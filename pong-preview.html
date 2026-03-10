@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PP Pong Preview</title>
+<style>
+  body {
+    background: #0a0908;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+    font-family: 'Georgia', serif;
+    color: #c8b89a;
+    margin: 0;
+  }
+  .container { width: 580px; }
+  .pp-arena {
+    background: linear-gradient(135deg, #0a1a0a 0%, #1a2a1a 50%, #0a1a0a 100%);
+    border: 2px solid #2a4a2a;
+    border-top: 3px solid #4a8a4a;
+    padding: 1.2em;
+    margin: 1em 0;
+    position: relative;
+    box-shadow: 0 0 20px rgba(40, 120, 40, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5);
+  }
+  .pp-score {
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 1.6em;
+    color: #7aea7a;
+    letter-spacing: 0.2em;
+    text-shadow: 0 0 10px rgba(120, 234, 120, 0.8), 0 0 20px rgba(80, 180, 80, 0.5);
+    padding: 0.4em;
+    margin: 0 0 0.5em 0;
+    background: rgba(0, 20, 0, 0.5);
+    border: 1px solid #3a6a3a;
+  }
+  #pong-canvas {
+    display: block;
+    margin: 0 auto;
+    cursor: none;
+    border: 1px solid #2a4a2a;
+  }
+  #pp-narrative {
+    text-align: center;
+    color: #b0d0b0;
+    font-size: 0.9em;
+    font-style: italic;
+    margin-top: 1em;
+    min-height: 1.5em;
+    transition: opacity 0.5s;
+  }
+  #pp-game-end {
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 1.4em;
+    margin-top: 0.5em;
+    min-height: 1.5em;
+  }
+  .pp-result-win { color: #aaffaa; text-shadow: 0 0 15px rgba(170, 255, 170, 0.6); }
+  .pp-result-lose { color: #ffaaaa; text-shadow: 0 0 10px rgba(255, 170, 170, 0.4); }
+  #pp-instructions {
+    text-align: center;
+    color: #5a7a5a;
+    font-size: 0.8em;
+    margin-top: 0.8em;
+    letter-spacing: 0.1em;
+  }
+  .opponent-select {
+    text-align: center;
+    margin: 1em 0;
+  }
+  .opponent-select button {
+    background: rgba(0, 20, 0, 0.5);
+    border: 1px solid #3a6a3a;
+    color: #7aea7a;
+    padding: 0.6em 1.5em;
+    margin: 0 0.5em;
+    font-family: Georgia, serif;
+    font-size: 1em;
+    cursor: pointer;
+  }
+  .opponent-select button:hover {
+    background: rgba(40, 80, 40, 0.3);
+    border-color: #5a9a5a;
+  }
+  .sobriety-slider {
+    text-align: center;
+    margin: 1em 0;
+    color: #5a7a5a;
+    font-size: 0.85em;
+  }
+  .sobriety-slider input { width: 200px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="sobriety-slider">
+    Sobriety: <input type="range" id="sobriety" min="0" max="100" value="65"> <span id="sob-val">65</span>
+  </div>
+  <div class="opponent-select" id="opponent-select">
+    <p style="color:#b0d0b0;">Choose your opponent:</p>
+    <button onclick="startGame('Harsent')">David Harsent</button>
+    <button onclick="startGame('Clegg')">John Clegg</button>
+  </div>
+
+  <div class="pp-arena" id="pp-arena" style="display:none;">
+    <div class="pp-score" id="score-display">YOU 0 — 0 OPPONENT</div>
+    <canvas id="pong-canvas" width="540" height="340"></canvas>
+    <div id="pp-narrative"></div>
+    <div id="pp-game-end"></div>
+    <div id="pp-instructions">Move mouse to control paddle</div>
+  </div>
+</div>
+
+<script>
+document.getElementById('sobriety').addEventListener('input', function() {
+  document.getElementById('sob-val').textContent = this.value;
+});
+
+function startGame(opponent) {
+  document.getElementById('opponent-select').style.display = 'none';
+  document.getElementById('pp-arena').style.display = 'block';
+  const sobriety = parseInt(document.getElementById('sobriety').value);
+  new PongGame('pong-canvas', opponent, sobriety);
+}
+
+class PongGame {
+  constructor(canvasId, opponent, sobriety) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.W = this.canvas.width;
+    this.H = this.canvas.height;
+    this.opponent = opponent;
+    this.sobriety = sobriety;
+
+    this.playerScore = 0;
+    this.oppScore = 0;
+    this.round = 0;
+    this.gameOver = false;
+    this.paused = false;
+    this.pauseTimer = 0;
+    this.serving = true;
+    this.serveTimer = 0;
+
+    // Ball
+    this.ball = { x: this.W / 2, y: this.H / 2, dx: 0, dy: 0, r: 5, baseSpeed: 3.2 };
+
+    // Paddles
+    this.pPad = { x: 12, y: this.H / 2 - 35, w: 8, h: 70 };
+    this.oPad = { x: this.W - 20, y: this.H / 2 - 35, w: 8, h: 70 };
+
+    // AI state
+    this.aiTarget = this.H / 2;
+    this.aiLastUpdate = 0;
+    this.aiHesitating = false;
+    this.aiHesitateTimer = 0;
+
+    // Player input
+    this.mouseY = this.H / 2;
+    this.actualPaddleY = this.pPad.y;
+
+    // Narrative lines
+    this.narrativeLines = {
+      Harsent: {
+        win: [
+          "Harsent nods. A veteran's approval.",
+          "Your shot surprises you both.",
+          "Even the poet blinks.",
+          "A clean winner. Harsent says nothing."
+        ],
+        lose: [
+          "Harsent places it where you aren't. He's done this before.",
+          "The ball passes you like a rumour.",
+          "Harsent smiles, unhurried. A poet's patience.",
+          "He reads you like a manuscript."
+        ]
+      },
+      Clegg: {
+        win: [
+          "Clegg overcommits. Wild swing, clean miss.",
+          "His brilliance undoes him.",
+          "Too much angle. Clegg curses.",
+          "Speed without direction is just noise."
+        ],
+        lose: [
+          "Clegg smashes it. You never saw it.",
+          "A wild shot that somehow finds the corner.",
+          "Clegg whoops. The cellar echoes.",
+          "He plays like a man with nothing to lose."
+        ]
+      }
+    };
+
+    this.setupInput();
+    this.serve();
+    this.updateScore();
+    this.loop();
+  }
+
+  setupInput() {
+    const handler = (clientY) => {
+      const rect = this.canvas.getBoundingClientRect();
+      this.mouseY = (clientY - rect.top) * (this.H / rect.height);
+    };
+    this.canvas.addEventListener('mousemove', (e) => handler(e.clientY));
+    this.canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      handler(e.touches[0].clientY);
+    }, { passive: false });
+    // Also track mouse on document in case cursor drifts off canvas
+    document.addEventListener('mousemove', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        handler(e.clientY);
+      }
+    });
+  }
+
+  serve() {
+    this.ball.x = this.W / 2;
+    this.ball.y = this.H / 2;
+    const speed = this.ball.baseSpeed + this.round * 0.25;
+    const angle = (Math.random() - 0.5) * 0.8;
+    // Alternate serve direction
+    const dir = (this.round % 2 === 0) ? -1 : 1;
+    this.ball.dx = dir * speed * Math.cos(angle);
+    this.ball.dy = speed * Math.sin(angle);
+    this.serving = true;
+    this.serveTimer = Date.now();
+    this.round++;
+  }
+
+  updateScore() {
+    const el = document.getElementById('score-display');
+    el.textContent = `YOU ${this.playerScore} — ${this.oppScore} ${this.opponent.toUpperCase()}`;
+  }
+
+  showNarrative(playerWon) {
+    const lines = playerWon
+      ? this.narrativeLines[this.opponent].win
+      : this.narrativeLines[this.opponent].lose;
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    const el = document.getElementById('pp-narrative');
+    el.style.opacity = '1';
+    el.textContent = line;
+
+    // Sobriety warning
+    if (this.sobriety < 30 && Math.random() < 0.4) {
+      el.textContent = line + ' Your vision swims.';
+    }
+  }
+
+  clearNarrative() {
+    document.getElementById('pp-narrative').style.opacity = '0';
+  }
+
+  updatePlayerPaddle() {
+    let targetY = this.mouseY - this.pPad.h / 2;
+
+    // Sobriety effects
+    if (this.sobriety < 25) {
+      // Very drunk: heavy lag, big jitter, occasional drops
+      targetY += (Math.random() - 0.5) * 40;
+      if (Math.random() < 0.15) return; // drop input
+      this.actualPaddleY += (targetY - this.actualPaddleY) * 0.06;
+    } else if (this.sobriety < 50) {
+      // Tipsy: moderate lag, small jitter
+      targetY += (Math.random() - 0.5) * 15;
+      this.actualPaddleY += (targetY - this.actualPaddleY) * 0.12;
+    } else {
+      // Sober: responsive
+      this.actualPaddleY += (targetY - this.actualPaddleY) * 0.25;
+    }
+
+    this.pPad.y = Math.max(0, Math.min(this.H - this.pPad.h, this.actualPaddleY));
+  }
+
+  updateOpponentAI() {
+    const now = Date.now();
+
+    if (this.opponent === 'Harsent') {
+      // Veteran: reads trajectory far ahead, moves deliberately, rarely wrong
+      // Reaction interval ~100ms
+      if (now - this.aiLastUpdate < 100) return;
+      this.aiLastUpdate = now;
+
+      // Predict where ball will reach the opponent's x
+      let predictY = this.ball.y;
+      if (this.ball.dx > 0) {
+        const framesToReach = (this.oPad.x - this.ball.x) / this.ball.dx;
+        predictY = this.ball.y + this.ball.dy * framesToReach;
+        // Bounce prediction (simple)
+        while (predictY < 0 || predictY > this.H) {
+          if (predictY < 0) predictY = -predictY;
+          if (predictY > this.H) predictY = 2 * this.H - predictY;
+        }
+      }
+
+      // Add slight imperfection (veteran, not perfect)
+      predictY += (Math.random() - 0.5) * 20;
+      this.aiTarget = predictY;
+
+      // Smooth, deliberate movement
+      const speed = 3.2;
+      const center = this.oPad.y + this.oPad.h / 2;
+      const diff = this.aiTarget - center;
+      if (Math.abs(diff) > 5) {
+        this.oPad.y += Math.sign(diff) * Math.min(speed, Math.abs(diff));
+      }
+    } else {
+      // Clegg: wild, reactive, fast but erratic
+      if (now - this.aiLastUpdate < 50) return;
+      this.aiLastUpdate = now;
+
+      // Short-term prediction only
+      let predictY = this.ball.y + this.ball.dy * 8;
+
+      // Wild overcorrections
+      predictY += (Math.random() - 0.5) * 50;
+
+      // Occasional brilliant read
+      if (Math.random() < 0.15) {
+        const framesToReach = this.ball.dx > 0 ? (this.oPad.x - this.ball.x) / this.ball.dx : 30;
+        predictY = this.ball.y + this.ball.dy * framesToReach;
+        while (predictY < 0 || predictY > this.H) {
+          if (predictY < 0) predictY = -predictY;
+          if (predictY > this.H) predictY = 2 * this.H - predictY;
+        }
+      }
+
+      this.aiTarget = predictY;
+
+      // Fast but jerky movement
+      const speed = 5;
+      const center = this.oPad.y + this.oPad.h / 2;
+      const diff = this.aiTarget - center;
+      if (Math.abs(diff) > 3) {
+        this.oPad.y += Math.sign(diff) * Math.min(speed, Math.abs(diff));
+      }
+    }
+
+    this.oPad.y = Math.max(0, Math.min(this.H - this.oPad.h, this.oPad.y));
+  }
+
+  updateBall() {
+    // Brief serve pause
+    if (this.serving) {
+      if (Date.now() - this.serveTimer < 800) return;
+      this.serving = false;
+    }
+
+    this.ball.x += this.ball.dx;
+    this.ball.y += this.ball.dy;
+
+    // Wall bounces
+    if (this.ball.y - this.ball.r < 0) {
+      this.ball.y = this.ball.r;
+      this.ball.dy = Math.abs(this.ball.dy);
+    }
+    if (this.ball.y + this.ball.r > this.H) {
+      this.ball.y = this.H - this.ball.r;
+      this.ball.dy = -Math.abs(this.ball.dy);
+    }
+
+    // Player paddle collision
+    if (this.ball.dx < 0 &&
+        this.ball.x - this.ball.r <= this.pPad.x + this.pPad.w &&
+        this.ball.x + this.ball.r >= this.pPad.x &&
+        this.ball.y >= this.pPad.y &&
+        this.ball.y <= this.pPad.y + this.pPad.h) {
+      const hitPos = (this.ball.y - this.pPad.y) / this.pPad.h;
+      const angle = (hitPos - 0.5) * Math.PI * 0.6;
+      const speed = Math.sqrt(this.ball.dx * this.ball.dx + this.ball.dy * this.ball.dy) * 1.05;
+      const capped = Math.min(speed, 7);
+      this.ball.dx = capped * Math.cos(angle);
+      this.ball.dy = capped * Math.sin(angle);
+      this.ball.x = this.pPad.x + this.pPad.w + this.ball.r;
+    }
+
+    // Opponent paddle collision
+    if (this.ball.dx > 0 &&
+        this.ball.x + this.ball.r >= this.oPad.x &&
+        this.ball.x - this.ball.r <= this.oPad.x + this.oPad.w &&
+        this.ball.y >= this.oPad.y &&
+        this.ball.y <= this.oPad.y + this.oPad.h) {
+      const hitPos = (this.ball.y - this.oPad.y) / this.oPad.h;
+      const angle = Math.PI - (hitPos - 0.5) * Math.PI * 0.6;
+
+      // Clegg hits harder angles
+      const angleMult = this.opponent === 'Clegg' ? 0.8 : 0.6;
+      const adj = Math.PI - (hitPos - 0.5) * Math.PI * angleMult;
+
+      const speed = Math.sqrt(this.ball.dx * this.ball.dx + this.ball.dy * this.ball.dy) * 1.05;
+      const capped = Math.min(speed, 7);
+      this.ball.dx = capped * Math.cos(adj);
+      this.ball.dy = capped * Math.sin(adj);
+      this.ball.x = this.oPad.x - this.ball.r;
+    }
+
+    // Point scored
+    if (this.ball.x < -20) {
+      this.oppScore++;
+      this.pointEnd(false);
+    } else if (this.ball.x > this.W + 20) {
+      this.playerScore++;
+      this.pointEnd(true);
+    }
+  }
+
+  pointEnd(playerWon) {
+    this.updateScore();
+    this.showNarrative(playerWon);
+    this.paused = true;
+
+    if (this.playerScore >= 3 || this.oppScore >= 3) {
+      this.endGame(this.playerScore >= 3);
+      return;
+    }
+
+    this.pauseTimer = setTimeout(() => {
+      this.paused = false;
+      this.clearNarrative();
+      this.serve();
+    }, 2200);
+  }
+
+  endGame(playerWon) {
+    this.gameOver = true;
+    const endEl = document.getElementById('pp-game-end');
+    document.getElementById('pp-instructions').style.display = 'none';
+
+    if (playerWon) {
+      endEl.innerHTML = '<span class="pp-result-win">★ VICTORY ★</span>';
+    } else {
+      endEl.innerHTML = '<span class="pp-result-lose">DEFEAT</span>';
+    }
+
+    // In actual game, this would click hidden Harlowe link after delay
+    // setTimeout(() => { document.querySelector(playerWon ? '#pp-go-win tw-link' : '#pp-go-lose tw-link').click(); }, 2000);
+  }
+
+  draw() {
+    const ctx = this.ctx;
+    // Background
+    ctx.fillStyle = '#0a1a0a';
+    ctx.fillRect(0, 0, this.W, this.H);
+
+    // Center court line
+    ctx.strokeStyle = '#2a4a2a';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(this.W / 2, 0);
+    ctx.lineTo(this.W / 2, this.H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Net posts (small marks at top and bottom of center)
+    ctx.fillStyle = '#3a5a3a';
+    ctx.fillRect(this.W / 2 - 2, 0, 4, 6);
+    ctx.fillRect(this.W / 2 - 2, this.H - 6, 4, 6);
+
+    // Player paddle (green glow)
+    ctx.shadowColor = 'rgba(170, 255, 170, 0.6)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#aaffaa';
+    ctx.fillRect(this.pPad.x, this.pPad.y, this.pPad.w, this.pPad.h);
+
+    // Opponent paddle (coral glow)
+    ctx.shadowColor = 'rgba(255, 170, 170, 0.4)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#ffaaaa';
+    ctx.fillRect(this.oPad.x, this.oPad.y, this.oPad.w, this.oPad.h);
+
+    // Ball (bright green glow)
+    ctx.shadowColor = 'rgba(122, 234, 122, 0.9)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#7aea7a';
+    ctx.beginPath();
+    ctx.arc(this.ball.x, this.ball.y, this.ball.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Sobriety visual effect: slight vignette overlay when drunk
+    if (this.sobriety < 30) {
+      const grad = ctx.createRadialGradient(this.W/2, this.H/2, this.H*0.3, this.W/2, this.H/2, this.H*0.7);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, this.W, this.H);
+    }
+
+    // Serve indicator
+    if (this.serving) {
+      ctx.fillStyle = 'rgba(122, 234, 122, 0.4)';
+      ctx.font = '14px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('· · ·', this.W / 2, this.H / 2 + 40);
+    }
+  }
+
+  loop() {
+    if (!this.gameOver) {
+      if (!this.paused) {
+        this.updatePlayerPaddle();
+        this.updateOpponentAI();
+        this.updateBall();
+      }
+      this.draw();
+      requestAnimationFrame(() => this.loop());
+    } else {
+      this.draw(); // Final frame
+    }
+  }
+}
+</script>
+</body>
+</html>

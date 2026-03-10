@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Centre Point — New Oxford Street, London, 1973</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(232,120,24,0.55);
+  pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="datestamp">23.11.73</div>
+<div id="location">CENTRE POINT, NEW OXFORD STREET, LONDON</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+
+// ============================================================
+// HELPERS (defined first — used by materials below)
+// ============================================================
+function makeCanvasTexture(w, h, drawFunc) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  drawFunc(cx, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+function placeMesh(geo, mat, x, y, z) {
+  var m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  scene.add(m);
+  return m;
+}
+
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x060810);
+scene.fog = new THREE.Fog(0x060810, 45, 220); // linear fog — sky objects at 50-70 units stay clear
+
+// Camera looks UP at the tower — positioned low, tilted steeply upward
+// FOV is wide (70) to exaggerate the vertiginous perspective
+var camera = new THREE.PerspectiveCamera(82, window.innerWidth / window.innerHeight, 0.1, 300);
+camera.position.set(0.6, 1.2, 5.0);
+camera.lookAt(0.3, 28, -2);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.55;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// MATERIALS
+// ============================================================
+
+// Centre Point's distinctive off-white precast concrete panels
+// with a slightly grainy aggregate finish — Portland stone dust mixed in
+var concreteTex = makeCanvasTexture(512, 512, function(cx, w, h) {
+  // Base off-white — not pure white, slightly warm and aged
+  cx.fillStyle = '#cdc8bc';
+  cx.fillRect(0, 0, w, h);
+  // Aggregate texture — fine pebbled surface
+  for (var i = 0; i < 3000; i++) {
+    var gx = Math.random() * w;
+    var gy = Math.random() * h;
+    var gr = 0.8 + Math.random() * 1.8;
+    var tone = 150 + Math.random() * 60;
+    cx.fillStyle = 'rgba(' + tone + ',' + (tone-5) + ',' + (tone-10) + ',0.35)';
+    cx.beginPath();
+    cx.arc(gx, gy, gr, 0, Math.PI * 2);
+    cx.fill();
+  }
+  // Pollution staining — London grime running down from the top
+  var soot = cx.createLinearGradient(0, 0, 0, h);
+  soot.addColorStop(0,   'rgba(40, 38, 32, 0.18)');
+  soot.addColorStop(0.2, 'rgba(40, 38, 32, 0.08)');
+  soot.addColorStop(0.6, 'rgba(0,0,0,0)');
+  soot.addColorStop(1,   'rgba(40, 38, 32, 0.06)');
+  cx.fillStyle = soot;
+  cx.fillRect(0, 0, w, h);
+  // Rain streak staining
+  cx.strokeStyle = 'rgba(80, 75, 65, 0.05)';
+  cx.lineWidth = 1.5;
+  for (var rs = 0; rs < 18; rs++) {
+    cx.beginPath();
+    var rx = Math.random() * w;
+    cx.moveTo(rx, 0);
+    for (var ry = 0; ry < h; ry += 25) {
+      rx += (Math.random() - 0.5) * 3;
+      cx.lineTo(rx, ry);
+    }
+    cx.stroke();
+  }
+});
+var concreteMat = new THREE.MeshStandardMaterial({
+  map: concreteTex, roughness: 0.88, metalness: 0.0
+});
+
+// The dark recessed concrete between the honeycomb cells
+var recessMat = new THREE.MeshStandardMaterial({
+  color: 0x1a1a18, roughness: 0.92
+});
+
+// Dark glass in the honeycomb windows — slightly reflective, 1973 tinted glass
+var darkGlassTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  cx.fillStyle = '#080c10';
+  cx.fillRect(0, 0, w, h);
+  // Faint reflection — sky and light caught in the glass
+  var refl = cx.createLinearGradient(0, 0, w, h);
+  refl.addColorStop(0,   'rgba(60, 70, 90, 0.25)');
+  refl.addColorStop(0.4, 'rgba(20, 25, 35, 0.10)');
+  refl.addColorStop(1,   'rgba(5, 8, 12, 0.05)');
+  cx.fillStyle = refl;
+  cx.fillRect(0, 0, w, h);
+});
+var darkGlass = new THREE.MeshStandardMaterial({
+  map: darkGlassTex, roughness: 0.15, metalness: 0.55,
+  color: 0x0a0e14
+});
+
+// A few windows warmly lit — offices working late
+var warmGlass = new THREE.MeshStandardMaterial({
+  color: 0x1a0c02, roughness: 0.3,
+  emissive: 0xd07020, emissiveIntensity: 0.28
+});
+
+// Very faintly lit window — fluorescent strip light, cold
+var coldGlass = new THREE.MeshStandardMaterial({
+  color: 0x080c10, roughness: 0.3,
+  emissive: 0x8090b0, emissiveIntensity: 0.08
+});
+
+// Ground pavement
+var paveTex = makeCanvasTexture(512, 512, function(cx, w, h) {
+  cx.fillStyle = '#484840';
+  cx.fillRect(0, 0, w, h);
+  // Concrete paving slabs
+  cx.strokeStyle = 'rgba(20, 18, 14, 0.55)';
+  cx.lineWidth = 3;
+  for (var gx = 0; gx <= w; gx += 128) {
+    cx.beginPath(); cx.moveTo(gx, 0); cx.lineTo(gx, h); cx.stroke();
+  }
+  for (var gy = 0; gy <= h; gy += 128) {
+    cx.beginPath(); cx.moveTo(0, gy); cx.lineTo(w, gy); cx.stroke();
+  }
+  // Surface grime and oil stains
+  cx.fillStyle = 'rgba(25, 22, 16, 0.15)';
+  for (var st = 0; st < 12; st++) {
+    cx.beginPath();
+    cx.ellipse(Math.random()*w, Math.random()*h, 10+Math.random()*30, 6+Math.random()*18, Math.random()*Math.PI, 0, Math.PI*2);
+    cx.fill();
+  }
+});
+var paveMat = new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.92 });
+
+// ============================================================
+// GROUND
+// ============================================================
+var ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), paveMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ============================================================
+// CENTRE POINT TOWER
+// ============================================================
+// The building is a cylindrical-ish tower with a hexagonal/faceted
+// plan. Each face of the tower has the distinctive deep-set honeycomb
+// window grid: horizontal bands of precast concrete framing
+// large trapezoidal glazed bays.
+//
+// We build it as a CylinderGeometry core (the structural mass)
+// then tile the honeycomb facade panels onto the visible faces.
+
+var tower = new THREE.Group();
+
+// ----- CORE SHAFT -----
+// 34-storey tower. In 1973 it dominated the Tottenham Court Road skyline.
+// Scale: ~0.7 units per storey, so total ~24 units tall.
+var STOREYS = 34;
+var STOREY_H = 0.72;
+var TOWER_H = STOREYS * STOREY_H;   // ~24.5
+var TOWER_R = 2.8;                  // radius of the roughly octagonal plan
+
+// Octagonal core — the structural body
+var coreGeo = new THREE.CylinderGeometry(TOWER_R, TOWER_R + 0.2, TOWER_H, 8, 1);
+var core = new THREE.Mesh(coreGeo, recessMat);
+core.position.set(0, TOWER_H / 2, 0);
+tower.add(core);
+
+// ----- HONEYCOMB FACADE PANELS -----
+// Centre Point's signature: each storey has deep-set concrete ribs
+// forming a diamond/hexagonal grid on the facade.
+// We'll tile this on the front 3 faces of the octagon.
+
+// Each honeycomb cell: a concrete surround (thick, projected forward)
+// with a recessed glass pane inside.
+// Cell dimensions roughly: 0.65 wide × 0.68 tall
+
+var CELL_W = 0.62;
+var CELL_H = 0.66;
+var PANEL_DEPTH = 0.18;   // how far the concrete ribs protrude
+var GLASS_INSET = 0.12;   // glass sits back from the rib face
+
+// The angled faces of the octagon — we'll cover faces at angles:
+// 0° (front), ±45° (front-flanks), and partially ±90° (sides)
+var facadeAngles = [0, -45, 45, -90, 90];
+var facadeWidths = [5.0, 3.5, 3.5, 2.2, 2.2];
+
+// Random seed for consistent window lighting
+var winStates = [];
+for (var w = 0; w < 2000; w++) {
+  var r = Math.random();
+  winStates.push(r < 0.08 ? 'warm' : r < 0.13 ? 'cold' : 'dark');
+}
+
+var warmWindows = [];  // track lit windows for glow lights
+var winIdx = 0;
+
+facadeAngles.forEach(function(angleDeg, fi) {
+  var angleRad = angleDeg * Math.PI / 180;
+  var fWidth   = facadeWidths[fi];
+
+  // Position of this face: on the surface of the octagon
+  var faceDist = TOWER_R * Math.cos(Math.PI / 8);  // apothem of octagon
+
+  var cols = Math.floor(fWidth / CELL_W);
+  var rows = STOREYS;
+
+  for (var row = 0; row < rows; row++) {
+    for (var col = 0; col < cols; col++) {
+
+      // Local position on the face
+      var lx = (col - (cols - 1) / 2) * CELL_W;
+      var ly = (row + 0.5) * CELL_H + 0.5;   // +0.5 for podium offset
+
+      // Odd rows offset by half a cell — the honeycomb stagger
+      if (row % 2 === 1) lx += CELL_W * 0.5;
+
+      // Concrete surround (the rib frame around each cell)
+      var surroundGeo = new THREE.BoxGeometry(CELL_W - 0.04, CELL_H - 0.04, PANEL_DEPTH);
+      var surround = new THREE.Mesh(surroundGeo, concreteMat);
+
+      // Glass pane — inset behind the surround
+      var glassState = winStates[winIdx % winStates.length];
+      winIdx++;
+      var glassMat = (glassState === 'warm') ? warmGlass :
+                     (glassState === 'cold') ? coldGlass : darkGlass;
+
+      var glassGeo = new THREE.BoxGeometry(CELL_W * 0.72, CELL_H * 0.78, 0.04);
+      var glass = new THREE.Mesh(glassGeo, glassMat);
+      glass.position.z = -GLASS_INSET;
+
+      // The horizontal rib — a thin bar across the bottom of each cell
+      var ribGeo = new THREE.BoxGeometry(CELL_W, 0.06, PANEL_DEPTH + 0.04);
+      var rib = new THREE.Mesh(ribGeo, concreteMat);
+      rib.position.y = -(CELL_H / 2) + 0.03;
+
+      // Group the cell
+      var cell = new THREE.Group();
+      cell.add(surround);
+      cell.add(glass);
+      cell.add(rib);
+
+      // Position on the face, rotated to sit on the correct face of octagon
+      cell.position.set(lx, ly, faceDist);
+      cell.rotation.y = -angleRad;
+
+      // Rotate so x-axis aligns with the face
+      var worldPos = new THREE.Vector3();
+      var cosA = Math.cos(angleRad);
+      var sinA = Math.sin(angleRad);
+      cell.position.set(
+        lx * cosA - 0 * sinA,
+        ly,
+        lx * sinA + faceDist * cosA
+      );
+
+      if (glassState === 'warm') {
+        warmWindows.push({ x: cell.position.x, y: ly, z: cell.position.z });
+      }
+
+      tower.add(cell);
+    }
+  }
+});
+
+// ----- PODIUM / BASE -----
+// The building sits on a broad podium at street level
+var podiumGeo = new THREE.BoxGeometry(7, 2.0, 7);
+var podium = new THREE.Mesh(podiumGeo, concreteMat);
+podium.position.set(0, 1.0, 0);
+tower.add(podium);
+
+// Podium overhang / colonnade edge
+var overhangGeo = new THREE.BoxGeometry(8.2, 0.25, 8.2);
+var overhang = new THREE.Mesh(overhangGeo, concreteMat);
+overhang.position.set(0, 2.1, 0);
+tower.add(overhang);
+
+// Colonnade pillars around the base
+for (var pi = 0; pi < 8; pi++) {
+  var pa = (pi / 8) * Math.PI * 2;
+  var px = Math.sin(pa) * 3.8;
+  var pz = Math.cos(pa) * 3.8;
+  var pillarGeo = new THREE.CylinderGeometry(0.15, 0.18, 2.2, 8);
+  var pillar = new THREE.Mesh(pillarGeo, concreteMat);
+  pillar.position.set(px, 1.1, pz);
+  tower.add(pillar);
+}
+
+// ----- ROOF / CROWN -----
+// The top of Centre Point has a distinctive recessed plant-room and
+// a parapet with a slightly different profile
+var roofSlab = new THREE.Mesh(
+  new THREE.CylinderGeometry(TOWER_R + 0.1, TOWER_R + 0.1, 0.4, 8),
+  concreteMat
+);
+roofSlab.position.set(0, TOWER_H + 0.2, 0);
+tower.add(roofSlab);
+
+// Plant room on roof
+var plantRoom = new THREE.Mesh(
+  new THREE.BoxGeometry(3.5, 2.5, 3.5),
+  recessMat
+);
+plantRoom.position.set(0, TOWER_H + 1.65, 0);
+tower.add(plantRoom);
+
+// Roof parapet
+var parapet = new THREE.Mesh(
+  new THREE.CylinderGeometry(TOWER_R + 0.3, TOWER_R + 0.3, 0.3, 8),
+  concreteMat
+);
+parapet.position.set(0, TOWER_H + 0.55, 0);
+tower.add(parapet);
+
+// Aviation warning light on top
+var warningLight = new THREE.Mesh(
+  new THREE.SphereGeometry(0.12, 8, 6),
+  new THREE.MeshStandardMaterial({
+    color: 0x400000, roughness: 0.3,
+    emissive: 0xff2000, emissiveIntensity: 0.6
+  })
+);
+warningLight.position.set(0, TOWER_H + 3.2, 0);
+tower.add(warningLight);
+
+scene.add(tower);
+
+// ============================================================
+// LOWER BUILDING / PODIUM CONTEXT — the smaller block at the base
+// ============================================================
+// Centre Point had a lower surrounding block — shops, service access
+var lowerBlock = new THREE.Mesh(
+  new THREE.BoxGeometry(10, 5.5, 8),
+  concreteMat
+);
+lowerBlock.position.set(0, 2.75, -3.5);
+scene.add(lowerBlock);
+
+// A few windows on the lower block
+for (var lb = 0; lb < 6; lb++) {
+  var lwx = -3.5 + lb * 1.4;
+  var lwGlass = (Math.random() < 0.3) ? warmGlass : darkGlass;
+  var lwin = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.9, 0.06), lwGlass);
+  lwin.position.set(lwx, 3.8, 0.5);
+  scene.add(lwin);
+}
+
+// ============================================================
+// SKY — night sky with a faint sodium glow on the horizon
+// ============================================================
+// Sky dome
+var skyGeo = new THREE.SphereGeometry(150, 16, 8);
+var skyTex = makeCanvasTexture(512, 256, function(cx, w, h) {
+  // Very dark blue-black night sky
+  var skyGrad = cx.createLinearGradient(0, 0, 0, h);
+  skyGrad.addColorStop(0,    '#030408');
+  skyGrad.addColorStop(0.5,  '#060810');
+  skyGrad.addColorStop(0.75, '#0c0e18');
+  skyGrad.addColorStop(0.85, '#1a1008');  // sodium glow on horizon
+  skyGrad.addColorStop(1,    '#2a1a08');
+  cx.fillStyle = skyGrad;
+  cx.fillRect(0, 0, w, h);
+  // Stars — faint
+  cx.fillStyle = 'rgba(255,255,255,0.7)';
+  for (var s = 0; s < 180; s++) {
+    var sx = Math.random() * w;
+    var sy = Math.random() * h * 0.7;
+    var sr = 0.4 + Math.random() * 0.8;
+    cx.beginPath();
+    cx.arc(sx, sy, sr, 0, Math.PI * 2);
+    cx.fill();
+  }
+});
+var skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
+var sky = new THREE.Mesh(skyGeo, skyMat);
+scene.add(sky);
+
+// ============================================================
+// STARS
+// ============================================================
+var starTex = makeCanvasTexture(64, 64, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  g.addColorStop(0,    'rgba(255,255,255,0.95)');
+  g.addColorStop(0.12, 'rgba(255,255,255,0.6)');
+  g.addColorStop(0.4,  'rgba(200,210,255,0.15)');
+  g.addColorStop(1,    'rgba(0,0,0,0)');
+  cx.fillStyle = g;
+  cx.fillRect(0, 0, w, h);
+});
+
+for (var si = 0; si < 220; si++) {
+  var sMat = new THREE.SpriteMaterial({
+    map: starTex, transparent: true,
+    opacity: 0.3 + Math.random() * 0.7,
+    fog: false
+  });
+  var sSpr = new THREE.Sprite(sMat);
+  var sTheta = Math.random() * Math.PI * 2;
+  var sPhi   = 0.05 + Math.random() * 0.45;
+  var sDist  = 90 + Math.random() * 30;
+  sSpr.position.set(
+    Math.sin(sTheta) * Math.sin(sPhi) * sDist,
+    Math.cos(sPhi)   * sDist * 0.6 + 15,
+    Math.cos(sTheta) * Math.sin(sPhi) * sDist - 20
+  );
+  var sSz = 0.4 + Math.random() * 1.1;
+  sSpr.scale.set(sSz, sSz, 1);
+  scene.add(sSpr);
+}
+
+
+// ============================================================
+// TOWER UPLIGHTING — dramatic uplights on the base washing the concrete
+// ============================================================
+var upLight1 = new THREE.SpotLight(0xfff0d0, 1.8, 35, Math.PI / 7, 0.5);
+upLight1.position.set(-3, 0.5, 4.5);
+upLight1.target.position.set(-1, 15, 0);
+scene.add(upLight1);
+scene.add(upLight1.target);
+
+var upLight2 = new THREE.SpotLight(0xfff0d0, 1.5, 35, Math.PI / 7, 0.5);
+upLight2.position.set(3, 0.5, 4.5);
+upLight2.target.position.set(1, 15, 0);
+scene.add(upLight2);
+scene.add(upLight2.target);
+
+var upLight3 = new THREE.SpotLight(0xffe8b0, 1.0, 40, Math.PI / 8, 0.6);
+upLight3.position.set(0, 0.5, 5.5);
+upLight3.target.position.set(0, 22, 0);
+scene.add(upLight3);
+scene.add(upLight3.target);
+
+// ============================================================
+// WARM WINDOW GLOW LIGHTS
+// ============================================================
+// Add a few point lights near the warmly lit windows
+var windowGlows = [];
+var glowSubset = warmWindows.slice(0, 8);
+glowSubset.forEach(function(ww) {
+  var wl = new THREE.PointLight(0xd07020, 0.18, 3.5);
+  wl.position.set(ww.x * 0.85, ww.y, ww.z * 0.85 + 0.5);
+  scene.add(wl);
+  windowGlows.push(wl);
+});
+
+// ============================================================
+// AVIATION WARNING LIGHT — animated red blink
+// ============================================================
+var avLight = new THREE.PointLight(0xff2000, 0.0, 20);
+avLight.position.set(0, TOWER_H + 3.3, 0);
+scene.add(avLight);
+
+// ============================================================
+// AMBIENT + MOON
+// ============================================================
+scene.add(new THREE.AmbientLight(0x05060e, 0.12));
+
+var moonLight = new THREE.DirectionalLight(0x1a2255, 0.06);
+moonLight.position.set(-8, 30, 10);
+scene.add(moonLight);
+
+// ============================================================
+// FOG SPRITES — ground-level murk
+// ============================================================
+var thickFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0,   'rgba(130,125,115,0.28)');
+  grad.addColorStop(0.5, 'rgba(100, 95, 85,0.12)');
+  grad.addColorStop(1,   'rgba(70, 65, 55, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+var sodiumFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0,   'rgba(220,110,20,0.22)');
+  grad.addColorStop(0.4, 'rgba(190, 85,14,0.10)');
+  grad.addColorStop(1,   'rgba(140, 55, 8, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+
+var fogSprites = [];
+
+for (var fi = 0; fi < 50; fi++) {
+  var fMat = new THREE.SpriteMaterial({
+    map: (fi < 35) ? thickFogTex : sodiumFogTex,
+    transparent: true, opacity: 0.2 + Math.random() * 0.2
+  });
+  var fs = new THREE.Sprite(fMat);
+  fs.position.set(Math.random() * 40 - 18, 0.2 + Math.random() * 2.0, Math.random() * 25 - 3);
+  var fsc = 6 + Math.random() * 14;
+  fs.scale.set(fsc, fsc * 0.28, 1);
+  scene.add(fs);
+  fogSprites.push({
+    sprite: fs, baseX: fs.position.x,
+    drift: 0.002 + Math.random() * 0.005,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.001 + Math.random() * 0.003,
+    swayAmt: 0.5 + Math.random() * 1.2
+  });
+}
+
+// ============================================================
+// NEON BLUE LADDER — two rails + cross rungs up the central gap
+// ============================================================
+var LADDER_X    = 0.0;           // dead centre
+var RAIL_SEP    = 0.32;          // half-distance between the two rails
+var LADDER_Z    = TOWER_R + 0.4; // clearly in front of the core cylinder
+var RUNG_COUNT  = STOREYS + 2;
+var RUNG_SPACING = STOREY_H;
+
+// Base neon material — shared by rails
+var neonMat = new THREE.MeshStandardMaterial({
+  color: 0x001833,
+  emissive: new THREE.Color(0x00aaff),
+  emissiveIntensity: 2.2,
+  roughness: 0.15,
+  metalness: 0.0,
+  fog: false
+});
+
+// LEFT RAIL
+var leftRail = new THREE.Mesh(
+  new THREE.BoxGeometry(0.055, TOWER_H + 2, 0.055),
+  neonMat
+);
+leftRail.position.set(-RAIL_SEP, (TOWER_H + 2) / 2 + 0.5, LADDER_Z);
+scene.add(leftRail);
+
+// RIGHT RAIL
+var rightRail = new THREE.Mesh(
+  new THREE.BoxGeometry(0.055, TOWER_H + 2, 0.055),
+  neonMat
+);
+rightRail.position.set(RAIL_SEP, (TOWER_H + 2) / 2 + 0.5, LADDER_Z);
+scene.add(rightRail);
+
+// RUNGS — flat boxes spanning between the rails, clearly visible face-on
+var rungMeshes = [];
+for (var rung = 0; rung < RUNG_COUNT; rung++) {
+  var ry = 0.8 + rung * RUNG_SPACING;
+  var rungMat = neonMat.clone();
+  var rungMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(RAIL_SEP * 2, 0.07, 0.07),
+    rungMat
+  );
+  rungMesh.position.set(0, ry, LADDER_Z);
+  scene.add(rungMesh);
+  rungMeshes.push(rungMesh);
+}
+
+// Travelling pulse light
+var pulseLight = new THREE.PointLight(0x00aaff, 0.0, 7);
+scene.add(pulseLight);
+
+// Soft base glow pooling at the bottom
+var ladderBaseGlow = new THREE.PointLight(0x0055cc, 0.5, 10);
+ladderBaseGlow.position.set(0, 1.5, LADDER_Z + 1);
+scene.add(ladderBaseGlow);
+
+// ============================================================
+// ANIMATION
+// ============================================================
+var clock = new THREE.Clock();
+var avBlinkPhase = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+
+  // --- UPLIGHTING — slow breathing, like a building being dramatic ---
+  var upBreath = 0.96 + Math.sin(t * 0.18) * 0.03;
+  upLight1.intensity = 1.8 * upBreath;
+  upLight2.intensity = 1.5 * upBreath;
+  upLight3.intensity = 1.0 * upBreath;
+
+  // --- AVIATION LIGHT — slow red blink, every ~4 seconds ---
+  avBlinkPhase += 0.016;
+  var avCycle = Math.sin(avBlinkPhase * 0.8);
+  var avOn = avCycle > 0.85;
+  avLight.intensity = avOn ? (avCycle - 0.85) * 12 : 0;
+  warningLight.material.emissiveIntensity = avOn ? 0.8 + (avCycle - 0.85) * 4 : 0.08;
+
+  // --- WINDOW GLOW PULSE (very slow, nearly static) ---
+  for (var wgi = 0; wgi < windowGlows.length; wgi++) {
+    windowGlows[wgi].intensity = 0.15 + Math.sin(t * 0.08 + wgi * 0.9) * 0.04;
+  }
+
+  // --- NEON LADDER PULSE ---
+  // A bright pulse travels upward continuously, looping from bottom to top
+  var PULSE_SPEED = 4.5;   // storeys per second
+  var pulsePos = (t * PULSE_SPEED) % (RUNG_COUNT + 4);  // loops
+  var pulseY   = 0.8 + pulsePos * RUNG_SPACING;
+
+  // Move the travelling point light
+  pulseLight.position.set(LADDER_X, pulseY, LADDER_Z + 0.8);
+
+  // Each rung brightness: peak when pulse is at that rung, fades off quickly
+  for (var ri = 0; ri < rungMeshes.length; ri++) {
+    var dist = Math.abs(ri - pulsePos);
+    var brightness = Math.max(0, 1.0 - dist * 0.55);
+    // Base flicker on the neon — slow, like a real tube
+    var neonFlicker = 0.88 + Math.sin(t * 1.4 + ri * 0.3) * 0.06
+                           + Math.sin(t * 3.1 + ri * 0.7) * 0.03;
+    rungMeshes[ri].material.emissiveIntensity = (0.5 + brightness * 1.8) * neonFlicker;
+  }
+
+  // Spine pulses with overall neon flicker
+  var spineFlicker = 0.9 + Math.sin(t * 1.2) * 0.05 + Math.sin(t * 2.8) * 0.03;
+  leftRail.material.emissiveIntensity  = 1.0 * spineFlicker;
+  rightRail.material.emissiveIntensity = 1.0 * spineFlicker;
+
+  // The pulse light intensity peaks at the centre of the travel
+  pulseLight.intensity = 1.2 + Math.sin(t * 1.8) * 0.2;
+
+  // Base glow breathes slowly
+  ladderBaseGlow.intensity = 0.35 + Math.sin(t * 0.4) * 0.12;
+
+  // --- FOG DRIFT ---
+  for (var fdi = 0; fdi < fogSprites.length; fdi++) {
+    var f = fogSprites[fdi];
+    f.sway += f.swaySpeed;
+    f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;
+    f.baseX += f.drift;
+    if (f.baseX > 22) f.baseX = -18;
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>

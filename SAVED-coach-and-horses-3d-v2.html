@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Coach & Horses — Greek Street, Soho, 1973</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(255,140,50,0.55);
+  pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="datestamp">23.11.73</div>
+<div id="location">GREEK STREET SOUTH, SOHO</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a12);
+
+// Depth-based fog: linear fog from near to far gives that depth-buffer look
+// Objects fade into murky darkness the further they are
+scene.fog = new THREE.Fog(0x0a0a12, 8, 55);
+
+var camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 200);
+
+// ============================================================
+// LAYOUT EXPLANATION
+// ============================================================
+// Corner of pub at origin (0, 0, 0)
+// Greek St face: runs along -Z (z=0 to z=-5), facade at x≈0 faces +X
+// Romilly St face: runs along -X (x=0 to x=-9), facade at z≈0 faces +Z
+// Building bodies extend BEHIND facades (into -X and -Z)
+// Camera at (+X, +Z) so it sees BOTH facades from the outside
+//
+// From camera: Greek St face on the RIGHT, Romilly face on the LEFT,
+// corner banner in the MIDDLE — just like the photo!
+
+camera.position.set(13, 2.8, 10);
+camera.lookAt(-1, 3.5, -1);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = 0.65;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// MATERIALS
+// ============================================================
+var creamWall = new THREE.MeshStandardMaterial({ color: 0xd8cfc0, roughness: 0.85 });
+var darkCream = new THREE.MeshStandardMaterial({ color: 0xc0b8a8, roughness: 0.8 });
+var redFacade = new THREE.MeshStandardMaterial({ color: 0x8b1a1a, roughness: 0.6 });
+var brightRed = new THREE.MeshStandardMaterial({ color: 0xcc2020, roughness: 0.5 });
+var goldMat = new THREE.MeshStandardMaterial({ color: 0xc0a040, roughness: 0.3, metalness: 0.4 });
+var darkWood = new THREE.MeshStandardMaterial({ color: 0x2a1505, roughness: 0.7 });
+var warmGlass = new THREE.MeshStandardMaterial({ color: 0x3a2510, roughness: 0.3, emissive: 0xc89030, emissiveIntensity: 0.15 });
+var pavementMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.9 });
+var roadMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.85 });
+var blueBrick = new THREE.MeshStandardMaterial({ color: 0x3a4a6a, roughness: 0.85 });
+var redBrick = new THREE.MeshStandardMaterial({ color: 0x8b4a3a, roughness: 0.85 });
+var windowFrame = new THREE.MeshStandardMaterial({ color: 0xb0a890, roughness: 0.7 });
+var darkGlass = new THREE.MeshStandardMaterial({ color: 0x0a0a15, roughness: 0.2, metalness: 0.3 });
+
+// ============================================================
+// HELPER: canvas texture
+// ============================================================
+function makeCanvasTexture(w, h, drawFunc) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  drawFunc(cx, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+function makeSign(text, opts) {
+  var o = opts || {};
+  var w = o.w || 512; var h = o.h || 128;
+  var bg = o.bg || '#6b0e0e'; var fg = o.fg || '#c8a840';
+  var fs = o.fs || 36; var ff = o.ff || 'bold Georgia';
+  var tex = makeCanvasTexture(w, h, function(cx, cw, ch) {
+    cx.fillStyle = bg; cx.fillRect(0, 0, cw, ch);
+    if (o.border) {
+      cx.strokeStyle = fg; cx.lineWidth = 4;
+      cx.strokeRect(6, 6, cw - 12, ch - 12);
+    }
+    cx.fillStyle = fg; cx.font = fs + 'px ' + ff;
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText(text, cw/2, ch/2);
+  });
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 });
+}
+
+// ============================================================
+// GROUND
+// ============================================================
+var pavement = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), pavementMat);
+pavement.rotation.x = -Math.PI / 2;
+pavement.receiveShadow = true;
+scene.add(pavement);
+
+// Greek St road (runs along Z, east of the pub)
+var greekRoad = new THREE.Mesh(new THREE.PlaneGeometry(8, 40), roadMat);
+greekRoad.rotation.x = -Math.PI / 2;
+greekRoad.position.set(5, -0.01, -5);
+greekRoad.receiveShadow = true;
+scene.add(greekRoad);
+
+// Romilly St road (runs along X, south of the pub)
+var romRoad = new THREE.Mesh(new THREE.PlaneGeometry(30, 8), roadMat);
+romRoad.rotation.x = -Math.PI / 2;
+romRoad.position.set(-10, -0.01, 5);
+romRoad.receiveShadow = true;
+scene.add(romRoad);
+
+// Wet road reflections
+var wetMat = new THREE.MeshStandardMaterial({
+  color: 0x1a1a1a, roughness: 0.2, metalness: 0.5, transparent: true, opacity: 0.25
+});
+var wetRoad = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), wetMat);
+wetRoad.rotation.x = -Math.PI / 2;
+wetRoad.position.set(3, 0.01, 3);
+scene.add(wetRoad);
+
+// ============================================================
+// THE COACH & HORSES
+// ============================================================
+var pub = new THREE.Group();
+
+// ----- UPPER FLOORS -----
+// Greek St wing body: extends from x=-6 to x=0, z=-5 to z=0
+// Facade is at x=0, facing +X
+var greekBody = new THREE.Mesh(new THREE.BoxGeometry(6, 8, 5), creamWall);
+greekBody.position.set(-3, 8, -2.5);
+greekBody.castShadow = true;
+pub.add(greekBody);
+
+// Romilly St wing body: extends from x=-9 to x=0, z=0 to z=-6
+// Facade is at z=0, facing +Z
+var romBody = new THREE.Mesh(new THREE.BoxGeometry(9, 8, 6), creamWall);
+romBody.position.set(-4.5, 8, -3);
+romBody.castShadow = true;
+pub.add(romBody);
+
+// Corner chamfer block — wider so the banner face is prominent
+var cornerBlock = new THREE.Mesh(new THREE.BoxGeometry(3, 12.5, 3), creamWall);
+cornerBlock.rotation.y = Math.PI / 4;
+cornerBlock.position.set(-0.2, 6.25, -0.2);
+pub.add(cornerBlock);
+
+// Red ground floor on the chamfer face
+var cornerRedBlock = new THREE.Mesh(new THREE.BoxGeometry(3.05, 4, 3.05), redFacade);
+cornerRedBlock.rotation.y = Math.PI / 4;
+cornerRedBlock.position.set(-0.2, 2, -0.2);
+pub.add(cornerRedBlock);
+
+// ----- CORNICES -----
+// Top cornice — Greek St face (at x=0.08, running along -Z)
+pub.add(makeCorniceBox(0.15, 0.4, 5.5, 0.08, 12, -2.5));
+// Top cornice — Romilly face (at z=0.08, running along -X)
+pub.add(makeCorniceBoxZ(9.5, 0.4, 0.15, -4.5, 12, 0.08));
+// Mid cornice — Greek St
+pub.add(makeCorniceBox(0.15, 0.3, 5.5, 0.08, 8, -2.5));
+// Mid cornice — Romilly
+pub.add(makeCorniceBoxZ(9.5, 0.3, 0.15, -4.5, 8, 0.08));
+
+function makeCorniceBox(w, h, d, x, y, z) {
+  var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), darkCream);
+  m.position.set(x, y, z);
+  return m;
+}
+function makeCorniceBoxZ(w, h, d, x, y, z) {
+  var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), darkCream);
+  m.position.set(x, y, z);
+  return m;
+}
+
+// ----- GROUND FLOOR RED FACADES -----
+// Greek St facade slab (at x=0.08, facing +X)
+var greekRedSlab = new THREE.Mesh(new THREE.BoxGeometry(0.15, 4, 5), redFacade);
+greekRedSlab.position.set(0.08, 2, -2.5);
+pub.add(greekRedSlab);
+
+// Romilly facade slab (at z=0.08, facing +Z)
+var romRedSlab = new THREE.Mesh(new THREE.BoxGeometry(9, 4, 0.15), redFacade);
+romRedSlab.position.set(-4.5, 2, 0.08);
+pub.add(romRedSlab);
+
+// Ground floor fill behind facades
+var gfFill1 = new THREE.Mesh(
+  new THREE.BoxGeometry(6, 4, 5),
+  new THREE.MeshStandardMaterial({ color: 0x4a1010, roughness: 0.9 })
+);
+gfFill1.position.set(-3, 2, -2.5);
+pub.add(gfFill1);
+var gfFill2 = new THREE.Mesh(
+  new THREE.BoxGeometry(9, 4, 6),
+  new THREE.MeshStandardMaterial({ color: 0x4a1010, roughness: 0.9 })
+);
+gfFill2.position.set(-4.5, 2, -3);
+pub.add(gfFill2);
+
+// Red ground floor on corner
+var cornerRed = new THREE.Mesh(new THREE.BoxGeometry(2, 4, 2), redFacade);
+cornerRed.rotation.y = Math.PI / 4;
+cornerRed.position.set(-0.3, 2, -0.3);
+pub.add(cornerRed);
+
+// ----- FASCIA SIGNS -----
+// Greek St fascia (face +X, at x=0.16)
+var greekFascia = new THREE.Mesh(
+  new THREE.PlaneGeometry(4.5, 0.55),
+  makeSign('THE  COACH  &  HORSES', { w: 512, h: 64, fs: 28, border: true })
+);
+greekFascia.rotation.y = Math.PI / 2; // face +X
+greekFascia.position.set(0.16, 3.7, -2.5);
+pub.add(greekFascia);
+
+// Romilly fascia (face +Z, at z=0.16)
+var romFascia = new THREE.Mesh(
+  new THREE.PlaneGeometry(8.5, 0.55),
+  makeSign('THE  COACH  &  HORSES', { w: 512, h: 64, fs: 28, border: true })
+);
+// face +Z — default plane faces +Z, no rotation needed
+romFascia.position.set(-4.5, 3.7, 0.16);
+pub.add(romFascia);
+
+// ----- RED COLUMNS -----
+function addColumn(x, y, z) {
+  var col = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 3.2, 8), brightRed);
+  col.position.set(x, y, z);
+  col.castShadow = true;
+  pub.add(col);
+  var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.15, 8), goldMat);
+  cap.position.set(x, y + 1.65, z);
+  pub.add(cap);
+  var base = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.1, 8), goldMat);
+  base.position.set(x, y - 1.6, z);
+  pub.add(base);
+}
+
+// Greek St columns (at x=0.2, spaced along -Z)
+addColumn(0.2, 2, -0.8);
+addColumn(0.2, 2, -1.8);
+addColumn(0.2, 2, -3.2);
+addColumn(0.2, 2, -4.2);
+
+// Romilly St columns (at z=0.2, spaced along -X)
+addColumn(-1.5, 2, 0.2);
+addColumn(-3.0, 2, 0.2);
+addColumn(-4.5, 2, 0.2);
+addColumn(-6.0, 2, 0.2);
+addColumn(-7.5, 2, 0.2);
+
+// ----- UPPER FLOOR WINDOWS -----
+// Greek St windows: on the +X face (at x≈0.1), spaced along -Z
+function addUpperWindow(x, y, z, faceX) {
+  // faceX = true means window on X face, false means on Z face
+  var ww = 0.7, wh = 1.5;
+  var frameGeo, glassGeo, barGeo;
+  if (faceX) {
+    frameGeo = new THREE.BoxGeometry(0.08, wh + 0.15, ww + 0.15);
+    glassGeo = new THREE.BoxGeometry(0.06, wh, ww);
+    barGeo = new THREE.BoxGeometry(0.09, 0.05, ww);
+  } else {
+    frameGeo = new THREE.BoxGeometry(ww + 0.15, wh + 0.15, 0.08);
+    glassGeo = new THREE.BoxGeometry(ww, wh, 0.06);
+    barGeo = new THREE.BoxGeometry(ww, 0.05, 0.09);
+  }
+  pub.add(new THREE.Mesh(frameGeo, windowFrame).tap(function(m){ m.position.set(x,y,z); }));
+  pub.add(new THREE.Mesh(glassGeo, warmGlass).tap(function(m){ m.position.set(x,y,z); }));
+  pub.add(new THREE.Mesh(barGeo, windowFrame).tap(function(m){ m.position.set(x,y+0.2,z); }));
+}
+
+// Since .tap doesn't exist on Mesh, let's use a helper
+function placeMesh(geo, mat, x, y, z) {
+  var m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  pub.add(m);
+  return m;
+}
+
+function addWin(x, y, z, faceX) {
+  var ww = 0.7, wh = 1.5;
+  if (faceX) {
+    placeMesh(new THREE.BoxGeometry(0.08, wh+0.15, ww+0.15), windowFrame, x, y, z);
+    placeMesh(new THREE.BoxGeometry(0.06, wh, ww), warmGlass, x, y, z);
+    placeMesh(new THREE.BoxGeometry(0.09, 0.05, ww), windowFrame, x, y+0.2, z);
+    placeMesh(new THREE.BoxGeometry(0.09, wh, 0.05), windowFrame, x, y, z); // vertical bar
+  } else {
+    placeMesh(new THREE.BoxGeometry(ww+0.15, wh+0.15, 0.08), windowFrame, x, y, z);
+    placeMesh(new THREE.BoxGeometry(ww, wh, 0.06), warmGlass, x, y, z);
+    placeMesh(new THREE.BoxGeometry(ww, 0.05, 0.09), windowFrame, x, y+0.2, z);
+    placeMesh(new THREE.BoxGeometry(0.05, wh, 0.09), windowFrame, x, y, z); // vertical bar
+  }
+}
+
+// Greek St upper windows (face +X at x=0.1)
+addWin(0.1, 6, -1.0, true);
+addWin(0.1, 6, -2.5, true);
+addWin(0.1, 6, -4.0, true);
+addWin(0.1, 10, -1.0, true);
+addWin(0.1, 10, -2.5, true);
+addWin(0.1, 10, -4.0, true);
+
+// Romilly upper windows (face +Z at z=0.1)
+addWin(-1.5, 6, 0.1, false);
+addWin(-3.5, 6, 0.1, false);
+addWin(-5.5, 6, 0.1, false);
+addWin(-7.5, 6, 0.1, false);
+addWin(-1.5, 10, 0.1, false);
+addWin(-3.5, 10, 0.1, false);
+addWin(-5.5, 10, 0.1, false);
+addWin(-7.5, 10, 0.1, false);
+
+// ----- GROUND FLOOR PUB WINDOWS -----
+function addPubWin(x, y, z, faceX) {
+  var ww = 0.9, wh = 2.2;
+  if (faceX) {
+    placeMesh(new THREE.BoxGeometry(0.08, wh+0.1, ww+0.1), darkWood, x, y, z);
+    placeMesh(new THREE.BoxGeometry(0.06, wh, ww), warmGlass, x, y, z);
+  } else {
+    placeMesh(new THREE.BoxGeometry(ww+0.1, wh+0.1, 0.08), darkWood, x, y, z);
+    placeMesh(new THREE.BoxGeometry(ww, wh, 0.06), warmGlass, x, y, z);
+  }
+}
+
+// Greek St pub windows (face +X)
+addPubWin(0.16, 1.8, -1.5, true);
+addPubWin(0.16, 1.8, -3.5, true);
+
+// Romilly pub windows (face +Z)
+addPubWin(-2.0, 1.8, 0.16, false);
+addPubWin(-4.0, 1.8, 0.16, false);
+addPubWin(-6.0, 1.8, 0.16, false);
+addPubWin(-8.0, 1.8, 0.16, false);
+
+// ----- PUB DOOR (Greek St face, near corner) -----
+placeMesh(new THREE.BoxGeometry(0.08, 2.5, 1.0), darkWood, 0.16, 1.25, -2.5);
+placeMesh(new THREE.BoxGeometry(0.06, 1.2, 0.7), warmGlass, 0.18, 1.8, -2.5);
+placeMesh(new THREE.BoxGeometry(0.06, 0.15, 0.04), goldMat, 0.2, 1.3, -2.15);
+
+// Door light
+var doorLight = new THREE.PointLight(0xc89030, 0.8, 8);
+doorLight.position.set(0.5, 2, -2.5);
+pub.add(doorLight);
+
+// ----- THE BIG CORNER BANNER -----
+// This is the iconic sign — tall, filling the chamfer face
+// In the photo it runs from just below roof to just above ground floor
+var bannerTex = makeCanvasTexture(512, 1024, function(cx, w, h) {
+  // Deep red background
+  cx.fillStyle = '#6b0e0e';
+  cx.fillRect(0, 0, w, h);
+
+  // Gold border — thick and ornate
+  cx.strokeStyle = '#c0a040';
+  cx.lineWidth = 10;
+  cx.strokeRect(18, 18, w - 36, h - 36);
+  // Inner border line
+  cx.lineWidth = 3;
+  cx.strokeRect(30, 30, w - 60, h - 60);
+
+  cx.fillStyle = '#c8a840';
+  cx.textAlign = 'center';
+
+  // Main title — large
+  cx.font = 'bold 52px Georgia';
+  cx.fillText('THE', w/2, 100);
+  cx.font = 'bold 64px Georgia';
+  cx.fillText('COACH', w/2, 175);
+  cx.font = 'bold 52px Georgia';
+  cx.fillText('&', w/2, 240);
+  cx.font = 'bold 64px Georgia';
+  cx.fillText('HORSES', w/2, 315);
+
+  // Decorative line
+  cx.strokeStyle = '#c0a040';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.moveTo(100, 355); cx.lineTo(w - 100, 355);
+  cx.stroke();
+
+  cx.fillStyle = '#c8a840';
+  cx.font = '28px Georgia';
+  cx.fillText('BUILT IN 1847', w/2, 400);
+
+  // Decorative line
+  cx.beginPath();
+  cx.moveTo(120, 430); cx.lineTo(w - 120, 430);
+  cx.stroke();
+
+  cx.font = 'italic 34px Georgia';
+  cx.fillText("NORMAN'S", w/2, 480);
+
+  cx.font = 'bold 36px Georgia';
+  cx.fillText('THE', w/2, 545);
+  cx.font = 'bold 44px Georgia';
+  cx.fillText("WEST END'S", w/2, 600);
+  cx.font = 'bold 52px Georgia';
+  cx.fillText('BEST', w/2, 665);
+  cx.fillText('KNOWN', w/2, 730);
+  cx.font = 'bold 60px Georgia';
+  cx.fillText('PUB', w/2, 810);
+
+  // Decorative line
+  cx.strokeStyle = '#c0a040';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.moveTo(80, 855); cx.lineTo(w - 80, 855);
+  cx.stroke();
+
+  cx.font = 'italic 26px Georgia';
+  cx.fillText('Traditional', w/2, 905);
+  cx.font = 'bold 30px Georgia';
+  cx.fillText('BEERS & LAGERS', w/2, 955);
+});
+var bannerMat = new THREE.MeshStandardMaterial({
+  map: bannerTex, roughness: 0.4, emissive: 0x6b0e0e, emissiveIntensity: 0.35,
+  emissiveMap: bannerTex
+});
+// Banner faces outward from corner at 45° — toward (+X, +Z)
+// Sized to fill most of the chamfer face: 2.5 wide, 7 tall
+// The chamfer face diagonal = 3 * sqrt(2)/2 ≈ 2.12, so 2.0 wide fits nicely
+// Use DoubleSide so it's visible from both directions, and BasicMaterial so lighting can't hide it
+var bannerMeshMat = new THREE.MeshBasicMaterial({
+  map: bannerTex, side: THREE.DoubleSide
+});
+var banner = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 8.0), bannerMeshMat);
+// Position clearly in front of the chamfer wall
+banner.position.set(1.6, 6, 1.6);
+banner.rotation.y = Math.PI / 4; // face toward camera at (+X, +Z) — NOTE: positive PI/4!
+pub.add(banner);
+
+// Strong spot light on the banner — it should glow in the fog
+var bannerSpot = new THREE.SpotLight(0xffddaa, 1.2, 15, Math.PI / 5, 0.3);
+bannerSpot.position.set(3, 14, 3);
+bannerSpot.target.position.set(1.6, 6, 1.6);
+pub.add(bannerSpot);
+pub.add(bannerSpot.target);
+
+// Second light from below to catch the lower half
+var bannerSpot2 = new THREE.PointLight(0xffccaa, 0.4, 8);
+bannerSpot2.position.set(1.5, 2, 1.5);
+pub.add(bannerSpot2);
+
+// ----- HANGING PUB SIGN (Greek St face) -----
+var signTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  cx.fillStyle = '#6b0e0e';
+  cx.fillRect(0, 0, w, h);
+  cx.strokeStyle = '#c0a040'; cx.lineWidth = 3;
+  cx.strokeRect(5, 5, w-10, h-10);
+  cx.fillStyle = '#c8a840';
+  cx.font = 'bold 16px Georgia'; cx.textAlign = 'center';
+  cx.fillText('COACH', w/2, 45);
+  cx.fillText('&', w/2, 65);
+  cx.fillText('HORSES', w/2, 85);
+  cx.font = '10px Georgia'; cx.fillText("NORMAN'S", w/2, 108);
+});
+var signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.5, side: THREE.DoubleSide });
+var hangSign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), signMat);
+hangSign.position.set(1.2, 3.8, -4.2);
+pub.add(hangSign);
+// Bracket
+var bracketMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
+placeMesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), bracketMat, 0.6, 4.3, -4.2);
+placeMesh(new THREE.BoxGeometry(0.05, 0.55, 0.05), bracketMat, 1.2, 4.05, -4.2);
+
+// ----- CHIMNEYS -----
+var chimMat = new THREE.MeshStandardMaterial({ color: 0xa09080, roughness: 0.85 });
+placeMesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), chimMat, -2, 12.75, -1);
+placeMesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), chimMat, -6, 12.75, -2);
+placeMesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), chimMat, -2, 13.55, -1);
+placeMesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), chimMat, -6, 13.55, -2);
+
+scene.add(pub);
+
+// ============================================================
+// NEIGHBOURING BUILDINGS
+// ============================================================
+
+// --- NEXT DOOR: Building adjoining pub on Greek St (further down the street) ---
+// Greek St face ends at z=-5, so this building starts right there
+// In the photo this is a dark/red brick building flush against the pub
+var greekNextDoor = new THREE.Group();
+var gndBody = new THREE.Mesh(new THREE.BoxGeometry(6, 13, 6), redBrick);
+gndBody.position.set(-3, 6.5, -8);
+gndBody.castShadow = true;
+greekNextDoor.add(gndBody);
+// Simple windows on the face visible to camera (at x=0, facing +X)
+for (var row = 0; row < 3; row++) {
+  for (var col = 0; col < 2; col++) {
+    var wm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.2, 0.6), darkGlass);
+    wm.position.set(0.05, 4 + row * 3.5, -6.5 - col * 2.5);
+    greekNextDoor.add(wm);
+    var wf = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.3, 0.7), windowFrame);
+    wf.position.set(0.04, 4 + row * 3.5, -6.5 - col * 2.5);
+    greekNextDoor.add(wf);
+  }
+}
+scene.add(greekNextDoor);
+
+// A further building down Greek St beyond that one
+var greekFarB = new THREE.Mesh(
+  new THREE.BoxGeometry(6, 11, 8),
+  new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9 })
+);
+greekFarB.position.set(-3, 5.5, -15);
+greekFarB.castShadow = true;
+scene.add(greekFarB);
+
+// --- NEXT DOOR: Building adjoining pub on Romilly St ---
+// Romilly face ends at x=-9, so this building starts right there
+// In the photo this is a blue/grey building flush against the pub
+var romNextDoor = new THREE.Group();
+var rndBody = new THREE.Mesh(new THREE.BoxGeometry(6, 14, 6), blueBrick);
+rndBody.position.set(-12, 7, -3);
+rndBody.castShadow = true;
+romNextDoor.add(rndBody);
+// Windows on the face facing +Z (toward Romilly St / camera)
+for (var row = 0; row < 3; row++) {
+  for (var col = 0; col < 2; col++) {
+    var wm2 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.2, 0.06), darkGlass);
+    wm2.position.set(-10.5 - col * 2.5, 4 + row * 3.5, 0.05);
+    romNextDoor.add(wm2);
+    var wf2 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.08), windowFrame);
+    wf2.position.set(-10.5 - col * 2.5, 4 + row * 3.5, 0.04);
+    romNextDoor.add(wf2);
+  }
+}
+scene.add(romNextDoor);
+
+// Further building along Romilly St
+var romFarB = new THREE.Mesh(
+  new THREE.BoxGeometry(8, 12, 6),
+  new THREE.MeshStandardMaterial({ color: 0x4a3a30, roughness: 0.9 })
+);
+romFarB.position.set(-19, 6, -3);
+romFarB.castShadow = true;
+scene.add(romFarB);
+
+// --- BUILDINGS ACROSS THE STREETS ---
+// Across Greek St (east side — well behind camera so it doesn't block the view)
+var oppGreek = new THREE.Mesh(
+  new THREE.BoxGeometry(4, 11, 20),
+  new THREE.MeshStandardMaterial({ color: 0x4a4040, roughness: 0.9 })
+);
+oppGreek.position.set(16, 5.5, -8);
+scene.add(oppGreek);
+
+// Across Romilly St (south side — behind camera)
+var oppRom = new THREE.Mesh(
+  new THREE.BoxGeometry(25, 10, 4),
+  new THREE.MeshStandardMaterial({ color: 0x504838, roughness: 0.9 })
+);
+oppRom.position.set(-8, 5, 16);
+scene.add(oppRom);
+
+// ============================================================
+// PAVEMENTS — raised kerbs along both streets
+// ============================================================
+var kerbMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 });
+var paveMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.85 });
+
+// Greek St pavement — pub side (west, at x≈0-1)
+// Runs along -Z from z=5 down to z=-20
+var greekPaveW = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 30), paveMat);
+greekPaveW.position.set(1.25, 0.075, -5);
+greekPaveW.receiveShadow = true;
+scene.add(greekPaveW);
+// Kerb edge
+var greekKerbW = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 30), kerbMat);
+greekKerbW.position.set(2.5, 0.09, -5);
+scene.add(greekKerbW);
+
+// Greek St pavement — opposite side (east, at x≈8-9)
+var greekPaveE = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 30), paveMat);
+greekPaveE.position.set(7.75, 0.075, -5);
+greekPaveE.receiveShadow = true;
+scene.add(greekPaveE);
+var greekKerbE = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 30), kerbMat);
+greekKerbE.position.set(6.5, 0.09, -5);
+scene.add(greekKerbE);
+
+// Romilly St pavement — pub side (north, at z≈0-1)
+var romPaveN = new THREE.Mesh(new THREE.BoxGeometry(25, 0.15, 2.5), paveMat);
+romPaveN.position.set(-10, 0.075, 1.25);
+romPaveN.receiveShadow = true;
+scene.add(romPaveN);
+var romKerbN = new THREE.Mesh(new THREE.BoxGeometry(25, 0.18, 0.15), kerbMat);
+romKerbN.position.set(-10, 0.09, 2.5);
+scene.add(romKerbN);
+
+// Romilly St pavement — opposite side (south, at z≈8-9)
+var romPaveS = new THREE.Mesh(new THREE.BoxGeometry(25, 0.15, 2.5), paveMat);
+romPaveS.position.set(-10, 0.075, 7.75);
+romPaveS.receiveShadow = true;
+scene.add(romPaveS);
+var romKerbS = new THREE.Mesh(new THREE.BoxGeometry(25, 0.18, 0.15), kerbMat);
+romKerbS.position.set(-10, 0.09, 6.5);
+scene.add(romKerbS);
+
+// Corner pavement (where the two streets meet, in front of the pub)
+var cornerPave = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), paveMat);
+cornerPave.position.set(1.5, 0.075, 1.5);
+cornerPave.receiveShadow = true;
+scene.add(cornerPave);
+
+// ============================================================
+// STREETLAMPS
+// ============================================================
+var lampLights = [];
+function createLamp(x, z) {
+  var g = new THREE.Group();
+  var postMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+  placeMeshG(g, new THREE.CylinderGeometry(0.05, 0.07, 5, 6), postMat, 0, 2.5, 0);
+  placeMeshG(g, new THREE.BoxGeometry(0.3, 0.4, 0.3), postMat, 0.3, 5, 0);
+  placeMeshG(g, new THREE.BoxGeometry(0.6, 0.06, 0.06), postMat, 0.15, 5, 0);
+  var light = new THREE.PointLight(0xffdda0, 0.6, 15);
+  light.position.set(0.3, 4.8, 0);
+  light.castShadow = true;
+  g.add(light);
+  lampLights.push(light);
+  // Glow sprite
+  var glowTex = makeCanvasTexture(64, 64, function(cx, w, h) {
+    var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+    grad.addColorStop(0, 'rgba(255, 220, 150, 0.8)');
+    grad.addColorStop(0.3, 'rgba(255, 200, 100, 0.3)');
+    grad.addColorStop(1, 'rgba(255, 180, 80, 0)');
+    cx.fillStyle = grad;
+    cx.fillRect(0, 0, w, h);
+  });
+  var glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, opacity: 0.5 }));
+  glowSprite.position.set(0.3, 5, 0);
+  glowSprite.scale.set(3, 3, 1);
+  g.add(glowSprite);
+  g.position.set(x, 0, z);
+  scene.add(g);
+}
+
+function placeMeshG(group, geo, mat, x, y, z) {
+  var m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  group.add(m);
+}
+
+createLamp(1, 1);
+createLamp(1, -8);
+createLamp(7, 4);
+
+// ============================================================
+// LIGHTING
+// ============================================================
+scene.add(new THREE.AmbientLight(0x1a1a2a, 0.3));
+
+var moonLight = new THREE.DirectionalLight(0x4455aa, 0.12);
+moonLight.position.set(10, 20, -5);
+moonLight.castShadow = true;
+scene.add(moonLight);
+
+// Warm interior glow from pub windows
+var pubGlow1 = new THREE.PointLight(0xc89030, 0.5, 10);
+pubGlow1.position.set(-1, 2, -2);
+scene.add(pubGlow1);
+var pubGlow2 = new THREE.PointLight(0xc89030, 0.4, 8);
+pubGlow2.position.set(-5, 2, -1);
+scene.add(pubGlow2);
+
+// ============================================================
+// FOG VOLUMES — depth-based atmospheric fog
+// ============================================================
+// Layered fog sprites at ground level for that Soho mist
+var fogSprites = [];
+for (var i = 0; i < 35; i++) {
+  var fogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+    var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+    grad.addColorStop(0, 'rgba(160, 150, 140, 0.12)');
+    grad.addColorStop(0.5, 'rgba(140, 130, 120, 0.06)');
+    grad.addColorStop(1, 'rgba(120, 110, 100, 0)');
+    cx.fillStyle = grad;
+    cx.fillRect(0, 0, w, h);
+  });
+  var fogMat = new THREE.SpriteMaterial({ map: fogTex, transparent: true, opacity: 0.2 + Math.random() * 0.15 });
+  var fogSprite = new THREE.Sprite(fogMat);
+  fogSprite.position.set(
+    Math.random() * 40 - 15,
+    0.2 + Math.random() * 2.5,
+    Math.random() * 40 - 15
+  );
+  var s = 3 + Math.random() * 8;
+  fogSprite.scale.set(s, s * 0.4, 1);
+  scene.add(fogSprite);
+  fogSprites.push({
+    sprite: fogSprite,
+    baseX: fogSprite.position.x,
+    drift: 0.003 + Math.random() * 0.008,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.002 + Math.random() * 0.006,
+    swayAmt: 0.3 + Math.random() * 0.8
+  });
+}
+
+// Higher fog wisps (thinner, drifting)
+for (var i = 0; i < 12; i++) {
+  var wispTex = makeCanvasTexture(64, 64, function(cx, w, h) {
+    var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+    grad.addColorStop(0, 'rgba(120, 115, 110, 0.08)');
+    grad.addColorStop(1, 'rgba(100, 95, 90, 0)');
+    cx.fillStyle = grad;
+    cx.fillRect(0, 0, w, h);
+  });
+  var wispMat = new THREE.SpriteMaterial({ map: wispTex, transparent: true, opacity: 0.1 });
+  var wisp = new THREE.Sprite(wispMat);
+  wisp.position.set(
+    Math.random() * 30 - 10,
+    3 + Math.random() * 5,
+    Math.random() * 30 - 10
+  );
+  wisp.scale.set(5 + Math.random() * 10, 2 + Math.random() * 3, 1);
+  scene.add(wisp);
+  fogSprites.push({
+    sprite: wisp,
+    baseX: wisp.position.x,
+    drift: 0.005 + Math.random() * 0.01,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.003 + Math.random() * 0.008,
+    swayAmt: 0.5 + Math.random() * 1.5
+  });
+}
+
+// ============================================================
+// PUDDLES (post-rain, wet ground)
+// ============================================================
+for (var i = 0; i < 8; i++) {
+  var puddleMat = new THREE.MeshStandardMaterial({
+    color: 0x111118, roughness: 0.1, metalness: 0.6, transparent: true, opacity: 0.3
+  });
+  var puddle = new THREE.Mesh(new THREE.CircleGeometry(0.4 + Math.random() * 0.8, 16), puddleMat);
+  puddle.rotation.x = -Math.PI / 2;
+  puddle.position.set(
+    Math.random() * 16 - 4,
+    0.02,
+    Math.random() * 16 - 4
+  );
+  scene.add(puddle);
+}
+
+// ============================================================
+// ANIMATION
+// ============================================================
+var clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+
+  // Flicker pub lights
+  var flicker = 0.85 + Math.sin(t * 1.3) * 0.1 + Math.sin(t * 3.7) * 0.05;
+  doorLight.intensity = 0.8 * flicker;
+  pubGlow1.intensity = 0.5 * flicker;
+  pubGlow2.intensity = 0.4 * (0.9 + Math.sin(t * 2.1) * 0.1);
+
+  // Flicker streetlamps
+  for (var i = 0; i < lampLights.length; i++) {
+    lampLights[i].intensity = 0.6 + Math.sin(t * (3 + i * 1.7)) * 0.06;
+  }
+
+  // Drift fog
+  for (var i = 0; i < fogSprites.length; i++) {
+    var f = fogSprites[i];
+    f.sway += f.swaySpeed;
+    f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;
+    f.baseX += f.drift;
+    // Wrap around
+    if (f.baseX > 25) f.baseX = -20;
+  }
+
+  // Warm glass emissive pulse
+  warmGlass.emissiveIntensity = 0.12 + Math.sin(t * 1.5) * 0.05;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>

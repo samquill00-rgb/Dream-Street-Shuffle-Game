@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fight Preview — Copper's Cellar</title>
+<style>
+  body {
+    background: #0a0908;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+    font-family: 'Georgia', serif;
+    color: #c8b89a;
+    margin: 0;
+  }
+  .container { width: 600px; }
+  .pp-arena {
+    background: linear-gradient(135deg, #1a0a0a 0%, #2a1515 50%, #1a0a0a 100%);
+    border: 2px solid #4a2a2a;
+    border-top: 3px solid #8a4a4a;
+    padding: 1.2em;
+    margin: 1em 0;
+    position: relative;
+    box-shadow: 0 0 20px rgba(120, 40, 40, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5);
+  }
+  .pp-score {
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 1.5em;
+    color: #ea7a7a;
+    letter-spacing: 0.2em;
+    text-shadow: 0 0 10px rgba(234, 120, 120, 0.8);
+    padding: 0.4em;
+    margin: 0 0 0.5em 0;
+    background: rgba(20, 0, 0, 0.5);
+    border: 1px solid #5a3a3a;
+  }
+  #fight-canvas {
+    display: block;
+    margin: 0 auto;
+    border: 1px solid #3a2a2a;
+    cursor: crosshair;
+  }
+  #fight-narrative {
+    text-align: center;
+    color: #d0b0b0;
+    font-size: 0.95em;
+    font-style: italic;
+    margin-top: 1em;
+    min-height: 2.5em;
+    line-height: 1.5;
+    transition: opacity 0.4s;
+  }
+  #fight-end {
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 1.4em;
+    margin-top: 0.5em;
+    min-height: 1.5em;
+  }
+  #fight-instructions {
+    text-align: center;
+    color: #7a5a5a;
+    font-size: 0.8em;
+    margin-top: 0.8em;
+    letter-spacing: 0.08em;
+  }
+  .sobriety-slider {
+    text-align: center;
+    margin: 1em 0;
+    color: #7a5a5a;
+    font-size: 0.85em;
+  }
+  .sobriety-slider input { width: 200px; }
+  #start-btn {
+    display: block;
+    margin: 2em auto;
+    background: rgba(20, 0, 0, 0.5);
+    border: 1px solid #5a3a3a;
+    color: #ea7a7a;
+    padding: 0.8em 2em;
+    font-family: Georgia, serif;
+    font-size: 1.1em;
+    cursor: pointer;
+  }
+  #start-btn:hover {
+    background: rgba(80, 30, 30, 0.3);
+    border-color: #8a5a5a;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="sobriety-slider">
+    Sobriety: <input type="range" id="sobriety" min="0" max="100" value="55"> <span id="sob-val">55</span>
+  </div>
+
+  <div id="pre-fight" style="text-align:center;margin:1.5em 0;">
+    <p style="color:#d0b0b0;font-style:italic;">Copper rolls his shoulder, all tectonic. Says: 'Three rounds.'</p>
+    <button id="start-btn" onclick="startFight()">Brace yourself</button>
+  </div>
+
+  <div class="pp-arena" id="fight-arena" style="display:none;">
+    <div class="pp-score" id="round-display">🥊 PRACTICE 1/3 🥊</div>
+    <canvas id="fight-canvas" width="560" height="400"></canvas>
+    <div id="fight-narrative"></div>
+    <div id="fight-end"></div>
+    <div id="fight-instructions">Watch his glove — dodge away from the glowing fist</div>
+  </div>
+</div>
+
+<script>
+document.getElementById('sobriety').addEventListener('input', function() {
+  document.getElementById('sob-val').textContent = this.value;
+});
+
+function startFight() {
+  document.getElementById('pre-fight').style.display = 'none';
+  document.getElementById('fight-arena').style.display = 'block';
+  var sobriety = parseInt(document.getElementById('sobriety').value);
+  new FightGame('fight-canvas', sobriety);
+}
+
+class FightGame {
+  constructor(canvasId, sobriety) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.W = this.canvas.width;
+    this.H = this.canvas.height;
+    this.sobriety = sobriety;
+
+    this.score = 0;
+    // Rounds: 0,1,2 = practice; 3,4,5 = real rounds 1-3
+    this.round = 0;
+    this.gameOver = false;
+    this.phase = 'idle';
+    this.phaseTimer = 0;
+    this.punchType = '';
+    this.resultText = '';
+    this.resultClass = '';
+    this.narrativeText = '';
+    this.clickable = false;
+    this.acted = false;
+
+    this.copperBaseX = this.W / 2;
+    this.copperBaseY = 80;
+    this.telegraphT = 0;
+    this.punchT = 0;
+    this.resultFlash = 0;
+    this.hoveredZone = '';
+
+    this.baseTelegraphDuration = 2000;
+    this.telegraphDuration = this.baseTelegraphDuration;
+
+    // Punch sequence: 3 practice (one of each type) then 3 real
+    this.roundPunches = ['right_cross', 'left_hook', 'uppercut', 'right_cross', 'left_hook', 'uppercut'];
+
+    // Practice intros
+    this.practiceIntros = [
+      "Watch his RIGHT glove. It glows and a curved trail shows where the punch is heading. Dodge away from it.",
+      "Now his LEFT glove. Follow the trail \u2014 it shows where the fist lands. Dodge the other way.",
+      "This time he crouches. The glove drops low for an uppercut. Dodge either side."
+    ];
+
+    // Real round intros (author's prose)
+    this.realIntros = [
+      "Copper feints left. You clock it; he clocks you clocking it. The right cross comes.",
+      "Copper works behind the jab until he steps in: a straight right to your nose.",
+      "You both breathe heavy as sports. An uppercut emits straight from his stomach."
+    ];
+
+    // Practice result text
+    this.practiceNarr = [
+      { clean: "Good. You read it.", block: "Blocked it. Safe, but dodging scores more.", caught: "He pulls the punch. Watch the glowing glove next time." },
+      { clean: "Quick feet. You've got it.", block: "Covered up. Try dodging away for more points.", caught: "Wrong side. Dodge AWAY from the glowing fist." },
+      { clean: "Sidestepped it clean.", block: "Absorbed it. Either side works for an uppercut.", caught: "Too slow. Step sideways when he crouches." }
+    ];
+
+    // Real result text (author's prose)
+    this.realDodgeNarr = [
+      { clean: "You slip under it so as to suggest a vacuum.",
+        block: "You shell up and take a hit, with the general grace of the crayfish.",
+        caught: "You give ground and feel the wall behind you. No room. A hook finds your shoulder." },
+      { clean: "Your neck rolls. His knuckles are pinking your cheek.",
+        block: "You parry at the wrist. A jab goes wide.",
+        caught: "\u2018Careful, clever cunt,\u2019 says Copper." },
+      { clean: "You swerve it and he stumbles.",
+        block: "You smother him on the inside. The uppercut dies on your shoulder.",
+        caught: "His experienced punch,\nTakes you to lunch,\nAnd hey, nonnie, nonie!" }
+    ];
+
+    this.practiceCounterNarr = [
+      { success: "You swing and Copper leans back. He grins.", fail: "Copper catches your wrist. 'Timing,' he says." },
+      { success: "Copper nods. 'Not bad.'", fail: "He swats your hand away. 'Watch the glove first.'" },
+      { success: "You step inside. Copper grunts approval.", fail: "He rides it. 'Patience.'" }
+    ];
+
+    this.realCounterNarr = [
+      { success: "You let the right come. Your own left hook finds the unclaimed territory of his diaphragm.",
+        fail: "You swing \u2014 Copper saw it coming a street away." },
+      { success: "You step inside his reach and land one clean to the ribs.",
+        fail: "\u2018Careful, clever cunt,\u2019 says Copper." },
+      { success: "Your forehead to his nose, which powders like a shingle under its force.",
+        fail: "His experienced punch,\nTakes you to lunch,\nAnd hey, nonnie, nonie!" }
+    ];
+
+    this.setupInput();
+    this.startRound();
+    this.loop();
+  }
+
+  isPractice() { return this.round < 3; }
+  realRoundIndex() { return this.round - 3; } // 0, 1, 2 for real rounds
+
+  setupInput() {
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (!this.clickable) { this.hoveredZone = ''; return; }
+      var rect = this.canvas.getBoundingClientRect();
+      var mx = (e.clientX - rect.left) * (this.W / rect.width);
+      var my = (e.clientY - rect.top) * (this.H / rect.height);
+      this.hoveredZone = this.getZone(mx, my);
+      this.canvas.style.cursor = this.hoveredZone ? 'pointer' : 'crosshair';
+    });
+
+    this.canvas.addEventListener('click', (e) => {
+      if (!this.clickable || this.acted) return;
+      var rect = this.canvas.getBoundingClientRect();
+      var mx = (e.clientX - rect.left) * (this.W / rect.width);
+      var my = (e.clientY - rect.top) * (this.H / rect.height);
+      var zone = this.getZone(mx, my);
+      if (zone) this.handleAction(zone);
+    });
+  }
+
+  getZone(mx, my) {
+    if (mx < 130 && my > 120 && my < 350) return 'dodge_left';
+    if (mx > this.W - 130 && my > 120 && my < 350) return 'dodge_right';
+    if (mx > 150 && mx < this.W - 150 && my > 330) return 'block';
+    if (mx > 210 && mx < this.W - 210 && my > 80 && my < 280) return 'counter';
+    return '';
+  }
+
+  startRound() {
+    this.phase = 'intro';
+    this.phaseTimer = Date.now();
+    this.telegraphT = 0;
+    this.punchT = 0;
+    this.resultFlash = 0;
+    this.clickable = false;
+    this.acted = false;
+    this.hoveredZone = '';
+
+    if (this.isPractice()) {
+      this.showNarrative(this.practiceIntros[this.round]);
+      this.telegraphDuration = 3200;
+    } else {
+      this.showNarrative(this.realIntros[this.realRoundIndex()]);
+      var sobPenalty = (100 - this.sobriety) * 5;
+      this.telegraphDuration = Math.max(1000, this.baseTelegraphDuration - sobPenalty);
+    }
+
+    this.updateRoundDisplay();
+    var introDelay = this.isPractice() ? 3200 : 2500;
+
+    setTimeout(() => {
+      if (this.gameOver) return;
+      this.phase = 'telegraph';
+      this.phaseTimer = Date.now();
+      this.punchType = this.roundPunches[this.round];
+      this.clickable = true;
+      if (!this.isPractice()) this.clearNarrative();
+    }, introDelay);
+  }
+
+  getCorrectDodge() {
+    if (this.punchType === 'right_cross') return 'dodge_right';
+    if (this.punchType === 'left_hook') return 'dodge_left';
+    if (this.punchType === 'uppercut') return 'either';
+    return 'dodge_left';
+  }
+
+  handleAction(zone) {
+    this.acted = true;
+    this.clickable = false;
+    var practice = this.isPractice();
+    var ni = practice ? this.round : this.realRoundIndex();
+
+    if (zone === 'counter') {
+      var chance = practice ? 0.8 : 0.45 + (this.sobriety / 285);
+      if (Math.random() < chance) {
+        if (!practice) this.score += 3;
+        this.resultText = '\u2605 COUNTER \u2605';
+        this.resultClass = 'win';
+        this.narrativeText = practice ? this.practiceCounterNarr[ni].success : this.realCounterNarr[ni].success;
+      } else {
+        this.resultText = 'CAUGHT';
+        this.resultClass = 'lose';
+        this.narrativeText = practice ? this.practiceCounterNarr[ni].fail : this.realCounterNarr[ni].fail;
+      }
+    } else if (zone === 'block') {
+      if (!practice) this.score += 1;
+      this.resultText = 'ABSORBED';
+      this.resultClass = 'neutral';
+      this.narrativeText = practice ? this.practiceNarr[ni].block : this.realDodgeNarr[ni].block;
+    } else {
+      var correct = this.getCorrectDodge();
+      var isCorrect = (zone === correct) || (correct === 'either');
+      if (isCorrect) {
+        if (!practice) this.score += 2;
+        this.resultText = 'CLEAN';
+        this.resultClass = 'win';
+        this.narrativeText = practice ? this.practiceNarr[ni].clean : this.realDodgeNarr[ni].clean;
+      } else {
+        this.resultText = 'CAUGHT';
+        this.resultClass = 'lose';
+        this.narrativeText = practice ? this.practiceNarr[ni].caught : this.realDodgeNarr[ni].caught;
+      }
+    }
+
+    this.phase = 'punching';
+    this.phaseTimer = Date.now();
+
+    setTimeout(() => {
+      this.phase = 'result';
+      this.phaseTimer = Date.now();
+      this.resultFlash = 1;
+      this.showResult(this.resultText, this.resultClass);
+      this.showNarrative(this.narrativeText);
+      this.updateRoundDisplay();
+
+      setTimeout(() => {
+        // Transition between practice and real, or between rounds
+        if (practice && this.round === 2) {
+          // End of practice, brief message before real fight
+          this.showNarrative("Practice over. Now it counts. Dodge: 2 points. Block: 1. Counter: 3 (risky). You need 4 to win.");
+          setTimeout(() => {
+            this.round = 3;
+            this.startRound();
+          }, 3500);
+        } else if (!practice && this.round >= 5) {
+          this.endGame();
+        } else {
+          this.round++;
+          this.startRound();
+        }
+      }, 2500);
+    }, 500);
+  }
+
+  timeOut() {
+    this.acted = true;
+    this.clickable = false;
+    var practice = this.isPractice();
+    var ni = practice ? this.round : this.realRoundIndex();
+
+    this.resultText = 'CAUGHT';
+    this.resultClass = 'lose';
+    this.narrativeText = practice ? this.practiceNarr[ni].caught : this.realDodgeNarr[ni].caught;
+
+    this.phase = 'punching';
+    this.phaseTimer = Date.now();
+
+    setTimeout(() => {
+      this.phase = 'result';
+      this.phaseTimer = Date.now();
+      this.resultFlash = 1;
+      this.showResult(this.resultText, this.resultClass);
+      this.showNarrative(this.narrativeText);
+      this.updateRoundDisplay();
+
+      setTimeout(() => {
+        if (practice && this.round === 2) {
+          this.showNarrative("Practice over. Now it counts. Dodge: 2 points. Block: 1. Counter: 3 (risky). You need 4 to win.");
+          setTimeout(() => { this.round = 3; this.startRound(); }, 3500);
+        } else if (!practice && this.round >= 5) {
+          this.endGame();
+        } else {
+          this.round++;
+          this.startRound();
+        }
+      }, 2500);
+    }, 500);
+  }
+
+  endGame() {
+    this.gameOver = true;
+    var won = this.score >= 4;
+    var endEl = document.getElementById('fight-end');
+    var inst = document.getElementById('fight-instructions');
+    if (inst) inst.style.display = 'none';
+
+    if (won) {
+      endEl.innerHTML = '<span style="color:#aaffaa;text-shadow:0 0 15px rgba(170,255,170,0.6);">\ud83e\udd4a STANDING \ud83e\udd4a</span>';
+      this.showNarrative("\u2018It\u2019s alright,\u2019 says Copper, \u2018Alright. Tell whoever sent you that I know that they sent you.\u2019");
+    } else {
+      endEl.innerHTML = '<span style="color:#ffaaaa;text-shadow:0 0 10px rgba(255,170,170,0.4);">\ud83e\udd4a DOWN \ud83e\udd4a</span>';
+      this.showNarrative("\u2018You\u2019re lucky that Quiet Frankie hasn\u2019t killed you. He would have if I wanted him to. Now, fuck off.\u2019");
+    }
+  }
+
+  updateRoundDisplay() {
+    var el = document.getElementById('round-display');
+    if (!el) return;
+    if (this.isPractice()) {
+      el.textContent = '\ud83e\udd4a PRACTICE ' + (this.round + 1) + '/3 \ud83e\udd4a';
+    } else {
+      var r = this.realRoundIndex() + 1;
+      el.textContent = '\ud83e\udd4a ROUND ' + r + ' \u2014 Score: ' + this.score + '/4 \ud83e\udd4a';
+    }
+  }
+
+  showNarrative(text) {
+    var el = document.getElementById('fight-narrative');
+    if (el) { el.style.opacity = '1'; el.textContent = text; }
+  }
+
+  clearNarrative() {
+    var el = document.getElementById('fight-narrative');
+    if (el) el.style.opacity = '0';
+  }
+
+  showResult(text, cls) {
+    var el = document.getElementById('round-display');
+    if (!el) return;
+    var col = cls === 'win' ? '#aaffaa' : cls === 'lose' ? '#ffaaaa' : '#eeddaa';
+    if (this.isPractice()) {
+      el.innerHTML = '\ud83e\udd4a <span style="color:' + col + ';">' + text + '</span> \u2014 PRACTICE \ud83e\udd4a';
+    } else {
+      el.innerHTML = '\ud83e\udd4a <span style="color:' + col + ';">' + text + '</span> \u2014 Score: ' + this.score + '/4 \ud83e\udd4a';
+    }
+  }
+
+  // ──────────── DRAWING ────────────
+
+  draw() {
+    var ctx = this.ctx;
+    var W = this.W, H = this.H;
+
+    ctx.fillStyle = '#0e0808';
+    ctx.fillRect(0, 0, W, H);
+
+    // Cellar brickwork
+    ctx.strokeStyle = '#1e1212';
+    ctx.lineWidth = 0.5;
+    for (var row = 0; row < H; row += 30) {
+      ctx.beginPath(); ctx.moveTo(0, row); ctx.lineTo(W, row); ctx.stroke();
+      var off = (Math.floor(row / 30) % 2) * 35;
+      for (var col = off; col < W; col += 70) {
+        ctx.beginPath(); ctx.moveTo(col, row); ctx.lineTo(col, row + 30); ctx.stroke();
+      }
+    }
+
+    // Overhead light
+    var lg = ctx.createRadialGradient(W / 2, -20, 10, W / 2, -20, 350);
+    lg.addColorStop(0, 'rgba(180, 140, 80, 0.10)');
+    lg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = lg;
+    ctx.fillRect(0, 0, W, H);
+
+    this.drawCopper(ctx);
+
+    // Punch path arrow (during telegraph)
+    if (this.phase === 'telegraph' && this.clickable) {
+      this.drawPunchPath(ctx);
+      this.drawZones(ctx);
+      this.drawTimerBar(ctx);
+    }
+
+    // Result flash
+    if (this.phase === 'result' && this.resultFlash > 0) {
+      this.resultFlash -= 0.02;
+      if (this.resultClass === 'win') ctx.fillStyle = 'rgba(170, 255, 170, ' + (this.resultFlash * 0.08) + ')';
+      else if (this.resultClass === 'lose') ctx.fillStyle = 'rgba(255, 100, 100, ' + (this.resultFlash * 0.1) + ')';
+      else ctx.fillStyle = 'rgba(220, 200, 120, ' + (this.resultFlash * 0.06) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Sobriety vignette
+    if (this.sobriety < 35) {
+      var str = (35 - this.sobriety) / 35;
+      var vig = ctx.createRadialGradient(W/2, H/2, H*0.2, W/2, H/2, H*0.6);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,0,' + (str * 0.45) + ')');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  drawCopper(ctx) {
+    ctx.save();
+    var cx = this.copperBaseX;
+    var cy = this.copperBaseY;
+    var lean = 0, crouch = 0, fistPull = 0;
+
+    if (this.phase === 'telegraph') {
+      var t = Math.min((Date.now() - this.phaseTimer) / this.telegraphDuration, 1);
+      this.telegraphT = t;
+      if (this.punchType === 'right_cross') { lean = -35 * t; fistPull = t; }
+      else if (this.punchType === 'left_hook') { lean = 35 * t; fistPull = t; }
+      else if (this.punchType === 'uppercut') { crouch = 30 * t; fistPull = t; }
+      if (t >= 1 && !this.acted) this.timeOut();
+    }
+
+    if (this.phase === 'punching') {
+      var pt = Math.min((Date.now() - this.phaseTimer) / 500, 1);
+      this.punchT = pt;
+      cy += 40 * pt;
+      fistPull = 1 - pt;
+    }
+
+    cx += lean;
+    cy += crouch;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(this.copperBaseX, 340, 80, 18, 0, 0, Math.PI * 2); ctx.fill();
+
+    // Torso
+    ctx.fillStyle = '#2e2018'; ctx.strokeStyle = '#4a3028'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 55, cy + 70); ctx.lineTo(cx - 60, cy + 230);
+    ctx.lineTo(cx + 60, cy + 230); ctx.lineTo(cx + 55, cy + 70);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // Shoulders
+    ctx.fillStyle = '#2e2018';
+    ctx.beginPath(); ctx.ellipse(cx, cy + 75, 68, 22, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    // Neck
+    ctx.fillStyle = '#8a6a52'; ctx.fillRect(cx - 14, cy + 38, 28, 38);
+
+    // Head
+    ctx.fillStyle = '#8a6a52';
+    ctx.beginPath(); ctx.ellipse(cx, cy + 15, 35, 40, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#6a4a35'; ctx.lineWidth = 1; ctx.stroke();
+
+    // Buzz-cut
+    ctx.fillStyle = '#3a2a1e';
+    ctx.beginPath(); ctx.ellipse(cx, cy - 8, 32, 20, 0, Math.PI, Math.PI * 2); ctx.fill();
+
+    // Brow
+    ctx.strokeStyle = '#6a4a35'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(cx - 24, cy + 2); ctx.quadraticCurveTo(cx - 12, cy - 3, cx - 4, cy + 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 4, cy + 2); ctx.quadraticCurveTo(cx + 12, cy - 3, cx + 24, cy + 2); ctx.stroke();
+
+    // Eyes
+    ctx.fillStyle = '#1a0a08';
+    ctx.beginPath(); ctx.ellipse(cx - 13, cy + 8, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 13, cy + 8, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+
+    // Nose
+    ctx.strokeStyle = '#6a4a35'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 2, cy + 10); ctx.quadraticCurveTo(cx - 6, cy + 25, cx - 8, cy + 27); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 2, cy + 10); ctx.quadraticCurveTo(cx + 6, cy + 25, cx + 8, cy + 27); ctx.stroke();
+
+    // Mouth
+    ctx.strokeStyle = '#5a3828'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(cx - 10, cy + 35); ctx.quadraticCurveTo(cx, cy + 37, cx + 10, cy + 35); ctx.stroke();
+
+    // ═══ FISTS — the key telegraph visual ═══
+    var lfx = cx - 65, lfy = cy + 140;
+    var rfx = cx + 65, rfy = cy + 140;
+
+    // Glowing fist helper
+    var glowPulse = 0.5 + 0.5 * Math.sin(Date.now() / 100);
+    var glowStrength = fistPull; // grows as telegraph progresses
+
+    // Sobriety dims the glow during real rounds
+    var glowAlpha = glowStrength;
+    if (!this.isPractice()) {
+      if (this.sobriety < 25) glowAlpha *= 0.5;
+      else if (this.sobriety < 50) glowAlpha *= 0.7;
+    }
+
+    if (this.punchType === 'right_cross') {
+      // RIGHT fist (Copper's right, player's left) pulls back and glows
+      rfx = cx + 65 + 30 * fistPull;
+      rfy = cy + 130 - 25 * fistPull;
+
+      if (this.phase === 'punching') {
+        rfx = cx + 65 + 30 * (1 - this.punchT) - 60 * this.punchT;
+        rfy = cy + 105 + 95 * this.punchT;
+        var fs = 1 + 1.2 * this.punchT;
+        this.drawFist(ctx, rfx, rfy, 16 * fs, 20 * fs, -0.2, 0);
+        this.drawFist(ctx, lfx, lfy, 16, 20, 0.2, 0);
+        ctx.restore(); return;
+      }
+
+      // Draw normal left fist, glowing right fist
+      this.drawFist(ctx, lfx, lfy, 16, 20, 0.2, 0);
+      this.drawFist(ctx, rfx, rfy, 16, 20, -0.2, glowAlpha * glowPulse);
+
+    } else if (this.punchType === 'left_hook') {
+      // LEFT fist pulls back and glows
+      lfx = cx - 65 - 30 * fistPull;
+      lfy = cy + 130 - 25 * fistPull;
+
+      if (this.phase === 'punching') {
+        lfx = cx - 65 - 30 * (1 - this.punchT) + 60 * this.punchT;
+        lfy = cy + 105 + 95 * this.punchT;
+        var fs = 1 + 1.2 * this.punchT;
+        this.drawFist(ctx, lfx, lfy, 16 * fs, 20 * fs, 0.2, 0);
+        this.drawFist(ctx, rfx, rfy, 16, 20, -0.2, 0);
+        ctx.restore(); return;
+      }
+
+      this.drawFist(ctx, rfx, rfy, 16, 20, -0.2, 0);
+      this.drawFist(ctx, lfx, lfy, 16, 20, 0.2, glowAlpha * glowPulse);
+
+    } else if (this.punchType === 'uppercut') {
+      // RIGHT fist drops low and glows
+      rfx = cx + 30;
+      rfy = cy + 160 + 35 * fistPull;
+
+      if (this.phase === 'punching') {
+        rfx = cx + 30 * (1 - this.punchT);
+        rfy = cy + 195 - 110 * this.punchT;
+        var fs = 1 + 1.5 * this.punchT;
+        this.drawFist(ctx, rfx, rfy, 16 * fs, 20 * fs, 0, 0);
+        this.drawFist(ctx, lfx, lfy, 16, 20, 0.2, 0);
+        ctx.restore(); return;
+      }
+
+      this.drawFist(ctx, lfx, lfy, 16, 20, 0.2, 0);
+      this.drawFist(ctx, rfx, rfy, 16, 20, 0, glowAlpha * glowPulse);
+
+    } else {
+      // Default guard
+      this.drawFist(ctx, lfx, lfy, 16, 20, 0.2, 0);
+      this.drawFist(ctx, rfx, rfy, 16, 20, -0.2, 0);
+    }
+
+    ctx.restore();
+  }
+
+  drawFist(ctx, x, y, rx, ry, rot, glow) {
+    // Glow effect behind the fist
+    if (glow > 0.05) {
+      ctx.save();
+      var glowR = Math.max(rx, ry) * 2.5;
+      var grad = ctx.createRadialGradient(x, y, 0, x, y, glowR);
+      grad.addColorStop(0, 'rgba(255, 100, 50, ' + (glow * 0.6) + ')');
+      grad.addColorStop(0.5, 'rgba(255, 60, 30, ' + (glow * 0.3) + ')');
+      grad.addColorStop(1, 'rgba(255, 30, 10, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(x, y, glowR, glowR, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // The fist itself
+    ctx.fillStyle = glow > 0.05 ? '#aa7050' : '#8a6a52';
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = glow > 0.05 ? '#cc6040' : '#6a4a35';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Knuckle line
+    ctx.strokeStyle = glow > 0.05 ? '#bb6545' : '#6a4a35';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 3); ctx.lineTo(x + 6, y - 3); ctx.stroke();
+  }
+
+  drawPunchPath(ctx) {
+    var t = this.telegraphT;
+    if (t < 0.15) return; // don't show immediately
+    var progress = Math.min((t - 0.15) / 0.6, 1); // fade in between 15% and 75% of telegraph
+
+    var pulse = 0.5 + 0.5 * Math.sin(Date.now() / 130);
+    var alpha = progress * 0.55 * pulse;
+
+    // Sobriety dims path in real rounds
+    if (!this.isPractice()) {
+      if (this.sobriety < 25) alpha *= 0.4;
+      else if (this.sobriety < 50) alpha *= 0.65;
+    }
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 120, 60, ' + alpha + ')';
+    ctx.fillStyle = 'rgba(255, 120, 60, ' + alpha + ')';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 6]);
+
+    var W = this.W, H = this.H;
+    // Fist position (approximate current position from drawCopper)
+    var cx = this.copperBaseX;
+    var lean = 0, crouch = 0;
+    if (this.punchType === 'right_cross') lean = -35 * Math.min(t, 1);
+    else if (this.punchType === 'left_hook') lean = 35 * Math.min(t, 1);
+    else if (this.punchType === 'uppercut') crouch = 30 * Math.min(t, 1);
+
+    cx += lean;
+    var cy = this.copperBaseY + crouch;
+
+    if (this.punchType === 'right_cross') {
+      // His right fist → curves to player's LEFT side
+      var fx = cx + 65 + 30 * t; // fist position
+      var fy = cy + 130 - 25 * t;
+      var landX = 100; // player's left
+      var landY = H * 0.75;
+      // Curved path with control point
+      var cpx = W * 0.35;
+      var cpy = fy + 40;
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.quadraticCurveTo(cpx, cpy, landX, landY);
+      ctx.stroke();
+      // Arrowhead at landing point
+      this.drawPathArrowhead(ctx, cpx, cpy, landX, landY, alpha);
+
+    } else if (this.punchType === 'left_hook') {
+      // His left fist → curves to player's RIGHT side
+      var fx = cx - 65 - 30 * t;
+      var fy = cy + 130 - 25 * t;
+      var landX = W - 100;
+      var landY = H * 0.75;
+      var cpx = W * 0.65;
+      var cpy = fy + 40;
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.quadraticCurveTo(cpx, cpy, landX, landY);
+      ctx.stroke();
+      this.drawPathArrowhead(ctx, cpx, cpy, landX, landY, alpha);
+
+    } else if (this.punchType === 'uppercut') {
+      // Fist drops low then comes straight up at you
+      var fx = cx + 30;
+      var fy = cy + 160 + 35 * t;
+      var landX = W / 2;
+      var landY = H * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.quadraticCurveTo(fx - 10, landY - 20, landX, landY);
+      ctx.stroke();
+      this.drawPathArrowhead(ctx, fx - 10, landY - 20, landX, landY, alpha);
+    }
+
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  drawPathArrowhead(ctx, cpx, cpy, tx, ty, alpha) {
+    // Arrowhead pointing in the direction of the curve's end
+    var angle = Math.atan2(ty - cpy, tx - cpx);
+    var headLen = 14;
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255, 120, 60, ' + alpha + ')';
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - headLen * Math.cos(angle - 0.45), ty - headLen * Math.sin(angle - 0.45));
+    ctx.lineTo(tx - headLen * Math.cos(angle + 0.45), ty - headLen * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawTimerBar(ctx) {
+    var t = this.telegraphT;
+    var remaining = 1 - t;
+    var barW = this.W * remaining;
+    var pulse = 0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 120));
+
+    ctx.fillStyle = 'rgba(234, 100, 100, 0.5)';
+    ctx.fillRect((this.W - barW) / 2, this.H - 10, barW, 5);
+    if (remaining < 0.3) {
+      ctx.fillStyle = 'rgba(255, 50, 50, ' + (0.3 + 0.7 * pulse) * 0.5 + ')';
+      ctx.fillRect((this.W - barW) / 2, this.H - 10, barW, 5);
+    }
+  }
+
+  drawZones(ctx) {
+    var alpha = 0.05;
+    var ha = 0.18;
+    var practice = this.isPractice();
+    var correct = this.getCorrectDodge();
+
+    // During practice, the correct dodge zone glows bright green
+    var hintAlpha = practice ? 0.22 + 0.08 * Math.sin(Date.now() / 200) : 0;
+
+    // Dodge left
+    var a = this.hoveredZone === 'dodge_left' ? ha : alpha;
+    if (practice && (correct === 'dodge_left' || correct === 'either')) a = Math.max(a, hintAlpha);
+    ctx.fillStyle = 'rgba(170, 255, 170, ' + a + ')';
+    this.roundRect(ctx, 10, 130, 115, 210, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(170, 255, 170, ' + (a + 0.1) + ')'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.font = '13px Georgia';
+    ctx.fillStyle = 'rgba(170, 255, 170, ' + (this.hoveredZone === 'dodge_left' ? 0.9 : (practice && (correct === 'dodge_left' || correct === 'either') ? 0.7 : 0.3)) + ')';
+    ctx.textAlign = 'center';
+    ctx.fillText('\u2190 DODGE', 67, 240);
+
+    // Dodge right
+    a = this.hoveredZone === 'dodge_right' ? ha : alpha;
+    if (practice && (correct === 'dodge_right' || correct === 'either')) a = Math.max(a, hintAlpha);
+    ctx.fillStyle = 'rgba(170, 255, 170, ' + a + ')';
+    this.roundRect(ctx, this.W - 125, 130, 115, 210, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(170, 255, 170, ' + (a + 0.1) + ')'; ctx.stroke();
+    ctx.fillStyle = 'rgba(170, 255, 170, ' + (this.hoveredZone === 'dodge_right' ? 0.9 : (practice && (correct === 'dodge_right' || correct === 'either') ? 0.7 : 0.3)) + ')';
+    ctx.fillText('DODGE \u2192', this.W - 67, 240);
+
+    // Block
+    a = this.hoveredZone === 'block' ? ha : alpha;
+    ctx.fillStyle = 'rgba(220, 200, 120, ' + a + ')';
+    this.roundRect(ctx, 155, 335, this.W - 310, 55, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(220, 200, 120, ' + (a + 0.1) + ')'; ctx.stroke();
+    ctx.fillStyle = 'rgba(220, 200, 120, ' + (this.hoveredZone === 'block' ? 0.9 : 0.3) + ')';
+    ctx.fillText('BLOCK', this.W / 2, 367);
+
+    // Counter
+    a = this.hoveredZone === 'counter' ? ha : alpha;
+    ctx.fillStyle = 'rgba(255, 150, 100, ' + a + ')';
+    ctx.beginPath(); ctx.ellipse(this.W / 2, 190, 60, 65, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 150, 100, ' + (a + 0.1) + ')'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 150, 100, ' + (this.hoveredZone === 'counter' ? 0.9 : 0.3) + ')';
+    ctx.fillText('COUNTER', this.W / 2, 195);
+  }
+
+  roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  loop() {
+    this.draw();
+    if (!this.gameOver) {
+      requestAnimationFrame(() => this.loop());
+    }
+  }
+}
+</script>
+</body>
+</html>

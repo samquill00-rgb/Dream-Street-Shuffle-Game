@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dean Street - 3D Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      overflow: hidden;
+      background: #0a0908;
+      font-family: 'Crimson Text', Georgia, serif;
+      color: #d4c4b0;
+      cursor: grab;
+    }
+    body.dragging { cursor: grabbing; }
+    canvas { display: block; }
+
+    #tooltip {
+      position: fixed;
+      padding: 8px 18px;
+      background: linear-gradient(135deg, rgba(20, 17, 16, 0.95) 0%, rgba(30, 25, 22, 0.9) 100%);
+      border: 1px solid rgba(212, 165, 116, 0.6);
+      border-radius: 4px;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-style: italic;
+      font-size: 14px;
+      color: #e8d5b7;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 100;
+      text-shadow: 0 0 10px rgba(212, 165, 116, 0.4);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+    #tooltip.visible { opacity: 1; }
+
+    #instructions {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 24px;
+      background: linear-gradient(135deg, rgba(20, 17, 16, 0.9) 0%, rgba(30, 25, 22, 0.85) 100%);
+      border: 1px solid rgba(212, 165, 116, 0.3);
+      border-radius: 4px;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 13px;
+      color: rgba(212, 165, 116, 0.8);
+      letter-spacing: 0.15em;
+      z-index: 50;
+      transition: opacity 2s ease;
+    }
+    #instructions.fade { opacity: 0; }
+
+    #location {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 24px;
+      background: linear-gradient(135deg, rgba(20, 17, 16, 0.9) 0%, rgba(30, 25, 22, 0.85) 100%);
+      border: 1px solid rgba(212, 165, 116, 0.4);
+      border-radius: 4px;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 12px;
+      letter-spacing: 0.3em;
+      color: rgba(212, 165, 116, 0.9);
+      text-shadow: 0 0 15px rgba(212, 165, 116, 0.4);
+      z-index: 50;
+    }
+
+    #date {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      color: rgba(138, 155, 174, 0.7);
+      z-index: 50;
+    }
+
+    .click-flash {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(212, 165, 116, 0.15);
+      pointer-events: none;
+      z-index: 200;
+      animation: flash 0.6s ease-out forwards;
+    }
+    @keyframes flash {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<div id="location">DEAN STREET, SOHO</div>
+<div id="date">23.11.73</div>
+<div id="tooltip"></div>
+<div id="instructions">DRAG TO LOOK AROUND &mdash; CLICK A DOOR TO ENTER</div>
+
+<script>
+// ============================================================
+// SCENE
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x06060e);
+scene.fog = new THREE.FogExp2(0x08080f, 0.016);
+
+var camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+document.body.appendChild(renderer.domElement);
+
+// ============================================================
+// CAMERA PAN — fixed position, drag to look
+// ============================================================
+var yaw = 0, pitch = 0, targetYaw = 0, targetPitch = 0;
+var isDragging = false, lastMX = 0, lastMY = 0;
+var SENS = 0.003, MAX_YAW = Math.PI * 0.55, MAX_PITCH = Math.PI / 8, SMOOTH = 0.08;
+
+document.addEventListener('mousedown', function(e) { isDragging = true; lastMX = e.clientX; lastMY = e.clientY; document.body.classList.add('dragging'); });
+document.addEventListener('mouseup', function() { isDragging = false; document.body.classList.remove('dragging'); });
+document.addEventListener('mousemove', function(e) {
+  if (isDragging) {
+    targetYaw = Math.max(-MAX_YAW, Math.min(MAX_YAW, targetYaw - (e.clientX - lastMX) * SENS));
+    targetPitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, targetPitch + (e.clientY - lastMY) * SENS));
+    lastMX = e.clientX; lastMY = e.clientY;
+  }
+  mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  tooltip.style.left = (e.clientX + 15) + 'px';
+  tooltip.style.top = (e.clientY - 30) + 'px';
+});
+// Touch
+document.addEventListener('touchstart', function(e) { isDragging = true; lastMX = e.touches[0].clientX; lastMY = e.touches[0].clientY; }, { passive: true });
+document.addEventListener('touchend', function() { isDragging = false; });
+document.addEventListener('touchmove', function(e) {
+  if (isDragging && e.touches.length) {
+    targetYaw = Math.max(-MAX_YAW, Math.min(MAX_YAW, targetYaw - (e.touches[0].clientX - lastMX) * SENS));
+    targetPitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, targetPitch + (e.touches[0].clientY - lastMY) * SENS));
+    lastMX = e.touches[0].clientX; lastMY = e.touches[0].clientY;
+  }
+}, { passive: true });
+
+// ============================================================
+// CLICKABLE VENUES
+// ============================================================
+var clickableObjects = [];
+var venueData = new Map();
+var mouseNDC = new THREE.Vector2();
+var raycaster = new THREE.Raycaster();
+var hoveredVenue = null;
+var tooltip = document.getElementById('tooltip');
+
+function makeClickable(mesh, info) {
+  clickableObjects.push(mesh);
+  venueData.set(mesh, info);
+}
+
+document.addEventListener('click', function() {
+  if (hoveredVenue) {
+    var flash = document.createElement('div');
+    flash.className = 'click-flash';
+    document.body.appendChild(flash);
+    setTimeout(function() { flash.remove(); }, 700);
+    alert('Entering: ' + hoveredVenue.name + '\n\nTwine passage: "' + hoveredVenue.passage + '"');
+  }
+});
+
+// ============================================================
+// LIGHTING — warm pools, deep shadows
+// ============================================================
+scene.add(new THREE.AmbientLight(0x252535, 0.35));
+scene.add(new THREE.HemisphereLight(0x3a3a6a, 0x1a0a0a, 0.25));
+
+// Distant amber horizon glow
+var sunGlow = new THREE.DirectionalLight(0xffa060, 0.15);
+sunGlow.position.set(-30, 10, 60);
+scene.add(sunGlow);
+
+// Cool moonlight from above
+var moonLight = new THREE.DirectionalLight(0x6688bb, 0.12);
+moonLight.position.set(10, 30, -20);
+scene.add(moonLight);
+
+// ============================================================
+// GROUND
+// ============================================================
+// Wet road — dark and slightly reflective
+var roadMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+var road = new THREE.Mesh(new THREE.PlaneGeometry(14, 120), roadMat);
+road.rotation.x = -Math.PI / 2;
+road.position.y = -0.01;
+road.receiveShadow = true;
+scene.add(road);
+
+// Pavements
+var paveMat = new THREE.MeshLambertMaterial({ color: 0x3a3a38 });
+var paveL = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 120), paveMat);
+paveL.rotation.x = -Math.PI / 2; paveL.position.set(-9.25, 0.02, 0); scene.add(paveL);
+var paveR = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 120), paveMat);
+paveR.rotation.x = -Math.PI / 2; paveR.position.set(9.25, 0.02, 0); scene.add(paveR);
+
+// Curbs
+function addCurb(x) {
+  var c = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 120), new THREE.MeshLambertMaterial({ color: 0x5a5a58 }));
+  c.position.set(x, 0.09, 0); scene.add(c);
+}
+addCurb(-7.1); addCurb(7.1);
+
+// Gutter line
+function addGutter(x) {
+  var g = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 120), new THREE.MeshLambertMaterial({ color: 0x2a2a28 }));
+  g.position.set(x, 0.01, 0); scene.add(g);
+}
+addGutter(-6.9); addGutter(6.9);
+
+// ============================================================
+// SKY DOME
+// ============================================================
+(function() {
+  var geo = new THREE.SphereGeometry(90, 32, 32);
+  var c = document.createElement('canvas'); c.width = 512; c.height = 512;
+  var ctx = c.getContext('2d');
+  var g = ctx.createLinearGradient(0, 0, 0, 512);
+  g.addColorStop(0, '#030308'); g.addColorStop(0.25, '#080814');
+  g.addColorStop(0.5, '#101025'); g.addColorStop(0.7, '#1a1535');
+  g.addColorStop(0.82, '#352540'); g.addColorStop(0.92, '#5a3a38');
+  g.addColorStop(1, '#100c08');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 512, 512);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  for (var i = 0; i < 80; i++) { ctx.beginPath(); ctx.arc(Math.random()*512, Math.random()*200, Math.random()*1.3, 0, Math.PI*2); ctx.fill(); }
+  var tex = new THREE.CanvasTexture(c);
+  scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })));
+})();
+
+// ============================================================
+// CANVAS TEXTURE HELPER
+// ============================================================
+function makeSign(text, opts) {
+  var o = opts || {};
+  var w = o.w || 512, h = o.h || 64;
+  var c = document.createElement('canvas'); c.width = w; c.height = h;
+  var ctx = c.getContext('2d');
+  ctx.fillStyle = o.bg || '#5a1010'; ctx.fillRect(0, 0, w, h);
+  if (o.border) { ctx.strokeStyle = o.border; ctx.lineWidth = o.bw || 3; ctx.strokeRect(3, 3, w-6, h-6); }
+  ctx.fillStyle = o.fg || '#ffd700';
+  ctx.font = (o.bold !== false ? 'bold ' : '') + (o.fs || 34) + 'px ' + (o.ff || 'Georgia, serif');
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, w/2, h/2);
+  if (o.sub) { ctx.font = (o.subfs || 16) + 'px Georgia, serif'; ctx.fillStyle = o.subfg || o.fg || '#ffd700'; ctx.fillText(o.sub, w/2, h - (o.suboff || 12)); }
+  return new THREE.CanvasTexture(c);
+}
+
+// ============================================================
+// GLOW SPRITE HELPER
+// ============================================================
+function addGlowSprite(parent, y, color, size) {
+  var c = document.createElement('canvas'); c.width = 64; c.height = 64;
+  var ctx = c.getContext('2d');
+  var g = ctx.createRadialGradient(32,32,0, 32,32,32);
+  g.addColorStop(0, color || 'rgba(255,214,153,0.5)');
+  g.addColorStop(0.4, 'rgba(255,200,130,0.12)');
+  g.addColorStop(1, 'rgba(255,180,100,0)');
+  ctx.fillStyle = g; ctx.fillRect(0,0,64,64);
+  var s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  s.scale.set(size || 4, size || 4, 1);
+  s.position.set(0, y, 0);
+  parent.add(s);
+  return s;
+}
+
+// ============================================================
+// VICTORIAN STREETLAMP (detailed)
+// ============================================================
+function createLamp(x, z) {
+  var g = new THREE.Group();
+  var iron = new THREE.MeshLambertMaterial({ color: 0x2a2a28 });
+
+  // Ornate base
+  var base1 = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 0.2, 8), iron);
+  base1.position.set(0, 0.1, 0); g.add(base1);
+  var base2 = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.15, 8), iron);
+  base2.position.set(0, 0.275, 0); g.add(base2);
+  var base3 = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.22, 0.1, 8), iron);
+  base3.position.set(0, 0.4, 0); g.add(base3);
+
+  // Fluted post
+  var post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.09, 3.6, 8), iron);
+  post.position.set(0, 2.25, 0); g.add(post);
+
+  // Decorative collar
+  var collar = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.08, 0.15, 8), iron);
+  collar.position.set(0, 4.1, 0); g.add(collar);
+
+  // Lamp housing — more ornate
+  var housingBot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.15, 0.12, 6), iron);
+  housingBot.position.set(0, 4.25, 0); g.add(housingBot);
+  var housingMid = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.35, 6), new THREE.MeshLambertMaterial({ color: 0x3a3a38 }));
+  housingMid.position.set(0, 4.5, 0); g.add(housingMid);
+  var housingTop = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.2, 6), iron);
+  housingTop.position.set(0, 4.8, 0); g.add(housingTop);
+  var finial = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), iron);
+  finial.position.set(0, 4.95, 0); g.add(finial);
+
+  // Glass globe (warm glow)
+  var globe = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), new THREE.MeshBasicMaterial({ color: 0xffe8aa, transparent: true, opacity: 0.85 }));
+  globe.position.set(0, 4.5, 0); g.add(globe);
+
+  // Actual light
+  var light = new THREE.PointLight(0xffd080, 3, 22);
+  light.position.set(0, 4.5, 0);
+  light.userData.baseIntensity = 3;
+  g.add(light);
+
+  // Big warm glow sprite
+  addGlowSprite(g, 4.5, 'rgba(255,214,153,0.45)', 5);
+
+  // Light pool on ground
+  var pool = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.035 }));
+  pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.03, 0); g.add(pool);
+
+  g.position.set(x, 0, z);
+  scene.add(g);
+  return g;
+}
+
+// ============================================================
+// WINDOW HELPERS
+// ============================================================
+function addWindowRow(parent, localX, localZ, startY, count, spacing, litChance, faceZ) {
+  for (var i = 0; i < count; i++) {
+    var wx = localX + (i - (count-1)/2) * spacing;
+    var isLit = Math.random() < litChance;
+
+    // Frame (recessed)
+    var frame = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.5, 0.08), new THREE.MeshLambertMaterial({ color: 0x2a2218 }));
+    frame.position.set(wx, startY, localZ);
+    parent.add(frame);
+
+    // Sill
+    var sill = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.06, 0.18), new THREE.MeshLambertMaterial({ color: 0x8a8078 }));
+    sill.position.set(wx, startY - 0.75, localZ + faceZ * 0.06);
+    parent.add(sill);
+
+    // Lintel
+    var lintel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.12), new THREE.MeshLambertMaterial({ color: 0x8a8078 }));
+    lintel.position.set(wx, startY + 0.78, localZ + faceZ * 0.04);
+    parent.add(lintel);
+
+    // Glass
+    var glassMat = isLit
+      ? new THREE.MeshBasicMaterial({ color: 0xffd699, transparent: true, opacity: 0.7 })
+      : new THREE.MeshLambertMaterial({ color: 0x1a2030 });
+    var glass = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.3), glassMat);
+    glass.position.set(wx, startY, localZ + faceZ * 0.05);
+    if (faceZ < 0) glass.rotation.y = Math.PI;
+    parent.add(glass);
+
+    // Glazing bar (cross)
+    var bar1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.3, 0.02), new THREE.MeshLambertMaterial({ color: 0xf0e8d8 }));
+    bar1.position.set(wx, startY, localZ + faceZ * 0.06);
+    parent.add(bar1);
+    var bar2 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.03, 0.02), new THREE.MeshLambertMaterial({ color: 0xf0e8d8 }));
+    bar2.position.set(wx, startY, localZ + faceZ * 0.06);
+    parent.add(bar2);
+
+    // Light spill on wall below (if lit)
+    if (isLit) {
+      var spill = new THREE.PointLight(0xffd699, 0.3, 4);
+      spill.position.set(wx, startY - 0.5, localZ + faceZ * 0.5);
+      parent.add(spill);
+    }
+  }
+}
+
+// ============================================================
+// CORNICE / LEDGE HELPER
+// ============================================================
+function addCornice(parent, x, z, width, y, depth, color) {
+  var c = new THREE.Mesh(new THREE.BoxGeometry(width + 0.3, 0.12, depth || 0.25), new THREE.MeshLambertMaterial({ color: color || 0x9a9590 }));
+  c.position.set(x, y, z); parent.add(c);
+}
+
+// ============================================================
+// HANGING PUB SIGN (like your friend's)
+// ============================================================
+function createHangingSign(x, z, text, subtext, faceZ) {
+  var g = new THREE.Group();
+  var iron = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+
+  // Bracket from wall
+  var bracket = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.2), iron);
+  bracket.position.set(0, 0, faceZ * 0.6); g.add(bracket);
+
+  // Hanging rod
+  var rod = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.2, 4), iron);
+  rod.position.set(0, -0.6, faceZ * 1.1); g.add(rod);
+
+  // Sign board
+  var boardC = document.createElement('canvas'); boardC.width = 256; boardC.height = 220;
+  var ctx = boardC.getContext('2d');
+  ctx.fillStyle = '#f5ead5'; ctx.fillRect(0,0,256,220);
+  ctx.strokeStyle = '#2a1a0a'; ctx.lineWidth = 5; ctx.strokeRect(6,6,244,208);
+  // Pub scene painting
+  ctx.fillStyle = '#8ab4d4'; ctx.fillRect(14,14,228,50); // sky
+  ctx.fillStyle = '#4a6a3a'; ctx.fillRect(14,54,228,60); // green
+  ctx.fillStyle = '#6a2020'; ctx.fillRect(85,70,75,30); // coach body
+  ctx.strokeStyle = '#4a3020'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(100,105,14,0,Math.PI*2); ctx.stroke(); // wheel
+  ctx.beginPath(); ctx.arc(145,105,14,0,Math.PI*2); ctx.stroke(); // wheel
+  ctx.fillStyle = '#6a4a30'; ctx.beginPath(); ctx.ellipse(55,88,20,14,-0.2,0,Math.PI*2); ctx.fill(); // horse
+  ctx.beginPath(); ctx.ellipse(38,76,8,6,-0.5,0,Math.PI*2); ctx.fill(); // head
+
+  ctx.fillStyle = '#2a1a0a';
+  ctx.font = 'bold 20px Georgia, serif'; ctx.textAlign = 'center';
+  ctx.fillText(text, 128, 148);
+  ctx.strokeStyle = '#b8860b'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(40,162); ctx.lineTo(216,162); ctx.stroke();
+  ctx.font = '13px Georgia, serif';
+  ctx.fillText(subtext || 'Est. 1847', 128, 182);
+
+  var signTex = new THREE.CanvasTexture(boardC);
+  var signFace = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.95), new THREE.MeshBasicMaterial({ map: signTex }));
+  signFace.position.set(0, -0.8, faceZ * 1.1 + faceZ * 0.03); g.add(signFace);
+  var signBack = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.95), new THREE.MeshBasicMaterial({ map: signTex }));
+  signBack.position.set(0, -0.8, faceZ * 1.1 - faceZ * 0.03);
+  signBack.rotation.y = Math.PI; g.add(signBack);
+
+  // Frame around sign
+  var signFrame = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.05, 0.07), new THREE.MeshLambertMaterial({ color: 0x2a1a0a }));
+  signFrame.position.set(0, -0.8, faceZ * 1.1); g.add(signFrame);
+
+  g.position.set(x, 4.2, z);
+  scene.add(g);
+  return g;
+}
+
+// ============================================================
+// DOOR HELPER (clickable, with warm light spill)
+// ============================================================
+function createDoor(x, z, w, h, venueName, passage, faceZ) {
+  var g = new THREE.Group();
+
+  // Door recess
+  var recess = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, h + 0.15, 0.2), new THREE.MeshLambertMaterial({ color: 0x0a0a0a }));
+  recess.position.set(0, h/2, 0); g.add(recess);
+
+  // Frame
+  var frameL = new THREE.Mesh(new THREE.BoxGeometry(0.08, h, 0.12), new THREE.MeshLambertMaterial({ color: 0x3a2a18 }));
+  frameL.position.set(-w/2 - 0.04, h/2, 0.05); g.add(frameL);
+  var frameR = frameL.clone(); frameR.position.x = w/2 + 0.04; g.add(frameR);
+  var frameT = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, 0.08, 0.12), new THREE.MeshLambertMaterial({ color: 0x3a2a18 }));
+  frameT.position.set(0, h + 0.04, 0.05); g.add(frameT);
+
+  // Door panel
+  var doorPanel = new THREE.Mesh(new THREE.BoxGeometry(w * 0.45, h - 0.1, 0.06), new THREE.MeshLambertMaterial({ color: 0x3a2a18 }));
+  doorPanel.position.set(-w * 0.25, h/2, 0.06); g.add(doorPanel);
+  var doorPanel2 = doorPanel.clone(); doorPanel2.position.x = w * 0.25; g.add(doorPanel2);
+
+  // Glass upper half (warm glow)
+  var doorGlass = new THREE.Mesh(
+    new THREE.PlaneGeometry(w - 0.15, h * 0.45),
+    new THREE.MeshBasicMaterial({ color: 0xffd699, transparent: true, opacity: 0.65 })
+  );
+  doorGlass.position.set(0, h * 0.7, 0.08 * faceZ);
+  g.add(doorGlass);
+
+  // Brass handle
+  var handle = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), new THREE.MeshLambertMaterial({ color: 0xd4a030 }));
+  handle.position.set(w * 0.15, h * 0.45, 0.1); g.add(handle);
+
+  // Light spilling out from doorway
+  var doorLight = new THREE.PointLight(0xffd699, 0.8, 6);
+  doorLight.position.set(0, h * 0.6, faceZ * 0.8);
+  g.add(doorLight);
+
+  // Clickable zone
+  var clickZone = new THREE.Mesh(
+    new THREE.PlaneGeometry(w + 0.6, h + 0.4),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, side: THREE.DoubleSide })
+  );
+  clickZone.position.set(0, h/2, 0.12 * faceZ);
+  g.add(clickZone);
+
+  g.position.set(x, 0, z);
+  if (faceZ < 0) g.rotation.y = Math.PI;
+  scene.add(g);
+
+  makeClickable(clickZone, { name: venueName, passage: passage, glowMesh: doorGlass });
+  return g;
+}
+
+// ============================================================
+// === THE FRENCH HOUSE (left side) ===
+// ============================================================
+(function() {
+  var g = new THREE.Group();
+
+  // Main building body
+  var upper = new THREE.Mesh(new THREE.BoxGeometry(7, 9, 7), new THREE.MeshLambertMaterial({ color: 0x5a7a9a }));
+  upper.position.set(0, 8, 0); g.add(upper);
+
+  // Ground floor — dark blue shopfront
+  var ground = new THREE.Mesh(new THREE.BoxGeometry(7, 3.5, 0.4), new THREE.MeshLambertMaterial({ color: 0x122844 }));
+  ground.position.set(0, 1.75, 3.7); g.add(ground);
+
+  // Fascia sign
+  var fascia = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.55, 0.18), new THREE.MeshBasicMaterial({ map: makeSign('THE FRENCH HOUSE', { bg: '#122844', fg: '#e8e0d0', fs: 28, border: '#8a8a6a', bw: 2 }) }));
+  fascia.position.set(0, 3.35, 3.85); g.add(fascia);
+
+  // Large pub windows
+  var winGlass1 = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.3), new THREE.MeshBasicMaterial({ color: 0xffd699, transparent: true, opacity: 0.75 }));
+  winGlass1.position.set(-1.5, 1.7, 3.92); g.add(winGlass1);
+  var winGlass2 = winGlass1.clone(); winGlass2.position.x = 1.5; g.add(winGlass2);
+
+  // Window frames
+  for (var wx of [-1.5, 1.5]) {
+    var wf = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.5, 0.06), new THREE.MeshLambertMaterial({ color: 0x122844 }));
+    wf.position.set(wx, 1.7, 3.88); g.add(wf);
+    // Glazing bars
+    var gb1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.3, 0.02), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
+    gb1.position.set(wx, 1.7, 3.94); g.add(gb1);
+    var gb2 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.04, 0.02), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
+    gb2.position.set(wx, 1.7, 3.94); g.add(gb2);
+  }
+
+  // Cornices
+  addCornice(g, 0, 3.8, 7, 3.6, 0.3, 0x7a9ab0);
+  addCornice(g, 0, 3.8, 7, 7, 0.25, 0x6a8a9a);
+  addCornice(g, 0, 3.8, 7, 12.5, 0.2, 0x7a9ab0);
+
+  // Upper windows
+  addWindowRow(g, 0, 3.9, 5.5, 3, 2, 0.55, 1);
+  addWindowRow(g, 0, 3.9, 8, 3, 2, 0.4, 1);
+  addWindowRow(g, 0, 3.9, 10.5, 3, 2, 0.3, 1);
+
+  // Light from windows spilling onto street
+  var winSpill = new THREE.PointLight(0xffd699, 0.6, 8);
+  winSpill.position.set(0, 1.5, 5.5); g.add(winSpill);
+
+  g.position.set(-9.5, 0, 6);
+  scene.add(g);
+
+  createDoor(-9.5, 9.92, 1.2, 2.3, 'The French House', 'The French', 1);
+  createHangingSign(-7.5, 9.9, 'French House', 'Soho since 1891', 1);
+})();
+
+// ============================================================
+// === COACH & HORSES (left side) ===
+// ============================================================
+(function() {
+  var g = new THREE.Group();
+
+  // Upper floors — cream
+  var upper = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, 7), new THREE.MeshLambertMaterial({ color: 0xd8d0c0 }));
+  upper.position.set(0, 7.75, 0); g.add(upper);
+
+  // Ground floor — deep red
+  var ground = new THREE.Mesh(new THREE.BoxGeometry(7, 3.5, 0.4), new THREE.MeshLambertMaterial({ color: 0x7a1515 }));
+  ground.position.set(0, 1.75, 3.7); g.add(ground);
+
+  // Red columns
+  for (var cx = -2.5; cx <= 2.5; cx += 1.25) {
+    var col = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 3.2, 8), new THREE.MeshLambertMaterial({ color: 0x7a1515 }));
+    col.position.set(cx, 1.6, 3.95); g.add(col);
+    // Gold capital
+    var cap = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.1, 0.25), new THREE.MeshLambertMaterial({ color: 0xd4a030 }));
+    cap.position.set(cx, 3.25, 3.95); g.add(cap);
+  }
+
+  // Gold fascia
+  var fascia = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.55, 0.18),
+    new THREE.MeshBasicMaterial({ map: makeSign('THE COACH & HORSES', { bg: '#5a1010', fg: '#ffd700', fs: 28, border: '#d4a030' }) }));
+  fascia.position.set(0, 3.35, 3.88); g.add(fascia);
+
+  // Large pub windows between columns
+  for (var wx = -1.8; wx <= 1.8; wx += 1.2) {
+    var pw = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 2.2), new THREE.MeshBasicMaterial({ color: 0xffd699, transparent: true, opacity: 0.8 }));
+    pw.position.set(wx, 1.6, 3.93); g.add(pw);
+  }
+
+  // Cornices — proper Georgian detail
+  addCornice(g, 0, 3.8, 7, 3.6, 0.35, 0xd4c8b8);
+  addCornice(g, 0, 3.8, 7, 7, 0.2, 0xc8bca8);
+  addCornice(g, 0, 3.8, 7, 12, 0.25, 0xd4c8b8);
+
+  // Upper windows
+  addWindowRow(g, 0, 3.9, 5.5, 3, 2, 0.45, 1);
+  addWindowRow(g, 0, 3.9, 8, 3, 2, 0.35, 1);
+  addWindowRow(g, 0, 3.9, 10.5, 3, 2, 0.25, 1);
+
+  // Vertical banner on side
+  var bannerC = document.createElement('canvas'); bannerC.width = 128; bannerC.height = 384;
+  var bctx = bannerC.getContext('2d');
+  bctx.fillStyle = '#5a1010'; bctx.fillRect(0,0,128,384);
+  bctx.strokeStyle = '#d4a030'; bctx.lineWidth = 4; bctx.strokeRect(8,8,112,368);
+  bctx.fillStyle = '#ffd700'; bctx.font = 'bold 20px Georgia'; bctx.textAlign = 'center';
+  bctx.fillText('THE', 64, 50); bctx.fillText('COACH', 64, 85); bctx.fillText('&', 64, 115);
+  bctx.fillText('HORSES', 64, 150); bctx.font = '14px Georgia'; bctx.fillText('Est. 1847', 64, 200);
+  bctx.font = 'bold 24px Georgia'; bctx.fillText('PUB', 64, 300);
+  var bannerTex = new THREE.CanvasTexture(bannerC);
+  var banner = new THREE.Mesh(new THREE.BoxGeometry(1, 5, 0.1), new THREE.MeshBasicMaterial({ map: bannerTex }));
+  banner.position.set(3.2, 7, 3.85); g.add(banner);
+
+  // Warm light spill
+  var cSpill = new THREE.PointLight(0xffd080, 0.8, 8);
+  cSpill.position.set(0, 1.5, 5.5); g.add(cSpill);
+
+  g.position.set(-9.5, 0, -8);
+  scene.add(g);
+
+  createDoor(-9.5, -4.08, 1.3, 2.3, 'Coach & Horses', 'Coach and Horses lock', 1);
+  createHangingSign(-12, -4.1, 'Coach & Horses', 'Est. 1847', 1);
+  createHangingSign(-7, -4.1, 'Coach & Horses', "The West End's Best", 1);
+})();
+
+// ============================================================
+// === PILLARS OF HERCULES (left side, far) ===
+// ============================================================
+(function() {
+  var g = new THREE.Group();
+  var upper = new THREE.Mesh(new THREE.BoxGeometry(7, 9, 7), new THREE.MeshLambertMaterial({ color: 0x8a7a68 }));
+  upper.position.set(0, 8, 0); g.add(upper);
+  var ground = new THREE.Mesh(new THREE.BoxGeometry(7, 3.5, 0.4), new THREE.MeshLambertMaterial({ color: 0x1a2a1a }));
+  ground.position.set(0, 1.75, 3.7); g.add(ground);
+
+  var fascia = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.5, 0.18),
+    new THREE.MeshBasicMaterial({ map: makeSign('PILLARS OF HERCULES', { bg: '#1a2a1a', fg: '#e8d5b7', fs: 24, border: '#5a7a4a' }) }));
+  fascia.position.set(0, 3.35, 3.88); g.add(fascia);
+
+  for (var wx = -1.5; wx <= 1.5; wx += 1.5) {
+    var pw = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.2), new THREE.MeshBasicMaterial({ color: 0xffd699, transparent: true, opacity: 0.65 }));
+    pw.position.set(wx, 1.6, 3.93); g.add(pw);
+  }
+
+  addCornice(g, 0, 3.8, 7, 3.6, 0.3, 0x9a8a78);
+  addCornice(g, 0, 3.8, 7, 12.5, 0.2, 0x9a8a78);
+  addWindowRow(g, 0, 3.9, 5.5, 3, 2, 0.35, 1);
+  addWindowRow(g, 0, 3.9, 8, 3, 2, 0.25, 1);
+  addWindowRow(g, 0, 3.9, 10.5, 3, 2, 0.2, 1);
+
+  g.position.set(-9.5, 0, 20);
+  scene.add(g);
+  createDoor(-9.5, 23.92, 1.2, 2.2, 'Pillars of Hercules', 'Entering The Pillars of Hercules', 1);
+  createHangingSign(-7.5, 23.9, 'Pillars of Hercules', 'Greek Street', 1);
+})();
+
+// ============================================================
+// === THE COLONY ROOM (right side) ===
+// ============================================================
+(function() {
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(new THREE.BoxGeometry(7, 13, 7), new THREE.MeshLambertMaterial({ color: 0x5a4a3a }));
+  body.position.set(0, 6.5, 0); g.add(body);
+  var shopFront = new THREE.Mesh(new THREE.BoxGeometry(7, 3.5, 0.4), new THREE.MeshLambertMaterial({ color: 0x2a2a28 }));
+  shopFront.position.set(0, 1.75, -3.7); g.add(shopFront);
+
+  // Small green neon sign upstairs
+  var colSign = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 0.12),
+    new THREE.MeshBasicMaterial({ map: makeSign('COLONY ROOM CLUB', { w: 384, h: 48, bg: '#0a1a0a', fg: '#88ee88', fs: 26, border: '#4a8a4a' }) }));
+  colSign.position.set(0, 5.5, -3.82); g.add(colSign);
+  // Green neon glow
+  var colNeon = new THREE.PointLight(0x66cc66, 0.8, 6);
+  colNeon.position.set(0, 5.5, -5); g.add(colNeon);
+
+  addCornice(g, 0, -3.8, 7, 3.6, 0.3, 0x6a5a4a);
+  addCornice(g, 0, -3.8, 7, 13, 0.2, 0x6a5a4a);
+  addWindowRow(g, 0, -3.9, 5.5, 3, 2, 0.45, -1);
+  addWindowRow(g, 0, -3.9, 8, 3, 2, 0.35, -1);
+  addWindowRow(g, 0, -3.9, 10.5, 3, 2, 0.3, -1);
+
+  g.position.set(9.5, 0, 2);
+  scene.add(g);
+  createDoor(9.5, -1.72, 0.9, 2.1, 'The Colony Room', 'The Colony Room Door', -1);
+})();
+
+// ============================================================
+// === RONNIE SCOTT'S (right side) ===
+// ============================================================
+(function() {
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(new THREE.BoxGeometry(7, 11, 7), new THREE.MeshLambertMaterial({ color: 0x2a2a35 }));
+  body.position.set(0, 5.5, 0); g.add(body);
+  var shopFront = new THREE.Mesh(new THREE.BoxGeometry(7, 3.5, 0.4), new THREE.MeshLambertMaterial({ color: 0x0a0a12 }));
+  shopFront.position.set(0, 1.75, -3.7); g.add(shopFront);
+
+  // Neon sign
+  var rSign = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.65, 0.15),
+    new THREE.MeshBasicMaterial({ map: makeSign("RONNIE SCOTT'S", { bg: '#0a0a18', fg: '#5599ff', fs: 32, border: '#3366cc' }) }));
+  rSign.position.set(0, 3.4, -3.85); g.add(rSign);
+
+  // Subtitle
+  var rSub = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 0.12),
+    new THREE.MeshBasicMaterial({ map: makeSign('JAZZ CLUB', { w: 384, h: 32, bg: '#0a0a18', fg: '#cc4444', fs: 22 }) }));
+  rSub.position.set(0, 2.9, -3.85); g.add(rSub);
+
+  // Blue neon glow — pulsing
+  var rNeon = new THREE.PointLight(0x4488ff, 2, 10);
+  rNeon.position.set(0, 3.5, -5.5);
+  rNeon.userData.neonBase = 2;
+  g.add(rNeon);
+
+  // Red neon accent
+  var rRedNeon = new THREE.PointLight(0xff4444, 0.5, 5);
+  rRedNeon.position.set(0, 2.9, -5);
+  g.add(rRedNeon);
+
+  // Dark windows (jazz club — mysterious)
+  addWindowRow(g, 0, -3.9, 5.5, 3, 2, 0.15, -1);
+  addWindowRow(g, 0, -3.9, 8, 3, 2, 0.1, -1);
+  addCornice(g, 0, -3.8, 7, 3.6, 0.3, 0x3a3a45);
+  addCornice(g, 0, -3.8, 7, 11, 0.2, 0x3a3a45);
+
+  // Neon glow sprites
+  addGlowSprite(g, 3.4, 'rgba(80,140,255,0.4)', 6);
+  g.children[g.children.length-1].position.z = -4.5;
+
+  g.position.set(9.5, 0, -12);
+  scene.add(g);
+  createDoor(9.5, -15.72, 1.3, 2.2, "Ronnie Scott's", "Ronnie Scott's", -1);
+})();
+
+// ============================================================
+// === LACKLAND'S OFFICE (right side) ===
+// ============================================================
+(function() {
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(new THREE.BoxGeometry(7, 10, 7), new THREE.MeshLambertMaterial({ color: 0x5a5a50 }));
+  body.position.set(0, 5, 0); g.add(body);
+  var shopFront = new THREE.Mesh(new THREE.BoxGeometry(7, 3.5, 0.4), new THREE.MeshLambertMaterial({ color: 0x2a2a28 }));
+  shopFront.position.set(0, 1.75, -3.7); g.add(shopFront);
+
+  var lSign = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.35, 0.1),
+    new THREE.MeshBasicMaterial({ map: makeSign('M. LACKLAND — LITERARY AGENT', { w: 512, h: 40, bg: '#1a1a18', fg: '#a09080', fs: 22 }) }));
+  lSign.position.set(0, 3.3, -3.85); g.add(lSign);
+
+  // One dimly lit window upstairs
+  addWindowRow(g, 0, -3.9, 5.5, 3, 2, 0.2, -1);
+  addWindowRow(g, 0, -3.9, 8, 3, 2, 0.15, -1);
+  addCornice(g, 0, -3.8, 7, 3.6, 0.25, 0x6a6a60);
+  addCornice(g, 0, -3.8, 7, 10, 0.2, 0x6a6a60);
+
+  g.position.set(9.5, 0, 14);
+  scene.add(g);
+  createDoor(9.5, 10.28, 1.0, 2.1, "Lackland's Office", "Martin Lackland's Office", -1);
+})();
+
+// ============================================================
+// FILLER BUILDINGS (with detail)
+// ============================================================
+function fillerBuilding(x, z, w, h, color, floors) {
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(new THREE.BoxGeometry(w, h, 7), new THREE.MeshLambertMaterial({ color: color }));
+  body.position.set(0, h/2, 0); g.add(body);
+  addCornice(g, 0, (x < 0 ? 3.8 : -3.8), w, h, 0.2, 0x8a8880);
+  addCornice(g, 0, (x < 0 ? 3.8 : -3.8), w, 3.5, 0.25, 0x8a8880);
+  var fz = x < 0 ? 3.9 : -3.9;
+  var fd = x < 0 ? 1 : -1;
+  for (var f = 0; f < (floors || 3); f++) {
+    addWindowRow(g, 0, fz, 5 + f * 2.5, Math.floor(w / 2), 2, 0.25, fd);
+  }
+  g.position.set(x, 0, z);
+  scene.add(g);
+}
+fillerBuilding(-9.5, -20, 7, 11, 0x6a5040, 3);
+fillerBuilding(-9.5, -32, 7, 10, 0x5a5a58, 2);
+fillerBuilding(-9.5, 33, 7, 10, 0x7a6a55, 2);
+fillerBuilding(9.5, -25, 7, 12, 0x6a5a4a, 3);
+fillerBuilding(9.5, 27, 7, 11, 0x5a4a40, 3);
+fillerBuilding(9.5, -35, 7, 9, 0x5a5550, 2);
+
+// ============================================================
+// STREETLAMPS
+// ============================================================
+createLamp(-7.8, -5);
+createLamp(-7.8, 9);
+createLamp(-7.8, 23);
+createLamp(7.8, -14);
+createLamp(7.8, 3);
+createLamp(7.8, 17);
+createLamp(-7.8, -18);
+createLamp(7.8, -28);
+
+// ============================================================
+// STREET FURNITURE
+// ============================================================
+// A-frame chalkboard outside Coach
+(function() {
+  var board = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.05), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+  board.position.set(-8, 0.45, -3); board.rotation.y = 0.2; scene.add(board);
+  var boardFrame = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.85, 0.03), new THREE.MeshLambertMaterial({ color: 0x3a2a18 }));
+  boardFrame.position.set(-8, 0.45, -3.02); boardFrame.rotation.y = 0.2; scene.add(boardFrame);
+})();
+
+// Bollards
+for (var bz = -20; bz <= 30; bz += 8) {
+  var bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.6, 6), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
+  bollard.position.set(-7.3, 0.3, bz + (Math.random()-0.5)*2);
+  scene.add(bollard);
+}
+
+// ============================================================
+// WET PAVEMENT PUDDLES (reflective hints)
+// ============================================================
+for (var pi = 0; pi < 15; pi++) {
+  var puddle = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.4 + Math.random() * 2, 0.3 + Math.random()),
+    new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.02 + Math.random() * 0.03 })
+  );
+  puddle.rotation.x = -Math.PI / 2;
+  puddle.position.set((Math.random()-0.5) * 12, 0.025, (Math.random()-0.5) * 50);
+  scene.add(puddle);
+}
+
+// ============================================================
+// FOG PARTICLES (atmospheric drift)
+// ============================================================
+var fogParticles = [];
+(function() {
+  var fogMat = new THREE.SpriteMaterial({
+    color: 0x8888aa,
+    transparent: true,
+    opacity: 0.06,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  for (var i = 0; i < 30; i++) {
+    var fog = new THREE.Sprite(fogMat.clone());
+    fog.scale.set(8 + Math.random() * 12, 4 + Math.random() * 6, 1);
+    fog.position.set(
+      (Math.random()-0.5) * 30,
+      1 + Math.random() * 4,
+      (Math.random()-0.5) * 60
+    );
+    fog.userData.speed = 0.1 + Math.random() * 0.2;
+    fog.userData.baseOpacity = 0.03 + Math.random() * 0.04;
+    fog.userData.driftOffset = Math.random() * Math.PI * 2;
+    scene.add(fog);
+    fogParticles.push(fog);
+  }
+})();
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+var clock = new THREE.Clock();
+var elapsed = 0;
+
+setTimeout(function() { document.getElementById('instructions').classList.add('fade'); }, 5000);
+
+function animate() {
+  requestAnimationFrame(animate);
+  var dt = clock.getDelta();
+  elapsed += dt;
+
+  // Smooth camera
+  yaw += (targetYaw - yaw) * SMOOTH;
+  pitch += (targetPitch - pitch) * SMOOTH;
+  camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+
+  // Flicker lamps
+  scene.traverse(function(obj) {
+    if (obj.isPointLight && obj.userData.baseIntensity) {
+      obj.intensity = obj.userData.baseIntensity * (0.9 + Math.sin(elapsed * 7 + obj.id * 4) * 0.1);
+    }
+    // Neon pulse
+    if (obj.isPointLight && obj.userData.neonBase) {
+      obj.intensity = obj.userData.neonBase * (0.85 + Math.sin(elapsed * 1.8) * 0.15);
+    }
+  });
+
+  // Drift fog
+  for (var i = 0; i < fogParticles.length; i++) {
+    var f = fogParticles[i];
+    f.position.x += f.userData.speed * dt;
+    f.material.opacity = f.userData.baseOpacity * (0.7 + 0.3 * Math.sin(elapsed * 0.5 + f.userData.driftOffset));
+    if (f.position.x > 20) f.position.x = -20;
+  }
+
+  // Raycasting hover
+  raycaster.setFromCamera(mouseNDC, camera);
+  var hits = raycaster.intersectObjects(clickableObjects);
+  if (hits.length > 0) {
+    var venue = venueData.get(hits[0].object);
+    if (venue) {
+      hoveredVenue = venue;
+      tooltip.textContent = venue.name;
+      tooltip.classList.add('visible');
+      document.body.style.cursor = 'pointer';
+      if (venue.glowMesh) { venue.glowMesh.material.opacity = 0.95; }
+    }
+  } else {
+    if (hoveredVenue && hoveredVenue.glowMesh) { hoveredVenue.glowMesh.material.opacity = 0.65; }
+    hoveredVenue = null;
+    tooltip.classList.remove('visible');
+    if (!isDragging) document.body.style.cursor = 'grab';
+  }
+
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>

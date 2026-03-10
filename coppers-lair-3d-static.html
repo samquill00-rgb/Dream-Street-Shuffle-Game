@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Copper's Lair — Beneath Soho, 1973</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(200,160,100,0.35);
+  pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="datestamp">23.11.73</div>
+<div id="location">BENEATH GREEK STREET, SOHO</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x06060a);
+scene.fog = new THREE.Fog(0x05050a, 5, 26);
+
+var camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.1, 200);
+
+// ============================================================
+// LAYOUT — Long rectangular room
+// Room runs along Z axis. Camera at +Z end, looking toward -Z.
+// Table with figures at the far -Z end.
+// ============================================================
+camera.position.set(0.3, 1.5, 8.5);
+camera.lookAt(0, 1.4, -6);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = 0.5;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// MATERIALS
+// ============================================================
+var concreteMat = new THREE.MeshStandardMaterial({ color: 0x5a5850, roughness: 0.95 });
+var concreteFloor = new THREE.MeshStandardMaterial({ color: 0x3a3835, roughness: 0.95 });
+var concreteDark = new THREE.MeshStandardMaterial({ color: 0x484540, roughness: 0.9 });
+var ceilingMat = new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.9 });
+var woodBeam = new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.85 });
+var darkWood = new THREE.MeshStandardMaterial({ color: 0x3a2515, roughness: 0.8 });
+var pipeMat = new THREE.MeshStandardMaterial({ color: 0x555550, roughness: 0.6, metalness: 0.3 });
+var ironMat = new THREE.MeshStandardMaterial({ color: 0x2a2a28, roughness: 0.7, metalness: 0.4 });
+var wireMat = new THREE.MeshStandardMaterial({ color: 0x888878, roughness: 0.7 });
+var bulbGlass = new THREE.MeshStandardMaterial({
+  color: 0xeeeee8, roughness: 0.2, emissive: 0xccbbaa, emissiveIntensity: 0.55,
+  transparent: true, opacity: 0.9
+});
+var silhouetteMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9 });
+var tableMat = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.85 });
+
+// ============================================================
+// HELPERS
+// ============================================================
+function box(group, w, h, d, mat, x, y, z) {
+  var geo = new THREE.BoxGeometry(w, h, d);
+  var m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  group.add(m);
+  return m;
+}
+
+function cyl(group, rTop, rBot, h, segs, mat, x, y, z) {
+  var geo = new THREE.CylinderGeometry(rTop, rBot, h, segs);
+  var m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  group.add(m);
+  return m;
+}
+
+function makeCanvasTexture(w, h, drawFunc) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  drawFunc(cx, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+// ============================================================
+// ROOM DIMENSIONS
+// ============================================================
+var roomLength = 20;   // along Z
+var roomWidth = 6;     // along X
+var roomHeight = 2.8;  // Y
+var halfW = roomWidth / 2;
+var halfL = roomLength / 2;
+
+// ============================================================
+// FLOOR
+// ============================================================
+var floorGroup = new THREE.Group();
+scene.add(floorGroup);
+
+// Concrete block texture for floor
+var floorTex = makeCanvasTexture(512, 512, function(cx, w, h) {
+  cx.fillStyle = '#3a3835';
+  cx.fillRect(0, 0, w, h);
+  // Dirty concrete patches
+  var i;
+  for (i = 0; i < 200; i++) {
+    var px = Math.random() * w;
+    var py = Math.random() * h;
+    var shade = Math.floor(Math.random() * 20) + 45;
+    cx.fillStyle = 'rgba(' + shade + ',' + shade + ',' + (shade - 5) + ',0.4)';
+    cx.fillRect(px, py, Math.random() * 30 + 5, Math.random() * 30 + 5);
+  }
+  // Cracks
+  for (i = 0; i < 8; i++) {
+    cx.strokeStyle = 'rgba(30,28,25,0.5)';
+    cx.lineWidth = 0.5 + Math.random();
+    cx.beginPath();
+    cx.moveTo(Math.random() * w, Math.random() * h);
+    cx.lineTo(Math.random() * w, Math.random() * h);
+    cx.stroke();
+  }
+});
+var floorMatTex = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.95 });
+var floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(roomWidth, roomLength),
+  floorMatTex
+);
+floor.rotation.x = -Math.PI / 2;
+floor.position.set(0, 0, 0);
+floor.receiveShadow = true;
+floorGroup.add(floor);
+
+// ============================================================
+// WALLS — concrete block texture
+// ============================================================
+var wallGroup = new THREE.Group();
+scene.add(wallGroup);
+
+function makeBlockWallTex(w, h) {
+  return makeCanvasTexture(w, h, function(cx, cw, ch) {
+    cx.fillStyle = '#585550';
+    cx.fillRect(0, 0, cw, ch);
+    // Draw concrete blocks
+    var blockH = 32;
+    var blockW = 64;
+    var row, col, ox;
+    for (row = 0; row < ch / blockH + 1; row++) {
+      ox = (row % 2 === 0) ? 0 : blockW / 2; // stagger
+      for (col = -1; col < cw / blockW + 1; col++) {
+        var bx = col * blockW + ox;
+        var by = row * blockH;
+        // Block face — slight colour variation
+        var shade = 75 + Math.floor(Math.random() * 20);
+        cx.fillStyle = 'rgb(' + shade + ',' + (shade - 2) + ',' + (shade - 5) + ')';
+        cx.fillRect(bx + 1, by + 1, blockW - 2, blockH - 2);
+        // Mortar lines (darker)
+        cx.strokeStyle = 'rgba(40,38,35,0.7)';
+        cx.lineWidth = 1.5;
+        cx.strokeRect(bx, by, blockW, blockH);
+      }
+    }
+    // Stains and damp patches
+    var i;
+    for (i = 0; i < 30; i++) {
+      cx.fillStyle = 'rgba(50,45,35,' + (Math.random() * 0.3) + ')';
+      cx.beginPath();
+      cx.arc(Math.random() * cw, Math.random() * ch, Math.random() * 30 + 5, 0, Math.PI * 2);
+      cx.fill();
+    }
+    // DRIP STREAKS — dark wet lines running top to bottom
+    var d;
+    for (d = 0; d < 6; d++) {
+      var dx = 40 + Math.random() * (cw - 80);
+      var dWidth = 3 + Math.random() * 5;
+      var dLen = ch * (0.4 + Math.random() * 0.6);
+      var grd = cx.createLinearGradient(dx, 0, dx, dLen);
+      grd.addColorStop(0, 'rgba(20,18,12,0.85)');
+      grd.addColorStop(0.3, 'rgba(25,20,14,0.7)');
+      grd.addColorStop(0.7, 'rgba(20,18,12,0.4)');
+      grd.addColorStop(1, 'rgba(20,18,12,0)');
+      cx.fillStyle = grd;
+      // Wobbly drip path
+      cx.beginPath();
+      cx.moveTo(dx - dWidth/2, 0);
+      cx.quadraticCurveTo(dx + dWidth, dLen * 0.3, dx - dWidth * 0.3, dLen * 0.6);
+      cx.quadraticCurveTo(dx + dWidth * 0.5, dLen * 0.85, dx, dLen);
+      cx.lineTo(dx + dWidth, dLen);
+      cx.quadraticCurveTo(dx + dWidth * 1.5, dLen * 0.85, dx + dWidth * 1.3, dLen * 0.6);
+      cx.quadraticCurveTo(dx - dWidth * 0.5, dLen * 0.3, dx + dWidth/2, 0);
+      cx.closePath();
+      cx.fill();
+      // Wet sheen at the top of the drip
+      cx.fillStyle = 'rgba(80,75,65,0.2)';
+      cx.fillRect(dx - dWidth/2, 0, dWidth, 8);
+    }
+  });
+}
+
+// Left wall (x = -halfW, facing +X)
+var leftWallTex = makeBlockWallTex(512, 256);
+var leftWallMat = new THREE.MeshStandardMaterial({ map: leftWallTex, roughness: 0.9 });
+var leftWall = new THREE.Mesh(new THREE.PlaneGeometry(roomLength, roomHeight), leftWallMat);
+leftWall.position.set(-halfW, roomHeight / 2, 0);
+leftWall.rotation.y = Math.PI / 2;
+leftWall.receiveShadow = true;
+wallGroup.add(leftWall);
+
+// Right wall (x = +halfW, facing -X)
+var rightWallTex = makeBlockWallTex(512, 256);
+var rightWallMat = new THREE.MeshStandardMaterial({ map: rightWallTex, roughness: 0.9 });
+var rightWall = new THREE.Mesh(new THREE.PlaneGeometry(roomLength, roomHeight), rightWallMat);
+rightWall.position.set(halfW, roomHeight / 2, 0);
+rightWall.rotation.y = -Math.PI / 2;
+rightWall.receiveShadow = true;
+wallGroup.add(rightWall);
+
+// Far wall (z = -halfL, facing +Z) — where the figures sit
+var farWallTex = makeBlockWallTex(512, 256);
+var farWallMat = new THREE.MeshStandardMaterial({ map: farWallTex, roughness: 0.9 });
+var farWall = new THREE.Mesh(new THREE.PlaneGeometry(roomWidth, roomHeight), farWallMat);
+farWall.position.set(0, roomHeight / 2, -halfL);
+farWall.receiveShadow = true;
+wallGroup.add(farWall);
+
+// Near wall (z = +halfL, behind camera)
+var nearWall = new THREE.Mesh(new THREE.PlaneGeometry(roomWidth, roomHeight), concreteMat);
+nearWall.position.set(0, roomHeight / 2, halfL);
+nearWall.rotation.y = Math.PI;
+nearWall.receiveShadow = true;
+wallGroup.add(nearWall);
+
+// ============================================================
+// CEILING
+// ============================================================
+var ceilGroup = new THREE.Group();
+scene.add(ceilGroup);
+
+var ceilingTex = makeCanvasTexture(512, 256, function(cx, cw, ch) {
+  cx.fillStyle = '#4a4038';
+  cx.fillRect(0, 0, cw, ch);
+  // Water stains
+  var i;
+  for (i = 0; i < 15; i++) {
+    cx.fillStyle = 'rgba(60,50,35,' + (Math.random() * 0.3 + 0.1) + ')';
+    cx.beginPath();
+    cx.ellipse(Math.random() * cw, Math.random() * ch, Math.random() * 50 + 20, Math.random() * 20 + 10, 0, 0, Math.PI * 2);
+    cx.fill();
+  }
+});
+var ceilMatTex = new THREE.MeshStandardMaterial({ map: ceilingTex, roughness: 0.9, side: THREE.DoubleSide });
+var ceiling = new THREE.Mesh(new THREE.PlaneGeometry(roomWidth, roomLength), ceilMatTex);
+ceiling.rotation.x = Math.PI / 2;
+ceiling.position.set(0, roomHeight, 0);
+ceiling.receiveShadow = true;
+ceilGroup.add(ceiling);
+
+// ============================================================
+// EXPOSED WOODEN JOISTS (across the ceiling, running along X)
+// ============================================================
+var joistGroup = new THREE.Group();
+scene.add(joistGroup);
+
+var jz;
+for (jz = -halfL + 1; jz <= halfL - 1; jz += 1.8) {
+  box(joistGroup, roomWidth - 0.2, 0.12, 0.08, woodBeam, 0, roomHeight - 0.06, jz);
+}
+// Two main beams running along Z (long direction)
+box(joistGroup, 0.15, 0.2, roomLength - 0.4, woodBeam, -1.5, roomHeight - 0.1, 0);
+box(joistGroup, 0.15, 0.2, roomLength - 0.4, woodBeam, 1.5, roomHeight - 0.1, 0);
+
+// ============================================================
+// WOODEN SUPPORT POSTS
+// ============================================================
+var postGroup = new THREE.Group();
+scene.add(postGroup);
+
+// Two posts along the length — like the reference image
+box(postGroup, 0.12, roomHeight, 0.12, woodBeam, -1.2, roomHeight / 2, 2);
+box(postGroup, 0.12, roomHeight, 0.12, woodBeam, 1.2, roomHeight / 2, -2);
+box(postGroup, 0.12, roomHeight, 0.12, darkWood, -1.2, roomHeight / 2, -5);
+
+// ============================================================
+// PIPES along the walls
+// ============================================================
+var pipeGroup = new THREE.Group();
+scene.add(pipeGroup);
+
+// Pipe running along left wall near ceiling
+var pipe1 = cyl(pipeGroup, 0.04, 0.04, roomLength - 2, 8, pipeMat, -halfW + 0.15, roomHeight - 0.3, 0);
+pipe1.rotation.x = Math.PI / 2;
+
+// Pipe running along right wall, lower
+var pipe2 = cyl(pipeGroup, 0.05, 0.05, roomLength - 4, 8, pipeMat, halfW - 0.2, 1.0, -1);
+pipe2.rotation.x = Math.PI / 2;
+
+// Vertical pipe descending on right wall
+cyl(pipeGroup, 0.04, 0.04, roomHeight, 8, ironMat, halfW - 0.15, roomHeight / 2, 3);
+
+// Pipe elbow / duct on right wall (like reference)
+box(pipeGroup, 0.3, 0.3, 0.5, ironMat, halfW - 0.25, roomHeight - 0.5, 1);
+cyl(pipeGroup, 0.08, 0.08, 0.6, 8, ironMat, halfW - 0.15, roomHeight - 0.5, 0.3);
+
+// Small pipes on ceiling
+var cp;
+for (cp = -6; cp < 7; cp += 4) {
+  var cpipe = cyl(pipeGroup, 0.02, 0.02, roomWidth * 0.6, 6, wireMat, 0, roomHeight - 0.15, cp);
+  cpipe.rotation.z = Math.PI / 2;
+}
+
+// ============================================================
+// HANGING LIGHT BULB — centre of ceiling
+// ============================================================
+var bulbGroup = new THREE.Group();
+scene.add(bulbGroup);
+
+// Wire from ceiling
+var wireGeo = new THREE.CylinderGeometry(0.005, 0.005, 1.0, 4);
+var wire = new THREE.Mesh(wireGeo, wireMat);
+wire.position.set(0, roomHeight - 0.5, 1.5);
+bulbGroup.add(wire);
+
+// Bulb socket
+cyl(bulbGroup, 0.025, 0.02, 0.08, 8, ironMat, 0, roomHeight - 1.04, 1.5);
+
+// The bulb itself — a glowing sphere
+var bulbSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(0.06, 12, 8),
+  bulbGlass
+);
+bulbSphere.position.set(0, roomHeight - 1.12, 1.5);
+bulbGroup.add(bulbSphere);
+
+// Point light from the bulb — harsh white
+var bulbLight = new THREE.PointLight(0xccbbaa, 2.5, 25, 1.5);
+bulbLight.position.set(0, roomHeight - 1.15, 1.5);
+bulbLight.castShadow = true;
+bulbLight.shadow.mapSize.set(512, 512);
+bulbLight.shadow.radius = 8;
+bulbLight.shadow.bias = -0.002;
+scene.add(bulbLight);
+
+// Tight glow halo — white
+var glowMat = new THREE.MeshBasicMaterial({
+  color: 0xccbbaa, transparent: true, opacity: 0.1
+});
+var glowSphere = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 12), glowMat);
+glowSphere.position.copy(bulbSphere.position);
+scene.add(glowSphere);
+
+// ============================================================
+// AMBIENT LIGHT — very dim to keep it oppressive
+// ============================================================
+var ambientLight = new THREE.AmbientLight(0x0a0810, 0.08);
+scene.add(ambientLight);
+
+// Backlight behind figures — cold bluish-white, harsh silhouette
+var farFill = new THREE.PointLight(0x8090aa, 0.9, 10, 1.5);
+farFill.position.set(0, 2.2, -halfL + 0.5);
+scene.add(farFill);
+
+// Rim light — cold, catches edges hard
+var rimLight = new THREE.PointLight(0x506080, 0.4, 8, 2);
+rimLight.position.set(0.3, 1.2, -halfL + 3.5);
+scene.add(rimLight);
+
+// Floor-level cold hint — something clinical underneath
+var floorGlow = new THREE.PointLight(0x182030, 0.2, 6, 2);
+floorGlow.position.set(0, 0.05, -halfL + 4);
+scene.add(floorGlow);
+
+// ============================================================
+// TABLE at far end
+// ============================================================
+var tableGroup = new THREE.Group();
+scene.add(tableGroup);
+
+var tableZ = -halfL + 4.5;
+var tableY = 0.7;
+// Table top
+box(tableGroup, 1.4, 0.06, 0.7, tableMat, 0, tableY, tableZ);
+// Table legs
+box(tableGroup, 0.06, tableY, 0.06, darkWood, -0.6, tableY / 2, tableZ - 0.25);
+box(tableGroup, 0.06, tableY, 0.06, darkWood, 0.6, tableY / 2, tableZ - 0.25);
+box(tableGroup, 0.06, tableY, 0.06, darkWood, -0.6, tableY / 2, tableZ + 0.25);
+box(tableGroup, 0.06, tableY, 0.06, darkWood, 0.6, tableY / 2, tableZ + 0.25);
+
+// ============================================================
+// SILHOUETTED FIGURES — minimal shapes, clean readable outlines
+// Each figure: one body block + one head. That's it.
+// At distance in fog they merge into solid human shapes.
+// ============================================================
+var figureGroup = new THREE.Group();
+scene.add(figureGroup);
+
+// --- WOMAN (left, small and lithe) ---
+var womanGroup = new THREE.Group();
+womanGroup.position.set(-0.4, 0, tableZ);
+figureGroup.add(womanGroup);
+
+// Body — extends from below table up to neck (no gap)
+var wBodyGeo = new THREE.BoxGeometry(0.26, 0.7, 0.16);
+var wBody = new THREE.Mesh(wBodyGeo, silhouetteMat);
+wBody.position.set(0, tableY + 0.12, 0);
+wBody.castShadow = false;
+womanGroup.add(wBody);
+
+// Head — single sphere, sits right on top of body
+var wHeadGeo = new THREE.SphereGeometry(0.09, 12, 8);
+var wHeadMesh = new THREE.Mesh(wHeadGeo, silhouetteMat);
+wHeadMesh.position.set(0, tableY + 0.56, 0);
+wHeadMesh.scale.set(1, 1.15, 0.95);
+wHeadMesh.castShadow = false;
+womanGroup.add(wHeadMesh);
+
+// --- MAN (right, bigger and chunky) ---
+// Exact same approach as woman: one box body + one sphere head. Just bigger.
+var manGroup = new THREE.Group();
+manGroup.position.set(0.5, 0, tableZ);
+figureGroup.add(manGroup);
+
+// Body — extends from below table up to neck (no gap)
+var mBodyGeo = new THREE.BoxGeometry(0.38, 0.75, 0.2);
+var mBody = new THREE.Mesh(mBodyGeo, silhouetteMat);
+mBody.position.set(0, tableY + 0.14, 0);
+mBody.castShadow = false;
+manGroup.add(mBody);
+
+// Head — sphere, sitting directly on the box top
+var mHeadGeo = new THREE.SphereGeometry(0.1, 12, 8);
+var mHeadMesh = new THREE.Mesh(mHeadGeo, silhouetteMat);
+mHeadMesh.position.set(0, tableY + 0.6, 0);
+mHeadMesh.scale.set(1, 0.9, 0.95);
+mHeadMesh.castShadow = false;
+manGroup.add(mHeadMesh);
+
+// ============================================================
+// TURKISH RUG — large, fills centre of room
+// ============================================================
+var rugGroup = new THREE.Group();
+scene.add(rugGroup);
+
+var rugTex = makeCanvasTexture(512, 512, function(cx, w, h) {
+  // Deep burgundy base
+  cx.fillStyle = '#3a0e0e';
+  cx.fillRect(0, 0, w, h);
+  var i, j, a;
+  // Ornate multi-layer border
+  // Outermost — dark frame
+  cx.strokeStyle = '#1a0505';
+  cx.lineWidth = 14;
+  cx.strokeRect(10, 10, w - 20, h - 20);
+  // Gold outer border
+  cx.strokeStyle = '#7a5a20';
+  cx.lineWidth = 6;
+  cx.strokeRect(22, 22, w - 44, h - 44);
+  // Running vine pattern in border zone
+  for (i = 35; i < w - 35; i += 18) {
+    cx.fillStyle = '#5a3818';
+    cx.fillRect(i, 30, 8, 8);
+    cx.fillRect(i, h - 38, 8, 8);
+  }
+  for (j = 35; j < h - 35; j += 18) {
+    cx.fillStyle = '#5a3818';
+    cx.fillRect(30, j, 8, 8);
+    cx.fillRect(w - 38, j, 8, 8);
+  }
+  // Inner red border
+  cx.strokeStyle = '#5a1818';
+  cx.lineWidth = 3;
+  cx.strokeRect(45, 45, w - 90, h - 90);
+  // Cream inner line
+  cx.strokeStyle = '#8a7a50';
+  cx.lineWidth = 1.5;
+  cx.strokeRect(50, 50, w - 100, h - 100);
+  // Central medallion — large diamond
+  cx.save();
+  cx.translate(w/2, h/2);
+  cx.rotate(Math.PI / 4);
+  cx.fillStyle = '#4a1510';
+  cx.fillRect(-65, -65, 130, 130);
+  cx.strokeStyle = '#7a5a28';
+  cx.lineWidth = 2;
+  cx.strokeRect(-65, -65, 130, 130);
+  cx.fillStyle = '#2a0a08';
+  cx.fillRect(-40, -40, 80, 80);
+  cx.strokeStyle = '#6a4a20';
+  cx.lineWidth = 1.5;
+  cx.strokeRect(-40, -40, 80, 80);
+  // Inner star
+  cx.fillStyle = '#5a2015';
+  cx.fillRect(-18, -18, 36, 36);
+  cx.restore();
+  // Corner ornaments — smaller diamonds
+  var crnrs = [[120, 120], [w-120, 120], [120, h-120], [w-120, h-120]];
+  for (i = 0; i < crnrs.length; i++) {
+    cx.save();
+    cx.translate(crnrs[i][0], crnrs[i][1]);
+    cx.rotate(Math.PI / 4);
+    cx.fillStyle = '#4a1812';
+    cx.fillRect(-25, -25, 50, 50);
+    cx.strokeStyle = '#6a4a22';
+    cx.lineWidth = 1.5;
+    cx.strokeRect(-25, -25, 50, 50);
+    cx.fillStyle = '#3a0e0a';
+    cx.fillRect(-12, -12, 24, 24);
+    cx.restore();
+  }
+  // Tiny repeating motifs between medallions
+  for (i = 0; i < 8; i++) {
+    for (j = 0; j < 8; j++) {
+      var mx = 80 + i * 48;
+      var my = 80 + j * 48;
+      if (Math.sqrt(Math.pow(mx - w/2, 2) + Math.pow(my - h/2, 2)) < 60) { continue; }
+      if (mx < 55 || mx > w - 55 || my < 55 || my > h - 55) { continue; }
+      cx.fillStyle = '#5a2818';
+      cx.fillRect(mx - 3, my - 3, 6, 6);
+      cx.strokeStyle = '#6a4020';
+      cx.lineWidth = 0.5;
+      cx.strokeRect(mx - 3, my - 3, 6, 6);
+    }
+  }
+  // Wear and age
+  for (i = 0; i < 40; i++) {
+    cx.fillStyle = 'rgba(20,10,5,' + (Math.random() * 0.12) + ')';
+    cx.fillRect(Math.random() * w, Math.random() * h, Math.random() * 30 + 5, Math.random() * 30 + 5);
+  }
+});
+var rugMat = new THREE.MeshStandardMaterial({ map: rugTex, roughness: 0.92 });
+var rug = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 4.0), rugMat);
+rug.rotation.x = -Math.PI / 2;
+rug.position.set(halfW - 1.2, 0.003, 1.5);
+rug.receiveShadow = true;
+rugGroup.add(rug);
+
+// ============================================================
+// RED CHESTERFIELD SOFA — against right wall, midway
+// ============================================================
+var sofaGroup = new THREE.Group();
+sofaGroup.position.set(halfW - 0.55, 0, 1.5);
+scene.add(sofaGroup);
+
+var chesterRed = new THREE.MeshStandardMaterial({ color: 0x6a1818, roughness: 0.7 });
+var chesterDark = new THREE.MeshStandardMaterial({ color: 0x4a1010, roughness: 0.75 });
+
+// Seat base
+box(sofaGroup, 0.7, 0.35, 1.6, chesterRed, 0, 0.175, 0);
+// Seat cushion (slightly lighter, sits on top)
+box(sofaGroup, 0.6, 0.08, 1.5, chesterRed, 0, 0.39, 0);
+// Back — against the wall, tall and padded
+box(sofaGroup, 0.15, 0.5, 1.6, chesterDark, 0.28, 0.6, 0);
+// Left arm
+box(sofaGroup, 0.6, 0.35, 0.12, chesterDark, 0, 0.5, -0.8);
+// Right arm
+box(sofaGroup, 0.6, 0.35, 0.12, chesterDark, 0, 0.5, 0.8);
+// Arm tops — rounded appearance (slightly wider)
+box(sofaGroup, 0.55, 0.06, 0.16, chesterRed, -0.05, 0.68, -0.8);
+box(sofaGroup, 0.55, 0.06, 0.16, chesterRed, -0.05, 0.68, 0.8);
+// Tufting detail — small bumps across the back (canvas texture)
+var tuftTex = makeCanvasTexture(256, 128, function(cx, cw, ch) {
+  cx.fillStyle = '#5a1515';
+  cx.fillRect(0, 0, cw, ch);
+  // Diamond tufting pattern
+  var row, col;
+  for (row = 0; row < 5; row++) {
+    for (col = 0; col < 10; col++) {
+      var tx = col * 26 + (row % 2 === 0 ? 0 : 13);
+      var ty = row * 26 + 5;
+      // Button
+      cx.fillStyle = '#3a0a0a';
+      cx.beginPath();
+      cx.arc(tx + 13, ty + 13, 4, 0, Math.PI * 2);
+      cx.fill();
+      // Diamond lines between buttons
+      cx.strokeStyle = '#4a1212';
+      cx.lineWidth = 0.8;
+      cx.beginPath();
+      cx.moveTo(tx, ty + 13);
+      cx.lineTo(tx + 13, ty);
+      cx.lineTo(tx + 26, ty + 13);
+      cx.lineTo(tx + 13, ty + 26);
+      cx.closePath();
+      cx.stroke();
+    }
+  }
+});
+var tuftMat = new THREE.MeshStandardMaterial({ map: tuftTex, roughness: 0.75 });
+// Overlay on back face
+var tuftPanel = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.45), tuftMat);
+tuftPanel.position.set(0.2, 0.6, 0);
+tuftPanel.rotation.y = -Math.PI / 2;
+sofaGroup.add(tuftPanel);
+
+// Stubby wooden feet
+box(sofaGroup, 0.08, 0.04, 0.08, darkWood, -0.25, 0.02, -0.7);
+box(sofaGroup, 0.08, 0.04, 0.08, darkWood, -0.25, 0.02, 0.7);
+box(sofaGroup, 0.08, 0.04, 0.08, darkWood, 0.25, 0.02, -0.7);
+box(sofaGroup, 0.08, 0.04, 0.08, darkWood, 0.25, 0.02, 0.7);
+
+// ============================================================
+// SPARSE FURNISHINGS — a few crates, debris
+// ============================================================
+var debrisGroup = new THREE.Group();
+scene.add(debrisGroup);
+
+// Old barrel near left wall
+cyl(debrisGroup, 0.25, 0.28, 0.7, 10, darkWood, -2.3, 0.35, -1);
+
+// Scattered debris on floor
+box(debrisGroup, 0.3, 0.02, 0.2, concreteDark, 1.0, 0.01, 5);
+box(debrisGroup, 0.15, 0.08, 0.12, ironMat, -0.8, 0.04, 3);
+
+// ============================================================
+// SUSPICIOUS PUDDLE — bottom left, like blood poorly cleaned
+// ============================================================
+var puddleTex = makeCanvasTexture(256, 256, function(cx, cw, ch) {
+  cx.clearRect(0, 0, cw, ch);
+  // Main stain — irregular dark brownish-red, like diluted blood
+  var grd = cx.createRadialGradient(cw/2, ch/2, 0, cw/2, ch/2, cw/2);
+  grd.addColorStop(0, 'rgba(60,15,12,0.85)');
+  grd.addColorStop(0.3, 'rgba(70,20,16,0.65)');
+  grd.addColorStop(0.6, 'rgba(50,16,12,0.45)');
+  grd.addColorStop(0.85, 'rgba(40,14,10,0.2)');
+  grd.addColorStop(1, 'rgba(30,10,8,0)');
+  cx.fillStyle = grd;
+  // Irregular shape — not a perfect circle
+  cx.beginPath();
+  cx.moveTo(cw * 0.3, ch * 0.15);
+  cx.quadraticCurveTo(cw * 0.7, ch * 0.05, cw * 0.8, ch * 0.3);
+  cx.quadraticCurveTo(cw * 0.9, ch * 0.6, cw * 0.7, ch * 0.8);
+  cx.quadraticCurveTo(cw * 0.5, ch * 0.95, cw * 0.25, ch * 0.75);
+  cx.quadraticCurveTo(cw * 0.1, ch * 0.5, cw * 0.15, ch * 0.3);
+  cx.quadraticCurveTo(cw * 0.2, ch * 0.1, cw * 0.3, ch * 0.15);
+  cx.closePath();
+  cx.fill();
+  // Smear marks — like someone wiped at it
+  cx.strokeStyle = 'rgba(50,15,12,0.35)';
+  cx.lineWidth = 8;
+  cx.lineCap = 'round';
+  cx.beginPath();
+  cx.moveTo(cw * 0.6, ch * 0.4);
+  cx.quadraticCurveTo(cw * 0.85, ch * 0.35, cw * 0.9, ch * 0.5);
+  cx.stroke();
+  cx.lineWidth = 5;
+  cx.beginPath();
+  cx.moveTo(cw * 0.4, ch * 0.55);
+  cx.quadraticCurveTo(cw * 0.2, ch * 0.7, cw * 0.15, ch * 0.85);
+  cx.stroke();
+  // Darker centre — where it pooled
+  cx.fillStyle = 'rgba(35,8,6,0.4)';
+  cx.beginPath();
+  cx.ellipse(cw * 0.45, ch * 0.45, 30, 22, 0.3, 0, Math.PI * 2);
+  cx.fill();
+  // Wet sheen
+  cx.fillStyle = 'rgba(80,40,35,0.12)';
+  cx.beginPath();
+  cx.ellipse(cw * 0.42, ch * 0.4, 18, 12, -0.2, 0, Math.PI * 2);
+  cx.fill();
+});
+var puddleMat = new THREE.MeshStandardMaterial({
+  map: puddleTex, transparent: true, roughness: 0.35, metalness: 0.15,
+  emissive: 0x120403, emissiveIntensity: 0.1
+});
+var puddle = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.4), puddleMat);
+puddle.rotation.x = -Math.PI / 2;
+puddle.position.set(-0.6, 0.006, 4.0);
+puddle.receiveShadow = true;
+debrisGroup.add(puddle);
+
+// ============================================================
+// ELECTRICAL WIRES — draped along ceiling / walls
+// ============================================================
+var wireGroup = new THREE.Group();
+scene.add(wireGroup);
+
+// Wire from bulb socket running to right wall
+var wirePts = [];
+wirePts.push(new THREE.Vector3(0, roomHeight - 1.0, 1.5));
+wirePts.push(new THREE.Vector3(0.8, roomHeight - 0.6, 1.5));
+wirePts.push(new THREE.Vector3(1.8, roomHeight - 0.3, 1.5));
+wirePts.push(new THREE.Vector3(halfW - 0.1, roomHeight - 0.2, 1.5));
+var wireCurve = new THREE.CatmullRomCurve3(wirePts);
+var wirePathGeo = new THREE.TubeGeometry(wireCurve, 20, 0.008, 4, false);
+var wirePath = new THREE.Mesh(wirePathGeo, wireMat);
+wireGroup.add(wirePath);
+
+// Another wire draping along left wall
+var wire2Pts = [];
+wire2Pts.push(new THREE.Vector3(-halfW + 0.1, roomHeight - 0.15, 5));
+wire2Pts.push(new THREE.Vector3(-halfW + 0.15, roomHeight - 0.4, 3));
+wire2Pts.push(new THREE.Vector3(-halfW + 0.1, roomHeight - 0.2, 0));
+wire2Pts.push(new THREE.Vector3(-halfW + 0.12, roomHeight - 0.5, -3));
+var wire2Curve = new THREE.CatmullRomCurve3(wire2Pts);
+var wire2Geo = new THREE.TubeGeometry(wire2Curve, 20, 0.006, 4, false);
+wireGroup.add(new THREE.Mesh(wire2Geo, wireMat));
+
+// Drips are baked into wall textures (see makeBlockWallTex above)
+
+// ============================================================
+// ANIMATION — soft pulsing bulb
+// ============================================================
+var clock = new THREE.Clock();
+var baseBulbIntensity = 2.5;
+var baseBulbEmissive = 0.55;
+var baseGlowOpacity = 0.1;
+
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+
+  // Soft slow pulse with occasional nervous flicker
+  var pulse = Math.sin(t * 1.2) * 0.15 + Math.sin(t * 0.5) * 0.08;
+  // Micro-flicker — subtle, like a dodgy connection
+  var flicker = (Math.sin(t * 17.3) > 0.94) ? -0.12 : 0;
+  flicker += (Math.sin(t * 23.7) > 0.97) ? -0.06 : 0;
+  pulse += flicker;
+
+  // Light intensity
+  bulbLight.intensity = baseBulbIntensity + pulse;
+
+  // Bulb glow material
+  bulbGlass.emissiveIntensity = baseBulbEmissive + pulse * 0.5;
+
+  // Halo opacity
+  glowSphere.material.opacity = baseGlowOpacity + pulse * 0.03;
+
+  // Very subtle bulb sway (barely perceptible)
+  var sway = Math.sin(t * 0.4) * 0.003;
+  bulbSphere.position.x = sway;
+  bulbLight.position.x = sway;
+  glowSphere.position.x = sway;
+  wire.position.x = sway * 0.5;
+
+  // Uneasy camera drift — barely perceptible unease
+  camera.position.x = 0.3 + Math.sin(t * 0.12) * 0.035 + Math.sin(t * 0.5) * 0.006;
+  camera.position.y = 1.5 + Math.sin(t * 0.15) * 0.012 + Math.sin(t * 0.6) * 0.004;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>

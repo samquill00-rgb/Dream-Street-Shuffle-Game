@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cecil Court — Soho, 1973</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(232,120,24,0.55);
+  pointer-events: none; z-index: 10;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none; z-index: 10;
+}
+</style>
+</head>
+<body>
+<div id="datestamp">23.11.73</div>
+<div id="location">CECIL COURT, CHARING CROSS ROAD</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e0a10);
+scene.fog = new THREE.FogExp2(0x0e0a10, 0.022);
+
+var camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0.3, 1.75, 22);
+camera.lookAt(0, 2.2, -5);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.6;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function makeCanvasTexture(w, h, drawFunc) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  drawFunc(cx, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+// ============================================================
+// MATERIALS
+// ============================================================
+// Brick — sooty dark London stock
+var brickTex = makeCanvasTexture(512, 512, function(cx, w, h) {
+  cx.fillStyle = '#3a2018';
+  cx.fillRect(0, 0, w, h);
+  var brickH = 22;
+  var brickW = 55;
+  var mortarW = 3;
+  for (var row = 0; row < Math.ceil(h / (brickH + mortarW)); row++) {
+    var offset = (row % 2 === 0) ? 0 : brickW * 0.5;
+    for (var col = -1; col < Math.ceil(w / (brickW + mortarW)) + 1; col++) {
+      var bx = col * (brickW + mortarW) + offset;
+      var by = row * (brickH + mortarW);
+      var rv = 45 + Math.random() * 25;
+      var gv = 25 + Math.random() * 15;
+      var bv = 18 + Math.random() * 12;
+      cx.fillStyle = 'rgb(' + Math.floor(rv) + ',' + Math.floor(gv) + ',' + Math.floor(bv) + ')';
+      cx.fillRect(bx, by, brickW, brickH);
+    }
+  }
+  // Heavy soot — 1973 London, decades of coal smoke
+  var soot = cx.createLinearGradient(0, 0, 0, h);
+  soot.addColorStop(0, 'rgba(5, 3, 2, 0.5)');
+  soot.addColorStop(0.3, 'rgba(8, 5, 3, 0.3)');
+  soot.addColorStop(0.7, 'rgba(10, 8, 5, 0.15)');
+  soot.addColorStop(1, 'rgba(5, 3, 2, 0.45)');
+  cx.fillStyle = soot;
+  cx.fillRect(0, 0, w, h);
+  // Vertical water/damp streaks running down the wall
+  for (var ws = 0; ws < 8; ws++) {
+    var sx = Math.random() * w;
+    var sw = 3 + Math.random() * 8;
+    var streak = cx.createLinearGradient(0, 0, 0, h);
+    streak.addColorStop(0, 'rgba(15, 10, 8, 0.4)');
+    streak.addColorStop(0.5, 'rgba(20, 15, 10, 0.2)');
+    streak.addColorStop(1, 'rgba(10, 8, 5, 0.35)');
+    cx.fillStyle = streak;
+    cx.fillRect(sx, 0, sw, h);
+  }
+  // Blotchy grime patches
+  for (var gp = 0; gp < 12; gp++) {
+    cx.fillStyle = 'rgba(8, 5, 3, ' + (0.1 + Math.random() * 0.2) + ')';
+    cx.beginPath();
+    cx.ellipse(Math.random() * w, Math.random() * h,
+      15 + Math.random() * 40, 10 + Math.random() * 30,
+      Math.random() * Math.PI, 0, Math.PI * 2);
+    cx.fill();
+  }
+  // Green-black mould near the bottom
+  cx.fillStyle = 'rgba(10, 18, 8, 0.2)';
+  cx.fillRect(0, h * 0.8, w, h * 0.2);
+});
+var brickMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.85 });
+
+// Stone — yellowed and sooty
+var whiteStoneMat = new THREE.MeshStandardMaterial({ color: 0x6a6050, roughness: 0.85 });
+var greyStone = new THREE.MeshStandardMaterial({ color: 0x504840, roughness: 0.85 });
+var ironMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.6, metalness: 0.4 });
+var brassMat = new THREE.MeshStandardMaterial({ color: 0xb8922a, roughness: 0.3, metalness: 0.8 });
+
+// Flagstone paving — big irregular York stone slabs, cracked and uneven
+var flagTex = makeCanvasTexture(512, 512, function(cx, w, h) {
+  // Dark mortar base — the gaps between slabs
+  cx.fillStyle = '#1a1815';
+  cx.fillRect(0, 0, w, h);
+
+  // Lay irregular flagstones — big slabs of varying size
+  var slabs = [];
+  var slabY = 0;
+  while (slabY < h + 20) {
+    var slabX = 0;
+    var rowH = 50 + Math.random() * 50;  // row height varies a lot
+    while (slabX < w + 20) {
+      var slabW = 60 + Math.random() * 100;  // wide slabs
+      slabs.push({ x: slabX + 2, y: slabY + 2, w: slabW - 4, h: rowH - 4 });
+      slabX += slabW;
+    }
+    slabY += rowH;
+  }
+
+  // Draw each slab
+  for (var si = 0; si < slabs.length; si++) {
+    var s = slabs[si];
+    // Each slab a different shade of grey/brown York stone
+    var base = 38 + Math.random() * 30;
+    var warmth = Math.random() * 8;
+    cx.fillStyle = 'rgb(' + Math.floor(base + warmth) + ',' + Math.floor(base + warmth * 0.5) + ',' + Math.floor(base - 2) + ')';
+    // Slightly irregular edges — not perfect rectangles
+    cx.beginPath();
+    cx.moveTo(s.x + (Math.random() - 0.5) * 3, s.y + (Math.random() - 0.5) * 2);
+    cx.lineTo(s.x + s.w + (Math.random() - 0.5) * 3, s.y + (Math.random() - 0.5) * 2);
+    cx.lineTo(s.x + s.w + (Math.random() - 0.5) * 3, s.y + s.h + (Math.random() - 0.5) * 2);
+    cx.lineTo(s.x + (Math.random() - 0.5) * 3, s.y + s.h + (Math.random() - 0.5) * 2);
+    cx.closePath();
+    cx.fill();
+
+    // Cracks running across some slabs
+    if (Math.random() > 0.6) {
+      cx.strokeStyle = 'rgba(10, 8, 5, 0.4)';
+      cx.lineWidth = 1 + Math.random();
+      cx.beginPath();
+      cx.moveTo(s.x + Math.random() * s.w * 0.3, s.y + Math.random() * s.h);
+      cx.lineTo(s.x + s.w * 0.4 + Math.random() * s.w * 0.6, s.y + Math.random() * s.h);
+      cx.stroke();
+    }
+
+    // Surface wear — lighter scuff marks
+    if (Math.random() > 0.5) {
+      cx.fillStyle = 'rgba(80, 75, 65, 0.12)';
+      cx.beginPath();
+      cx.ellipse(s.x + s.w * 0.5, s.y + s.h * 0.5,
+        s.w * 0.3 + Math.random() * 10, s.h * 0.3 + Math.random() * 8,
+        Math.random(), 0, Math.PI * 2);
+      cx.fill();
+    }
+  }
+
+  // Damp patches — bigger, more of them
+  cx.fillStyle = 'rgba(20, 20, 25, 0.18)';
+  for (var dp = 0; dp < 10; dp++) {
+    cx.beginPath();
+    cx.ellipse(Math.random() * w, Math.random() * h, 20 + Math.random() * 50, 15 + Math.random() * 35, Math.random(), 0, Math.PI * 2);
+    cx.fill();
+  }
+
+  // Dark stains — oil, grime, ground-in dirt
+  for (var ds = 0; ds < 8; ds++) {
+    cx.fillStyle = 'rgba(10, 8, 5, ' + (0.08 + Math.random() * 0.12) + ')';
+    cx.beginPath();
+    cx.ellipse(Math.random() * w, Math.random() * h, 10 + Math.random() * 25, 8 + Math.random() * 20, Math.random(), 0, Math.PI * 2);
+    cx.fill();
+  }
+
+  // Moss/algae in the mortar gaps — green-black
+  cx.strokeStyle = 'rgba(15, 25, 10, 0.15)';
+  cx.lineWidth = 3;
+  for (var mg = 0; mg < slabs.length; mg++) {
+    if (Math.random() > 0.7) {
+      var ms = slabs[mg];
+      cx.beginPath();
+      cx.moveTo(ms.x, ms.y);
+      cx.lineTo(ms.x + ms.w, ms.y);
+      cx.stroke();
+    }
+  }
+
+});
+// Damp, grimy flagstones — rough and dirty
+var cobbleMat = new THREE.MeshStandardMaterial({ map: flagTex, roughness: 0.75 });
+
+// Window materials — transparent so you can see book displays through them
+var darkGlass = new THREE.MeshStandardMaterial({
+  color: 0x0a0a14, roughness: 0.2, metalness: 0.3,
+  emissive: 0x080810, emissiveIntensity: 0.08,
+  transparent: true, opacity: 0.35, depthWrite: false
+});
+var warmGlass = new THREE.MeshStandardMaterial({
+  color: 0x2a1808, roughness: 0.3,
+  emissive: 0xe89030, emissiveIntensity: 0.8,
+  transparent: true, opacity: 0.3, depthWrite: false
+});
+var brightWarmGlass = new THREE.MeshStandardMaterial({
+  color: 0x5a3010, roughness: 0.2,
+  emissive: 0xffc060, emissiveIntensity: 3.0,
+  transparent: true, opacity: 0.25, depthWrite: false
+});
+
+// ============================================================
+// GROUND — Cobblestone paving
+// ============================================================
+var ground = new THREE.Mesh(new THREE.PlaneGeometry(12, 55), cobbleMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.set(0, 0, -2);
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Central gutter
+var drainMat = new THREE.MeshStandardMaterial({ color: 0x252520, roughness: 0.7 });
+var drainStrip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.01, 55), drainMat);
+drainStrip.position.set(0, 0.005, -2);
+scene.add(drainStrip);
+
+// Drain covers
+var drainCoverMat = new THREE.MeshStandardMaterial({ color: 0x3a3a38, roughness: 0.5, metalness: 0.4 });
+for (var di = 0; di < 4; di++) {
+  var dc = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.35), drainCoverMat);
+  dc.position.set((Math.random() - 0.5) * 2, 0.01, 16 - di * 7);
+  scene.add(dc);
+}
+
+// ============================================================
+// STREET MESS — 1973 London grime
+// ============================================================
+// A few puddles — it rained earlier, water still sitting in dips
+var puddleMat = new THREE.MeshStandardMaterial({
+  color: 0x0c0c14, roughness: 0.1, metalness: 0.5,
+  transparent: true, opacity: 0.35
+});
+for (var pi = 0; pi < 6; pi++) {
+  var pudW = 0.5 + Math.random() * 1.0;
+  var pudD = 0.3 + Math.random() * 0.6;
+  var puddle = new THREE.Mesh(new THREE.PlaneGeometry(pudW, pudD), puddleMat);
+  puddle.rotation.x = -Math.PI / 2;
+  puddle.position.set(
+    (Math.random() - 0.5) * 4,
+    0.006,
+    20 - pi * 4.5 + (Math.random() - 0.5) * 2
+  );
+  puddle.rotation.z = Math.random() * 0.5;
+  scene.add(puddle);
+}
+
+// Litter — small flat scraps of newspaper, fag packets, etc.
+var litterColours = [0xd8d0b8, 0xc8b890, 0xe0d8c0, 0x888070, 0xb0a888];
+for (var li = 0; li < 18; li++) {
+  var litW = 0.04 + Math.random() * 0.1;
+  var litD = 0.03 + Math.random() * 0.08;
+  var litCol = litterColours[Math.floor(Math.random() * litterColours.length)];
+  var litMat = new THREE.MeshStandardMaterial({
+    color: litCol, roughness: 0.9,
+    emissive: litCol, emissiveIntensity: 0.05
+  });
+  var litter = new THREE.Mesh(new THREE.PlaneGeometry(litW, litD), litMat);
+  litter.rotation.x = -Math.PI / 2 + (Math.random() - 0.5) * 0.15;
+  litter.position.set(
+    (Math.random() - 0.5) * 7,
+    0.008,
+    22 - li * 1.8 + (Math.random() - 0.5) * 1.5
+  );
+  litter.rotation.z = Math.random() * Math.PI;
+  scene.add(litter);
+}
+
+// Larger scraps — crumpled newspaper pages blown against walls
+for (var np = 0; np < 5; np++) {
+  var npSide = (Math.random() > 0.5) ? -1 : 1;
+  var npMat = new THREE.MeshStandardMaterial({
+    color: 0xd8d0b0, roughness: 0.85,
+    emissive: 0xd8d0b0, emissiveIntensity: 0.04
+  });
+  var paper = new THREE.Mesh(new THREE.PlaneGeometry(0.18 + Math.random() * 0.12, 0.14 + Math.random() * 0.1), npMat);
+  paper.position.set(
+    npSide * (3.2 + Math.random() * 0.8),
+    0.02 + Math.random() * 0.05,
+    18 - np * 5 + (Math.random() - 0.5) * 3
+  );
+  paper.rotation.x = -0.3 + Math.random() * 0.6;
+  paper.rotation.y = Math.random() * Math.PI;
+  paper.rotation.z = Math.random() * 0.5;
+  scene.add(paper);
+}
+
+// Cigarette butts near doorways
+var buttMat = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9 });
+for (var cb = 0; cb < 12; cb++) {
+  var butt = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.03, 4), buttMat);
+  butt.position.set(
+    (Math.random() > 0.5 ? -1 : 1) * (3.0 + Math.random() * 1.0),
+    0.005,
+    20 - cb * 2.5 + (Math.random() - 0.5) * 2
+  );
+  butt.rotation.x = Math.PI / 2;
+  butt.rotation.z = Math.random() * Math.PI;
+  scene.add(butt);
+}
+
+// ============================================================
+// SHOPFRONT BUILDER — each shop is unique
+// ============================================================
+// opts: { side, z, name, paintHex, fasciaHex, glowLevel, windowCount, signStyle, hasAwning }
+var SHOP_DEPTH = 1.2;
+var shopLights = [];
+
+function buildShop(opts) {
+  var group = new THREE.Group();
+  var side = opts.side;
+  var z = opts.z;
+  var wallX = side * 5.0;
+  var faceX = wallX - side * SHOP_DEPTH;
+  var faceDir = -side;
+  var faceRot = (side === -1) ? Math.PI / 2 : -Math.PI / 2;
+  var paintCol = opts.paintHex || 0x142e1c;
+  var fasciaCol = opts.fasciaHex || paintCol;
+  var glowLevel = opts.glowLevel || 0;
+  var winCount = opts.windowCount || 1;
+  var signStyle = opts.signStyle || 'hanging';
+
+  // Weathered, chipped paintwork
+  var paintMat = new THREE.MeshStandardMaterial({ color: paintCol, roughness: 0.7, metalness: 0.02 });
+  var fasciaMat = new THREE.MeshStandardMaterial({ color: fasciaCol, roughness: 0.65, metalness: 0.02 });
+
+  // Back wall
+  var backWall = new THREE.Mesh(new THREE.BoxGeometry(SHOP_DEPTH, 3.8, 4.5), paintMat);
+  backWall.position.set(wallX + faceDir * SHOP_DEPTH * 0.5, 1.9, z);
+  group.add(backWall);
+
+  // Fascia board
+  var fasciaH = 0.5 + Math.random() * 0.25;
+  var fascia = new THREE.Mesh(new THREE.BoxGeometry(0.12, fasciaH, 4.2), fasciaMat);
+  fascia.position.set(faceX + faceDir * 0.06, 3.4 + fasciaH * 0.1, z);
+  group.add(fascia);
+
+  // Fascia name
+  if (opts.name && opts.name.length > 0) {
+    var nameTex = makeCanvasTexture(512, 64, function(cx, w, h) {
+      var bg = '#' + fasciaCol.toString(16).padStart(6, '0');
+      cx.fillStyle = bg;
+      cx.fillRect(0, 0, w, h);
+      cx.fillStyle = opts.goldText !== false ? '#d4b050' : '#e8e0d0';
+      cx.font = (opts.fontStyle || 'bold') + ' ' + (opts.fontSize || 26) + 'px ' + (opts.fontFace || 'Georgia, serif');
+      cx.textAlign = 'center';
+      cx.textBaseline = 'middle';
+      cx.fillText(opts.name, w / 2, h / 2);
+    });
+    var nameBoard = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.0, 0.55),
+      new THREE.MeshStandardMaterial({ map: nameTex, roughness: 0.4, emissive: 0x443820, emissiveIntensity: 0.2 })
+    );
+    nameBoard.position.set(faceX + faceDir * 0.14, 3.45, z);
+    nameBoard.rotation.y = faceRot;
+    group.add(nameBoard);
+  }
+
+  // Pilasters — vary style: some white stone, some painted to match
+  var pilMat = opts.paintedPilasters ? paintMat : whiteStoneMat;
+  var pilW = 0.18 + Math.random() * 0.08;
+  var pilGeo = new THREE.BoxGeometry(pilW, 3.8, pilW);
+  var pilL = new THREE.Mesh(pilGeo, pilMat);
+  pilL.position.set(faceX + faceDir * 0.05, 1.9, z - 2.15);
+  group.add(pilL);
+  var pilR = new THREE.Mesh(pilGeo, pilMat);
+  pilR.position.set(faceX + faceDir * 0.05, 1.9, z + 2.15);
+  group.add(pilR);
+
+  // Shop windows — different configurations
+  var glassChoice = (glowLevel === 2) ? brightWarmGlass : (glowLevel >= 1) ? warmGlass : darkGlass;
+
+  if (winCount === 2) {
+    // Two smaller windows with a central mullion bar
+    for (var wi = 0; wi < 2; wi++) {
+      var wz = z - 1.2 + wi * 1.8;
+      var sw = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.2), glassChoice);
+      sw.position.set(faceX + faceDir * 0.13, 1.5, wz);
+      sw.rotation.y = faceRot;
+      group.add(sw);
+    }
+  } else {
+    // One big display window
+    var winH = 2.0 + Math.random() * 0.4;
+    var shopWin = new THREE.Mesh(new THREE.PlaneGeometry(3.0, winH), glassChoice);
+    shopWin.position.set(faceX + faceDir * 0.13, 1.4 + (winH - 2.2) * 0.3, z - 0.5);
+    shopWin.rotation.y = faceRot;
+    group.add(shopWin);
+  }
+
+  // INTERIOR PANEL — covers the ENTIRE shopfront face behind the glass
+  // Must be bigger than the back wall face (4.5 x 3.8) to eliminate all dark spots
+  // ALL shops get a panel — lit shops get warm glow, dark shops get subtle warmth
+  var interiorCol, interiorEmCol, interiorEmI;
+  if (glowLevel === 2) {
+    interiorCol = 0x4a2a0a;
+    interiorEmCol = 0xffc060;
+    interiorEmI = 0.4;
+  } else if (glowLevel === 1) {
+    interiorCol = 0x2a1808;
+    interiorEmCol = 0xe89030;
+    interiorEmI = 0.15;
+  } else {
+    // Dark/closed shops — very subtle warm dark so it's not pure black
+    interiorCol = 0x12100c;
+    interiorEmCol = 0x281810;
+    interiorEmI = 0.04;
+  }
+  var interiorMat = new THREE.MeshStandardMaterial({
+    color: interiorCol, roughness: 0.8,
+    emissive: interiorEmCol, emissiveIntensity: interiorEmI
+  });
+  // Panel covers the full shopfront — 5.0 wide x 4.0 tall, centred on the face
+  var interiorPanel = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 4.0), interiorMat);
+  interiorPanel.position.set(faceX + faceDir * 0.01, 1.9, z);
+  interiorPanel.rotation.y = faceRot;
+  group.add(interiorPanel);
+
+  // WINDOW DISPLAY — books, manuscripts, curiosities
+  // Position BETWEEN the back wall face (faceX) and the glass (faceX + faceDir*0.13)
+  var displayBaseX = faceX + faceDir * 0.06;  // in the display space, not inside the wall
+  var displayBaseZ = z - 0.5;
+  var displayBaseY = 0.42;  // on top of the stall riser
+
+  // Emissive intensity for books — lit shops show their wares, dark shops don't
+  var bookEmissiveIntensity = (glowLevel >= 1) ? 0.28 : 0.03;
+  var bookEmissiveCol = 0xe89030;
+
+  // Colour palettes for book spines and objects
+  var bookColours = [0x8b1a1a, 0x2e4b2e, 0x1a2a5c, 0x6b3a10, 0x4a1a4a,
+    0x1c3c3c, 0x5c2a0a, 0x2a1a3c, 0x8b6914, 0x3a0a0a];
+  var clothColours = [0x4a2a1a, 0x2a3a2a, 0x1a1a3a, 0x5a3a0a];
+
+  // Helper to make a book material that glows subtly in lit shops
+  function makeBookMat(col) {
+    return new THREE.MeshStandardMaterial({
+      color: col, roughness: 0.7,
+      emissive: bookEmissiveCol, emissiveIntensity: bookEmissiveIntensity
+    });
+  }
+
+  // PACKED WINDOW DISPLAY — books crammed everywhere, floor to mid-window
+  // Multiple rows deep (front and back) and spread across the full window width
+
+  // Row 1: Stacked flat books across the full window — the foundation layer
+  var stackCount = 6 + Math.floor(Math.random() * 4);  // 6-9 stacks
+  for (var si = 0; si < stackCount; si++) {
+    var stackZ = z - 2.0 + si * (3.6 / stackCount) + (Math.random() - 0.5) * 0.15;
+    var booksInStack = 4 + Math.floor(Math.random() * 6);  // 4-9 books per stack
+    var stackY = displayBaseY;
+    for (var bi = 0; bi < booksInStack; bi++) {
+      var bW = 0.15 + Math.random() * 0.1;
+      var bH = 0.025 + Math.random() * 0.02;
+      var bD = 0.2 + Math.random() * 0.12;
+      var bookCol = bookColours[Math.floor(Math.random() * bookColours.length)];
+      var book = new THREE.Mesh(new THREE.BoxGeometry(bW, bH, bD), makeBookMat(bookCol));
+      book.position.set(displayBaseX, stackY + bH * 0.5, stackZ);
+      book.rotation.y = (Math.random() - 0.5) * 0.15;
+      group.add(book);
+      stackY += bH;
+    }
+    // Upright book on top of most stacks
+    if (Math.random() > 0.3) {
+      var upCol = bookColours[Math.floor(Math.random() * bookColours.length)];
+      var upBook = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.26, 0.18), makeBookMat(upCol));
+      upBook.position.set(displayBaseX, stackY + 0.13, stackZ);
+      upBook.rotation.y = (Math.random() - 0.5) * 0.3;
+      group.add(upBook);
+    }
+  }
+
+  // Row 2: Standing books — a dense row of spines like a bookshelf
+  var rowZ1 = z - 1.5;
+  var rowBooks1 = 10 + Math.floor(Math.random() * 8);  // 10-17 books
+  for (var ri = 0; ri < rowBooks1; ri++) {
+    var rbCol = bookColours[Math.floor(Math.random() * bookColours.length)];
+    var rbH = 0.24 + Math.random() * 0.14;
+    var rbW = 0.025 + Math.random() * 0.02;
+    var rbD = 0.16 + Math.random() * 0.08;
+    var standBook = new THREE.Mesh(new THREE.BoxGeometry(rbW, rbH, rbD), makeBookMat(rbCol));
+    standBook.position.set(displayBaseX, displayBaseY + rbH * 0.5, rowZ1 + ri * 0.05);
+    standBook.rotation.z = (Math.random() - 0.5) * 0.12;
+    group.add(standBook);
+  }
+
+  // Row 3: Second row of standing books further along the window
+  var rowZ2 = z + 0.3;
+  var rowBooks2 = 8 + Math.floor(Math.random() * 6);
+  for (var ri2 = 0; ri2 < rowBooks2; ri2++) {
+    var rbCol2 = bookColours[Math.floor(Math.random() * bookColours.length)];
+    var rbH2 = 0.22 + Math.random() * 0.12;
+    var rbW2 = 0.025 + Math.random() * 0.02;
+    var rbD2 = 0.16 + Math.random() * 0.06;
+    var standBook2 = new THREE.Mesh(new THREE.BoxGeometry(rbW2, rbH2, rbD2), makeBookMat(rbCol2));
+    standBook2.position.set(displayBaseX, displayBaseY + rbH2 * 0.5, rowZ2 + ri2 * 0.055);
+    standBook2.rotation.z = (Math.random() - 0.5) * 0.1;
+    group.add(standBook2);
+  }
+
+  // Row 4: Larger display books propped up at an angle — eye-catchers
+  var displayCount = 2 + Math.floor(Math.random() * 3);
+  for (var di2 = 0; di2 < displayCount; di2++) {
+    var dCol = bookColours[Math.floor(Math.random() * bookColours.length)];
+    var dBook = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.3, 0.22), makeBookMat(dCol));
+    dBook.position.set(displayBaseX, displayBaseY + 0.25, z - 1.0 + di2 * 1.2 + (Math.random() - 0.5) * 0.3);
+    dBook.rotation.z = side * (0.15 + Math.random() * 0.15);
+    dBook.rotation.y = (Math.random() - 0.5) * 0.2;
+    group.add(dBook);
+  }
+
+  // WALL SHELVES — rows of standing books going up the full window height
+  // These sit against the back wall and fill the window from bottom to top
+  var shelfHeights = [0.75, 1.2, 1.65, 2.05];
+  for (var sh = 0; sh < shelfHeights.length; sh++) {
+    var shelfY = shelfHeights[sh];
+    // Shelf plank
+    var shelfMat = new THREE.MeshStandardMaterial({
+      color: 0x3a2a18, roughness: 0.7,
+      emissive: bookEmissiveCol, emissiveIntensity: bookEmissiveIntensity * 0.3
+    });
+    var shelf = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 3.2), shelfMat);
+    shelf.position.set(faceX + faceDir * 0.03, shelfY, z - 0.3);
+    group.add(shelf);
+
+    // Books on each shelf — dense row of spines
+    var shelfBooks = 12 + Math.floor(Math.random() * 10);
+    var shelfStartZ = z - 1.6;
+    for (var sb = 0; sb < shelfBooks; sb++) {
+      var sbCol = bookColours[Math.floor(Math.random() * bookColours.length)];
+      var sbH = 0.18 + Math.random() * 0.12;
+      var sbW = 0.02 + Math.random() * 0.02;
+      var sbD = 0.1 + Math.random() * 0.06;
+      var shelfBook = new THREE.Mesh(new THREE.BoxGeometry(sbW, sbH, sbD), makeBookMat(sbCol));
+      shelfBook.position.set(faceX + faceDir * 0.04, shelfY + 0.01 + sbH * 0.5, shelfStartZ + sb * 0.048);
+      shelfBook.rotation.z = (Math.random() - 0.5) * 0.08;
+      group.add(shelfBook);
+    }
+  }
+
+  // Curiosities — varies per shop (also with emissive so they're visible)
+  var curiosityType = Math.floor(Math.random() * 5);
+  if (curiosityType === 0) {
+    // Globe on a stand
+    var globeMat = new THREE.MeshStandardMaterial({ color: 0xb89860, roughness: 0.4, metalness: 0.2, emissive: bookEmissiveCol, emissiveIntensity: bookEmissiveIntensity * 0.5 });
+    var globeSphere = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), globeMat);
+    globeSphere.position.set(displayBaseX, displayBaseY + 0.22, displayBaseZ + 0.9);
+    group.add(globeSphere);
+    var globeStand = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.14, 8), ironMat);
+    globeStand.position.set(displayBaseX, displayBaseY + 0.1, displayBaseZ + 0.9);
+    group.add(globeStand);
+  } else if (curiosityType === 1) {
+    // Rolled manuscript / scroll
+    var scrollMat = new THREE.MeshStandardMaterial({ color: 0xd4c8a0, roughness: 0.6, emissive: 0xd4c8a0, emissiveIntensity: bookEmissiveIntensity * 0.6 });
+    var scroll = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.28, 8), scrollMat);
+    scroll.position.set(displayBaseX, displayBaseY + 0.04, displayBaseZ + 0.8);
+    scroll.rotation.x = Math.PI / 2;
+    scroll.rotation.z = 0.3;
+    group.add(scroll);
+    var scroll2 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.24, 8), scrollMat);
+    scroll2.position.set(displayBaseX, displayBaseY + 0.08, displayBaseZ + 0.85);
+    scroll2.rotation.x = Math.PI / 2;
+    scroll2.rotation.z = -0.2;
+    group.add(scroll2);
+  } else if (curiosityType === 2) {
+    // Magnifying glass / lens on a stand
+    var lensMat = new THREE.MeshStandardMaterial({ color: 0x889098, roughness: 0.3, metalness: 0.5, emissive: 0x889098, emissiveIntensity: bookEmissiveIntensity * 0.3 });
+    var lensRing = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.015, 16), lensMat);
+    lensRing.position.set(displayBaseX, displayBaseY + 0.2, displayBaseZ - 0.5);
+    group.add(lensRing);
+    var lensHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.018, 0.15, 8), new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 0.5, emissive: bookEmissiveCol, emissiveIntensity: bookEmissiveIntensity * 0.3 }));
+    lensHandle.position.set(displayBaseX, displayBaseY + 0.1, displayBaseZ - 0.5);
+    group.add(lensHandle);
+  } else if (curiosityType === 3) {
+    // Open book on a stand, pages fanned
+    var openMat = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.7, emissive: 0xe8dcc0, emissiveIntensity: bookEmissiveIntensity * 0.5 });
+    var pageL = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.2, 0.16), openMat);
+    pageL.position.set(displayBaseX, displayBaseY + 0.18, displayBaseZ + 0.7);
+    pageL.rotation.z = side * 0.25;
+    group.add(pageL);
+    var pageR = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.2, 0.16), openMat);
+    pageR.position.set(displayBaseX, displayBaseY + 0.18, displayBaseZ + 0.72);
+    pageR.rotation.z = -side * 0.25;
+    group.add(pageR);
+    var spine = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.2, 0.03), new THREE.MeshStandardMaterial({ color: 0x5a2a0a, roughness: 0.6, emissive: bookEmissiveCol, emissiveIntensity: bookEmissiveIntensity * 0.3 }));
+    spine.position.set(displayBaseX, displayBaseY + 0.18, displayBaseZ + 0.71);
+    group.add(spine);
+  } else {
+    // Candlestick
+    var candleMat = new THREE.MeshStandardMaterial({ color: 0xb89830, roughness: 0.3, metalness: 0.6, emissive: 0xb89830, emissiveIntensity: bookEmissiveIntensity * 0.4 });
+    var candleBase = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.03, 8), candleMat);
+    candleBase.position.set(displayBaseX, displayBaseY + 0.015, displayBaseZ - 0.6);
+    group.add(candleBase);
+    var candleStick = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.18, 8), candleMat);
+    candleStick.position.set(displayBaseX, displayBaseY + 0.12, displayBaseZ - 0.6);
+    group.add(candleStick);
+    var wax = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.08, 8), new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.8, emissive: 0xe8dcc0, emissiveIntensity: bookEmissiveIntensity * 0.5 }));
+    wax.position.set(displayBaseX, displayBaseY + 0.24, displayBaseZ - 0.6);
+    group.add(wax);
+  }
+
+  // Folded cloth/velvet display drape
+  var drapeMat = new THREE.MeshStandardMaterial({
+    color: clothColours[Math.floor(Math.random() * clothColours.length)],
+    roughness: 0.85, emissive: bookEmissiveCol, emissiveIntensity: bookEmissiveIntensity * 0.2
+  });
+  var drape = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.3), drapeMat);
+  drape.position.set(displayBaseX, displayBaseY + 0.015, displayBaseZ - 0.2);
+  drape.rotation.y = (Math.random() - 0.5) * 0.5;
+  group.add(drape);
+
+  // Window frame
+  var frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a18, roughness: 0.6 });
+  var wft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 3.4), frameMat);
+  wft.position.set(faceX + faceDir * 0.13, 2.62, z - 0.3);
+  group.add(wft);
+  var wfb = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 3.4), frameMat);
+  wfb.position.set(faceX + faceDir * 0.13, 0.38, z - 0.3);
+  group.add(wfb);
+
+  // Stall riser
+  var stallRiser = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.35, 3.2), paintMat);
+  stallRiser.position.set(faceX + faceDir * 0.08, 0.18, z - 0.3);
+  group.add(stallRiser);
+
+  // Door
+  var doorZ = z + 1.6;
+  var doorPanel = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.3, 0.85), paintMat);
+  doorPanel.position.set(faceX + faceDir * 0.1, 1.25, doorZ);
+  group.add(doorPanel);
+  var doorGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.9), glassChoice);
+  doorGlass.position.set(faceX + faceDir * 0.14, 1.75, doorZ);
+  doorGlass.rotation.y = faceRot;
+  group.add(doorGlass);
+  var handle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.05), brassMat);
+  handle.position.set(faceX + faceDir * 0.15, 1.1, doorZ - 0.2);
+  group.add(handle);
+
+  // Upper floors (brick)
+  var upperH = 5.5 + Math.random() * 2.0;
+  var upperWall = new THREE.Mesh(new THREE.BoxGeometry(SHOP_DEPTH + 0.3, upperH, 4.6), brickMat);
+  upperWall.position.set(wallX + faceDir * (SHOP_DEPTH * 0.5 - 0.1), 3.8 + upperH * 0.5, z);
+  group.add(upperWall);
+
+  // Upper windows — vary count
+  var upperWinCount = 1 + Math.floor(Math.random() * 2);
+  var sashGlass = new THREE.MeshStandardMaterial({ color: 0x0c0c18, roughness: 0.3, metalness: 0.2, emissive: 0x080810, emissiveIntensity: 0.05 });
+  for (var floor = 0; floor < 2; floor++) {
+    for (var win = 0; win < upperWinCount; win++) {
+      var wy = 5.0 + floor * 2.8;
+      var wz = z - (upperWinCount - 1) * 0.9 + win * 1.8;
+      var sashPane = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 1.3), sashGlass);
+      sashPane.position.set(faceX + faceDir * 0.18, wy, wz);
+      sashPane.rotation.y = faceRot;
+      group.add(sashPane);
+      var sill = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.9), greyStone);
+      sill.position.set(faceX + faceDir * 0.12, wy - 0.7, wz);
+      group.add(sill);
+    }
+  }
+
+  // Cornice — vary height
+  var corniceY = 3.8 + upperH + 0.1;
+  var roofCornice = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 4.8), greyStone);
+  roofCornice.position.set(faceX + faceDir * 0.12, corniceY, z);
+  group.add(roofCornice);
+
+  // Hanging sign — different SHAPES per shop
+  var signShape = opts.signShape || 'rect';
+  if (opts.name && opts.name.length > 0 && signStyle !== 'none') {
+    var signW = 0.6 + Math.random() * 0.3;
+    var signH = 0.4 + Math.random() * 0.25;
+    // Bracket — iron arm sticking out from the wall
+    var bracket = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.04), ironMat);
+    bracket.position.set(faceX + faceDir * 0.4, 3.9, z - 1.5);
+    group.add(bracket);
+    var bracketV = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.35, 0.04), ironMat);
+    bracketV.position.set(faceX + faceDir * 0.7, 3.72, z - 1.5);
+    group.add(bracketV);
+
+    // Build the sign SHAPE geometry
+    var signGeo;
+    var shape;
+    if (signShape === 'circle') {
+      // Round sign like a pub sign
+      var radius = Math.min(signW, signH) * 0.85;
+      shape = new THREE.Shape();
+      for (var ai = 0; ai <= 32; ai++) {
+        var ang = (ai / 32) * Math.PI * 2;
+        var px = Math.cos(ang) * radius;
+        var py = Math.sin(ang) * radius;
+        if (ai === 0) { shape.moveTo(px, py); }
+        else { shape.lineTo(px, py); }
+      }
+      signGeo = new THREE.ShapeGeometry(shape);
+    } else if (signShape === 'oval') {
+      // Tall oval
+      shape = new THREE.Shape();
+      for (var ai2 = 0; ai2 <= 32; ai2++) {
+        var ang2 = (ai2 / 32) * Math.PI * 2;
+        var px2 = Math.cos(ang2) * signW * 0.45;
+        var py2 = Math.sin(ang2) * signH * 0.65;
+        if (ai2 === 0) { shape.moveTo(px2, py2); }
+        else { shape.lineTo(px2, py2); }
+      }
+      signGeo = new THREE.ShapeGeometry(shape);
+    } else if (signShape === 'shield') {
+      // Heraldic shield — pointed bottom
+      var sw2 = signW * 0.5;
+      var sh2 = signH * 0.6;
+      shape = new THREE.Shape();
+      shape.moveTo(-sw2, sh2);          // top-left
+      shape.lineTo(sw2, sh2);           // top-right
+      shape.lineTo(sw2, 0);             // right side
+      shape.quadraticCurveTo(sw2, -sh2 * 0.5, 0, -sh2);  // curve to point
+      shape.quadraticCurveTo(-sw2, -sh2 * 0.5, -sw2, 0); // curve back up
+      shape.lineTo(-sw2, sh2);          // back to top-left
+      signGeo = new THREE.ShapeGeometry(shape);
+    } else if (signShape === 'octagon') {
+      // Octagonal — like a stop sign
+      var oct = signW * 0.42;
+      var octInset = oct * 0.4;
+      shape = new THREE.Shape();
+      shape.moveTo(-octInset, oct);
+      shape.lineTo(octInset, oct);
+      shape.lineTo(oct, octInset);
+      shape.lineTo(oct, -octInset);
+      shape.lineTo(octInset, -oct);
+      shape.lineTo(-octInset, -oct);
+      shape.lineTo(-oct, -octInset);
+      shape.lineTo(-oct, octInset);
+      shape.lineTo(-octInset, oct);
+      signGeo = new THREE.ShapeGeometry(shape);
+    } else {
+      // Default rectangle
+      signGeo = new THREE.PlaneGeometry(signW, signH);
+    }
+
+    // Paint the sign texture — adapts to any shape
+    var signBgHex = '#' + fasciaCol.toString(16).padStart(6, '0');
+    var hangTex = makeCanvasTexture(256, 256, function(cx, w, h) {
+      cx.fillStyle = signBgHex;
+      cx.fillRect(0, 0, w, h);
+      // Border
+      if (signStyle === 'ornate') {
+        cx.strokeStyle = '#d4b050';
+        cx.lineWidth = 5;
+        cx.strokeRect(8, 8, w - 16, h - 16);
+        cx.lineWidth = 2;
+        cx.strokeRect(14, 14, w - 28, h - 28);
+      } else {
+        cx.strokeStyle = '#c0a848';
+        cx.lineWidth = 3;
+        cx.strokeRect(10, 10, w - 20, h - 20);
+      }
+      // Weathering — faded patches on the sign
+      for (var fp = 0; fp < 4; fp++) {
+        cx.fillStyle = 'rgba(0,0,0,' + (0.05 + Math.random() * 0.1) + ')';
+        cx.beginPath();
+        cx.ellipse(Math.random() * w, Math.random() * h, 20 + Math.random() * 30, 15 + Math.random() * 20, 0, 0, Math.PI * 2);
+        cx.fill();
+      }
+      cx.fillStyle = opts.goldText !== false ? '#d4b050' : '#e8e0d0';
+      cx.font = (signStyle === 'ornate' ? 'italic ' : 'bold ') + '20px Georgia, serif';
+      cx.textAlign = 'center';
+      cx.textBaseline = 'middle';
+      var words = opts.name.split(' ');
+      if (words.length <= 2) {
+        cx.fillText(opts.name, w / 2, h / 2);
+      } else {
+        var mid = Math.ceil(words.length / 2);
+        cx.fillText(words.slice(0, mid).join(' '), w / 2, h / 2 - 16);
+        cx.fillText(words.slice(mid).join(' '), w / 2, h / 2 + 16);
+      }
+    });
+    var hangSign = new THREE.Mesh(
+      signGeo,
+      new THREE.MeshStandardMaterial({ map: hangTex, roughness: 0.6, side: THREE.DoubleSide, emissive: 0x332810, emissiveIntensity: 0.1 })
+    );
+    hangSign.position.set(faceX + faceDir * 0.7, 3.55, z - 1.5);
+    // Face toward the camera (which is at +Z looking down the alley)
+    hangSign.rotation.y = 0;  // PlaneGeometry/ShapeGeometry face +Z by default
+    group.add(hangSign);
+  }
+
+  // Awning
+  if (opts.hasAwning) {
+    var awCol = opts.awningColour || 0x122218;
+    var awMat = new THREE.MeshStandardMaterial({ color: awCol, roughness: 0.8, side: THREE.DoubleSide });
+    var awning = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 3.8), awMat);
+    awning.position.set(faceX + faceDir * 0.6, 3.15, z);
+    awning.rotation.z = faceDir * 0.35;
+    awning.rotation.y = Math.PI / 2;
+    group.add(awning);
+  }
+
+  // Interior glow — THIS IS THE MAIN LIGHT SOURCE
+  if (glowLevel > 0) {
+    var intensity = glowLevel === 2 ? 5.0 : 2.5;
+    var range = glowLevel === 2 ? 7 : 10;
+    var shopLight = new THREE.PointLight(0xe89030, intensity, range, 2);
+    shopLight.position.set(wallX + faceDir * 0.3, 2.2, z);
+    group.add(shopLight);
+    shopLights.push(shopLight);
+
+    // Pavement spill — positioned OUT in the street so it lights the cobbles, not the walls
+    var spillIntensity = glowLevel === 2 ? 4.0 : 1.2;
+    var spillRange = glowLevel === 2 ? 7 : 5.5;
+    var spillLight = new THREE.PointLight(0xd88828, spillIntensity, spillRange, 2);
+    spillLight.position.set(faceX + faceDir * 1.5, 0.3, z);
+    group.add(spillLight);
+    shopLights.push(spillLight);
+  }
+
+  // Target shop: strong but contained glow — stays on the street
+  if (glowLevel === 2) {
+    // Beacon sits in front of the shop, aimed into the alley
+    var beacon = new THREE.PointLight(0xffc060, 6.0, 8, 2);
+    beacon.position.set(faceX + faceDir * 2.0, 1.2, z);
+    group.add(beacon);
+    shopLights.push(beacon);
+    // Second low spill for the cobbles directly in front
+    var lowSpill = new THREE.PointLight(0xe89030, 3.5, 6, 2);
+    lowSpill.position.set(faceX + faceDir * 2.5, 0.15, z);
+    group.add(lowSpill);
+    shopLights.push(lowSpill);
+    // High warm spill above the door — visible "column of light"
+    var highSpill = new THREE.PointLight(0xffc060, 3.0, 7, 2);
+    highSpill.position.set(faceX + faceDir * 1.5, 3.0, z);
+    group.add(highSpill);
+    shopLights.push(highSpill);
+    // Visible warm glow volume — translucent box of light spilling out
+    var glowVolMat = new THREE.MeshBasicMaterial({
+      color: 0xffc060, transparent: true, opacity: 0.035,
+      side: THREE.DoubleSide, depthWrite: false
+    });
+    var glowVol = new THREE.Mesh(new THREE.BoxGeometry(3.0, 3.5, 4.0), glowVolMat);
+    glowVol.position.set(faceX + faceDir * 2.0, 1.8, z);
+    group.add(glowVol);
+  }
+
+  scene.add(group);
+  return group;
+}
+
+// ============================================================
+// PLACE THE SHOPS — each one unique
+// ============================================================
+// LEFT SIDE (side = -1)
+buildShop({ side: -1, z: 18, name: 'P.J. HILTON', paintHex: 0x142e1c, fasciaHex: 0x0e2414,
+  glowLevel: 1, windowCount: 1, signStyle: 'hanging', signShape: 'oval',
+  hasAwning: true, awningColour: 0x0e2015 });
+
+buildShop({ side: -1, z: 13.5, name: 'MOTOR BOOKS', paintHex: 0x0c0c0c, fasciaHex: 0x0a0a0a,
+  glowLevel: 1, windowCount: 2, signStyle: 'hanging', signShape: 'rect', goldText: false });
+
+buildShop({ side: -1, z: 9, name: 'BELL, BOOK & RADMALL', paintHex: 0x1a1228, fasciaHex: 0x14102a,
+  glowLevel: 1, windowCount: 1, signStyle: 'ornate', signShape: 'shield' });
+
+buildShop({ side: -1, z: 4.5, name: 'R. STOREY', paintHex: 0x2a1218, fasciaHex: 0x221018,
+  glowLevel: 1, windowCount: 2, signStyle: 'hanging', signShape: 'circle', paintedPilasters: true });
+
+buildShop({ side: -1, z: 0, name: 'A. ZWEMMER', paintHex: 0x0e1e28, fasciaHex: 0x0a1820,
+  glowLevel: 0, windowCount: 1, signStyle: 'hanging', signShape: 'octagon' });
+
+// Target shop — blazing warm glow, no name visible
+buildShop({ side: -1, z: -4.5, name: '', paintHex: 0x142e1c, fasciaHex: 0x0e2414,
+  glowLevel: 2, windowCount: 1, signStyle: 'none' });
+
+// RIGHT SIDE (side = +1)
+buildShop({ side: 1, z: 18, name: 'WATKINS BOOKS', paintHex: 0x142e1c, fasciaHex: 0x0e2414,
+  glowLevel: 1, windowCount: 1, signStyle: 'ornate', signShape: 'shield',
+  hasAwning: true, awningColour: 0x142e1c,
+  fontStyle: 'italic', fontSize: 24 });
+
+buildShop({ side: 1, z: 13.5, name: 'TRAVIS & EMERY', paintHex: 0x1a0e0e, fasciaHex: 0x180c0c,
+  glowLevel: 1, windowCount: 2, signStyle: 'ornate', signShape: 'oval',
+  fontStyle: 'italic', fontSize: 22 });
+
+buildShop({ side: 1, z: 9, name: 'H.M. FLETCHER', paintHex: 0x0c0c0c, fasciaHex: 0x0a0a0a,
+  glowLevel: 1, windowCount: 1, signStyle: 'hanging', signShape: 'circle',
+  goldText: false, paintedPilasters: true });
+
+buildShop({ side: 1, z: 4.5, name: 'MARCHPANE', paintHex: 0x28180a, fasciaHex: 0x221408,
+  glowLevel: 1, windowCount: 1, signStyle: 'ornate', signShape: 'octagon',
+  hasAwning: true, awningColour: 0x281a0a });
+
+buildShop({ side: 1, z: 0, name: 'ROBERT FREW', paintHex: 0x142e1c, fasciaHex: 0x0e2414,
+  glowLevel: 0, windowCount: 2, signStyle: 'hanging', signShape: 'rect' });
+
+buildShop({ side: 1, z: -4.5, name: 'HAROLD STOREY', paintHex: 0x1a1228, fasciaHex: 0x14102a,
+  glowLevel: 0, windowCount: 1, signStyle: 'hanging', signShape: 'oval' });
+
+// ============================================================
+// A-BOARD SIGNS
+// ============================================================
+function buildABoard(x, z, text, rotation) {
+  var boardTex = makeCanvasTexture(128, 192, function(cx, w, h) {
+    cx.fillStyle = '#1a1a10';
+    cx.fillRect(0, 0, w, h);
+    cx.strokeStyle = '#999';
+    cx.lineWidth = 2;
+    cx.strokeRect(4, 4, w - 8, h - 8);
+    cx.fillStyle = '#d8c870';
+    cx.font = '14px Georgia, serif';
+    cx.textAlign = 'center';
+    cx.textBaseline = 'middle';
+    var words = text.split(' ');
+    var lineH = 18;
+    var startY = h / 2 - (words.length * lineH) / 2;
+    for (var i = 0; i < words.length; i++) {
+      cx.fillText(words[i], w / 2, startY + i * lineH + lineH / 2);
+    }
+  });
+  var board = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.45, 0.65),
+    new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.7, side: THREE.DoubleSide })
+  );
+  board.position.set(x, 0.38, z);
+  board.rotation.y = rotation || 0;
+  scene.add(board);
+}
+
+buildABoard(2.5, 17.5, 'ESOTERIC BOOKS', -0.2);
+buildABoard(2.5, 13, 'SHEET MUSIC SCORES', -0.15);
+buildABoard(-2.5, 8.5, 'FIRST EDITIONS', 0.25);
+buildABoard(2.5, 4, "CHILDREN'S BOOKS", -0.2);
+
+// ============================================================
+// ALLEY CONTINUATION WALLS — extend the alley behind the camera
+// so there are no dark voids on either side of the view
+// ============================================================
+// The camera is at z=22, but the nearest shops end at ~z=20.25.
+// We need brick walls filling the gap and extending past the camera.
+var alleyWallLength = 8;  // from z=20 to z=28 — well past camera
+var alleyWallHeight = 12; // tall enough to fill the view
+
+// Left alley wall
+var leftAlleyWall = new THREE.Mesh(
+  new THREE.BoxGeometry(SHOP_DEPTH + 0.3, alleyWallHeight, alleyWallLength),
+  brickMat
+);
+leftAlleyWall.position.set(-5 + (SHOP_DEPTH + 0.3) * 0.5 - 0.1, alleyWallHeight * 0.5, 24);
+scene.add(leftAlleyWall);
+
+// Right alley wall
+var rightAlleyWall = new THREE.Mesh(
+  new THREE.BoxGeometry(SHOP_DEPTH + 0.3, alleyWallHeight, alleyWallLength),
+  brickMat
+);
+rightAlleyWall.position.set(5 - (SHOP_DEPTH + 0.3) * 0.5 + 0.1, alleyWallHeight * 0.5, 24);
+scene.add(rightAlleyWall);
+
+// ============================================================
+// BACKGROUND BUILDING (far end) — lower so the moon looms above
+// ============================================================
+var endBuilding = new THREE.Mesh(new THREE.BoxGeometry(14, 10, 2), brickMat);
+endBuilding.position.set(0, 5, -14);
+scene.add(endBuilding);
+
+for (var ew = 0; ew < 3; ew++) {
+  for (var ef = 0; ef < 2; ef++) {
+    var ewGlass = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 1.3, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0x0c0c18, roughness: 0.3 })
+    );
+    ewGlass.position.set(-2.5 + ew * 2.5, 3 + ef * 3, -12.95);
+    scene.add(ewGlass);
+  }
+}
+
+// ============================================================
+// STARS — scattered across the night sky
+// ============================================================
+// Use THREE.Points for hundreds of tiny stars, exempt from fog
+var starCount = 400;
+var starPositions = new Float32Array(starCount * 3);
+for (var si2 = 0; si2 < starCount; si2++) {
+  // Spread stars across a wide dome above the alley
+  // X: wide spread, Y: above the rooftops, Z: behind the buildings
+  starPositions[si2 * 3] = (Math.random() - 0.5) * 120;       // x
+  starPositions[si2 * 3 + 1] = 15 + Math.random() * 60;       // y — above buildings
+  starPositions[si2 * 3 + 2] = -20 + (Math.random() - 0.5) * 100;  // z
+}
+var starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+var starMat = new THREE.PointsMaterial({
+  color: 0xffeedd,
+  size: 0.15 + Math.random() * 0.1,
+  fog: false,
+  transparent: true,
+  opacity: 0.7
+});
+var stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// A few brighter stars — larger and warmer
+var brightStarCount = 30;
+var brightPositions = new Float32Array(brightStarCount * 3);
+for (var bs = 0; bs < brightStarCount; bs++) {
+  brightPositions[bs * 3] = (Math.random() - 0.5) * 100;
+  brightPositions[bs * 3 + 1] = 18 + Math.random() * 50;
+  brightPositions[bs * 3 + 2] = -25 + (Math.random() - 0.5) * 80;
+}
+var brightStarGeo = new THREE.BufferGeometry();
+brightStarGeo.setAttribute('position', new THREE.BufferAttribute(brightPositions, 3));
+var brightStarMat = new THREE.PointsMaterial({
+  color: 0xffddbb,
+  size: 0.3,
+  fog: false,
+  transparent: true,
+  opacity: 0.9
+});
+var brightStars = new THREE.Points(brightStarGeo, brightStarMat);
+scene.add(brightStars);
+
+// ============================================================
+// BLOOD MOON — ruddy disc high in the sky above rooftops
+// ============================================================
+// Moon disc — textured blood moon with craters and maria
+var moonTex = makeCanvasTexture(512, 512, function(cx, w, h) {
+  // Base blood-red colour
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, '#cc4422');
+  grad.addColorStop(0.6, '#bb3318');
+  grad.addColorStop(1, '#882210');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+  // Maria — dark patches (the "seas" on the moon's surface)
+  var mariaData = [
+    { x: 0.35, y: 0.3, rx: 0.12, ry: 0.08 },
+    { x: 0.55, y: 0.25, rx: 0.08, ry: 0.1 },
+    { x: 0.45, y: 0.5, rx: 0.15, ry: 0.1 },
+    { x: 0.6, y: 0.55, rx: 0.07, ry: 0.06 },
+    { x: 0.3, y: 0.6, rx: 0.06, ry: 0.08 },
+    { x: 0.5, y: 0.7, rx: 0.09, ry: 0.06 }
+  ];
+  for (var mi = 0; mi < mariaData.length; mi++) {
+    var md = mariaData[mi];
+    cx.fillStyle = 'rgba(60, 15, 8, 0.35)';
+    cx.beginPath();
+    cx.ellipse(md.x * w, md.y * h, md.rx * w, md.ry * h, 0.3 * mi, 0, Math.PI * 2);
+    cx.fill();
+  }
+  // Craters — small bright-rimmed circles
+  for (var ci = 0; ci < 30; ci++) {
+    var crX = w * 0.15 + Math.random() * w * 0.7;
+    var crY = h * 0.15 + Math.random() * h * 0.7;
+    var crR = 3 + Math.random() * 12;
+    // Dark centre
+    cx.fillStyle = 'rgba(50, 12, 6, 0.25)';
+    cx.beginPath();
+    cx.arc(crX, crY, crR, 0, Math.PI * 2);
+    cx.fill();
+    // Bright rim on one side
+    cx.strokeStyle = 'rgba(220, 100, 50, 0.2)';
+    cx.lineWidth = 1;
+    cx.beginPath();
+    cx.arc(crX - 1, crY - 1, crR, -0.8, 1.2);
+    cx.stroke();
+  }
+  // Circular mask so the texture fades at edges (sphere will handle shape,
+  // but this helps the surface shading look rounder)
+  var edgeMask = cx.createRadialGradient(w/2, h/2, w * 0.3, w/2, h/2, w/2);
+  edgeMask.addColorStop(0, 'rgba(0,0,0,0)');
+  edgeMask.addColorStop(1, 'rgba(30,8,4,0.4)');
+  cx.fillStyle = edgeMask;
+  cx.fillRect(0, 0, w, h);
+});
+var moonGeo = new THREE.SphereGeometry(2.5, 64, 64);
+var moonMat = new THREE.MeshBasicMaterial({
+  map: moonTex, fog: false
+});
+var moonSphere = new THREE.Mesh(moonGeo, moonMat);
+moonSphere.position.set(3.5, 33, -70);
+scene.add(moonSphere);
+
+// Halo / corona around the moon
+var haloGeo = new THREE.SphereGeometry(3.5, 32, 32);
+var haloMat = new THREE.MeshBasicMaterial({
+  color: 0x881808,
+  transparent: true,
+  opacity: 0.25,
+  fog: false
+});
+var moonHalo = new THREE.Mesh(haloGeo, haloMat);
+moonHalo.position.set(3.5, 33, -71);
+scene.add(moonHalo);
+
+// Outer glow — softer, wider
+var outerGlowGeo = new THREE.SphereGeometry(5.5, 32, 32);
+var outerGlowMat = new THREE.MeshBasicMaterial({
+  color: 0x601008,
+  transparent: true,
+  opacity: 0.1,
+  fog: false
+});
+var moonOuterGlow = new THREE.Mesh(outerGlowGeo, outerGlowMat);
+moonOuterGlow.position.set(3.5, 33, -72);
+scene.add(moonOuterGlow);
+
+// Blood moon light — casts deep red light down the entire alley
+var bloodMoonLight = new THREE.DirectionalLight(0xaa2810, 0.6);
+bloodMoonLight.position.set(3.5, 33, -60);
+bloodMoonLight.target.position.set(0, 1, 10);
+scene.add(bloodMoonLight);
+scene.add(bloodMoonLight.target);
+
+// Red point light at the far end — moon glow flooding in
+var moonFlood = new THREE.PointLight(0xcc3318, 2.5, 35, 2);
+moonFlood.position.set(0, 8, -12);
+scene.add(moonFlood);
+
+// Lower red wash on the cobbles from the moon
+var moonPavingWash = new THREE.PointLight(0x881510, 1.0, 25, 2);
+moonPavingWash.position.set(0, 0.5, -5);
+scene.add(moonPavingWash);
+
+// ============================================================
+// LIGHTING — no streetlamps, light comes from the shops
+// ============================================================
+// Ambient — tinted slightly red from the blood moon
+var ambient = new THREE.AmbientLight(0x2a1820, 0.42);
+scene.add(ambient);
+
+// Dim glow from Charing Cross Road behind the camera
+var entranceGlow = new THREE.PointLight(0xd88830, 0.6, 18, 2);
+entranceGlow.position.set(0, 2.5, 26);
+scene.add(entranceGlow);
+
+// ============================================================
+// FOG LAYERS
+// ============================================================
+var fogMat1 = new THREE.MeshBasicMaterial({
+  color: 0x1e1215, transparent: true, opacity: 0.03,
+  side: THREE.DoubleSide, depthWrite: false
+});
+var fogMat2 = new THREE.MeshBasicMaterial({
+  color: 0x221410, transparent: true, opacity: 0.02,
+  side: THREE.DoubleSide, depthWrite: false
+});
+
+var fogPlanes = [];
+for (var fi = 0; fi < 14; fi++) {
+  var fMat = (fi % 2 === 0) ? fogMat1.clone() : fogMat2.clone();
+  var fogPlane = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), fMat);
+  fogPlane.position.set(
+    (Math.random() - 0.5) * 2,
+    1.5 + Math.random() * 2.5,
+    20 - fi * 2.8 + Math.random() * 2
+  );
+  fogPlane.rotation.y = (Math.random() - 0.5) * 0.4;
+  fogPlane.userData = {
+    baseX: fogPlane.position.x,
+    baseY: fogPlane.position.y,
+    speed: 0.08 + Math.random() * 0.12,
+    amplitude: 0.3 + Math.random() * 0.4,
+    phase: Math.random() * Math.PI * 2
+  };
+  fogPlanes.push(fogPlane);
+  scene.add(fogPlane);
+}
+
+// Thicker fog at the far end
+var thickFogMat = new THREE.MeshBasicMaterial({
+  color: 0x12100c, transparent: true, opacity: 0.05,
+  side: THREE.DoubleSide, depthWrite: false
+});
+for (var tfi = 0; tfi < 5; tfi++) {
+  var tFog = new THREE.Mesh(new THREE.PlaneGeometry(12, 5), thickFogMat.clone());
+  tFog.position.set(
+    (Math.random() - 0.5) * 1.5,
+    1.5 + Math.random() * 2,
+    -5 - tfi * 1.5 + Math.random()
+  );
+  tFog.rotation.y = (Math.random() - 0.5) * 0.3;
+  tFog.userData = {
+    baseX: tFog.position.x,
+    baseY: tFog.position.y,
+    speed: 0.06 + Math.random() * 0.08,
+    amplitude: 0.2 + Math.random() * 0.3,
+    phase: Math.random() * Math.PI * 2
+  };
+  fogPlanes.push(tFog);
+  scene.add(tFog);
+}
+
+// ============================================================
+// ANIMATION
+// ============================================================
+// Store each light's ORIGINAL intensity before the animation loop starts
+// (this prevents the flicker from drifting/compounding over time)
+var shopLightBaseIntensities = [];
+for (var sli = 0; sli < shopLights.length; sli++) {
+  shopLightBaseIntensities.push(shopLights[sli].intensity);
+}
+
+var clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+
+  // Fog drift
+  for (var fi = 0; fi < fogPlanes.length; fi++) {
+    var fp = fogPlanes[fi];
+    var ud = fp.userData;
+    fp.position.x = ud.baseX + Math.sin(t * ud.speed + ud.phase) * ud.amplitude;
+    fp.position.y = ud.baseY + Math.sin(t * ud.speed * 0.7 + ud.phase + 1) * ud.amplitude * 0.3;
+  }
+
+  // Shop light flicker — subtle warmth variation (using saved base values)
+  for (var li = 0; li < shopLights.length; li++) {
+    var baseI = shopLightBaseIntensities[li];
+    var flicker = Math.sin(t * 2.0 + li * 1.7) * baseI * 0.02 +
+                  Math.sin(t * 5.3 + li * 2.3) * baseI * 0.01;
+    shopLights[li].intensity = baseI + flicker;
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>

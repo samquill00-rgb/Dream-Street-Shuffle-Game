@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Coach & Horses — Greek Street, Soho, 1973</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; cursor: default; }
+canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<script>
+var canvas = document.getElementById('scene');
+var ctx = canvas.getContext('2d');
+var W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ============================================================
+// RAIN DROPS
+// ============================================================
+var raindrops = [];
+for (var i = 0; i < 300; i++) {
+  raindrops.push({
+    x: Math.random() * 2000 - 200,
+    y: Math.random() * 1400 - 200,
+    len: 8 + Math.random() * 18,
+    speed: 4 + Math.random() * 8,
+    opacity: 0.15 + Math.random() * 0.25
+  });
+}
+
+// Splashes on the ground
+var splashes = [];
+for (var i = 0; i < 20; i++) {
+  splashes.push({
+    x: Math.random() * 2000 - 200,
+    y: 0,
+    radius: 0,
+    maxRadius: 3 + Math.random() * 5,
+    opacity: 0.5,
+    speed: 0.3 + Math.random() * 0.4
+  });
+}
+
+// ============================================================
+// STEAM WISPS
+// ============================================================
+var steamWisps = [];
+for (var i = 0; i < 6; i++) {
+  steamWisps.push({
+    x: 0, y: 0,
+    radius: 5 + Math.random() * 15,
+    opacity: 0.05 + Math.random() * 0.08,
+    drift: -0.2 - Math.random() * 0.3,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.01 + Math.random() * 0.02
+  });
+}
+
+// ============================================================
+// FLICKER STATE
+// ============================================================
+var flickerTimer = 0;
+var pubGlow = 1.0;
+var windowGlows = [1, 1, 1, 1, 1, 1, 1, 1];
+
+// ============================================================
+// DRAWING HELPERS
+// ============================================================
+function drawRect(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, h);
+}
+
+function drawPoly(points, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (var i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i][0], points[i][1]);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawLine(x1, y1, x2, y2, color, width) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width || 1;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+}
+
+function drawText(text, x, y, font, color, align) {
+  ctx.fillStyle = color;
+  ctx.font = font;
+  ctx.textAlign = align || 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+}
+
+// ============================================================
+// MAIN DRAWING FUNCTION
+// ============================================================
+function draw(time) {
+  // Scale to fit — design at 1200x900
+  var scaleX = W / 1200;
+  var scaleY = H / 900;
+  var scale = Math.min(scaleX, scaleY);
+  var offsetX = (W - 1200 * scale) / 2;
+  var offsetY = (H - 900 * scale) / 2;
+
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, scale);
+
+  // ---- SKY ----
+  var skyGrad = ctx.createLinearGradient(0, 0, 0, 400);
+  skyGrad.addColorStop(0, '#0a0a18');
+  skyGrad.addColorStop(0.5, '#0f1020');
+  skyGrad.addColorStop(1, '#1a1525');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, 1200, 900);
+
+  // Subtle city glow on horizon
+  var horizonGlow = ctx.createRadialGradient(600, 500, 50, 600, 500, 500);
+  horizonGlow.addColorStop(0, 'rgba(60, 40, 30, 0.15)');
+  horizonGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = horizonGlow;
+  ctx.fillRect(0, 0, 1200, 900);
+
+  // ============================================================
+  // BACKGROUND BUILDINGS (left side, behind/beside pub)
+  // ============================================================
+  // Blue building far left (like in the photo)
+  drawPoly([[0, 200], [130, 200], [130, 680], [0, 680]], '#3a4a6a');
+  // Windows on blue building
+  for (var row = 0; row < 3; row++) {
+    for (var col = 0; col < 2; col++) {
+      var wx = 30 + col * 50;
+      var wy = 260 + row * 120;
+      drawRect(wx, wy, 35, 50, '#2a3550');
+      // Dim window light
+      if (Math.random() > 0.3) {
+        drawRect(wx + 2, wy + 2, 31, 46, 'rgba(180, 150, 80, 0.08)');
+      }
+    }
+  }
+
+  // ============================================================
+  // THE COACH & HORSES — MAIN BUILDING
+  // ============================================================
+
+  // ----- ROMILLY ST FACE (left, going back in perspective) -----
+  // This face recedes to the left in perspective
+  var romillyLeft = 130;    // far edge (perspective vanishing)
+  var romillyRight = 470;   // where it meets the corner
+  var roofTop = 180;
+  var roofTopLeft = 210;    // slightly lower at far end (perspective)
+  var groundY = 680;
+  var fasciaTopY = 530;     // where the red ground floor starts
+
+  // Upper floors — cream/off-white with perspective
+  drawPoly([
+    [romillyLeft, roofTopLeft],
+    [romillyRight, roofTop],
+    [romillyRight, fasciaTopY],
+    [romillyLeft, fasciaTopY + 15]
+  ], '#d8cfc0');
+
+  // Subtle shadow/depth on upper wall
+  var wallShade = ctx.createLinearGradient(romillyLeft, 0, romillyRight, 0);
+  wallShade.addColorStop(0, 'rgba(0,0,0,0.15)');
+  wallShade.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = wallShade;
+  ctx.beginPath();
+  ctx.moveTo(romillyLeft, roofTopLeft);
+  ctx.lineTo(romillyRight, roofTop);
+  ctx.lineTo(romillyRight, fasciaTopY);
+  ctx.lineTo(romillyLeft, fasciaTopY + 15);
+  ctx.closePath();
+  ctx.fill();
+
+  // Cornice line at top
+  drawPoly([
+    [romillyLeft, roofTopLeft],
+    [romillyRight, roofTop],
+    [romillyRight, roofTop + 8],
+    [romillyLeft, roofTopLeft + 8]
+  ], '#c0b8a8');
+
+  // Romilly windows — 2 rows of 4 windows (perspective gets smaller to left)
+  for (var row = 0; row < 2; row++) {
+    for (var col = 0; col < 4; col++) {
+      var t = col / 3; // 0 to 1, left to right
+      var wx = romillyLeft + 30 + t * (romillyRight - romillyLeft - 80);
+      var wy = roofTopLeft + 40 + row * 130 + (1 - t) * 10;
+      var ww = 30 + t * 15;  // windows get bigger toward camera
+      var wh = 55 + t * 15;
+      // Window frame
+      drawRect(wx - 2, wy - 2, ww + 4, wh + 4, '#b0a890');
+      // Window glass — dark with warm glow
+      var glowIdx = row * 4 + col;
+      var glow = windowGlows[glowIdx % windowGlows.length];
+      drawRect(wx, wy, ww, wh, '#1a1a2a');
+      // Warm interior light
+      ctx.fillStyle = 'rgba(200, 160, 80, ' + (0.15 * glow) + ')';
+      ctx.fillRect(wx + 2, wy + 2, ww - 4, wh - 4);
+      // Window cross bars
+      drawLine(wx + ww/2, wy, wx + ww/2, wy + wh, '#b0a890', 1.5);
+      drawLine(wx, wy + wh/2, wx + ww, wy + wh/2, '#b0a890', 1.5);
+    }
+  }
+
+  // Floor divider line between floors
+  drawPoly([
+    [romillyLeft, roofTopLeft + 135],
+    [romillyRight, roofTop + 125],
+    [romillyRight, roofTop + 130],
+    [romillyLeft, roofTopLeft + 140]
+  ], '#c0b8a8');
+
+  // ----- RED GROUND FLOOR — ROMILLY FACE -----
+  drawPoly([
+    [romillyLeft, fasciaTopY + 15],
+    [romillyRight, fasciaTopY],
+    [romillyRight, groundY],
+    [romillyLeft, groundY]
+  ], '#8b1a1a');
+
+  // Dark red fascia band with gold text
+  drawPoly([
+    [romillyLeft + 5, fasciaTopY + 18],
+    [romillyRight - 5, fasciaTopY + 3],
+    [romillyRight - 5, fasciaTopY + 30],
+    [romillyLeft + 5, fasciaTopY + 48]
+  ], '#6b0e0e');
+  // Gold border on fascia
+  ctx.strokeStyle = '#c0a040';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(romillyLeft + 5, fasciaTopY + 18);
+  ctx.lineTo(romillyRight - 5, fasciaTopY + 3);
+  ctx.lineTo(romillyRight - 5, fasciaTopY + 30);
+  ctx.lineTo(romillyLeft + 5, fasciaTopY + 48);
+  ctx.closePath();
+  ctx.stroke();
+  // Fascia text
+  drawText('THE  COACH  &  HORSES', (romillyLeft + romillyRight) / 2, fasciaTopY + 33, 'bold 14px Georgia', '#c8a840');
+
+  // Red columns on Romilly face
+  for (var col = 0; col < 4; col++) {
+    var t = col / 3;
+    var cx = romillyLeft + 25 + t * (romillyRight - romillyLeft - 60);
+    var colW = 8 + t * 4;
+    // Column
+    ctx.fillStyle = '#cc2020';
+    ctx.fillRect(cx - colW/2, fasciaTopY + 50, colW, groundY - fasciaTopY - 50);
+    // Gold capital
+    ctx.fillStyle = '#c0a040';
+    ctx.fillRect(cx - colW/2 - 2, fasciaTopY + 48, colW + 4, 6);
+  }
+
+  // Romilly windows (ground floor — dark pub windows)
+  for (var col = 0; col < 3; col++) {
+    var t = col / 2;
+    var wx = romillyLeft + 40 + t * (romillyRight - romillyLeft - 100);
+    var ww = 40 + t * 15;
+    drawRect(wx, fasciaTopY + 60, ww, 90, '#1a0a0a');
+    // Warm pub interior glow
+    ctx.fillStyle = 'rgba(200, 140, 50, ' + (0.2 * pubGlow) + ')';
+    ctx.fillRect(wx + 2, fasciaTopY + 62, ww - 4, 86);
+  }
+
+  // ============================================================
+  // CORNER — THE CHAMFERED CORNER WITH BANNER
+  // ============================================================
+  var cornerLeft = 470;
+  var cornerRight = 540;
+
+  // Upper corner — cream, slightly angled
+  drawPoly([
+    [cornerLeft, roofTop],
+    [cornerRight, roofTop - 5],
+    [cornerRight, fasciaTopY - 5],
+    [cornerLeft, fasciaTopY]
+  ], '#d5cbb8');
+
+  // Corner cornice
+  drawPoly([
+    [cornerLeft, roofTop],
+    [cornerRight, roofTop - 5],
+    [cornerRight, roofTop + 3],
+    [cornerLeft, roofTop + 8]
+  ], '#c0b8a8');
+
+  // Corner window (upper)
+  drawRect(cornerLeft + 12, roofTop + 40, 38, 55, '#1a1a2a');
+  ctx.fillStyle = 'rgba(200, 160, 80, 0.12)';
+  ctx.fillRect(cornerLeft + 14, roofTop + 42, 34, 51);
+  drawLine(cornerLeft + 31, roofTop + 40, cornerLeft + 31, roofTop + 95, '#b0a890', 1.5);
+
+  // ---- THE BIG RED BANNER ON THE CORNER ----
+  var bannerX = cornerLeft + 5;
+  var bannerW = cornerRight - cornerLeft - 10;
+  var bannerTop = roofTop + 110;
+  var bannerBottom = fasciaTopY - 10;
+
+  // Banner background — deep red
+  ctx.fillStyle = '#6b0e0e';
+  ctx.fillRect(bannerX, bannerTop, bannerW, bannerBottom - bannerTop);
+  // Gold border
+  ctx.strokeStyle = '#c0a040';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(bannerX + 3, bannerTop + 3, bannerW - 6, bannerBottom - bannerTop - 6);
+
+  // Banner text
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var bx = bannerX + bannerW / 2;
+  var bty = bannerTop + 20;
+  drawText('THE', bx, bty + 15, 'bold 16px Georgia', '#c8a840');
+  drawText('COACH', bx, bty + 38, 'bold 20px Georgia', '#c8a840');
+  drawText('&', bx, bty + 58, 'bold 16px Georgia', '#c8a840');
+  drawText('HORSES', bx, bty + 80, 'bold 20px Georgia', '#c8a840');
+
+  drawText('BUILT IN 1847', bx, bty + 110, '9px Georgia', '#c8a840');
+
+  drawText("NORMAN'S", bx, bty + 135, 'italic 11px Georgia', '#c8a840');
+
+  drawText('THE', bx, bty + 165, 'bold 11px Georgia', '#c8a840');
+  drawText('WEST END\'S', bx, bty + 180, 'bold 13px Georgia', '#c8a840');
+  drawText('BEST', bx, bty + 198, 'bold 15px Georgia', '#c8a840');
+  drawText('KNOWN', bx, bty + 216, 'bold 15px Georgia', '#c8a840');
+  drawText('PUB', bx, bty + 236, 'bold 17px Georgia', '#c8a840');
+
+  drawText('Traditional', bx, bty + 265, 'italic 9px Georgia', '#c8a840');
+  drawText('BEERS & LAGERS', bx, bty + 280, 'bold 10px Georgia', '#c8a840');
+  ctx.restore();
+
+  // Red ground floor on corner
+  drawPoly([
+    [cornerLeft, fasciaTopY],
+    [cornerRight, fasciaTopY - 5],
+    [cornerRight, groundY],
+    [cornerLeft, groundY]
+  ], '#8b1a1a');
+
+  // ============================================================
+  // GREEK STREET FACE (right side, facing us more directly)
+  // ============================================================
+  var greekLeft = 540;
+  var greekRight = 900;
+
+  // Upper floors — cream
+  drawPoly([
+    [greekLeft, roofTop - 5],
+    [greekRight, roofTop + 10],
+    [greekRight, fasciaTopY + 10],
+    [greekLeft, fasciaTopY - 5]
+  ], '#ddd4c5');
+
+  // Perspective shading
+  var greekShade = ctx.createLinearGradient(greekLeft, 0, greekRight, 0);
+  greekShade.addColorStop(0, 'rgba(0,0,0,0)');
+  greekShade.addColorStop(1, 'rgba(0,0,0,0.08)');
+  ctx.fillStyle = greekShade;
+  ctx.fillRect(greekLeft, roofTop - 5, greekRight - greekLeft, fasciaTopY - roofTop + 20);
+
+  // Cornice
+  drawPoly([
+    [greekLeft, roofTop - 5],
+    [greekRight, roofTop + 10],
+    [greekRight, roofTop + 18],
+    [greekLeft, roofTop + 3]
+  ], '#c0b8a8');
+
+  // Greek St windows — 2 rows of 3
+  for (var row = 0; row < 2; row++) {
+    for (var col = 0; col < 3; col++) {
+      var t = col / 2;
+      var wx = greekLeft + 35 + t * (greekRight - greekLeft - 100);
+      var wy = roofTop + 35 + row * 130 + t * 8;
+      var ww = 48 - t * 5;
+      var wh = 70 - t * 5;
+      // Frame
+      drawRect(wx - 2, wy - 2, ww + 4, wh + 4, '#b0a890');
+      // Glass
+      drawRect(wx, wy, ww, wh, '#1a1a2a');
+      // Glow
+      var gi = row * 3 + col;
+      ctx.fillStyle = 'rgba(200, 160, 80, ' + (0.12 * windowGlows[gi % windowGlows.length]) + ')';
+      ctx.fillRect(wx + 2, wy + 2, ww - 4, wh - 4);
+      // Cross bars
+      drawLine(wx + ww/2, wy, wx + ww/2, wy + wh, '#b0a890', 1.5);
+      drawLine(wx, wy + wh * 0.4, wx + ww, wy + wh * 0.4, '#b0a890', 1.5);
+    }
+  }
+
+  // Floor divider
+  drawPoly([
+    [greekLeft, roofTop + 120],
+    [greekRight, roofTop + 133],
+    [greekRight, roofTop + 138],
+    [greekLeft, roofTop + 125]
+  ], '#c0b8a8');
+
+  // ----- RED GROUND FLOOR — GREEK ST FACE -----
+  drawPoly([
+    [greekLeft, fasciaTopY - 5],
+    [greekRight, fasciaTopY + 10],
+    [greekRight, groundY],
+    [greekLeft, groundY]
+  ], '#8b1a1a');
+
+  // Dark red fascia band
+  drawPoly([
+    [greekLeft + 5, fasciaTopY - 2],
+    [greekRight - 5, fasciaTopY + 13],
+    [greekRight - 5, fasciaTopY + 38],
+    [greekLeft + 5, fasciaTopY + 25]
+  ], '#6b0e0e');
+  ctx.strokeStyle = '#c0a040';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(greekLeft + 5, fasciaTopY - 2);
+  ctx.lineTo(greekRight - 5, fasciaTopY + 13);
+  ctx.lineTo(greekRight - 5, fasciaTopY + 38);
+  ctx.lineTo(greekLeft + 5, fasciaTopY + 25);
+  ctx.closePath();
+  ctx.stroke();
+  drawText('THE  COACH  &  HORSES', (greekLeft + greekRight) / 2, fasciaTopY + 20, 'bold 16px Georgia', '#c8a840');
+
+  // Red columns on Greek St face
+  for (var col = 0; col < 4; col++) {
+    var t = col / 3;
+    var cx = greekLeft + 30 + t * (greekRight - greekLeft - 70);
+    var colW = 12 - t * 2;
+    ctx.fillStyle = '#cc2020';
+    ctx.fillRect(cx - colW/2, fasciaTopY + 40, colW, groundY - fasciaTopY - 40);
+    ctx.fillStyle = '#c0a040';
+    ctx.fillRect(cx - colW/2 - 2, fasciaTopY + 38, colW + 4, 6);
+  }
+
+  // Greek St pub windows (ground floor)
+  for (var col = 0; col < 3; col++) {
+    var t = col / 2;
+    var wx = greekLeft + 45 + t * (greekRight - greekLeft - 120);
+    var ww = 55 - t * 8;
+    drawRect(wx, fasciaTopY + 55, ww, 100, '#1a0a0a');
+    ctx.fillStyle = 'rgba(200, 140, 50, ' + (0.25 * pubGlow) + ')';
+    ctx.fillRect(wx + 2, fasciaTopY + 57, ww - 4, 96);
+  }
+
+  // ----- PUB DOOR (on Greek St face, near the corner) -----
+  var doorX = greekLeft + 20;
+  var doorW = 35;
+  var doorH = 80;
+  var doorY = groundY - doorH;
+  drawRect(doorX, doorY, doorW, doorH, '#2a1505');
+  // Door glass panel
+  drawRect(doorX + 4, doorY + 5, doorW - 8, doorH * 0.5, '#1a0a0a');
+  ctx.fillStyle = 'rgba(200, 140, 50, ' + (0.35 * pubGlow) + ')';
+  ctx.fillRect(doorX + 6, doorY + 7, doorW - 12, doorH * 0.5 - 4);
+  // Door handle
+  ctx.fillStyle = '#c0a040';
+  ctx.fillRect(doorX + doorW - 10, doorY + doorH * 0.55, 4, 8);
+
+  // ============================================================
+  // HANGING PUB SIGN (on Greek St face)
+  // ============================================================
+  var signBracketX = greekRight - 60;
+  var signBracketY = fasciaTopY + 5;
+  // Iron bracket
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(signBracketX, signBracketY);
+  ctx.lineTo(signBracketX + 45, signBracketY);
+  ctx.lineTo(signBracketX + 45, signBracketY + 60);
+  ctx.stroke();
+  // Sign board
+  drawRect(signBracketX + 20, signBracketY + 15, 50, 45, '#6b0e0e');
+  ctx.strokeStyle = '#c0a040';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(signBracketX + 22, signBracketY + 17, 46, 41);
+  drawText('COACH', signBracketX + 45, signBracketY + 32, 'bold 8px Georgia', '#c8a840');
+  drawText('& HORSES', signBracketX + 45, signBracketY + 44, 'bold 7px Georgia', '#c8a840');
+
+  // ============================================================
+  // BUILDING TO THE RIGHT (red brick, like in the photo)
+  // ============================================================
+  drawPoly([
+    [greekRight, roofTop + 10],
+    [1050, roofTop + 30],
+    [1050, groundY],
+    [greekRight, groundY]
+  ], '#8b4a3a');
+  // Windows
+  for (var row = 0; row < 3; row++) {
+    for (var col = 0; col < 2; col++) {
+      var wx = greekRight + 20 + col * 60;
+      var wy = roofTop + 60 + row * 120;
+      drawRect(wx, wy, 35, 55, '#1a1a2a');
+      ctx.fillStyle = 'rgba(180, 150, 80, 0.06)';
+      ctx.fillRect(wx + 2, wy + 2, 31, 51);
+    }
+  }
+
+  // Far right building edge
+  drawPoly([[1050, roofTop + 30], [1200, roofTop + 50], [1200, groundY], [1050, groundY]], '#704030');
+
+  // ============================================================
+  // ROOF / PARAPET
+  // ============================================================
+  // Slight parapet wall on top of pub
+  drawPoly([
+    [romillyLeft, roofTopLeft - 5],
+    [greekRight, roofTop + 5],
+    [greekRight, roofTop + 10],
+    [romillyLeft, roofTopLeft]
+  ], '#b0a898');
+
+  // Chimney stacks
+  drawRect(350, roofTopLeft - 35, 15, 40, '#a09080');
+  drawRect(700, roofTop - 30, 15, 40, '#a09080');
+  drawRect(348, roofTopLeft - 40, 19, 8, '#908070');
+  drawRect(698, roofTop - 35, 19, 8, '#908070');
+
+  // ============================================================
+  // PAVEMENT & ROAD
+  // ============================================================
+  // Pavement
+  drawRect(0, groundY, 1200, 30, '#3a3a3a');
+  // Kerb
+  drawRect(0, groundY, 1200, 4, '#555');
+
+  // Road
+  var roadGrad = ctx.createLinearGradient(0, groundY + 30, 0, 900);
+  roadGrad.addColorStop(0, '#1a1a1a');
+  roadGrad.addColorStop(1, '#0a0a0a');
+  ctx.fillStyle = roadGrad;
+  ctx.fillRect(0, groundY + 30, 1200, 200);
+
+  // Wet road reflections
+  ctx.fillStyle = 'rgba(200, 140, 50, ' + (0.04 * pubGlow) + ')';
+  ctx.fillRect(300, groundY + 40, 400, 150);
+  // Streetlamp reflections
+  ctx.fillStyle = 'rgba(200, 180, 120, 0.03)';
+  ctx.fillRect(80, groundY + 50, 80, 120);
+  ctx.fillRect(900, groundY + 50, 80, 120);
+
+  // Puddles with reflections
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = '#c8a840';
+  ctx.beginPath();
+  ctx.ellipse(500, groundY + 80, 60, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(750, groundY + 100, 40, 8, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(200, groundY + 90, 50, 10, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // ============================================================
+  // STREETLAMPS
+  // ============================================================
+  function drawLamp(lx, brightness) {
+    // Post
+    ctx.fillStyle = '#222';
+    ctx.fillRect(lx - 3, groundY - 180, 6, 180);
+    // Arm
+    ctx.fillRect(lx - 3, groundY - 180, 20, 5);
+    // Lantern
+    drawRect(lx + 10, groundY - 195, 16, 22, '#333');
+    // Light glow
+    var lampGlow = ctx.createRadialGradient(lx + 18, groundY - 184, 2, lx + 18, groundY - 184, 80);
+    lampGlow.addColorStop(0, 'rgba(255, 220, 150, ' + (0.4 * brightness) + ')');
+    lampGlow.addColorStop(0.3, 'rgba(255, 200, 100, ' + (0.15 * brightness) + ')');
+    lampGlow.addColorStop(1, 'rgba(255, 180, 80, 0)');
+    ctx.fillStyle = lampGlow;
+    ctx.fillRect(lx - 80, groundY - 280, 200, 200);
+    // Bulb
+    ctx.fillStyle = 'rgba(255, 230, 180, ' + (0.8 * brightness) + ')';
+    ctx.beginPath();
+    ctx.arc(lx + 18, groundY - 184, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawLamp(100, 0.9);
+  drawLamp(950, 0.85);
+
+  // ============================================================
+  // WARM PUB GLOW spilling onto pavement
+  // ============================================================
+  var pubGlowGrad = ctx.createRadialGradient(600, groundY, 20, 600, groundY + 30, 200);
+  pubGlowGrad.addColorStop(0, 'rgba(200, 140, 50, ' + (0.12 * pubGlow) + ')');
+  pubGlowGrad.addColorStop(1, 'rgba(200, 140, 50, 0)');
+  ctx.fillStyle = pubGlowGrad;
+  ctx.fillRect(400, groundY - 10, 400, 200);
+
+  // ============================================================
+  // RAIN
+  // ============================================================
+  ctx.strokeStyle = 'rgba(180, 200, 220, 0.3)';
+  ctx.lineWidth = 1;
+  for (var i = 0; i < raindrops.length; i++) {
+    var r = raindrops[i];
+    ctx.globalAlpha = r.opacity;
+    ctx.beginPath();
+    ctx.moveTo(r.x, r.y);
+    ctx.lineTo(r.x - 2, r.y + r.len);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // Splashes
+  for (var i = 0; i < splashes.length; i++) {
+    var s = splashes[i];
+    if (s.radius > 0) {
+      ctx.strokeStyle = 'rgba(180, 200, 220, ' + (s.opacity * 0.3) + ')';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.ellipse(s.x, groundY + 2, s.radius, s.radius * 0.3, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // ============================================================
+  // FOG / MIST
+  // ============================================================
+  for (var i = 0; i < steamWisps.length; i++) {
+    var w = steamWisps[i];
+    var fogX = 200 + i * 170 + Math.sin(w.sway) * 30;
+    var fogY = groundY - 20 + w.drift * 100;
+    ctx.fillStyle = 'rgba(150, 140, 130, ' + w.opacity + ')';
+    ctx.beginPath();
+    ctx.ellipse(fogX, fogY, w.radius * 3, w.radius, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ============================================================
+  // DATE STAMP — "23.11.73"
+  // ============================================================
+  drawText('23.11.73', 1120, 30, '14px monospace', 'rgba(255, 140, 50, 0.6)', 'right');
+
+  // ============================================================
+  // LOCATION TEXT
+  // ============================================================
+  ctx.save();
+  ctx.globalAlpha = 0.7;
+  drawText('GREEK STREET SOUTH, SOHO', 600, 860, '12px "Courier New", monospace', 'rgba(200, 180, 140, 0.5)');
+  ctx.restore();
+
+  ctx.restore(); // end scale transform
+}
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+function update(time) {
+  // Update rain
+  for (var i = 0; i < raindrops.length; i++) {
+    var r = raindrops[i];
+    r.y += r.speed;
+    r.x -= r.speed * 0.15; // slight wind
+    if (r.y > 900) {
+      r.y = -20;
+      r.x = Math.random() * 1400 - 100;
+    }
+  }
+
+  // Update splashes
+  for (var i = 0; i < splashes.length; i++) {
+    var s = splashes[i];
+    s.radius += s.speed;
+    s.opacity -= 0.01;
+    if (s.radius > s.maxRadius || s.opacity <= 0) {
+      s.x = 100 + Math.random() * 1000;
+      s.y = 680;
+      s.radius = 0;
+      s.opacity = 0.5;
+    }
+  }
+
+  // Update steam
+  for (var i = 0; i < steamWisps.length; i++) {
+    var w = steamWisps[i];
+    w.sway += w.swaySpeed;
+    w.drift -= 0.002;
+    if (w.drift < -1) w.drift = 0;
+  }
+
+  // Flicker pub glow
+  flickerTimer += 0.05;
+  pubGlow = 0.85 + Math.sin(flickerTimer * 1.3) * 0.1 + Math.sin(flickerTimer * 3.7) * 0.05;
+
+  // Window glows — subtle random flicker
+  for (var i = 0; i < windowGlows.length; i++) {
+    windowGlows[i] = 0.8 + Math.sin(flickerTimer * (1.1 + i * 0.3)) * 0.15 + Math.random() * 0.05;
+  }
+
+  // Clear and draw
+  ctx.clearRect(0, 0, W, H);
+  draw(time);
+  requestAnimationFrame(update);
+}
+
+requestAnimationFrame(update);
+</script>
+</body>
+</html>

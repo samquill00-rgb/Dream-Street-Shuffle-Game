@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lackland's Office — Frith Street, Soho, 1973</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(232,120,24,0.55);
+  pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="datestamp">23.11.73</div>
+<div id="location">LACKLAND'S OFFICE, FRITH STREET, SOHO</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04040a);
+scene.fog = new THREE.Fog(0x04040a, 4, 22);
+
+var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+// Camera is across the street, looking at the door — slightly off-centre for depth
+camera.position.set(2.8, 2.0, 6.5);
+camera.lookAt(0, 2.8, 0);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.6;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// MATERIALS
+// ============================================================
+// Cream stucco with London grime — soot staining and weathering
+var stuccoTex = makeCanvasTexture(512, 1024, function(cx, w, h) {
+  // Base cream
+  cx.fillStyle = '#d5ccb8';
+  cx.fillRect(0, 0, w, h);
+  // Soot/pollution darkening at the top (rain washes down from cornice)
+  var sootWash = cx.createLinearGradient(0, 0, 0, h);
+  sootWash.addColorStop(0, 'rgba(50, 45, 35, 0.15)');
+  sootWash.addColorStop(0.1, 'rgba(60, 55, 45, 0.05)');
+  sootWash.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+  sootWash.addColorStop(0.85, 'rgba(50, 45, 30, 0.08)');
+  sootWash.addColorStop(1, 'rgba(40, 35, 25, 0.2)');
+  cx.fillStyle = sootWash;
+  cx.fillRect(0, 0, w, h);
+  // Rain streaks running down the facade
+  cx.strokeStyle = 'rgba(90, 85, 70, 0.06)';
+  cx.lineWidth = 2;
+  for (var rs = 0; rs < 20; rs++) {
+    cx.beginPath();
+    var rx = Math.random() * w;
+    cx.moveTo(rx, 0);
+    for (var ry = 0; ry < h; ry += 30) {
+      rx += (Math.random() - 0.5) * 4;
+      cx.lineTo(rx, ry);
+    }
+    cx.stroke();
+  }
+  // Patchy discolouration
+  cx.fillStyle = 'rgba(160, 150, 130, 0.08)';
+  for (var pc = 0; pc < 6; pc++) {
+    cx.beginPath();
+    cx.ellipse(Math.random() * w, Math.random() * h, 30 + Math.random() * 60, 20 + Math.random() * 40, Math.random(), 0, Math.PI * 2);
+    cx.fill();
+  }
+});
+var creamStucco = new THREE.MeshStandardMaterial({ map: stuccoTex, roughness: 0.85 });
+var darkStucco = new THREE.MeshStandardMaterial({ color: 0xb0a890, roughness: 0.85 });
+var sootBrick = new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 0.9 });
+var darkBrick = new THREE.MeshStandardMaterial({ color: 0x3a2a22, roughness: 0.9 });
+var redBrick = new THREE.MeshStandardMaterial({ color: 0x6b3a2a, roughness: 0.85 });
+var greyStone = new THREE.MeshStandardMaterial({ color: 0x9a9488, roughness: 0.75 });
+var whiteStone = new THREE.MeshStandardMaterial({ color: 0xc8c0b0, roughness: 0.7 });
+// Pavement texture — large rectangular Portland stone flagstones
+var paveTex = makeCanvasTexture(512, 512, function(cx, w, h) {
+  // Base grey stone colour
+  cx.fillStyle = '#555550';
+  cx.fillRect(0, 0, w, h);
+  // Large flagstone grid — big rectangular slabs, some wider than others
+  var flagRows = [
+    { y: 0, h: 128 },
+    { y: 128, h: 110 },
+    { y: 238, h: 140 },
+    { y: 378, h: 134 }
+  ];
+  for (var ri = 0; ri < flagRows.length; ri++) {
+    var row = flagRows[ri];
+    // Each row has 2-3 slabs of varying width
+    var slabs = (ri % 2 === 0) ? [0, 200, 380] : [0, 260, 420];
+    for (var si = 0; si < slabs.length; si++) {
+      var sx = slabs[si];
+      var sw = (si < slabs.length - 1) ? slabs[si + 1] - sx : w - sx;
+      // Each slab has slightly different tone (natural stone variation)
+      var tone = 60 + Math.random() * 25;
+      cx.fillStyle = 'rgb(' + tone + ',' + tone + ',' + (tone - 3) + ')';
+      cx.fillRect(sx + 2, row.y + 2, sw - 4, row.h - 4);
+      // Subtle surface texture within each slab (stone grain)
+      cx.fillStyle = 'rgba(80, 78, 72, 0.06)';
+      for (var sp = 0; sp < 8; sp++) {
+        cx.beginPath();
+        cx.ellipse(sx + Math.random() * sw, row.y + Math.random() * row.h, 10 + Math.random() * 25, 5 + Math.random() * 12, Math.random(), 0, Math.PI * 2);
+        cx.fill();
+      }
+    }
+  }
+  // Dark mortar lines between flags
+  cx.strokeStyle = 'rgba(25, 22, 18, 0.6)';
+  cx.lineWidth = 3;
+  // Horizontal mortar
+  for (var ri = 0; ri < flagRows.length; ri++) {
+    cx.beginPath();
+    cx.moveTo(0, flagRows[ri].y);
+    cx.lineTo(w, flagRows[ri].y);
+    cx.stroke();
+  }
+  // Vertical mortar (different per row)
+  var vertLines1 = [200, 380];
+  var vertLines2 = [260, 420];
+  for (var ri = 0; ri < flagRows.length; ri++) {
+    var row = flagRows[ri];
+    var vlines = (ri % 2 === 0) ? vertLines1 : vertLines2;
+    for (var vi = 0; vi < vlines.length; vi++) {
+      cx.beginPath();
+      cx.moveTo(vlines[vi], row.y);
+      cx.lineTo(vlines[vi], row.y + row.h);
+      cx.stroke();
+    }
+  }
+  // Grime in the mortar joints
+  cx.fillStyle = 'rgba(15, 12, 8, 0.25)';
+  for (var ri = 0; ri < flagRows.length; ri++) {
+    cx.fillRect(0, flagRows[ri].y - 1, w, 4);
+  }
+  // Dark stains (oil, spills)
+  cx.fillStyle = 'rgba(30, 28, 22, 0.2)';
+  for (var st = 0; st < 8; st++) {
+    cx.beginPath();
+    cx.ellipse(Math.random() * w, Math.random() * h, 8 + Math.random() * 20, 6 + Math.random() * 15, Math.random() * Math.PI, 0, Math.PI * 2);
+    cx.fill();
+  }
+  // Chewing gum
+  cx.fillStyle = 'rgba(90, 88, 82, 0.35)';
+  for (var gm = 0; gm < 5; gm++) {
+    cx.beginPath();
+    cx.arc(Math.random() * w, Math.random() * h, 2 + Math.random() * 4, 0, Math.PI * 2);
+    cx.fill();
+  }
+  // Damp patches
+  cx.fillStyle = 'rgba(35, 35, 38, 0.12)';
+  for (var dp = 0; dp < 3; dp++) {
+    cx.beginPath();
+    cx.ellipse(Math.random() * w, Math.random() * h, 25 + Math.random() * 40, 20 + Math.random() * 30, Math.random(), 0, Math.PI * 2);
+    cx.fill();
+  }
+});
+var pavementMat = new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.9 });
+var roadMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.85 });
+var kerbMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
+var paveMat = new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.85 });
+var windowFrame = new THREE.MeshStandardMaterial({ color: 0x8a8070, roughness: 0.7 });
+var darkGlass = new THREE.MeshStandardMaterial({ color: 0x0a0a12, roughness: 0.2, metalness: 0.3 });
+var warmGlass = new THREE.MeshStandardMaterial({ color: 0x2a1505, roughness: 0.3, emissive: 0xe87818, emissiveIntensity: 0.12 });
+var ironMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.4 });
+
+// Racing green door — painted wood grain with wear
+var doorTex = makeCanvasTexture(256, 512, function(cx, w, h) {
+  // Base racing green
+  cx.fillStyle = '#1a4a2a';
+  cx.fillRect(0, 0, w, h);
+  // Vertical wood grain lines showing through paint
+  cx.strokeStyle = 'rgba(10, 50, 22, 0.4)';
+  cx.lineWidth = 1;
+  for (var gx = 0; gx < w; gx += 3 + Math.random() * 4) {
+    cx.beginPath();
+    cx.moveTo(gx, 0);
+    cx.lineTo(gx + (Math.random() - 0.5) * 2, h);
+    cx.stroke();
+  }
+  // Subtle knots in the wood
+  cx.fillStyle = 'rgba(12, 40, 18, 0.3)';
+  for (var k = 0; k < 5; k++) {
+    cx.beginPath();
+    cx.ellipse(Math.random() * w, Math.random() * h, 6 + Math.random() * 8, 3 + Math.random() * 4, Math.random() * Math.PI, 0, Math.PI * 2);
+    cx.fill();
+  }
+  // Wear around the edges — lighter, paint rubbed thin
+  cx.fillStyle = 'rgba(35, 80, 45, 0.15)';
+  cx.fillRect(0, 0, 8, h);
+  cx.fillRect(w - 8, 0, 8, h);
+  cx.fillRect(0, 0, w, 6);
+  cx.fillRect(0, h - 6, w, 6);
+  // Scuff marks near bottom (kicked by shoes over decades)
+  cx.fillStyle = 'rgba(20, 30, 15, 0.25)';
+  for (var sc = 0; sc < 12; sc++) {
+    cx.fillRect(Math.random() * w, h - 20 - Math.random() * 60, 15 + Math.random() * 25, 1 + Math.random() * 2);
+  }
+  // Slight weathering/discolouration
+  cx.fillStyle = 'rgba(30, 50, 25, 0.08)';
+  cx.fillRect(0, 0, w, h * 0.15);
+  cx.fillStyle = 'rgba(15, 35, 18, 0.06)';
+  cx.fillRect(0, h * 0.85, w, h * 0.15);
+});
+var racingGreen = new THREE.MeshStandardMaterial({ map: doorTex, roughness: 0.5, metalness: 0.05 });
+
+var panelTex = makeCanvasTexture(256, 512, function(cx, w, h) {
+  // Darker recessed panel green
+  cx.fillStyle = '#143820';
+  cx.fillRect(0, 0, w, h);
+  // Wood grain in panels too
+  cx.strokeStyle = 'rgba(8, 40, 16, 0.35)';
+  cx.lineWidth = 1;
+  for (var gx = 0; gx < w; gx += 3 + Math.random() * 5) {
+    cx.beginPath();
+    cx.moveTo(gx, 0);
+    cx.lineTo(gx + (Math.random() - 0.5) * 2, h);
+    cx.stroke();
+  }
+  // Shadow in the recess — darker at top
+  var panelShadow = cx.createLinearGradient(0, 0, 0, h);
+  panelShadow.addColorStop(0, 'rgba(5, 15, 8, 0.2)');
+  panelShadow.addColorStop(0.3, 'rgba(5, 15, 8, 0)');
+  panelShadow.addColorStop(1, 'rgba(5, 15, 8, 0.05)');
+  cx.fillStyle = panelShadow;
+  cx.fillRect(0, 0, w, h);
+});
+var racingGreenDark = new THREE.MeshStandardMaterial({ map: panelTex, roughness: 0.55, metalness: 0.05 });
+
+// Brass material — polished
+var brassMat = new THREE.MeshStandardMaterial({
+  color: 0xb8922a, roughness: 0.25, metalness: 0.85
+});
+var brassMatDull = new THREE.MeshStandardMaterial({
+  color: 0x8a7020, roughness: 0.4, metalness: 0.7
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function makeCanvasTexture(w, h, drawFunc) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  drawFunc(cx, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+function placeMesh(geo, mat, x, y, z) {
+  var m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  scene.add(m);
+  return m;
+}
+
+// ============================================================
+// GROUND
+// ============================================================
+// Pavement
+var pavement = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), paveMat);
+pavement.rotation.x = -Math.PI / 2;
+pavement.receiveShadow = true;
+scene.add(pavement);
+
+// Road
+var road = new THREE.Mesh(new THREE.PlaneGeometry(40, 7), roadMat);
+road.rotation.x = -Math.PI / 2;
+road.position.set(0, -0.01, 6);
+road.receiveShadow = true;
+scene.add(road);
+
+// Kerb
+var kerb = new THREE.Mesh(new THREE.BoxGeometry(30, 0.15, 0.15), kerbMat);
+kerb.position.set(0, 0.075, 2.5);
+scene.add(kerb);
+
+// Raised pavement in front of buildings
+var raisedPave = new THREE.Mesh(new THREE.BoxGeometry(30, 0.12, 3), paveMat);
+raisedPave.position.set(0, 0.06, 1);
+raisedPave.receiveShadow = true;
+scene.add(raisedPave);
+
+// Wet road
+var wetMat = new THREE.MeshStandardMaterial({
+  color: 0x1a1a1a, roughness: 0.12, metalness: 0.5, transparent: true, opacity: 0.3
+});
+var wetRoad = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), wetMat);
+wetRoad.rotation.x = -Math.PI / 2;
+wetRoad.position.set(1, 0.01, 5);
+scene.add(wetRoad);
+
+// ============================================================
+// THE BUILDING — Georgian townhouse facade
+// ============================================================
+var building = new THREE.Group();
+
+// Main facade — cream stucco
+var facade = new THREE.Mesh(new THREE.BoxGeometry(7, 14, 1.5), creamStucco);
+facade.position.set(0, 7, -0.75);
+facade.castShadow = true;
+building.add(facade);
+
+// Ground floor base — slightly darker, rougher
+var groundBase = new THREE.Mesh(new THREE.BoxGeometry(7.05, 3.5, 0.1), darkStucco);
+groundBase.position.set(0, 1.75, 0.02);
+building.add(groundBase);
+
+// Rusticated ground floor lines (horizontal grooves)
+// Split into segments so they stop at window and door openings
+// Left window surround spans roughly -2.9 to -1.5
+// Door area spans roughly -1.0 to 1.0
+// Right window surround spans roughly 1.5 to 2.9
+var grooveMat = new THREE.MeshStandardMaterial({ color: 0x908878, roughness: 0.8 });
+for (var i = 0; i < 5; i++) {
+  var gy = 0.5 + i * 0.7;
+  // Far left segment
+  var g1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.02, 0.08), grooveMat);
+  g1.position.set(-3.2, gy, 0.04);
+  building.add(g1);
+  // Between left window and door
+  var g2 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.08), grooveMat);
+  g2.position.set(-1.25, gy, 0.04);
+  building.add(g2);
+  // Between door and right window
+  var g3 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.08), grooveMat);
+  g3.position.set(1.25, gy, 0.04);
+  building.add(g3);
+  // Far right segment
+  var g4 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.02, 0.08), grooveMat);
+  g4.position.set(3.2, gy, 0.04);
+  building.add(g4);
+}
+
+// String course (horizontal band between ground and first floor)
+var stringCourse = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.2, 0.12), whiteStone);
+stringCourse.position.set(0, 3.8, 0.05);
+building.add(stringCourse);
+
+// Cornice at top
+var cornice = new THREE.Mesh(new THREE.BoxGeometry(7.3, 0.25, 0.2), whiteStone);
+cornice.position.set(0, 13.9, 0.1);
+building.add(cornice);
+var corniceUnder = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.12, 0.15), greyStone);
+corniceUnder.position.set(0, 13.7, 0.08);
+building.add(corniceUnder);
+
+// ============================================================
+// THE DOOR — Racing green Georgian door
+// ============================================================
+var doorGroup = new THREE.Group();
+
+// Door recess (the reveal — set back from the facade)
+var doorRecess = new THREE.Mesh(
+  new THREE.BoxGeometry(1.4, 3.2, 0.3),
+  new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.9 })
+);
+doorRecess.position.set(0, 1.7, -0.05);
+doorGroup.add(doorRecess);
+
+// Wooden doorframe — dark stained timber surrounding the green door
+var woodFrameTex = makeCanvasTexture(128, 512, function(cx, w, h) {
+  // Dark stained wood base
+  cx.fillStyle = '#2a1e14';
+  cx.fillRect(0, 0, w, h);
+  // Wood grain
+  cx.strokeStyle = 'rgba(50, 35, 22, 0.5)';
+  cx.lineWidth = 1;
+  for (var gx = 0; gx < w; gx += 2 + Math.random() * 3) {
+    cx.beginPath();
+    cx.moveTo(gx, 0);
+    cx.lineTo(gx + (Math.random() - 0.5) * 2, h);
+    cx.stroke();
+  }
+  // Darker varnish at edges
+  cx.fillStyle = 'rgba(15, 10, 5, 0.15)';
+  cx.fillRect(0, 0, 6, h);
+  cx.fillRect(w - 6, 0, 6, h);
+});
+var woodFrameMat = new THREE.MeshStandardMaterial({ map: woodFrameTex, roughness: 0.55, metalness: 0.05 });
+
+// Left frame piece
+var frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.9, 0.07), woodFrameMat);
+frameLeft.position.set(-0.6, 1.55, 0.06);
+doorGroup.add(frameLeft);
+// Right frame piece
+var frameRight = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.9, 0.07), woodFrameMat);
+frameRight.position.set(0.6, 1.55, 0.06);
+doorGroup.add(frameRight);
+// Top frame piece (header)
+var frameTop = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.08, 0.07), woodFrameMat);
+frameTop.position.set(0, 3.01, 0.06);
+doorGroup.add(frameTop);
+// Threshold frame piece
+var frameBottom = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.05, 0.07), woodFrameMat);
+frameBottom.position.set(0, 0.13, 0.06);
+doorGroup.add(frameBottom);
+
+// The door itself — racing green, 6-panel Georgian style
+var doorSlab = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.8, 0.08), racingGreen);
+doorSlab.position.set(0, 1.55, 0.08);
+doorSlab.castShadow = true;
+doorGroup.add(doorSlab);
+
+// Door panels — recessed rectangles (6-panel Georgian layout)
+// Top 2 panels (taller)
+var panelGeo1 = new THREE.BoxGeometry(0.38, 0.65, 0.03);
+var topPanelL = new THREE.Mesh(panelGeo1, racingGreenDark);
+topPanelL.position.set(-0.22, 2.55, 0.12);
+doorGroup.add(topPanelL);
+var topPanelR = new THREE.Mesh(panelGeo1, racingGreenDark);
+topPanelR.position.set(0.22, 2.55, 0.12);
+doorGroup.add(topPanelR);
+
+// Middle 2 panels (shorter)
+var panelGeo2 = new THREE.BoxGeometry(0.38, 0.45, 0.03);
+var midPanelL = new THREE.Mesh(panelGeo2, racingGreenDark);
+midPanelL.position.set(-0.22, 1.65, 0.12);
+doorGroup.add(midPanelL);
+var midPanelR = new THREE.Mesh(panelGeo2, racingGreenDark);
+midPanelR.position.set(0.22, 1.65, 0.12);
+doorGroup.add(midPanelR);
+
+// Bottom 2 panels (taller)
+var panelGeo3 = new THREE.BoxGeometry(0.38, 0.6, 0.03);
+var botPanelL = new THREE.Mesh(panelGeo3, racingGreenDark);
+botPanelL.position.set(-0.22, 0.75, 0.12);
+doorGroup.add(botPanelL);
+var botPanelR = new THREE.Mesh(panelGeo3, racingGreenDark);
+botPanelR.position.set(0.22, 0.75, 0.12);
+doorGroup.add(botPanelR);
+
+// Panel moulding strips (the raised borders around each panel)
+var mouldMat = new THREE.MeshStandardMaterial({ color: 0x1e5530, roughness: 0.45 });
+
+function addPanelMould(cx, cy, pw, ph) {
+  // Top strip
+  doorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(pw + 0.06, 0.025, 0.02), mouldMat).translateX(cx).translateY(cy + ph/2 + 0.01).translateZ(0.13));
+  // Bottom strip
+  doorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(pw + 0.06, 0.025, 0.02), mouldMat).translateX(cx).translateY(cy - ph/2 - 0.01).translateZ(0.13));
+  // Left strip
+  doorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.025, ph + 0.06, 0.02), mouldMat).translateX(cx - pw/2 - 0.01).translateY(cy).translateZ(0.13));
+  // Right strip
+  doorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.025, ph + 0.06, 0.02), mouldMat).translateX(cx + pw/2 + 0.01).translateY(cy).translateZ(0.13));
+}
+
+addPanelMould(-0.22, 2.55, 0.38, 0.65);
+addPanelMould(0.22, 2.55, 0.38, 0.65);
+addPanelMould(-0.22, 1.65, 0.38, 0.45);
+addPanelMould(0.22, 1.65, 0.38, 0.45);
+addPanelMould(-0.22, 0.75, 0.38, 0.6);
+addPanelMould(0.22, 0.75, 0.38, 0.6);
+
+// Centre stile (vertical strip between left and right panels)
+var centreStile = new THREE.Mesh(new THREE.BoxGeometry(0.05, 2.6, 0.02), racingGreen);
+centreStile.position.set(0, 1.55, 0.12);
+doorGroup.add(centreStile);
+
+// ============================================================
+// BRASS KNOB — the hero detail, big and centred on the door
+// ============================================================
+// Knob backplate (round brass escutcheon) — centred
+var backplate = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.015, 16), brassMat);
+backplate.rotation.x = Math.PI / 2;
+backplate.position.set(0, 1.55, 0.14);
+doorGroup.add(backplate);
+
+// Knob stem — centred
+var knobStem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.07, 8), brassMat);
+knobStem.rotation.x = Math.PI / 2;
+knobStem.position.set(0, 1.55, 0.18);
+doorGroup.add(knobStem);
+
+// The big brass knob itself — chunkier and centred on the door
+var knob = new THREE.Mesh(new THREE.SphereGeometry(0.065, 16, 12), brassMat);
+knob.position.set(0, 1.55, 0.25);
+doorGroup.add(knob);
+
+// Keyhole escutcheon (below the knob)
+var keyholeEsc = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.01, 8), brassMatDull);
+keyholeEsc.rotation.x = Math.PI / 2;
+keyholeEsc.position.set(0.32, 1.3, 0.13);
+doorGroup.add(keyholeEsc);
+// Keyhole slot
+var keyholeSlot = new THREE.Mesh(
+  new THREE.BoxGeometry(0.008, 0.02, 0.01),
+  new THREE.MeshStandardMaterial({ color: 0x050505 })
+);
+keyholeSlot.position.set(0.32, 1.3, 0.14);
+doorGroup.add(keyholeSlot);
+
+// Letterbox (brass slot)
+var letterbox = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.015), brassMat);
+letterbox.position.set(0, 1.1, 0.13);
+doorGroup.add(letterbox);
+var letterSlot = new THREE.Mesh(
+  new THREE.BoxGeometry(0.22, 0.015, 0.02),
+  new THREE.MeshStandardMaterial({ color: 0x0a0a05 })
+);
+letterSlot.position.set(0, 1.1, 0.14);
+doorGroup.add(letterSlot);
+
+// ============================================================
+// DOOR SURROUND — Georgian portico with pilasters
+// ============================================================
+
+// Left pilaster (flat classical column)
+var pilasterL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 3.0, 0.12), whiteStone);
+pilasterL.position.set(-0.85, 1.6, 0.05);
+doorGroup.add(pilasterL);
+
+// Right pilaster
+var pilasterR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 3.0, 0.12), whiteStone);
+pilasterR.position.set(0.85, 1.6, 0.05);
+doorGroup.add(pilasterR);
+
+// Pilaster bases
+var pilBaseL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.15), whiteStone);
+pilBaseL.position.set(-0.85, 0.1, 0.06);
+doorGroup.add(pilBaseL);
+var pilBaseR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.15), whiteStone);
+pilBaseR.position.set(0.85, 0.1, 0.06);
+doorGroup.add(pilBaseR);
+
+// Pilaster capitals (simple moulding at the top)
+var capitalMat = new THREE.MeshStandardMaterial({ color: 0xd0c8b8, roughness: 0.65 });
+var capL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.15, 0.16), capitalMat);
+capL.position.set(-0.85, 3.2, 0.07);
+doorGroup.add(capL);
+var capR = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.15, 0.16), capitalMat);
+capR.position.set(0.85, 3.2, 0.07);
+doorGroup.add(capR);
+
+// Entablature (the flat beam above the door)
+var entablature = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.18, 0.18), whiteStone);
+entablature.position.set(0, 3.4, 0.08);
+doorGroup.add(entablature);
+
+// Pediment-style moulding above the entablature
+var pediment = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.2), capitalMat);
+pediment.position.set(0, 3.55, 0.1);
+doorGroup.add(pediment);
+
+// Fanlight (semi-circular window above door)
+var fanlightGlass = new THREE.MeshStandardMaterial({
+  color: 0x0a0808, roughness: 0.2, emissive: 0xc08030, emissiveIntensity: 0.15
+});
+var fanlight = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 0.05), fanlightGlass);
+fanlight.position.set(0, 3.1, 0.06);
+doorGroup.add(fanlight);
+
+// Fanlight frame
+var fanlightFrame = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.42, 0.02), windowFrame);
+fanlightFrame.position.set(0, 3.1, 0.04);
+doorGroup.add(fanlightFrame);
+
+// Fanlight glazing bars (radial lines)
+for (var i = 0; i < 5; i++) {
+  var bar = new THREE.Mesh(
+    new THREE.BoxGeometry(0.015, 0.38, 0.01),
+    new THREE.MeshStandardMaterial({ color: 0x6a6050, roughness: 0.7 })
+  );
+  bar.position.set(-0.4 + i * 0.2, 3.1, 0.08);
+  bar.rotation.z = (i - 2) * 0.12;
+  doorGroup.add(bar);
+}
+
+// ============================================================
+// BUZZER PANEL — shared building, three bells beside the door
+// Mounted on the wall to the right of the door surround
+// ============================================================
+// Main panel backing — dark painted metal plate
+var buzzerPanelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a18, roughness: 0.5, metalness: 0.4 });
+var buzzerPanel = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.65, 0.03), buzzerPanelMat);
+buzzerPanel.position.set(1.25, 1.5, 0.08);
+doorGroup.add(buzzerPanel);
+
+// Brass frame around the whole panel
+var buzzerFrame = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.67, 0.01), brassMatDull);
+buzzerFrame.position.set(1.25, 1.5, 0.065);
+doorGroup.add(buzzerFrame);
+
+// Small light to illuminate the buzzer panel
+var buzzerLight = new THREE.PointLight(0xffe0a0, 0.15, 2);
+buzzerLight.position.set(1.25, 1.9, 0.5);
+doorGroup.add(buzzerLight);
+
+// Helper function for each buzzer row
+function addBuzzerRow(yPos, labelText) {
+  // Button — round brass, bigger and pushed forward
+  var btn = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.02, 12), brassMat);
+  btn.rotation.x = Math.PI / 2;
+  btn.position.set(1.35, yPos, 0.1);
+  doorGroup.add(btn);
+  // Button rim
+  var rim = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.008, 12), brassMatDull);
+  rim.rotation.x = Math.PI / 2;
+  rim.position.set(1.35, yPos, 0.095);
+  doorGroup.add(rim);
+  // Horizontal divider line between rows (thin brass strip)
+  var divider = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.005, 0.01), brassMatDull);
+  divider.position.set(1.25, yPos - 0.09, 0.095);
+  doorGroup.add(divider);
+  // Label card slot — bigger so you can read them
+  var labelTex = makeCanvasTexture(256, 64, function(cx, w, h) {
+    // Aged cream card
+    cx.fillStyle = labelText ? '#e8e0c8' : '#d8d0b8';
+    cx.fillRect(0, 0, w, h);
+    if (!labelText) {
+      // Blank card — yellowed, slightly grimy
+      cx.fillStyle = 'rgba(140, 120, 80, 0.12)';
+      cx.fillRect(0, 0, w, h);
+      // Faint coffee ring stain
+      cx.strokeStyle = 'rgba(100, 70, 30, 0.1)';
+      cx.lineWidth = 2;
+      cx.beginPath();
+      cx.arc(w * 0.55, h * 0.5, 14, 0, Math.PI * 2);
+      cx.stroke();
+    }
+    // Fine border
+    cx.strokeStyle = '#8a7020';
+    cx.lineWidth = 2;
+    cx.strokeRect(3, 3, w - 6, h - 6);
+    if (labelText) {
+      cx.fillStyle = '#1a1a1a';
+      cx.font = '600 18px Georgia';
+      cx.textAlign = 'center';
+      cx.textBaseline = 'middle';
+      cx.fillText(labelText, w/2, h/2);
+    }
+  });
+  var labelMat = new THREE.MeshStandardMaterial({ map: labelTex, roughness: 0.45 });
+  var label = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.05), labelMat);
+  label.position.set(1.18, yPos, 0.1);
+  doorGroup.add(label);
+}
+
+// Bottom buzzer — M. LACKLAND (his office)
+addBuzzerRow(1.32, 'M. LACKLAND');
+
+// Middle buzzer — blank (the brothel, no name for obvious reasons)
+addBuzzerRow(1.5, '');
+
+// Top buzzer — also blank (another brothel floor, discretion assured)
+addBuzzerRow(1.68, '');
+
+// ============================================================
+// DOOR STEP — worn stone threshold with decades of foot traffic
+// ============================================================
+var stepTex = makeCanvasTexture(512, 128, function(cx, w, h) {
+  // Base stone colour
+  cx.fillStyle = '#8a8878';
+  cx.fillRect(0, 0, w, h);
+  // Worn groove down the centre where thousands of feet have stepped
+  var wornGrad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w * 0.4);
+  wornGrad.addColorStop(0, 'rgba(70, 68, 60, 0.35)');
+  wornGrad.addColorStop(0.6, 'rgba(80, 78, 68, 0.15)');
+  wornGrad.addColorStop(1, 'rgba(90, 88, 78, 0)');
+  cx.fillStyle = wornGrad;
+  cx.fillRect(0, 0, w, h);
+  // Dirt ground into the edges
+  cx.fillStyle = 'rgba(40, 35, 25, 0.3)';
+  cx.fillRect(0, 0, w, 8);
+  cx.fillRect(0, h - 6, w, 6);
+  cx.fillRect(0, 0, 10, h);
+  cx.fillRect(w - 10, 0, 10, h);
+  // Scuff marks and scratches
+  cx.strokeStyle = 'rgba(55, 50, 40, 0.2)';
+  cx.lineWidth = 1;
+  for (var sc = 0; sc < 20; sc++) {
+    cx.beginPath();
+    var sx = Math.random() * w;
+    cx.moveTo(sx, Math.random() * h);
+    cx.lineTo(sx + 10 + Math.random() * 30, Math.random() * h);
+    cx.stroke();
+  }
+  // A few dark stains (spilled drinks, grime)
+  cx.fillStyle = 'rgba(30, 25, 18, 0.2)';
+  for (var st = 0; st < 4; st++) {
+    cx.beginPath();
+    cx.ellipse(50 + Math.random() * (w - 100), 20 + Math.random() * (h - 40), 8 + Math.random() * 15, 4 + Math.random() * 8, Math.random(), 0, Math.PI * 2);
+    cx.fill();
+  }
+  // Cigarette burn mark
+  cx.fillStyle = 'rgba(25, 20, 10, 0.4)';
+  cx.beginPath();
+  cx.arc(w * 0.7, h * 0.6, 3, 0, Math.PI * 2);
+  cx.fill();
+});
+var stepMat = new THREE.MeshStandardMaterial({ map: stepTex, roughness: 0.8, metalness: 0.0 });
+var doorStep = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.4), stepMat);
+doorStep.position.set(0, 0.05, 0.3);
+doorGroup.add(doorStep);
+
+// Number plate above the door or on the fanlight frame
+var numberTex = makeCanvasTexture(128, 64, function(cx, w, h) {
+  cx.fillStyle = 'rgba(0,0,0,0)';
+  cx.fillRect(0, 0, w, h);
+  cx.fillStyle = '#c8c0a0';
+  cx.font = 'bold 28px Georgia';
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText('14', w/2, h/2);
+});
+var numberMat = new THREE.MeshStandardMaterial({
+  map: numberTex, roughness: 0.5, transparent: true
+});
+var numberPlate = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.1), numberMat);
+numberPlate.position.set(0, 3.65, 0.12);
+doorGroup.add(numberPlate);
+
+// ============================================================
+// WALL SIGN — "M. LACKLAND" brass plaque ABOVE the door
+// ============================================================
+var wallSignTex = makeCanvasTexture(512, 128, function(cx, w, h) {
+  // Brass background
+  cx.fillStyle = '#8a7a30';
+  cx.fillRect(0, 0, w, h);
+  // Darker border
+  cx.strokeStyle = '#5a4a18';
+  cx.lineWidth = 6;
+  cx.strokeRect(6, 6, w - 12, h - 12);
+  // Inner bright edge
+  cx.strokeStyle = '#b8a240';
+  cx.lineWidth = 2;
+  cx.strokeRect(12, 12, w - 24, h - 24);
+  // Engraved text
+  cx.fillStyle = '#1a1508';
+  cx.font = '600 42px Georgia';
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText('M. LACKLAND', w/2, h/2);
+});
+var wallSignMat = new THREE.MeshStandardMaterial({
+  map: wallSignTex, roughness: 0.3, metalness: 0.6
+});
+// Positioned above the door, on the entablature
+var wallSign = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.18), wallSignMat);
+wallSign.position.set(0, 3.72, 0.15);
+doorGroup.add(wallSign);
+
+// Brass mounting screws for sign above door
+var screwMat2 = new THREE.MeshStandardMaterial({ color: 0xb8922a, roughness: 0.3, metalness: 0.8 });
+var screwGeo2 = new THREE.SphereGeometry(0.015, 6, 4);
+var screw1 = new THREE.Mesh(screwGeo2, screwMat2);
+screw1.position.set(-0.32, 3.79, 0.16);
+doorGroup.add(screw1);
+var screw2 = new THREE.Mesh(screwGeo2, screwMat2);
+screw2.position.set(0.32, 3.79, 0.16);
+doorGroup.add(screw2);
+var screw3 = new THREE.Mesh(screwGeo2, screwMat2);
+screw3.position.set(-0.32, 3.65, 0.16);
+doorGroup.add(screw3);
+var screw4 = new THREE.Mesh(screwGeo2, screwMat2);
+screw4.position.set(0.32, 3.65, 0.16);
+doorGroup.add(screw4);
+
+// Light to illuminate the sign above the door
+var signLight = new THREE.PointLight(0xffe0a0, 0.2, 3);
+signLight.position.set(0, 4.1, 0.8);
+doorGroup.add(signLight);
+
+doorGroup.position.set(0, 0.12, 0);
+scene.add(doorGroup);
+
+// ============================================================
+// UPPER FLOOR WINDOWS — Georgian sash windows
+// ============================================================
+function addSashWindow(x, y, lit) {
+  // Window surround
+  var surround = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.5, 0.08), whiteStone);
+  surround.position.set(x, y, 0.03);
+  building.add(surround);
+
+  // Glass
+  var glassMat = lit ? warmGlass : darkGlass;
+  var glass = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.04), glassMat);
+  glass.position.set(x, y, 0.05);
+  building.add(glass);
+
+  // Glazing bar (horizontal, dividing upper and lower sash)
+  var glazBar = new THREE.Mesh(
+    new THREE.BoxGeometry(0.72, 0.03, 0.02),
+    windowFrame
+  );
+  glazBar.position.set(x, y + 0.1, 0.07);
+  building.add(glazBar);
+
+  // Sill
+  var sill = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.15), whiteStone);
+  sill.position.set(x, y - 0.75, 0.06);
+  building.add(sill);
+
+  // Lintel/head
+  var lintel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 0.1), whiteStone);
+  lintel.position.set(x, y + 0.8, 0.04);
+  building.add(lintel);
+}
+
+// First floor — 3 windows (left red brothel, middle dark, right amber office)
+addSashWindow(-2.2, 5.5, false);
+addSashWindow(0, 5.5, false);
+addSashWindow(2.2, 5.5, false);
+
+// Second floor — 3 windows (all dark — Lackland's office floor)
+addSashWindow(-2.2, 8.5, false);
+addSashWindow(0, 8.5, false);
+addSashWindow(2.2, 8.5, false);
+
+// Third floor — 3 windows: one amber, one red, one dark
+addSashWindow(-2.2, 11.2, false);
+addSashWindow(0, 11.2, false);
+addSashWindow(2.2, 11.2, false);
+
+// Now overlay the top floor with coloured glass — the brothel upstairs
+var amberGlass = new THREE.MeshStandardMaterial({
+  color: 0x2a1805, roughness: 0.3, emissive: 0xd8a030, emissiveIntensity: 0.18
+});
+var redGlass = new THREE.MeshStandardMaterial({
+  color: 0x4a0505, roughness: 0.2, emissive: 0xff1515, emissiveIntensity: 0.7
+});
+
+// Left third-floor window — soft amber glow
+var amberWin = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.045), amberGlass);
+amberWin.position.set(-2.2, 11.2, 0.055);
+building.add(amberWin);
+
+// Right third-floor window — soft red glow
+var redWin = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.045), redGlass);
+redWin.position.set(2.2, 11.2, 0.055);
+building.add(redWin);
+
+// Point lights for the coloured glows spilling onto the facade
+var amberWinGlow = new THREE.PointLight(0xd8a030, 0.15, 4);
+amberWinGlow.position.set(-2.2, 11.2, 0.8);
+scene.add(amberWinGlow);
+
+var redWinGlow = new THREE.PointLight(0xff2020, 0.6, 6);
+redWinGlow.position.set(2.2, 11.2, 1.2);
+scene.add(redWinGlow);
+
+// First floor — left window: soft red glow (the brothel)
+var redWin1F = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.045), redGlass);
+redWin1F.position.set(-2.2, 5.5, 0.055);
+building.add(redWin1F);
+
+var redWinGlow1F = new THREE.PointLight(0xff2020, 0.7, 7);
+redWinGlow1F.position.set(-2.2, 5.5, 1.5);
+scene.add(redWinGlow1F);
+
+// First floor — middle window: dark, curtains drawn
+var curtainGlass1F = new THREE.MeshStandardMaterial({
+  color: 0x080808, roughness: 0.95, metalness: 0.0
+});
+var darkWin1F = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.05), curtainGlass1F);
+darkWin1F.position.set(0, 5.5, 0.055);
+building.add(darkWin1F);
+
+// Glazing bar for middle first floor window (matching the other sash windows)
+var darkWin1FBar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.03, 0.02), windowFrame);
+darkWin1FBar.position.set(0, 5.6, 0.08);
+building.add(darkWin1FBar);
+
+// First floor — right window: someone working late, dark with warm flicker
+var workingGlass1F = new THREE.MeshStandardMaterial({
+  color: 0x0a0a08, roughness: 0.3, metalness: 0.1,
+  emissive: 0xc08030, emissiveIntensity: 0.0
+});
+var workWin1F = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.045), workingGlass1F);
+workWin1F.position.set(2.2, 5.5, 0.055);
+building.add(workWin1F);
+
+// Faint point light for first-floor working-late flicker
+var workingGlow1F = new THREE.PointLight(0xc08030, 0.0, 4);
+workingGlow1F.position.set(2.2, 5.5, 1.0);
+scene.add(workingGlow1F);
+
+// Ground floor windows (flanking the door) — proper Georgian sash style
+// Left window — heavy curtains drawn, completely dark and opaque
+var curtainGlass = new THREE.MeshStandardMaterial({
+  color: 0x080808, roughness: 0.95, metalness: 0.0
+});
+// Net curtain texture — lace pattern typical of 1970s London
+var curtainPatternTex = makeCanvasTexture(256, 512, function(cx, w, h) {
+  // Dark background (the room behind)
+  cx.fillStyle = '#0a0a08';
+  cx.fillRect(0, 0, w, h);
+  // Net curtain base — slightly lighter
+  cx.fillStyle = 'rgba(180, 170, 150, 0.18)';
+  cx.fillRect(0, 0, w, h);
+  // Diamond lattice pattern
+  cx.strokeStyle = 'rgba(220, 210, 190, 0.22)';
+  cx.lineWidth = 1;
+  var spacing = 18;
+  for (var dy = -h; dy < h * 2; dy += spacing) {
+    cx.beginPath();
+    cx.moveTo(0, dy);
+    cx.lineTo(w, dy + w);
+    cx.stroke();
+    cx.beginPath();
+    cx.moveTo(0, dy);
+    cx.lineTo(w, dy - w);
+    cx.stroke();
+  }
+  // Small floral dots at intersections
+  cx.fillStyle = 'rgba(230, 220, 200, 0.15)';
+  for (var px = 0; px < w; px += spacing) {
+    for (var py = 0; py < h; py += spacing) {
+      cx.beginPath();
+      cx.arc(px, py, 2.5, 0, Math.PI * 2);
+      cx.fill();
+    }
+  }
+  // Vertical drape folds
+  cx.strokeStyle = 'rgba(160, 150, 130, 0.1)';
+  cx.lineWidth = 3;
+  for (var dx = 20; dx < w; dx += 40) {
+    cx.beginPath();
+    cx.moveTo(dx, 0);
+    cx.bezierCurveTo(dx - 5, h * 0.3, dx + 5, h * 0.6, dx - 3, h);
+    cx.stroke();
+  }
+  // Warm glow bleeding through from behind (desk lamp)
+  var glow = cx.createRadialGradient(w * 0.6, h * 0.4, 10, w * 0.6, h * 0.4, w * 0.6);
+  glow.addColorStop(0, 'rgba(192, 128, 48, 0.18)');
+  glow.addColorStop(0.5, 'rgba(192, 128, 48, 0.06)');
+  glow.addColorStop(1, 'rgba(192, 128, 48, 0)');
+  cx.fillStyle = glow;
+  cx.fillRect(0, 0, w, h);
+});
+
+// Left curtain material (separate so it can animate independently)
+var curtainMatL = new THREE.MeshStandardMaterial({
+  map: curtainPatternTex, roughness: 0.7, emissive: 0xc08030, emissiveIntensity: 0.0
+});
+// Right curtain material
+var curtainMatR = new THREE.MeshStandardMaterial({
+  map: curtainPatternTex, roughness: 0.7, emissive: 0xc08030, emissiveIntensity: 0.0
+});
+
+// Left surround (pushed well forward to eliminate z-fighting)
+var gfSurroundL = new THREE.Mesh(new THREE.BoxGeometry(1.35, 2.15, 0.25), whiteStone);
+gfSurroundL.position.set(-2.2, 1.8, 0.15);
+building.add(gfSurroundL);
+// Left curtain — the main visible surface
+var gfWinL = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.9, 0.02), curtainMatL);
+gfWinL.position.set(-2.2, 1.8, 0.29);
+building.add(gfWinL);
+// Left glazing bar (horizontal, dividing upper and lower sash)
+var gfBarL = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.03, 0.02), windowFrame);
+gfBarL.position.set(-2.2, 1.9, 0.31);
+building.add(gfBarL);
+// Left sill
+var gfSillL = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.08, 0.25), whiteStone);
+gfSillL.position.set(-2.2, 0.72, 0.15);
+building.add(gfSillL);
+// Left lintel
+var gfLintelL = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.1, 0.2), whiteStone);
+gfLintelL.position.set(-2.2, 2.9, 0.12);
+building.add(gfLintelL);
+
+// Right surround (pushed well forward to eliminate z-fighting)
+var gfSurroundR = new THREE.Mesh(new THREE.BoxGeometry(1.35, 2.15, 0.25), whiteStone);
+gfSurroundR.position.set(2.2, 1.8, 0.15);
+building.add(gfSurroundR);
+// Right curtain — the main visible surface
+var gfWinR = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.9, 0.02), curtainMatR);
+gfWinR.position.set(2.2, 1.8, 0.29);
+building.add(gfWinR);
+// Right glazing bar
+var gfBarR = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.03, 0.02), windowFrame);
+gfBarR.position.set(2.2, 1.9, 0.31);
+building.add(gfBarR);
+// Right sill
+var gfSillR = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.08, 0.25), whiteStone);
+gfSillR.position.set(2.2, 0.72, 0.15);
+building.add(gfSillR);
+// Right lintel
+var gfLintelR = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.1, 0.2), whiteStone);
+gfLintelR.position.set(2.2, 2.9, 0.12);
+building.add(gfLintelR);
+
+// Working-late glow from ground floor left window
+var workingGlowGFL = new THREE.PointLight(0xc08030, 0.0, 3);
+workingGlowGFL.position.set(-2.2, 1.8, 0.6);
+scene.add(workingGlowGFL);
+
+// Faint point light for the working-late flicker (animated in the loop)
+var workingGlow = new THREE.PointLight(0xc08030, 0.0, 3);
+workingGlow.position.set(2.2, 1.8, 0.6);
+scene.add(workingGlow);
+
+scene.add(building);
+
+// ============================================================
+// NEIGHBOURING BUILDINGS
+// ============================================================
+// Left neighbour — darker, taller
+var leftNeighbour = new THREE.Mesh(new THREE.BoxGeometry(6, 15, 2), sootBrick);
+leftNeighbour.position.set(-6.5, 7.5, -1);
+leftNeighbour.castShadow = true;
+scene.add(leftNeighbour);
+
+// Left neighbour windows (single column, well away from main building edge)
+for (var row = 0; row < 3; row++) {
+  var wx = -6.5;
+  var wy = 5 + row * 3.2;
+  var wf = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.06), windowFrame);
+  wf.position.set(wx, wy, 0.02);
+  scene.add(wf);
+  var wg = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.0, 0.04), (row === 1) ? warmGlass : darkGlass);
+  wg.position.set(wx, wy, 0.04);
+  scene.add(wg);
+}
+
+// Right neighbour — redder brick
+var rightNeighbour = new THREE.Mesh(new THREE.BoxGeometry(6, 13, 2), redBrick);
+rightNeighbour.position.set(6.5, 6.5, -1);
+rightNeighbour.castShadow = true;
+scene.add(rightNeighbour);
+
+// Right neighbour windows
+for (var row = 0; row < 3; row++) {
+  for (var col = 0; col < 2; col++) {
+    var wx2 = 5.5 + col * 2;
+    var wy2 = 4.5 + row * 3;
+    var wf2 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.06), windowFrame);
+    wf2.position.set(wx2, wy2, 0.02);
+    scene.add(wf2);
+    var wg2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.0, 0.04), (row === 0 && col === 1) ? warmGlass : darkGlass);
+    wg2.position.set(wx2, wy2, 0.04);
+    scene.add(wg2);
+  }
+}
+
+// Building across the road (vague dark mass in the fog)
+var acrossRoad = new THREE.Mesh(new THREE.BoxGeometry(20, 12, 2), sootBrick);
+acrossRoad.position.set(0, 6, 12);
+scene.add(acrossRoad);
+
+// ============================================================
+// CHIMNEYS
+// ============================================================
+var chimMat = new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 0.85 });
+placeMesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), chimMat, -1, 14.75, -0.5);
+placeMesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), chimMat, -1, 15.55, -0.5);
+placeMesh(new THREE.CylinderGeometry(0.08, 0.1, 0.3, 6), chimMat, -1, 15.8, -0.5);
+placeMesh(new THREE.BoxGeometry(0.5, 1.8, 0.5), chimMat, 2, 14.9, -0.5);
+placeMesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), chimMat, 2, 15.85, -0.5);
+
+// ============================================================
+// STREETLAMPS
+// ============================================================
+var lampLights = [];
+
+function createStreetlamp(x, z, intensity) {
+  var g = new THREE.Group();
+  var postMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+
+  // Base
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 0.4, 8), postMat).translateY(0.2));
+  // Post
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 4.5, 6), postMat).translateY(2.45));
+  // Lantern housing
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.3), postMat).translateY(4.9));
+
+  // Ginger glow glass
+  var glassGeo = new THREE.BoxGeometry(0.22, 0.3, 0.22);
+  var glassMat = new THREE.MeshStandardMaterial({
+    color: 0x4a2005, roughness: 0.2, transparent: true, opacity: 0.7,
+    emissive: 0xe87818, emissiveIntensity: 0.6
+  });
+  g.add(new THREE.Mesh(glassGeo, glassMat).translateY(4.9));
+
+  // Light
+  var light = new THREE.PointLight(0xe87818, intensity || 0.8, 15);
+  light.position.set(0, 4.8, 0);
+  light.castShadow = true;
+  g.add(light);
+  lampLights.push(light);
+
+  // Glow sprite
+  var glowTex = makeCanvasTexture(64, 64, function(cx, w, h) {
+    var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+    grad.addColorStop(0, 'rgba(232, 120, 24, 0.8)');
+    grad.addColorStop(0.3, 'rgba(200, 90, 15, 0.3)');
+    grad.addColorStop(1, 'rgba(140, 50, 8, 0)');
+    cx.fillStyle = grad;
+    cx.fillRect(0, 0, w, h);
+  });
+  var glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, transparent: true, opacity: 0.6
+  }));
+  glow.position.set(0, 4.9, 0);
+  glow.scale.set(3.5, 3.5, 1);
+  g.add(glow);
+
+  g.position.set(x, 0, z);
+  scene.add(g);
+  return light;
+}
+
+// Lamp near the door — the one pool of warm light in the darkness
+var doorLamp = createStreetlamp(2.5, 2.5, 1.0);
+
+// Lamp further along the street — barely visible, swallowed by fog
+createStreetlamp(-5, 2.5, 0.25);
+
+// Distant lamp — almost gone in the murk
+createStreetlamp(10, 2.5, 0.15);
+
+// ============================================================
+// STREET FURNITURE
+// ============================================================
+// Bollard
+var bollardMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7, metalness: 0.3 });
+placeMesh(new THREE.CylinderGeometry(0.08, 0.1, 0.7, 6), bollardMat, 1.8, 0.47, 2.2);
+placeMesh(new THREE.SphereGeometry(0.1, 6, 4), bollardMat, 1.8, 0.85, 2.2);
+
+// Drain
+var drainMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.7, metalness: 0.4 });
+placeMesh(new THREE.BoxGeometry(0.5, 0.02, 0.35), drainMat, -1.5, 0.01, 2.8);
+
+// Dustbin
+var binMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.6, metalness: 0.3 });
+var bin = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.75, 8), binMat);
+bin.position.set(-3.8, 0.5, 1.2);
+scene.add(bin);
+var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.03, 8), binMat);
+lid.position.set(-3.8, 0.9, 1.2);
+lid.rotation.z = 0.08;
+scene.add(lid);
+
+// Iron railing stumps (period detail — where area railings once were)
+for (var i = 0; i < 3; i++) {
+  var stump = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.25, 6), ironMat);
+  stump.position.set(-1.5 + i * 0.3, 0.25, 0.5);
+  scene.add(stump);
+}
+
+// ============================================================
+// SILHOUETTES IN WINDOWS
+// ============================================================
+var silhouettes = [];
+
+function makeSilhouetteTex(seed) {
+  return makeCanvasTexture(256, 256, function(cx, w, h) {
+    var bg = cx.createRadialGradient(w/2, h*0.4, 10, w/2, h*0.5, w);
+    bg.addColorStop(0, 'rgba(200, 140, 50, 0.5)');
+    bg.addColorStop(0.5, 'rgba(160, 100, 30, 0.3)');
+    bg.addColorStop(1, 'rgba(80, 50, 15, 0.15)');
+    cx.fillStyle = bg;
+    cx.fillRect(0, 0, w, h);
+
+    cx.fillStyle = 'rgba(10, 5, 0, 0.85)';
+    var fx = w/2 + (seed - 0.5) * 30;
+    var baseY = h * 0.98;
+    // Body
+    cx.beginPath();
+    cx.moveTo(fx - 20, baseY - h*0.35);
+    cx.lineTo(fx + 20, baseY - h*0.35);
+    cx.lineTo(fx + 28, baseY);
+    cx.lineTo(fx - 28, baseY);
+    cx.closePath();
+    cx.fill();
+    // Shoulders
+    cx.beginPath();
+    cx.ellipse(fx, baseY - h*0.38, 25, 12, 0, 0, Math.PI, true);
+    cx.fill();
+    // Neck + Head
+    cx.fillRect(fx - 5, baseY - h*0.48, 10, h*0.1);
+    cx.beginPath();
+    cx.arc(fx, baseY - h*0.52, 14, 0, Math.PI * 2);
+    cx.fill();
+  });
+}
+
+function addSilhouette(x, y, z, seed) {
+  var sTex = makeSilhouetteTex(seed);
+  var sMat = new THREE.MeshBasicMaterial({
+    map: sTex, transparent: true, side: THREE.DoubleSide, depthWrite: false
+  });
+  var sPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 1.0), sMat);
+  sPlane.position.set(x, y, z);
+  scene.add(sPlane);
+  silhouettes.push({
+    mesh: sPlane,
+    baseX: x, baseY: y,
+    swayPhase: Math.random() * Math.PI * 2,
+    swaySpeed: 0.2 + Math.random() * 0.3,
+    swayAmt: 0.012 + Math.random() * 0.015
+  });
+}
+
+// Silhouette only in neighbour building (main building windows are dark or coloured)
+addSilhouette(-5.5, 8.2, 0.04, 0.6);
+
+// ============================================================
+// PUDDLES
+// ============================================================
+for (var i = 0; i < 10; i++) {
+  var puddleMat = new THREE.MeshStandardMaterial({
+    color: 0x111115, roughness: 0.08, metalness: 0.7, transparent: true, opacity: 0.3
+  });
+  var puddle = new THREE.Mesh(new THREE.CircleGeometry(0.25 + Math.random() * 0.7, 16), puddleMat);
+  puddle.rotation.x = -Math.PI / 2;
+  puddle.position.set(Math.random() * 10 - 4, 0.015, 2 + Math.random() * 5);
+  scene.add(puddle);
+}
+
+// Puddle near the door reflecting the streetlamp
+var doorPuddleMat = new THREE.MeshStandardMaterial({
+  color: 0x1a1208, roughness: 0.05, metalness: 0.8, transparent: true, opacity: 0.4,
+  emissive: 0xe87818, emissiveIntensity: 0.06
+});
+var doorPuddle = new THREE.Mesh(new THREE.CircleGeometry(1.0, 20), doorPuddleMat);
+doorPuddle.rotation.x = -Math.PI / 2;
+doorPuddle.position.set(1.5, 0.015, 3.5);
+scene.add(doorPuddle);
+
+// ============================================================
+// LIGHTING
+// ============================================================
+scene.add(new THREE.AmbientLight(0x060610, 0.08));
+
+var moonLight = new THREE.DirectionalLight(0x1a2255, 0.03);
+moonLight.position.set(5, 18, -3);
+moonLight.castShadow = true;
+scene.add(moonLight);
+
+// (First floor windows are dark — no glow lights needed)
+
+// Faint warm light leaking from fanlight above the door
+var fanlightGlow = new THREE.PointLight(0xc08030, 0.15, 4);
+fanlightGlow.position.set(0, 3.2, 0.5);
+scene.add(fanlightGlow);
+
+// Dedicated door light — spotlight from the streetlamp angled at the door
+// This really picks out the racing green and the brass details
+var doorSpot = new THREE.SpotLight(0xe8a040, 1.2, 10, Math.PI / 5, 0.6);
+doorSpot.position.set(2.5, 5.5, 3.5);
+doorSpot.target.position.set(0, 1.8, 0.1);
+doorSpot.castShadow = true;
+scene.add(doorSpot);
+scene.add(doorSpot.target);
+
+// Softer fill light from the other side — much dimmer for deeper shadows
+var doorFill = new THREE.PointLight(0xd09040, 0.15, 5);
+doorFill.position.set(-2, 3.5, 2.5);
+scene.add(doorFill);
+
+// Tight point light near the brass knob to make it gleam
+var brassHighlight = new THREE.PointLight(0xffe0a0, 0.25, 2.5);
+brassHighlight.position.set(0.2, 1.6, 1.0);
+scene.add(brassHighlight);
+
+// ============================================================
+// FOG — 4-layer system
+// ============================================================
+var thickFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, 'rgba(140, 135, 125, 0.32)');
+  grad.addColorStop(0.4, 'rgba(110, 105, 95, 0.15)');
+  grad.addColorStop(1, 'rgba(80, 75, 65, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+var thinFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, 'rgba(100, 95, 85, 0.18)');
+  grad.addColorStop(0.6, 'rgba(80, 75, 65, 0.08)');
+  grad.addColorStop(1, 'rgba(60, 55, 45, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+var gingerFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, 'rgba(232, 120, 24, 0.3)');
+  grad.addColorStop(0.3, 'rgba(210, 95, 18, 0.15)');
+  grad.addColorStop(0.6, 'rgba(180, 70, 12, 0.06)');
+  grad.addColorStop(1, 'rgba(140, 50, 8, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+
+var fogSprites = [];
+
+// LAYER 1: Ground-hugging — thick and oppressive
+for (var i = 0; i < 60; i++) {
+  var fogMat = new THREE.SpriteMaterial({
+    map: thickFogTex, transparent: true,
+    opacity: 0.3 + Math.random() * 0.25
+  });
+  var fog = new THREE.Sprite(fogMat);
+  fog.position.set(Math.random() * 40 - 15, 0.1 + Math.random() * 1.8, Math.random() * 30 - 5);
+  var s = 5 + Math.random() * 12;
+  fog.scale.set(s, s * 0.3, 1);
+  scene.add(fog);
+  fogSprites.push({
+    sprite: fog, baseX: fog.position.x,
+    drift: 0.002 + Math.random() * 0.005,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.001 + Math.random() * 0.004,
+    swayAmt: 0.4 + Math.random() * 0.8
+  });
+}
+
+// LAYER 2: Mid-height (kept behind the building plane to avoid crossing windows)
+for (var i = 0; i < 15; i++) {
+  var mfMat = new THREE.SpriteMaterial({
+    map: thinFogTex, transparent: true,
+    opacity: 0.06 + Math.random() * 0.06
+  });
+  var mf = new THREE.Sprite(mfMat);
+  mf.position.set(Math.random() * 30 - 10, 2 + Math.random() * 4, 3 + Math.random() * 20);
+  var ms = 5 + Math.random() * 12;
+  mf.scale.set(ms, ms * 0.3, 1);
+  scene.add(mf);
+  fogSprites.push({
+    sprite: mf, baseX: mf.position.x,
+    drift: 0.003 + Math.random() * 0.006,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.002 + Math.random() * 0.005,
+    swayAmt: 0.5 + Math.random() * 1.2
+  });
+}
+
+// LAYER 3: Ginger-tinted near streetlamp
+for (var i = 0; i < 25; i++) {
+  var gfMat = new THREE.SpriteMaterial({
+    map: gingerFogTex, transparent: true,
+    opacity: 0.2 + Math.random() * 0.2
+  });
+  var gf = new THREE.Sprite(gfMat);
+  gf.position.set(2.5 + (Math.random() - 0.5) * 10, 0.3 + Math.random() * 5, 2.5 + (Math.random() - 0.5) * 8);
+  var gs = 2 + Math.random() * 6;
+  gf.scale.set(gs, gs * 0.45, 1);
+  scene.add(gf);
+  fogSprites.push({
+    sprite: gf, baseX: gf.position.x,
+    drift: 0.002 + Math.random() * 0.004,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.002 + Math.random() * 0.004,
+    swayAmt: 0.3 + Math.random() * 0.5
+  });
+}
+
+// LAYER 4: High wisps (kept behind building to avoid crossing windows)
+for (var i = 0; i < 10; i++) {
+  var wMat = new THREE.SpriteMaterial({
+    map: thinFogTex, transparent: true,
+    opacity: 0.04 + Math.random() * 0.05
+  });
+  var w = new THREE.Sprite(wMat);
+  w.position.set(Math.random() * 30 - 10, 8 + Math.random() * 7, 4 + Math.random() * 15);
+  w.scale.set(7 + Math.random() * 12, 2 + Math.random() * 3, 1);
+  scene.add(w);
+  fogSprites.push({
+    sprite: w, baseX: w.position.x,
+    drift: 0.004 + Math.random() * 0.008,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.003 + Math.random() * 0.006,
+    swayAmt: 0.6 + Math.random() * 1.5
+  });
+}
+
+// ============================================================
+// ANIMATION
+// ============================================================
+var clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+
+  // --- STREETLAMP FLICKER (slow, gentle — no fast frequencies) ---
+  for (var i = 0; i < lampLights.length; i++) {
+    var baseInt = (i === 0) ? 1.2 : (i === 1) ? 0.5 : 0.3;
+    var flicker = 0.92 + Math.sin(t * (0.3 + i * 0.15)) * 0.04 + Math.sin(t * (0.7 + i * 0.2)) * 0.02;
+    lampLights[i].intensity = baseInt * flicker;
+  }
+
+  // --- FANLIGHT GLOW PULSE ---
+  fanlightGlow.intensity = 0.25 + Math.sin(t * 0.12) * 0.02;
+
+  // --- DOOR LIGHTING (very slow gentle breathing, not flickering) ---
+  var doorBreath = 0.95 + Math.sin(t * 0.25) * 0.03;
+  doorSpot.intensity = 1.5 * doorBreath;
+  doorFill.intensity = 0.4 * doorBreath;
+  brassHighlight.intensity = 0.3 * doorBreath;
+
+  // --- BRASS KNOB HIGHLIGHT ---
+  brassMat.emissive = brassMat.emissive || new THREE.Color(0x4a3008);
+  brassMat.emissiveIntensity = 0.05 * doorBreath;
+
+  // --- SIGN LIGHT (steady) ---
+  signLight.intensity = 0.25 + Math.sin(t * 0.2) * 0.02;
+
+  // --- FOG DRIFT ---
+  for (var i = 0; i < fogSprites.length; i++) {
+    var f = fogSprites[i];
+    f.sway += f.swaySpeed;
+    f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;
+    f.baseX += f.drift;
+    if (f.baseX > 20) f.baseX = -15;
+  }
+
+  // --- WARM GLASS — completely static, no animation ---
+  // (removed pulse to prevent any flashing)
+
+  // --- AMBER & RED WINDOWS — completely static, no animation ---
+  // These are set once and never change, for a soft steady glow
+
+  // --- SILHOUETTE SWAY (gentle) ---
+  for (var i = 0; i < silhouettes.length; i++) {
+    var s = silhouettes[i];
+    s.swayPhase += s.swaySpeed * 0.016;
+    s.mesh.position.x = s.baseX + Math.sin(s.swayPhase) * s.swayAmt;
+    s.mesh.position.y = s.baseY + Math.sin(s.swayPhase * 0.7) * 0.005;
+  }
+
+  // --- WORKING LATE FLICKER (ground floor right window) ---
+  // Irregular warm glow bleeding through net curtains
+  var wFlicker = Math.sin(t * 0.4) * 0.3 + Math.sin(t * 1.1) * 0.2 + Math.sin(t * 0.17) * 0.5;
+  wFlicker = Math.max(0, wFlicker);
+  curtainMatR.emissiveIntensity = 0.1 + wFlicker * 0.35;
+  workingGlow.intensity = 0.08 + wFlicker * 0.4;
+
+  // --- WORKING LATE FLICKER (ground floor left window) ---
+  // Different rhythm so they don't sync up
+  var wFlickerGFL = Math.sin(t * 0.28) * 0.4 + Math.sin(t * 0.75) * 0.2 + Math.sin(t * 0.13) * 0.4;
+  wFlickerGFL = Math.max(0, wFlickerGFL);
+  curtainMatL.emissiveIntensity = 0.1 + wFlickerGFL * 0.35;
+  workingGlowGFL.intensity = 0.08 + wFlickerGFL * 0.4;
+
+  // --- WORKING LATE FLICKER (first floor right window — Lackland's office) ---
+  // More obvious warm glow — someone clearly working by lamplight
+  var wFlicker1F = Math.sin(t * 0.35) * 0.35 + Math.sin(t * 0.9) * 0.25 + Math.sin(t * 0.22) * 0.4;
+  wFlicker1F = Math.max(0, wFlicker1F);
+  workingGlass1F.emissiveIntensity = 0.15 + wFlicker1F * 0.35;
+  workingGlow1F.intensity = 0.1 + wFlicker1F * 0.5;
+
+  // --- PUDDLE REFLECTION ---
+  doorPuddleMat.emissiveIntensity = 0.04 + Math.sin(t * 1.7) * 0.02;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>

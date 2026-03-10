@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Corner of Dean Street & Greek Street — Soho, 1973</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(232,120,24,0.55);
+  pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="datestamp">23.11.73</div>
+<div id="location">CORNER OF DEAN STREET AND GREEK STREET, SOHO</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x08080e);
+
+// Deep Soho fog — swallows the far end of the streets
+scene.fog = new THREE.Fog(0x08080e, 4, 32);
+
+var camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+
+// ============================================================
+// LAYOUT EXPLANATION
+// ============================================================
+// Street corner: Dean Street runs north-south (along Z axis)
+// Greek Street joins from the east (along X axis)
+// The hero streetlamp stands at the corner, slightly on the pavement
+// Camera looks up slightly at the lamp from across the junction
+// Buildings line both streets, fading into fog
+
+camera.position.set(6.5, 2.2, 8);
+camera.lookAt(0, 4.5, -1);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = 0.6;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// MATERIALS
+// ============================================================
+var darkBrick = new THREE.MeshStandardMaterial({ color: 0x3a2a22, roughness: 0.9 });
+var creamWall = new THREE.MeshStandardMaterial({ color: 0xc8bfaa, roughness: 0.85 });
+var greyStone = new THREE.MeshStandardMaterial({ color: 0x6a6560, roughness: 0.85 });
+var sootBrick = new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 0.9 });
+var redBrick = new THREE.MeshStandardMaterial({ color: 0x6b3a2a, roughness: 0.85 });
+var shopFront = new THREE.MeshStandardMaterial({ color: 0x1a2a1a, roughness: 0.7 });
+var darkWood = new THREE.MeshStandardMaterial({ color: 0x1a1008, roughness: 0.7 });
+var pavementMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.9 });
+var roadMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.85 });
+var windowFrame = new THREE.MeshStandardMaterial({ color: 0x8a8070, roughness: 0.7 });
+var darkGlass = new THREE.MeshStandardMaterial({ color: 0x0a0a12, roughness: 0.2, metalness: 0.3 });
+var warmGlass = new THREE.MeshStandardMaterial({ color: 0x2a1505, roughness: 0.3, emissive: 0xe87818, emissiveIntensity: 0.14 });
+var ironMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.4 });
+var kerbMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
+var paveMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.85 });
+
+// ============================================================
+// HELPER: canvas texture
+// ============================================================
+function makeCanvasTexture(w, h, drawFunc) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  drawFunc(cx, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+function makeSign(text, opts) {
+  var o = opts || {};
+  var w = o.w || 512; var h = o.h || 128;
+  var bg = o.bg || '#1a1a1a'; var fg = o.fg || '#c8c0a0';
+  var fs = o.fs || 36; var ff = o.ff || 'bold Georgia';
+  var tex = makeCanvasTexture(w, h, function(cx, cw, ch) {
+    cx.fillStyle = bg; cx.fillRect(0, 0, cw, ch);
+    if (o.border) {
+      cx.strokeStyle = fg; cx.lineWidth = 3;
+      cx.strokeRect(4, 4, cw - 8, ch - 8);
+    }
+    cx.fillStyle = fg; cx.font = fs + 'px ' + ff;
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText(text, cw/2, ch/2);
+  });
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 });
+}
+
+function placeMesh(geo, mat, x, y, z) {
+  var m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  scene.add(m);
+  return m;
+}
+
+function placeMeshG(group, geo, mat, x, y, z) {
+  var m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  group.add(m);
+  return m;
+}
+
+// ============================================================
+// GROUND
+// ============================================================
+var pavement = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), pavementMat);
+pavement.rotation.x = -Math.PI / 2;
+pavement.receiveShadow = true;
+scene.add(pavement);
+
+// Dean Street road (runs along Z — north-south)
+var deanRoad = new THREE.Mesh(new THREE.PlaneGeometry(7, 50), roadMat);
+deanRoad.rotation.x = -Math.PI / 2;
+deanRoad.position.set(0, -0.01, -5);
+deanRoad.receiveShadow = true;
+scene.add(deanRoad);
+
+// Greek Street road (runs along X — east from junction)
+var greekRoad = new THREE.Mesh(new THREE.PlaneGeometry(40, 7), roadMat);
+greekRoad.rotation.x = -Math.PI / 2;
+greekRoad.position.set(15, -0.01, 0);
+greekRoad.receiveShadow = true;
+scene.add(greekRoad);
+
+// Wet road reflections — glistening after rain
+var wetMat = new THREE.MeshStandardMaterial({
+  color: 0x1a1a1a, roughness: 0.15, metalness: 0.5, transparent: true, opacity: 0.3
+});
+var wetRoad = new THREE.Mesh(new THREE.PlaneGeometry(18, 18), wetMat);
+wetRoad.rotation.x = -Math.PI / 2;
+wetRoad.position.set(2, 0.01, 1);
+scene.add(wetRoad);
+
+// ============================================================
+// PAVEMENTS — raised kerbs
+// ============================================================
+// West side of Dean St (where the lamp stands)
+var deanPaveW = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 35), paveMat);
+deanPaveW.position.set(-5.25, 0.075, -5);
+deanPaveW.receiveShadow = true;
+scene.add(deanPaveW);
+var deanKerbW = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 35), kerbMat);
+deanKerbW.position.set(-4, 0.09, -5);
+scene.add(deanKerbW);
+
+// East side of Dean St
+var deanPaveE = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 35), paveMat);
+deanPaveE.position.set(5.25, 0.075, -5);
+deanPaveE.receiveShadow = true;
+scene.add(deanPaveE);
+var deanKerbE = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 35), kerbMat);
+deanKerbE.position.set(4, 0.09, -5);
+scene.add(deanKerbE);
+
+// North side of Greek St (pub side)
+var greekPaveN = new THREE.Mesh(new THREE.BoxGeometry(30, 0.15, 2.5), paveMat);
+greekPaveN.position.set(15, 0.075, -5.25);
+greekPaveN.receiveShadow = true;
+scene.add(greekPaveN);
+var greekKerbN = new THREE.Mesh(new THREE.BoxGeometry(30, 0.18, 0.15), kerbMat);
+greekKerbN.position.set(15, 0.09, -4);
+scene.add(greekKerbN);
+
+// South side of Greek St
+var greekPaveS = new THREE.Mesh(new THREE.BoxGeometry(30, 0.15, 2.5), paveMat);
+greekPaveS.position.set(15, 0.075, 5.25);
+greekPaveS.receiveShadow = true;
+scene.add(greekPaveS);
+var greekKerbS = new THREE.Mesh(new THREE.BoxGeometry(30, 0.18, 0.15), kerbMat);
+greekKerbS.position.set(15, 0.09, 4);
+scene.add(greekKerbS);
+
+// Corner pavement (where the lamp and Red stand)
+var cornerPave = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), paveMat);
+cornerPave.position.set(-4, 0.075, -4);
+cornerPave.receiveShadow = true;
+scene.add(cornerPave);
+
+// ============================================================
+// THE HERO STREETLAMP — Victorian gas lamp, ginger light
+// ============================================================
+var heroLamp = new THREE.Group();
+
+// --- POST ---
+// Ornate fluted base
+var baseSkirt = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, 0.5, 8), ironMat);
+baseSkirt.position.set(0, 0.25, 0);
+heroLamp.add(baseSkirt);
+
+// Decorative base collar
+var baseCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.2, 8), ironMat);
+baseCollar.position.set(0, 0.55, 0);
+heroLamp.add(baseCollar);
+
+// Lower post section (thicker)
+var lowerPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.15, 2.0, 8), ironMat);
+lowerPost.position.set(0, 1.65, 0);
+heroLamp.add(lowerPost);
+
+// Mid-post decorative ring
+var midRing = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.12, 8), ironMat);
+midRing.position.set(0, 2.7, 0);
+heroLamp.add(midRing);
+
+// Upper post section (thinner)
+var upperPost = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.2, 8), ironMat);
+upperPost.position.set(0, 3.85, 0);
+heroLamp.add(upperPost);
+
+// Second decorative ring
+var topRing = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 8), ironMat);
+topRing.position.set(0, 4.95, 0);
+heroLamp.add(topRing);
+
+// --- LANTERN BRACKET (scrollwork) ---
+// Curved scroll arms (simplified with angled cylinders)
+var scrollMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5, metalness: 0.5 });
+
+// Left scroll arm
+var scrollL = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 6), scrollMat);
+scrollL.rotation.z = Math.PI / 4;
+scrollL.position.set(-0.15, 5.15, 0);
+heroLamp.add(scrollL);
+
+// Right scroll arm
+var scrollR = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 6), scrollMat);
+scrollR.rotation.z = -Math.PI / 4;
+scrollR.position.set(0.15, 5.15, 0);
+heroLamp.add(scrollR);
+
+// Front and back scroll arms
+var scrollF = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 6), scrollMat);
+scrollF.rotation.x = Math.PI / 4;
+scrollF.position.set(0, 5.15, -0.15);
+heroLamp.add(scrollF);
+
+var scrollB = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 6), scrollMat);
+scrollB.rotation.x = -Math.PI / 4;
+scrollB.position.set(0, 5.15, 0.15);
+heroLamp.add(scrollB);
+
+// --- LANTERN HEAD ---
+// Lantern base plate
+var lanternBase = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.04, 0.45), ironMat);
+lanternBase.position.set(0, 5.3, 0);
+heroLamp.add(lanternBase);
+
+// Lantern glass panels — using a slightly tapered box shape
+// The glass glows with warm ginger from inside
+var gingerGlassMat = new THREE.MeshStandardMaterial({
+  color: 0x4a2005, roughness: 0.2, transparent: true, opacity: 0.7,
+  emissive: 0xe87818, emissiveIntensity: 1.4
+});
+
+// Four glass panels forming the lantern
+var panelGeo = new THREE.PlaneGeometry(0.32, 0.55);
+
+var panelFront = new THREE.Mesh(panelGeo, gingerGlassMat);
+panelFront.position.set(0, 5.6, 0.18);
+heroLamp.add(panelFront);
+
+var panelBack = new THREE.Mesh(panelGeo, gingerGlassMat);
+panelBack.position.set(0, 5.6, -0.18);
+panelBack.rotation.y = Math.PI;
+heroLamp.add(panelBack);
+
+var panelLeft = new THREE.Mesh(panelGeo, gingerGlassMat);
+panelLeft.position.set(-0.18, 5.6, 0);
+panelLeft.rotation.y = Math.PI / 2;
+heroLamp.add(panelLeft);
+
+var panelRight = new THREE.Mesh(panelGeo, gingerGlassMat);
+panelRight.position.set(0.18, 5.6, 0);
+panelRight.rotation.y = -Math.PI / 2;
+heroLamp.add(panelRight);
+
+// Lantern frame edges (iron strips between panels)
+var stripGeo = new THREE.BoxGeometry(0.03, 0.6, 0.03);
+var strip1 = new THREE.Mesh(stripGeo, ironMat);
+strip1.position.set(0.19, 5.6, 0.19);
+heroLamp.add(strip1);
+var strip2 = new THREE.Mesh(stripGeo, ironMat);
+strip2.position.set(-0.19, 5.6, 0.19);
+heroLamp.add(strip2);
+var strip3 = new THREE.Mesh(stripGeo, ironMat);
+strip3.position.set(0.19, 5.6, -0.19);
+heroLamp.add(strip3);
+var strip4 = new THREE.Mesh(stripGeo, ironMat);
+strip4.position.set(-0.19, 5.6, -0.19);
+heroLamp.add(strip4);
+
+// Lantern top plate
+var lanternTop = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), ironMat);
+lanternTop.position.set(0, 5.9, 0);
+heroLamp.add(lanternTop);
+
+// Pyramidal cap on top
+var capGeo = new THREE.CylinderGeometry(0.02, 0.22, 0.35, 4);
+var lanternCap = new THREE.Mesh(capGeo, ironMat);
+lanternCap.position.set(0, 6.1, 0);
+lanternCap.rotation.y = Math.PI / 4;
+heroLamp.add(lanternCap);
+
+// Finial on very top
+var finial = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), ironMat);
+finial.position.set(0, 6.32, 0);
+heroLamp.add(finial);
+var finialSpike = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.03, 0.12, 4), ironMat);
+finialSpike.position.set(0, 6.42, 0);
+heroLamp.add(finialSpike);
+
+// --- THE GINGER LIGHT ---
+// Main ginger point light — the hero light source
+var gingerLight = new THREE.PointLight(0xe87818, 3.2, 28);
+gingerLight.position.set(0, 5.5, 0);
+gingerLight.castShadow = true;
+gingerLight.shadow.mapSize.width = 1024;
+gingerLight.shadow.mapSize.height = 1024;
+heroLamp.add(gingerLight);
+
+// Secondary softer ginger fill — bigger radius for fog bleed
+var gingerFill = new THREE.PointLight(0xd46812, 1.2, 35);
+gingerFill.position.set(0, 5.2, 0);
+heroLamp.add(gingerFill);
+
+// Third ginger wash — very wide, very soft, bleeds deep into fog
+var gingerWash = new THREE.PointLight(0xc0580e, 0.5, 50);
+gingerWash.position.set(0, 4.5, 0);
+heroLamp.add(gingerWash);
+
+// Glow sprite — the visible halo in the fog
+var gingerGlowTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, 'rgba(232, 120, 24, 0.95)');
+  grad.addColorStop(0.15, 'rgba(220, 100, 18, 0.6)');
+  grad.addColorStop(0.4, 'rgba(200, 80, 12, 0.22)');
+  grad.addColorStop(0.7, 'rgba(170, 60, 8, 0.07)');
+  grad.addColorStop(1, 'rgba(140, 45, 5, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+var gingerGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: gingerGlowTex, transparent: true, opacity: 0.85
+}));
+gingerGlow.position.set(0, 5.6, 0);
+gingerGlow.scale.set(8, 8, 1);
+heroLamp.add(gingerGlow);
+
+// Smaller inner glow — brighter core
+var innerGlowTex = makeCanvasTexture(64, 64, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, 'rgba(255, 155, 40, 1)');
+  grad.addColorStop(0.3, 'rgba(240, 125, 25, 0.55)');
+  grad.addColorStop(1, 'rgba(232, 120, 24, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+var innerGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: innerGlowTex, transparent: true, opacity: 0.9
+}));
+innerGlow.position.set(0, 5.6, 0);
+innerGlow.scale.set(2.5, 2.5, 1);
+heroLamp.add(innerGlow);
+
+// Downward cone of light on the pavement
+var downSpot = new THREE.SpotLight(0xe87818, 2.0, 16, Math.PI / 3.5, 0.5);
+downSpot.position.set(0, 5.3, 0);
+downSpot.target.position.set(0, 0, 0);
+heroLamp.add(downSpot);
+heroLamp.add(downSpot.target);
+
+// Position the hero lamp at the corner
+heroLamp.position.set(-3.5, 0, -3.5);
+scene.add(heroLamp);
+
+// ============================================================
+// SECONDARY STREETLAMPS (dimmer, fading into fog)
+// ============================================================
+var lampLights = [gingerLight]; // include hero light for animation
+
+function createDistantLamp(x, z, intensity) {
+  var g = new THREE.Group();
+  var postMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+  // Simplified post
+  placeMeshG(g, new THREE.CylinderGeometry(0.06, 0.1, 4.8, 6), postMat, 0, 2.4, 0);
+  placeMeshG(g, new THREE.BoxGeometry(0.35, 0.35, 0.35), postMat, 0, 5, 0);
+  // Light
+  var light = new THREE.PointLight(0xe87818, intensity || 0.4, 12);
+  light.position.set(0, 4.8, 0);
+  g.add(light);
+  lampLights.push(light);
+  // Dim glow sprite
+  var glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: gingerGlowTex, transparent: true, opacity: 0.3
+  }));
+  glowSprite.position.set(0, 5, 0);
+  glowSprite.scale.set(2.5, 2.5, 1);
+  g.add(glowSprite);
+  g.position.set(x, 0, z);
+  scene.add(g);
+}
+
+// Along Dean Street fading north
+createDistantLamp(-5.5, -12, 0.35);
+createDistantLamp(-5.5, -22, 0.2);
+
+// Along Greek Street fading east
+createDistantLamp(10, -5.5, 0.3);
+createDistantLamp(20, 5.5, 0.2);
+
+// One across the road
+createDistantLamp(5.5, 5, 0.25);
+
+// ============================================================
+// BUILDINGS — WEST SIDE OF DEAN STREET (behind the lamp)
+// ============================================================
+var westBuildings = new THREE.Group();
+
+// Building 1: Corner building — dark sooty Georgian
+var bldg1 = new THREE.Mesh(new THREE.BoxGeometry(7, 14, 8), sootBrick);
+bldg1.position.set(-7.5, 7, -3);
+bldg1.castShadow = true;
+westBuildings.add(bldg1);
+
+// Ground floor shopfront with faint warm glow
+var shop1 = new THREE.Mesh(new THREE.BoxGeometry(7.05, 3.8, 0.15), shopFront);
+shop1.position.set(-7.5, 1.9, 1.05);
+westBuildings.add(shop1);
+
+// Shop windows — dark with just a hint of interior
+var shopGlass = new THREE.MeshStandardMaterial({
+  color: 0x0a0808, roughness: 0.2, emissive: 0x604020, emissiveIntensity: 0.04
+});
+var shopWin1 = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.5), shopGlass);
+shopWin1.position.set(-8.5, 1.8, 1.08);
+westBuildings.add(shopWin1);
+var shopWin2 = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.5), shopGlass);
+shopWin2.position.set(-6.0, 1.8, 1.08);
+westBuildings.add(shopWin2);
+
+// Upper floor windows facing toward camera (+Z face)
+for (var row = 0; row < 3; row++) {
+  for (var col = 0; col < 3; col++) {
+    var wy = 5.5 + row * 3;
+    var wx = -9.2 + col * 2;
+    var wGeo = new THREE.BoxGeometry(0.7, 1.3, 0.08);
+    var wfm = new THREE.Mesh(wGeo, windowFrame);
+    wfm.position.set(wx, wy, 1.02);
+    westBuildings.add(wfm);
+    // Some windows lit, some dark
+    var glassM = (row === 1 && col === 1) || (row === 0 && col === 2) ? warmGlass : darkGlass;
+    var wgl = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.1, 0.06), glassM);
+    wgl.position.set(wx, wy, 1.03);
+    westBuildings.add(wgl);
+  }
+}
+
+// Building 2: Next building north on Dean St
+var bldg2 = new THREE.Mesh(new THREE.BoxGeometry(7, 12, 7), darkBrick);
+bldg2.position.set(-7.5, 6, -10.5);
+bldg2.castShadow = true;
+westBuildings.add(bldg2);
+// Windows on east face (facing Dean St)
+for (var row = 0; row < 3; row++) {
+  for (var col = 0; col < 2; col++) {
+    var wy2 = 4.5 + row * 3;
+    var wz2 = -9 - col * 2.5;
+    var wfm2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.2, 0.65), windowFrame);
+    wfm2.position.set(-4.02, wy2, wz2);
+    westBuildings.add(wfm2);
+    var glM2 = (row === 2 && col === 0) ? warmGlass : darkGlass;
+    var wgl2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.5), glM2);
+    wgl2.position.set(-4.01, wy2, wz2);
+    westBuildings.add(wgl2);
+  }
+}
+
+// Building 3: Further north, dissolving into fog
+var bldg3 = new THREE.Mesh(
+  new THREE.BoxGeometry(7, 10, 8),
+  new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.9 })
+);
+bldg3.position.set(-7.5, 5, -18);
+bldg3.castShadow = true;
+westBuildings.add(bldg3);
+
+scene.add(westBuildings);
+
+// ============================================================
+// BUILDINGS — EAST SIDE OF DEAN STREET
+// ============================================================
+var eastBuildings = new THREE.Group();
+
+// Building across the road — looms in shadow
+var eastBldg1 = new THREE.Mesh(new THREE.BoxGeometry(6, 13, 8), redBrick);
+eastBldg1.position.set(7, 6.5, -3);
+eastBldg1.castShadow = true;
+eastBuildings.add(eastBldg1);
+
+// Windows on west face (facing Dean St, toward camera)
+for (var row = 0; row < 3; row++) {
+  for (var col = 0; col < 2; col++) {
+    var ey = 5 + row * 3;
+    var ez = -1.5 - col * 2.5;
+    var efm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.2, 0.65), windowFrame);
+    efm.position.set(4.02, ey, ez);
+    eastBuildings.add(efm);
+    var eglM = (row === 0 && col === 1) ? warmGlass : darkGlass;
+    var egl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.5), eglM);
+    egl.position.set(4.01, ey, ez);
+    eastBuildings.add(egl);
+  }
+}
+
+// Ground floor — dark shopfront
+var eastShop = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.5, 7), shopFront);
+eastShop.position.set(4.03, 1.75, -3);
+eastBuildings.add(eastShop);
+
+// Further east building
+var eastBldg2 = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 8), sootBrick);
+eastBldg2.position.set(7, 5.5, -11);
+eastBldg2.castShadow = true;
+eastBuildings.add(eastBldg2);
+
+scene.add(eastBuildings);
+
+// ============================================================
+// BUILDINGS — ALONG GREEK STREET (running east)
+// ============================================================
+// South side of Greek St
+var greekSouth1 = new THREE.Mesh(new THREE.BoxGeometry(8, 12, 6), creamWall);
+greekSouth1.position.set(10, 6, 7);
+greekSouth1.castShadow = true;
+scene.add(greekSouth1);
+
+var greekSouth2 = new THREE.Mesh(
+  new THREE.BoxGeometry(7, 10, 6),
+  new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.9 })
+);
+greekSouth2.position.set(19, 5, 7);
+greekSouth2.castShadow = true;
+scene.add(greekSouth2);
+
+// North side of Greek St
+var greekNorth1 = new THREE.Mesh(new THREE.BoxGeometry(8, 13, 6), redBrick);
+greekNorth1.position.set(10, 6.5, -8);
+greekNorth1.castShadow = true;
+scene.add(greekNorth1);
+
+// ============================================================
+// CHIMNEYS — silhouettes against the sky
+// ============================================================
+var chimMat = new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 0.85 });
+
+placeMesh(new THREE.BoxGeometry(0.5, 1.8, 0.5), chimMat, -7, 14.9, -2);
+placeMesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), chimMat, -7, 15.85, -2);
+placeMesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), chimMat, -9, 14.75, -4);
+placeMesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), chimMat, -9, 15.55, -4);
+placeMesh(new THREE.BoxGeometry(0.4, 1.3, 0.4), chimMat, 7, 13.65, -1);
+placeMesh(new THREE.BoxGeometry(0.5, 0.15, 0.5), chimMat, 7, 14.35, -1);
+
+// Chimney pots (small cylinders on top)
+placeMesh(new THREE.CylinderGeometry(0.08, 0.1, 0.3, 6), chimMat, -7, 16.05, -2);
+placeMesh(new THREE.CylinderGeometry(0.08, 0.1, 0.3, 6), chimMat, -9, 15.75, -4);
+
+// ============================================================
+// STREET FURNITURE
+// ============================================================
+
+// Bollard near the corner
+var bollardMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7, metalness: 0.3 });
+placeMesh(new THREE.CylinderGeometry(0.08, 0.1, 0.8, 6), bollardMat, -2.5, 0.4, -2);
+placeMesh(new THREE.SphereGeometry(0.1, 6, 4), bollardMat, -2.5, 0.85, -2);
+
+// Another bollard
+placeMesh(new THREE.CylinderGeometry(0.08, 0.1, 0.8, 6), bollardMat, -1.5, 0.4, -5);
+placeMesh(new THREE.SphereGeometry(0.1, 6, 4), bollardMat, -1.5, 0.85, -5);
+
+// Dustbin (galvanised bin, period-appropriate)
+var binMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.6, metalness: 0.3 });
+var dustbin = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 0.8, 8), binMat);
+dustbin.position.set(-5.8, 0.4, 0.5);
+scene.add(dustbin);
+var binLid = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 8), binMat);
+binLid.position.set(-5.8, 0.82, 0.5);
+binLid.rotation.z = 0.1; // slightly askew
+scene.add(binLid);
+
+// Drain cover in the road
+var drainMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.7, metalness: 0.4 });
+var drain = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.02, 0.4), drainMat);
+drain.position.set(1, 0.01, -1);
+scene.add(drain);
+
+// Street name plate on building wall (Dean Street)
+var deanSignTex = makeCanvasTexture(256, 64, function(cx, w, h) {
+  cx.fillStyle = '#1a1a2a';
+  cx.fillRect(0, 0, w, h);
+  cx.strokeStyle = '#aaa';
+  cx.lineWidth = 2;
+  cx.strokeRect(2, 2, w-4, h-4);
+  cx.fillStyle = '#e0d8c0';
+  cx.font = 'bold 22px serif';
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText('DEAN STREET W1', w/2, h/2);
+});
+var deanSignMat = new THREE.MeshStandardMaterial({ map: deanSignTex, roughness: 0.5 });
+var deanSign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.4), deanSignMat);
+deanSign.position.set(-4.0, 3.5, 1.06);
+scene.add(deanSign);
+
+// ============================================================
+// SILHOUETTES IN WINDOWS — gentle sway
+// ============================================================
+var silhouettes = [];
+
+function makeSilhouetteTex(seed) {
+  return makeCanvasTexture(256, 256, function(cx, w, h) {
+    // Warm amber interior glow background
+    var bg = cx.createRadialGradient(w/2, h*0.4, 10, w/2, h*0.5, w);
+    bg.addColorStop(0, 'rgba(200, 140, 50, 0.5)');
+    bg.addColorStop(0.5, 'rgba(160, 100, 30, 0.3)');
+    bg.addColorStop(1, 'rgba(80, 50, 15, 0.15)');
+    cx.fillStyle = bg;
+    cx.fillRect(0, 0, w, h);
+
+    // Dark silhouette figure
+    var figureCount = 1 + Math.floor(seed * 1.5);
+    for (var f = 0; f < figureCount; f++) {
+      var fx = (w / (figureCount + 1)) * (f + 1);
+      var baseY = h * 0.98;
+      var headR = 14 + seed * 6;
+      var shoulderW = 35 + seed * 15;
+
+      cx.fillStyle = 'rgba(10, 5, 0, 0.85)';
+
+      // Body
+      cx.beginPath();
+      cx.moveTo(fx - shoulderW/2, baseY - h*0.35);
+      cx.lineTo(fx + shoulderW/2, baseY - h*0.35);
+      cx.lineTo(fx + shoulderW/2 + 8, baseY);
+      cx.lineTo(fx - shoulderW/2 - 8, baseY);
+      cx.closePath();
+      cx.fill();
+
+      // Shoulders
+      cx.beginPath();
+      cx.ellipse(fx, baseY - h*0.38, shoulderW/2 + 5, 14, 0, 0, Math.PI, true);
+      cx.fill();
+
+      // Neck
+      cx.fillRect(fx - 6, baseY - h*0.48, 12, h*0.1);
+
+      // Head
+      cx.beginPath();
+      cx.arc(fx + (f - 1) * 4, baseY - h*0.52, headR, 0, Math.PI * 2);
+      cx.fill();
+    }
+  });
+}
+
+// Silhouette in west side building (the lit windows)
+function addSilhouette(x, y, z, faceX, seed) {
+  var sTex = makeSilhouetteTex(seed);
+  var sMat = new THREE.MeshBasicMaterial({
+    map: sTex, transparent: true, side: THREE.DoubleSide, depthWrite: false
+  });
+  var sPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 1.0), sMat);
+  if (faceX) {
+    sPlane.rotation.y = Math.PI / 2;
+  }
+  sPlane.position.set(x, y, z);
+  scene.add(sPlane);
+  silhouettes.push({
+    mesh: sPlane,
+    baseX: x,
+    baseY: y,
+    baseZ: z,
+    faceX: faceX,
+    swayPhase: Math.random() * Math.PI * 2,
+    swaySpeed: 0.2 + Math.random() * 0.4,
+    swayAmt: 0.015 + Math.random() * 0.02
+  });
+}
+
+// West building — lit windows
+addSilhouette(-7.2, 8.5, 1.01, false, 0.5);
+addSilhouette(-5.2, 5.5, 1.01, false, 0.8);
+// East building — lit window
+addSilhouette(4.0, 5, -4, true, 0.3);
+// Building further north
+addSilhouette(-4.0, 10.5, -9, true, 0.6);
+
+// ============================================================
+// LIGHTING
+// ============================================================
+// Very dim ambient — the scene should be mostly dark with ginger pools
+scene.add(new THREE.AmbientLight(0x0a0a15, 0.2));
+
+// Faint cool moonlight from above-right
+var moonLight = new THREE.DirectionalLight(0x3344aa, 0.08);
+moonLight.position.set(8, 20, -5);
+moonLight.castShadow = true;
+scene.add(moonLight);
+
+// Warm interior glow from lit windows (west building)
+var winGlow1 = new THREE.PointLight(0xd87018, 0.25, 6);
+winGlow1.position.set(-6, 8.5, 2);
+scene.add(winGlow1);
+
+var winGlow2 = new THREE.PointLight(0xd87018, 0.15, 5);
+winGlow2.position.set(-5, 5.5, 2);
+scene.add(winGlow2);
+
+// ============================================================
+// PUDDLES — reflecting ginger light
+// ============================================================
+for (var i = 0; i < 12; i++) {
+  var puddleMat = new THREE.MeshStandardMaterial({
+    color: 0x111115, roughness: 0.08, metalness: 0.7, transparent: true, opacity: 0.35
+  });
+  var puddle = new THREE.Mesh(new THREE.CircleGeometry(0.3 + Math.random() * 0.9, 16), puddleMat);
+  puddle.rotation.x = -Math.PI / 2;
+  puddle.position.set(
+    Math.random() * 14 - 5,
+    0.02,
+    Math.random() * 14 - 5
+  );
+  scene.add(puddle);
+}
+
+// Large puddle directly under the lamp — ginger reflection pool
+var heroReflect = new THREE.MeshStandardMaterial({
+  color: 0x1a1208, roughness: 0.05, metalness: 0.8, transparent: true, opacity: 0.5,
+  emissive: 0xe87818, emissiveIntensity: 0.1
+});
+var heroPuddle = new THREE.Mesh(new THREE.CircleGeometry(1.5, 24), heroReflect);
+heroPuddle.rotation.x = -Math.PI / 2;
+heroPuddle.position.set(-3.5, 0.015, -2.5);
+scene.add(heroPuddle);
+
+// ============================================================
+// FOG VOLUMES — 4-layer Soho pea-souper
+// ============================================================
+
+// Shared fog textures
+var thickFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, 'rgba(160, 155, 145, 0.22)');
+  grad.addColorStop(0.4, 'rgba(130, 125, 115, 0.1)');
+  grad.addColorStop(1, 'rgba(100, 95, 85, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+var thinFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, 'rgba(120, 115, 105, 0.12)');
+  grad.addColorStop(0.6, 'rgba(100, 95, 85, 0.05)');
+  grad.addColorStop(1, 'rgba(80, 75, 65, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+var gingerFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  grad.addColorStop(0, 'rgba(232, 120, 24, 0.3)');
+  grad.addColorStop(0.25, 'rgba(220, 100, 18, 0.18)');
+  grad.addColorStop(0.55, 'rgba(200, 80, 12, 0.08)');
+  grad.addColorStop(1, 'rgba(160, 55, 8, 0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+});
+
+var fogSprites = [];
+
+// LAYER 1: Thick ground-hugging fog banks
+for (var i = 0; i < 55; i++) {
+  var fogMat = new THREE.SpriteMaterial({
+    map: thickFogTex, transparent: true,
+    opacity: 0.2 + Math.random() * 0.2
+  });
+  var fogSprite = new THREE.Sprite(fogMat);
+  fogSprite.position.set(
+    Math.random() * 50 - 20,
+    0.2 + Math.random() * 1.8,
+    Math.random() * 50 - 20
+  );
+  var s = 5 + Math.random() * 12;
+  fogSprite.scale.set(s, s * 0.3, 1);
+  scene.add(fogSprite);
+  fogSprites.push({
+    sprite: fogSprite,
+    baseX: fogSprite.position.x,
+    drift: 0.002 + Math.random() * 0.005,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.001 + Math.random() * 0.004,
+    swayAmt: 0.4 + Math.random() * 1.0
+  });
+}
+
+// LAYER 2: Mid-height fog (building level)
+for (var i = 0; i < 30; i++) {
+  var midFogMat = new THREE.SpriteMaterial({
+    map: thinFogTex, transparent: true,
+    opacity: 0.12 + Math.random() * 0.12
+  });
+  var midFog = new THREE.Sprite(midFogMat);
+  midFog.position.set(
+    Math.random() * 40 - 15,
+    2 + Math.random() * 5,
+    Math.random() * 40 - 15
+  );
+  var ms = 6 + Math.random() * 14;
+  midFog.scale.set(ms, ms * 0.3, 1);
+  scene.add(midFog);
+  fogSprites.push({
+    sprite: midFog,
+    baseX: midFog.position.x,
+    drift: 0.003 + Math.random() * 0.007,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.002 + Math.random() * 0.006,
+    swayAmt: 0.5 + Math.random() * 1.5
+  });
+}
+
+// LAYER 3: GINGER-tinted fog near the hero lamp (light bleeding into mist)
+for (var i = 0; i < 40; i++) {
+  var gingerFogMat = new THREE.SpriteMaterial({
+    map: gingerFogTex, transparent: true,
+    opacity: 0.25 + Math.random() * 0.3
+  });
+  var gFog = new THREE.Sprite(gingerFogMat);
+  gFog.position.set(
+    -3.5 + (Math.random() - 0.5) * 16,
+    0.3 + Math.random() * 7,
+    -3.5 + (Math.random() - 0.5) * 16
+  );
+  var gs = 3 + Math.random() * 9;
+  gFog.scale.set(gs, gs * 0.5, 1);
+  scene.add(gFog);
+  fogSprites.push({
+    sprite: gFog,
+    baseX: gFog.position.x,
+    drift: 0.002 + Math.random() * 0.004,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.002 + Math.random() * 0.005,
+    swayAmt: 0.3 + Math.random() * 0.6
+  });
+}
+
+// LAYER 4: High wisps drifting past rooftops
+for (var i = 0; i < 20; i++) {
+  var wispMat = new THREE.SpriteMaterial({
+    map: thinFogTex, transparent: true,
+    opacity: 0.08 + Math.random() * 0.1
+  });
+  var wisp = new THREE.Sprite(wispMat);
+  wisp.position.set(
+    Math.random() * 40 - 15,
+    7 + Math.random() * 8,
+    Math.random() * 40 - 15
+  );
+  wisp.scale.set(8 + Math.random() * 15, 3 + Math.random() * 4, 1);
+  scene.add(wisp);
+  fogSprites.push({
+    sprite: wisp,
+    baseX: wisp.position.x,
+    drift: 0.005 + Math.random() * 0.01,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.003 + Math.random() * 0.008,
+    swayAmt: 0.8 + Math.random() * 2.0
+  });
+}
+
+// ============================================================
+// ANIMATION
+// ============================================================
+var clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+
+  // --- HERO LAMP FLICKER ---
+  // Ginger gaslight flicker — irregular, organic
+  var flicker = 0.85
+    + Math.sin(t * 1.7) * 0.08
+    + Math.sin(t * 4.3) * 0.04
+    + Math.sin(t * 7.1) * 0.02
+    + Math.sin(t * 11.3) * 0.01;
+  gingerLight.intensity = 3.2 * flicker;
+  gingerFill.intensity = 1.2 * flicker;
+  gingerWash.intensity = 0.5 * flicker;
+  downSpot.intensity = 2.0 * flicker;
+
+  // Glow sprite pulses with the flicker
+  gingerGlow.material.opacity = 0.7 + (flicker - 0.85) * 2;
+  innerGlow.material.opacity = 0.8 + (flicker - 0.85) * 3;
+
+  // Lantern glass emissive flicker
+  gingerGlassMat.emissiveIntensity = 0.65 + (flicker - 0.85) * 3;
+
+  // Puddle reflection emissive flicker
+  heroReflect.emissiveIntensity = 0.02 + (flicker - 0.85) * 0.15;
+
+  // --- SECONDARY LAMP FLICKER ---
+  for (var i = 1; i < lampLights.length; i++) {
+    var lFlicker = 0.85 + Math.sin(t * (2.5 + i * 1.9)) * 0.06 + Math.sin(t * (5 + i * 3.1)) * 0.03;
+    lampLights[i].intensity = 0.3 * lFlicker;
+  }
+
+  // --- FOG DRIFT ---
+  for (var i = 0; i < fogSprites.length; i++) {
+    var f = fogSprites[i];
+    f.sway += f.swaySpeed;
+    f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;
+    f.baseX += f.drift;
+    if (f.baseX > 25) f.baseX = -20;
+  }
+
+  // --- WARM GLASS PULSE ---
+  warmGlass.emissiveIntensity = 0.1 + Math.sin(t * 0.6) * 0.04 + Math.sin(t * 1.9) * 0.02;
+
+  // --- SILHOUETTE SWAY ---
+  for (var i = 0; i < silhouettes.length; i++) {
+    var s = silhouettes[i];
+    s.swayPhase += s.swaySpeed * 0.016;
+    var swayOffset = Math.sin(s.swayPhase) * s.swayAmt;
+    s.mesh.position.y = s.baseY + Math.sin(s.swayPhase * 0.7) * 0.01;
+    if (s.faceX) {
+      s.mesh.position.z = s.baseZ + swayOffset;
+    } else {
+      s.mesh.position.x = s.baseX + swayOffset;
+    }
+  }
+
+  // --- WINDOW GLOW ---
+  winGlow1.intensity = 0.25 + Math.sin(t * 0.4) * 0.05;
+  winGlow2.intensity = 0.15 + Math.sin(t * 0.7) * 0.03;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>

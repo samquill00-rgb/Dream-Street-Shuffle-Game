@@ -3536,72 +3536,19 @@ window.addEventListener('popstate', function() {
 });
 
 // ====== DEBUG / PLAYTESTING MENU (backtick ` key) ======
+// Strategy: store target passage in URL hash, reload page.
+// Before Harlowe boots, a separate inline script swaps the startnode.
 (function() {
-var debugOpen = false;
 var debugPanel = null;
 
-// Preset game states for quick testing
-var presets = {
-  'Fresh start': { passage: 'Dean Street', vars: {} },
-  'Met Red, got coin': { passage: 'Dean Street', vars: { metRed: true, hasCoin: true, returns: 2, sobriety: 80, confidence: 50 } },
-  'Mid-game (French done, has matchbook)': { passage: 'Dean Street', vars: { metRed: true, hasCoin: true, returns: 5, sobriety: 60, confidence: 40, hasTrishaMatchbook: true, afterMidnight: false } },
-  'Pre-Copper (has password)': { passage: 'Maltese Gangsters', vars: { metRed: true, hasCoin: true, returns: 6, sobriety: 50, confidence: 45, knowsCopperWord: true, hasTrishaMatchbook: true } },
-  'Copper fight': { passage: 'Fight starts', vars: { metRed: true, hasCoin: true, returns: 6, sobriety: 50, confidence: 45, knowsCopperWord: true, knowsCopperSecret: true } },
-  'Alba complete (tower ready)': { passage: 'Dean Street', vars: { metRed: true, hasCoin: true, returns: 10, sobriety: 30, confidence: 60, afterMidnight: true, knowsCopperWord: true, knowsCopperSecret: true, knowsLackland: true, wasBeaten: true, visitedInterval: true, hadPhoneCall: true } },
-  'Centre Point (tower)': { passage: 'Approach Centre Point', vars: { metRed: true, returns: 10, sobriety: 30, afterMidnight: true } },
-  'Aoife Call 2 (dual ring)': { passage: 'The dual ring', vars: { metRed: true, returns: 6, sobriety: 50, hadPhoneCall: false } },
-  'Cecil Court (O\'Flatterly)': { passage: 'Cecil Court Approach', vars: { metRed: true, returns: 4, sobriety: 70, hasMissingPage: false } },
-  'PP Pong': { passage: 'PP Pong', vars: { metRed: true, sobriety: 60, opponent: 'Ashton Granger' } }
-};
-
-function setVars(vars) {
-  var engine = document.querySelector('tw-storydata');
-  if (!engine) return;
-  // Use Harlowe's State API
-  try {
-    var State = window.State || (window.Engine && window.Engine.state);
-    if (!State) {
-      // Try to access via Harlowe internals
-      var h = window.Harlowe;
-      if (h && h.API_ACCESS) State = h.API_ACCESS.STATE;
-    }
-    if (State && State.variables) {
-      for (var k in vars) {
-        State.variables[k] = vars[k];
-      }
-    }
-  } catch(e) { console.log('Debug: Could not set variables', e); }
-}
-
-function goToPassage(name) {
-  // Try multiple approaches to navigate
-  try {
-    // Approach 1: Create a link and click it
-    var link = document.createElement('tw-link');
-    link.setAttribute('passage-name', name);
-    link.textContent = name;
-    var passage = document.querySelector('tw-passage');
-    if (passage) {
-      passage.appendChild(link);
-      link.click();
-      setTimeout(function() { if (link.parentNode) link.remove(); }, 100);
-      return;
-    }
-  } catch(e) {}
-  try {
-    // Approach 2: Use Harlowe's engine directly
-    if (window.Engine && window.Engine.goToPassage) {
-      window.Engine.goToPassage(name);
-      return;
-    }
-  } catch(e) {}
-  // Approach 3: Manipulate the URL hash
-  alert('Could not navigate automatically. Try clicking a link in the game first, then use debug again.');
+function jumpTo(passageName) {
+  // Store target in URL hash and reload — the early-boot script handles the rest
+  window.location.hash = '#dss-debug-jump=' + encodeURIComponent(passageName);
+  window.location.reload();
 }
 
 function createPanel() {
-  if (debugPanel) { debugPanel.remove(); debugPanel = null; debugOpen = false; return; }
-  debugOpen = true;
+  if (debugPanel) { debugPanel.remove(); debugPanel = null; return; }
   var panel = document.createElement('div');
   panel.id = 'dss-debug';
   panel.style.cssText = 'position:fixed;top:0;right:0;width:360px;height:100vh;background:rgba(10,8,6,0.95);color:#c8b89a;font:13px/1.5 Georgia,serif;z-index:99999;overflow-y:auto;padding:16px;border-left:1px solid #3a2a1a;';
@@ -3613,19 +3560,11 @@ function createPanel() {
   var curName = cur ? cur.getAttribute('data-name') : '(unknown)';
   html += '<div style="margin-bottom:12px;padding:8px;background:rgba(255,255,255,0.05);border-radius:4px;"><small style="color:#888;">Current passage:</small><br><strong>' + curName + '</strong></div>';
 
-  // Presets
-  html += '<div style="margin-bottom:12px;"><strong style="color:#d4b050;">Quick Presets</strong></div>';
-  var presetNames = Object.keys(presets);
-  for (var i = 0; i < presetNames.length; i++) {
-    html += '<div class="dss-dbg-btn" data-preset="' + presetNames[i] + '" style="padding:6px 10px;margin:3px 0;background:rgba(255,255,255,0.06);border:1px solid #2a2018;border-radius:3px;cursor:pointer;font-size:12px;">' + presetNames[i] + '</div>';
-  }
-
   // All passages jump
-  html += '<div style="margin:16px 0 8px;"><strong style="color:#d4b050;">Jump to Passage</strong></div>';
+  html += '<div style="margin:8px 0 8px;"><strong style="color:#d4b050;">Jump to Passage</strong><br><small style="color:#888;">(page will reload at that passage)</small></div>';
   html += '<input id="dss-dbg-search" type="text" placeholder="Type to filter..." style="width:100%;box-sizing:border-box;padding:6px 8px;background:#1a1410;color:#c8b89a;border:1px solid #3a2a1a;border-radius:3px;font:12px Georgia,serif;margin-bottom:8px;">';
-  html += '<div id="dss-dbg-passages" style="max-height:40vh;overflow-y:auto;">';
+  html += '<div id="dss-dbg-passages" style="max-height:70vh;overflow-y:auto;">';
 
-  // Get all passage names
   var passages = document.querySelectorAll('tw-passagedata');
   var names = [];
   for (var j = 0; j < passages.length; j++) {
@@ -3634,7 +3573,7 @@ function createPanel() {
   }
   names.sort();
   for (var k = 0; k < names.length; k++) {
-    html += '<div class="dss-dbg-jump" data-passage="' + names[k].replace(/"/g, '&quot;') + '" style="padding:4px 8px;margin:2px 0;background:rgba(255,255,255,0.03);border-radius:2px;cursor:pointer;font-size:11px;">' + names[k] + '</div>';
+    html += '<div class="dss-dbg-jump" data-passage="' + names[k].replace(/"/g, '&quot;') + '" style="padding:5px 8px;margin:2px 0;background:rgba(255,255,255,0.03);border-radius:2px;cursor:pointer;font-size:12px;">' + names[k] + '</div>';
   }
   html += '</div>';
 
@@ -3642,10 +3581,8 @@ function createPanel() {
   document.body.appendChild(panel);
   debugPanel = panel;
 
-  // Close button
-  document.getElementById('dss-debug-close').addEventListener('click', function() { panel.remove(); debugPanel = null; debugOpen = false; });
+  document.getElementById('dss-debug-close').addEventListener('click', function() { panel.remove(); debugPanel = null; });
 
-  // Search filter
   document.getElementById('dss-dbg-search').addEventListener('input', function() {
     var q = this.value.toLowerCase();
     var items = document.querySelectorAll('.dss-dbg-jump');
@@ -3654,30 +3591,14 @@ function createPanel() {
     }
   });
 
-  // Preset clicks
-  var presetBtns = panel.querySelectorAll('.dss-dbg-btn');
-  for (var i = 0; i < presetBtns.length; i++) {
-    presetBtns[i].addEventListener('click', function() {
-      var name = this.getAttribute('data-preset');
-      var p = presets[name];
-      if (p.vars && Object.keys(p.vars).length) setVars(p.vars);
-      goToPassage(p.passage);
-      panel.remove(); debugPanel = null; debugOpen = false;
-    });
-  }
+  panel.addEventListener('click', function(e) {
+    if (e.target.classList.contains('dss-dbg-jump')) {
+      jumpTo(e.target.getAttribute('data-passage'));
+    }
+  });
 
-  // Jump clicks
-  var jumpBtns = panel.querySelectorAll('.dss-dbg-jump');
-  for (var i = 0; i < jumpBtns.length; i++) {
-    jumpBtns[i].addEventListener('click', function() {
-      goToPassage(this.getAttribute('data-passage'));
-      panel.remove(); debugPanel = null; debugOpen = false;
-    });
-  }
-
-  // Hover effects
-  panel.addEventListener('mouseover', function(e) { if (e.target.classList.contains('dss-dbg-btn') || e.target.classList.contains('dss-dbg-jump')) e.target.style.background = 'rgba(212,176,80,0.15)'; });
-  panel.addEventListener('mouseout', function(e) { if (e.target.classList.contains('dss-dbg-btn')) e.target.style.background = 'rgba(255,255,255,0.06)'; if (e.target.classList.contains('dss-dbg-jump')) e.target.style.background = 'rgba(255,255,255,0.03)'; });
+  panel.addEventListener('mouseover', function(e) { if (e.target.classList.contains('dss-dbg-jump')) e.target.style.background = 'rgba(212,176,80,0.15)'; });
+  panel.addEventListener('mouseout', function(e) { if (e.target.classList.contains('dss-dbg-jump')) e.target.style.background = 'rgba(255,255,255,0.03)'; });
 }
 
 document.addEventListener('keydown', function(e) {
@@ -24078,6 +23999,32 @@ Traveller, sleep!
 
 [[·|Black page]]</tw-passagedata>
 </tw-storydata>
+<script id="dss-debug-boot">
+// DEBUG: If URL hash contains a jump target, swap Harlowe's startnode before it boots
+(function() {
+  var hash = window.location.hash;
+  var match = hash.match(/dss-debug-jump=([^&]*)/);
+  if (!match) return;
+  var target = decodeURIComponent(match[1]);
+  // Find the tw-passagedata with this name and get its pid
+  var passages = document.querySelectorAll('tw-passagedata');
+  for (var i = 0; i < passages.length; i++) {
+    if (passages[i].getAttribute('name') === target) {
+      var pid = passages[i].getAttribute('pid');
+      // Swap the startnode on tw-storydata
+      var story = document.querySelector('tw-storydata');
+      if (story) {
+        story.setAttribute('startnode', pid);
+        console.log('DEBUG: Jumping to "' + target + '" (pid ' + pid + ')');
+      }
+      break;
+    }
+  }
+  // Clear the hash so it doesn't keep jumping on further reloads
+  window.history.replaceState(null, '', window.location.pathname);
+})();
+</script>
+
 <script title="Twine engine code" data-main="harlowe">(function(){"use strict";
 var require,define;!function(){var e={},r={};require=function(i){var n=e[i];return n&&(r[i]=n[1].apply(void 0,n[0].map(require)),e[i]=void 0),r[i]},(define=function(r,i,n){if("function"==typeof r)return r();e[r]=[i,n]}).amd=!0}();/*!
  * https://github.com/paulmillr/es6-shim

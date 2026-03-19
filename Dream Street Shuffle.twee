@@ -25,6 +25,156 @@ window.addEventListener('popstate', function() {
   if (first) first.click();
 });
 
+// ====== DEBUG / PLAYTESTING MENU (Ctrl+D) ======
+(function() {
+var debugOpen = false;
+var debugPanel = null;
+
+// Preset game states for quick testing
+var presets = {
+  'Fresh start': { passage: 'Dean Street', vars: {} },
+  'Met Red, got coin': { passage: 'Dean Street', vars: { metRed: true, hasCoin: true, returns: 2, sobriety: 80, confidence: 50 } },
+  'Mid-game (French done, has matchbook)': { passage: 'Dean Street', vars: { metRed: true, hasCoin: true, returns: 5, sobriety: 60, confidence: 40, hasTrishaMatchbook: true, afterMidnight: false } },
+  'Pre-Copper (has password)': { passage: 'Maltese Gangsters', vars: { metRed: true, hasCoin: true, returns: 6, sobriety: 50, confidence: 45, knowsCopperWord: true, hasTrishaMatchbook: true } },
+  'Copper fight': { passage: 'Fight starts', vars: { metRed: true, hasCoin: true, returns: 6, sobriety: 50, confidence: 45, knowsCopperWord: true, knowsCopperSecret: true } },
+  'Alba complete (tower ready)': { passage: 'Dean Street', vars: { metRed: true, hasCoin: true, returns: 10, sobriety: 30, confidence: 60, afterMidnight: true, knowsCopperWord: true, knowsCopperSecret: true, knowsLackland: true, wasBeaten: true, visitedInterval: true, hadPhoneCall: true } },
+  'Centre Point (tower)': { passage: 'Approach Centre Point', vars: { metRed: true, returns: 10, sobriety: 30, afterMidnight: true } },
+  'Aoife Call 2 (dual ring)': { passage: 'The dual ring', vars: { metRed: true, returns: 6, sobriety: 50, hadPhoneCall: false } },
+  'Cecil Court (O\'Flatterly)': { passage: 'Cecil Court Approach', vars: { metRed: true, returns: 4, sobriety: 70, hasMissingPage: false } },
+  'PP Pong': { passage: 'PP Pong', vars: { metRed: true, sobriety: 60, opponent: 'Ashton Granger' } }
+};
+
+function setVars(vars) {
+  var engine = document.querySelector('tw-storydata');
+  if (!engine) return;
+  // Use Harlowe's State API
+  try {
+    var State = window.State || (window.Engine && window.Engine.state);
+    if (!State) {
+      // Try to access via Harlowe internals
+      var h = window.Harlowe;
+      if (h && h.API_ACCESS) State = h.API_ACCESS.STATE;
+    }
+    if (State && State.variables) {
+      for (var k in vars) {
+        State.variables[k] = vars[k];
+      }
+    }
+  } catch(e) { console.log('Debug: Could not set variables', e); }
+}
+
+function goToPassage(name) {
+  // Try multiple approaches to navigate
+  try {
+    // Approach 1: Create a link and click it
+    var link = document.createElement('tw-link');
+    link.setAttribute('passage-name', name);
+    link.textContent = name;
+    var passage = document.querySelector('tw-passage');
+    if (passage) {
+      passage.appendChild(link);
+      link.click();
+      setTimeout(function() { if (link.parentNode) link.remove(); }, 100);
+      return;
+    }
+  } catch(e) {}
+  try {
+    // Approach 2: Use Harlowe's engine directly
+    if (window.Engine && window.Engine.goToPassage) {
+      window.Engine.goToPassage(name);
+      return;
+    }
+  } catch(e) {}
+  // Approach 3: Manipulate the URL hash
+  alert('Could not navigate automatically. Try clicking a link in the game first, then use debug again.');
+}
+
+function createPanel() {
+  if (debugPanel) { debugPanel.remove(); debugPanel = null; debugOpen = false; return; }
+  debugOpen = true;
+  var panel = document.createElement('div');
+  panel.id = 'dss-debug';
+  panel.style.cssText = 'position:fixed;top:0;right:0;width:360px;height:100vh;background:rgba(10,8,6,0.95);color:#c8b89a;font:13px/1.5 Georgia,serif;z-index:99999;overflow-y:auto;padding:16px;border-left:1px solid #3a2a1a;';
+
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><strong style="color:#ea7a7a;letter-spacing:0.1em;">DEBUG MENU</strong><span id="dss-debug-close" style="cursor:pointer;color:#666;font-size:18px;">&times;</span></div>';
+
+  // Current passage
+  var cur = document.querySelector('tw-passage[data-name]');
+  var curName = cur ? cur.getAttribute('data-name') : '(unknown)';
+  html += '<div style="margin-bottom:12px;padding:8px;background:rgba(255,255,255,0.05);border-radius:4px;"><small style="color:#888;">Current passage:</small><br><strong>' + curName + '</strong></div>';
+
+  // Presets
+  html += '<div style="margin-bottom:12px;"><strong style="color:#d4b050;">Quick Presets</strong></div>';
+  var presetNames = Object.keys(presets);
+  for (var i = 0; i < presetNames.length; i++) {
+    html += '<div class="dss-dbg-btn" data-preset="' + presetNames[i] + '" style="padding:6px 10px;margin:3px 0;background:rgba(255,255,255,0.06);border:1px solid #2a2018;border-radius:3px;cursor:pointer;font-size:12px;">' + presetNames[i] + '</div>';
+  }
+
+  // All passages jump
+  html += '<div style="margin:16px 0 8px;"><strong style="color:#d4b050;">Jump to Passage</strong></div>';
+  html += '<input id="dss-dbg-search" type="text" placeholder="Type to filter..." style="width:100%;box-sizing:border-box;padding:6px 8px;background:#1a1410;color:#c8b89a;border:1px solid #3a2a1a;border-radius:3px;font:12px Georgia,serif;margin-bottom:8px;">';
+  html += '<div id="dss-dbg-passages" style="max-height:40vh;overflow-y:auto;">';
+
+  // Get all passage names
+  var passages = document.querySelectorAll('tw-passagedata');
+  var names = [];
+  for (var j = 0; j < passages.length; j++) {
+    var n = passages[j].getAttribute('name');
+    if (n && n !== 'UserScript' && n !== 'UserStylesheet') names.push(n);
+  }
+  names.sort();
+  for (var k = 0; k < names.length; k++) {
+    html += '<div class="dss-dbg-jump" data-passage="' + names[k].replace(/"/g, '&quot;') + '" style="padding:4px 8px;margin:2px 0;background:rgba(255,255,255,0.03);border-radius:2px;cursor:pointer;font-size:11px;">' + names[k] + '</div>';
+  }
+  html += '</div>';
+
+  panel.innerHTML = html;
+  document.body.appendChild(panel);
+  debugPanel = panel;
+
+  // Close button
+  document.getElementById('dss-debug-close').addEventListener('click', function() { panel.remove(); debugPanel = null; debugOpen = false; });
+
+  // Search filter
+  document.getElementById('dss-dbg-search').addEventListener('input', function() {
+    var q = this.value.toLowerCase();
+    var items = document.querySelectorAll('.dss-dbg-jump');
+    for (var i = 0; i < items.length; i++) {
+      items[i].style.display = items[i].getAttribute('data-passage').toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+    }
+  });
+
+  // Preset clicks
+  var presetBtns = panel.querySelectorAll('.dss-dbg-btn');
+  for (var i = 0; i < presetBtns.length; i++) {
+    presetBtns[i].addEventListener('click', function() {
+      var name = this.getAttribute('data-preset');
+      var p = presets[name];
+      if (p.vars && Object.keys(p.vars).length) setVars(p.vars);
+      goToPassage(p.passage);
+      panel.remove(); debugPanel = null; debugOpen = false;
+    });
+  }
+
+  // Jump clicks
+  var jumpBtns = panel.querySelectorAll('.dss-dbg-jump');
+  for (var i = 0; i < jumpBtns.length; i++) {
+    jumpBtns[i].addEventListener('click', function() {
+      goToPassage(this.getAttribute('data-passage'));
+      panel.remove(); debugPanel = null; debugOpen = false;
+    });
+  }
+
+  // Hover effects
+  panel.addEventListener('mouseover', function(e) { if (e.target.classList.contains('dss-dbg-btn') || e.target.classList.contains('dss-dbg-jump')) e.target.style.background = 'rgba(212,176,80,0.15)'; });
+  panel.addEventListener('mouseout', function(e) { if (e.target.classList.contains('dss-dbg-btn')) e.target.style.background = 'rgba(255,255,255,0.06)'; if (e.target.classList.contains('dss-dbg-jump')) e.target.style.background = 'rgba(255,255,255,0.03)'; });
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.key === 'd') { e.preventDefault(); createPanel(); }
+});
+})();
+
 // ====== COIN FLIP POPUP (notebook) ======
 window.showCoinModal = function(opts) {
   var mode = opts.mode || "free", max = opts.maxToss || (mode === "free" ? 3 : 1), tc = 0, cb = opts.onResult || function() {};
@@ -951,39 +1101,88 @@ fistPull = 1 - pt;
 cx += lean;
 cy += crouch;
 
-ctx.fillStyle = 'rgba(0,0,0,0.25)';
-ctx.beginPath(); ctx.ellipse(this.copperBaseX, 340, 80, 18, 0, 0, Math.PI * 2); ctx.fill();
-
-ctx.fillStyle = '#2e2018'; ctx.strokeStyle = '#4a3028'; ctx.lineWidth = 1.5;
-ctx.beginPath();
-ctx.moveTo(cx - 55, cy + 70); ctx.lineTo(cx - 60, cy + 230);
-ctx.lineTo(cx + 60, cy + 230); ctx.lineTo(cx + 55, cy + 70);
-ctx.closePath(); ctx.fill(); ctx.stroke();
-
-ctx.fillStyle = '#2e2018';
-ctx.beginPath(); ctx.ellipse(cx, cy + 75, 68, 22, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-
 // ═══ COPPER COLOUR CONSTANTS ═══
 var SKIN = '#c4a07a', SKIN_SHADOW = '#a88060', SKIN_OUTLINE = '#8e6e52', SKIN_DARK = '#7a6050';
 var HAIR = '#2a1e14', HAIR_HI = '#3e3020';
+var SUIT = '#1e1e24', SUIT_DARK = '#101016', SUIT_LIGHT = '#2e2e36';
+var STRIPE = 'rgba(150,150,160,0.06)', SHIRT_WHITE = '#d8d4cc';
+var TIE = '#2a1a1a', TIE_HI = '#3e2828';
+var TROUSERS = '#1a1a20', TROUSERS_DARK = '#0e0e14';
 
-// ═══ NECK ═══
-ctx.fillStyle = SKIN; ctx.fillRect(cx - 14, cy + 38, 28, 38);
+// ═══ SHADOW ═══
+ctx.fillStyle = 'rgba(0,0,0,0.25)';
+ctx.beginPath(); ctx.ellipse(this.copperBaseX, 340, 95, 22, 0, 0, Math.PI * 2); ctx.fill();
 
-// ═══ HEAD — larger, more detailed ═══
+// ═══ TROUSERS with pinstripes ═══
+ctx.fillStyle = TROUSERS; ctx.strokeStyle = TROUSERS_DARK; ctx.lineWidth = 1;
+ctx.beginPath(); ctx.moveTo(cx - 70, cy + 195); ctx.lineTo(cx - 74, cy + 320); ctx.lineTo(cx - 2, cy + 320); ctx.lineTo(cx - 2, cy + 205); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(cx + 70, cy + 195); ctx.lineTo(cx + 74, cy + 320); ctx.lineTo(cx + 2, cy + 320); ctx.lineTo(cx + 2, cy + 205); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.save(); ctx.strokeStyle = STRIPE; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 70, cy + 195); ctx.lineTo(cx - 74, cy + 320); ctx.lineTo(cx - 2, cy + 320); ctx.lineTo(cx - 2, cy + 205); ctx.closePath(); ctx.clip(); for (var s = -75; s <= -2; s += 8) { ctx.beginPath(); ctx.moveTo(cx + s, cy + 195); ctx.lineTo(cx + s - 1, cy + 320); ctx.stroke(); } ctx.restore();
+ctx.save(); ctx.strokeStyle = STRIPE; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx + 70, cy + 195); ctx.lineTo(cx + 74, cy + 320); ctx.lineTo(cx + 2, cy + 320); ctx.lineTo(cx + 2, cy + 205); ctx.closePath(); ctx.clip(); for (var s = 2; s <= 75; s += 8) { ctx.beginPath(); ctx.moveTo(cx + s, cy + 195); ctx.lineTo(cx + s - 1, cy + 320); ctx.stroke(); } ctx.restore();
+ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+ctx.beginPath(); ctx.moveTo(cx - 36, cy + 200); ctx.lineTo(cx - 38, cy + 320); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(cx + 36, cy + 200); ctx.lineTo(cx + 38, cy + 320); ctx.stroke();
+
+// ═══ BELT ═══
+ctx.fillStyle = '#1a1210'; ctx.strokeStyle = '#0e0a08'; ctx.lineWidth = 1;
+ctx.beginPath(); ctx.moveTo(cx - 72, cy + 192); ctx.lineTo(cx + 72, cy + 192); ctx.lineTo(cx + 72, cy + 204); ctx.lineTo(cx - 72, cy + 204); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.fillStyle = '#c0a040'; ctx.strokeStyle = '#a08830'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.rect(cx - 8, cy + 194, 16, 8); ctx.fill(); ctx.stroke();
+ctx.fillStyle = '#d4b050'; ctx.beginPath(); ctx.rect(cx - 5, cy + 196, 10, 4); ctx.fill();
+
+// ═══ SUIT JACKET — shorter, shaped, dark pinstripe ═══
+ctx.fillStyle = SUIT; ctx.strokeStyle = SUIT_DARK; ctx.lineWidth = 1.5;
+ctx.beginPath(); ctx.moveTo(cx - 32, cy + 58); ctx.lineTo(cx - 78, cy + 68); ctx.quadraticCurveTo(cx - 82, cy + 120, cx - 78, cy + 160); ctx.quadraticCurveTo(cx - 76, cy + 185, cx - 72, cy + 195); ctx.lineTo(cx - 10, cy + 195); ctx.lineTo(cx - 10, cy + 88); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(cx + 32, cy + 58); ctx.lineTo(cx + 78, cy + 68); ctx.quadraticCurveTo(cx + 82, cy + 120, cx + 78, cy + 160); ctx.quadraticCurveTo(cx + 76, cy + 185, cx + 72, cy + 195); ctx.lineTo(cx + 10, cy + 195); ctx.lineTo(cx + 10, cy + 88); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.save(); ctx.strokeStyle = STRIPE; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 82, cy + 68); ctx.quadraticCurveTo(cx - 82, cy + 120, cx - 78, cy + 160); ctx.quadraticCurveTo(cx - 76, cy + 185, cx - 72, cy + 195); ctx.lineTo(cx - 10, cy + 195); ctx.lineTo(cx - 10, cy + 88); ctx.lineTo(cx - 32, cy + 58); ctx.lineTo(cx - 78, cy + 68); ctx.closePath(); ctx.clip(); for (var s = -85; s <= -5; s += 8) { ctx.beginPath(); ctx.moveTo(cx + s, cy + 58); ctx.lineTo(cx + s - 2, cy + 200); ctx.stroke(); } ctx.restore();
+ctx.save(); ctx.strokeStyle = STRIPE; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx + 82, cy + 68); ctx.quadraticCurveTo(cx + 82, cy + 120, cx + 78, cy + 160); ctx.quadraticCurveTo(cx + 76, cy + 185, cx + 72, cy + 195); ctx.lineTo(cx + 10, cy + 195); ctx.lineTo(cx + 10, cy + 88); ctx.lineTo(cx + 32, cy + 58); ctx.lineTo(cx + 78, cy + 68); ctx.closePath(); ctx.clip(); for (var s = 5; s <= 85; s += 8) { ctx.beginPath(); ctx.moveTo(cx + s, cy + 58); ctx.lineTo(cx + s - 2, cy + 200); ctx.stroke(); } ctx.restore();
+ctx.strokeStyle = SUIT_LIGHT; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(cx - 72, cy + 194); ctx.lineTo(cx - 10, cy + 194); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx + 10, cy + 194); ctx.lineTo(cx + 72, cy + 194); ctx.stroke();
+ctx.fillStyle = SUIT_LIGHT; ctx.beginPath(); ctx.arc(cx - 12, cy + 140, 2.5, 0, Math.PI * 2); ctx.fill();
+
+// ═══ SHOULDERS — broad ═══
+ctx.fillStyle = SUIT; ctx.strokeStyle = SUIT_DARK; ctx.lineWidth = 1.5;
+ctx.beginPath(); ctx.ellipse(cx, cy + 72, 88, 28, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+// ═══ SHIRT ═══
+ctx.fillStyle = SHIRT_WHITE; ctx.strokeStyle = '#b8b4ac'; ctx.lineWidth = 0.8;
+ctx.beginPath(); ctx.moveTo(cx - 28, cy + 50); ctx.lineTo(cx - 12, cy + 195); ctx.lineTo(cx + 12, cy + 195); ctx.lineTo(cx + 28, cy + 50); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+// ═══ KIPPER TIE ═══
+ctx.fillStyle = TIE;
+ctx.beginPath(); ctx.moveTo(cx - 8, cy + 54); ctx.lineTo(cx + 8, cy + 54); ctx.lineTo(cx + 7, cy + 70); ctx.lineTo(cx - 7, cy + 70); ctx.closePath(); ctx.fill();
+ctx.strokeStyle = TIE_HI; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 2, cy + 55); ctx.lineTo(cx - 1, cy + 69); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx + 2, cy + 55); ctx.lineTo(cx + 1, cy + 69); ctx.stroke();
+ctx.fillStyle = TIE;
+ctx.beginPath(); ctx.moveTo(cx - 7, cy + 70); ctx.lineTo(cx - 13, cy + 170); ctx.lineTo(cx, cy + 182); ctx.lineTo(cx + 13, cy + 170); ctx.lineTo(cx + 7, cy + 70); ctx.closePath(); ctx.fill();
+ctx.strokeStyle = TIE_HI; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx, cy + 72); ctx.lineTo(cx, cy + 178); ctx.stroke();
+ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(cx - 8, cy + 72); ctx.lineTo(cx - 13, cy + 170); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx + 8, cy + 72); ctx.lineTo(cx + 13, cy + 170); ctx.stroke();
+ctx.strokeStyle = 'rgba(60,30,30,0.3)'; ctx.lineWidth = 0.5; for (var ty = cy + 80; ty < cy + 168; ty += 12) { var tw = 7 + ((ty - cy - 70) / 100) * 6; ctx.beginPath(); ctx.moveTo(cx - tw, ty); ctx.lineTo(cx + tw, ty + 6); ctx.stroke(); }
+
+// ═══ COLLAR ═══
+ctx.fillStyle = SHIRT_WHITE; ctx.strokeStyle = '#b0aca4'; ctx.lineWidth = 1;
+ctx.beginPath(); ctx.moveTo(cx - 5, cy + 50); ctx.lineTo(cx - 32, cy + 46); ctx.lineTo(cx - 36, cy + 54); ctx.lineTo(cx - 30, cy + 62); ctx.lineTo(cx - 8, cy + 56); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(cx + 5, cy + 50); ctx.lineTo(cx + 32, cy + 46); ctx.lineTo(cx + 36, cy + 54); ctx.lineTo(cx + 30, cy + 62); ctx.lineTo(cx + 8, cy + 56); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.fillStyle = SHIRT_WHITE; ctx.beginPath(); ctx.moveTo(cx - 10, cy + 48); ctx.lineTo(cx + 10, cy + 48); ctx.lineTo(cx + 8, cy + 55); ctx.lineTo(cx - 8, cy + 55); ctx.closePath(); ctx.fill();
+
+// ═══ LAPELS ═══
+ctx.fillStyle = SUIT; ctx.strokeStyle = SUIT_DARK; ctx.lineWidth = 1.2;
+ctx.beginPath(); ctx.moveTo(cx - 26, cy + 48); ctx.lineTo(cx - 52, cy + 76); ctx.lineTo(cx - 68, cy + 66); ctx.lineTo(cx - 38, cy + 40); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(cx + 26, cy + 48); ctx.lineTo(cx + 52, cy + 76); ctx.lineTo(cx + 68, cy + 66); ctx.lineTo(cx + 38, cy + 40); ctx.closePath(); ctx.fill(); ctx.stroke();
+ctx.strokeStyle = SUIT_LIGHT; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(cx - 26, cy + 48); ctx.lineTo(cx - 52, cy + 76); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx + 26, cy + 48); ctx.lineTo(cx + 52, cy + 76); ctx.stroke();
+
+// ═══ GOLD CHAIN ═══
+ctx.save(); ctx.strokeStyle = '#d4b050'; ctx.lineWidth = 3; ctx.shadowColor = 'rgba(220,180,60,0.5)'; ctx.shadowBlur = 8;
+ctx.beginPath(); ctx.moveTo(cx - 14, cy + 50); ctx.quadraticCurveTo(cx - 8, cy + 68, cx - 5, cy + 74); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(cx + 14, cy + 50); ctx.quadraticCurveTo(cx + 8, cy + 68, cx + 5, cy + 74); ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
+
+// ═══ NECK — bull neck ═══
+ctx.fillStyle = SKIN; ctx.beginPath(); ctx.moveTo(cx - 22, cy + 38); ctx.lineTo(cx - 24, cy + 56); ctx.lineTo(cx + 24, cy + 56); ctx.lineTo(cx + 22, cy + 38); ctx.closePath(); ctx.fill();
+ctx.strokeStyle = SKIN_DARK; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(cx - 12, cy + 42); ctx.lineTo(cx - 14, cy + 53); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx + 12, cy + 42); ctx.lineTo(cx + 14, cy + 53); ctx.stroke();
+
+// ═══ HEAD ═══
 ctx.fillStyle = SKIN;
-ctx.beginPath(); ctx.ellipse(cx, cy + 15, 35, 40, 0, 0, Math.PI * 2); ctx.fill();
-ctx.strokeStyle = SKIN_OUTLINE; ctx.lineWidth = 1; ctx.stroke();
-// Jaw definition
-ctx.strokeStyle = SKIN_OUTLINE; ctx.lineWidth = 1.5;
-ctx.beginPath();
-ctx.moveTo(cx - 34, cy + 10);
-ctx.lineTo(cx - 34, cy + 30);
-ctx.quadraticCurveTo(cx - 30, cy + 44, cx - 18, cy + 44);
-ctx.lineTo(cx + 18, cy + 44);
-ctx.quadraticCurveTo(cx + 30, cy + 44, cx + 34, cy + 30);
-ctx.lineTo(cx + 34, cy + 10);
-ctx.stroke();
+ctx.beginPath(); ctx.moveTo(cx - 32, cy + 10); ctx.lineTo(cx - 34, cy + 30); ctx.quadraticCurveTo(cx - 30, cy + 44, cx - 18, cy + 44); ctx.lineTo(cx + 18, cy + 44); ctx.quadraticCurveTo(cx + 30, cy + 44, cx + 34, cy + 30); ctx.lineTo(cx + 32, cy + 10); ctx.closePath(); ctx.fill();
+ctx.beginPath(); ctx.ellipse(cx, cy + 10, 34, 36, 0, Math.PI, Math.PI * 2); ctx.fill();
+ctx.strokeStyle = SKIN_OUTLINE; ctx.lineWidth = 1.2;
+ctx.beginPath(); ctx.moveTo(cx - 34, cy + 10); ctx.lineTo(cx - 34, cy + 30); ctx.quadraticCurveTo(cx - 30, cy + 44, cx - 18, cy + 44); ctx.lineTo(cx + 18, cy + 44); ctx.quadraticCurveTo(cx + 30, cy + 44, cx + 34, cy + 30); ctx.lineTo(cx + 34, cy + 10); ctx.stroke();
 
 // ═══ HAIR — short-back-and-sides with quiff, M-shaped receding hairline ═══
 ctx.fillStyle = HAIR;

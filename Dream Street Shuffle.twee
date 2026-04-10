@@ -392,292 +392,3338 @@ if (link) link.click();
 }
 }, 200);
 
-// ====== BAR GAME CLASS ======
+// ====== BAR GAME CLASS (two-phase: orders + carry) ======
 window.BarGame = class BarGame {
 constructor(canvasId, sobriety) {
 this.canvas = document.getElementById(canvasId);
 this.ctx = this.canvas.getContext('2d');
+this.W = this.canvas.width; this.H = this.canvas.height;
 this.sobriety = sobriety;
-this.phase = 'selecting';
-this.currentRound = 0;
-this.selections = [null, null, null, null];
-this.correct = [0, 1, 0, 1];
-this.isAnimating = false;
-this.mouseX = 0; this.mouseY = 0;
-this.hoveredItem = null; this.selectedItem = null;
-this.bottles = [
-{ name: 'Wild Turkey', x: 80, w: 50, h: 120, color: '#8b4513', label: 'bird' },
-{ name: "Jack Daniel's", x: 220, w: 45, h: 130, color: '#1a1a1a', label: 'square' },
-{ name: "Maker's Mark", x: 360, w: 48, h: 125, color: '#9d3d2a', label: 'wax' }
+this.stopped = false;
+this.mx = this.W/2; this.my = this.H/2;
+this.t = 0;
+this.lt = performance.now();
+
+// ========== MIXING PHASE STATE ==========
+this.phase = 'mixing';
+this.mRound = 0; this.mScore = 0;
+this.pouring = false; this.pourLevel = 0; this.pourDone = false;
+this.pourSpeed = 0; this.wobT = 0;
+this.finishPhase = false; this.finHover = -1; this.finPicked = null;
+this.mFeed = null; this.mTransition = false;
+this.pourDrops = []; this.bubbles = [];
+this.bottleAngle = 0; this.pourStream = 0;
+this.pourTime = 0; this.pourCommitted = false;
+this.handShake = 0;
+this.targetOff = 0; this.targetPhase = Math.random() * Math.PI * 2;
+this.liquidWobble = 0;
+this.pourAccuracy = 0;
+
+// Drink definitions (unchanged from original)
+this.drinks = [
+  {name:"Bourbon",who:"Guitarist",glass:"tulip",liqCol:"#c98030",liqHi:"#e8b860",target:0.55,
+   bottle:{col:"#8b4513",acc:"#c9a961",lab:"WT"},
+   finish:{prompt:"Which glass?",correct:0,opts:["Tulip glass","Rocks glass"],
+   okMsg:"Tulip glass. Right.",badMsg:"Wrong glass \u2014 he said tulip."}},
+  {name:"Moscow Mule",who:"Moe",glass:"copper",liqCol:"#e0d090",liqHi:"#f0e8b0",target:0.60,
+   bottle:{col:"#c0c0c0",acc:"#e8e8e8",lab:"Vodka"},
+   finish:{prompt:"Lime?",correct:0,opts:["Squeeze fresh lime","Pour bottled juice"],
+   okMsg:"Fresh lime. Perfect.",badMsg:"He said fresh lime, not bottled."}},
+  {name:"Scotch",who:"Pianist",glass:"rocks",liqCol:"#d4a050",liqHi:"#e8c070",target:0.40,
+   bottle:{col:"#5a2d0c",acc:"#d4a574",lab:"Mac"},
+   finish:{prompt:"How?",correct:1,opts:["Add ice","Serve neat"],
+   okMsg:"Neat. As requested.",badMsg:"He said neat \u2014 no ice."}}
 ];
-this.glasses = [
-{ name: 'Tumbler', x: 80, w: 50, h: 80, shape: 'tumbler' },
-{ name: 'Tulip', x: 220, w: 35, h: 95, shape: 'tulip' },
-{ name: 'Highball', x: 360, w: 40, h: 110, shape: 'highball' }
-];
-this.limes = [
-{ name: 'Fresh Lime', x: 140, w: 60, h: 60, type: 'fresh' },
-{ name: 'Bottled Lime Juice', x: 360, w: 50, h: 90, type: 'bottled' }
-];
-this.scotches = [
-{ name: 'Johnnie Walker', x: 60, w: 48, h: 130, color: '#1a1a1a', label: 'JW', accent: '#c9a961' },
-{ name: 'The Macallan', x: 190, w: 50, h: 120, color: '#5a2d0c', label: 'Mac', accent: '#d4a574' },
-{ name: 'Glenfiddich', x: 330, w: 46, h: 125, color: '#2d5a0c', label: 'Glen', accent: '#8bc34a' }
-];
-this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-this.canvas.addEventListener('click', (e) => this.handleClick(e));
-document.getElementById('bar-round-display').textContent = '\uD83C\uDFB8 Guitarist\u2019s bourbon? \uD83C\uDFB8';
-document.getElementById('bar-narrative').innerHTML = '';
-document.getElementById('bar-end').innerHTML = '';
-this.animate();
-}
-handleMouseMove(e) {
-var rect = this.canvas.getBoundingClientRect();
-var scaleX = this.canvas.width / rect.width;
-var scaleY = this.canvas.height / rect.height;
-this.mouseX = (e.clientX - rect.left) * scaleX;
-this.mouseY = (e.clientY - rect.top) * scaleY;
-this.updateHoveredItem();
-}
-handleClick(e) {
-if (this.phase !== 'selecting' || this.isAnimating) return;
-var rect = this.canvas.getBoundingClientRect();
-var scaleX = this.canvas.width / rect.width;
-var scaleY = this.canvas.height / rect.height;
-this.mouseX = (e.clientX - rect.left) * scaleX;
-this.mouseY = (e.clientY - rect.top) * scaleY;
-var items = this.getCurrentRoundItems();
+
+this.glassH = {tulip: 70, copper: 55, rocks: 42};
+this.completedDrinks = [];
+this.sparkles = [];
+this.smokePs = [];
+for (var i = 0; i < 8; i++) this.smokePs.push({x:Math.random()*this.W,y:Math.random()*120+20,s:20+Math.random()*40,sp:0.1+Math.random()*0.2,off:Math.random()*10});
+this.patrons = this._initPatrons();
+
+// ========== CARRY PHASE STATE ==========
+this.carryPhase = {
+  scrollPos: 0,
+  scrollSpeed: 180,
+  maxScroll: 7000,
+  playerY: 320,
+  playerVelY: 0,
+  playerJumping: false,
+  playerDuckingInput: false,
+  gravity: 600,
+  jumpPower: -400,
+  groundY: 320,
+  baseGroundY: 320,
+  glassesLeft: 3,
+  invulnTimer: 0,
+  obstacles: [],
+  nextObstacleTime: 0,
+  screenShake: 0,
+  difficultyPhase: 0,
+  wobbling: false,
+  wobbleTimer: 0,
+  staggerTimer: 0,
+  terrain: [
+    {x: 0, y: 320},
+    {x: 900, y: 320},
+    {x: 1050, y: 285},
+    {x: 1550, y: 285},
+    {x: 1700, y: 320},
+    {x: 2500, y: 320},
+    {x: 2650, y: 295},
+    {x: 3250, y: 295},
+    {x: 3400, y: 320},
+    {x: 4000, y: 320},
+    {x: 4150, y: 275},
+    {x: 4650, y: 275},
+    {x: 4850, y: 320},
+    {x: 5400, y: 320},
+    {x: 5550, y: 290},
+    {x: 6050, y: 290},
+    {x: 6200, y: 320},
+    {x: 7000, y: 320}
+  ]
+};
+
+this._generateObstacles();
+
+// ========== EVENT LISTENERS ==========
+this.canvas.addEventListener('mousemove', (e) => {
+  var r = this.canvas.getBoundingClientRect();
+  this.mx = (e.clientX - r.left) * (this.W / r.width);
+  this.my = (e.clientY - r.top) * (this.H / r.height);
+});
+
+this.canvas.addEventListener('mousedown', (e) => {
+  if (this.phase === 'mixing' && !this.pourDone && !this.finishPhase && !this.mTransition) {
+    this.pouring = true;
+    this.pourCommitted = true;
+  }
+  if (this.phase === 'carry') {
+    this._playerJump();
+  }
+});
+
+this.canvas.addEventListener('mouseup', (e) => {
+  if (this.phase === 'mixing' && this.pouring) {
+    this.pouring = false;
+    this.pourDone = true;
+    this._scorePour();
+  }
+});
+
+this.canvas.addEventListener('mouseleave', (e) => {
+  if (this.phase === 'mixing' && this.pouring) {
+    this.pouring = false;
+    this.pourDone = true;
+    this._scorePour();
+  }
+});
+
+this.canvas.addEventListener('click', () => {
+  // No longer needed for finish choices
+});
+
+document.addEventListener('keydown', (e) => {
+  if (this.phase === 'carry') {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+      e.preventDefault();
+      this._playerJump();
+    }
+    if (e.code === 'ArrowDown') {
+      e.preventDefault();
+      this.carryPhase.playerDuckingInput = true;
+    }
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (this.phase === 'carry') {
+    if (e.code === 'ArrowDown') {
+      this.carryPhase.playerDuckingInput = false;
+    }
+  }
+});
+
+document.getElementById('bar-round-display').textContent = '\u2727 ' + this.drinks[0].who + '\u2019s ' + this.drinks[0].name + ' \u2727';
+document.getElementById('bar-narrative').innerHTML = '<em style="color:#d4a574;">Click and hold to pour. Release when the level looks right.</em>';
+
 var self = this;
-items.forEach(function(item, idx) {
-var bounds = self.getItemBounds(item);
-if (self.mouseX >= bounds.x && self.mouseX <= bounds.x + bounds.w &&
-self.mouseY >= bounds.y && self.mouseY <= bounds.y + bounds.h) {
-self.selectItem(idx);
+setTimeout(function() { if (self.phase === 'mixing' && !self.pourDone) document.getElementById('bar-narrative').innerHTML = ''; }, 3000);
+
+this._loop();
 }
-});
+
+// ========== MIXING PHASE: HELPERS ==========
+_initPatrons() {
+var patrons = [];
+for (var i = 0; i < 5; i++) {
+  patrons.push({
+    x: 30 + Math.random() * (this.W - 60),
+    y: 80 + Math.random() * 100,
+    w: 15 + Math.random() * 20,
+    h: 25 + Math.random() * 35
+  });
 }
-updateHoveredItem() {
-if (this.phase !== 'selecting') { this.hoveredItem = null; return; }
-var items = this.getCurrentRoundItems();
-var hovered = null; var self = this;
-items.forEach(function(item, idx) {
-var bounds = self.getItemBounds(item);
-if (self.mouseX >= bounds.x && self.mouseX <= bounds.x + bounds.w &&
-self.mouseY >= bounds.y && self.mouseY <= bounds.y + bounds.h) { hovered = idx; }
-});
-this.hoveredItem = hovered;
+return patrons;
 }
-getCurrentRoundItems() {
-if (this.currentRound === 0) return this.bottles;
-if (this.currentRound === 1) return this.glasses;
-if (this.currentRound === 2) return this.limes;
-return this.scotches;
+
+_liquidY(glassType, gy, fill) {
+var h = this.glassH[glassType] || 55;
+var offset = glassType === 'tulip' ? -5 : 0;
+return gy + h * (1 - fill * 0.85) + offset;
 }
-getItemBounds(item) { return { x: item.x, y: 240, w: item.w, h: item.h }; }
-selectItem(idx) {
-this.selections[this.currentRound] = idx;
-this.selectedItem = idx;
-this.isAnimating = true;
-var isCorrect = idx === this.correct[this.currentRound];
-var narrativeDiv = document.getElementById('bar-narrative');
-if (isCorrect) {
-narrativeDiv.innerHTML = '<em style="color:#4CFF00;">Right.</em>';
+
+_scorePour() {
+var d = this.drinks[this.mRound];
+var effectiveTarget = Math.max(0.1, Math.min(0.9, d.target + this.targetOff));
+var diff = Math.abs(this.pourLevel - effectiveTarget);
+if (diff < 0.05) { this.pourAccuracy = 2; }
+else if (diff < 0.12) { this.pourAccuracy = 1; }
+else { this.pourAccuracy = 0; }
+var gx = this.W/2, gy = 270;
+this.mScore += this.pourAccuracy;
+var narr = document.getElementById('bar-narrative');
+if (this.pourAccuracy === 2) {
+  this._spawnSparkles(gx, gy, 15);
+  narr.innerHTML = '<em style="color:#4CFF00;">Perfect pour.</em>';
+} else if (this.pourAccuracy === 1) {
+  this._spawnSparkles(gx, gy + 15, 8);
+  narr.innerHTML = '<em style="color:#d4a574;">Close enough.</em>';
 } else {
-var wrongMsgs = ['"The bird. I said the bird."','"The tulip. I said the tulip."','"Fresh lime. Not bottled."','"The Macallan. I said The Macallan."'];
-narrativeDiv.innerHTML = '<em style="color:#FF6B6B;">' + wrongMsgs[this.currentRound] + '</em>';
+  narr.innerHTML = '<em style="color:#FF6B6B;">' + (this.pourLevel > effectiveTarget ? 'Too much.' : 'Not enough.') + '</em>';
 }
+this.liquidWobble = 1.0;
+this.mTransition = true;
+this.completedDrinks.push({
+  name: d.name,
+  who: d.who,
+  glass: d.glass,
+  liqCol: d.liqCol,
+  accuracy: this.pourAccuracy
+});
 var self = this;
 setTimeout(function() {
-narrativeDiv.innerHTML = '';
-self.currentRound++;
-if (self.currentRound < 4) {
-self.isAnimating = false; self.selectedItem = null; self.hoveredItem = null;
-var hints = ['Guitarist\u2019s bourbon?','Guitarist\u2019s glass?','Moe\u2019s lime?','Pianist\u2019s scotch?'];
-document.getElementById('bar-round-display').textContent = '\uD83C\uDFB8 ' + hints[self.currentRound] + ' \uD83C\uDFB8';
-} else {
-self.phase = 'feedback'; self.showResult();
+  self.mRound++;
+  if (self.mRound >= 3) {
+    self._startCarryTransition();
+  } else {
+    self._resetPour();
+    var nd = self.drinks[self.mRound];
+    document.getElementById('bar-round-display').textContent = '\u2727 ' + nd.who + '\u2019s ' + nd.name + ' \u2727';
+    narr.innerHTML = '';
+  }
+}, 1200);
 }
-}, 1000);
-}
-showResult() {
-var score = 0;
-for (var i = 0; i < 4; i++) { if (this.selections[i] === this.correct[i]) score++; }
-var narrativeDiv = document.getElementById('bar-narrative');
-var roundDisplay = document.getElementById('bar-round-display');
-if (score === 4) {
-this.canvas.classList.add('success-flash');
-roundDisplay.textContent = '\u2605 PERFECT \u2605';
-narrativeDiv.innerHTML = '<em>\u201CFresh lime,\u201D says Moe. \u201CTulip,\u201D nods the guitarist. The pianist raises his Macallan.</em>';
-narrativeDiv.style.color = '#4CFF00';
-} else if (score >= 3) {
-this.canvas.classList.add('error-flash');
-roundDisplay.textContent = '\u2606 CLOSE \u2606';
-narrativeDiv.innerHTML = '<em>' + score + ' out of 4. Nearly had it.</em>';
-narrativeDiv.style.color = '#d4a574';
-} else {
-this.canvas.classList.add('error-flash');
-roundDisplay.textContent = '\u2717 WRONG \u2717';
-narrativeDiv.innerHTML = '<em>' + score + ' out of 4. They look at you like you\u2019ve never been in a bar.</em>';
-narrativeDiv.style.color = '#FF6B6B';
-}
+
+_startCarryTransition() {
+var narr = document.getElementById('bar-narrative');
+document.getElementById('bar-round-display').textContent = '\u2727 Drinks ready! \u2727';
+narr.innerHTML = '<em style="color:#d4a574;">Now carry the tray back to the stage.<br><strong>SPACE / UP</strong> to jump &nbsp; <strong>DOWN</strong> to duck</em>';
+this.phase = 'carryWait';
+var self = this;
 setTimeout(function() {
-var link = score === 4 ? document.querySelector('#bar-win-link tw-link') : document.querySelector('#bar-lose-link tw-link');
-if (link) link.click();
-}, 2500);
-this.phase = 'result';
+  narr.innerHTML = '';
+  document.getElementById('bar-round-display').textContent = '\u2727 CARRY THE TRAY \u2727';
+  self.phase = 'carry';
+}, 3000);
 }
-stop() { this.stopped = true; }
-animate() {
+
+_resetPour() {
+this.pouring = false; this.pourLevel = 0; this.pourDone = false;
+this.finishPhase = false; this.finHover = -1; this.finPicked = null;
+this.mFeed = null; this.mTransition = false;
+this.pourDrops = []; this.bubbles = [];
+this.bottleAngle = 0; this.pourStream = 0;
+this.pourAccuracy = 0;
+this.pourTime = 0; this.pourCommitted = false;
+this.handShake = 0;
+this.targetOff = 0; this.targetPhase = Math.random() * Math.PI * 2;
+this.liquidWobble = 0;
+}
+
+_spawnSparkles(x, y, count) {
+for (var i = 0; i < count; i++) {
+  var angle = Math.random() * Math.PI * 2;
+  var speed = 2 + Math.random() * 3;
+  this.sparkles.push({
+    x: x,
+    y: y,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    life: 1,
+    size: 1 + Math.random() * 2
+  });
+}
+}
+
+// ========== CARRY PHASE: OBSTACLES ==========
+_generateObstacles() {
+this.carryPhase.obstacles = [];
+var baseGY = this.carryPhase.baseGroundY;
+var maxScroll = this.carryPhase.maxScroll;
+
+var dist = 450; // start after a short run-up
+var lastAction = ''; // 'jump' or 'duck'
+var sameCount = 0;
+var sinceGap = 0;
+
+while (dist < maxScroll - 200) {
+  var progress = dist / maxScroll; // 0.0 to 1.0
+
+  // Decide what chunk to place
+  var chunk;
+  var r = Math.random();
+
+  // Force a gap every 5-8 obstacles
+  if (sinceGap >= 5 + Math.floor(Math.random() * 3)) {
+    chunk = 'gap';
+  }
+  // Early section: mostly singles, introduce floor gaps
+  else if (progress < 0.3) {
+    if (r < 0.35) chunk = 'single_low';
+    else if (r < 0.7) chunk = 'single_high';
+    else if (r < 0.88) chunk = 'floor_gap';
+    else chunk = 'gap';
+  }
+  // Middle section: introduce doubles and combos
+  else if (progress < 0.7) {
+    if (r < 0.2) chunk = 'single_low';
+    else if (r < 0.4) chunk = 'single_high';
+    else if (r < 0.5) chunk = 'floor_gap';
+    else if (r < 0.6) chunk = 'double_low';
+    else if (r < 0.7) chunk = 'double_high';
+    else if (r < 0.8) chunk = 'combo_low_high';
+    else if (r < 0.9) chunk = 'combo_high_low';
+    else chunk = 'gap';
+  }
+  // Late section: denser, tougher
+  else {
+    if (r < 0.18) chunk = 'single_low';
+    else if (r < 0.36) chunk = 'single_high';
+    else if (r < 0.48) chunk = 'floor_gap';
+    else if (r < 0.6) chunk = 'double_low';
+    else if (r < 0.72) chunk = 'double_high';
+    else if (r < 0.82) chunk = 'combo_low_high';
+    else if (r < 0.92) chunk = 'combo_high_low';
+    else chunk = 'gap';
+  }
+
+  // Prevent 3+ of same action in a row
+  var chunkAction = '';
+  if (chunk === 'single_low' || chunk === 'double_low' || chunk === 'floor_gap') chunkAction = 'jump';
+  else if (chunk === 'single_high' || chunk === 'double_high') chunkAction = 'duck';
+
+  if (chunkAction === lastAction) {
+    sameCount++;
+    if (sameCount >= 2) {
+      // Force the opposite
+      if (chunkAction === 'jump') {
+        chunk = (Math.random() < 0.7) ? 'single_high' : 'double_high';
+        chunkAction = 'duck';
+      } else {
+        chunk = (Math.random() < 0.7) ? 'single_low' : 'double_low';
+        chunkAction = 'jump';
+      }
+      sameCount = 0;
+    }
+  } else {
+    sameCount = (chunkAction !== '') ? 1 : sameCount;
+  }
+  if (chunkAction !== '') lastAction = chunkAction;
+
+  var style = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3 — which art set
+  var type = Math.floor(Math.random() * 3); // 0, 1, or 2 — variant within set
+
+  if (chunk === 'gap') {
+    dist += 300 + Math.random() * 200; // breather gap
+    sinceGap = 0;
+  }
+  else if (chunk === 'floor_gap') {
+    var gapWidth = 80 + Math.random() * 60;
+    var localGY = this._getTerrainY(dist);
+    this.carryPhase.obstacles.push({
+      x: dist, type: type, isHigh: false, isGap: true, style: style,
+      width: gapWidth,
+      y: localGY, height: 80, hit: false, groundY: localGY
+    });
+    dist += 320 + Math.random() * 180;
+    sinceGap++;
+  }
+  else if (chunk === 'single_low') {
+    var h = 30 + Math.random() * 20;
+    var localGY = this._getTerrainY(dist);
+    this.carryPhase.obstacles.push({
+      x: dist, type: type, isHigh: false, style: style,
+      width: 50 + Math.random() * 40,
+      y: localGY - h, height: h, hit: false, groundY: localGY
+    });
+    dist += 300 + Math.random() * 180;
+    sinceGap++;
+  }
+  else if (chunk === 'single_high') {
+    var localGY = this._getTerrainY(dist);
+    this.carryPhase.obstacles.push({
+      x: dist, type: type, isHigh: true, style: style,
+      width: 70 + Math.random() * 30,
+      y: 0, height: localGY + 5, hit: false, groundY: localGY
+    });
+    dist += 300 + Math.random() * 180;
+    sinceGap++;
+  }
+  else if (chunk === 'double_low') {
+    var h1 = 30 + Math.random() * 15;
+    var h2 = 30 + Math.random() * 15;
+    var style2 = Math.floor(Math.random() * 3) + 1;
+    var type2 = Math.floor(Math.random() * 3);
+    var gap1 = 240 + Math.random() * 60;
+    var localGY1 = this._getTerrainY(dist);
+    var localGY2 = this._getTerrainY(dist + gap1);
+    this.carryPhase.obstacles.push({
+      x: dist, type: type, isHigh: false, style: style,
+      width: 45 + Math.random() * 25,
+      y: localGY1 - h1, height: h1, hit: false, groundY: localGY1
+    });
+    this.carryPhase.obstacles.push({
+      x: dist + gap1, type: type2, isHigh: false, style: style2,
+      width: 45 + Math.random() * 25,
+      y: localGY2 - h2, height: h2, hit: false, groundY: localGY2
+    });
+    dist += 500 + Math.random() * 200;
+    sinceGap += 2;
+  }
+  else if (chunk === 'double_high') {
+    var style2 = Math.floor(Math.random() * 3) + 1;
+    var type2 = Math.floor(Math.random() * 3);
+    var gap1 = 260 + Math.random() * 60;
+    var localGY1 = this._getTerrainY(dist);
+    var localGY2 = this._getTerrainY(dist + gap1);
+    this.carryPhase.obstacles.push({
+      x: dist, type: type, isHigh: true, style: style,
+      width: 65 + Math.random() * 25,
+      y: 0, height: localGY1 + 5, hit: false, groundY: localGY1
+    });
+    this.carryPhase.obstacles.push({
+      x: dist + gap1, type: type2, isHigh: true, style: style2,
+      width: 65 + Math.random() * 25,
+      y: 0, height: localGY2 + 5, hit: false, groundY: localGY2
+    });
+    dist += 520 + Math.random() * 200;
+    sinceGap += 2;
+  }
+  else if (chunk === 'combo_low_high') {
+    var h1 = 30 + Math.random() * 15;
+    var style2 = Math.floor(Math.random() * 3) + 1;
+    var type2 = Math.floor(Math.random() * 3);
+    var gap1 = 300 + Math.random() * 60;
+    var localGY1 = this._getTerrainY(dist);
+    var localGY2 = this._getTerrainY(dist + gap1);
+    this.carryPhase.obstacles.push({
+      x: dist, type: type, isHigh: false, style: style,
+      width: 45 + Math.random() * 25,
+      y: localGY1 - h1, height: h1, hit: false, groundY: localGY1
+    });
+    this.carryPhase.obstacles.push({
+      x: dist + gap1, type: type2, isHigh: true, style: style2,
+      width: 65 + Math.random() * 25,
+      y: 0, height: localGY2 + 5, hit: false, groundY: localGY2
+    });
+    dist += 540 + Math.random() * 200;
+    sinceGap += 2;
+  }
+  else if (chunk === 'combo_high_low') {
+    var h2 = 30 + Math.random() * 15;
+    var style2 = Math.floor(Math.random() * 3) + 1;
+    var type2 = Math.floor(Math.random() * 3);
+    var gap1 = 300 + Math.random() * 60;
+    var localGY1 = this._getTerrainY(dist);
+    var localGY2 = this._getTerrainY(dist + gap1);
+    this.carryPhase.obstacles.push({
+      x: dist, type: type, isHigh: true, style: style,
+      width: 65 + Math.random() * 25,
+      y: 0, height: localGY1 + 5, hit: false, groundY: localGY1
+    });
+    this.carryPhase.obstacles.push({
+      x: dist + gap1, type: type2, isHigh: false, style: style2,
+      width: 45 + Math.random() * 25,
+      y: localGY2 - h2, height: h2, hit: false, groundY: localGY2
+    });
+    dist += 560 + Math.random() * 200;
+    sinceGap += 2;
+  }
+}
+}
+
+_getTerrainY(worldX) {
+var t = this.carryPhase.terrain;
+if (worldX <= t[0].x) return t[0].y;
+if (worldX >= t[t.length-1].x) return t[t.length-1].y;
+for (var i = 0; i < t.length - 1; i++) {
+  if (worldX >= t[i].x && worldX < t[i+1].x) {
+    var frac = (worldX - t[i].x) / (t[i+1].x - t[i].x);
+    return t[i].y + frac * (t[i+1].y - t[i].y);
+  }
+}
+return this.carryPhase.baseGroundY;
+}
+
+_playerJump() {
+if (this.phase === 'carry' && !this.carryPhase.playerJumping && this.carryPhase.staggerTimer <= 0 && this.carryPhase.playerY >= this.carryPhase.groundY - 5) {
+  this.carryPhase.playerJumping = true;
+  this.carryPhase.playerVelY = this.carryPhase.jumpPower;
+}
+}
+
+_checkObstacleCollisions() {
+var cp = this.carryPhase;
+if (cp.invulnTimer > 0) return;
+var isDucking = cp.playerDuckingInput && !cp.playerJumping;
+var playerLeft = 85, playerRight = 115;
+
+for (var i = 0; i < cp.obstacles.length; i++) {
+  var obs = cp.obstacles[i];
+  if (obs.hit) continue;
+  var obsLeft = obs.x - cp.scrollPos;
+  var obsRight = obsLeft + obs.width;
+  if (obsLeft > this.W || obsRight < 0) continue;
+
+  // Horizontal overlap check
+  if (playerLeft >= obsRight || playerRight <= obsLeft) continue;
+
+  var collides = false;
+  if (obs.isHigh) {
+    // HIGH obstacles: you MUST duck. Jumping does NOT help.
+    if (!isDucking) collides = true;
+    // Trigger duck scatter when successfully ducking through
+    if (isDucking && !obs.scattered) {
+      obs.scattered = true;
+      obs.scatterTime = this.t;
+    }
+  } else if (obs.isGap) {
+    // FLOOR GAP: you must be airborne to clear it
+    var isAirborne = cp.playerY < cp.groundY - 15;
+    if (!isAirborne) collides = true;
+  } else {
+    // LOW obstacles: you must jump over them.
+    var isAirborne = cp.playerY < cp.groundY - 15;
+    if (!isAirborne) collides = true;
+  }
+
+  if (collides) {
+    // Bounce-back for high obstacles when jumping into them
+    if (obs.isHigh && cp.playerJumping) {
+      cp.scrollPos = Math.max(0, cp.scrollPos - 100);
+      cp.playerJumping = false;
+      cp.playerVelY = 0;
+      cp.playerY = cp.groundY;
+      cp.screenShake = 1.2;
+      cp.invulnTimer = 1.2;
+      cp.staggerTimer = 0.9;
+      cp.glassesLeft = Math.max(0, cp.glassesLeft - 1);
+      continue;
+    }
+    // Wobble mechanic: first hit wobbles, second hit loses a glass
+    if (!cp.wobbling) {
+      cp.wobbling = true;
+      cp.wobbleTimer = 3.0;
+      cp.invulnTimer = 1.0;
+      cp.screenShake = 0.6;
+    } else {
+      obs.hit = true;
+      cp.glassesLeft = Math.max(0, cp.glassesLeft - 1);
+      cp.wobbling = false;
+      cp.wobbleTimer = 0;
+      cp.invulnTimer = 1.5;
+      cp.screenShake = 1;
+    }
+  }
+}
+}
+
+// ========== MAIN LOOP ==========
+stop() {
+  this.stopped = true;
+  document.removeEventListener('keydown', this._keydownHandler);
+  document.removeEventListener('keyup', this._keyupHandler);
+}
+
+_loop() {
 if (this.stopped) return;
-requestAnimationFrame(() => this.animate());
-this.draw();
+var now = performance.now(), dt = Math.min(now - this.lt, 50); this.lt = now;
+this.t += dt * 0.001;
+this._update(dt);
+this._draw();
+requestAnimationFrame(() => this._loop());
 }
-draw() {
-this.ctx.fillStyle = '#0c0814';
-this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-if (this.sobriety < 50 && this.phase === 'selecting') {
-this.ctx.save();
-var wa = (this.sobriety < 30) ? 4 : 2;
-var wb = Math.sin(Date.now() / 200) * wa;
-this.ctx.translate(wb, wb * 0.5);
-}
-this.drawBar(this.ctx);
-if (this.phase === 'selecting') {
-if (this.currentRound === 0) this.drawBottles(this.ctx);
-else if (this.currentRound === 1) this.drawGlasses(this.ctx);
-else if (this.currentRound === 2) this.drawLimes(this.ctx);
-else this.drawScotches(this.ctx);
-for (var i = 0; i < 4; i++) {
-this.ctx.beginPath(); this.ctx.arc(245 + i * 25, 75, 4, 0, Math.PI * 2);
-this.ctx.fillStyle = i < this.currentRound ? '#4CFF00' : i === this.currentRound ? '#d4a574' : '#3a2a22';
-this.ctx.fill();
-}
-if (this.hoveredItem !== null) {
-var items = this.getCurrentRoundItems();
-this.ctx.fillStyle = '#8a7aaa'; this.ctx.font = 'bold 14px Georgia'; this.ctx.textAlign = 'center';
-this.ctx.fillText(items[this.hoveredItem].name, this.canvas.width / 2, 380);
-}
-}
-if (this.sobriety < 50 && this.phase === 'selecting') this.ctx.restore();
-}
-drawBar(ctx) {
-ctx.fillStyle = '#2a1a12'; ctx.fillRect(0, 180, this.canvas.width, 220);
-ctx.fillStyle = '#4a3a32'; ctx.fillRect(0, 178, this.canvas.width, 4);
-ctx.fillStyle = '#1a1008'; ctx.fillRect(0, 0, this.canvas.width, 180);
-var g = ctx.createLinearGradient(0, 0, 0, 180);
-g.addColorStop(0, 'rgba(212,165,116,0.05)'); g.addColorStop(1, 'rgba(138,122,170,0.08)');
-ctx.fillStyle = g; ctx.fillRect(0, 0, this.canvas.width, 180);
-}
-drawBottleShape(ctx, x, y, w, h, color) {
-ctx.fillStyle = color;
-var nW = 10, nH = 25, cx = x + w/2;
-ctx.beginPath(); ctx.moveTo(cx-nW/2, y); ctx.lineTo(cx-nW/2, y+nH);
-ctx.quadraticCurveTo(x, y+nH+5, x+3, y+nH+15); ctx.lineTo(x+3, y+h-5);
-ctx.quadraticCurveTo(x+3, y+h, x+8, y+h); ctx.lineTo(x+w-8, y+h);
-ctx.quadraticCurveTo(x+w-3, y+h, x+w-3, y+h-5); ctx.lineTo(x+w-3, y+nH+15);
-ctx.quadraticCurveTo(x+w, y+nH+5, cx+nW/2, y+nH); ctx.lineTo(cx+nW/2, y);
-ctx.closePath(); ctx.fill();
-ctx.fillStyle = '#555'; ctx.fillRect(cx-nW/2-1, y-3, nW+2, 5);
-}
-drawBottles(ctx) {
-var self = this;
-this.bottles.forEach(function(b, idx) {
-var isH = self.hoveredItem === idx, isS = self.selectedItem === idx, isC = idx === self.correct[0];
-ctx.save();
-if (isH) { ctx.shadowColor = 'rgba(212,165,116,0.6)'; ctx.shadowBlur = 20; }
-if (self.selectedItem !== null && !isS) ctx.globalAlpha = 0.3;
-var x = b.x, y = 240;
-self.drawBottleShape(ctx, x, y, b.w, b.h, b.color);
-ctx.fillStyle = b.label==='bird'?'#c9a961':b.label==='square'?'#2a2a2a':'#8b0000';
-var lY = y+b.h/3, lH = b.h/3;
-ctx.fillRect(x+5, lY, b.w-10, lH);
-ctx.fillStyle = '#d4a574'; ctx.font = 'bold 9px Georgia'; ctx.textAlign = 'center';
-if (b.label==='bird') self.drawBirdLabel(ctx, x+b.w/2, lY+lH/2);
-else if (b.label==='square') ctx.fillText('JD', x+b.w/2, lY+lH/2+2);
-else { ctx.fillStyle='#8b0000'; ctx.beginPath(); ctx.ellipse(x+b.w/2,y-8,7,5,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#d4a574'; ctx.fillText('MM',x+b.w/2,lY+lH/2+2); }
-if (isS) { ctx.strokeStyle=isC?'#4CFF00':'#FF4444'; ctx.lineWidth=3; ctx.strokeRect(x-5,y-20,b.w+10,b.h+25); }
-ctx.restore();
+
+_update(dt) {
+if (this.phase === 'mixing') this._updateMixing(dt);
+if (this.phase === 'carry') this._updateCarry(dt);
+
+// Update sparkles
+this.sparkles = this.sparkles.filter((s) => {
+  s.x += s.vx;
+  s.y += s.vy;
+  s.vy += 0.12;
+  s.life -= 0.035;
+  s.vx *= 0.98;
+  return s.life > 0;
 });
+
+this.liquidWobble *= 0.94;
 }
-drawBirdLabel(ctx, x, y) {
-ctx.save(); ctx.fillStyle = '#1a1a1a';
-var tX=x-6, tY=y+2;
-for (var i=-2;i<=2;i++) { ctx.beginPath(); ctx.moveTo(tX,tY); var a=-Math.PI/2+i*0.35; ctx.lineTo(tX+Math.cos(a)*10,tY+Math.sin(a)*10); ctx.lineTo(tX+Math.cos(a+0.15)*9,tY+Math.sin(a+0.15)*9); ctx.closePath(); ctx.fill(); }
-ctx.beginPath(); ctx.ellipse(x+1,y+2,5,4,0.2,0,Math.PI*2); ctx.fill();
-ctx.beginPath(); ctx.moveTo(x+4,y); ctx.quadraticCurveTo(x+7,y-3,x+6,y-6); ctx.lineTo(x+4.5,y-5); ctx.quadraticCurveTo(x+5.5,y-2,x+3,y+1); ctx.closePath(); ctx.fill();
-ctx.beginPath(); ctx.arc(x+5.5,y-7,2,0,Math.PI*2); ctx.fill();
-ctx.beginPath(); ctx.moveTo(x+7.5,y-7.5); ctx.lineTo(x+10,y-7); ctx.lineTo(x+7.5,y-6.5); ctx.closePath(); ctx.fill();
-ctx.fillStyle='#8b0000'; ctx.beginPath(); ctx.ellipse(x+6.5,y-5.5,0.8,1.2,0,0,Math.PI*2); ctx.fill();
-ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=0.8; ctx.beginPath(); ctx.moveTo(x,y+5); ctx.lineTo(x-1,y+8); ctx.moveTo(x+2,y+5); ctx.lineTo(x+3,y+8); ctx.stroke();
-ctx.restore();
+
+_updateMixing(dt) {
+this.wobT += dt * 0.004;
+
+// Oscillate target while pouring (harder: faster, wider, triple-harmonic)
+if (this.pourCommitted && !this.pourDone) {
+  this.targetPhase += dt * 0.003;
+  this.targetOff = Math.sin(this.targetPhase * 1.3) * 0.20 + Math.sin(this.targetPhase * 2.1 + 1.7) * 0.14 + Math.sin(this.targetPhase * 3.7 + 0.9) * 0.06;
 }
-drawGlasses(ctx) {
-var self = this;
-this.glasses.forEach(function(g, idx) {
-var isH=self.hoveredItem===idx, isS=self.selectedItem===idx, isC=idx===self.correct[1];
-ctx.save();
-if (isH) { ctx.shadowColor='rgba(212,165,116,0.6)'; ctx.shadowBlur=20; }
-if (self.selectedItem!==null&&!isS) ctx.globalAlpha=0.3;
-var x=g.x, y=240;
-ctx.strokeStyle='#d4a574'; ctx.lineWidth=2; ctx.fillStyle='rgba(212,165,116,0.1)';
-if (g.shape==='tumbler') { ctx.beginPath(); ctx.moveTo(x+8,y); ctx.lineTo(x+8,y+g.h-5); ctx.quadraticCurveTo(x+g.w/2,y+g.h,x+g.w-8,y+g.h-5); ctx.lineTo(x+g.w-8,y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-else if (g.shape==='tulip') { ctx.beginPath(); ctx.moveTo(x+8,y+15); ctx.quadraticCurveTo(x+5,y+20,x+10,y+g.h-5); ctx.lineTo(x+g.w-10,y+g.h-5); ctx.quadraticCurveTo(x+g.w-5,y+20,x+g.w-8,y+15); ctx.quadraticCurveTo(x+g.w/2,y,x+g.w/2,y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-else { ctx.beginPath(); ctx.moveTo(x+10,y); ctx.lineTo(x+10,y+g.h-5); ctx.quadraticCurveTo(x+g.w/2,y+g.h,x+g.w-10,y+g.h-5); ctx.lineTo(x+g.w-10,y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-ctx.strokeStyle='rgba(212,165,116,0.5)'; ctx.lineWidth=1; ctx.beginPath(); ctx.ellipse(x+g.w/2,y+2,g.w/2-2,2,0,0,Math.PI); ctx.stroke();
-if (isS) { ctx.strokeStyle=isC?'#4CFF00':'#FF4444'; ctx.lineWidth=3; ctx.strokeRect(x-5,y-10,g.w+10,g.h+20); }
-ctx.restore();
-});
-}
-drawLimes(ctx) {
-var self = this;
-this.limes.forEach(function(l, idx) {
-var isH=self.hoveredItem===idx, isS=self.selectedItem===idx, isC=idx===self.correct[2];
-ctx.save();
-if (isH) { ctx.shadowColor='rgba(212,165,116,0.6)'; ctx.shadowBlur=20; }
-if (self.selectedItem!==null&&!isS) ctx.globalAlpha=0.3;
-var x=l.x, y=240;
-if (l.type==='fresh') {
-ctx.fillStyle='#2d8659'; ctx.beginPath(); ctx.moveTo(x+l.w/2,y); ctx.lineTo(x+l.w,y+20); ctx.quadraticCurveTo(x+l.w,y+l.h,x+l.w/2,y+l.h+10); ctx.quadraticCurveTo(x,y+l.h,x,y+20); ctx.closePath(); ctx.fill();
-ctx.fillStyle='#4CAF50'; ctx.beginPath(); ctx.ellipse(x+l.w/3,y+l.h/3,8,5,0.3,0,Math.PI*2); ctx.fill();
-ctx.strokeStyle='#1a5a3a'; ctx.lineWidth=1; for(var i=0;i<5;i++){ctx.beginPath();ctx.moveTo(x+l.w/2-i*5,y);ctx.lineTo(x+i*5,y+l.h);ctx.stroke();}
+
+// Sobriety hand shake
+var drunk = (100 - this.sobriety) / 100;
+this.handShake = Math.sin(this.wobT * 4.2) * drunk * 3 + Math.sin(this.wobT * 2.7) * drunk * 2;
+
+if (this.pouring && !this.pourDone) {
+  this.pourTime += dt;
+  var ramp = Math.min(1, this.pourTime / 400);
+  var steadySpeed = 0.00048;
+  var wobbleMult = 1.0 + drunk * 0.4 * Math.sin(this.wobT * 3.1 + Math.sin(this.wobT * 1.7) * 0.5);
+  var speed = steadySpeed * ramp * wobbleMult;
+  this.pourLevel = Math.min(1.0, this.pourLevel + Math.max(0.00005, speed) * dt);
+  this.bottleAngle = Math.min(0.45, this.bottleAngle + 0.006 * ramp);
+  this.pourStream = Math.min(1, this.pourStream + 0.06);
+
+  if (Math.random() < 0.25 && ramp > 0.3) {
+    this.pourDrops.push({
+      x: this.W/2 + 38 + this.handShake,
+      y: 95 + Math.random()*15,
+      vy: 1.5 + Math.random()*2.5,
+      vx: (Math.random()-0.5) * 0.8,
+      life: 1
+    });
+  }
+
+  if (this.mRound === 1 && this.pourLevel > 0.08 && Math.random() < 0.12) {
+    var glassBase = 320 - this.pourLevel * 120;
+    this.bubbles.push({
+      x: this.W/2 - 16 + Math.random()*32,
+      y: glassBase + Math.random() * 20,
+      vy: -0.2 - Math.random()*0.4,
+      life: 1,
+      r: 0.8 + Math.random()*2
+    });
+  }
 } else {
-ctx.fillStyle='#2a2a2a'; ctx.beginPath(); ctx.moveTo(x+5,y); ctx.lineTo(x+l.w-5,y); ctx.lineTo(x+l.w-5,y+l.h-8); ctx.quadraticCurveTo(x+l.w/2,y+l.h,x+5,y+l.h-8); ctx.closePath(); ctx.fill();
-ctx.strokeStyle='rgba(212,165,116,0.3)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x+8,y+5); ctx.lineTo(x+8,y+l.h-10); ctx.stroke();
-ctx.fillStyle='#2d8659'; ctx.fillRect(x+3,y+l.h/3,l.w-6,l.h/4);
-ctx.fillStyle='#d4a574'; ctx.font='bold 7px Georgia'; ctx.textAlign='center'; ctx.fillText('LIME',x+l.w/2,y+l.h/2+1);
-ctx.fillStyle='#c9a961'; ctx.beginPath(); ctx.ellipse(x+l.w/2,y-3,l.w/2-2,3,0,0,Math.PI*2); ctx.fill();
+  this.bottleAngle = Math.max(0, this.bottleAngle - 0.015);
+  this.pourStream = Math.max(0, this.pourStream - 0.04);
 }
-if (isS) { ctx.strokeStyle=isC?'#4CFF00':'#FF4444'; ctx.lineWidth=3; ctx.strokeRect(x-5,y-10,l.w+10,l.h+20); }
-ctx.restore();
+
+this.pourDrops = this.pourDrops.filter(function(d) {
+  d.y += d.vy; d.x += (d.vx || 0); d.vy += 0.08; d.life -= 0.025;
+  return d.life > 0 && d.y < 340;
+});
+
+this.bubbles = this.bubbles.filter(function(b) {
+  b.y += b.vy; b.x += Math.sin(b.y * 0.1) * 0.15; b.life -= 0.006;
+  return b.life > 0;
 });
 }
-drawScotches(ctx) {
+
+_updateCarry(dt) {
+var cp = this.carryPhase;
+var s = dt * 0.001;
+
+// Stagger timer: character is stunned, world pauses
+if (cp.staggerTimer > 0) {
+  cp.staggerTimer -= s;
+  if (cp.invulnTimer > 0) cp.invulnTimer -= s;
+  cp.screenShake *= 0.92;
+  // Don't scroll or check collisions during stagger
+  return;
+}
+
+// Speed ramp: starts at 170, gently climbs to 260, plateaus
+var progressRatio = cp.scrollPos / cp.maxScroll;
+cp.scrollSpeed = 170 + Math.min(progressRatio * 1.5, 1.0) * 90;
+cp.difficultyPhase = Math.floor(progressRatio * 4);
+
+// Dynamic terrain: player is at screen x=100, so world x = scrollPos + 100
+cp.groundY = this._getTerrainY(cp.scrollPos + 100);
+
+// Player physics
+cp.playerVelY += cp.gravity * s;
+cp.playerY += cp.playerVelY * s;
+
+// Ground collision / terrain following
+if (cp.playerJumping) {
+  // Airborne: land when reaching the ground
+  if (cp.playerY >= cp.groundY) {
+    cp.playerY = cp.groundY;
+    cp.playerVelY = 0;
+    cp.playerJumping = false;
+  }
+} else {
+  // On ground: follow terrain smoothly
+  cp.playerY = cp.groundY;
+  cp.playerVelY = 0;
+}
+
+cp.scrollPos += cp.scrollSpeed * s;
+
+this._checkObstacleCollisions();
+
+if (cp.invulnTimer > 0) cp.invulnTimer -= s;
+cp.screenShake *= 0.92;
+
+// Wobble timer: if you survive long enough after a wobble, it resets
+if (cp.wobbling) {
+  cp.wobbleTimer -= s;
+  if (cp.wobbleTimer <= 0) {
+    cp.wobbling = false;
+    cp.wobbleTimer = 0;
+  }
+}
+
+if (cp.scrollPos >= cp.maxScroll) {
+  this.phase = 'result';
+  this._resultCarry();
+}
+}
+
+
+_draw() {
+if (this.phase === 'mixing') this._drawMixing();
+else if (this.phase === 'carryWait') this._drawCarryWait();
+else if (this.phase === 'carry') this._drawCarry();
+else if (this.phase === 'result') this._drawResult();
+}
+
+
+_drawCarryWait() {
+var c = this.ctx, W = this.W, H = this.H;
+c.fillStyle = '#0a0804';
+c.fillRect(0, 0, W, H);
+this._drawAtmosphere(c);
+c.save();
+c.font = 'bold 20px Georgia';
+c.textAlign = 'center';
+c.fillStyle = '#d4a574';
+c.fillText('Get ready...', W/2, H/2 - 20);
+c.font = '14px Georgia';
+c.fillStyle = '#8a7a6a';
+c.fillText('SPACE / UP to jump', W/2, H/2 + 20);
+c.fillText('DOWN to duck', W/2, H/2 + 45);
+c.restore();
+}
+
+// ========== DRAW: MIXING ==========
+_drawMixing() {
+var c = this.ctx, W = this.W, H = this.H;
+c.fillStyle = '#0a0804';
+c.fillRect(0, 0, W, H);
+
+this._drawAtmosphere(c);
+
+var gx = W/2, gy = 230;
+var d = this.drinks[this.mRound];
+
+// Bottle
+this._drawBottle(c, gx - 50, 40, 40, 90, d.bottle.col, d.bottle.acc, d.bottle.lab);
+
+// Bottle tilt for pouring
+c.save();
+c.translate(gx - 30, 85);
+c.rotate(this.bottleAngle);
+c.fillStyle = 'rgba(255, 220, 150, ' + (this.pourStream * 0.4) + ')';
+if (this.pourStream > 0) {
+  for (var i = 0; i < this.pourStream * 8; i++) {
+    var px = (Math.random() - 0.5) * 6;
+    var py = i * 4;
+    c.fillRect(px, py, 3, 3);
+  }
+}
+c.restore();
+
+// Pour drops
+c.fillStyle = d.liqCol;
+this.pourDrops.forEach((drop) => {
+  c.globalAlpha = drop.life * 0.7;
+  c.beginPath();
+  c.arc(drop.x, drop.y, 2, 0, Math.PI * 2);
+  c.fill();
+});
+c.globalAlpha = 1;
+
+// Glass — scaled up 1.5x
+var glassScale = 1.5;
+c.save();
+c.translate(gx, gy);
+c.scale(glassScale, glassScale);
+c.translate(-gx, -gy);
+this._drawGlass(c, d.glass, gx, gy, this.pourLevel, d.target, d.liqCol, d.liqHi);
+
+// Target marker (drawn in scaled space so it matches glass)
+var targetY = this._liquidY(d.glass, gy, d.target + this.targetOff);
+c.strokeStyle = 'rgba(255, 100, 100, 0.3)';
+c.lineWidth = 1.5;
+c.beginPath();
+c.moveTo(gx - 30, targetY);
+c.lineTo(gx + 30, targetY);
+c.stroke();
+c.restore();
+
+// Bubbles (Moscow Mule)
+this.bubbles.forEach((b) => {
+  c.save();
+  c.globalAlpha = b.life * 0.6;
+  c.strokeStyle = 'rgba(200, 200, 255, 0.8)';
+  c.lineWidth = 1;
+  c.beginPath();
+  c.arc(gx - 16 + b.x, gy + 10 + b.y, b.r, 0, Math.PI * 2);
+  c.stroke();
+  c.restore();
+});
+
+// Completed drinks sidebar
+var sideX = 10, sideY = 10;
+c.fillStyle = 'rgba(100, 80, 60, 0.4)';
+c.fillRect(sideX, sideY, 80, 380);
+c.strokeStyle = 'rgba(200, 180, 160, 0.5)';
+c.lineWidth = 1;
+c.strokeRect(sideX, sideY, 80, 380);
+
+var completed = 0;
+for (var i = 0; i < this.completedDrinks.length; i++) {
+  this._drawCompletedDrink(c, this.completedDrinks[i], sideX + 5, sideY + 10 + i * 120);
+  completed++;
+}
+
+// Sparkles
+this._drawSparkles(c);
+}
+
+_drawCompletedDrink(c, cd, dx, dy) {
+c.save();
+c.font = 'bold 10px Georgia';
+c.textAlign = 'center';
+c.fillStyle = '#d4a574';
+c.fillText(cd.who, dx + 35, dy + 5);
+
+// Mini glass
+var gy = dy + 20;
+this._drawGlass(c, cd.glass, dx + 35, gy, 0.6, 0, cd.liqCol, '#fff');
+
+// Accuracy stars
+c.font = 'bold 14px Georgia';
+var starColor = cd.accuracy === 2 ? '#4CFF00' : cd.accuracy === 1 ? '#d4a574' : '#666';
+c.fillStyle = starColor;
+if (cd.accuracy === 2) {
+  c.fillText('★', dx + 35, dy + 75);
+} else if (cd.accuracy === 1) {
+  c.fillText('◐', dx + 35, dy + 75);
+} else {
+  c.fillText('○', dx + 35, dy + 75);
+}
+
+// Finish mark
+var finColor = cd.finishOk ? '#4CFF00' : '#FF6B6B';
+c.fillStyle = finColor;
+c.font = 'bold 12px Georgia';
+c.fillText(cd.finishOk ? '✓' : '✗', dx + 35, dy + 95);
+
+c.restore();
+}
+
+_drawGlass(c, type, gx, gy, fill, target, liqCol, liqHi) {
+c.save();
+if (type === 'tulip') {
+  var bw = 30, bh = 70, stemH = 28, baseW = 22;
+  c.fillStyle = 'rgba(180,170,160,0.25)';
+  c.fillRect(gx - 2, gy + bh - 5, 4, stemH);
+  c.beginPath();
+  c.ellipse(gx, gy + bh + stemH - 2, baseW/2, 4, 0, 0, Math.PI * 2);
+  c.fillStyle = 'rgba(180,170,160,0.3)';
+  c.fill();
+  c.beginPath();
+  c.moveTo(gx - 6, gy + bh - 5);
+  c.quadraticCurveTo(gx - bw/2 - 8, gy + bh * 0.5, gx - bw/2, gy + bh * 0.2);
+  c.quadraticCurveTo(gx - bw/2 + 4, gy - 5, gx, gy - 8);
+  c.quadraticCurveTo(gx + bw/2 - 4, gy - 5, gx + bw/2, gy + bh * 0.2);
+  c.quadraticCurveTo(gx + bw/2 + 8, gy + bh * 0.5, gx + 6, gy + bh - 5);
+  c.closePath();
+  c.strokeStyle = 'rgba(200,190,180,0.4)';
+  c.lineWidth = 1.5;
+  c.stroke();
+  if (fill > 0) {
+    var liqTop = gy + bh * (1 - fill * 0.85) - 5;
+    c.save();
+    c.beginPath();
+    c.moveTo(gx - 6, gy + bh - 5);
+    c.quadraticCurveTo(gx - bw/2 - 8, gy + bh * 0.5, gx - bw/2, gy + bh * 0.2);
+    c.quadraticCurveTo(gx - bw/2 + 4, gy - 5, gx, gy - 8);
+    c.quadraticCurveTo(gx + bw/2 - 4, gy - 5, gx + bw/2, gy + bh * 0.2);
+    c.quadraticCurveTo(gx + bw/2 + 8, gy + bh * 0.5, gx + 6, gy + bh - 5);
+    c.closePath();
+    c.clip();
+    var lg = c.createLinearGradient(gx - bw/2, liqTop, gx + bw/2, gy + bh);
+    lg.addColorStop(0, liqHi);
+    lg.addColorStop(1, liqCol);
+    c.fillStyle = lg;
+    c.fillRect(gx - bw, liqTop, bw * 2, gy + bh - liqTop + 10);
+    if (this.liquidWobble > 0) {
+      c.globalAlpha = this.liquidWobble * 0.3;
+      for (var i = 0; i < 3; i++) {
+        var rippleY = liqTop + Math.sin(this.t * 5 + i) * 2;
+        c.strokeStyle = 'rgba(255,255,255,0.4)';
+        c.lineWidth = 0.5;
+        c.beginPath();
+        c.moveTo(gx - 10, rippleY);
+        c.quadraticCurveTo(gx, rippleY - 1, gx + 10, rippleY);
+        c.stroke();
+      }
+    }
+    c.globalAlpha = 0.08;
+    c.fillStyle = 'rgba(255,255,255,1)';
+    c.fillRect(gx - bw/2 + 2, liqTop, bw * 0.3, gy + bh - liqTop);
+    c.restore();
+  }
+  c.strokeStyle = 'rgba(255,255,255,0.1)';
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(gx - bw/2 + 5, gy + bh * 0.3);
+  c.lineTo(gx - bw/2 + 3, gy + bh * 0.6);
+  c.stroke();
+} else if (type === 'copper') {
+  var mw = 36, mh = 55;
+  c.strokeStyle = '#8a6030';
+  c.lineWidth = 3;
+  c.beginPath();
+  c.arc(gx + mw/2 + 8, gy + mh/2, 12, -1.2, 1.2);
+  c.stroke();
+  var mg = c.createLinearGradient(gx - mw/2, 0, gx + mw/2, 0);
+  mg.addColorStop(0, '#8a5a20');
+  mg.addColorStop(0.3, '#c9883a');
+  mg.addColorStop(0.5, '#daa050');
+  mg.addColorStop(0.7, '#c98838');
+  mg.addColorStop(1, '#8a5a20');
+  c.fillStyle = mg;
+  c.beginPath();
+  c.roundRect(gx - mw/2, gy, mw, mh, 3);
+  c.fill();
+  c.strokeStyle = '#e8b860';
+  c.lineWidth = 1.5;
+  c.beginPath();
+  c.moveTo(gx - mw/2, gy + 2);
+  c.lineTo(gx + mw/2, gy + 2);
+  c.stroke();
+  if (fill > 0) {
+    var liqTop2 = gy + mh * (1 - fill * 0.85);
+    c.save();
+    c.beginPath();
+    c.roundRect(gx - mw/2, gy, mw, mh, 3);
+    c.clip();
+    var lg2 = c.createLinearGradient(0, liqTop2, 0, gy + mh);
+    lg2.addColorStop(0, liqHi);
+    lg2.addColorStop(1, liqCol);
+    c.fillStyle = lg2;
+    c.fillRect(gx - mw/2, liqTop2, mw, mh);
+    if (this.liquidWobble > 0) {
+      c.globalAlpha = this.liquidWobble * 0.2;
+      for (var i = 0; i < 2; i++) {
+        var rippleY = liqTop2 + Math.sin(this.t * 4.5 + i) * 1.5;
+        c.strokeStyle = 'rgba(255,255,255,0.3)';
+        c.lineWidth = 0.5;
+        c.beginPath();
+        c.moveTo(gx - 12, rippleY);
+        c.quadraticCurveTo(gx, rippleY - 1, gx + 12, rippleY);
+        c.stroke();
+      }
+    }
+    c.restore();
+  }
+  c.save();
+  c.globalAlpha = 0.2;
+  for (var i = 0; i < 4; i++) {
+    var dx2 = gx - mw/2 + 5 + i * 9, dy2 = gy + 15 + (i % 2) * 12;
+    c.beginPath();
+    c.ellipse(dx2, dy2, 1.5, 2.5, 0, 0, Math.PI * 2);
+    c.fillStyle = '#e8d8c0';
+    c.fill();
+  }
+  c.restore();
+} else if (type === 'rocks') {
+  var rw = 36, rh = 42;
+  c.beginPath();
+  c.moveTo(gx - rw/2 + 3, gy);
+  c.lineTo(gx - rw/2, gy + rh);
+  c.lineTo(gx + rw/2, gy + rh);
+  c.lineTo(gx + rw/2 - 3, gy);
+  c.closePath();
+  c.strokeStyle = 'rgba(200,190,180,0.35)';
+  c.lineWidth = 1.5;
+  c.stroke();
+  c.save();
+  c.globalAlpha = 0.08;
+  c.strokeStyle = '#fff';
+  c.lineWidth = 0.5;
+  for (var i = 0; i < 5; i++) {
+    var cy = gy + 8 + i * 7;
+    c.beginPath();
+    c.moveTo(gx - rw/2 + 4, cy);
+    c.lineTo(gx + rw/2 - 4, cy);
+    c.stroke();
+  }
+  c.restore();
+  if (fill > 0) {
+    var liqTop3 = gy + rh * (1 - fill * 0.85);
+    c.save();
+    c.beginPath();
+    c.moveTo(gx - rw/2 + 3, gy);
+    c.lineTo(gx - rw/2, gy + rh);
+    c.lineTo(gx + rw/2, gy + rh);
+    c.lineTo(gx + rw/2 - 3, gy);
+    c.closePath();
+    c.clip();
+    var lg3 = c.createLinearGradient(0, liqTop3, 0, gy + rh);
+    lg3.addColorStop(0, liqHi);
+    lg3.addColorStop(1, liqCol);
+    c.fillStyle = lg3;
+    c.fillRect(gx - rw, liqTop3, rw * 2, rh);
+    if (this.liquidWobble > 0) {
+      c.globalAlpha = this.liquidWobble * 0.25;
+      for (var i = 0; i < 2; i++) {
+        var rippleY = liqTop3 + Math.sin(this.t * 5.2 + i * 0.5) * 1.8;
+        c.strokeStyle = 'rgba(255,255,255,0.4)';
+        c.lineWidth = 0.5;
+        c.beginPath();
+        c.moveTo(gx - 12, rippleY);
+        c.quadraticCurveTo(gx, rippleY - 1, gx + 12, rippleY);
+        c.stroke();
+      }
+    }
+    c.globalAlpha = 0.06;
+    c.fillStyle = 'rgba(255,255,255,1)';
+    c.fillRect(gx - rw/2 + 3, liqTop3, rw * 0.25, rh);
+    c.restore();
+  }
+  c.strokeStyle = 'rgba(255,255,255,0.1)';
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(gx - rw/2 + 5, gy + 5);
+  c.lineTo(gx - rw/2 + 3, gy + rh - 5);
+  c.stroke();
+  c.fillStyle = 'rgba(200,190,180,0.12)';
+  c.fillRect(gx - rw/2 + 1, gy + rh - 6, rw - 2, 6);
+}
+c.restore();
+}
+
+_drawBottle(c, x, y, w, h, col, acc, lab) {
+c.fillStyle = col;
+var nW = 10, nH = 20, cx = x + w / 2;
+c.beginPath();
+c.moveTo(cx - nW/2, y);
+c.lineTo(cx - nW/2, y + nH);
+c.quadraticCurveTo(x + 2, y + nH + 5, x + 4, y + nH + 12);
+c.lineTo(x + 4, y + h - 5);
+c.quadraticCurveTo(x + 4, y + h, x + 8, y + h);
+c.lineTo(x + w - 8, y + h);
+c.quadraticCurveTo(x + w - 4, y + h, x + w - 4, y + h - 5);
+c.lineTo(x + w - 4, y + nH + 12);
+c.quadraticCurveTo(x + w - 2, y + nH + 5, cx + nW/2, y + nH);
+c.lineTo(cx + nW/2, y);
+c.closePath();
+c.fill();
+c.fillStyle = acc;
+c.fillRect(x + 6, y + h * 0.35, w - 12, h * 0.3);
+c.fillStyle = col;
+c.font = 'bold 11px Georgia';
+c.textAlign = 'center';
+c.fillText(lab, cx, y + h * 0.35 + h * 0.15 + 4);
+c.fillStyle = '#555';
+c.fillRect(cx - nW/2 - 1, y - 3, nW + 2, 5);
+c.save();
+c.globalAlpha = 0.08;
+c.fillStyle = '#fff';
+c.fillRect(x + 6, y + nH + 14, 4, h * 0.5);
+c.restore();
+}
+
+_drawAtmosphere(c) {
+var W = this.W, H = this.H;
+var lg1 = c.createRadialGradient(W*0.2, -30, 20, W*0.2, 80, 250);
+lg1.addColorStop(0, 'rgba(255,220,150,0.08)');
+lg1.addColorStop(1, 'rgba(0,0,0,0)');
+c.fillStyle = lg1;
+c.fillRect(0, 0, W, 180);
+var lg2 = c.createRadialGradient(W*0.8, -20, 20, W*0.8, 70, 240);
+lg2.addColorStop(0, 'rgba(255,180,100,0.06)');
+lg2.addColorStop(1, 'rgba(0,0,0,0)');
+c.fillStyle = lg2;
+c.fillRect(0, 0, W, 170);
+var lg3 = c.createRadialGradient(W/2, 0, 10, W/2, 120, 300);
+lg3.addColorStop(0, 'rgba(255,200,100,0.12)');
+lg3.addColorStop(1, 'rgba(0,0,0,0)');
+c.fillStyle = lg3;
+c.fillRect(0, 0, W, 250);
+c.save();
+c.globalAlpha = 0.25;
+c.fillStyle = '#1a1a1a';
+for (var i = 0; i < this.patrons.length; i++) {
+  var p = this.patrons[i];
+  c.beginPath();
+  c.ellipse(p.x + p.w/2, p.y + 8, p.w * 0.35, p.w * 0.4, 0, 0, Math.PI * 2);
+  c.fill();
+  c.fillRect(p.x + p.w * 0.25, p.y + p.h * 0.4, p.w * 0.5, p.h * 0.6);
+}
+c.restore();
+c.save();
+c.globalAlpha = 0.15;
+c.fillStyle = '#0a0a0a';
+var sx = 80, sy = 60;
+c.beginPath();
+c.ellipse(sx, sy, 4, 8, 0.3, 0, Math.PI * 2);
+c.fill();
+c.fillRect(sx + 3, sy - 12, 2, 24);
+c.beginPath();
+c.ellipse(sx + 8, sy - 8, 3, 5, 0, 0, Math.PI * 2);
+c.fill();
+var tx = W - 90, ty = 50;
+c.beginPath();
+c.ellipse(tx, ty, 3, 6, 0.4, 0, Math.PI * 2);
+c.fill();
+c.quadraticCurveTo(tx + 8, ty - 5, tx + 12, ty);
+c.stroke();
+c.restore();
+c.save();
+c.globalAlpha = 0.08;
+var neonGrad = c.createRadialGradient(W - 50, 50, 0, W - 50, 50, 60);
+neonGrad.addColorStop(0, 'rgba(255, 100, 100, 0.5)');
+neonGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+c.fillStyle = neonGrad;
+c.fillRect(W - 100, 20, 100, 60);
+c.restore();
+var smokeOffsets = [
+  {baseX: 0.15, baseY: 180, cols: 0.15},
+  {baseX: 0.5, baseY: 200, cols: 0.2},
+  {baseX: 0.85, baseY: 190, cols: 0.15}
+];
+for (var so = 0; so < smokeOffsets.length; so++) {
+  var so_data = smokeOffsets[so];
+  for (var si = 0; si < 3; si++) {
+    var p = this.smokePs[si * 2];
+    var sx = W * so_data.baseX + Math.sin(this.t * p.sp + p.off) * 25;
+    var sy = so_data.baseY - si * 35 + Math.sin(this.t * p.sp * 0.7 + p.off) * 15;
+    var sm = c.createRadialGradient(sx, sy, 0, sx, sy, 35 + si * 10);
+    sm.addColorStop(0, 'rgba(120,110,140,' + (0.035 - si * 0.008) + ')');
+    sm.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sm;
+    c.fillRect(sx - 40 - si * 10, sy - 40 - si * 10, 80 + si * 20, 80 + si * 20);
+  }
+}
+c.save();
+c.globalAlpha = 0.04;
+var flicker = Math.sin(this.t * 3.5) * 0.5 + 0.5;
+var candleGrad1 = c.createRadialGradient(100, 280, 0, 100, 280, 40);
+candleGrad1.addColorStop(0, 'rgba(255,200,100,' + (flicker * 0.5) + ')');
+candleGrad1.addColorStop(1, 'rgba(0,0,0,0)');
+c.fillStyle = candleGrad1;
+c.fillRect(70, 250, 60, 60);
+var candleGrad2 = c.createRadialGradient(W - 100, 300, 0, W - 100, 300, 45);
+candleGrad2.addColorStop(0, 'rgba(255,200,100,' + (flicker * 0.5) + ')');
+candleGrad2.addColorStop(1, 'rgba(0,0,0,0)');
+c.fillStyle = candleGrad2;
+c.fillRect(W - 130, 270, 60, 60);
+c.restore();
+}
+
+_drawSparkles(c) {
+this.sparkles.forEach((s) => {
+  c.save();
+  c.globalAlpha = s.life * 0.8;
+  c.fillStyle = '#ffd700';
+  c.beginPath();
+  c.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+  c.fill();
+  c.globalAlpha = s.life * 0.3;
+  var halo = c.createRadialGradient(s.x, s.y, s.size, s.x, s.y, s.size * 4);
+  halo.addColorStop(0, 'rgba(255,215,0,0.6)');
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = halo;
+  c.fillRect(s.x - s.size * 4, s.y - s.size * 4, s.size * 8, s.size * 8);
+  c.restore();
+});
+}
+
+// ========== DRAW: CARRY PHASE ==========
+_drawCarry() {
+var c = this.ctx, W = this.W, H = this.H;
+var cp = this.carryPhase;
+var gY = cp.baseGroundY;
+var progressRatio = cp.scrollPos / cp.maxScroll;
+
+// Screen shake
+var shake = cp.screenShake * 3;
+c.save();
+c.translate(Math.random() * shake - shake/2, Math.random() * shake - shake/2);
+
+// Draw background
+this._drawCarryBgLevel1(c, W, H, gY);
+
+
+// === FINISH LINE ===
+var finishWorldX = cp.maxScroll - 60;
+var finishScreenX = finishWorldX - cp.scrollPos;
+if (finishScreenX < W + 100 && finishScreenX > -100) {
+  var finishGY = this._getTerrainY(finishWorldX);
+  c.save();
+  // Spotlight glow from above
+  var spotGrad = c.createRadialGradient(finishScreenX, finishGY - 80, 10, finishScreenX, finishGY - 40, 120);
+  spotGrad.addColorStop(0, 'rgba(255,220,120,0.25)');
+  spotGrad.addColorStop(0.6, 'rgba(255,200,80,0.08)');
+  spotGrad.addColorStop(1, 'rgba(255,200,80,0)');
+  c.fillStyle = spotGrad;
+  c.fillRect(finishScreenX - 120, 0, 240, finishGY);
+  // Spotlight cone (triangle from top)
+  c.globalAlpha = 0.1 + Math.sin(this.t * 2) * 0.04;
+  c.fillStyle = '#ffe880';
+  c.beginPath();
+  c.moveTo(finishScreenX - 5, 0);
+  c.lineTo(finishScreenX + 5, 0);
+  c.lineTo(finishScreenX + 70, finishGY);
+  c.lineTo(finishScreenX - 70, finishGY);
+  c.closePath();
+  c.fill();
+  // Stage edge - red velvet curtain drapes on either side
+  var curtainW = 25;
+  // Left curtain
+  c.globalAlpha = 0.7;
+  var cGrad = c.createLinearGradient(finishScreenX - 65, 0, finishScreenX - 40, 0);
+  cGrad.addColorStop(0, '#3a0a0a');
+  cGrad.addColorStop(0.5, '#8a2020');
+  cGrad.addColorStop(1, '#5a1010');
+  c.fillStyle = cGrad;
+  c.beginPath();
+  c.moveTo(finishScreenX - 65, 0);
+  c.lineTo(finishScreenX - 40, 0);
+  c.quadraticCurveTo(finishScreenX - 38, finishGY * 0.3, finishScreenX - 45, finishGY * 0.5);
+  c.quadraticCurveTo(finishScreenX - 38, finishGY * 0.7, finishScreenX - 40, finishGY);
+  c.lineTo(finishScreenX - 65, finishGY);
+  c.closePath();
+  c.fill();
+  // Right curtain
+  var cGrad2 = c.createLinearGradient(finishScreenX + 40, 0, finishScreenX + 65, 0);
+  cGrad2.addColorStop(0, '#5a1010');
+  cGrad2.addColorStop(0.5, '#8a2020');
+  cGrad2.addColorStop(1, '#3a0a0a');
+  c.fillStyle = cGrad2;
+  c.beginPath();
+  c.moveTo(finishScreenX + 40, 0);
+  c.lineTo(finishScreenX + 65, 0);
+  c.lineTo(finishScreenX + 65, finishGY);
+  c.quadraticCurveTo(finishScreenX + 38, finishGY * 0.7, finishScreenX + 45, finishGY * 0.5);
+  c.quadraticCurveTo(finishScreenX + 38, finishGY * 0.3, finishScreenX + 40, 0);
+  c.closePath();
+  c.fill();
+  // Curtain valance (top drape)
+  c.globalAlpha = 0.75;
+  c.fillStyle = '#6a1515';
+  c.beginPath();
+  c.moveTo(finishScreenX - 68, 0);
+  c.lineTo(finishScreenX + 68, 0);
+  c.quadraticCurveTo(finishScreenX + 50, 35, finishScreenX, 28);
+  c.quadraticCurveTo(finishScreenX - 50, 35, finishScreenX - 68, 0);
+  c.closePath();
+  c.fill();
+  // Gold fringe on valance
+  c.strokeStyle = '#c9a050';
+  c.lineWidth = 2;
+  c.globalAlpha = 0.6;
+  c.beginPath();
+  c.moveTo(finishScreenX - 60, 5);
+  c.quadraticCurveTo(finishScreenX, 35, finishScreenX + 60, 5);
+  c.stroke();
+  // Gold tassels
+  c.fillStyle = '#c9a050';
+  c.globalAlpha = 0.5;
+  for (var tassel = 0; tassel < 5; tassel++) {
+    var tX = finishScreenX - 40 + tassel * 20;
+    var tY = 10 + Math.sin(tassel * 1.2) * 8 + 15;
+    c.beginPath();
+    c.moveTo(tX, tY);
+    c.lineTo(tX - 3, tY + 10);
+    c.lineTo(tX + 3, tY + 10);
+    c.closePath();
+    c.fill();
+  }
+  // "STAGE" text
+  c.globalAlpha = 0.5 + Math.sin(this.t * 3) * 0.2;
+  c.fillStyle = '#c9a050';
+  c.font = 'bold 14px Georgia';
+  c.textAlign = 'center';
+  c.fillText('★ STAGE ★', finishScreenX, finishGY - 8);
+  c.restore();
+}
+
+// === OBSTACLES ===
+this._drawObstacles(c);
+
+// === PLAYER ===
+this._drawPlayer(c);
+this._drawTray(c);
+
+// === WOBBLE WARNING ===
+if (cp.wobbling) {
+  c.save();
+  var wFlash = Math.sin(this.t * 10) * 0.3 + 0.7;
+  c.globalAlpha = wFlash * Math.min(1, cp.wobbleTimer / 1.0);
+  c.fillStyle = '#ff9040';
+  c.font = 'bold 12px Georgia';
+  c.textAlign = 'center';
+  c.fillText('STEADY!', 100, cp.playerY - 22);
+  c.restore();
+}
+
+// === STAGGER / RUBBER DUCK BONK ===
+if (cp.staggerTimer > 0) {
+  c.save();
+  var bonkAlpha = Math.min(1, cp.staggerTimer / 0.3);
+  var bonkFloat = (0.9 - cp.staggerTimer) * 25;
+  var bonkScale = 1.0 + (0.9 - Math.min(0.9, cp.staggerTimer)) * 0.3;
+  var bonkX = 100;
+  var bonkY = cp.playerY - 50 - bonkFloat;
+  var bonkRot = Math.sin(this.t * 12) * 0.15;
+
+  c.globalAlpha = bonkAlpha;
+  c.translate(bonkX, bonkY);
+  c.rotate(bonkRot);
+  c.scale(bonkScale, bonkScale);
+
+  // === BIG RUBBER DUCK ===
+  // Body — bright yellow
+  c.fillStyle = '#ffdd00';
+  c.beginPath();
+  c.ellipse(0, 8, 22, 16, 0, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = '#d4a800';
+  c.lineWidth = 1.5;
+  c.stroke();
+  // Belly highlight
+  c.fillStyle = '#ffee55';
+  c.beginPath();
+  c.ellipse(-3, 10, 14, 10, -0.2, 0, Math.PI * 2);
+  c.fill();
+  // Head
+  c.fillStyle = '#ffdd00';
+  c.beginPath();
+  c.arc(16, -6, 13, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = '#d4a800';
+  c.lineWidth = 1.2;
+  c.stroke();
+  // Head highlight
+  c.fillStyle = '#ffee55';
+  c.beginPath();
+  c.arc(14, -9, 7, 0, Math.PI * 2);
+  c.fill();
+  // Eye — big cartoon eye
+  c.fillStyle = '#ffffff';
+  c.beginPath();
+  c.arc(20, -9, 4.5, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = '#111111';
+  c.beginPath();
+  c.arc(21, -9, 2.5, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = '#ffffff';
+  c.beginPath();
+  c.arc(22, -10.5, 1, 0, Math.PI * 2);
+  c.fill();
+  // Beak — bright orange
+  c.fillStyle = '#ff8800';
+  c.beginPath();
+  c.moveTo(27, -6);
+  c.quadraticCurveTo(36, -4, 27, -1);
+  c.quadraticCurveTo(30, -3.5, 27, -6);
+  c.closePath();
+  c.fill();
+  // Little wing
+  c.fillStyle = '#eec800';
+  c.beginPath();
+  c.ellipse(-10, 4, 8, 5, -0.4, 0, Math.PI * 2);
+  c.fill();
+  // Tail tuft
+  c.fillStyle = '#ffdd00';
+  c.beginPath();
+  c.moveTo(-20, 2);
+  c.lineTo(-26, -2);
+  c.lineTo(-23, 4);
+  c.lineTo(-27, 3);
+  c.lineTo(-22, 7);
+  c.closePath();
+  c.fill();
+
+  // "BONK!" text coming from the duck
+  c.fillStyle = '#ff2020';
+  c.font = 'bold 16px Georgia';
+  c.textAlign = 'center';
+  c.fillText('BONK!', 0, -24);
+
+  c.restore();
+}
+
+// === SMOKE WISPS ===
+c.save();
+c.globalAlpha = 0.06;
+for (var i = 0; i < 5; i++) {
+  var smokeX = ((i * 190) - cp.scrollPos * 0.4) % (W + 200);
+  if (smokeX < -100) smokeX += W + 300;
+  var smokeY = 80 + Math.sin(this.t * 0.3 + i * 1.7) * 30;
+  var sm = c.createRadialGradient(smokeX, smokeY, 0, smokeX, smokeY, 60 + Math.sin(this.t * 0.5 + i) * 20);
+  sm.addColorStop(0, 'rgba(200, 180, 160, 0.5)');
+  sm.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = sm;
+  c.fillRect(smokeX - 80, smokeY - 60, 160, 120);
+}
+c.restore();
+
+c.restore(); // end screen shake
+
+// === UI: Glass counter ===
+c.save();
+c.fillStyle = 'rgba(10, 8, 4, 0.85)';
+c.fillRect(0, 0, 130, 50);
+c.strokeStyle = 'rgba(200, 180, 160, 0.4)';
+c.lineWidth = 1;
+c.strokeRect(0, 0, 130, 50);
+c.fillStyle = '#d4a574';
+c.font = '11px Georgia';
+c.fillText('Glasses left:', 8, 20);
+// Draw mini glasses
+for (var i = 0; i < 3; i++) {
+  var gAlive = i < cp.glassesLeft;
+  c.fillStyle = gAlive ? '#c9a050' : '#3a2a1a';
+  c.fillRect(10 + i * 22, 28, 8, 14);
+  if (gAlive) {
+    c.fillStyle = '#e8c060';
+    c.fillRect(11 + i * 22, 34, 6, 7);
+  }
+  c.strokeStyle = gAlive ? '#d4a574' : '#2a1a10';
+  c.lineWidth = 0.8;
+  c.strokeRect(10 + i * 22, 28, 8, 14);
+}
+c.restore();
+
+// === UI: Progress bar ===
+var pW = (cp.scrollPos / cp.maxScroll) * (W - 40);
+c.save();
+c.fillStyle = 'rgba(30, 20, 10, 0.7)';
+c.fillRect(20, H - 22, W - 40, 12);
+var pGrad = c.createLinearGradient(20, 0, 20 + pW, 0);
+pGrad.addColorStop(0, '#8a6030');
+pGrad.addColorStop(1, '#d4a574');
+c.fillStyle = pGrad;
+c.fillRect(20, H - 22, pW, 12);
+c.strokeStyle = 'rgba(200, 180, 160, 0.3)';
+c.lineWidth = 0.8;
+c.strokeRect(20, H - 22, W - 40, 12);
+c.fillStyle = '#8a7a6a';
+c.font = '8px Georgia';
+c.textAlign = 'left';
+c.fillText('BAR', 22, H - 12);
+c.textAlign = 'right';
+c.fillText('STAGE', W - 22, H - 12);
+c.textAlign = 'left';
+c.restore();
+}
+
+// ========== BACKGROUND: LEVEL 1 - THE FLOOR ==========
+_drawCarryBgLevel1(c, W, H, gY) {
+var cp = this.carryPhase;
+
+// === CEILING ===
+var ceilGrad = c.createLinearGradient(0, 0, 0, 40);
+ceilGrad.addColorStop(0, '#0a0604');
+ceilGrad.addColorStop(1, '#1a0f0a');
+c.fillStyle = ceilGrad;
+c.fillRect(0, 0, W, 40);
+// Ceiling beams
+c.fillStyle = '#2a1a10';
+for (var i = 0; i < 10; i++) {
+  var beamX = ((-cp.scrollPos * 0.8) % 180) + i * 180;
+  c.fillRect(beamX, 0, 12, 40);
+  c.fillStyle = '#1a1008';
+  c.fillRect(beamX + 1, 0, 2, 40);
+  c.fillStyle = '#2a1a10';
+}
+
+// === BACK WALL ===
+var wallGrad = c.createLinearGradient(0, 40, 0, gY);
+wallGrad.addColorStop(0, '#2d1810');
+wallGrad.addColorStop(0.4, '#3a2018');
+wallGrad.addColorStop(1, '#251510');
+c.fillStyle = wallGrad;
+c.fillRect(0, 40, W, gY - 40);
+
+// Brick texture (subtle)
+c.save();
+c.globalAlpha = 0.06;
+c.fillStyle = '#5a3a28';
+for (var row = 0; row < 12; row++) {
+  var brickOff = (row % 2) * 35;
+  for (var col = 0; col < 10; col++) {
+    var bx = ((-cp.scrollPos * 0.15) % 70) + brickOff + col * 70;
+    c.fillRect(bx, 45 + row * 22, 65, 18);
+  }
+}
+c.restore();
+
+// Wainscoting follows terrain
+c.save();
+c.beginPath();
+for (var screenX = 0; screenX <= W; screenX += 4) {
+  var worldX = cp.scrollPos + screenX;
+  var terrainY = this._getTerrainY(worldX);
+  if (screenX === 0) c.moveTo(screenX, terrainY - 70);
+  else c.lineTo(screenX, terrainY - 70);
+}
+for (var screenX = W; screenX >= 0; screenX -= 4) {
+  var worldX = cp.scrollPos + screenX;
+  var terrainY = this._getTerrainY(worldX);
+  c.lineTo(screenX, terrainY);
+}
+c.closePath();
+c.fillStyle = '#201008';
+c.fill();
+// Top edge line
+c.beginPath();
+for (var screenX = 0; screenX <= W; screenX += 4) {
+  var worldX = cp.scrollPos + screenX;
+  var terrainY = this._getTerrainY(worldX);
+  if (screenX === 0) c.moveTo(screenX, terrainY - 70);
+  else c.lineTo(screenX, terrainY - 70);
+}
+c.strokeStyle = '#3a2818';
+c.lineWidth = 1;
+c.stroke();
+// Panel details (simplified - using base terrain for consistency)
+for (var i = 0; i < 12; i++) {
+  var panX = ((-cp.scrollPos * 0.8) % 160) + i * 160;
+  var panWorldX = cp.scrollPos + panX;
+  var panTerrainY = this._getTerrainY(panWorldX);
+  c.strokeStyle = '#2a1a10';
+  c.lineWidth = 0.8;
+  c.strokeRect(panX + 8, panTerrainY - 65, 140, 58);
+}
+c.restore();
+
+// Framed photos / posters on wall (parallax slow)
+var posters = [
+  {off: 50, w: 45, h: 55, col: '#4a3828', label: 'MONK'},
+  {off: 320, w: 40, h: 50, col: '#3a3040', label: 'MILES'},
+  {off: 600, w: 50, h: 40, col: '#2a3a28', label: 'BIRD'},
+  {off: 880, w: 42, h: 52, col: '#4a2828', label: 'TRANE'},
+  {off: 1150, w: 48, h: 45, col: '#3a3828', label: 'MINGUS'},
+  {off: 1450, w: 44, h: 50, col: '#2a2840', label: 'EVANS'}
+];
+for (var i = 0; i < posters.length; i++) {
+  var p = posters[i];
+  var pX = p.off - cp.scrollPos * 0.25;
+  if (pX > -60 && pX < W + 10) {
+    c.fillStyle = '#4a3a28';
+    c.fillRect(pX - 3, 70 - 3, p.w + 6, p.h + 6);
+    c.fillStyle = p.col;
+    c.fillRect(pX, 70, p.w, p.h);
+    c.fillStyle = '#d4c8a0';
+    c.font = 'bold 7px Georgia';
+    c.textAlign = 'center';
+    c.fillText(p.label, pX + p.w/2, 70 + p.h - 6);
+    c.textAlign = 'left';
+    c.fillStyle = '#0a0a0a';
+    c.beginPath();
+    c.arc(pX + p.w/2, 70 + p.h/2 - 8, 6, 0, Math.PI * 2);
+    c.fill();
+    c.fillRect(pX + p.w/2 - 4, 70 + p.h/2 - 2, 8, 14);
+  }
+}
+
+// Seated patrons at tables (mid-ground parallax)
+for (var i = 0; i < 6; i++) {
+  var tX = 80 + i * 450 - cp.scrollPos * 0.5;
+  if (tX > -120 && tX < W + 50) {
+    var patronTerrainY = this._getTerrainY(cp.scrollPos + tX);
+    c.save();
+    c.globalAlpha = 0.5;
+    c.fillStyle = '#1a1210';
+    c.beginPath();
+    c.ellipse(tX, patronTerrainY - 30, 30, 8, 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillRect(tX - 3, patronTerrainY - 24, 6, 24);
+    c.fillStyle = 'rgba(200,180,140,0.4)';
+    c.fillRect(tX - 8, patronTerrainY - 38, 4, 8);
+    c.fillRect(tX + 4, patronTerrainY - 36, 4, 6);
+    c.fillStyle = '#0e0a08';
+    c.beginPath();
+    c.arc(tX - 30, patronTerrainY - 50, 8, 0, Math.PI * 2);
+    c.fill();
+    c.fillRect(tX - 36, patronTerrainY - 42, 12, 20);
+    c.fillRect(tX - 38, patronTerrainY - 22, 16, 22);
+    if (i % 2 === 0) {
+      c.beginPath();
+      c.arc(tX + 28, patronTerrainY - 48, 7, 0, Math.PI * 2);
+      c.fill();
+      c.fillRect(tX + 22, patronTerrainY - 41, 12, 18);
+      c.fillRect(tX + 20, patronTerrainY - 23, 16, 23);
+    }
+    c.restore();
+  }
+}
+
+// === FLOOR (terrain-following) ===
+c.save();
+c.beginPath();
+// Walk along the terrain contour across the visible screen
+var startWorldX = cp.scrollPos;
+var endWorldX = cp.scrollPos + W;
+c.moveTo(0, this._getTerrainY(startWorldX));
+// Sample terrain across screen width
+for (var screenX = 0; screenX <= W; screenX += 4) {
+  var worldX = cp.scrollPos + screenX;
+  var terrainY = this._getTerrainY(worldX);
+  c.lineTo(screenX, terrainY);
+}
+// Close the polygon at the bottom
+c.lineTo(W, H);
+c.lineTo(0, H);
+c.closePath();
+var floorGrad = c.createLinearGradient(0, 280, 0, H);
+floorGrad.addColorStop(0, '#2a1a10');
+floorGrad.addColorStop(0.3, '#221610');
+floorGrad.addColorStop(1, '#1a100a');
+c.fillStyle = floorGrad;
+c.fill();
+c.restore();
+
+// Floorboard lines (vertical, terrain-following)
+c.strokeStyle = 'rgba(60, 40, 25, 0.5)';
+c.lineWidth = 0.8;
+for (var i = 0; i < 15; i++) {
+  var bX = ((-cp.scrollPos * 1.0) % 120) + i * 120;
+  var terrainAtBoard = this._getTerrainY(cp.scrollPos + bX);
+  c.beginPath();
+  c.moveTo(bX, terrainAtBoard);
+  c.lineTo(bX, H);
+  c.stroke();
+}
+// Horizontal plank seam also follows terrain
+c.beginPath();
+for (var screenX = 0; screenX <= W; screenX += 8) {
+  var worldX = cp.scrollPos + screenX;
+  var terrainY = this._getTerrainY(worldX);
+  if (screenX === 0) c.moveTo(screenX, terrainY + 30);
+  else c.lineTo(screenX, terrainY + 30);
+}
+c.stroke();
+
+// Floor highlight strip follows terrain
+c.save();
+c.globalAlpha = 0.06;
+c.fillStyle = '#c9a060';
+c.beginPath();
+for (var screenX = 0; screenX <= W; screenX += 4) {
+  var worldX = cp.scrollPos + screenX;
+  var terrainY = this._getTerrainY(worldX);
+  if (screenX === 0) c.moveTo(screenX, terrainY);
+  else c.lineTo(screenX, terrainY);
+}
+for (var screenX = W; screenX >= 0; screenX -= 4) {
+  var worldX = cp.scrollPos + screenX;
+  var terrainY = this._getTerrainY(worldX);
+  c.lineTo(screenX, terrainY + 4);
+}
+c.closePath();
+c.fill();
+c.restore();
+
+// Spotlight pools on floor
+c.save();
+for (var i = 0; i < 3; i++) {
+  var spotX = 140 + i * 500 - cp.scrollPos * 0.6;
+  if (spotX > -100 && spotX < W + 100) {
+    var spotTerrainY = this._getTerrainY(cp.scrollPos + spotX);
+    var spot = c.createRadialGradient(spotX, spotTerrainY + 5, 0, spotX, spotTerrainY + 5, 70);
+    spot.addColorStop(0, 'rgba(255,220,140,0.08)');
+    spot.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = spot;
+    c.fillRect(spotX - 70, spotTerrainY - 20, 140, 80);
+  }
+}
+c.restore();
+
+// === SMOKE WISPS ===
+c.save();
+c.globalAlpha = 0.06;
+for (var i = 0; i < 5; i++) {
+  var smokeX = ((i * 190) - cp.scrollPos * 0.4) % (W + 200);
+  if (smokeX < -100) smokeX += W + 300;
+  var smokeY = 80 + Math.sin(this.t * 0.3 + i * 1.7) * 30;
+  var sm = c.createRadialGradient(smokeX, smokeY, 0, smokeX, smokeY, 60 + Math.sin(this.t * 0.5 + i) * 20);
+  sm.addColorStop(0, 'rgba(200, 180, 160, 0.5)');
+  sm.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = sm;
+  c.fillRect(smokeX - 80, smokeY - 60, 160, 120);
+}
+c.restore();
+}
+
+_drawObstacles(c) {
+var cp = this.carryPhase;
+var W = this.W;
+var pulse = 0.55 + Math.sin(this.t * 4) * 0.35;
+
+for (var i = 0; i < cp.obstacles.length; i++) {
+  var obs = cp.obstacles[i];
+  var ox = obs.x - cp.scrollPos;
+  if (ox > -150 && ox < W + 50) {
+    if (obs.hit) { c.globalAlpha = 0.35; }
+    if (obs.isHigh) {
+      // === RED DANGER ZONE behind high obstacles ===
+      var hCx = ox + obs.width / 2;
+      var hBottom = obs.height;
+      // Wide red-tinted danger stripe area
+      c.save();
+      var dangerW = obs.width + 40;
+      var dangerX = ox - 20;
+      // Red translucent column from ceiling to obstacle bottom
+      var dangerGrad = c.createLinearGradient(0, 0, 0, hBottom + 30);
+      dangerGrad.addColorStop(0, 'rgba(180,40,40,0.12)');
+      dangerGrad.addColorStop(0.7, 'rgba(200,50,30,0.18)');
+      dangerGrad.addColorStop(1, 'rgba(200,60,30,0.05)');
+      c.fillStyle = dangerGrad;
+      c.fillRect(dangerX, 0, dangerW, hBottom + 30);
+      // Diagonal warning stripes
+      c.globalAlpha = 0.08 + pulse * 0.06;
+      c.strokeStyle = '#ff4040';
+      c.lineWidth = 3;
+      for (var stripe = -8; stripe < 12; stripe++) {
+        var sx = dangerX + stripe * 12;
+        c.beginPath();
+        c.moveTo(sx, 0);
+        c.lineTo(sx + hBottom * 0.4, hBottom + 20);
+        c.stroke();
+      }
+      c.restore();
+
+      // Draw the obstacle itself
+      if (obs.style === 1) this._drawHighObs1(c, obs.type, ox, obs.width, obs.height);
+      else if (obs.style === 2) this._drawHighObs2(c, obs.type, ox, obs.width, obs.height);
+      else this._drawHighObs3(c, obs.type, ox, obs.width, obs.height);
+
+      // === MALLARD DUCKS — waddle normally or scatter in panic ===
+      if (!obs.hit) {
+        c.save();
+        var dSeed = obs.x * 7.3;
+        var numDucks = 2 + Math.floor((dSeed % 3));
+        var isScattered = obs.scattered;
+        var scatterElapsed = isScattered ? (this.t - obs.scatterTime) : 0;
+
+        // Feather particles when scattering
+        if (isScattered && scatterElapsed < 2.0) {
+          c.save();
+          var featherAlpha = Math.max(0, 1.0 - scatterElapsed / 2.0);
+          c.globalAlpha = featherAlpha * 0.6;
+          for (var fi = 0; fi < 8; fi++) {
+            var fSeed = dSeed + fi * 17.3;
+            var fAngle = (fSeed % 6.28) + scatterElapsed * (2 + (fi % 3));
+            var fDist = scatterElapsed * (40 + (fSeed % 30));
+            var fX = hCx + Math.cos(fAngle) * fDist;
+            var fY = hBottom + 22 - scatterElapsed * (20 + fi * 8) + Math.sin(this.t * 6 + fi) * 5;
+            var fRot = this.t * 8 + fi * 2;
+            c.save();
+            c.translate(fX, fY);
+            c.rotate(fRot);
+            c.fillStyle = (fi % 3 === 0) ? '#5a4a30' : (fi % 3 === 1) ? '#1a6a30' : '#e8e8d0';
+            c.beginPath();
+            c.ellipse(0, 0, 3, 1.2, 0, 0, Math.PI * 2);
+            c.fill();
+            c.restore();
+          }
+          c.restore();
+        }
+
+        for (var di = 0; di < numDucks; di++) {
+          // Base position
+          var duckRestX = ox - 18 + di * (obs.width / numDucks + 10) + Math.sin(dSeed + di * 2.1) * 8;
+          var duckRestY = hBottom + 22 + Math.sin(dSeed + di * 3.7) * 4;
+          var duckX, duckY, duckRot, duckAlpha, flapping;
+
+          if (isScattered && scatterElapsed < 2.5) {
+            // SCATTER! Each duck flies off in a different direction
+            var scatterAngle = -0.8 - di * 0.5 + (di % 2 === 0 ? -0.6 : 0.6);
+            var scatterSpeed = 80 + di * 25;
+            var flyT = Math.min(scatterElapsed, 2.0);
+            duckX = duckRestX + Math.cos(scatterAngle) * scatterSpeed * flyT;
+            duckY = duckRestY + Math.sin(scatterAngle) * scatterSpeed * flyT - flyT * 50;
+            duckRot = scatterAngle * 0.4 + Math.sin(this.t * 15 + di) * 0.3;
+            duckAlpha = Math.max(0, 1.0 - scatterElapsed / 2.2);
+            flapping = true;
+          } else if (isScattered) {
+            continue; // ducks have flown away
+          } else {
+            // Normal waddling
+            var waddle = Math.sin(this.t * 4 + di * 2.3) * 2;
+            var bobY = Math.sin(this.t * 3.5 + di * 1.8) * 1.5;
+            duckX = duckRestX + waddle;
+            duckY = duckRestY + bobY;
+            duckRot = 0;
+            duckAlpha = 1;
+            flapping = false;
+          }
+
+          c.save();
+          c.globalAlpha = duckAlpha;
+          c.translate(duckX, duckY);
+          c.rotate(duckRot);
+
+          // Body
+          c.fillStyle = '#5a4a30';
+          c.beginPath();
+          c.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2);
+          c.fill();
+          // Breast
+          c.fillStyle = '#6a3a20';
+          c.beginPath();
+          c.ellipse(5, 1, 4, 4, 0, 0, Math.PI * 2);
+          c.fill();
+          // Head — iridescent green
+          c.fillStyle = '#1a6a30';
+          c.beginPath();
+          c.arc(9, -4, 4, 0, Math.PI * 2);
+          c.fill();
+          // Eye — wide open if panicking
+          c.fillStyle = '#111';
+          c.beginPath();
+          c.arc(10.5, -5, flapping ? 1.2 : 0.8, 0, Math.PI * 2);
+          c.fill();
+          // Beak — open if panicking
+          c.fillStyle = '#d4a030';
+          if (flapping) {
+            // Open beak — top
+            c.beginPath();
+            c.moveTo(13, -5.5);
+            c.lineTo(18, -5);
+            c.lineTo(13, -3.5);
+            c.closePath();
+            c.fill();
+            // Open beak — bottom
+            c.fillStyle = '#c08020';
+            c.beginPath();
+            c.moveTo(13, -3);
+            c.lineTo(17, -1.5);
+            c.lineTo(13, -1.5);
+            c.closePath();
+            c.fill();
+          } else {
+            c.beginPath();
+            c.moveTo(13, -4);
+            c.lineTo(17, -3.5);
+            c.lineTo(13, -2.5);
+            c.closePath();
+            c.fill();
+          }
+          // White neck ring
+          c.strokeStyle = '#e8e8e8';
+          c.lineWidth = 1;
+          c.beginPath();
+          c.arc(9, -4, 4.5, 1.2, 2.0);
+          c.stroke();
+          // Wings — flapping if scattered
+          if (flapping) {
+            var wingAngle = Math.sin(this.t * 18 + di * 3) * 0.8;
+            // Left wing
+            c.save();
+            c.fillStyle = '#4a3a25';
+            c.translate(-4, -2);
+            c.rotate(-0.5 + wingAngle);
+            c.beginPath();
+            c.ellipse(0, -6, 4, 8, 0, 0, Math.PI * 2);
+            c.fill();
+            c.restore();
+            // Right wing
+            c.save();
+            c.fillStyle = '#4a3a25';
+            c.translate(-4, -2);
+            c.rotate(-0.5 - wingAngle);
+            c.beginPath();
+            c.ellipse(0, 6, 4, 8, 0, 0, Math.PI * 2);
+            c.fill();
+            c.restore();
+          }
+          // Tail
+          c.fillStyle = '#3a3a2a';
+          c.beginPath();
+          c.moveTo(-7, -2);
+          c.lineTo(-12, -4);
+          c.lineTo(-10, 0);
+          c.closePath();
+          c.fill();
+          // Feet (tucked up if flying)
+          if (!flapping) {
+            c.fillStyle = '#d48030';
+            c.fillRect(-2, 4, 3, 2);
+            c.fillRect(3, 4, 3, 2);
+          } else {
+            c.fillStyle = '#d48030';
+            c.fillRect(0, 3, 2, 3);
+            c.fillRect(4, 4, 2, 2);
+          }
+          c.restore();
+        }
+        c.restore();
+      }
+
+      // DUCK cue - bigger, bolder, with pulsing border
+      if (!obs.hit) {
+        c.save();
+        // Thick pulsing red line at obstacle bottom
+        c.globalAlpha = 0.5 + pulse * 0.4;
+        c.strokeStyle = '#ff4040';
+        c.lineWidth = 3;
+        c.setLineDash([8, 5]);
+        c.beginPath();
+        c.moveTo(ox - 10, hBottom);
+        c.lineTo(ox + obs.width + 10, hBottom);
+        c.stroke();
+        c.setLineDash([]);
+        c.restore();
+        // Large DUCK text with dark backing
+        c.save();
+        c.globalAlpha = pulse * 0.9;
+        c.fillStyle = 'rgba(80,0,0,0.5)';
+        c.fillRect(hCx - 30, hBottom + 2, 60, 20);
+        c.fillStyle = '#ff5050';
+        c.font = 'bold 16px Georgia';
+        c.textAlign = 'center';
+        c.fillText('\u2193 DUCK!', hCx, hBottom + 17);
+        c.restore();
+        // Down arrows flanking the obstacle
+        c.save();
+        c.globalAlpha = pulse * 0.6;
+        c.fillStyle = '#ff5050';
+        c.font = 'bold 18px Georgia';
+        c.textAlign = 'center';
+        c.fillText('\u25BC', ox - 8, hBottom - 10);
+        c.fillText('\u25BC', ox + obs.width + 8, hBottom - 10);
+        c.restore();
+      }
+    } else if (obs.isGap) {
+      // FLOOR GAP — dramatic pit/hole in the pub floor
+      var gapCx = ox + obs.width / 2;
+      var gapTop = obs.y;
+      var gapH = this.H - gapTop; // extends to bottom of canvas
+      c.save();
+
+      // Deep black pit
+      var pitGrad = c.createLinearGradient(0, gapTop, 0, gapTop + 60);
+      pitGrad.addColorStop(0, '#080404');
+      pitGrad.addColorStop(0.4, '#030202');
+      pitGrad.addColorStop(1, '#000000');
+      c.fillStyle = pitGrad;
+      c.fillRect(ox - 2, gapTop, obs.width + 4, gapH);
+
+      // Amber glow from below (like there's a cellar down there)
+      var cellarGlow = c.createRadialGradient(gapCx, gapTop + 40, 5, gapCx, gapTop + 30, obs.width * 0.7);
+      cellarGlow.addColorStop(0, 'rgba(200,120,40,0.15)');
+      cellarGlow.addColorStop(1, 'rgba(200,120,40,0)');
+      c.fillStyle = cellarGlow;
+      c.fillRect(ox - 20, gapTop + 5, obs.width + 40, 70);
+
+      // Broken floorboard edges on left side
+      c.fillStyle = '#5a3a20';
+      c.beginPath();
+      c.moveTo(ox - 2, gapTop);
+      c.lineTo(ox + 8, gapTop);
+      c.lineTo(ox + 5, gapTop + 20);
+      c.lineTo(ox + 10, gapTop + 35);
+      c.lineTo(ox + 3, gapTop + 50);
+      c.lineTo(ox - 2, gapTop + 40);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = '#3a2210';
+      c.lineWidth = 1;
+      c.stroke();
+
+      // Broken floorboard edges on right side
+      c.beginPath();
+      c.moveTo(ox + obs.width + 2, gapTop);
+      c.lineTo(ox + obs.width - 6, gapTop);
+      c.lineTo(ox + obs.width - 3, gapTop + 18);
+      c.lineTo(ox + obs.width - 8, gapTop + 30);
+      c.lineTo(ox + obs.width - 2, gapTop + 45);
+      c.lineTo(ox + obs.width + 2, gapTop + 38);
+      c.closePath();
+      c.fill();
+      c.stroke();
+
+      // Splintered wood pieces hanging
+      c.fillStyle = '#4a2a15';
+      c.save();
+      c.translate(ox + 12, gapTop);
+      c.rotate(0.3);
+      c.fillRect(0, 0, 4, 18);
+      c.restore();
+      c.save();
+      c.translate(ox + obs.width - 10, gapTop);
+      c.rotate(-0.2);
+      c.fillRect(0, 0, 3, 14);
+      c.restore();
+
+      // Top edge shadow — dark gradient spreading outward
+      c.globalAlpha = 0.6;
+      var topShadow = c.createLinearGradient(0, gapTop - 8, 0, gapTop + 12);
+      topShadow.addColorStop(0, 'rgba(0,0,0,0)');
+      topShadow.addColorStop(0.5, 'rgba(0,0,0,0.6)');
+      topShadow.addColorStop(1, 'rgba(0,0,0,0.3)');
+      c.fillStyle = topShadow;
+      c.fillRect(ox - 10, gapTop - 8, obs.width + 20, 20);
+      c.globalAlpha = 1;
+
+      // Pulsing amber warning markers on edges
+      c.globalAlpha = 0.4 + pulse * 0.3;
+      c.fillStyle = '#ffaa40';
+      // Left warning dot
+      c.beginPath();
+      c.arc(ox - 4, gapTop + 3, 3, 0, Math.PI * 2);
+      c.fill();
+      // Right warning dot
+      c.beginPath();
+      c.arc(ox + obs.width + 4, gapTop + 3, 3, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1;
+
+      // === MUSIC NOTES drifting up from the jazz abyss ===
+      var noteChars = ['\u266A', '\u266B', '\u266C', '\u2669'];
+      var noteSeed = obs.x * 3.7;
+      for (var ni = 0; ni < 6; ni++) {
+        // Each note has its own cycle based on time + seed
+        var notePhase = (this.t * 0.6 + ni * 1.3 + noteSeed * 0.01) % 3.0;
+        var noteRise = notePhase / 3.0; // 0 to 1 as it rises
+        var noteX = ox + 8 + (ni * (obs.width - 16) / 5) + Math.sin(this.t * 1.5 + ni * 2.1) * 8;
+        var noteY = gapTop + 60 - noteRise * 110; // rises from deep in pit to above
+        var noteAlpha = 0;
+        if (noteRise < 0.15) noteAlpha = noteRise / 0.15; // fade in
+        else if (noteRise > 0.75) noteAlpha = (1.0 - noteRise) / 0.25; // fade out near top
+        else noteAlpha = 1.0;
+        noteAlpha *= 0.5;
+        // Clip to pit area mostly but let them drift slightly above
+        if (noteY < gapTop - 15 || noteY > gapTop + 70) continue;
+        c.save();
+        c.globalAlpha = noteAlpha;
+        // Alternate gold and warm amber
+        c.fillStyle = (ni % 2 === 0) ? '#c9a050' : '#e8a040';
+        c.font = (10 + ni % 3 * 2) + 'px Georgia';
+        c.textAlign = 'center';
+        var noteRot = Math.sin(this.t * 2 + ni * 1.7) * 0.3;
+        c.translate(noteX, noteY);
+        c.rotate(noteRot);
+        c.fillText(noteChars[ni % noteChars.length], 0, 0);
+        c.restore();
+      }
+
+      c.restore();
+
+      // JUMP cue — amber/orange for gaps, distinct from green JUMP
+      if (!obs.hit) {
+        c.save();
+        c.globalAlpha = pulse * 0.9;
+        c.fillStyle = 'rgba(60,30,0,0.6)';
+        c.fillRect(gapCx - 30, gapTop - 28, 60, 22);
+        c.strokeStyle = 'rgba(255,170,64,0.4)';
+        c.lineWidth = 1;
+        c.strokeRect(gapCx - 30, gapTop - 28, 60, 22);
+        c.fillStyle = '#ffaa40';
+        c.font = 'bold 15px Georgia';
+        c.textAlign = 'center';
+        c.fillText('\u2191 JUMP!', gapCx, gapTop - 11);
+        c.restore();
+      }
+    } else {
+      if (obs.style === 1) this._drawLowObs1(c, obs.type, ox, obs.y, obs.width, obs.height);
+      else if (obs.style === 2) this._drawLowObs2(c, obs.type, ox, obs.y, obs.width, obs.height);
+      else this._drawLowObs3(c, obs.type, ox, obs.y, obs.width, obs.height);
+      // JUMP cue - green with backing
+      if (!obs.hit) {
+        var cx = ox + obs.width / 2;
+        c.save();
+        c.globalAlpha = pulse * 0.85;
+        c.fillStyle = 'rgba(0,40,0,0.4)';
+        c.fillRect(cx - 28, obs.y - 22, 56, 18);
+        c.fillStyle = '#60ff90';
+        c.font = 'bold 14px Georgia';
+        c.textAlign = 'center';
+        c.fillText('\u2191 JUMP', cx, obs.y - 8);
+        c.restore();
+      }
+    }
+    if (obs.hit) { c.globalAlpha = 1; }
+  }
+}
+}
+
+// === HIGH OBSTACLES (hang from ceiling, duck under) ===
+_drawHighObs1(c, type, x, w, h) {
+var cx = x + w/2;
+var bottom = h; // bottom edge of the obstacle zone
+// Danger glow behind high obstacles so they stand out
+var dg = c.createRadialGradient(cx, bottom - 20, 5, cx, bottom, 50);
+dg.addColorStop(0, 'rgba(255,80,80,0.15)');
+dg.addColorStop(1, 'rgba(255,80,80,0)');
+c.fillStyle = dg;
+c.fillRect(cx - 50, bottom - 60, 100, 70);
+if (type === 0) {
+  // Hanging lamp with wide shade
+  c.fillStyle = '#3a3530';
+  c.fillRect(cx - 1, 0, 2, bottom - 40); // cord
+  // Shade - wide cone
+  c.fillStyle = '#c9a050';
+  c.beginPath();
+  c.moveTo(cx - 28, bottom);
+  c.lineTo(cx - 8, bottom - 35);
+  c.lineTo(cx + 8, bottom - 35);
+  c.lineTo(cx + 28, bottom);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = '#a08030';
+  c.lineWidth = 1.5;
+  c.stroke();
+  // Warm light glow
+  var lg = c.createRadialGradient(cx, bottom, 5, cx, bottom + 20, 60);
+  lg.addColorStop(0, 'rgba(255,220,120,0.25)');
+  lg.addColorStop(1, 'rgba(255,200,80,0)');
+  c.fillStyle = lg;
+  c.fillRect(cx - 60, bottom - 10, 120, 80);
+  // Bulb
+  c.fillStyle = '#ffe880';
+  c.beginPath();
+  c.arc(cx, bottom - 8, 4, 0, Math.PI * 2);
+  c.fill();
+} else if (type === 1) {
+  // Low-hanging speaker/monitor wedge on a bracket
+  c.fillStyle = '#2a2a2a';
+  c.fillRect(cx - 3, 0, 6, bottom - 50); // mounting pole
+  // Bracket
+  c.fillStyle = '#444';
+  c.fillRect(cx - 22, bottom - 52, 44, 6);
+  // Speaker box
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(cx - 20, bottom - 46, 40, 46);
+  c.strokeStyle = '#333';
+  c.lineWidth = 1.5;
+  c.strokeRect(cx - 20, bottom - 46, 40, 46);
+  // Speaker cone
+  c.fillStyle = '#2a2a2a';
+  c.beginPath();
+  c.arc(cx, bottom - 24, 12, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = '#444';
+  c.lineWidth = 1;
+  c.stroke();
+  c.beginPath();
+  c.arc(cx, bottom - 24, 5, 0, Math.PI * 2);
+  c.fill();
+  // Mesh grille lines
+  c.strokeStyle = '#333';
+  c.lineWidth = 0.5;
+  for (var g = -16; g <= 16; g += 4) {
+    c.beginPath();
+    c.moveTo(cx - 18, bottom - 24 + g);
+    c.lineTo(cx + 18, bottom - 24 + g);
+    c.stroke();
+  }
+} else {
+  // Bunting / banner hanging across the path
+  c.fillStyle = '#3a3530';
+  c.fillRect(x, 0, 2, bottom - 20); // left cord
+  c.fillRect(x + w - 2, 0, 2, bottom - 20); // right cord
+  // Sagging rope
+  c.strokeStyle = '#8a7a60';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(x, bottom - 20);
+  c.quadraticCurveTo(cx, bottom + 5, x + w, bottom - 20);
+  c.stroke();
+  // Triangular pennants
+  var cols = ['#8b3030','#c9a050','#3a5a8a','#6a8a3a','#8a5a8a'];
+  var segs = 6;
+  for (var p = 0; p < segs; p++) {
+    var t1 = p / segs, t2 = (p + 0.5) / segs;
+    var px1 = x + t1 * w;
+    var py1 = (bottom - 20) + Math.sin(t1 * Math.PI) * 25;
+    var px2 = x + t2 * w;
+    var py2 = (bottom - 20) + Math.sin(t2 * Math.PI) * 25;
+    var px3 = (px1 + px2) / 2;
+    var py3 = py2 + 18;
+    c.fillStyle = cols[p % cols.length];
+    c.beginPath();
+    c.moveTo(px1, py1);
+    c.lineTo(px2, py2);
+    c.lineTo(px3, py3);
+    c.closePath();
+    c.fill();
+  }
+}
+}
+
+// === LOW OBSTACLES (on the ground, jump over) ===
+_drawLowObs1(c, type, x, y, w, h) {
+var cx = x + w/2;
+var gY = y + h;
+if (type === 0) {
+  // Toppled bar stool
+  var seatY = y + 4;
+  // Seat (circle, tilted)
+  c.fillStyle = '#6a4030';
+  c.beginPath();
+  c.ellipse(cx, seatY, w/2 - 4, 8, 0.15, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = '#4a2a18';
+  c.lineWidth = 1.5;
+  c.stroke();
+  // Padded top
+  c.fillStyle = '#8a5a40';
+  c.beginPath();
+  c.ellipse(cx, seatY - 3, w/2 - 8, 5, 0.15, 0, Math.PI * 2);
+  c.fill();
+  // Central pole (angled because toppled)
+  c.strokeStyle = '#888';
+  c.lineWidth = 3;
+  c.beginPath();
+  c.moveTo(cx, seatY + 6);
+  c.lineTo(cx + 12, gY);
+  c.stroke();
+  // Foot ring
+  c.strokeStyle = '#777';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.ellipse(cx + 8, gY - 8, 10, 3, 0, 0, Math.PI * 2);
+  c.stroke();
+  // Base
+  c.fillStyle = '#666';
+  c.beginPath();
+  c.ellipse(cx + 10, gY - 2, 14, 4, 0, 0, Math.PI * 2);
+  c.fill();
+} else if (type === 1) {
+  // Instrument case (saxophone or guitar)
+  var caseH = h - 2;
+  var caseW = w - 4;
+  // Main case body
+  c.fillStyle = '#1a1a1a';
+  c.beginPath();
+  c.moveTo(x + 4, gY);
+  c.lineTo(x + 4, y + 6);
+  c.quadraticCurveTo(cx, y, x + w - 4, y + 6);
+  c.lineTo(x + w - 4, gY);
+  c.closePath();
+  c.fill();
+  // Case edge
+  c.strokeStyle = '#444';
+  c.lineWidth = 1.5;
+  c.stroke();
+  // Latches
+  c.fillStyle = '#c9a050';
+  c.fillRect(cx - 12, y + caseH * 0.3, 5, 4);
+  c.fillRect(cx + 7, y + caseH * 0.3, 5, 4);
+  // Handle
+  c.strokeStyle = '#888';
+  c.lineWidth = 2.5;
+  c.beginPath();
+  c.moveTo(cx - 8, y + 4);
+  c.quadraticCurveTo(cx, y - 2, cx + 8, y + 4);
+  c.stroke();
+  // Brand label
+  c.fillStyle = '#c9a050';
+  c.font = 'italic 8px Georgia';
+  c.textAlign = 'center';
+  c.fillText('SELMER', cx, y + caseH * 0.6);
+} else {
+  // Crate of beer bottles
+  var crateW = w - 6, crateH = h - 2;
+  // Wooden crate
+  c.fillStyle = '#5a3a20';
+  c.fillRect(x + 3, y + 4, crateW, crateH - 4);
+  c.strokeStyle = '#3a2210';
+  c.lineWidth = 1.5;
+  c.strokeRect(x + 3, y + 4, crateW, crateH - 4);
+  // Horizontal slat
+  c.fillStyle = '#4a2a15';
+  c.fillRect(x + 3, y + crateH/2, crateW, 4);
+  // Bottles sticking up
+  var bottleCount = Math.floor(crateW / 10);
+  for (var b = 0; b < bottleCount; b++) {
+    var bx = x + 8 + b * (crateW - 10) / Math.max(1, bottleCount - 1);
+    // Bottle body
+    c.fillStyle = '#2a4a20';
+    c.fillRect(bx - 2.5, y - 8, 5, 16);
+    // Neck
+    c.fillRect(bx - 1.5, y - 14, 3, 8);
+    // Cap
+    c.fillStyle = '#c9a050';
+    c.fillRect(bx - 2, y - 16, 4, 3);
+    // Label
+    c.fillStyle = '#d4c8a0';
+    c.fillRect(bx - 2, y - 4, 4, 6);
+    // Glass highlight
+    c.fillStyle = 'rgba(255,255,255,0.1)';
+    c.fillRect(bx - 1, y - 12, 1.5, 10);
+  }
+}
+}
+
+// === HIGH OBSTACLES LEVEL 2 (bar top) ===
+_drawHighObs2(c, type, x, w, h) {
+var cx = x + w/2;
+var bottom = h;
+var dg = c.createRadialGradient(cx, bottom - 20, 5, cx, bottom, 50);
+dg.addColorStop(0, 'rgba(255,80,80,0.15)');
+dg.addColorStop(1, 'rgba(255,80,80,0)');
+c.fillStyle = dg;
+c.fillRect(cx - 50, bottom - 60, 100, 70);
+
+if (type === 0) {
+  // Hanging bottle rack (wooden rack with bottles hanging upside down)
+  c.fillStyle = '#4a3a2a';
+  c.fillRect(cx - 1, 0, 2, bottom - 30); // mounting pole
+  // Rack frame
+  c.strokeStyle = '#3a2a1a';
+  c.lineWidth = 2;
+  c.strokeRect(cx - 25, bottom - 45, 50, 35);
+  // Hanging bottles (upside down)
+  for (var b = 0; b < 4; b++) {
+    var bx = cx - 18 + b * 12;
+    // Bottle hanging down
+    c.fillStyle = '#2a4a20';
+    c.fillRect(bx - 2, bottom - 35, 4, 20);
+    c.fillStyle = '#4a6a30';
+    c.fillRect(bx - 3, bottom - 38, 6, 4); // bottom (now at top due to inversion)
+  }
+} else if (type === 1) {
+  // Shelf bracket with bottles
+  c.fillStyle = '#4a3a2a';
+  c.fillRect(cx - 1, 0, 2, bottom - 35);
+  // Bracket
+  c.fillStyle = '#5a4a3a';
+  c.beginPath();
+  c.moveTo(cx, bottom - 40);
+  c.lineTo(cx - 35, bottom - 40);
+  c.lineTo(cx - 35, bottom - 32);
+  c.closePath();
+  c.fill();
+  // Shelf
+  c.fillStyle = '#6a5a4a';
+  c.fillRect(cx - 35, bottom - 33, 35, 4);
+  // Bottles on shelf
+  for (var b = 0; b < 5; b++) {
+    var bx = cx - 32 + b * 7;
+    c.fillStyle = '#2a4a20';
+    c.fillRect(bx, bottom - 30, 4, 15);
+    c.fillStyle = '#d4a050';
+    c.fillRect(bx, bottom - 32, 4, 2);
+  }
+} else {
+  // Bartender's arm reaching across
+  c.fillStyle = '#c9a07a';
+  c.beginPath();
+  c.ellipse(cx + 20, bottom - 35, 6, 8, 0.3, 0, Math.PI * 2);
+  c.fill();
+  // Arm extending
+  c.strokeStyle = '#c9a07a';
+  c.lineWidth = 4;
+  c.beginPath();
+  c.moveTo(cx, bottom - 40);
+  c.quadraticCurveTo(cx + 25, bottom - 50, cx + 40, bottom - 35);
+  c.stroke();
+  // Hand holding cloth/glass
+  c.fillStyle = '#c9a07a';
+  c.beginPath();
+  c.arc(cx + 40, bottom - 35, 5, 0, Math.PI * 2);
+  c.fill();
+  // Cloth fluttering
+  c.fillStyle = '#d4c8a0';
+  c.beginPath();
+  c.moveTo(cx + 35, bottom - 30);
+  c.quadraticCurveTo(cx + 50, bottom - 20, cx + 45, bottom - 10);
+  c.quadraticCurveTo(cx + 40, bottom - 15, cx + 35, bottom - 20);
+  c.closePath();
+  c.fill();
+}
+}
+
+// === LOW OBSTACLES LEVEL 2 (bar top) ===
+_drawLowObs2(c, type, x, y, w, h) {
+var cx = x + w/2;
+var gY = y + h;
+
+if (type === 0) {
+  // Beer taps (brass/chrome tap handles sticking up from bar)
+  c.fillStyle = '#d4a574';
+  c.beginPath();
+  c.ellipse(cx - 8, y + h - 5, 3, 8, 0, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = '#a08050';
+  c.beginPath();
+  c.ellipse(cx - 8, y + h - 5, 2, 6, 0, 0, Math.PI * 2);
+  c.fill();
+  // Second tap
+  c.fillStyle = '#d4a574';
+  c.beginPath();
+  c.ellipse(cx + 8, y + h - 5, 3, 8, 0, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = '#a08050';
+  c.beginPath();
+  c.ellipse(cx + 8, y + h - 5, 2, 6, 0, 0, Math.PI * 2);
+  c.fill();
+} else if (type === 1) {
+  // Tip jar with coins (glass jar, coins visible)
+  c.fillStyle = '#2a4a40';
+  c.beginPath();
+  c.arc(cx, y + h/2, w/2 - 2, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = '#4a6a60';
+  c.lineWidth = 1.5;
+  c.stroke();
+  // Coins in jar
+  c.fillStyle = '#c9a050';
+  for (var coin = 0; coin < 6; coin++) {
+    var coinX = cx - w/4 + Math.random() * (w/2);
+    var coinY = y + h/2 + Math.random() * (h/3);
+    c.beginPath();
+    c.ellipse(coinX, coinY, 2.5, 1.5, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  // Jar lid
+  c.fillStyle = '#d4a574';
+  c.fillRect(cx - w/2 - 2, y + 2, w + 4, 4);
+} else {
+  // Spilled drink with fallen glass (puddle, broken glass shards)
+  c.fillStyle = 'rgba(200, 160, 80, 0.4)';
+  c.beginPath();
+  c.ellipse(cx, y + h - 5, w/2 - 4, 4, 0, 0, Math.PI * 2);
+  c.fill();
+  // Broken glass shards
+  c.fillStyle = 'rgba(100, 150, 200, 0.5)';
+  c.beginPath();
+  c.moveTo(cx - 10, y + h - 5);
+  c.lineTo(cx - 12, y + h - 2);
+  c.lineTo(cx - 8, y + h - 1);
+  c.closePath();
+  c.fill();
+  c.beginPath();
+  c.moveTo(cx, y + h - 8);
+  c.lineTo(cx - 2, y + h - 2);
+  c.lineTo(cx + 3, y + h - 3);
+  c.closePath();
+  c.fill();
+  c.beginPath();
+  c.moveTo(cx + 10, y + h - 6);
+  c.lineTo(cx + 8, y + h - 2);
+  c.lineTo(cx + 14, y + h - 1);
+  c.closePath();
+  c.fill();
+}
+}
+
+// === HIGH OBSTACLES LEVEL 3 (stage) ===
+_drawHighObs3(c, type, x, w, h) {
+var cx = x + w/2;
+var bottom = h;
+var dg = c.createRadialGradient(cx, bottom - 20, 5, cx, bottom, 50);
+dg.addColorStop(0, 'rgba(255,80,80,0.15)');
+dg.addColorStop(1, 'rgba(255,80,80,0)');
+c.fillStyle = dg;
+c.fillRect(cx - 50, bottom - 60, 100, 70);
+
+if (type === 0) {
+  // Guitar neck swinging overhead
+  c.fillStyle = '#3a2018';
+  c.fillRect(cx - 2, bottom - 50, 4, 50); // strap
+  // Guitar neck
+  c.fillStyle = '#5a4a3a';
+  c.fillRect(cx - 8, bottom - 45, 16, 35);
+  // Frets
+  c.strokeStyle = '#d4a574';
+  c.lineWidth = 0.5;
+  for (var f = 0; f < 12; f++) {
+    c.beginPath();
+    c.moveTo(cx - 7, bottom - 43 + f * 3);
+    c.lineTo(cx + 7, bottom - 43 + f * 3);
+    c.stroke();
+  }
+  // Tuning pegs
+  c.fillStyle = '#8a7a6a';
+  for (var p = 0; p < 3; p++) {
+    c.beginPath();
+    c.arc(cx - 10, bottom - 40 + p * 8, 2, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(cx + 10, bottom - 40 + p * 8, 2, 0, Math.PI * 2);
+    c.fill();
+  }
+} else if (type === 1) {
+  // Cymbal on tall stand
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(cx - 1, bottom - 40, 2, 40); // stand pole
+  // Cymbal disc
+  c.fillStyle = '#8a7a50';
+  c.beginPath();
+  c.ellipse(cx, bottom - 45, 25, 8, 0.1, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = '#5a4a30';
+  c.lineWidth = 2;
+  c.stroke();
+  // Cymbal shine
+  c.fillStyle = 'rgba(255, 255, 200, 0.15)';
+  c.beginPath();
+  c.ellipse(cx - 5, bottom - 47, 8, 3, 0.1, 0, Math.PI * 2);
+  c.fill();
+} else {
+  // Low-hanging spotlight rig (PAR can lights on a bar)
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(cx - 1, 0, 2, bottom - 25); // mounting pole
+  // Truss/pipe
+  c.fillStyle = '#2a2a2a';
+  c.fillRect(cx - 30, bottom - 30, 60, 4);
+  // PAR cans
+  for (var par = 0; par < 3; par++) {
+    var parX = cx - 20 + par * 20;
+    c.fillStyle = '#333';
+    c.fillRect(parX - 10, bottom - 28, 20, 16);
+    // Lens
+    c.fillStyle = 'rgba(255, 200, 100, 0.3)';
+    c.beginPath();
+    c.arc(parX, bottom - 20, 8, 0, Math.PI * 2);
+    c.fill();
+  }
+}
+}
+
+// === LOW OBSTACLES LEVEL 3 (stage) ===
+_drawLowObs3(c, type, x, y, w, h) {
+var cx = x + w/2;
+var gY = y + h;
+
+if (type === 0) {
+  // Stage monitor wedge (angled black wedge speaker)
+  c.fillStyle = '#1a1a1a';
+  c.beginPath();
+  c.moveTo(x, y + h);
+  c.lineTo(x + w, y + h);
+  c.lineTo(x + w - 5, y);
+  c.lineTo(x + 5, y);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = '#333';
+  c.lineWidth = 1.5;
+  c.stroke();
+  // Speaker cone
+  c.fillStyle = '#2a2a2a';
+  c.beginPath();
+  c.arc(cx, y + h - 8, 6, 0, Math.PI * 2);
+  c.fill();
+} else if (type === 1) {
+  // Cable bundle with gaffer tape (tangled cables on floor)
+  c.fillStyle = '#1a1a1a';
+  c.beginPath();
+  c.ellipse(cx, y + h - 3, w/2, h/2, 0, 0, Math.PI * 2);
+  c.fill();
+  // Cables
+  c.strokeStyle = '#3a3a3a';
+  c.lineWidth = 1;
+  for (var c_i = 0; c_i < 5; c_i++) {
+    c.beginPath();
+    c.moveTo(cx - w/3, y + h - Math.random() * 6);
+    c.quadraticCurveTo(cx, y + h - 4 - Math.random() * 8, cx + w/3, y + h - Math.random() * 6);
+    c.stroke();
+  }
+  // Gaffer tape strips
+  c.fillStyle = '#333333';
+  c.fillRect(cx - w/3, y + h - 4, w/3, 2);
+  c.fillRect(cx, y + h - 3, w/4, 1);
+} else {
+  // Fallen mic stand (stand on its side with mic)
+  c.fillStyle = '#1a1a1a';
+  c.beginPath();
+  c.moveTo(x + 5, y + h);
+  c.lineTo(x + w - 5, y + 5);
+  c.lineTo(x + w - 2, y + h);
+  c.closePath();
+  c.fill();
+  // Mic head
+  c.fillStyle = '#3a3a3a';
+  c.beginPath();
+  c.arc(x + w - 5, y + 2, 4, 0, Math.PI * 2);
+  c.fill();
+  // Mic clip
+  c.fillStyle = '#888';
+  c.fillRect(x + w - 8, y + 6, 6, 3);
+}
+}
+
+_drawPlayer(c) {
+var cp = this.carryPhase;
+var px = 100, py = cp.playerY;
+var isDucking = cp.playerDuckingInput && !cp.playerJumping;
+var isAirborne = cp.playerY < cp.groundY - 5;
+var legCycle = Math.sin(this.t * 8);
+var blink = (Math.sin(this.t * 2.1) > 0.95);
+
+// Invulnerability flash
+if (cp.invulnTimer > 0 && Math.sin(this.t * 30) > 0) { c.globalAlpha = 0.4; }
+
+c.save();
+
+// Stagger shake — character wobbles side to side rapidly
+if (cp.staggerTimer > 0) {
+  var staggerIntensity = Math.min(1, cp.staggerTimer / 0.5);
+  var shakeX = Math.sin(this.t * 28) * 6 * staggerIntensity;
+  var shakeR = Math.sin(this.t * 22) * 0.15 * staggerIntensity;
+  c.translate(px + shakeX, py);
+  c.rotate(shakeR);
+  c.translate(-(px + shakeX), -py);
+  // Draw dizzy stars above head
+  c.save();
+  c.globalAlpha = 0.7 * staggerIntensity;
+  c.fillStyle = '#ffe880';
+  c.font = '10px Georgia';
+  c.textAlign = 'center';
+  var starAngle = this.t * 6;
+  for (var si = 0; si < 3; si++) {
+    var sa = starAngle + si * (Math.PI * 2 / 3);
+    var starX = px + Math.cos(sa) * 14;
+    var starY = py - 18 + Math.sin(sa) * 5;
+    c.fillText('\u2726', starX, starY);
+  }
+  c.restore();
+}
+
+if (isDucking) {
+  // DUCKING POSE — crouched low
+  var duckY = cp.groundY + 5;
+  // Shadow
+  c.fillStyle = 'rgba(0,0,0,0.3)';
+  c.beginPath();
+  c.ellipse(px, cp.groundY + 38, 16, 4, 0, 0, Math.PI * 2);
+  c.fill();
+  // Legs (folded)
+  c.fillStyle = '#1a1a28';
+  c.fillRect(px - 8, duckY + 10, 7, 12);
+  c.fillRect(px + 1, duckY + 10, 7, 12);
+  // Shoes
+  c.fillStyle = '#2a1a10';
+  c.fillRect(px - 10, duckY + 20, 10, 5);
+  c.fillRect(px, duckY + 20, 10, 5);
+  // Torso (hunched)
+  c.fillStyle = '#4a3a2a';
+  c.fillRect(px - 8, duckY, 16, 14);
+  // Collar
+  c.fillStyle = '#d4c8b0';
+  c.fillRect(px - 5, duckY, 10, 3);
+  // Head (tucked)
+  c.fillStyle = '#c9a07a';
+  c.beginPath();
+  c.arc(px, duckY - 4, 7, 0, Math.PI * 2);
+  c.fill();
+  // Hair
+  c.fillStyle = '#3a2a1a';
+  c.beginPath();
+  c.arc(px, duckY - 6, 7, Math.PI, Math.PI * 2);
+  c.fill();
+  // Arms holding tray up
+  c.strokeStyle = '#c9a07a';
+  c.lineWidth = 2.5;
+  c.beginPath();
+  c.moveTo(px + 7, duckY + 5);
+  c.lineTo(px + 14, duckY - 10);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(px - 7, duckY + 5);
+  c.lineTo(px - 14, duckY - 10);
+  c.stroke();
+} else {
+  // STANDING / RUNNING / JUMPING POSE
+  var bodyTop = py;
+  // Shadow (only on ground)
+  if (!isAirborne) {
+    c.fillStyle = 'rgba(0,0,0,0.3)';
+    c.beginPath();
+    c.ellipse(px, cp.groundY + 38, 12, 3, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  // Shoes
+  c.fillStyle = '#2a1a10';
+  var shoeL = isAirborne ? -2 : legCycle * 5;
+  var shoeR = isAirborne ? 2 : -legCycle * 5;
+  c.fillRect(px - 7 + shoeL, bodyTop + 33, 8, 5);
+  c.fillRect(px - 1 + shoeR, bodyTop + 33, 8, 5);
+  // Legs (dark trousers)
+  c.fillStyle = '#1a1a28';
+  c.save();
+  c.beginPath();
+  c.moveTo(px - 3, bodyTop + 20);
+  c.lineTo(px - 6 + shoeL, bodyTop + 34);
+  c.lineTo(px + 1 + shoeL, bodyTop + 34);
+  c.lineTo(px, bodyTop + 20);
+  c.closePath();
+  c.fill();
+  c.beginPath();
+  c.moveTo(px, bodyTop + 20);
+  c.lineTo(px - 1 + shoeR, bodyTop + 34);
+  c.lineTo(px + 6 + shoeR, bodyTop + 34);
+  c.lineTo(px + 3, bodyTop + 20);
+  c.closePath();
+  c.fill();
+  c.restore();
+  // Torso (brown waistcoat over white shirt)
+  c.fillStyle = '#d4c8b0'; // shirt
+  c.fillRect(px - 7, bodyTop + 6, 14, 16);
+  c.fillStyle = '#4a3a2a'; // waistcoat
+  c.fillRect(px - 7, bodyTop + 6, 5, 15);
+  c.fillRect(px + 2, bodyTop + 6, 5, 15);
+  // Waistcoat buttons
+  c.fillStyle = '#c9a050';
+  c.beginPath(); c.arc(px, bodyTop + 10, 1, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(px, bodyTop + 15, 1, 0, Math.PI * 2); c.fill();
+  // Collar / bow tie
+  c.fillStyle = '#d4c8b0';
+  c.fillRect(px - 5, bodyTop + 4, 10, 3);
+  c.fillStyle = '#8a2020';
+  c.beginPath();
+  c.moveTo(px - 3, bodyTop + 5);
+  c.lineTo(px, bodyTop + 3);
+  c.lineTo(px + 3, bodyTop + 5);
+  c.lineTo(px, bodyTop + 7);
+  c.closePath();
+  c.fill();
+  // Head
+  c.fillStyle = '#c9a07a';
+  c.beginPath();
+  c.arc(px, bodyTop - 2, 8, 0, Math.PI * 2);
+  c.fill();
+  // Hair
+  c.fillStyle = '#3a2a1a';
+  c.beginPath();
+  c.arc(px, bodyTop - 4, 8, Math.PI + 0.3, Math.PI * 2 - 0.3);
+  c.fill();
+  // Eyes
+  c.fillStyle = blink ? '#c9a07a' : '#1a1a1a';
+  c.beginPath(); c.arc(px - 3, bodyTop - 2, 1.2, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(px + 3, bodyTop - 2, 1.2, 0, Math.PI * 2); c.fill();
+  // Nose
+  c.fillStyle = '#b8906a';
+  c.beginPath(); c.arc(px, bodyTop + 1, 1, 0, Math.PI * 2); c.fill();
+  // Arms holding tray up
+  c.strokeStyle = '#c9a07a';
+  c.lineWidth = 2.5;
+  var armBob = isAirborne ? 2 : Math.sin(this.t * 8) * 1.5;
+  c.beginPath();
+  c.moveTo(px + 7, bodyTop + 10);
+  c.quadraticCurveTo(px + 14, bodyTop + 2, px + 16, bodyTop - 10 + armBob);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(px - 7, bodyTop + 10);
+  c.quadraticCurveTo(px - 14, bodyTop + 2, px - 16, bodyTop - 10 + armBob);
+  c.stroke();
+  // Hands
+  c.fillStyle = '#c9a07a';
+  c.beginPath(); c.arc(px + 16, bodyTop - 10 + armBob, 2, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(px - 16, bodyTop - 10 + armBob, 2, 0, Math.PI * 2); c.fill();
+}
+
+c.restore();
+c.globalAlpha = 1;
+}
+
+_drawTray(c) {
+var cp = this.carryPhase;
+var px = 100;
+var isDucking = cp.playerDuckingInput && !cp.playerJumping;
+var trayY = isDucking ? (cp.groundY - 8) : (cp.playerY - 12);
+var armBob = (cp.playerY < cp.groundY - 5) ? 2 : Math.sin(this.t * 8) * 1.5;
+if (!isDucking) trayY += armBob;
+
+var wobble = cp.screenShake * 2;
+
+// Wobble effect: tray rocks back and forth when in danger
+var wobbleRot = 0;
+if (cp.wobbling) {
+  var wobbleIntensity = Math.min(1, cp.wobbleTimer / 1.5); // fades out over time
+  wobbleRot = Math.sin(this.t * 14) * 0.12 * wobbleIntensity;
+}
+
+c.save();
+c.translate(px, trayY);
+c.rotate(wobble * 0.04 + wobbleRot);
+
+// Silver tray with rim
+c.fillStyle = '#888';
+c.beginPath();
+c.ellipse(0, 0, 22, 5, 0, 0, Math.PI * 2);
+c.fill();
+c.fillStyle = '#aaa';
+c.beginPath();
+c.ellipse(0, -1, 20, 4, 0, 0, Math.PI * 2);
+c.fill();
+// Tray highlight
+c.fillStyle = 'rgba(255,255,255,0.15)';
+c.beginPath();
+c.ellipse(-4, -2, 10, 2, -0.2, 0, Math.PI * 2);
+c.fill();
+
+// Glasses on tray
+var cols = ['#c98030','#e0d090','#d4a050'];
+var names = ['B','M','S'];
+for (var i = 0; i < cp.glassesLeft; i++) {
+  var gx = -14 + i * 14;
+  // Glass body
+  c.fillStyle = 'rgba(200,200,200,0.25)';
+  c.fillRect(gx - 4, -16, 8, 14);
+  c.strokeStyle = 'rgba(255,255,255,0.3)';
+  c.lineWidth = 0.8;
+  c.strokeRect(gx - 4, -16, 8, 14);
+  // Liquid
+  c.fillStyle = cols[i] || '#d4a050';
+  c.fillRect(gx - 3, -10, 6, 8);
+  // Glass highlight
+  c.fillStyle = 'rgba(255,255,255,0.15)';
+  c.fillRect(gx - 3, -14, 2, 10);
+}
+
+c.restore();
+}
+
+// ========== RESULT PHASE ==========
+_resultCarry() {
+var cp = this.carryPhase;
+var total = this.mScore + cp.glassesLeft;
+var perfect = cp.glassesLeft === 3;
+var win = cp.glassesLeft >= 2;
+
+document.getElementById('bar-round-display').textContent = win ? '★ YOU MADE IT! ★' : '✗ SPILLED! ✗';
+var narr = document.getElementById('bar-narrative');
+
+if (perfect) {
+  narr.innerHTML = '<em style="color:#4CFF00;">All three drinks delivered perfectly. The band erupts in cheers!</em>';
+} else if (win) {
+  narr.innerHTML = '<em style="color:#d4a574;">The drinks arrive. "Not bad, kid."</em>';
+} else {
+  narr.innerHTML = '<em style="color:#FF6B6B;">You spilled everything. The pianist sighs.</em>';
+}
+
+this.phase = 'result';
+
 var self = this;
-this.scotches.forEach(function(s, idx) {
-var isH=self.hoveredItem===idx, isS=self.selectedItem===idx, isC=idx===self.correct[3];
-ctx.save();
-if (isH) { ctx.shadowColor='rgba(212,165,116,0.6)'; ctx.shadowBlur=20; }
-if (self.selectedItem!==null&&!isS) ctx.globalAlpha=0.3;
-var x=s.x, y=240;
-self.drawBottleShape(ctx, x, y, s.w, s.h, s.color);
-var lY=y+s.h/3, lH=s.h/3;
-ctx.fillStyle=s.accent; ctx.fillRect(x+5,lY,s.w-10,lH);
-ctx.fillStyle=s.color; ctx.font='bold 9px Georgia'; ctx.textAlign='center';
-ctx.fillText(s.label, x+s.w/2, lY+lH/2+3);
-if (isS) { ctx.strokeStyle=isC?'#4CFF00':'#FF4444'; ctx.lineWidth=3; ctx.strokeRect(x-5,y-20,s.w+10,s.h+25); }
-ctx.restore();
-});
+setTimeout(function() {
+  var lk = win ? document.querySelector('#bar-win-link tw-link') : document.querySelector('#bar-lose-link tw-link');
+  if (lk) lk.click();
+}, 2500);
+}
+
+_drawResult() {
+var c = this.ctx, W = this.W, H = this.H;
+c.fillStyle = '#0a0804';
+c.fillRect(0, 0, W, H);
+
+var total = this.mScore + this.carryPhase.glassesLeft;
+var isWin = this.carryPhase.glassesLeft >= 2;
+
+// Score display
+c.save();
+c.font = 'bold 28px Georgia';
+c.textAlign = 'center';
+c.fillStyle = isWin ? '#4CFF00' : '#FF6B6B';
+c.fillText('SCORE: ' + total + '/9', W/2, 80);
+
+// Star rating
+var stars = Math.ceil(total / 2.5);
+c.font = 'bold 28px Georgia';
+for (var i = 0; i < Math.min(3, stars); i++) {
+  c.fillText('★', W/2 - 40 + i * 40, 130);
+}
+
+// Completed drinks
+var dY = 200;
+c.font = 'bold 12px Georgia';
+c.fillStyle = '#d4a574';
+for (var i = 0; i < this.completedDrinks.length; i++) {
+  var cd = this.completedDrinks[i];
+  var dText = cd.who + '\u2019s ' + cd.name + ' \u2014 ' + (cd.accuracy === 2 ? '★ Perfect' : cd.accuracy === 1 ? '◐ Close' : '○ Missed');
+  c.fillText(dText, W/2, dY + i * 25);
+}
+
+// Glasses remaining
+dY += this.completedDrinks.length * 25 + 30;
+c.fillText('Glasses delivered: ' + this.carryPhase.glassesLeft + '/3', W/2, dY);
+
+this._drawSparkles(c);
+c.restore();
 }
 };
+
+// ====== DRINK POPUP (sip animation for buying drinks) ======
+window.DrinkPopup = class DrinkPopup {
+constructor(drinkType) {
+  // drinkType: 'pint', 'whisky', 'gin', 'wine', 'champagne'
+  this.type = drinkType || 'whisky';
+  this.sipped = false;
+  this.tiltAngle = 0;
+  this.tiltTarget = 0;
+  this.liquidLevel = 1.0;
+  this.wobble = 0;
+  this.wobbleDecay = 0;
+  this.fadeAlpha = 0;
+  this.fadeTarget = 1;
+  this.done = false;
+  this.t = 0;
+
+  // Drink configs: label, liquid colour, highlight, glass shape
+  this.configs = {
+    pint:      { label: 'Pint', liq: '#1a0a00', hi: '#3a1a08', foam: '#f0e8d0', bg: '#c8a86a' },
+    whisky:    { label: 'Whisky', liq: '#c98030', hi: '#e8b860', foam: null, bg: '#c8a86a' },
+    gin:       { label: 'Gin & Bitter Lemon', liq: '#e8e8a0', hi: '#f8f8d0', foam: null, bg: '#8ac8dc' },
+    wine:      { label: 'Wine', liq: '#6a1028', hi: '#8a2040', foam: null, bg: '#c8a86a' },
+    champagne: { label: 'Champagne', liq: '#e8d880', hi: '#f8f0b0', foam: '#f8f4e8', bg: '#c8a86a' },
+    scotch:    { label: 'Scotch', liq: '#d4a050', hi: '#e8c070', foam: null, bg: '#c8a86a' },
+    cider:     { label: 'Cider', liq: '#c8a030', hi: '#e0c060', foam: '#f0e8c8', bg: '#c8a86a' },
+    vodka:     { label: 'Vodka Tonic', liq: '#d8e8e8', hi: '#e8f4f4', foam: null, bg: '#8ac8dc' },
+    beer:      { label: 'Beer', liq: '#c08020', hi: '#e0a840', foam: '#f0e8d0', bg: '#c8a86a' }
+  };
+  this.cfg = this.configs[this.type] || this.configs.whisky;
+
+  this._build();
+  this._startLoop();
+}
+
+_build() {
+  // Overlay
+  this.overlay = document.createElement('div');
+  this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.4s;';
+  document.body.appendChild(this.overlay);
+
+  // Card
+  this.card = document.createElement('div');
+  this.card.style.cssText = 'display:flex;flex-direction:column;align-items:center;padding:24px 32px 18px;background:rgba(20,14,8,0.95);border:1px solid rgba(200,168,106,0.3);border-radius:10px;opacity:0;transition:opacity 0.4s;';
+  this.overlay.appendChild(this.card);
+
+  // Canvas
+  this.canvas = document.createElement('canvas');
+  this.canvas.width = 160;
+  this.canvas.height = 200;
+  this.canvas.style.cssText = 'cursor:pointer;';
+  this.ctx = this.canvas.getContext('2d');
+  this.card.appendChild(this.canvas);
+
+  // Prompt text
+  this.prompt = document.createElement('div');
+  this.prompt.style.cssText = 'margin-top:12px;font:italic 14px Georgia,serif;color:#d4a574;opacity:0.8;';
+  this.prompt.textContent = 'Hold to drink';
+  this.card.appendChild(this.prompt);
+
+  // Fade in
+  var self = this;
+  this.drinking = false;    // true while mouse/touch held down
+  this.hasDrunk = false;    // true once they've drunk at least a little
+  this.minLevel = 0.30;     // can't go below this — no downing it
+  this.closing = false;     // true once fade-out has started
+
+  setTimeout(function() {
+    self.overlay.style.background = 'rgba(0,0,0,0.55)';
+    self.card.style.opacity = '1';
+    self.fadeAlpha = 1;
+  }, 30);
+
+  // Hold-to-drink handlers (mouse + touch)
+  var startDrink = function(e) {
+    e.preventDefault();
+    if (self.closing || self.done) return;
+    if (self.liquidLevel <= self.minLevel + 0.01) return; // already hit bottom
+    self.drinking = true;
+    self.hasDrunk = true;
+    self.tiltTarget = -0.28;
+    self.wobbleDecay = 0.6;
+    self.prompt.textContent = '';
+  };
+  var stopDrink = function(e) {
+    e.preventDefault();
+    if (!self.drinking) return;
+    self.drinking = false;
+    self.tiltTarget = 0;
+    self.wobbleDecay = 0.8;
+    // Once they let go after drinking, fade out after a short pause
+    if (self.hasDrunk && !self.closing) {
+      self.closing = true;
+      setTimeout(function() {
+        self._fadeOut();
+      }, 700);
+    }
+  };
+
+  this.canvas.addEventListener('mousedown', startDrink);
+  this.canvas.addEventListener('mouseup', stopDrink);
+  this.canvas.addEventListener('mouseleave', stopDrink);
+  this.canvas.addEventListener('touchstart', startDrink);
+  this.canvas.addEventListener('touchend', stopDrink);
+  this.canvas.addEventListener('touchcancel', stopDrink);
+}
+
+_fadeOut() {
+  this.overlay.style.background = 'rgba(0,0,0,0)';
+  this.card.style.opacity = '0';
+  var self = this;
+  setTimeout(function() {
+    self.done = true;
+    if (self.overlay.parentNode) self.overlay.parentNode.removeChild(self.overlay);
+  }, 450);
+}
+
+_startLoop() {
+  var self = this;
+  var lt = performance.now();
+  function loop() {
+    if (self.done) return;
+    var now = performance.now();
+    var dt = Math.min(now - lt, 50) * 0.001;
+    lt = now;
+    self.t += dt;
+    // Smooth tilt
+    self.tiltAngle += (self.tiltTarget - self.tiltAngle) * 4 * dt;
+    // Drain liquid while holding
+    if (self.drinking) {
+      // Drain rate slows as you approach the minimum (can't down it)
+      var headroom = self.liquidLevel - self.minLevel;
+      var rate = 0.35 * Math.min(1.0, headroom * 4); // slows near bottom
+      self.liquidLevel = Math.max(self.minLevel, self.liquidLevel - rate * dt);
+      // If hit the floor, auto-release
+      if (self.liquidLevel <= self.minLevel + 0.005) {
+        self.liquidLevel = self.minLevel;
+        self.drinking = false;
+        self.tiltTarget = 0;
+        self.wobbleDecay = 0.8;
+        if (!self.closing) {
+          self.closing = true;
+          setTimeout(function() { self._fadeOut(); }, 700);
+        }
+      }
+    }
+    // Wobble
+    if (self.wobbleDecay > 0.01) {
+      self.wobble = Math.sin(self.t * 12) * self.wobbleDecay * 0.04;
+      self.wobbleDecay *= (1 - 2 * dt);
+    } else {
+      self.wobble = Math.sin(self.t * 1.8) * 0.005; // gentle idle slosh
+    }
+    self._draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+
+_draw() {
+  var c = this.ctx, W = 160, H = 200;
+  c.clearRect(0, 0, W, H);
+
+  c.save();
+  c.translate(W / 2, H * 0.85);
+  c.rotate(this.tiltAngle);
+
+  var cfg = this.cfg;
+  var lev = this.liquidLevel;
+  var wob = this.wobble;
+
+  if (this.type === 'pint' || this.type === 'cider' || this.type === 'beer') {
+    this._drawPint(c, cfg, lev, wob);
+  } else if (this.type === 'wine') {
+    this._drawWine(c, cfg, lev, wob);
+  } else if (this.type === 'champagne') {
+    this._drawChampagne(c, cfg, lev, wob);
+  } else if (this.type === 'gin' || this.type === 'vodka') {
+    this._drawTallGlass(c, cfg, lev, wob);
+  } else {
+    this._drawTumbler(c, cfg, lev, wob);
+  }
+
+  c.restore();
+}
+
+// === PINT GLASS ===
+_drawPint(c, cfg, lev, wob) {
+  var gW = 36, gH = 100, topW = 40;
+  var y0 = -gH;
+  // Glass body (slight taper)
+  c.fillStyle = 'rgba(200,200,200,0.08)';
+  c.beginPath();
+  c.moveTo(-gW / 2, 0);
+  c.lineTo(-topW / 2, y0);
+  c.lineTo(topW / 2, y0);
+  c.lineTo(gW / 2, 0);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.18)';
+  c.lineWidth = 1.2;
+  c.stroke();
+  // Liquid
+  var liqH = gH * 0.88 * lev;
+  var liqTop = -liqH;
+  var lW = gW / 2 - 2 + (topW / 2 - gW / 2) * (liqH / gH);
+  c.fillStyle = cfg.liq;
+  c.beginPath();
+  c.moveTo(-gW / 2 + 2, 0);
+  c.lineTo(-lW, liqTop + wob * 200);
+  c.quadraticCurveTo(0, liqTop - wob * 400, lW, liqTop + wob * 200);
+  c.lineTo(gW / 2 - 2, 0);
+  c.closePath();
+  c.fill();
+  // Foam head
+  if (cfg.foam && lev > 0.5) {
+    c.fillStyle = cfg.foam;
+    var foamY = liqTop + wob * 200;
+    c.beginPath();
+    c.ellipse(0, foamY, lW, 8, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  // Glass highlight
+  c.fillStyle = 'rgba(255,255,255,0.08)';
+  c.fillRect(-topW / 2 + 3, y0 + 5, 4, gH - 10);
+  // Handle
+  c.strokeStyle = 'rgba(255,255,255,0.15)';
+  c.lineWidth = 3;
+  c.beginPath();
+  c.moveTo(gW / 2, -gH * 0.25);
+  c.quadraticCurveTo(gW / 2 + 16, -gH * 0.5, gW / 2, -gH * 0.75);
+  c.stroke();
+}
+
+// === TUMBLER (whisky/scotch) ===
+_drawTumbler(c, cfg, lev, wob) {
+  var gW = 40, gH = 52, topW = 44;
+  var y0 = -gH;
+  // Glass body
+  c.fillStyle = 'rgba(200,200,200,0.08)';
+  c.beginPath();
+  c.moveTo(-gW / 2, 0);
+  c.lineTo(-topW / 2, y0);
+  c.lineTo(topW / 2, y0);
+  c.lineTo(gW / 2, 0);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.2)';
+  c.lineWidth = 1.5;
+  c.stroke();
+  // Liquid
+  var liqH = gH * 0.45 * lev;
+  var liqTop = -liqH;
+  var lW = gW / 2 - 2;
+  c.fillStyle = cfg.liq;
+  c.beginPath();
+  c.moveTo(-lW, 0);
+  c.lineTo(-lW - 1, liqTop + wob * 100);
+  c.quadraticCurveTo(0, liqTop - wob * 200, lW + 1, liqTop + wob * 100);
+  c.lineTo(lW, 0);
+  c.closePath();
+  c.fill();
+  // Highlight
+  c.fillStyle = cfg.hi;
+  c.globalAlpha = 0.25;
+  c.beginPath();
+  c.ellipse(0, liqTop + wob * 100, lW - 2, 3, 0, 0, Math.PI * 2);
+  c.fill();
+  c.globalAlpha = 1;
+  // Glass highlight
+  c.fillStyle = 'rgba(255,255,255,0.07)';
+  c.fillRect(-topW / 2 + 3, y0 + 3, 3, gH - 6);
+  // Thick glass base
+  c.strokeStyle = 'rgba(255,255,255,0.12)';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(-gW / 2 - 2, 2);
+  c.lineTo(gW / 2 + 2, 2);
+  c.stroke();
+}
+
+// === WINE GLASS ===
+_drawWine(c, cfg, lev, wob) {
+  var bowlW = 34, bowlH = 50, stemH = 35, baseW = 24;
+  var bowlY = -(stemH + bowlH);
+  // Stem
+  c.strokeStyle = 'rgba(255,255,255,0.2)';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(0, 0);
+  c.lineTo(0, -stemH);
+  c.stroke();
+  // Base
+  c.beginPath();
+  c.ellipse(0, 0, baseW / 2, 4, 0, 0, Math.PI * 2);
+  c.stroke();
+  // Bowl
+  c.fillStyle = 'rgba(200,200,200,0.06)';
+  c.beginPath();
+  c.moveTo(-8, -stemH);
+  c.quadraticCurveTo(-bowlW / 2, -stemH - bowlH * 0.5, -bowlW / 2 + 4, bowlY);
+  c.lineTo(bowlW / 2 - 4, bowlY);
+  c.quadraticCurveTo(bowlW / 2, -stemH - bowlH * 0.5, 8, -stemH);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.18)';
+  c.lineWidth = 1;
+  c.stroke();
+  // Liquid in bowl
+  var liqH = bowlH * 0.55 * lev;
+  var liqBot = -stemH;
+  var liqTop = liqBot - liqH;
+  var lW = 7 + (bowlW / 2 - 10) * (liqH / bowlH);
+  c.fillStyle = cfg.liq;
+  c.beginPath();
+  c.moveTo(-7, liqBot);
+  c.quadraticCurveTo(-lW, liqTop + wob * 100, 0, liqTop - wob * 150);
+  c.quadraticCurveTo(lW, liqTop + wob * 100, 7, liqBot);
+  c.closePath();
+  c.fill();
+}
+
+// === CHAMPAGNE FLUTE ===
+_drawChampagne(c, cfg, lev, wob) {
+  var fluteW = 16, fluteH = 65, stemH = 32, baseW = 22;
+  var fluteY = -(stemH + fluteH);
+  // Stem
+  c.strokeStyle = 'rgba(255,255,255,0.2)';
+  c.lineWidth = 1.5;
+  c.beginPath();
+  c.moveTo(0, 0);
+  c.lineTo(0, -stemH);
+  c.stroke();
+  // Base
+  c.beginPath();
+  c.ellipse(0, 0, baseW / 2, 3, 0, 0, Math.PI * 2);
+  c.stroke();
+  // Flute body
+  c.fillStyle = 'rgba(200,200,200,0.06)';
+  c.beginPath();
+  c.moveTo(-fluteW / 2 + 2, -stemH);
+  c.lineTo(-fluteW / 2, fluteY + 10);
+  c.quadraticCurveTo(-fluteW / 2 + 2, fluteY, 0, fluteY);
+  c.quadraticCurveTo(fluteW / 2 - 2, fluteY, fluteW / 2, fluteY + 10);
+  c.lineTo(fluteW / 2 - 2, -stemH);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.18)';
+  c.lineWidth = 1;
+  c.stroke();
+  // Liquid
+  var liqH = fluteH * 0.75 * lev;
+  var liqBot = -stemH;
+  var liqTop = liqBot - liqH;
+  c.fillStyle = cfg.liq;
+  c.beginPath();
+  c.moveTo(-fluteW / 2 + 3, liqBot);
+  c.lineTo(-fluteW / 2 + 2, liqTop + wob * 80);
+  c.quadraticCurveTo(0, liqTop - wob * 150, fluteW / 2 - 2, liqTop + wob * 80);
+  c.lineTo(fluteW / 2 - 3, liqBot);
+  c.closePath();
+  c.fill();
+  // Bubbles
+  if (lev > 0.3) {
+    c.fillStyle = 'rgba(255,255,240,0.4)';
+    for (var b = 0; b < 5; b++) {
+      var bx = (Math.sin(this.t * 2.3 + b * 1.7)) * 4;
+      var by = liqBot - (((this.t * 18 + b * 13) % liqH));
+      if (by > liqTop) {
+        c.beginPath();
+        c.arc(bx, by, 1.2, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  }
+}
+
+// === TALL GLASS (gin & tonic / bitter lemon) ===
+_drawTallGlass(c, cfg, lev, wob) {
+  var gW = 28, gH = 80, topW = 30;
+  var y0 = -gH;
+  // Glass body
+  c.fillStyle = 'rgba(200,200,200,0.07)';
+  c.beginPath();
+  c.moveTo(-gW / 2, 0);
+  c.lineTo(-topW / 2, y0);
+  c.lineTo(topW / 2, y0);
+  c.lineTo(gW / 2, 0);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.18)';
+  c.lineWidth = 1.2;
+  c.stroke();
+  // Liquid
+  var liqH = gH * 0.8 * lev;
+  var liqTop = -liqH;
+  var lW = gW / 2 - 2;
+  c.fillStyle = cfg.liq;
+  c.beginPath();
+  c.moveTo(-lW, 0);
+  c.lineTo(-lW - 1, liqTop + wob * 150);
+  c.quadraticCurveTo(0, liqTop - wob * 300, lW + 1, liqTop + wob * 150);
+  c.lineTo(lW, 0);
+  c.closePath();
+  c.fill();
+  // Lemon slice on rim
+  c.fillStyle = '#e8d860';
+  c.globalAlpha = 0.7;
+  c.beginPath();
+  c.arc(topW / 2 - 2, y0 + 2, 8, 0, Math.PI, true);
+  c.fill();
+  c.fillStyle = '#f0e880';
+  c.beginPath();
+  c.arc(topW / 2 - 2, y0 + 2, 5, 0, Math.PI, true);
+  c.fill();
+  c.globalAlpha = 1;
+  // Ice cubes
+  c.fillStyle = 'rgba(200,220,240,0.2)';
+  c.fillRect(-5, -liqH * 0.4, 10, 8);
+  c.fillRect(2, -liqH * 0.6, 8, 7);
+  // Glass highlight
+  c.fillStyle = 'rgba(255,255,255,0.06)';
+  c.fillRect(-topW / 2 + 3, y0 + 4, 3, gH - 8);
+  // Base
+  c.strokeStyle = 'rgba(255,255,255,0.1)';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(-gW / 2 - 1, 2);
+  c.lineTo(gW / 2 + 1, 2);
+  c.stroke();
+}
+};
+
+// Global helper to show drink popup from passage scripts
+window.showDrinkPopup = function(drinkType) {
+  new window.DrinkPopup(drinkType);
+};
+
 
 window.startBarGame = function() {
 if (window.currentBarGame) window.currentBarGame.stop();
 document.getElementById('pre-bar').classList.add('hidden');
 var sobriety = parseInt(document.getElementById('sob-data-bar').textContent) || 55;
 var canvas = document.getElementById('bar-canvas');
+canvas.style.display = 'block';
 canvas.classList.remove('success-flash', 'error-flash');
 window.currentBarGame = new window.BarGame('bar-canvas', sobriety);
 };
+// Delegated click listener as backup for inline onclick
+document.addEventListener('click', function(e) {
+if (e.target && e.target.id === 'bar-start-btn') window.startBarGame();
+if (e.target && e.target.id === 'fight-start-btn') window.startFightGame();
+});
 
 /* ===== FIGHT MINIGAME ENGINE ===== */
 window.FightGame = class FightGame {
@@ -15228,10 +18274,10 @@ rsWrap.appendChild(rsLoc);
 // ============================================================
 rsBtn = document.createElement('div');
 rsBtn.id = 'rs-enter-btn';
-rsBtn.style.cssText = 'position:absolute;bottom:45px;left:50%;transform:translateX(-50%);font:14px monospace;color:rgba(200,140,100,0.7);cursor:pointer;user-select:none;z-index:9001;';
-rsBtn.textContent = '·';
-rsBtn.addEventListener('mouseover', function() { rsBtn.style.color = 'rgba(255,160,100,0.95)'; });
-rsBtn.addEventListener('mouseout', function() { rsBtn.style.color = 'rgba(200,140,100,0.7)'; });
+rsBtn.style.cssText = 'position:absolute;bottom:60px;left:50%;transform:translateX(-50%);font:13px "Courier New",monospace;color:rgba(200,140,100,0.85);cursor:pointer;user-select:none;z-index:9001;letter-spacing:2px;padding:8px 18px;border:1px solid rgba(200,140,100,0.35);opacity:0;transition:opacity 1.2s ease, color 0.3s ease, border-color 0.3s ease;';
+rsBtn.textContent = "ENTER RONNIE SCOTT\u0027S";
+rsBtn.addEventListener('mouseenter', function() { rsBtn.style.color = 'rgba(255,160,100,0.95)'; rsBtn.style.borderColor = 'rgba(232,120,24,0.6)'; });
+rsBtn.addEventListener('mouseleave', function() { rsBtn.style.color = 'rgba(200,140,100,0.85)'; rsBtn.style.borderColor = 'rgba(200,140,100,0.35)'; });
 rsBtn.addEventListener('click', function() {
   rsAnimId = null;
   rsActive = false;
@@ -15240,6 +18286,7 @@ rsBtn.addEventListener('click', function() {
   if (cont) { var lk = cont.parentElement.querySelector('tw-link'); if (lk) lk.click(); }
 });
 rsWrap.appendChild(rsBtn);
+setTimeout(function() { rsBtn.style.opacity = '1'; }, 1500);
 
 // ============================================================
 // ANIMATION LOOP WITH EFFECTS
@@ -18530,7 +21577,7 @@ You once told him that he should stick to poems.
 So now, have you got anything to lose?
 
 [[Nothing|The novelist]]
-(link: "Everything")[(set: $confidence to $confidence - 12)(goto: "Dean Street")]
+(link: "Everything")[(set: $confidence to $confidence - 12)(go-to: "Dean Street")]
 
 <svg class="french-rule" viewBox="0 0 300 24" width="100%" height="24" preserveAspectRatio="none"><defs><linearGradient id="frC" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="45%" stop-color="#c8a86a" stop-opacity="0.55"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient><linearGradient id="frD" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="45%" stop-color="#c8a86a" stop-opacity="0.28"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="7" x2="300" y2="7" stroke="url(#frD)" stroke-width="0.5"/><line x1="0" y1="12" x2="300" y2="12" stroke="url(#frC)" stroke-width="1.2"/><svg x="140" y="0" width="20" height="24" viewBox="-12 -2 24 26" preserveAspectRatio="xMidYMid meet"><g fill="#c8a86a" opacity="0.75"><path d="M0,15 C-3,10 -4,2 0,-1 C4,2 3,10 0,15Z"/><path d="M-1,13 C-4,10 -8,5 -9,3 C-9,5 -8,6 -6,5 C-3,8 -1,11 0,13Z"/><path d="M1,13 C4,10 8,5 9,3 C9,5 8,6 6,5 C3,8 1,11 0,13Z"/><rect x="-8" y="14" width="16" height="2.5" rx="0.5"/><ellipse cx="0" cy="20" rx="2.5" ry="2"/></g></svg></svg>
 
@@ -18748,9 +21795,32 @@ She moos; he drinks.
 //&#91;insert sponsored drink&#93;//
 
 (link: "Drink it.")[(set: $confidence to $confidence + 15)(set: $sobriety to $sobriety - 5)
-<span class="inventory-note">&#9734; CONFIDENCE +15 | SOBRIETY −5</span>]
+<span class="inventory-note">&#9734; CONFIDENCE +15 | SOBRIETY −5</span>
+<script>setTimeout(function(){ window.showDrinkPopup('champagne'); }, 200);</script>]
 
-[[Deal with the cow|Jeffrey Bernard's Cow]]
+'Will you do something about this cow?'
+
+Said Jeffrey Bernard.
+
+You take its bridle. It sneezes. When you look back he's disappeared to a timeshare on the seacoast of Bohemia.
+
+(if: not ($haunts contains $haunt3))[(if: $hauntExplained is false)[(set: $hauntExplained to true)
+<div class="lore-box">
+<strong>⟡ HAUNTS ⟡</strong>
+
+Tonight, Soho will mark you. Here, in our dream, we call these marks 'haunts'. You'll gather them as you wander the night and its stages. Seek them: you'll need them to get out.
+</div>]
+(set: $haunts to $haunts + (a: $haunt3))
+
+<div class="haunt-box">
+<div class="haunt-header">⟡ HAUNT COLLECTED ⟡</div>
+<div class="haunt-name">THE BEAST</div>
+<div class="haunt-description">Is it New York or New Year?</div>
+</div>]
+
+What will you do with his cow?
+
+[[Ride the beast|Ride Jeffrey Bernard's cow]]
 
 :: Colony drink [venue-colony] {"position":"1400,850","size":"100,100"}
 <div class="colony-scene">
@@ -18760,6 +21830,8 @@ She moos; he drinks.
 <svg class="colony-corner br" viewBox="0 0 28 28"><path d="M2,26 L2,5 Q2,2 5,2 L26,2" fill="none" stroke="#7aaa60" stroke-width="1.8" stroke-linecap="round"/><path d="M6,26 L6,9 Q6,6 9,6 L26,6" fill="none" stroke="#9a8a30" stroke-width="0.8" opacity="0.55" stroke-linecap="round"/><circle cx="2" cy="2" r="2" fill="#8a9a50" opacity="0.75"/><circle cx="2" cy="2" r="0.8" fill="#c8b860" opacity="0.6"/></svg>
 <svg class="colony-fan" viewBox="0 0 300 52" width="100%" height="52" preserveAspectRatio="none"><defs><clipPath id="cf1"><rect x="0" y="0" width="300" height="50"/></clipPath><linearGradient id="cfL" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="50%" stop-color="#9a8a30" stop-opacity="0.75"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient></defs><g clip-path="url(#cf1)" opacity="0.35"><line x1="150" y1="54" x2="0"   y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="33"  y2="0" stroke="#8a9a50" stroke-width="0.8"/><line x1="150" y1="54" x2="67"  y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="100" y2="0" stroke="#9a8a30" stroke-width="0.8"/><line x1="150" y1="54" x2="133" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="150" y2="0" stroke="#c8b860" stroke-width="1.0"/><line x1="150" y1="54" x2="167" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="200" y2="0" stroke="#9a8a30" stroke-width="0.8"/><line x1="150" y1="54" x2="233" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="267" y2="0" stroke="#8a9a50" stroke-width="0.8"/><line x1="150" y1="54" x2="300" y2="0" stroke="#7aaa60" stroke-width="0.8"/></g><line x1="0" y1="44" x2="300" y2="44" stroke="url(#cfL)" stroke-width="0.6"/><line x1="0" y1="48" x2="300" y2="48" stroke="url(#cfL)" stroke-width="1.8"/><polygon points="150,41 155,45 150,49 145,45" fill="#c8b860" opacity="0.65"/><polygon points="120,45 123,48 120,51 117,48" fill="none" stroke="#7aaa60" stroke-width="0.8" opacity="0.45"/><polygon points="180,45 183,48 180,51 177,48" fill="none" stroke="#7aaa60" stroke-width="0.8" opacity="0.45"/></svg>
 (set: $sobriety to $sobriety - 16)
+<span id="drink-type-data" style="display:none;">(print: $lastDrink)</span>\
+<script>setTimeout(function(){ var dt = document.getElementById('drink-type-data'); var t = (dt && dt.textContent.trim()) || 'champagne'; window.showDrinkPopup(t); }, 400);</script>\
 You drink. The Colony Room tilts.
 
 (if: $knowsCopperSecret is false)[At the bar, a man, drinking.
@@ -18818,11 +21890,12 @@ Davy Merkin gave you a password: //Valletta//. For Lackland's back room.
 <svg class="colony-corner bl" viewBox="0 0 28 28"><path d="M2,26 L2,5 Q2,2 5,2 L26,2" fill="none" stroke="#7aaa60" stroke-width="1.8" stroke-linecap="round"/><path d="M6,26 L6,9 Q6,6 9,6 L26,6" fill="none" stroke="#9a8a30" stroke-width="0.8" opacity="0.55" stroke-linecap="round"/><circle cx="2" cy="2" r="2" fill="#8a9a50" opacity="0.75"/><circle cx="2" cy="2" r="0.8" fill="#c8b860" opacity="0.6"/></svg>
 <svg class="colony-corner br" viewBox="0 0 28 28"><path d="M2,26 L2,5 Q2,2 5,2 L26,2" fill="none" stroke="#7aaa60" stroke-width="1.8" stroke-linecap="round"/><path d="M6,26 L6,9 Q6,6 9,6 L26,6" fill="none" stroke="#9a8a30" stroke-width="0.8" opacity="0.55" stroke-linecap="round"/><circle cx="2" cy="2" r="2" fill="#8a9a50" opacity="0.75"/><circle cx="2" cy="2" r="0.8" fill="#c8b860" opacity="0.6"/></svg>
 <svg class="colony-fan" viewBox="0 0 300 52" width="100%" height="52" preserveAspectRatio="none"><defs><clipPath id="cf1"><rect x="0" y="0" width="300" height="50"/></clipPath><linearGradient id="cfL" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="50%" stop-color="#9a8a30" stop-opacity="0.75"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient></defs><g clip-path="url(#cf1)" opacity="0.35"><line x1="150" y1="54" x2="0"   y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="33"  y2="0" stroke="#8a9a50" stroke-width="0.8"/><line x1="150" y1="54" x2="67"  y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="100" y2="0" stroke="#9a8a30" stroke-width="0.8"/><line x1="150" y1="54" x2="133" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="150" y2="0" stroke="#c8b860" stroke-width="1.0"/><line x1="150" y1="54" x2="167" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="200" y2="0" stroke="#9a8a30" stroke-width="0.8"/><line x1="150" y1="54" x2="233" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="267" y2="0" stroke="#8a9a50" stroke-width="0.8"/><line x1="150" y1="54" x2="300" y2="0" stroke="#7aaa60" stroke-width="0.8"/></g><line x1="0" y1="44" x2="300" y2="44" stroke="url(#cfL)" stroke-width="0.6"/><line x1="0" y1="48" x2="300" y2="48" stroke="url(#cfL)" stroke-width="1.8"/><polygon points="150,41 155,45 150,49 145,45" fill="#c8b860" opacity="0.65"/><polygon points="120,45 123,48 120,51 117,48" fill="none" stroke="#7aaa60" stroke-width="0.8" opacity="0.45"/><polygon points="180,45 183,48 180,51 177,48" fill="none" stroke="#7aaa60" stroke-width="0.8" opacity="0.45"/></svg>
-Drink?
-
-[[Vodka tonic|Colony drink]]
-[[Champagne|Colony drink]]
-[[Beer|Colony drink]]
+<svg viewBox="0 0 400 180" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;"><defs><linearGradient id="dcGold" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="15%" stop-color="#9a8a30" stop-opacity="0.9"/><stop offset="50%" stop-color="#c8b860" stop-opacity="1"/><stop offset="85%" stop-color="#9a8a30" stop-opacity="0.9"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient><linearGradient id="dcBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0e1a0c" stop-opacity="0.97"/><stop offset="100%" stop-color="#080e08" stop-opacity="0.99"/></linearGradient><linearGradient id="dcRule" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="25%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="75%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient><radialGradient id="dcGlow" cx="50%" cy="40%" r="40%"><stop offset="0%" stop-color="#c8b860" stop-opacity="0.07"/><stop offset="100%" stop-color="#c8b860" stop-opacity="0"/></radialGradient><linearGradient id="dcVodka" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c0d8d8" stop-opacity="0.15"/><stop offset="100%" stop-color="#a0c0c0" stop-opacity="0.35"/></linearGradient><linearGradient id="dcChamp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e8d880" stop-opacity="0.2"/><stop offset="100%" stop-color="#c8a840" stop-opacity="0.5"/></linearGradient><linearGradient id="dcBeer" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e0a840" stop-opacity="0.2"/><stop offset="100%" stop-color="#c08020" stop-opacity="0.5"/></linearGradient></defs><!-- Background card --><rect x="10" y="6" width="380" height="168" rx="3" fill="url(#dcBg)" stroke="rgba(122,170,96,0.32)" stroke-width="1"/><rect x="18" y="14" width="364" height="152" rx="2" fill="url(#dcGlow)" stroke="rgba(122,170,96,0.13)" stroke-width="0.5"/><!-- Left botanical vine --><g opacity="0.38" fill="none" stroke="#7aaa60" stroke-width="0.85"><path d="M28,70 C27,55 30,40 34,28 C37,20 41,14 38,8"/><path d="M33,50 C29,44 22,42 19,36"/><path d="M31,35 C27,29 29,22 26,16"/></g><g opacity="0.4" fill="#7aaa60"><path d="M33,50 C31,44 26,47 24,42 C28,41 32,44 33,50 Z"/><path d="M31,35 C29,29 24,31 23,27 C27,26 31,30 31,35 Z"/></g><!-- Right botanical vine --><g opacity="0.38" fill="none" stroke="#7aaa60" stroke-width="0.85"><path d="M372,70 C373,55 370,40 366,28 C363,20 359,14 362,8"/><path d="M367,50 C371,44 378,42 381,36"/><path d="M369,35 C373,29 371,22 374,16"/></g><g opacity="0.4" fill="#7aaa60"><path d="M367,50 C369,44 374,47 376,42 C372,41 368,44 367,50 Z"/><path d="M369,35 C371,29 376,31 377,27 C373,26 369,30 369,35 Z"/></g><!-- Header --><text x="200" y="42" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#dcGold)" letter-spacing="3" style="font-size:14px">Drink?</text><!-- Divider --><line x1="80" y1="52" x2="320" y2="52" stroke="url(#dcRule)" stroke-width="0.6"/><polygon points="200,49 203,52 200,55 197,52" fill="#9a8a30" opacity="0.6"/><!-- VODKA HIGHBALL (left) --><g opacity="0.8"><rect x="112" y="66" width="16" height="40" rx="1.5" fill="rgba(180,200,200,0.15)" stroke="rgba(180,200,200,0.35)" stroke-width="1"/><rect x="113" y="82" width="14" height="23" rx="1" fill="url(#dcVodka)"/><line x1="114" y1="90" x2="126" y2="90" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/><path d="M124,70 L128,66 L130,72 Z" fill="rgba(120,180,80,0.5)" stroke="rgba(100,160,60,0.4)" stroke-width="0.5"/></g><text x="120" y="120" text-anchor="middle" font-family="Georgia,serif" fill="#7aaa60" opacity="0.55" style="font-size:7px">Vodka tonic</text><!-- CHAMPAGNE FLUTE (centre) --><g opacity="0.8"><rect x="199" y="90" width="2" height="12" fill="rgba(200,180,100,0.3)"/><ellipse cx="200" cy="103" rx="8" ry="2.2" fill="rgba(200,180,100,0.22)"/><path d="M193,90 C190,80 189,70 192,64 C195,60 198,58 200,57 C202,58 205,60 208,64 C211,70 210,80 207,90 Z" fill="url(#dcChamp)" stroke="rgba(220,200,120,0.4)" stroke-width="1"/><circle cx="198" cy="74" r="1" fill="rgba(255,255,200,0.3)"/><circle cx="202" cy="68" r="0.8" fill="rgba(255,255,200,0.25)"/><circle cx="200" cy="80" r="0.7" fill="rgba(255,255,200,0.2)"/></g><text x="200" y="120" text-anchor="middle" font-family="Georgia,serif" fill="#c8b860" opacity="0.55" style="font-size:7px">Champagne</text><!-- BEER PINT (right) --><g opacity="0.8"><path d="M291,72 C298,72 300,78 300,82 C300,86 298,92 291,92" fill="none" stroke="rgba(180,160,100,0.35)" stroke-width="2"/><rect x="272" y="66" width="20" height="38" rx="1.5" fill="rgba(192,128,32,0.15)" stroke="rgba(192,128,32,0.3)" stroke-width="1"/><rect x="273" y="78" width="18" height="25" rx="1" fill="url(#dcBeer)"/><path d="M273,78 Q277,75 282,78 Q287,75 291,78" fill="rgba(240,232,208,0.35)" stroke="none"/></g><text x="282" y="120" text-anchor="middle" font-family="Georgia,serif" fill="#c08020" opacity="0.55" style="font-size:7px">Beer</text><!-- Dots between glasses --><g fill="#9a8a30" opacity="0.4"><circle cx="152" cy="85" r="1.3"/><circle cx="160" cy="82" r="0.9"/><circle cx="168" cy="85" r="1.3"/><circle cx="232" cy="85" r="1.3"/><circle cx="240" cy="82" r="0.9"/><circle cx="248" cy="85" r="1.3"/></g><!-- Lower divider --><line x1="30" y1="132" x2="370" y2="132" stroke="url(#dcRule)" stroke-width="0.6"/><!-- Diamond row --><g fill="#7aaa60" opacity="0.4"><polygon points="160,142 163,146 160,150 157,146"/><polygon points="180,140 183,144 180,148 177,144"/><polygon points="200,138 204,142 200,146 196,142"/><polygon points="220,140 223,144 220,148 217,144"/><polygon points="240,142 243,146 240,150 237,146"/></g><!-- Bottom swags --><g opacity="0.2" fill="none" stroke="#7aaa60" stroke-width="0.7"><path d="M42,164 C68,155 105,160 135,153 C160,146 176,150 196,146"/><path d="M358,164 C332,155 295,160 265,153 C240,146 224,150 204,146"/></g><!-- Corner brackets --><g opacity="0.3" stroke="#7aaa60" stroke-width="0.9" fill="none"><polyline points="20,22 20,16 29,16"/><polyline points="380,22 380,16 371,16"/><polyline points="20,160 20,168 29,168"/><polyline points="380,160 380,168 371,168"/></g></svg>
+<div class="drink-menu colony-drinks">
+(link: "Vodka tonic")[(set: $lastDrink to "vodka")(go-to: "Colony drink")]
+(link: "Champagne")[(set: $lastDrink to "champagne")(go-to: "Colony drink")]
+(link: "Beer")[(set: $lastDrink to "beer")(go-to: "Colony drink")]
+</div>
 <svg class="colony-fan-bottom" viewBox="0 0 300 52" width="100%" height="52" preserveAspectRatio="none"><defs><clipPath id="cf2"><rect x="0" y="0" width="300" height="50"/></clipPath><linearGradient id="cfL2" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="50%" stop-color="#9a8a30" stop-opacity="0.75"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient></defs><g clip-path="url(#cf2)" opacity="0.35"><line x1="150" y1="54" x2="0"   y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="33"  y2="0" stroke="#8a9a50" stroke-width="0.8"/><line x1="150" y1="54" x2="67"  y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="100" y2="0" stroke="#9a8a30" stroke-width="0.8"/><line x1="150" y1="54" x2="133" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="150" y2="0" stroke="#c8b860" stroke-width="1.0"/><line x1="150" y1="54" x2="167" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="200" y2="0" stroke="#9a8a30" stroke-width="0.8"/><line x1="150" y1="54" x2="233" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="267" y2="0" stroke="#8a9a50" stroke-width="0.8"/><line x1="150" y1="54" x2="300" y2="0" stroke="#7aaa60" stroke-width="0.8"/></g><line x1="0" y1="44" x2="300" y2="44" stroke="url(#cfL2)" stroke-width="0.6"/><line x1="0" y1="48" x2="300" y2="48" stroke="url(#cfL2)" stroke-width="1.8"/><polygon points="150,41 155,45 150,49 145,45" fill="#c8b860" opacity="0.65"/><polygon points="120,45 123,48 120,51 117,48" fill="none" stroke="#7aaa60" stroke-width="0.8" opacity="0.45"/><polygon points="180,45 183,48 180,51 177,48" fill="none" stroke="#7aaa60" stroke-width="0.8" opacity="0.45"/></svg>
 </div>
 
@@ -18877,7 +21950,7 @@ Traveller, sleep!
 [[·|Black page]]
 
 :: Centre Point {"position":"1650,75","size":"100,100"}
-(if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[(goto: "Alba Complete")](else:)[(goto: "Alba Incomplete")]
+(if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[(go-to: "Alba Complete")](else:)[(go-to: "Alba Incomplete")]
 
 :: Dawn {"position":"1700,100","size":"100,100"}
 (if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[Here you are, on Dean Street again, watching the light as it peels through its changes. First cobalt; then the brassic crown that grows rich and gilded; then the antiseptic mint while the corolla rises and blooms through the lobes (frontal, parietal, temporal, occipital), the blue-blooded, hemorrhaging sky. Then the cool white quivering lip of the dawn's bells and flowers when they're trying to settle.
@@ -19021,6 +22094,8 @@ So, so happily I go, under the shades.
 :: Drinking at the French {"position":"100,750","size":"100,100"}
 <svg class="french-rule" viewBox="0 0 300 60" width="100%" height="60" preserveAspectRatio="none"><defs><linearGradient id="frAmb" x1="0" x2="1"><stop offset="0%" stop-color="#a06010" stop-opacity="0"/><stop offset="8%" stop-color="#b07020" stop-opacity="0.5"/><stop offset="50%" stop-color="#c88020" stop-opacity="0.65"/><stop offset="92%" stop-color="#b07020" stop-opacity="0.5"/><stop offset="100%" stop-color="#a06010" stop-opacity="0"/></linearGradient><linearGradient id="frLn" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="8%" stop-color="#c8a86a" stop-opacity="0.9"/><stop offset="92%" stop-color="#c8a86a" stop-opacity="0.9"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient></defs><rect x="0" y="10" width="300" height="40" fill="url(#frAmb)" opacity="0.4"/><line x1="20" y1="10" x2="280" y2="10" stroke="url(#frLn)" stroke-width="1.5"/><line x1="20" y1="50" x2="280" y2="50" stroke="url(#frLn)" stroke-width="1.5"/><g opacity="0.3" stroke="#c8a86a" stroke-width="0.6" fill="none"><line x1="40" y1="10" x2="40" y2="50"/><line x1="55" y1="10" x2="55" y2="50"/><line x1="70" y1="10" x2="70" y2="50"/><line x1="85" y1="10" x2="85" y2="50"/><line x1="100" y1="10" x2="100" y2="50"/><line x1="115" y1="10" x2="115" y2="50"/><line x1="185" y1="10" x2="185" y2="50"/><line x1="200" y1="10" x2="200" y2="50"/><line x1="215" y1="10" x2="215" y2="50"/><line x1="230" y1="10" x2="230" y2="50"/><line x1="245" y1="10" x2="245" y2="50"/><line x1="260" y1="10" x2="260" y2="50"/></g><g opacity="0.55"><path d="M130,30 Q135,14 140,30 Q145,46 150,30 Q155,14 160,30 Q165,46 170,30" fill="none" stroke="#c8a86a" stroke-width="1.2"/><circle cx="130" cy="30" r="2" fill="#c8a86a" opacity="0.7"/><circle cx="170" cy="30" r="2" fill="#c8a86a" opacity="0.7"/></g><polygon points="150,22 154,30 150,38 146,30" fill="#c8a86a" opacity="0.6"/><g opacity="0.35"><rect x="62" y="20" width="6" height="20" rx="1" fill="#002395"/><rect x="73" y="19" width="7" height="22" rx="1" fill="#f0f0f0"/><rect x="85" y="20" width="5" height="20" rx="1" fill="#ed2939"/><rect x="210" y="20" width="6" height="20" rx="1" fill="#002395"/><rect x="221" y="19" width="7" height="22" rx="1" fill="#f0f0f0"/><rect x="233" y="20" width="5" height="20" rx="1" fill="#ed2939"/></g><path d="M20,10 Q20,8 22,8 L28,8 Q30,8 30,10" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M270,10 Q270,8 272,8 L278,8 Q280,8 280,10" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M20,50 Q20,52 22,52 L28,52 Q30,52 30,50" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M270,50 Q270,52 272,52 L278,52 Q280,52 280,50" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/></svg>
 (set: $sobriety to $sobriety - 16)
+<span id="drink-type-data" style="display:none;">(print: $lastDrink)</span>\
+<script>setTimeout(function(){ var dt = document.getElementById('drink-type-data'); var t = (dt && dt.textContent.trim()) || 'wine'; window.showDrinkPopup(t); }, 400);</script>\
 You're served.
 
 [[Back to the bar|The French]]
@@ -19313,13 +22388,7 @@ He jerks his thumb toward the stairs: the universal gesture for //go, before I c
 <div class="pp-score">🥊 THE CELLAR 🥊</div>
 </div>
 
-The cellar contracts like a lung. Copper rolls his shoulders; the sound of them is tectonic.
-
-Quiet Frankie looks up for the first time. Even the shadows lean in.
-
 'Three goes,' says Copper. 'More than most get.'
-
-He raises his fists in the old style, the Queensberry style, the style of men who learned violence before it had rules.
 
 <div style="text-align:center;margin-top:1em;">
 <button id="fight-start-btn" onclick="window.startFightGame()" style="background:#1a0a08;color:#d4a574;border:1px solid #8a4a3a;padding:8px 24px;font-family:Georgia,serif;font-size:1em;cursor:pointer;">Put your fists up</button>
@@ -19432,6 +22501,7 @@ John St. John (for that is his name) is a poet who hates Red, with a hatred more
 
 :: The Empty Glass {"position":"300,950","size":"100,100"}
 <svg class="french-rule" viewBox="0 0 300 24" width="100%" height="24" preserveAspectRatio="none"><defs><linearGradient id="frC" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="45%" stop-color="#c8a86a" stop-opacity="0.55"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient><linearGradient id="frD" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="45%" stop-color="#c8a86a" stop-opacity="0.28"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="7" x2="300" y2="7" stroke="url(#frD)" stroke-width="0.5"/><line x1="0" y1="12" x2="300" y2="12" stroke="url(#frC)" stroke-width="1.2"/><svg x="140" y="0" width="20" height="24" viewBox="-12 -2 24 26" preserveAspectRatio="xMidYMid meet"><g fill="#c8a86a" opacity="0.75"><path d="M0,15 C-3,10 -4,2 0,-1 C4,2 3,10 0,15Z"/><path d="M-1,13 C-4,10 -8,5 -9,3 C-9,5 -8,6 -6,5 C-3,8 -1,11 0,13Z"/><path d="M1,13 C4,10 8,5 9,3 C9,5 8,6 6,5 C3,8 1,11 0,13Z"/><rect x="-8" y="14" width="16" height="2.5" rx="0.5"/><ellipse cx="0" cy="20" rx="2.5" ry="2"/></g></svg></svg>
+<script>setTimeout(function(){ window.showDrinkPopup('whisky'); }, 400);</script>\
 After these thoughts you drink and while you drink you notice that John's glass is empty already.
 
 He drops it and it smashes.
@@ -19461,28 +22531,7 @@ Tonight, Soho will mark you. Here, in our mutual dream, we call them 'haunts'. Y
 [[Back to Dean Street|Dean Street]]
 
 :: In Copper's lair [venue-cellar] {"position":"1600,700","size":"100,100"}
-<!-- Swinging bulb -->
-<div class="cellar-bulb-wrap">
-<svg width="48" height="90" viewBox="0 0 48 90"><!-- Wire from ceiling --><line x1="24" y1="0" x2="24" y2="30" stroke="#888878" stroke-width="1.4" opacity="0.75"/><!-- Socket cap --><rect x="17" y="28" width="14" height="10" rx="2.5"fill="rgba(80,78,65,0.9)" stroke="rgba(160,155,120,0.7)" stroke-width="1"/><!-- Socket ring detail --><rect x="19" y="36" width="10" height="3" rx="1"fill="none" stroke="rgba(150,145,110,0.55)" stroke-width="0.8"/><!-- Outer glow halo --><ellipse cx="24" cy="60" rx="20" ry="22"fill="rgba(255,245,160,0.12)"/><!-- Bulb body — pear shape, bright and solid --><path d="M24,38 C16,38 10,45 10,55 C10,67 16,78 24,78 C32,78 38,67 38,55 C38,45 32,38 24,38 Z"fill="rgba(255,252,210,0.95)" stroke="rgba(220,210,160,0.6)" stroke-width="0.8"/><!-- Inner warm core --><ellipse cx="24" cy="57" rx="9" ry="11"fill="rgba(255,240,120,0.55)"/><!-- Filament — W-shape --><path d="M18,60 L20,53 L24,58 L28,53 L30,60"fill="none" stroke="rgba(255,200,40,0.95)" stroke-width="1.4" stroke-linejoin="round"/><!-- Neck base ring --><rect x="20" y="75" width="8" height="3" rx="1"fill="rgba(200,195,155,0.65)" stroke="none"/></svg>
-</div>
-<div class="cellar-scene">
-<div class="cellar-light"></div>
-'Come in then,' says Copper.
-
-You do as you're told as he closes the door behind you.
-
-'Downstairs,' says Copper.
-
-You don't remember it being downstairs.
-
-Salvu Copper is a big man in a small body, or perhaps it's the other way round, you can't be sure.
-
-You barrel yourself into a cellar, cold and pale. It extends to your left, beneath the colony rooms and probably one plot further.
-
-You turn to Copper, who has just joined you from the stairs.
-
-[[Turn to Copper|Turn to Copper]]
-</div>
+(go-to: "Turn to Copper")
 
 :: Items Display {"position":"1500,50","size":"100,100"}
 <div class="items-tracker">
@@ -20153,56 +23202,19 @@ Tonight, Soho will mark you. Here, in our mutual dream, we call them 'haunts'. Y
 [[Back upstairs|Dean Street]]
 
 :: RS Drink Orders [venue-ronnies] {"position":"1900,1650","size":"100,100"}
-<div class="ronnies-scene">
-<div class="ronnies-spot"></div>
-<div class="ronnies-cone"></div>
-<svg class="ronnies-rule" viewBox="0 0 300 20" width="100%" height="20" preserveAspectRatio="none"><defs><linearGradient id="rnG" x1="0" x2="1"><stop offset="0%"   stop-color="#6888b8" stop-opacity="0"/><stop offset="22%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="50%"  stop-color="#aac8f0" stop-opacity="0.90"/><stop offset="78%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="100%" stop-color="#6888b8" stop-opacity="0"/></linearGradient><linearGradient id="rnGd" x1="0" x2="1"><stop offset="0%"   stop-color="#405880" stop-opacity="0"/><stop offset="25%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="75%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="100%" stop-color="#405880" stop-opacity="0"/></linearGradient><!-- Warm stage-light bleed above the main rule --><radialGradient id="rnSpill" cx="50%" cy="100%" r="60%"><stop offset="0%"   stop-color="#e8c060" stop-opacity="0.18"/><stop offset="100%" stop-color="#e8c060" stop-opacity="0"/></radialGradient></defs><!-- Stage-light spill glow above the rule --><rect x="30" y="0" width="240" height="22" fill="url(#rnSpill)"/><!-- Fine upper shadow line --><line x1="0" y1="18" x2="300" y2="18" stroke="url(#rnGd)" stroke-width="0.7"/><!-- Main bright rule --><line x1="0" y1="22" x2="300" y2="22" stroke="url(#rnG)"  stroke-width="2.2"/><!-- Subtle secondary line beneath --><line x1="0" y1="25" x2="300" y2="25" stroke="url(#rnGd)" stroke-width="0.8"/><!-- Small diamond at centre — like a stage footlight marker --><polygon points="150,19 153,22 150,25 147,22" fill="#aac8f0" opacity="0.7"/><!-- Two flanking dots --><circle cx="100" cy="22" r="1.2" fill="#8aacdc" opacity="0.5"/><circle cx="200" cy="22" r="1.2" fill="#8aacdc" opacity="0.5"/></svg>
-'Bourbon,' says the guitarist. 'The one with the bird on the label. Tulip glass.'
-
-'Moscow Mule,' says Moe de Alcousin. 'Fresh lime. Not bottled.'
-
-'Scotch,' says the pianist. 'The Macallan. Neat.'
-
-<span id="sob-data-bar" style="display:none;">(print: $sobriety)</span>
-<div class="pp-arena" id="bar-arena">
-<div class="pp-score" id="bar-round-display">🎸 THE BAR 🎸</div>
-<canvas id="bar-canvas" width="560" height="400" style="display:block;width:100%;height:100%;"></canvas>
-<div id="pre-bar">
-<div style="text-align:center;padding:1em;color:#d4a574;font-family:Georgia,serif;">
-<p><strong>🎸 Guitarist:</strong> Bourbon — "the one with the bird on the label" — tulip glass</p>
-<p><strong>🎷 Moe:</strong> Moscow Mule — "fresh lime, not bottled"</p>
-<p><strong>🎹 Pianist:</strong> Scotch — "The Macallan, neat"</p>
-<br>
-<button id="bar-start-btn" onclick="window.startBarGame()" style="background:#2a1a12;color:#d4a574;border:1px solid #d4a574;padding:8px 24px;font-family:Georgia,serif;font-size:1em;cursor:pointer;">Go to the bar</button>
-</div>
-</div>
-<div id="bar-narrative" style="text-align:center;padding:0.5em;min-height:1.5em;font-style:italic;"></div>
-<div id="bar-end" style="text-align:center;padding:0.5em;"></div>
-</div>
-<span id="bar-win-link" style="display:none;">[[Bar Canvas Win]]</span>
-<span id="bar-lose-link" style="display:none;">[[Bar Canvas Lose]]</span>
-<svg class="ronnies-rule" viewBox="0 0 300 14" width="100%" height="14" preserveAspectRatio="none"><defs><linearGradient id="rnG2" x1="0" x2="1"><stop offset="0%"   stop-color="#6888b8" stop-opacity="0"/><stop offset="22%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="50%"  stop-color="#aac8f0" stop-opacity="0.90"/><stop offset="78%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="100%" stop-color="#6888b8" stop-opacity="0"/></linearGradient><linearGradient id="rnGd2" x1="0" x2="1"><stop offset="0%"   stop-color="#405880" stop-opacity="0"/><stop offset="25%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="75%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="100%" stop-color="#405880" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="4"  x2="300" y2="4"  stroke="url(#rnGd2)" stroke-width="0.7"/><line x1="0" y1="7"  x2="300" y2="7"  stroke="url(#rnG2)"  stroke-width="2.2"/><line x1="0" y1="10" x2="300" y2="10" stroke="url(#rnGd2)" stroke-width="0.8"/><polygon points="150,4 153,7 150,10 147,7" fill="#aac8f0" opacity="0.7"/><circle cx="100" cy="7" r="1.2" fill="#8aacdc" opacity="0.5"/><circle cx="200" cy="7" r="1.2" fill="#8aacdc" opacity="0.5"/></svg>
-</div>
+(go-to: "Ronnie Scott's")
 
 :: RS Bar Order {"position":"1900,1800","size":"100,100"}
-(redirect: "RS Drink Orders")
+(go-to: "Ronnie Scott's")
 
 :: Bar Canvas Win {"position":"2050,1900","size":"100,100"}
 <div class="ronnies-scene">
 <svg class="ronnies-rule" viewBox="0 0 300 14" width="100%" height="14" preserveAspectRatio="none"><defs><linearGradient id="rnG2" x1="0" x2="1"><stop offset="0%"   stop-color="#6888b8" stop-opacity="0"/><stop offset="22%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="50%"  stop-color="#aac8f0" stop-opacity="0.90"/><stop offset="78%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="100%" stop-color="#6888b8" stop-opacity="0"/></linearGradient><linearGradient id="rnGd2" x1="0" x2="1"><stop offset="0%"   stop-color="#405880" stop-opacity="0"/><stop offset="25%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="75%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="100%" stop-color="#405880" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="4"  x2="300" y2="4"  stroke="url(#rnGd2)" stroke-width="0.7"/><line x1="0" y1="7"  x2="300" y2="7"  stroke="url(#rnG2)"  stroke-width="2.2"/><line x1="0" y1="10" x2="300" y2="10" stroke="url(#rnGd2)" stroke-width="0.8"/><polygon points="150,4 153,7 150,10 147,7" fill="#aac8f0" opacity="0.7"/><circle cx="100" cy="7" r="1.2" fill="#8aacdc" opacity="0.5"/><circle cx="200" cy="7" r="1.2" fill="#8aacdc" opacity="0.5"/></svg>
 <div class="pp-arena">
-<div class="pp-score"><span class="pp-result-win">★ PERFECT ★</span></div>
+<div class="pp-score"><span class="pp-result-win">★ SIGNED, SEALED, DELIVERED ★</span></div>
 </div>
 
-Moe takes a long pull of his mule.
-
-'Fresh lime,' he says.
-
-'Tulip,' says the guitarist.
-
-The pianist raises his Macallan.
-
-'Wait for this,' says Moe.
+//&#91;PLACEHOLDER: Win prose \u2014 drinks delivered successfully&#93;//
 (set: $completedSetlist to true)\
 (set: $confidence to $confidence + 12)
 [[Listen|The Set]]
@@ -20240,16 +23252,10 @@ The set plays without you.
 <div class="ronnies-cone"></div>
 <svg class="ronnies-rule" viewBox="0 0 300 20" width="100%" height="20" preserveAspectRatio="none"><defs><linearGradient id="rnG" x1="0" x2="1"><stop offset="0%"   stop-color="#6888b8" stop-opacity="0"/><stop offset="22%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="50%"  stop-color="#aac8f0" stop-opacity="0.90"/><stop offset="78%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="100%" stop-color="#6888b8" stop-opacity="0"/></linearGradient><linearGradient id="rnGd" x1="0" x2="1"><stop offset="0%"   stop-color="#405880" stop-opacity="0"/><stop offset="25%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="75%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="100%" stop-color="#405880" stop-opacity="0"/></linearGradient><!-- Warm stage-light bleed above the main rule --><radialGradient id="rnSpill" cx="50%" cy="100%" r="60%"><stop offset="0%"   stop-color="#e8c060" stop-opacity="0.18"/><stop offset="100%" stop-color="#e8c060" stop-opacity="0"/></radialGradient></defs><!-- Stage-light spill glow above the rule --><rect x="30" y="0" width="240" height="22" fill="url(#rnSpill)"/><!-- Fine upper shadow line --><line x1="0" y1="18" x2="300" y2="18" stroke="url(#rnGd)" stroke-width="0.7"/><!-- Main bright rule --><line x1="0" y1="22" x2="300" y2="22" stroke="url(#rnG)"  stroke-width="2.2"/><!-- Subtle secondary line beneath --><line x1="0" y1="25" x2="300" y2="25" stroke="url(#rnGd)" stroke-width="0.8"/><!-- Small diamond at centre — like a stage footlight marker --><polygon points="150,19 153,22 150,25 147,22" fill="#aac8f0" opacity="0.7"/><!-- Two flanking dots --><circle cx="100" cy="22" r="1.2" fill="#8aacdc" opacity="0.5"/><circle cx="200" cy="22" r="1.2" fill="#8aacdc" opacity="0.5"/></svg>
 <div class="pp-arena">
-<div class="pp-score"><span class="pp-result-win">★ PERFECT ★</span></div>
+<div class="pp-score"><span class="pp-result-win">★ SIGNED, SEALED, DELIVERED ★</span></div>
 </div>
 
-Moe takes a long pull of his mule.
-
-'Fresh lime,' he says.
-
-'Tulip,' says the trumpet.
-
-'Wait for this,' says Moe.
+//&#91;PLACEHOLDER: Win prose \u2014 drinks delivered successfully&#93;//
 (set: $completedSetlist to true)\
 (set: $confidence to $confidence + 12)
 [[Listen|The Set]]
@@ -21554,8 +24560,7 @@ You land badly, lie still a moment while the world readjusts itself around you. 
 (set: $exploredSinceFrench to true)\
 (unless: $visited is a datamap)[(set: $visited to (dm:))]\
 (unless: $visited contains "Ronnies")[(set: $visited's Ronnies to false)]\
-(if: $visited's Ronnies is false)[(set: $visited's Ronnies to true)
-<div class="first-visit-hint">RONNIE SCOTT'S. THE MUSICIANS MIGHT NEED DRINKS.</div>]
+(if: $visited's Ronnies is false)[(set: $visited's Ronnies to true)]
 
 Ronnie Scott's, Ronnie Scott's, just like you pictured it: sky scrapers.
 
@@ -21576,12 +24581,21 @@ You hear four stories about Ronnie Scotts and half of them are true.
 4. A man was paying for a scotch when the horn started soloing. He finished his drink, put on his coat, his hat and stepped out into the cold Soho rain to see a woman, returning just as the horn seemed to finish her solo.
 </div>]
 
-There is a pianist with a long and sculpted face, like El Greco painted a heron, and a guitarist who is young Springsteen, in both grooming and attitude.
+There is a pianist with a long and sculpted face, like El Greco painted a heron, and a young guitarist who looks like he was groomed by Bruce Springsteen.
 
 Look a little lost boy, get us a drink, will yer?
 
-(if: $completedSetlist is false)[[[What are you having?|RS Drink Orders]]
-[[Just here to listen|RS Just Listen]]]
+'Bourbon,' says the guitarist. 'The one with the bird on the label. Tulip glass.'
+
+'Moscow Mule,' says Moe de Alcousin. 'Fresh lime. Not bottled.'
+
+'Scotch,' says the pianist. 'The Macallan. Neat.'
+
+(if: $completedSetlist is false)[<span id="sob-data-bar" style="display:none;">(print: $sobriety)</span>\
+<svg class="ronnies-rule" viewBox="0 0 300 20" width="100%" height="20" preserveAspectRatio="none"><defs><linearGradient id="rnGb" x1="0" x2="1"><stop offset="0%"   stop-color="#6888b8" stop-opacity="0"/><stop offset="22%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="50%"  stop-color="#aac8f0" stop-opacity="0.90"/><stop offset="78%"  stop-color="#8aacdc" stop-opacity="0.75"/><stop offset="100%" stop-color="#6888b8" stop-opacity="0"/></linearGradient><linearGradient id="rnGdb" x1="0" x2="1"><stop offset="0%"   stop-color="#405880" stop-opacity="0"/><stop offset="25%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="75%"  stop-color="#6070a0" stop-opacity="0.45"/><stop offset="100%" stop-color="#405880" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="18" x2="300" y2="18" stroke="url(#rnGdb)" stroke-width="0.7"/><line x1="0" y1="22" x2="300" y2="22" stroke="url(#rnGb)"  stroke-width="2.2"/><polygon points="150,19 153,22 150,25 147,22" fill="#aac8f0" opacity="0.7"/></svg>\
+<div class="pp-arena" id="bar-arena"><div class="pp-score" id="bar-round-display" style="position:relative;overflow:visible;padding:0.6em 0.5em 0.3em;"><svg viewBox="0 0 400 70" width="100%" height="70" preserveAspectRatio="xMidYMid meet" style="display:block;margin:0 auto;"><defs><linearGradient id="barTG" x1="0" x2="1"><stop offset="0%" stop-color="#b89a60" stop-opacity="0"/><stop offset="15%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="50%" stop-color="#e8cc88" stop-opacity="1"/><stop offset="85%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="100%" stop-color="#b89a60" stop-opacity="0"/></linearGradient><linearGradient id="barTL" x1="0" x2="1"><stop offset="0%" stop-color="#8a7040" stop-opacity="0"/><stop offset="20%" stop-color="#b89a60" stop-opacity="0.6"/><stop offset="80%" stop-color="#b89a60" stop-opacity="0.6"/><stop offset="100%" stop-color="#8a7040" stop-opacity="0"/></linearGradient><radialGradient id="barTGlow" cx="50%" cy="50%" r="40%"><stop offset="0%" stop-color="#e8c060" stop-opacity="0.15"/><stop offset="100%" stop-color="#e8c060" stop-opacity="0"/></radialGradient></defs><rect x="80" y="10" width="240" height="50" fill="url(#barTGlow)"/><line x1="30" y1="18" x2="370" y2="18" stroke="url(#barTL)" stroke-width="0.8"/><line x1="30" y1="52" x2="370" y2="52" stroke="url(#barTL)" stroke-width="0.8"/><g opacity="0.5" stroke="#b89a60" stroke-width="0.6" fill="none"><path d="M40,35 Q50,18 60,35 Q70,52 80,35"/><path d="M320,35 Q330,18 340,35 Q350,52 360,35"/><circle cx="38" cy="35" r="2"/><circle cx="362" cy="35" r="2"/></g><g fill="none" stroke="#d4b878" stroke-width="0.5" opacity="0.35"><path d="M85,22 C90,18 95,18 100,22 L100,48 C95,52 90,52 85,48 Z"/><path d="M300,22 C305,18 310,18 315,22 L315,48 C310,52 305,52 300,48 Z"/></g><text x="200" y="42" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#barTG)" letter-spacing="8" style="font-size:22px">THE BAR</text><g opacity="0.55" fill="#d4b878"><polygon points="155,26 157,30 155,34 153,30"/><polygon points="245,26 247,30 245,34 243,30"/></g></svg></div><canvas id="bar-canvas" width="560" height="400" style="display:none;width:100%;height:auto;"></canvas><div id="pre-bar"><svg viewBox="0 0 420 272" width="100%" height="272" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;"><defs><linearGradient id="pbGold2" x1="0" x2="1"><stop offset="0%" stop-color="#b89a60" stop-opacity="0"/><stop offset="15%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="50%" stop-color="#e8cc88" stop-opacity="1"/><stop offset="85%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="100%" stop-color="#b89a60" stop-opacity="0"/></linearGradient><linearGradient id="pbBg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1c1408" stop-opacity="0.97"/><stop offset="100%" stop-color="#0c0804" stop-opacity="0.99"/></linearGradient><linearGradient id="pbRule2" x1="0" x2="1"><stop offset="0%" stop-color="#c9a050" stop-opacity="0"/><stop offset="25%" stop-color="#c9a050" stop-opacity="0.65"/><stop offset="75%" stop-color="#c9a050" stop-opacity="0.65"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0"/></linearGradient><linearGradient id="tulipFill2" x1="0" x2="1"><stop offset="0%" stop-color="#c9a050" stop-opacity="0.45"/><stop offset="50%" stop-color="#e8c880" stop-opacity="0.65"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0.45"/></linearGradient><linearGradient id="copperFill2" x1="0" x2="1"><stop offset="0%" stop-color="#8a5a20"/><stop offset="30%" stop-color="#c9883a"/><stop offset="50%" stop-color="#daa050"/><stop offset="70%" stop-color="#c98838"/><stop offset="100%" stop-color="#8a5a20"/></linearGradient><radialGradient id="pbGlow2" cx="50%" cy="38%" r="40%"><stop offset="0%" stop-color="#c9a050" stop-opacity="0.07"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0"/></radialGradient></defs><rect x="10" y="6" width="400" height="260" rx="3" fill="url(#pbBg2)" stroke="rgba(184,154,96,0.32)" stroke-width="1"/><rect x="18" y="14" width="384" height="244" rx="2" fill="url(#pbGlow2)" stroke="rgba(184,154,96,0.13)" stroke-width="0.5"/><!-- LEFT BOTANICAL VINE --><g opacity="0.33" fill="none" stroke="#b89a60" stroke-width="0.85"><path d="M28,95 C27,78 30,60 34,44 C37,35 41,26 38,16"/><path d="M33,70 C29,64 22,62 19,56"/><path d="M31,53 C27,47 29,39 26,32"/><path d="M35,41 C31,35 27,28 30,20"/></g><g opacity="0.38" fill="#b89a60"><path d="M33,70 C31,64 26,67 24,62 C28,61 32,64 33,70 Z"/><path d="M31,53 C29,47 24,49 23,45 C27,44 31,48 31,53 Z"/></g><!-- RIGHT BOTANICAL VINE (mirror) --><g opacity="0.33" fill="none" stroke="#b89a60" stroke-width="0.85"><path d="M392,95 C393,78 390,60 386,44 C383,35 379,26 382,16"/><path d="M387,70 C391,64 398,62 401,56"/><path d="M389,53 C393,47 391,39 394,32"/><path d="M385,41 C389,35 393,28 390,20"/></g><g opacity="0.38" fill="#b89a60"><path d="M387,70 C389,64 394,67 396,62 C392,61 388,64 387,70 Z"/><path d="M389,53 C391,47 396,49 397,45 C393,44 389,48 389,53 Z"/></g><!-- TULIP GLASS (left, cx=148) --><g opacity="0.85"><rect x="147" y="71" width="2" height="17" fill="rgba(200,180,140,0.32)"/><ellipse cx="148" cy="89" rx="10" ry="2.5" fill="rgba(200,180,140,0.26)"/><path d="M140,71 C136,60 133,44 137,33 C140,26 144,21 148,19 C152,21 156,26 159,33 C163,44 160,60 156,71 Z" fill="url(#tulipFill2)" stroke="rgba(220,200,150,0.42)" stroke-width="1.2"/><path d="M138,57 L137,41" stroke="rgba(255,255,255,0.14)" stroke-width="1.5"/></g><!-- COPPER MUG (centre, cx=220) --><g opacity="0.9"><path d="M233,41 C242,41 244,48 244,53 C244,58 242,65 233,65" fill="none" stroke="#9a6030" stroke-width="2.5"/><rect x="207" y="35" width="26" height="34" rx="2" fill="url(#copperFill2)" opacity="0.8"/><rect x="207" y="35" width="26" height="3" rx="1" fill="rgba(232,184,96,0.52)"/><line x1="208" y1="47" x2="232" y2="47" stroke="rgba(255,220,140,0.15)" stroke-width="1"/><line x1="208" y1="58" x2="232" y2="58" stroke="rgba(255,220,140,0.09)" stroke-width="0.8"/><rect x="208" y="40" width="24" height="28" rx="1" fill="rgba(180,120,40,0.3)"/></g><!-- ROCKS GLASS (right, cx=292) --><g opacity="0.85"><path d="M280,73 L283,47 L301,47 L304,73 Z" fill="rgba(180,170,150,0.22)" stroke="rgba(220,200,160,0.38)" stroke-width="1.2"/><path d="M281,73 L283,58 L301,58 L303,73 Z" fill="rgba(180,120,40,0.4)"/><rect x="286" y="51" width="8" height="7" rx="1" fill="rgba(200,220,255,0.22)" stroke="rgba(200,220,255,0.3)" stroke-width="0.5"/><line x1="284" y1="66" x2="284" y2="51" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/></g><!-- Dots between glasses --><g fill="#c9a050" opacity="0.4"><circle cx="170" cy="55" r="1.5"/><circle cx="178" cy="51" r="1"/><circle cx="186" cy="55" r="1.5"/><circle cx="254" cy="55" r="1.5"/><circle cx="262" cy="51" r="1"/><circle cx="270" cy="55" r="1.5"/></g><!-- Divider after glasses --><line x1="28" y1="100" x2="392" y2="100" stroke="url(#pbRule2)" stroke-width="0.75"/><polygon points="210,97 213,100 210,103 207,100" fill="#c9a050" opacity="0.68"/><!-- MAIN TEXT --><text x="210" y="124" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#pbGold2)" style="font-size:10px">Three drinks to pour for the band.</text><text x="210" y="145" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#pbGold2)" style="font-size:10px">Then carry the tray to the stage.</text><!-- Inner rule --><line x1="100" y1="158" x2="320" y2="158" stroke="url(#pbRule2)" stroke-width="0.45"/><!-- Control hints --><text x="210" y="174" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">Hold to pour &#183; Release to stop</text><text x="210" y="190" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">&#8593; Jump &#183; &#8595; Duck &#183; Mind the gaps</text><!-- Lower divider --><line x1="28" y1="207" x2="392" y2="207" stroke="url(#pbRule2)" stroke-width="0.75"/><!-- Diamond row --><g fill="#c9a050" opacity="0.44"><polygon points="138,219 141,223 138,227 135,223"/><polygon points="159,217 162,221 159,225 156,221"/><polygon points="180,219 183,223 180,227 177,223"/><polygon points="210,214 214,218 210,222 206,218"/><polygon points="240,219 243,223 240,227 237,223"/><polygon points="261,217 264,221 261,225 258,221"/><polygon points="282,219 285,223 282,227 279,223"/></g><!-- Bottom botanical swags --><g opacity="0.2" fill="none" stroke="#b89a60" stroke-width="0.7"><path d="M42,255 C68,245 105,251 135,243 C160,236 176,241 196,236"/><path d="M378,255 C352,245 315,251 285,243 C260,236 244,241 224,236"/></g><!-- Corner L-brackets --><g opacity="0.3" stroke="#b89a60" stroke-width="0.9" fill="none"><polyline points="20,26 20,18 29,18"/><polyline points="400,26 400,18 391,18"/><polyline points="20,250 20,258 29,258"/><polyline points="400,250 400,258 391,258"/></g></svg><div style="text-align:center;padding:0.1em 0 1.2em;"><button id="bar-start-btn" onclick="window.startBarGame()" style="background:linear-gradient(180deg,#241a0a,#130d05);color:#d4b878;border:1px solid rgba(184,154,96,0.55);outline:2px solid rgba(184,154,96,0.1);outline-offset:4px;padding:13px 52px;font-family:Georgia,serif;font-size:0.95em;cursor:pointer;letter-spacing:0.28em;text-transform:uppercase;box-shadow:0 0 24px rgba(184,154,96,0.12),0 0 6px rgba(184,154,96,0.06),inset 0 1px 0 rgba(255,255,255,0.06);transition:all 0.2s;">&#9670; Go to the Bar &#9670;</button></div></div><div id="bar-narrative" style="text-align:center;padding:0;min-height:0;font-style:italic;"></div><div id="bar-end" style="text-align:center;padding:0;"></div></div>\
+<span id="bar-win-link" style="display:none;">[[Bar Canvas Win]]</span>\
+<span id="bar-lose-link" style="display:none;">[[Bar Canvas Lose]]</span>]
 (else:)[<div class="venue-exhausted">They've played out all they have to play, there's no more here tonight.</div>
 
 [[Back to Dean Street|Dean Street]]]
@@ -21655,6 +24669,7 @@ For a moment you think he might let you go. Then his eyes harden.
 (set: $hadBreather to false)\
 (set: $exploredSinceFrench to true)\
 (set: $hadChippy to false)\
+(set: $frenchDrinkDone to false)\
 (set: $wasBeaten to false)\
 (set: $visitedInterval to false)\
 (set: $cowRideWon to false)\
@@ -21671,7 +24686,7 @@ For a moment you think he might let you go. Then his eyes harden.
 (set: $tookLily4 to false)\
 (set: $tookLily5 to false)\
 (set: $breatherReturns to 0)\
-(goto: "The Night Ahead")
+(go-to: "The Night Ahead")
 
 :: Stay in Carthage {"position":"100,1950","size":"100,100"}
 <svg class="carthage-pyre" viewBox="0 0 500 95" width="100%" height="95" preserveAspectRatio="none"><defs><radialGradient id="cpGlow" cx="50%" cy="85%" r="70%"><stop offset="0%" stop-color="#d4600a" stop-opacity="0.4"/><stop offset="30%" stop-color="#c84a08" stop-opacity="0.2"/><stop offset="60%" stop-color="#401808" stop-opacity="0.08"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="0"/></radialGradient><linearGradient id="cpTopFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0a12" stop-opacity="1"/><stop offset="35%" stop-color="#0a0a12" stop-opacity="0.6"/><stop offset="60%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="0"/></linearGradient><linearGradient id="cpFade" x1="0" x2="1"><stop offset="0%" stop-color="#0a0a12" stop-opacity="1"/><stop offset="8%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="92%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="1"/></linearGradient><linearGradient id="cpGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3a2010" stop-opacity="0.5"/><stop offset="100%" stop-color="#1a0a08" stop-opacity="0.3"/></linearGradient></defs><rect x="0" y="77" width="500" height="18" fill="url(#cpGround)"/><rect x="0" y="0" width="500" height="95" fill="url(#cpGlow)"/><rect x="195" y="77" width="110" height="6" rx="1" fill="#3a2818" opacity="0.6"/><rect x="205" y="72" width="90" height="6" rx="1" fill="#4a3020" opacity="0.5"/><rect x="215" y="67" width="70" height="6" rx="1" fill="#5a3828" opacity="0.45"/><path d="M220,67 Q210,50 225,28 Q230,40 240,18 Q248,35 250,8 Q255,30 262,14 Q268,38 275,22 Q280,45 285,67Z" fill="#8a2800" opacity="0.35"/><path d="M225,67 Q218,48 232,22 Q238,36 245,10 Q250,28 255,6 Q260,25 268,16 Q272,40 278,67Z" fill="#c04808" opacity="0.45"/><path d="M230,67 Q224,45 237,18 Q242,32 248,8 Q253,28 258,12 Q264,35 270,67Z" fill="#d4600a" opacity="0.5"/><path d="M235,67 Q230,42 242,20 Q246,34 250,12 Q254,30 258,18 Q262,40 265,67Z" fill="#e88020" opacity="0.5"/><path d="M240,67 Q237,44 246,24 Q249,36 252,18 Q255,34 258,26 Q259,42 260,67Z" fill="#ffa040" opacity="0.45"/><path d="M245,67 Q243,48 249,30 Q251,42 253,34 Q254,48 255,67Z" fill="#ffc868" opacity="0.4"/><path d="M222,67 Q216,52 224,35 Q228,45 230,38 Q229,50 232,67Z" fill="#c04808" opacity="0.3"/><path d="M268,67 Q272,50 276,32 Q274,44 278,40 Q276,52 275,67Z" fill="#c04808" opacity="0.3"/><circle cx="228" cy="61" r="4.5" fill="#1a0a06" opacity="0.55"/><rect x="232" y="63" width="32" height="3" rx="1" fill="#1a0a06" opacity="0.5"/><path d="M264,63 L266,63 L266,58 L264,58 Z" fill="#1a0a06" opacity="0.5"/><path d="M267,63 L269,63 L269,59 L267,59 Z" fill="#1a0a06" opacity="0.45"/><circle cx="245" cy="4" r="0.8" fill="#ffa030" opacity="0.4"/><circle cx="260" cy="7" r="0.6" fill="#ff8020" opacity="0.35"/><circle cx="238" cy="10" r="0.7" fill="#ffc050" opacity="0.4"/><circle cx="268" cy="3" r="0.5" fill="#ff6010" opacity="0.3"/><circle cx="252" cy="2" r="0.6" fill="#ffc050" opacity="0.35"/><circle cx="230" cy="6" r="0.5" fill="#ff8020" opacity="0.3"/><circle cx="272" cy="12" r="0.9" fill="#ffa030" opacity="0.35"/><circle cx="242" cy="16" r="0.5" fill="#ffc050" opacity="0.3"/><circle cx="256" cy="14" r="0.4" fill="#ff6010" opacity="0.25"/><rect x="80" y="30" width="5" height="47" fill="#705848" opacity="0.45"/><rect x="78" y="28" width="9" height="3" rx="0.5" fill="#806858" opacity="0.5"/><path d="M82,45 L84,55" stroke="#3a2010" stroke-width="0.8" opacity="0.4"/><rect x="70" y="74" width="9" height="4" rx="1" fill="#705848" opacity="0.3" transform="rotate(-15,74,76)"/><rect x="405" y="22" width="6" height="55" fill="#705848" opacity="0.4"/><rect x="402" y="20" width="12" height="3" rx="0.5" fill="#806858" opacity="0.45"/><path d="M408,35 Q410,42 407,50 Q410,58 408,65" fill="none" stroke="#d4600a" stroke-width="0.4" opacity="0.2"/><path d="M415,72 Q420,65 430,72" fill="none" stroke="#705848" stroke-width="1.5" opacity="0.3"/><rect x="140" y="48" width="3" height="29" fill="#503828" opacity="0.25"/><rect x="350" y="42" width="3" height="35" fill="#503828" opacity="0.2"/><path d="M348,42 L356,42" stroke="#503828" stroke-width="0.8" opacity="0.15"/><circle cx="180" cy="82" r="0.8" fill="#d4600a" opacity="0.25"/><circle cx="320" cy="80" r="0.6" fill="#c84a08" opacity="0.2"/><circle cx="160" cy="84" r="0.5" fill="#ff8020" opacity="0.15"/><circle cx="340" cy="83" r="0.7" fill="#d4600a" opacity="0.2"/><rect x="0" y="0" width="500" height="95" fill="url(#cpTopFade)"/><rect x="0" y="0" width="500" height="95" fill="url(#cpFade)"/></svg>
@@ -21826,6 +24841,8 @@ On which do you knock?
 (unless: $visited contains "French")[(set: $visited's French to false)]\
 (if: $visited's French is false)[(set: $visited's French to true)\
 (set: $confidence to $confidence + 8)]
+(if: $frenchDrinkDone is true)[(set: $frenchDrinkDone to false)<span id="drink-type-data" style="display:none;">(print: $lastDrink)</span><script>setTimeout(function(){ var dt = document.getElementById('drink-type-data'); var t = (dt && dt.textContent.trim()) || 'wine'; window.showDrinkPopup(t); }, 400);</script>]\
+(else-if: ($haunts contains $haunt4) and not (($haunts contains $haunt1) and ($haunts contains $haunt2)))[(set: $frenchDrinkDone to true)(go-to: "Which drink at the French?")]\
 (if: $tookLily5 is false)[|lily5>[(display: "Lily SVG")]\
 (click-replace: ?lily5)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily5 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">Was that her passing the window, almost six-foot and with the gait of a newborn antelope?</span>]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
@@ -22293,6 +25310,18 @@ You know who she is, she is Shana, destroyer of worlds.
 </div>
 <div class="cellar-scene">
 <div class="cellar-light"></div>
+'Come in then,' says Copper.
+
+You do as you're told as he closes the door behind you.
+
+'Downstairs,' says Copper.
+
+You don't remember it being downstairs.
+
+Salvu Copper is a big man in a small body, or perhaps it's the other way round, you can't be sure.
+
+You barrel yourself into a cellar, cold and pale. It extends to your left, beneath the colony rooms and probably one plot further.
+
 'Salvu Copper' is a name you know and now you're putting a face to it.
 
 Since the Twins went down in '68, his work's been easier. He's run his little fiefdom – pornography, strip clubs, hookers (the sorts of work that old fashioned East End crooks will swear blind they don't touch) – very nicely, though lately he's feeling the heat.
@@ -22340,15 +25369,12 @@ Jack Curtis tosses you a paddle. 'House rules.'
 [[Take the paddle|Challenge Jack Curtis]]
 
 :: Which drink at the French? {"position":"100,650","size":"100,100"}
-<svg class="french-rule" viewBox="0 0 300 60" width="100%" height="60" preserveAspectRatio="none"><defs><linearGradient id="frAmb" x1="0" x2="1"><stop offset="0%" stop-color="#a06010" stop-opacity="0"/><stop offset="8%" stop-color="#b07020" stop-opacity="0.5"/><stop offset="50%" stop-color="#c88020" stop-opacity="0.65"/><stop offset="92%" stop-color="#b07020" stop-opacity="0.5"/><stop offset="100%" stop-color="#a06010" stop-opacity="0"/></linearGradient><linearGradient id="frLn" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="8%" stop-color="#c8a86a" stop-opacity="0.9"/><stop offset="92%" stop-color="#c8a86a" stop-opacity="0.9"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient></defs><rect x="0" y="10" width="300" height="40" fill="url(#frAmb)" opacity="0.4"/><line x1="20" y1="10" x2="280" y2="10" stroke="url(#frLn)" stroke-width="1.5"/><line x1="20" y1="50" x2="280" y2="50" stroke="url(#frLn)" stroke-width="1.5"/><g opacity="0.3" stroke="#c8a86a" stroke-width="0.6" fill="none"><line x1="40" y1="10" x2="40" y2="50"/><line x1="55" y1="10" x2="55" y2="50"/><line x1="70" y1="10" x2="70" y2="50"/><line x1="85" y1="10" x2="85" y2="50"/><line x1="100" y1="10" x2="100" y2="50"/><line x1="115" y1="10" x2="115" y2="50"/><line x1="185" y1="10" x2="185" y2="50"/><line x1="200" y1="10" x2="200" y2="50"/><line x1="215" y1="10" x2="215" y2="50"/><line x1="230" y1="10" x2="230" y2="50"/><line x1="245" y1="10" x2="245" y2="50"/><line x1="260" y1="10" x2="260" y2="50"/></g><g opacity="0.55"><path d="M130,30 Q135,14 140,30 Q145,46 150,30 Q155,14 160,30 Q165,46 170,30" fill="none" stroke="#c8a86a" stroke-width="1.2"/><circle cx="130" cy="30" r="2" fill="#c8a86a" opacity="0.7"/><circle cx="170" cy="30" r="2" fill="#c8a86a" opacity="0.7"/></g><polygon points="150,22 154,30 150,38 146,30" fill="#c8a86a" opacity="0.6"/><g opacity="0.35"><rect x="62" y="20" width="6" height="20" rx="1" fill="#002395"/><rect x="73" y="19" width="7" height="22" rx="1" fill="#f0f0f0"/><rect x="85" y="20" width="5" height="20" rx="1" fill="#ed2939"/><rect x="210" y="20" width="6" height="20" rx="1" fill="#002395"/><rect x="221" y="19" width="7" height="22" rx="1" fill="#f0f0f0"/><rect x="233" y="20" width="5" height="20" rx="1" fill="#ed2939"/></g><path d="M20,10 Q20,8 22,8 L28,8 Q30,8 30,10" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M270,10 Q270,8 272,8 L278,8 Q280,8 280,10" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M20,50 Q20,52 22,52 L28,52 Q30,52 30,50" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M270,50 Q270,52 272,52 L278,52 Q280,52 280,50" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/></svg>
-
-You catch the barman's eye. What'll it be?
-
-[[Beaujolais|Drinking at the French]]
-[[Claret|Drinking at the French]]
-[[Breton Cider|Drinking at the French]]
-
-<svg class="french-rule" viewBox="0 0 300 24" width="100%" height="24" preserveAspectRatio="none"><defs><linearGradient id="frC" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="45%" stop-color="#c8a86a" stop-opacity="0.55"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient><linearGradient id="frD" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="45%" stop-color="#c8a86a" stop-opacity="0.28"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="7" x2="300" y2="7" stroke="url(#frD)" stroke-width="0.5"/><line x1="0" y1="12" x2="300" y2="12" stroke="url(#frC)" stroke-width="1.2"/><svg x="140" y="0" width="20" height="24" viewBox="-12 -2 24 26" preserveAspectRatio="xMidYMid meet"><g fill="#c8a86a" opacity="0.75"><path d="M0,15 C-3,10 -4,2 0,-1 C4,2 3,10 0,15Z"/><path d="M-1,13 C-4,10 -8,5 -9,3 C-9,5 -8,6 -6,5 C-3,8 -1,11 0,13Z"/><path d="M1,13 C4,10 8,5 9,3 C9,5 8,6 6,5 C3,8 1,11 0,13Z"/><rect x="-8" y="14" width="16" height="2.5" rx="0.5"/><ellipse cx="0" cy="20" rx="2.5" ry="2"/></g></svg></svg>
+<svg viewBox="0 0 400 180" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;"><defs><linearGradient id="dfGold" x1="0" x2="1"><stop offset="0%" stop-color="#a06010" stop-opacity="0"/><stop offset="15%" stop-color="#c88020" stop-opacity="0.9"/><stop offset="50%" stop-color="#d4a040" stop-opacity="1"/><stop offset="85%" stop-color="#c88020" stop-opacity="0.9"/><stop offset="100%" stop-color="#a06010" stop-opacity="0"/></linearGradient><linearGradient id="dfBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a1008" stop-opacity="0.97"/><stop offset="100%" stop-color="#0e0804" stop-opacity="0.99"/></linearGradient><linearGradient id="dfRule" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="25%" stop-color="#c8a86a" stop-opacity="0.65"/><stop offset="75%" stop-color="#c8a86a" stop-opacity="0.65"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient><radialGradient id="dfGlow" cx="50%" cy="40%" r="40%"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0.07"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></radialGradient><linearGradient id="dfWine" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8a2030" stop-opacity="0.3"/><stop offset="100%" stop-color="#5a1020" stop-opacity="0.6"/></linearGradient><linearGradient id="dfCider" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c8a040" stop-opacity="0.2"/><stop offset="100%" stop-color="#a08020" stop-opacity="0.45"/></linearGradient></defs><!-- Background card --><rect x="10" y="6" width="380" height="168" rx="3" fill="url(#dfBg)" stroke="rgba(200,168,106,0.32)" stroke-width="1"/><rect x="18" y="14" width="364" height="152" rx="2" fill="url(#dfGlow)" stroke="rgba(200,168,106,0.13)" stroke-width="0.5"/><!-- Left vine with grape cluster --><g opacity="0.35" fill="none" stroke="#c8a86a" stroke-width="0.85"><path d="M28,65 C27,50 30,38 34,26 C37,18 41,12 38,6"/><path d="M33,45 C29,40 22,38 19,32"/><path d="M31,32 C27,26 29,20 26,14"/></g><g opacity="0.4" fill="#c8a86a"><path d="M33,45 C31,40 26,42 24,38 C28,37 32,40 33,45 Z"/><circle cx="20" cy="30" r="2.2" opacity="0.45"/><circle cx="24" cy="27" r="2" opacity="0.38"/><circle cx="22" cy="34" r="2.2" opacity="0.42"/><circle cx="17" cy="33" r="1.8" opacity="0.35"/></g><!-- Right vine with grape cluster --><g opacity="0.35" fill="none" stroke="#c8a86a" stroke-width="0.85"><path d="M372,65 C373,50 370,38 366,26 C363,18 359,12 362,6"/><path d="M367,45 C371,40 378,38 381,32"/><path d="M369,32 C373,26 371,20 374,14"/></g><g opacity="0.4" fill="#c8a86a"><path d="M367,45 C369,40 374,42 376,38 C372,37 368,40 367,45 Z"/><circle cx="380" cy="30" r="2.2" opacity="0.45"/><circle cx="376" cy="27" r="2" opacity="0.38"/><circle cx="378" cy="34" r="2.2" opacity="0.42"/><circle cx="383" cy="33" r="1.8" opacity="0.35"/></g><!-- Header --><text x="200" y="38" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="url(#dfGold)" letter-spacing="1" style="font-size:11px">You catch the barman&#8217;s eye.</text><!-- Divider --><line x1="80" y1="48" x2="320" y2="48" stroke="url(#dfRule)" stroke-width="0.6"/><polygon points="200,45 203,48 200,51 197,48" fill="#c8a86a" opacity="0.6"/><!-- French tricolour accents --><g opacity="0.3"><rect x="92" y="54" width="4" height="12" rx="0.5" fill="#002395"/><rect x="98" y="53" width="5" height="14" rx="0.5" fill="#f0f0f0"/><rect x="105" y="54" width="4" height="12" rx="0.5" fill="#ed2939"/><rect x="291" y="54" width="4" height="12" rx="0.5" fill="#002395"/><rect x="297" y="53" width="5" height="14" rx="0.5" fill="#f0f0f0"/><rect x="304" y="54" width="4" height="12" rx="0.5" fill="#ed2939"/></g><!-- BEAUJOLAIS wine glass (left) --><g opacity="0.8"><rect x="119" y="92" width="2" height="10" fill="rgba(200,168,106,0.3)"/><ellipse cx="120" cy="103" rx="9" ry="2.5" fill="rgba(200,168,106,0.22)"/><path d="M110,92 Q108,80 110,72 Q114,66 120,64 Q126,66 130,72 Q132,80 130,92 Z" fill="url(#dfWine)" stroke="rgba(180,140,90,0.4)" stroke-width="0.8"/><ellipse cx="120" cy="76" rx="8" ry="2" fill="rgba(138,32,48,0.3)"/></g><text x="120" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a2030" opacity="0.55" style="font-size:7px">Beaujolais</text><!-- CLARET wine glass (centre) --><g opacity="0.8"><rect x="199" y="92" width="2" height="10" fill="rgba(200,168,106,0.3)"/><ellipse cx="200" cy="103" rx="9" ry="2.5" fill="rgba(200,168,106,0.22)"/><path d="M190,92 Q188,80 190,72 Q194,66 200,64 Q206,66 210,72 Q212,80 210,92 Z" fill="url(#dfWine)" stroke="rgba(180,140,90,0.4)" stroke-width="0.8"/><ellipse cx="200" cy="76" rx="8" ry="2" fill="rgba(138,32,48,0.3)"/></g><text x="200" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a2030" opacity="0.55" style="font-size:7px">Claret</text><!-- BRETON CIDER tumbler (right) --><g opacity="0.8"><path d="M270,100 L273,66 L287,66 L290,100 Z" fill="rgba(180,160,80,0.12)" stroke="rgba(200,180,100,0.35)" stroke-width="0.8"/><path d="M271,100 L273,82 L287,82 L289,100 Z" fill="url(#dfCider)"/><circle cx="278" cy="88" r="0.8" fill="rgba(255,255,200,0.25)"/><circle cx="282" cy="92" r="0.6" fill="rgba(255,255,200,0.2)"/><circle cx="276" cy="94" r="0.5" fill="rgba(255,255,200,0.18)"/></g><text x="280" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#a08020" opacity="0.55" style="font-size:7px">Breton Cider</text><!-- Dots between glasses --><g fill="#c8a86a" opacity="0.4"><circle cx="152" cy="85" r="1.3"/><circle cx="160" cy="82" r="0.9"/><circle cx="168" cy="85" r="1.3"/><circle cx="232" cy="85" r="1.3"/><circle cx="240" cy="82" r="0.9"/><circle cx="248" cy="85" r="1.3"/></g><!-- Lower divider --><line x1="30" y1="130" x2="370" y2="130" stroke="url(#dfRule)" stroke-width="0.6"/><!-- Diamond row --><g fill="#c8a86a" opacity="0.4"><polygon points="160,140 163,144 160,148 157,144"/><polygon points="180,138 183,142 180,146 177,142"/><polygon points="200,136 204,140 200,144 196,140"/><polygon points="220,138 223,142 220,146 217,142"/><polygon points="240,140 243,144 240,148 237,144"/></g><!-- Bottom swags --><g opacity="0.2" fill="none" stroke="#c8a86a" stroke-width="0.7"><path d="M42,162 C68,153 105,158 135,151 C160,144 176,148 196,144"/><path d="M358,162 C332,153 295,158 265,151 C240,144 224,148 204,144"/></g><!-- Corner brackets --><g opacity="0.3" stroke="#c8a86a" stroke-width="0.9" fill="none"><polyline points="20,22 20,16 29,16"/><polyline points="380,22 380,16 371,16"/><polyline points="20,158 20,166 29,166"/><polyline points="380,158 380,166 371,166"/></g></svg>
+<div class="drink-menu french-drinks">
+(link: "Beaujolais")[(set: $lastDrink to "wine")(set: $sobriety to $sobriety - 16)(set: $frenchDrinkDone to true)(go-to: "The French")]
+(link: "Claret")[(set: $lastDrink to "wine")(set: $sobriety to $sobriety - 16)(set: $frenchDrinkDone to true)(go-to: "The French")]
+(link: "Breton Cider")[(set: $lastDrink to "cider")(set: $sobriety to $sobriety - 16)(set: $frenchDrinkDone to true)(go-to: "The French")]
+</div>
 
 :: Wrong door {"position":"1600,550","size":"100,100"}
 You've ballsed this right up. It's already getting late.
@@ -24872,6 +27898,8 @@ animation: fadeWalk 1.5s ease-in-out;
 }
 
 /* ===== PING PONG MINIGAME ===== */
+.hidden { display: none !important; }
+
 .pp-arena {
 background: linear-gradient(160deg, #080e08 0%, #0c160c 60%, #080e08 100%);
 border: 2px solid #1a1208;
@@ -26008,6 +29036,48 @@ display: block;
 margin: 0.6em 0;
 padding: 0.35em 0 0.35em 0.8em;
 border-left: 2px solid rgba(100, 90, 74, 0.2);
+}
+
+/* ===== DRINK MENU ===== */
+.drink-menu {
+  text-align: center;
+  padding: 0.6em 0 0.4em;
+}
+.drink-menu tw-link {
+  display: inline-block;
+  margin: 0.4em 0.6em;
+  padding: 0.45em 1.4em;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  letter-spacing: 0.1em;
+  border: 1px solid rgba(200,168,106,0.22);
+  border-left: 1px solid rgba(200,168,106,0.22);
+  background: rgba(20,16,8,0.55);
+  transition: all 0.3s ease;
+}
+.drink-menu tw-link:hover {
+  border-color: rgba(200,168,106,0.55);
+  border-left-color: rgba(200,168,106,0.55);
+  background: rgba(40,30,16,0.65);
+  padding-left: 1.4em;
+  box-shadow: 0 0 12px rgba(200,168,106,0.1), inset 0 0 8px rgba(200,168,106,0.05);
+}
+.colony-drinks tw-link {
+  border-color: rgba(122,170,96,0.22);
+  border-left-color: rgba(122,170,96,0.22);
+  color: #9a8a30;
+}
+.colony-drinks tw-link:hover {
+  border-color: rgba(122,170,96,0.5);
+  border-left-color: rgba(122,170,96,0.5);
+  color: #c8b860;
+  box-shadow: 0 0 12px rgba(122,170,96,0.1), inset 0 0 8px rgba(122,170,96,0.05);
+}
+.french-drinks tw-link {
+  color: #c8a86a;
+}
+.french-drinks tw-link:hover {
+  color: #e8d090;
 }
 
 /* ===== COIN TOSS ===== */

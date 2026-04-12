@@ -7046,7 +7046,10 @@ constructor(drinkType) {
   this.sipped = false;
   this.tiltAngle = 0;
   this.tiltTarget = 0;
-  this.liquidLevel = 1.0;
+  this.liquidLevel = 0;      // starts empty — pours in on entry
+  this.fillLevel = 0;        // animation fill progress (0→1)
+  this.filling = true;       // true during pour-in animation
+  this.idleBob = 0;          // gentle vertical bob offset (px)
   this.wobble = 0;
   this.wobbleDecay = 0;
   this.fadeAlpha = 0;
@@ -7054,17 +7057,17 @@ constructor(drinkType) {
   this.done = false;
   this.t = 0;
 
-  // Drink configs: label, liquid colour, highlight, glass shape
+  // Drink configs: label, liquid colour, highlight, glass shape, ambient glow colour
   this.configs = {
-    pint:      { label: 'Pint', liq: '#1a0a00', hi: '#3a1a08', foam: '#f0e8d0', bg: '#c8a86a' },
-    whisky:    { label: 'Whisky', liq: '#c98030', hi: '#e8b860', foam: null, bg: '#c8a86a' },
-    gin:       { label: 'Gin & Bitter Lemon', liq: '#e8e8a0', hi: '#f8f8d0', foam: null, bg: '#8ac8dc' },
-    wine:      { label: 'Wine', liq: '#6a1028', hi: '#8a2040', foam: null, bg: '#c8a86a' },
-    champagne: { label: 'Champagne', liq: '#e8d880', hi: '#f8f0b0', foam: '#f8f4e8', bg: '#c8a86a' },
-    scotch:    { label: 'Scotch', liq: '#d4a050', hi: '#e8c070', foam: null, bg: '#c8a86a' },
-    cider:     { label: 'Cider', liq: '#c8a030', hi: '#e0c060', foam: '#f0e8c8', bg: '#c8a86a' },
-    vodka:     { label: 'Vodka Tonic', liq: '#d8e8e8', hi: '#e8f4f4', foam: null, bg: '#8ac8dc' },
-    beer:      { label: 'Beer', liq: '#c08020', hi: '#e0a840', foam: '#f0e8d0', bg: '#c8a86a' }
+    pint:      { label: 'Pint',               liq: '#1a0a00', hi: '#3a1a08', foam: '#f0e8d0', bg: '#c8a86a', glow: 'rgba(200,140,40,0.18)' },
+    whisky:    { label: 'Whisky',             liq: '#c98030', hi: '#e8b860', foam: null,       bg: '#c8a86a', glow: 'rgba(210,140,40,0.22)' },
+    gin:       { label: 'Gin & Bitter Lemon', liq: '#e8e8a0', hi: '#f8f8d0', foam: null,       bg: '#8ac8dc', glow: 'rgba(160,210,180,0.18)' },
+    wine:      { label: 'Wine',               liq: '#6a1028', hi: '#8a2040', foam: null,       bg: '#c8a86a', glow: 'rgba(160,30,60,0.25)' },
+    champagne: { label: 'Champagne',          liq: '#e8d880', hi: '#f8f0b0', foam: '#f8f4e8', bg: '#c8a86a', glow: 'rgba(230,220,100,0.22)' },
+    scotch:    { label: 'Scotch',             liq: '#d4a050', hi: '#e8c070', foam: null,       bg: '#c8a86a', glow: 'rgba(200,140,50,0.22)' },
+    cider:     { label: 'Cider',              liq: '#c8a030', hi: '#e0c060', foam: '#f0e8c8', bg: '#c8a86a', glow: 'rgba(190,160,40,0.20)' },
+    vodka:     { label: 'Vodka Tonic',        liq: '#d8e8e8', hi: '#e8f4f4', foam: null,       bg: '#8ac8dc', glow: 'rgba(160,200,220,0.18)' },
+    beer:      { label: 'Beer',               liq: '#c08020', hi: '#e0a840', foam: '#f0e8d0', bg: '#c8a86a', glow: 'rgba(190,150,30,0.20)' }
   };
   this.cfg = this.configs[this.type] || this.configs.whisky;
 
@@ -7075,25 +7078,55 @@ constructor(drinkType) {
 _build() {
   // Overlay
   this.overlay = document.createElement('div');
-  this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.4s;';
+  this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
   document.body.appendChild(this.overlay);
 
   // Card
   this.card = document.createElement('div');
-  this.card.style.cssText = 'display:flex;flex-direction:column;align-items:center;padding:24px 32px 18px;background:rgba(20,14,8,0.95);border:1px solid rgba(200,168,106,0.3);border-radius:10px;opacity:0;transition:opacity 0.4s;';
+  this.card.style.cssText = [
+    'display:flex;flex-direction:column;align-items:center;',
+    'padding:0 0 20px;',
+    'background:rgba(14,9,4,0.97);',
+    'border:1px solid rgba(200,168,106,0.35);',
+    'border-top:2px solid rgba(200,168,106,0.65);',
+    'border-radius:10px;',
+    'opacity:0;',
+    'transform:translateY(18px);',
+    'transition:opacity 0.45s,transform 0.45s;',
+    'min-width:180px;',
+  ].join('');
   this.overlay.appendChild(this.card);
+
+  // Drink name label
+  this.nameLabel = document.createElement('div');
+  this.nameLabel.style.cssText = [
+    'width:100%;box-sizing:border-box;',
+    'padding:12px 28px 10px;',
+    'text-align:center;',
+    'font:small-caps 600 13px "Cinzel",Georgia,serif;',
+    'letter-spacing:0.12em;',
+    'color:rgba(200,168,106,0.85);',
+    'border-bottom:1px solid rgba(200,168,106,0.15);',
+  ].join('');
+  this.nameLabel.textContent = this.cfg.label;
+  this.card.appendChild(this.nameLabel);
+
+  // Canvas wrapper
+  var canvasWrap = document.createElement('div');
+  canvasWrap.style.cssText = 'padding:18px 28px 0;';
+  this.card.appendChild(canvasWrap);
 
   // Canvas
   this.canvas = document.createElement('canvas');
   this.canvas.width = 160;
   this.canvas.height = 200;
-  this.canvas.style.cssText = 'cursor:pointer;';
+  this.canvas.style.cssText = 'cursor:pointer;display:block;';
   this.ctx = this.canvas.getContext('2d');
-  this.card.appendChild(this.canvas);
+  canvasWrap.appendChild(this.canvas);
 
   // Prompt text
   this.prompt = document.createElement('div');
-  this.prompt.style.cssText = 'margin-top:12px;font:italic 14px Georgia,serif;color:#d4a574;opacity:0.8;';
+  this.prompt.style.cssText = 'margin-top:10px;font:italic 13px Georgia,serif;color:rgba(212,165,116,0.75);letter-spacing:0.04em;';
   this.prompt.textContent = 'Hold to drink';
   this.card.appendChild(this.prompt);
 
@@ -7105,15 +7138,16 @@ _build() {
   this.closing = false;     // true once fade-out has started
 
   setTimeout(function() {
-    self.overlay.style.background = 'rgba(0,0,0,0.55)';
+    self.overlay.style.background = 'rgba(0,0,0,0.6)';
     self.card.style.opacity = '1';
+    self.card.style.transform = 'translateY(0)';
     self.fadeAlpha = 1;
   }, 30);
 
   // Hold-to-drink handlers (mouse + touch)
   var startDrink = function(e) {
     e.preventDefault();
-    if (self.closing || self.done) return;
+    if (self.closing || self.done || self.filling) return;
     if (self.liquidLevel <= self.minLevel + 0.01) return; // already hit bottom
     self.drinking = true;
     self.hasDrunk = true;
@@ -7147,11 +7181,12 @@ _build() {
 _fadeOut() {
   this.overlay.style.background = 'rgba(0,0,0,0)';
   this.card.style.opacity = '0';
+  this.card.style.transform = 'translateY(-12px)';
   var self = this;
   setTimeout(function() {
     self.done = true;
     if (self.overlay.parentNode) self.overlay.parentNode.removeChild(self.overlay);
-  }, 450);
+  }, 480);
 }
 
 _startLoop() {
@@ -7163,10 +7198,26 @@ _startLoop() {
     var dt = Math.min(now - lt, 50) * 0.001;
     lt = now;
     self.t += dt;
+    // Pour-in fill animation (liquid rises from 0 to 1 over ~0.7s on entry)
+    if (self.filling) {
+      self.fillLevel = Math.min(1, self.fillLevel + 1.5 * dt);
+      self.liquidLevel = self.fillLevel;
+      if (self.fillLevel >= 1) {
+        self.filling = false;
+        self.liquidLevel = 1.0;
+        self.wobbleDecay = 0.4; // little slosh as it settles
+      }
+    }
     // Smooth tilt
     self.tiltAngle += (self.tiltTarget - self.tiltAngle) * 4 * dt;
-    // Drain liquid while holding
-    if (self.drinking) {
+    // Idle bob (gentle float when upright and not pouring)
+    if (!self.drinking && !self.filling) {
+      self.idleBob = Math.sin(self.t * 1.25) * 1.6;
+    } else {
+      self.idleBob = 0;
+    }
+    // Drain liquid while holding (only after fill is complete)
+    if (self.drinking && !self.filling) {
       // Drain rate slows as you approach the minimum (can't down it)
       var headroom = self.liquidLevel - self.minLevel;
       var rate = 0.35 * Math.min(1.0, headroom * 4); // slows near bottom
@@ -7200,13 +7251,24 @@ _draw() {
   var c = this.ctx, W = 160, H = 200;
   c.clearRect(0, 0, W, H);
 
-  c.save();
-  c.translate(W / 2, H * 0.85);
-  c.rotate(this.tiltAngle);
-
   var cfg = this.cfg;
   var lev = this.liquidLevel;
   var wob = this.wobble;
+  var bob = this.idleBob || 0;
+
+  // Ambient radial glow behind the glass (per-drink colour, fades with level)
+  if (cfg.glow && lev > 0.05) {
+    var gCx = W / 2, gCy = H * 0.6 + bob;
+    var grd = c.createRadialGradient(gCx, gCy, 0, gCx, gCy, 72);
+    grd.addColorStop(0, cfg.glow);
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = grd;
+    c.fillRect(0, 0, W, H);
+  }
+
+  c.save();
+  c.translate(W / 2, H * 0.85 + bob);
+  c.rotate(this.tiltAngle);
 
   if (this.type === 'pint' || this.type === 'cider' || this.type === 'beer') {
     this._drawPint(c, cfg, lev, wob);
@@ -7299,7 +7361,26 @@ _drawTumbler(c, cfg, lev, wob) {
   c.lineTo(lW, 0);
   c.closePath();
   c.fill();
-  // Highlight
+  // Ice cubes floating in the liquid
+  if (liqH > 8) {
+    var icePos = [[-9, -liqH * 0.50], [5, -liqH * 0.38], [-1, -liqH * 0.68]];
+    for (var i = 0; i < icePos.length; i++) {
+      var ix = icePos[i][0], iy = icePos[i][1] + wob * 80;
+      if (iy > -3 && iy < liqTop + 3) {
+        c.fillStyle = 'rgba(200,228,248,0.22)';
+        c.strokeStyle = 'rgba(220,242,255,0.50)';
+        c.lineWidth = 0.8;
+        c.beginPath();
+        c.rect(ix, iy, 9, 9);
+        c.fill();
+        c.stroke();
+        // tiny highlight on ice face
+        c.fillStyle = 'rgba(255,255,255,0.18)';
+        c.fillRect(ix + 1, iy + 1, 3, 2);
+      }
+    }
+  }
+  // Liquid surface highlight
   c.fillStyle = cfg.hi;
   c.globalAlpha = 0.25;
   c.beginPath();
@@ -7350,6 +7431,7 @@ _drawWine(c, cfg, lev, wob) {
   var liqBot = -stemH;
   var liqTop = liqBot - liqH;
   var lW = 7 + (bowlW / 2 - 10) * (liqH / bowlH);
+  // Base liquid colour
   c.fillStyle = cfg.liq;
   c.beginPath();
   c.moveTo(-7, liqBot);
@@ -7357,6 +7439,20 @@ _drawWine(c, cfg, lev, wob) {
   c.quadraticCurveTo(lW, liqTop + wob * 100, 7, liqBot);
   c.closePath();
   c.fill();
+  // Luster — light sheen on left inner bowl face
+  if (liqH > 4) {
+    var luster = c.createLinearGradient(-lW, liqTop, lW * 0.3, liqBot);
+    luster.addColorStop(0, 'rgba(210,90,110,0.28)');
+    luster.addColorStop(0.5, 'rgba(180,60,80,0.08)');
+    luster.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = luster;
+    c.beginPath();
+    c.moveTo(-7, liqBot);
+    c.quadraticCurveTo(-lW, liqTop + wob * 100, 0, liqTop - wob * 150);
+    c.quadraticCurveTo(lW, liqTop + wob * 100, 7, liqBot);
+    c.closePath();
+    c.fill();
+  }
 }
 
 // === CHAMPAGNE FLUTE ===
@@ -7399,16 +7495,28 @@ _drawChampagne(c, cfg, lev, wob) {
   c.lineTo(fluteW / 2 - 3, liqBot);
   c.closePath();
   c.fill();
-  // Bubbles
-  if (lev > 0.3) {
-    c.fillStyle = 'rgba(255,255,240,0.4)';
-    for (var b = 0; b < 5; b++) {
-      var bx = (Math.sin(this.t * 2.3 + b * 1.7)) * 4;
-      var by = liqBot - (((this.t * 18 + b * 13) % liqH));
-      if (by > liqTop) {
-        c.beginPath();
-        c.arc(bx, by, 1.2, 0, Math.PI * 2);
-        c.fill();
+  // Bubbles — three rising streams with varied speed and drift
+  if (lev > 0.15 && liqH > 6) {
+    var streams = [
+      { x: -3.5, speed: 20, phase: 0.0, drift: 1.4 },
+      { x:  0.5, speed: 15, phase: 0.8, drift: 0.9 },
+      { x:  3.5, speed: 24, phase: 1.6, drift: 1.7 }
+    ];
+    for (var s = 0; s < streams.length; s++) {
+      var str = streams[s];
+      for (var b = 0; b < 4; b++) {
+        var tOff = (this.t * str.speed + str.phase + b * (liqH / str.speed)) % liqH;
+        var bx = str.x + Math.sin(this.t * 2.1 + s * 1.3 + b * 0.7) * str.drift;
+        var by = liqBot - tOff;
+        if (by > liqTop + 1 && by < liqBot - 1) {
+          var prog = tOff / liqH;
+          var bsize = 0.6 + prog * 0.9;          // grow as they rise
+          var balpha = 0.20 + prog * 0.30;       // brighten near surface
+          c.fillStyle = 'rgba(255,252,200,' + balpha.toFixed(2) + ')';
+          c.beginPath();
+          c.arc(bx, by, bsize, 0, Math.PI * 2);
+          c.fill();
+        }
       }
     }
   }
@@ -25093,6 +25201,336 @@ setInterval(function() {
     (document.querySelector('tw-story') || document.body).appendChild(bars);
   }).observe(document.body, { childList: true, subtree: true });
 })();</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

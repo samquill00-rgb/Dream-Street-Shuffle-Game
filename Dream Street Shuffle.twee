@@ -3890,6 +3890,61 @@ if (e.target && e.target.id === 'bar-start-btn') window.startBarGame();
 if (e.target && e.target.id === 'fight-start-btn') window.startFightGame();
 });
 
+// ====== PASSAGE GENERATION GUARD ======
+// Tracks passage navigation so scheduled popups can be cancelled if the player moves on.
+window._passageGen = 0;
+(function() {
+  function watch() {
+    var story = document.querySelector('tw-story');
+    if (!story) return;
+    new MutationObserver(function(muts) {
+      muts.forEach(function(m) {
+        m.addedNodes.forEach(function(n) {
+          if (n.nodeType === 1 && n.tagName === 'TW-PASSAGE') window._passageGen++;
+        });
+      });
+    }).observe(story, { childList: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch);
+  else watch();
+})();
+
+// Safe DrinkPopup: cancelled if the player navigates away before the delay fires.
+// typeOrFn: a drink type string, or a function that returns one (for DOM-read cases).
+window.showDrinkPopupSafe = function(typeOrFn, delay) {
+  var gen = window._passageGen;
+  setTimeout(function() {
+    if (window._passageGen !== gen) return; // navigated away — cancel
+    var t = typeof typeOrFn === 'function' ? typeOrFn() : typeOrFn;
+    if (t) window.showDrinkPopup(t);
+  }, delay !== undefined ? delay : 50);
+};
+
+// ====== HEAL EXIT LINK HANDLER ======
+// Fires the stat heal animation then navigates via a hidden Harlowe link.
+// Used in recovery passages because <script> inside (link:) hooks isn't reliable.
+document.addEventListener('click', function(e) {
+  if (!e.target || !e.target.classList || !e.target.classList.contains('heal-exit-link')) return;
+  var el = e.target;
+  var gains = { confidence: 0, sobriety: 0 };
+  var valsId = el.getAttribute('data-vals');
+  if (valsId) {
+    var valsEl = document.getElementById(valsId);
+    if (valsEl) {
+      var p = valsEl.textContent.split(',');
+      gains.confidence = parseInt(p[0]) || 0;
+      gains.sobriety   = parseInt(p[1]) || 0;
+    }
+  } else {
+    gains.confidence = parseInt(el.getAttribute('data-conf')) || 0;
+    gains.sobriety   = parseInt(el.getAttribute('data-sobr')) || 0;
+  }
+  if (window.showHealAnimation) window.showHealAnimation(gains);
+  var navEl = document.getElementById(el.getAttribute('data-nav') || '');
+  var twLink = navEl && navEl.querySelector('tw-link');
+  if (twLink) twLink.click();
+});
+
 /* ===== FIGHT MINIGAME ENGINE ===== */
 window.FightGame = class FightGame {
 constructor(canvasId, sobriety) {
@@ -21804,8 +21859,8 @@ You surface upon Dean Street.
 The coast is clear so you spew up your guts with the tact of a bulimic starlette. Well done. You feel much better for that.
 
 <span id="doorway-heal-vals" style="display:none">12,(if: $hadChippy is true)[5](else:)[20]</span>
-
-(link: "Back to Dean Street")[<script>if(window.showHealAnimation){var el=document.getElementById('doorway-heal-vals');if(el){var p=el.textContent.split(',');window.showHealAnimation({confidence:parseInt(p[0])||0,sobriety:parseInt(p[1])||0});}}</script>(go-to: "Dean Street")]
+<span id="doorway-nav" style="display:none">(link: "nav")[(go-to: "Dean Street")]</span>
+<span class="heal-exit-link" data-vals="doorway-heal-vals" data-nav="doorway-nav">Back to Dean Street</span>
 
 :: Alba Display {"position":"900,50","size":"100,100"}
 (if: $albaRevealed is true)[\
@@ -22037,7 +22092,8 @@ For a few minutes, you are nobody. You have no manuscript. You owe nothing to an
 
 The warmth spreads through you. The fog lifts, just a little.
 
-(link: "Back to Dean Street")[<script>if(window.showHealAnimation)window.showHealAnimation({confidence:15,sobriety:20});</script>(go-to: "Dean Street")]
+<span id="chippy-nav" style="display:none">(link: "nav")[(go-to: "Dean Street")]</span>
+<span class="heal-exit-link" data-conf="15" data-sobr="20" data-nav="chippy-nav">Back to Dean Street</span>
 <svg class="chippy-tube" viewBox="0 0 300 18" width="100%" height="18" preserveAspectRatio="none"><defs><filter id="fgB" x="-20%" y="-120%" width="140%" height="400%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="14" y="1" width="272" height="16" rx="6" fill="rgba(180,210,255,0.22)" filter="url(#fgB)"/><rect x="16" y="4" width="268" height="10" rx="4" fill="rgba(215,230,255,0.96)"/><rect x="18" y="6" width="264" height="4" rx="2" fill="rgba(240,248,255,1.0)"/><rect x="12"  y="3" width="7" height="12" rx="2" fill="rgba(130,135,145,0.75)"/><rect x="281" y="3" width="7" height="12" rx="2" fill="rgba(130,135,145,0.75)"/><line x1="22" y1="9" x2="278" y2="9" stroke="rgba(200,220,255,0.4)" stroke-width="0.7"/></svg>
 </div>
 
@@ -22105,7 +22161,7 @@ What will you do with his cow?
 <svg class="colony-fan" viewBox="0 0 300 52" width="100%" height="52" preserveAspectRatio="none"><defs><clipPath id="cf1"><rect x="0" y="0" width="300" height="50"/></clipPath><linearGradient id="cfL" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="50%" stop-color="#9a8a30" stop-opacity="0.75"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient></defs><g clip-path="url(#cf1)" opacity="0.35"><line x1="150" y1="54" x2="0"   y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="33"  y2="0" stroke="#8a9a50" stroke-width="0.8"/><line x1="150" y1="54" x2="67"  y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="100" y2="0" stroke="#9a8a30" stroke-width="0.8"/><line x1="150" y1="54" x2="133" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="150" y2="0" stroke="#c8b860" stroke-width="1.0"/><line x1="150" y1="54" x2="167" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="200" y2="0" stroke="#9a8a30" stroke-width="0.8"/><line x1="150" y1="54" x2="233" y2="0" stroke="#7aaa60" stroke-width="0.8"/><line x1="150" y1="54" x2="267" y2="0" stroke="#8a9a50" stroke-width="0.8"/><line x1="150" y1="54" x2="300" y2="0" stroke="#7aaa60" stroke-width="0.8"/></g><line x1="0" y1="44" x2="300" y2="44" stroke="url(#cfL)" stroke-width="0.6"/><line x1="0" y1="48" x2="300" y2="48" stroke="url(#cfL)" stroke-width="1.8"/><polygon points="150,41 155,45 150,49 145,45" fill="#c8b860" opacity="0.65"/><polygon points="120,45 123,48 120,51 117,48" fill="none" stroke="#7aaa60" stroke-width="0.8" opacity="0.45"/><polygon points="180,45 183,48 180,51 177,48" fill="none" stroke="#7aaa60" stroke-width="0.8" opacity="0.45"/></svg>
 (set: $sobriety to $sobriety - 16)
 <span id="drink-type-data" style="display:none;">(print: $lastDrink)</span>\
-<script>setTimeout(function(){ var dt = document.getElementById('drink-type-data'); var t = (dt && dt.textContent.trim()) || 'champagne'; window.showDrinkPopup(t); }, 400);</script>\
+<script>window.showDrinkPopupSafe(function(){ var dt=document.getElementById('drink-type-data'); return (dt&&dt.textContent.trim())||'champagne'; });</script>\
 You drink. The Colony Room tilts.
 
 (if: $knowsCopperSecret is false)[At the bar, a man, drinking.
@@ -22369,7 +22425,7 @@ So, so happily I go, under the shades.
 <svg class="french-rule" viewBox="0 0 300 60" width="100%" height="60" preserveAspectRatio="none"><defs><linearGradient id="frAmb" x1="0" x2="1"><stop offset="0%" stop-color="#a06010" stop-opacity="0"/><stop offset="8%" stop-color="#b07020" stop-opacity="0.5"/><stop offset="50%" stop-color="#c88020" stop-opacity="0.65"/><stop offset="92%" stop-color="#b07020" stop-opacity="0.5"/><stop offset="100%" stop-color="#a06010" stop-opacity="0"/></linearGradient><linearGradient id="frLn" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="8%" stop-color="#c8a86a" stop-opacity="0.9"/><stop offset="92%" stop-color="#c8a86a" stop-opacity="0.9"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient></defs><rect x="0" y="10" width="300" height="40" fill="url(#frAmb)" opacity="0.4"/><line x1="20" y1="10" x2="280" y2="10" stroke="url(#frLn)" stroke-width="1.5"/><line x1="20" y1="50" x2="280" y2="50" stroke="url(#frLn)" stroke-width="1.5"/><g opacity="0.3" stroke="#c8a86a" stroke-width="0.6" fill="none"><line x1="40" y1="10" x2="40" y2="50"/><line x1="55" y1="10" x2="55" y2="50"/><line x1="70" y1="10" x2="70" y2="50"/><line x1="85" y1="10" x2="85" y2="50"/><line x1="100" y1="10" x2="100" y2="50"/><line x1="115" y1="10" x2="115" y2="50"/><line x1="185" y1="10" x2="185" y2="50"/><line x1="200" y1="10" x2="200" y2="50"/><line x1="215" y1="10" x2="215" y2="50"/><line x1="230" y1="10" x2="230" y2="50"/><line x1="245" y1="10" x2="245" y2="50"/><line x1="260" y1="10" x2="260" y2="50"/></g><g opacity="0.55"><path d="M130,30 Q135,14 140,30 Q145,46 150,30 Q155,14 160,30 Q165,46 170,30" fill="none" stroke="#c8a86a" stroke-width="1.2"/><circle cx="130" cy="30" r="2" fill="#c8a86a" opacity="0.7"/><circle cx="170" cy="30" r="2" fill="#c8a86a" opacity="0.7"/></g><polygon points="150,22 154,30 150,38 146,30" fill="#c8a86a" opacity="0.6"/><g opacity="0.35"><rect x="62" y="20" width="6" height="20" rx="1" fill="#002395"/><rect x="73" y="19" width="7" height="22" rx="1" fill="#f0f0f0"/><rect x="85" y="20" width="5" height="20" rx="1" fill="#ed2939"/><rect x="210" y="20" width="6" height="20" rx="1" fill="#002395"/><rect x="221" y="19" width="7" height="22" rx="1" fill="#f0f0f0"/><rect x="233" y="20" width="5" height="20" rx="1" fill="#ed2939"/></g><path d="M20,10 Q20,8 22,8 L28,8 Q30,8 30,10" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M270,10 Q270,8 272,8 L278,8 Q280,8 280,10" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M20,50 Q20,52 22,52 L28,52 Q30,52 30,50" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/><path d="M270,50 Q270,52 272,52 L278,52 Q280,52 280,50" fill="none" stroke="#c8a86a" stroke-width="0.8" opacity="0.5"/></svg>
 (set: $sobriety to $sobriety - 16)
 <span id="drink-type-data" style="display:none;">(print: $lastDrink)</span>\
-<script>setTimeout(function(){ var dt = document.getElementById('drink-type-data'); var t = (dt && dt.textContent.trim()) || 'wine'; window.showDrinkPopup(t); }, 400);</script>\
+<script>window.showDrinkPopupSafe(function(){ var dt=document.getElementById('drink-type-data'); return (dt&&dt.textContent.trim())||'wine'; });</script>\
 You're served.
 
 [[Back to the bar|The French]]
@@ -22775,7 +22831,7 @@ John St. John (for that is his name) is a poet who hates Red, with a hatred more
 
 :: The Empty Glass {"position":"300,950","size":"100,100"}
 <svg class="french-rule" viewBox="0 0 300 24" width="100%" height="24" preserveAspectRatio="none"><defs><linearGradient id="frC" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="45%" stop-color="#c8a86a" stop-opacity="0.55"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient><linearGradient id="frD" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="45%" stop-color="#c8a86a" stop-opacity="0.28"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="7" x2="300" y2="7" stroke="url(#frD)" stroke-width="0.5"/><line x1="0" y1="12" x2="300" y2="12" stroke="url(#frC)" stroke-width="1.2"/><svg x="140" y="0" width="20" height="24" viewBox="-12 -2 24 26" preserveAspectRatio="xMidYMid meet"><g fill="#c8a86a" opacity="0.75"><path d="M0,15 C-3,10 -4,2 0,-1 C4,2 3,10 0,15Z"/><path d="M-1,13 C-4,10 -8,5 -9,3 C-9,5 -8,6 -6,5 C-3,8 -1,11 0,13Z"/><path d="M1,13 C4,10 8,5 9,3 C9,5 8,6 6,5 C3,8 1,11 0,13Z"/><rect x="-8" y="14" width="16" height="2.5" rx="0.5"/><ellipse cx="0" cy="20" rx="2.5" ry="2"/></g></svg></svg>
-<script>setTimeout(function(){ window.showDrinkPopup('whisky'); }, 400);</script>\
+<script>window.showDrinkPopupSafe('whisky', 400);</script>\
 After these thoughts you drink and while you drink you notice that John's glass is empty already.
 
 He drops it and it smashes.
@@ -25119,7 +25175,7 @@ On which do you knock?
 (unless: $visited contains "French")[(set: $visited's French to false)]\
 (if: $visited's French is false)[(set: $visited's French to true)\
 (set: $confidence to $confidence + 8)]
-(if: $frenchDrinkDone is true)[(set: $frenchDrinkDone to false)<span id="drink-type-data" style="display:none;">(print: $lastDrink)</span><script>setTimeout(function(){ var dt = document.getElementById('drink-type-data'); var t = (dt && dt.textContent.trim()) || 'wine'; window.showDrinkPopup(t); }, 400);</script>]\
+(if: $frenchDrinkDone is true)[(set: $frenchDrinkDone to false)<span id="drink-type-data" style="display:none;">(print: $lastDrink)</span><script>window.showDrinkPopupSafe(function(){ var dt=document.getElementById('drink-type-data'); return (dt&&dt.textContent.trim())||'wine'; });</script>]\
 (else-if: ($haunts contains $haunt4) and not (($haunts contains $haunt1) and ($haunts contains $haunt2)))[(set: $frenchDrinkDone to true)(go-to: "Which drink at the French?")]\
 (if: $tookLily5 is false)[|lily5>[(display: "Lily SVG")]\
 (click-replace: ?lily5)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily5 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">Was that her passing the window, almost six-foot and with the gait of a newborn antelope?</span>]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
@@ -25951,6 +26007,21 @@ tw-link.visited, .enchantment-link.visited {
 color: #d4a574;
 text-shadow: 0 0 8px rgba(212, 165, 116, 0.3);
 opacity: 1;
+}
+
+/* Recovery passage back links — styled to match tw-link */
+.heal-exit-link {
+color: #d4a574;
+text-decoration: none;
+border-bottom: 1px solid transparent;
+transition: all 0.4s ease;
+text-shadow: 0 0 8px rgba(212, 165, 116, 0.3);
+cursor: pointer;
+}
+.heal-exit-link:hover {
+color: #ffd699;
+border-bottom: 1px solid #d4a574;
+text-shadow: 0 0 10px rgba(255, 214, 153, 0.6), 0 0 20px rgba(212, 165, 116, 0.4);
 }
 
 /* ===== GREYED OUT OPTIONS ===== */

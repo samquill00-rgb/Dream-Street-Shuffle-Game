@@ -3982,13 +3982,27 @@ window.hauntBackgroundGlow = function() {
 
 // Safe DrinkPopup: cancelled if the player navigates away before the delay fires.
 // typeOrFn: a drink type string, or a function that returns one (for DOM-read cases).
+//
+// FIX (race condition): Harlowe runs passage <script> tags synchronously during
+// rendering, before the MutationObserver microtask has had a chance to fire and
+// increment _passageGen for the new passage.  If we snapshot gen immediately, we
+// capture the OLD value; the MO then increments it, and the cancel-guard fires
+// incorrectly, silently swallowing every passage-load popup.
+//
+// The outer setTimeout(0) defers the snapshot by one event-loop task, which is
+// enough for all pending microtasks (including the MO callback) to flush first.
+// Navigation-away cancellation still works correctly because gen is snapshotted
+// AFTER the current passage's increment, so any subsequent navigation will push
+// _passageGen higher and trip the guard as intended.
 window.showDrinkPopupSafe = function(typeOrFn, delay) {
-  var gen = window._passageGen;
   setTimeout(function() {
-    if (window._passageGen !== gen) return; // navigated away — cancel
-    var t = typeof typeOrFn === 'function' ? typeOrFn() : typeOrFn;
-    if (t) window.showDrinkPopup(t);
-  }, delay !== undefined ? delay : 50);
+    var gen = window._passageGen; // snapshot after MO has fired for this passage
+    setTimeout(function() {
+      if (window._passageGen !== gen) return; // navigated away — cancel
+      var t = typeof typeOrFn === 'function' ? typeOrFn() : typeOrFn;
+      if (t) window.showDrinkPopup(t);
+    }, delay !== undefined ? delay : 50);
+  }, 0);
 };
 
 // ====== HEAL EXIT LINK HANDLER ======

@@ -4029,6 +4029,451 @@ window.showDrinkPopupSafe = function(typeOrFn, delay) {
   }, 0);
 };
 
+// ====== SPEW POPUP (hold-to-retch animation for the Coach and Horses Gents) ======
+window.SpewPopup = class SpewPopup {
+constructor() {
+  this.done = false;
+  this.closing = false;
+  this.retching = false;
+  this.hasRetched = false;
+  this.t = 0;
+  this.streamLevel = 0;
+  this.particles = [];
+  this.wobbleDecay = 0;
+  this._build();
+  this._startLoop();
+}
+_build() {
+  this.overlay = document.createElement('div');
+  this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
+  document.body.appendChild(this.overlay);
+  this.card = document.createElement('div');
+  this.card.style.cssText = [
+    'display:flex;flex-direction:column;align-items:center;',
+    'padding:0 0 20px;',
+    'background:rgba(14,9,4,0.97);',
+    'border:1px solid rgba(200,168,106,0.35);',
+    'border-top:2px solid rgba(200,168,106,0.65);',
+    'border-radius:10px;',
+    'opacity:0;transform:translateY(18px);',
+    'transition:opacity 0.45s,transform 0.45s;',
+    'min-width:180px;',
+  ].join('');
+  this.overlay.appendChild(this.card);
+  this.nameLabel = document.createElement('div');
+  this.nameLabel.style.cssText = [
+    'width:100%;box-sizing:border-box;',
+    'padding:12px 28px 10px;text-align:center;',
+    'font:small-caps 600 13px "Cinzel",Georgia,serif;',
+    'letter-spacing:0.12em;color:rgba(200,168,106,0.85);',
+    'border-bottom:1px solid rgba(200,168,106,0.15);',
+  ].join('');
+  this.nameLabel.textContent = 'The Gents';
+  this.card.appendChild(this.nameLabel);
+  var canvasWrap = document.createElement('div');
+  canvasWrap.style.cssText = 'padding:18px 28px 0;';
+  this.card.appendChild(canvasWrap);
+  this.canvas = document.createElement('canvas');
+  this.canvas.width = 160;
+  this.canvas.height = 200;
+  this.canvas.style.cssText = 'cursor:pointer;display:block;';
+  this.ctx = this.canvas.getContext('2d');
+  canvasWrap.appendChild(this.canvas);
+  this.prompt = document.createElement('div');
+  this.prompt.style.cssText = 'margin-top:10px;font:italic 13px Georgia,serif;color:rgba(212,165,116,0.75);letter-spacing:0.04em;';
+  this.prompt.textContent = 'Hold to retch';
+  this.card.appendChild(this.prompt);
+  var self = this;
+  setTimeout(function() {
+    self.overlay.style.background = 'rgba(0,0,0,0.6)';
+    self.card.style.opacity = '1';
+    self.card.style.transform = 'translateY(0)';
+  }, 30);
+  var startRetch = function(e) {
+    e.preventDefault();
+    if (self.closing || self.done) return;
+    self.retching = true;
+    self.hasRetched = true;
+    self.wobbleDecay = 0.8;
+    self.prompt.textContent = '';
+  };
+  var stopRetch = function(e) {
+    e.preventDefault();
+    if (!self.retching) return;
+    self.retching = false;
+    self.wobbleDecay = 0.4;
+    if (self.hasRetched && self.streamLevel >= 0.6 && !self.closing) {
+      self.closing = true;
+      setTimeout(function() { self._fadeOut(); }, 800);
+    }
+  };
+  this.canvas.addEventListener('mousedown', startRetch);
+  this.canvas.addEventListener('mouseup', stopRetch);
+  this.canvas.addEventListener('mouseleave', stopRetch);
+  this.canvas.addEventListener('touchstart', startRetch);
+  this.canvas.addEventListener('touchend', stopRetch);
+  this.canvas.addEventListener('touchcancel', stopRetch);
+}
+_fadeOut() {
+  this.overlay.style.background = 'rgba(0,0,0,0)';
+  this.card.style.opacity = '0';
+  this.card.style.transform = 'translateY(-12px)';
+  var self = this;
+  setTimeout(function() {
+    self.done = true;
+    if (self.overlay.parentNode) self.overlay.parentNode.removeChild(self.overlay);
+  }, 480);
+}
+_startLoop() {
+  var self = this;
+  var lt = performance.now();
+  function loop() {
+    if (self.done) return;
+    var now = performance.now();
+    var dt = Math.min(now - lt, 50) * 0.001;
+    lt = now;
+    self.t += dt;
+    if (self.retching) {
+      self.streamLevel = Math.min(1, self.streamLevel + 0.45 * dt);
+      if (Math.random() < 0.5) {
+        self.particles.push({
+          x: 80 + (Math.random() - 0.5) * 18,
+          y: 118,
+          vx: (Math.random() - 0.5) * 55,
+          vy: 15 + Math.random() * 35,
+          life: 1.0,
+          size: 1.5 + Math.random() * 2.5,
+          col: Math.random() < 0.6 ? '#7aaa28' : '#a8c838'
+        });
+      }
+    }
+    self.particles = self.particles.filter(function(p) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 90 * dt;
+      p.life -= dt * 1.8;
+      return p.life > 0;
+    });
+    if (self.wobbleDecay > 0.01) self.wobbleDecay *= (1 - 1.5 * dt);
+    self._draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+_draw() {
+  var c = this.ctx, W = 160, H = 200, t = this.t;
+  c.clearRect(0, 0, W, H);
+  var bx = W / 2, by = 155, bRx = 52, bRy = 34;
+  // Sickly ambient glow when retching
+  if (this.streamLevel > 0.05) {
+    var grd = c.createRadialGradient(bx, by, 0, bx, by, 62);
+    grd.addColorStop(0, 'rgba(110,155,20,' + (this.streamLevel * 0.22).toFixed(2) + ')');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = grd; c.fillRect(0, 0, W, H);
+  }
+  // Toilet outer rim
+  c.fillStyle = 'rgba(205,205,200,0.93)';
+  c.beginPath(); c.ellipse(bx, by, bRx, bRy, 0, 0, Math.PI * 2); c.fill();
+  c.strokeStyle = 'rgba(175,175,170,0.75)'; c.lineWidth = 1.5;
+  c.beginPath(); c.ellipse(bx, by, bRx, bRy, 0, 0, Math.PI * 2); c.stroke();
+  // Inner bowl
+  c.fillStyle = 'rgba(238,240,236,0.97)';
+  c.beginPath(); c.ellipse(bx, by + 2, bRx - 10, bRy - 9, 0, 0, Math.PI * 2); c.fill();
+  // Water / contents — colour shifts from clear to bilious as streamLevel rises
+  var wl = this.streamLevel;
+  if (wl > 0.04) {
+    var rr = Math.round(150 - wl * 55), gg = Math.round(188 + wl * 18), bb = Math.round(95 - wl * 55);
+    c.fillStyle = 'rgba(' + rr + ',' + gg + ',' + bb + ',0.72)';
+    c.beginPath();
+    c.ellipse(bx, by + 2, (bRx - 11) * Math.min(1, wl * 1.3), (bRy - 10) * Math.min(1, wl * 1.3), 0, 0, Math.PI * 2);
+    c.fill();
+    // Surface shimmer
+    c.strokeStyle = 'rgba(190,215,100,0.28)'; c.lineWidth = 0.9;
+    c.beginPath(); c.ellipse(bx + Math.sin(t * 7) * 3, by - 1, (bRx - 16) * Math.min(1, wl), 3.5, 0, 0, Math.PI * 2); c.stroke();
+  }
+  // Streams arcing from figure above into bowl
+  if (this.retching && wl > 0) {
+    var sa = Math.min(1, wl * 2.2);
+    c.lineCap = 'round';
+    // Primary stream
+    c.strokeStyle = 'rgba(148,195,35,' + sa.toFixed(2) + ')';
+    c.lineWidth = 2.8 + Math.sin(t * 13) * 0.9;
+    c.beginPath();
+    c.moveTo(bx + Math.sin(t * 10) * 4, 65);
+    c.quadraticCurveTo(bx + 18 + Math.sin(t * 6) * 7, 108, bx + 2, by - bRy + 6);
+    c.stroke();
+    // Secondary thinner stream
+    c.lineWidth = 1.4;
+    c.strokeStyle = 'rgba(170,215,55,' + (sa * 0.55).toFixed(2) + ')';
+    c.beginPath();
+    c.moveTo(bx + Math.sin(t * 8) * 5 - 5, 70);
+    c.quadraticCurveTo(bx + 8 + Math.sin(t * 5) * 5, 112, bx - 6, by - bRy + 9);
+    c.stroke();
+  }
+  // Splatter particles
+  for (var i = 0; i < this.particles.length; i++) {
+    var p = this.particles[i];
+    c.globalAlpha = p.life * 0.75;
+    c.fillStyle = p.col;
+    c.beginPath(); c.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); c.fill();
+  }
+  c.globalAlpha = 1;
+  // Silhouette — figure hunched over the bowl
+  c.strokeStyle = 'rgba(95,75,55,0.62)';
+  c.lineWidth = 2.5; c.lineCap = 'round'; c.lineJoin = 'round';
+  var headShake = this.retching ? Math.sin(t * 11) * 3.5 : Math.sin(t * 1.4) * 0.8;
+  // Head
+  c.beginPath(); c.arc(bx - 4 + headShake, 30, 8, 0, Math.PI * 2); c.stroke();
+  // Spine, bent forward
+  c.beginPath();
+  c.moveTo(bx - 4 + headShake * 0.5, 38);
+  c.quadraticCurveTo(bx + 2, 55, bx + 3, 75);
+  c.stroke();
+  // Arms braced on rim
+  c.beginPath();
+  c.moveTo(bx, 58); c.lineTo(bx - 26, 72);
+  c.moveTo(bx + 2, 60); c.lineTo(bx + 20, 73);
+  c.stroke();
+}
+};
+window.showSpewPopup = function() { new window.SpewPopup(); };
+
+// ====== EAT POPUP (hold-to-eat animation for the Chinese Fish and Chips) ======
+window.EatPopup = class EatPopup {
+constructor(foodType) {
+  this.type = foodType || 'chips';
+  this.done = false;
+  this.closing = false;
+  this.eating = false;
+  this.hasEaten = false;
+  this.t = 0;
+  this.eaten = 0;
+  this.wobbleDecay = 0;
+  this.steam = [];
+  this._build();
+  for (var i = 0; i < 5; i++) this.steam.push(this._newSteam(true));
+  this._startLoop();
+}
+_newSteam(scatter) {
+  return {
+    x: 52 + Math.random() * 56,
+    y: scatter ? (80 + Math.random() * 40) : (85 + Math.random() * 15),
+    speed: 14 + Math.random() * 14,
+    life: scatter ? Math.random() : (0.1 + Math.random() * 0.3),
+    size: 2.5 + Math.random() * 3.5,
+    drift: 0.7 + Math.random() * 1.3,
+    phase: Math.random() * Math.PI * 2
+  };
+}
+_build() {
+  this.overlay = document.createElement('div');
+  this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
+  document.body.appendChild(this.overlay);
+  this.card = document.createElement('div');
+  this.card.style.cssText = [
+    'display:flex;flex-direction:column;align-items:center;',
+    'padding:0 0 20px;',
+    'background:rgba(14,9,4,0.97);',
+    'border:1px solid rgba(200,168,106,0.35);',
+    'border-top:2px solid rgba(200,168,106,0.65);',
+    'border-radius:10px;',
+    'opacity:0;transform:translateY(18px);',
+    'transition:opacity 0.45s,transform 0.45s;',
+    'min-width:180px;',
+  ].join('');
+  this.overlay.appendChild(this.card);
+  this.nameLabel = document.createElement('div');
+  this.nameLabel.style.cssText = [
+    'width:100%;box-sizing:border-box;',
+    'padding:12px 28px 10px;text-align:center;',
+    'font:small-caps 600 13px "Cinzel",Georgia,serif;',
+    'letter-spacing:0.12em;color:rgba(200,168,106,0.85);',
+    'border-bottom:1px solid rgba(200,168,106,0.15);',
+  ].join('');
+  this.nameLabel.textContent = 'Fish & Chips';
+  this.card.appendChild(this.nameLabel);
+  var canvasWrap = document.createElement('div');
+  canvasWrap.style.cssText = 'padding:18px 28px 0;';
+  this.card.appendChild(canvasWrap);
+  this.canvas = document.createElement('canvas');
+  this.canvas.width = 160;
+  this.canvas.height = 200;
+  this.canvas.style.cssText = 'cursor:pointer;display:block;';
+  this.ctx = this.canvas.getContext('2d');
+  canvasWrap.appendChild(this.canvas);
+  this.prompt = document.createElement('div');
+  this.prompt.style.cssText = 'margin-top:10px;font:italic 13px Georgia,serif;color:rgba(212,165,116,0.75);letter-spacing:0.04em;';
+  this.prompt.textContent = 'Hold to eat';
+  this.card.appendChild(this.prompt);
+  var self = this;
+  setTimeout(function() {
+    self.overlay.style.background = 'rgba(0,0,0,0.6)';
+    self.card.style.opacity = '1';
+    self.card.style.transform = 'translateY(0)';
+  }, 30);
+  var startEat = function(e) {
+    e.preventDefault();
+    if (self.closing || self.done || self.eaten >= 0.95) return;
+    self.eating = true;
+    self.hasEaten = true;
+    self.wobbleDecay = 0.5;
+    self.prompt.textContent = '';
+  };
+  var stopEat = function(e) {
+    e.preventDefault();
+    if (!self.eating) return;
+    self.eating = false;
+    if (self.hasEaten && self.eaten >= 0.5 && !self.closing) {
+      self.closing = true;
+      setTimeout(function() { self._fadeOut(); }, 800);
+    }
+  };
+  this.canvas.addEventListener('mousedown', startEat);
+  this.canvas.addEventListener('mouseup', stopEat);
+  this.canvas.addEventListener('mouseleave', stopEat);
+  this.canvas.addEventListener('touchstart', startEat);
+  this.canvas.addEventListener('touchend', stopEat);
+  this.canvas.addEventListener('touchcancel', stopEat);
+}
+_fadeOut() {
+  this.overlay.style.background = 'rgba(0,0,0,0)';
+  this.card.style.opacity = '0';
+  this.card.style.transform = 'translateY(-12px)';
+  var self = this;
+  setTimeout(function() {
+    self.done = true;
+    if (self.overlay.parentNode) self.overlay.parentNode.removeChild(self.overlay);
+  }, 480);
+}
+_startLoop() {
+  var self = this;
+  var lt = performance.now();
+  function loop() {
+    if (self.done) return;
+    var now = performance.now();
+    var dt = Math.min(now - lt, 50) * 0.001;
+    lt = now;
+    self.t += dt;
+    if (self.eating) {
+      var rate = 0.28 * Math.min(1.0, (1.0 - self.eaten) * 3.5);
+      self.eaten = Math.min(1, self.eaten + rate * dt);
+      if (self.eaten >= 0.95 && !self.closing) {
+        self.eating = false;
+        self.closing = true;
+        setTimeout(function() { self._fadeOut(); }, 600);
+      }
+    }
+    // Steam particles
+    self.steam.forEach(function(s) {
+      s.y -= s.speed * dt;
+      s.x += Math.sin(self.t * s.drift + s.phase) * 9 * dt;
+      s.life -= dt * 0.38;
+      if (s.life <= 0) { Object.assign(s, self._newSteam(false)); }
+    });
+    if (self.wobbleDecay > 0.01) self.wobbleDecay *= (1 - 2 * dt);
+    self._draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+_draw() {
+  var c = this.ctx, W = 160, H = 200, t = this.t;
+  c.clearRect(0, 0, W, H);
+  var eaten = this.eaten;
+  // Warm amber glow
+  var grd = c.createRadialGradient(W / 2, 148, 0, W / 2, 148, 68);
+  grd.addColorStop(0, 'rgba(210,158,38,0.20)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = grd; c.fillRect(0, 0, W, H);
+  c.save();
+  c.translate(W / 2, 158);
+  // Newspaper wrapping — open cone shape
+  c.fillStyle = 'rgba(218,208,182,0.90)';
+  c.beginPath();
+  c.moveTo(-44, 0);
+  c.quadraticCurveTo(-40, -28, -12, -46);
+  c.lineTo(12, -46); c.quadraticCurveTo(40, -28, 44, 0);
+  c.closePath(); c.fill();
+  c.strokeStyle = 'rgba(155,138,98,0.45)'; c.lineWidth = 1; c.stroke();
+  // Newsprint texture lines
+  c.strokeStyle = 'rgba(90,82,62,0.11)'; c.lineWidth = 0.7;
+  for (var li = 0; li < 6; li++) {
+    var ly = -8 - li * 6, lx = 26 - li * 2.5;
+    c.beginPath(); c.moveTo(-lx, ly); c.lineTo(lx, ly); c.stroke();
+  }
+  // Fish piece (battered) — present until ~70% eaten
+  if (eaten < 0.75) {
+    var fa = Math.max(0, 1 - eaten * 2.2);
+    c.globalAlpha = fa;
+    // Batter body
+    c.fillStyle = '#b87808';
+    c.beginPath();
+    c.moveTo(-22, -47); c.lineTo(22, -47);
+    c.quadraticCurveTo(24, -44, 22, -30);
+    c.lineTo(-22, -30); c.quadraticCurveTo(-24, -34, -22, -47);
+    c.fill();
+    // Batter highlight
+    c.fillStyle = '#e0a020'; c.globalAlpha = fa * 0.45;
+    c.beginPath();
+    c.moveTo(-18, -45); c.lineTo(2, -45); c.lineTo(2, -41); c.lineTo(-18, -41); c.closePath();
+    c.fill();
+    c.globalAlpha = 1;
+  }
+  // Chips — ten of them, disappear from top as eaten increases
+  var chipDefs = [
+    { x: -26, y: -34, w: 13, h: 6, a: -0.14 },
+    { x:  -8, y: -37, w: 15, h: 6, a:  0.04 },
+    { x:  10, y: -33, w: 12, h: 6, a:  0.17 },
+    { x: -18, y: -25, w: 14, h: 6, a:  0.07 },
+    { x:   4, y: -26, w: 13, h: 6, a: -0.09 },
+    { x: -30, y: -22, w: 11, h: 5, a:  0.24 },
+    { x:  17, y: -23, w: 12, h: 5, a: -0.19 },
+    { x: -12, y: -15, w: 14, h: 6, a: -0.04 },
+    { x:   5, y: -16, w: 13, h: 6, a:  0.11 },
+    { x: -26, y: -12, w: 11, h: 5, a:  0.29 },
+  ];
+  var vis = 1 - eaten;
+  for (var ci = 0; ci < chipDefs.length; ci++) {
+    var frac = (chipDefs.length - ci) / chipDefs.length;
+    var ca = Math.min(1, Math.max(0, (vis - frac + 0.18) / 0.14));
+    if (ca <= 0) continue;
+    var ch = chipDefs[ci];
+    c.save();
+    c.translate(ch.x + ch.w / 2, ch.y + ch.h / 2);
+    c.rotate(ch.a);
+    c.globalAlpha = ca;
+    c.fillStyle = '#c88818';
+    c.beginPath();
+    c.rect(-ch.w / 2, -ch.h / 2, ch.w, ch.h);
+    c.fill();
+    c.fillStyle = '#ecaa30'; c.globalAlpha = ca * 0.48;
+    c.beginPath();
+    c.rect(-ch.w / 2 + 1, -ch.h / 2 + 1, ch.w * 0.38, 2);
+    c.fill();
+    c.restore();
+  }
+  c.globalAlpha = 1;
+  c.restore();
+  // Steam particles
+  this.steam.forEach(function(s) {
+    var sa = s.life > 0.5 ? 0.22 : s.life * 0.44;
+    if (sa <= 0) return;
+    c.globalAlpha = sa * (1 - eaten * 0.65);
+    c.fillStyle = 'rgba(215,205,195,0.9)';
+    c.beginPath(); c.arc(s.x, s.y, s.size, 0, Math.PI * 2); c.fill();
+  });
+  c.globalAlpha = 1;
+  // Vinegar bottle, top-right corner (static, atmospheric)
+  c.fillStyle = 'rgba(80,100,60,0.55)';
+  c.beginPath(); c.rect(110, 96, 11, 28); c.fill();
+  c.fillStyle = 'rgba(100,120,75,0.65)';
+  c.beginPath(); c.rect(111, 90, 9, 8); c.fill();
+  c.fillStyle = 'rgba(200,195,170,0.4)';
+  c.beginPath(); c.rect(112, 93, 4, 18); c.fill();
+}
+};
+window.showEatPopup = function(foodType) { new window.EatPopup(foodType || 'chips'); };
+
 // ====== HEAL EXIT LINK HANDLER ======
 // Fires the stat heal animation then navigates via a hidden Harlowe link.
 // Used in recovery passages because <script> inside (link:) hooks isn't reliable.
@@ -22228,6 +22673,8 @@ You're eating at the counter when somebody passes the window: that's Lily.
 
 For a few minutes, you are nobody. You have no manuscript. You owe nothing to anyone.
 
+(link: "Eat up.")[<script>setTimeout(function(){ window.showEatPopup('chips'); }, 200);</script>]
+
 The warmth spreads through you. The fog lifts, just a little.
 
 <span id="chippy-nav" style="display:none">(link: "nav")[(go-to: "Dean Street")]</span>
@@ -22245,6 +22692,8 @@ The warmth spreads through you. The fog lifts, just a little.
 <svg class="coach-beam-bottom" viewBox="0 0 300 36" width="100%" height="36" preserveAspectRatio="none"><defs><linearGradient id="wdC" x1="0" x2="1"><stop offset="0%" stop-color="#3a2408" stop-opacity="0"/><stop offset="10%" stop-color="#5c3810" stop-opacity="1"/><stop offset="90%" stop-color="#5c3810" stop-opacity="1"/><stop offset="100%" stop-color="#3a2408" stop-opacity="0"/></linearGradient><linearGradient id="wdD" x1="0" x2="1"><stop offset="0%" stop-color="#3a2408" stop-opacity="0"/><stop offset="10%" stop-color="#7a5220" stop-opacity="0.7"/><stop offset="90%" stop-color="#7a5220" stop-opacity="0.7"/><stop offset="100%" stop-color="#3a2408" stop-opacity="0"/></linearGradient><linearGradient id="brB" x1="0" x2="1"><stop offset="0%" stop-color="#c8922a" stop-opacity="0"/><stop offset="50%" stop-color="#c8922a" stop-opacity="0.7"/><stop offset="100%" stop-color="#c8922a" stop-opacity="0"/></linearGradient><linearGradient id="wdGrain2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7a5220" stop-opacity="0.15"/><stop offset="50%" stop-color="#5c3810" stop-opacity="0"/><stop offset="100%" stop-color="#7a5220" stop-opacity="0.2"/></linearGradient></defs><rect x="0" y="6" width="300" height="24" fill="url(#wdC)"/><rect x="0" y="6" width="300" height="24" fill="url(#wdGrain2)"/><line x1="0" y1="6" x2="300" y2="6" stroke="url(#wdD)" stroke-width="1.2"/><line x1="0" y1="30" x2="300" y2="30" stroke="url(#wdD)" stroke-width="1.2"/><line x1="0" y1="18" x2="300" y2="18" stroke="url(#brB)" stroke-width="1.5"/><g opacity="0.4" stroke="#7a5220" stroke-width="0.4" fill="none"><line x1="35" y1="6" x2="33" y2="30"/><line x1="85" y1="6" x2="87" y2="30"/><line x1="135" y1="6" x2="134" y2="30"/><line x1="165" y1="6" x2="166" y2="30"/><line x1="215" y1="6" x2="213" y2="30"/><line x1="265" y1="6" x2="267" y2="30"/></g><circle cx="50" cy="18" r="4" fill="#c8922a" opacity="0.5"/><circle cx="50" cy="17" r="1.5" fill="#ffe090" opacity="0.35"/><circle cx="150" cy="18" r="4.5" fill="#c8922a" opacity="0.55"/><circle cx="150" cy="17" r="1.8" fill="#ffe090" opacity="0.4"/><circle cx="250" cy="18" r="4" fill="#c8922a" opacity="0.5"/><circle cx="250" cy="17" r="1.5" fill="#ffe090" opacity="0.35"/></svg>
 
 You've come-to in a cubicle, in what you think is the Gents toilet in the Coach and Horses.
+
+(link: "Recover.")[(set: $sobriety to $sobriety + 8)<span class="inventory-note">&#9734; SOBRIETY +8</span><script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]
 
 You gather your limbs to the bar.
 

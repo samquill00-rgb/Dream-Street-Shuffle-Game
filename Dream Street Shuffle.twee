@@ -38,11 +38,92 @@ function jumpTo(passageName) {
   window.location.reload();
 }
 
+// -- Grouping rules ------------------------------------------------------
+// A passage is assigned to exactly one group. Rules run in order; first match wins.
+// Hub / core passages are listed by explicit name so they stay at the top.
+var HUB_NAMES = {
+  'Start':1,'Title':1,'Dawn':1,'The Interval':1,'The Night Ahead':1,
+  'The Fetch':1,'Centre Point':1,'Escape success':1,'Dean Street':1,
+  'A Doorway on Dean Street':1,'At the Corner of Dean Street and Greek Street':1
+};
+var OPENING_NAMES = {
+  'The coast of Carthage':1,'Carthage shore':1,'Stay in Carthage':1,
+  'Dream to Dean':1,'Maritime interlude':1
+};
+var ENDING_NAMES = {
+  'Alba Display':1,'Alba Revealed':1,'Alba Complete':1,'Alba Incomplete':1,
+  'Name Your Book':1
+};
+var PHONECALL_NAMES = {
+  'The phone call':1,'Lily phone call 1':1,'The dual ring':1,'Dido':1,
+  'No more':1,'None of us likes it!':1,'Things turn up':1,
+  'His round':1,'The Empty Glass':1,'The novelist':1
+};
+var DISPLAY_NAMES = {
+  'Haunt Display':1,'Items Display':1,'Secrets Display':1,'Lily SVG':1,
+  'Deco Divider':1,'LINE 1':1,'LINE 2':1,'LINE 2 Oxford':1,'LINE 3':1,
+  'White page':1,'Black page':1,'Alba Display':1
+};
+// Venue tag -> human label
+var VENUE_LABELS = {
+  'venue-french':'The French','venue-colony':'The Colony Room',
+  'venue-coach':'The Coach & Horses','venue-ronnies':"Ronnie Scott's",
+  'venue-trishas':"Trisha's",'venue-cecilcourt':'Cecil Court',
+  'venue-cellar':'Cellar / Fight','venue-pillars':'Pillars of Hercules'
+};
+// Order groups appear in
+var GROUP_ORDER = [
+  'Hub','Opening','Approaches',
+  'The French','The Colony Room','The Coach & Horses',
+  'Pillars of Hercules',"Ronnie Scott's","Trisha's",
+  'Cecil Court','Cellar / Fight',
+  'Chinese Fish & Chips','Ping Pong',
+  'Phone call / Dido','Endings','Displays & UI',
+  'Other','Archive'
+];
+// Accent colour per group header (just for visual variety)
+var GROUP_COLOURS = {
+  'Hub':'#d4b050','Opening':'#9ab4c8','Approaches':'#b59866',
+  'The French':'#c89a7a','The Colony Room':'#a85c5c',
+  'The Coach & Horses':'#a67a4a','Pillars of Hercules':'#9a8a70',
+  "Ronnie Scott's":'#a478b8',"Trisha's":'#b89a68',
+  'Cecil Court':'#7aa67a','Cellar / Fight':'#8a5a5a',
+  'Chinese Fish & Chips':'#c88a4a','Ping Pong':'#6aa4c8',
+  'Phone call / Dido':'#88aaaa','Endings':'#d4a060',
+  'Displays & UI':'#666','Other':'#888','Archive':'#555'
+};
+
+function classify(name, tags) {
+  if (/^ARCHIVE-/.test(name)) return 'Archive';
+  if (HUB_NAMES[name]) return 'Hub';
+  if (OPENING_NAMES[name]) return 'Opening';
+  if (ENDING_NAMES[name]) return 'Endings';
+  if (PHONECALL_NAMES[name]) return 'Phone call / Dido';
+  if (DISPLAY_NAMES[name]) return 'Displays & UI';
+  if (/^Approach /i.test(name) || /Approach$/.test(name) || name === 'The Colony Room Door') return 'Approaches';
+  if (/^PP /.test(name) || name === 'PP Pong' || name === 'Watch the decider' || name === 'Watch them play') return 'Ping Pong';
+  if (name === 'Chinese Fish and Chips' || name === 'Eat Shelleys Liver') return 'Chinese Fish & Chips';
+  // Tag-based
+  for (var i = 0; i < tags.length; i++) {
+    if (VENUE_LABELS[tags[i]]) return VENUE_LABELS[tags[i]];
+  }
+  // Fallback by name fragments
+  if (/Pillars|Lackland|Maltese/i.test(name)) return 'Pillars of Hercules';
+  if (/Jeffrey Bernard|Cow ride/i.test(name)) return 'The Coach & Horses';
+  if (/Colony/i.test(name)) return 'The Colony Room';
+  if (/Shana|Trisha/i.test(name)) return "Trisha's";
+  if (/Ronnie|The Set|Bar Canvas/i.test(name)) return "Ronnie Scott's";
+  if (/Cecil Court|Watkins|O'Flatterly|Rescue the page|Return the page/i.test(name)) return 'Cecil Court';
+  if (/Fight|Beaten|Copper|Stand your ground|St\. John/i.test(name)) return 'Cellar / Fight';
+  if (/French|Spanish Artist|Painter|Sketch|critic|novelist|agent|Artists/i.test(name)) return 'The French';
+  return 'Other';
+}
+
 function createPanel() {
   if (debugPanel) { debugPanel.remove(); debugPanel = null; return; }
   var panel = document.createElement('div');
   panel.id = 'dss-debug';
-  panel.style.cssText = 'position:fixed;top:0;right:0;width:360px;height:100vh;background:rgba(10,8,6,0.95);color:#c8b89a;font:13px/1.5 Georgia,serif;z-index:99999;overflow-y:auto;padding:16px;border-left:1px solid #3a2a1a;';
+  panel.style.cssText = 'position:fixed;top:0;right:0;width:360px;height:100vh;background:rgba(10,8,6,0.96);color:#c8b89a;font:13px/1.5 Georgia,serif;z-index:99999;overflow-y:auto;padding:16px;border-left:1px solid #3a2a1a;';
 
   var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><strong style="color:#ea7a7a;letter-spacing:0.1em;">DEBUG MENU</strong><span id="dss-debug-close" style="cursor:pointer;color:#666;font-size:18px;">&times;</span></div>';
 
@@ -51,20 +132,43 @@ function createPanel() {
   var curName = cur ? cur.getAttribute('data-name') : '(unknown)';
   html += '<div style="margin-bottom:12px;padding:8px;background:rgba(255,255,255,0.05);border-radius:4px;"><small style="color:#888;">Current passage:</small><br><strong>' + curName + '</strong></div>';
 
-  // All passages jump
-  html += '<div style="margin:8px 0 8px;"><strong style="color:#d4b050;">Jump to Passage</strong><br><small style="color:#888;">(page will reload at that passage)</small></div>';
-  html += '<input id="dss-dbg-search" type="text" placeholder="Type to filter..." style="width:100%;box-sizing:border-box;padding:6px 8px;background:#1a1410;color:#c8b89a;border:1px solid #3a2a1a;border-radius:3px;font:12px Georgia,serif;margin-bottom:8px;">';
-  html += '<div id="dss-dbg-passages" style="max-height:70vh;overflow-y:auto;">';
-
+  // Collect + classify
   var passages = document.querySelectorAll('tw-passagedata');
-  var names = [];
+  var groups = {};
   for (var j = 0; j < passages.length; j++) {
     var n = passages[j].getAttribute('name');
-    if (n && n !== 'UserScript' && n !== 'UserStylesheet') names.push(n);
+    if (!n || n === 'UserScript' || n === 'UserStylesheet' || n === 'StoryTitle' || n === 'StoryData') continue;
+    var tagAttr = passages[j].getAttribute('tags') || '';
+    var tags = tagAttr.split(/\s+/).filter(Boolean);
+    var group = classify(n, tags);
+    if (!groups[group]) groups[group] = [];
+    groups[group].push(n);
   }
-  names.sort();
-  for (var k = 0; k < names.length; k++) {
-    html += '<div class="dss-dbg-jump" data-passage="' + names[k].replace(/"/g, '&quot;') + '" style="padding:5px 8px;margin:2px 0;background:rgba(255,255,255,0.03);border-radius:2px;cursor:pointer;font-size:12px;">' + names[k] + '</div>';
+  var totalShown = 0, totalArchive = (groups['Archive'] || []).length;
+  for (var g in groups) { if (g !== 'Archive') totalShown += groups[g].length; }
+
+  // Controls
+  html += '<div style="margin:8px 0 8px;"><strong style="color:#d4b050;">Jump to Passage</strong></div>';
+  html += '<input id="dss-dbg-search" type="text" placeholder="Type to filter..." style="width:100%;box-sizing:border-box;padding:6px 8px;background:#1a1410;color:#c8b89a;border:1px solid #3a2a1a;border-radius:3px;font:12px Georgia,serif;margin-bottom:6px;">';
+  html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#888;margin-bottom:10px;cursor:pointer;user-select:none;">' +
+          '<input type="checkbox" id="dss-dbg-archive" style="margin:0;"> show ' + totalArchive + ' archived passages</label>';
+  html += '<div style="font-size:11px;color:#666;margin-bottom:8px;">' + totalShown + ' passages, grouped by venue</div>';
+
+  html += '<div id="dss-dbg-passages">';
+  for (var o = 0; o < GROUP_ORDER.length; o++) {
+    var gname = GROUP_ORDER[o];
+    var list = groups[gname];
+    if (!list || !list.length) continue;
+    list.sort();
+    var colour = GROUP_COLOURS[gname] || '#888';
+    var extraClass = (gname === 'Archive') ? ' dss-dbg-archive-grp' : '';
+    html += '<div class="dss-dbg-grp' + extraClass + '" data-group="' + gname + '" style="margin-top:12px;">';
+    html += '<div style="font:600 11px/1.4 Georgia,serif;letter-spacing:0.1em;text-transform:uppercase;color:' + colour + ';border-bottom:1px solid rgba(200,170,100,0.18);padding-bottom:3px;margin-bottom:4px;">' + gname + ' <span style="color:#555;font-weight:400;">(' + list.length + ')</span></div>';
+    for (var k = 0; k < list.length; k++) {
+      var displayName = list[k].replace(/^ARCHIVE-/, '');
+      html += '<div class="dss-dbg-jump" data-passage="' + list[k].replace(/"/g, '&quot;') + '" style="padding:4px 8px;margin:1px 0;background:rgba(255,255,255,0.03);border-radius:2px;cursor:pointer;font-size:12px;">' + displayName + '</div>';
+    }
+    html += '</div>';
   }
   html += '</div>';
 
@@ -74,11 +178,31 @@ function createPanel() {
 
   document.getElementById('dss-debug-close').addEventListener('click', function() { panel.remove(); debugPanel = null; });
 
+  // Archive toggle
+  var archiveGrps = panel.querySelectorAll('.dss-dbg-archive-grp');
+  for (var a = 0; a < archiveGrps.length; a++) archiveGrps[a].style.display = 'none';
+  document.getElementById('dss-dbg-archive').addEventListener('change', function() {
+    var show = this.checked;
+    var els = panel.querySelectorAll('.dss-dbg-archive-grp');
+    for (var i = 0; i < els.length; i++) els[i].style.display = show ? '' : 'none';
+  });
+
+  // Search filter — hides items and empty groups
   document.getElementById('dss-dbg-search').addEventListener('input', function() {
     var q = this.value.toLowerCase();
-    var items = document.querySelectorAll('.dss-dbg-jump');
-    for (var i = 0; i < items.length; i++) {
-      items[i].style.display = items[i].getAttribute('data-passage').toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+    var grps = panel.querySelectorAll('.dss-dbg-grp');
+    var showArchive = document.getElementById('dss-dbg-archive').checked;
+    for (var i = 0; i < grps.length; i++) {
+      var isArchive = grps[i].classList.contains('dss-dbg-archive-grp');
+      if (isArchive && !showArchive) { grps[i].style.display = 'none'; continue; }
+      var items = grps[i].querySelectorAll('.dss-dbg-jump');
+      var any = false;
+      for (var j = 0; j < items.length; j++) {
+        var match = items[j].getAttribute('data-passage').toLowerCase().indexOf(q) >= 0;
+        items[j].style.display = match ? '' : 'none';
+        if (match) any = true;
+      }
+      grps[i].style.display = any ? '' : 'none';
     }
   });
 

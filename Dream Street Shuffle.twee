@@ -4474,6 +4474,315 @@ _draw() {
 };
 window.showEatPopup = function(foodType) { new window.EatPopup(foodType || 'chips'); };
 
+// ====== LIVER POPUP (guide the eagle to Prometheus's liver) ======
+// The player steers an eagle from the top-left toward Shelley's liver on a
+// rock in the bottom-right. Mouse/touch position drives the eagle with easing.
+// When it reaches the liver, the eagle tilts down, the liver shrinks, and the
+// popup fades. Draws on Prometheus Unbound — the eagle, the crag, the pulse.
+window.LiverPopup = class LiverPopup {
+constructor() {
+  this.done = false;
+  this.closing = false;
+  this.eating = false;
+  this.eatProgress = 0;
+  this.liverSize = 1.0;
+  this.t = 0;
+  // Eagle state
+  this.eagleX = 25; this.eagleY = 25;
+  this.eagleTargetX = 25; this.eagleTargetY = 25;
+  this.eagleTilt = 0;
+  this.hasMoved = false;
+  // Cloud drift (set in _initClouds after canvas sized)
+  this.clouds = [];
+  // Liver target position (bottom-right of canvas)
+  this.liverX = 172; this.liverY = 128;
+  this._build();
+  this._initClouds();
+  this._startLoop();
+}
+_initClouds() {
+  for (var i = 0; i < 5; i++) {
+    this.clouds.push({
+      x: Math.random() * 200,
+      y: 18 + Math.random() * 75,
+      vx: 3 + Math.random() * 5,
+      size: 16 + Math.random() * 14,
+      alpha: 0.06 + Math.random() * 0.10
+    });
+  }
+}
+_build() {
+  this.overlay = document.createElement('div');
+  this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
+  document.body.appendChild(this.overlay);
+  this.card = document.createElement('div');
+  this.card.style.cssText = [
+    'display:flex;flex-direction:column;align-items:center;',
+    'padding:0 0 20px;',
+    'background:rgba(14,9,4,0.97);',
+    'border:1px solid rgba(200,168,106,0.35);',
+    'border-top:2px solid rgba(200,168,106,0.65);',
+    'border-radius:10px;',
+    'opacity:0;transform:translateY(18px);',
+    'transition:opacity 0.45s,transform 0.45s;',
+    'min-width:180px;',
+  ].join('');
+  this.overlay.appendChild(this.card);
+  var canvasWrap = document.createElement('div');
+  canvasWrap.style.cssText = 'padding:18px 18px;';
+  this.card.appendChild(canvasWrap);
+  this.canvas = document.createElement('canvas');
+  this.canvas.width = 200;
+  this.canvas.height = 160;
+  this.canvas.style.cssText = 'cursor:crosshair;display:block;';
+  this.ctx = this.canvas.getContext('2d');
+  canvasWrap.appendChild(this.canvas);
+  // Intentionally no label and no prompt — the myth speaks for itself.
+  this.prompt = { textContent: '' };
+  var self = this;
+  setTimeout(function() {
+    self.overlay.style.background = 'rgba(0,0,0,0.6)';
+    self.card.style.opacity = '1';
+    self.card.style.transform = 'translateY(0)';
+  }, 30);
+  var handleMove = function(e) {
+    if (self.closing || self.done || self.eating) return;
+    var rect = self.canvas.getBoundingClientRect();
+    var cx, cy;
+    if (e.touches && e.touches.length) {
+      cx = e.touches[0].clientX; cy = e.touches[0].clientY;
+    } else {
+      cx = e.clientX; cy = e.clientY;
+    }
+    self.eagleTargetX = Math.max(8, Math.min(192, cx - rect.left));
+    self.eagleTargetY = Math.max(8, Math.min(152, cy - rect.top));
+    if (!self.hasMoved) {
+      self.hasMoved = true;
+      self.prompt.textContent = '';
+    }
+  };
+  this.canvas.addEventListener('mousemove', handleMove);
+  this.canvas.addEventListener('mousedown', handleMove);
+  this.canvas.addEventListener('touchstart', function(e) { e.preventDefault(); handleMove(e); });
+  this.canvas.addEventListener('touchmove', function(e) { e.preventDefault(); handleMove(e); });
+}
+_fadeOut() {
+  this.overlay.style.background = 'rgba(0,0,0,0)';
+  this.card.style.opacity = '0';
+  this.card.style.transform = 'translateY(-12px)';
+  var self = this;
+  setTimeout(function() {
+    self.done = true;
+    if (self.overlay.parentNode) self.overlay.parentNode.removeChild(self.overlay);
+  }, 480);
+}
+_startLoop() {
+  var self = this;
+  var lt = performance.now();
+  function loop() {
+    if (self.done) return;
+    var now = performance.now();
+    var dt = Math.min(now - lt, 50) * 0.001;
+    lt = now;
+    self.t += dt;
+    // Eagle eases toward target position
+    var prevX = self.eagleX;
+    self.eagleX += (self.eagleTargetX - self.eagleX) * 3.2 * dt;
+    self.eagleY += (self.eagleTargetY - self.eagleY) * 3.2 * dt;
+    // Tilt follows horizontal velocity
+    var vx = self.eagleX - prevX;
+    self.eagleTilt += (vx * 0.04 - self.eagleTilt) * 5 * dt;
+    // Check for arrival at liver
+    if (!self.eating && !self.closing) {
+      var dx = self.eagleX - self.liverX, dy = self.eagleY - self.liverY;
+      if (Math.sqrt(dx * dx + dy * dy) < 20) {
+        self.eating = true;
+        self.eatProgress = 0;
+      }
+    }
+    // Eating progression
+    if (self.eating) {
+      self.eatProgress = Math.min(1, self.eatProgress + 1.4 * dt);
+      self.liverSize = Math.max(0, 1 - self.eatProgress);
+      // Eagle head bobs toward liver while eating
+      self.eagleTargetX = self.liverX;
+      self.eagleTargetY = self.liverY - 4;
+      if (self.eatProgress >= 1 && !self.closing) {
+        self.closing = true;
+        setTimeout(function() { self._fadeOut(); }, 700);
+      }
+    }
+    // Drift clouds
+    self.clouds.forEach(function(cl) {
+      cl.x += cl.vx * dt;
+      if (cl.x > 230) { cl.x = -30; cl.y = 18 + Math.random() * 75; }
+    });
+    self._draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+_draw() {
+  var c = this.ctx, W = 200, H = 160, t = this.t;
+  // Stormy sky
+  var sky = c.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#282636');
+  sky.addColorStop(0.55, '#423748');
+  sky.addColorStop(1, '#362d3a');
+  c.fillStyle = sky;
+  c.fillRect(0, 0, W, H);
+  // Clouds
+  for (var i = 0; i < this.clouds.length; i++) {
+    var cl = this.clouds[i];
+    c.fillStyle = 'rgba(205,200,215,' + cl.alpha.toFixed(2) + ')';
+    c.beginPath();
+    c.ellipse(cl.x, cl.y, cl.size, cl.size * 0.38, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  // Distant crag hint (far background)
+  c.fillStyle = 'rgba(50,48,58,0.55)';
+  c.beginPath();
+  c.moveTo(0, 160); c.lineTo(0, 135);
+  c.lineTo(28, 125); c.lineTo(50, 130); c.lineTo(72, 125); c.lineTo(90, 132);
+  c.lineTo(90, 160); c.closePath(); c.fill();
+  // The main rock / crag (bottom-right, where Prometheus is bound)
+  c.fillStyle = '#3a3840';
+  c.beginPath();
+  c.moveTo(118, 160);
+  c.lineTo(126, 142);
+  c.lineTo(138, 130);
+  c.lineTo(152, 122);
+  c.lineTo(168, 118);
+  c.lineTo(182, 122);
+  c.lineTo(195, 135);
+  c.lineTo(200, 152);
+  c.lineTo(200, 160);
+  c.closePath();
+  c.fill();
+  // Rock highlights (moonlight catches the edges)
+  c.fillStyle = 'rgba(100,92,105,0.5)';
+  c.beginPath();
+  c.moveTo(152, 124); c.lineTo(168, 120); c.lineTo(178, 126); c.lineTo(164, 134); c.closePath();
+  c.fill();
+  c.fillStyle = 'rgba(70,65,75,0.7)';
+  c.beginPath();
+  c.moveTo(128, 143); c.lineTo(140, 134); c.lineTo(144, 145); c.lineTo(132, 152); c.closePath();
+  c.fill();
+  // Chain (going off-frame right, suggesting Prometheus bound)
+  c.strokeStyle = 'rgba(130,110,90,0.65)';
+  c.lineWidth = 1.3;
+  for (var k = 0; k < 5; k++) {
+    var kx = 186 + k * 3, ky = 130 + Math.sin(k * 1.1) * 1.2;
+    c.beginPath();
+    c.ellipse(kx, ky, 1.6, 1, k * 0.3, 0, Math.PI * 2);
+    c.stroke();
+  }
+  // Wrist silhouette, bound (small, just visible at rock edge)
+  c.fillStyle = 'rgba(65,50,38,0.88)';
+  c.beginPath();
+  c.ellipse(184, 132, 5, 3, 0.3, 0, Math.PI * 2);
+  c.fill();
+  // The liver — pulsing red on the rock
+  if (this.liverSize > 0.04) {
+    var lv = this.liverSize;
+    var pulse = 1 + Math.sin(t * 2.4) * 0.10 * lv;
+    // Ambient glow
+    var lg = c.createRadialGradient(this.liverX, this.liverY, 0, this.liverX, this.liverY, 18 * pulse * lv);
+    lg.addColorStop(0, 'rgba(180,40,52,0.55)');
+    lg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = lg;
+    c.fillRect(this.liverX - 25, this.liverY - 25, 50, 50);
+    // Liver body
+    c.fillStyle = '#841e2e';
+    c.beginPath();
+    c.ellipse(this.liverX, this.liverY, 9 * pulse * lv, 6 * pulse * lv, 0.2, 0, Math.PI * 2);
+    c.fill();
+    // Highlight
+    c.fillStyle = '#b04458';
+    c.beginPath();
+    c.ellipse(this.liverX - 2, this.liverY - 1.5, 3.2 * lv, 1.8 * lv, 0.2, 0, Math.PI * 2);
+    c.fill();
+    // Darker lobe suggestion
+    c.fillStyle = 'rgba(60,10,18,0.5)';
+    c.beginPath();
+    c.ellipse(this.liverX + 3, this.liverY + 1.5, 3 * lv, 1.5 * lv, 0.3, 0, Math.PI * 2);
+    c.fill();
+  }
+  // Blood flecks during eating
+  if (this.eating && this.eatProgress < 0.85) {
+    var flecks = 4;
+    for (var f = 0; f < flecks; f++) {
+      var fa = Math.max(0, (0.4 - this.eatProgress * 0.35)) * (0.7 + Math.sin(t * 8 + f) * 0.3);
+      c.fillStyle = 'rgba(150,30,42,' + fa.toFixed(2) + ')';
+      c.beginPath();
+      c.arc(this.liverX + (f - 1.5) * 4, this.liverY - 6 - this.eatProgress * 8 + Math.sin(t * 11 + f * 2) * 2, 1.3, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+  // The eagle/harpy — silhouette with flapping wings
+  if (!this.eating || this.eatProgress < 0.75) {
+    var ex = this.eagleX, ey = this.eagleY;
+    var flap = Math.sin(t * 13);
+    var wingSpan = 14 + flap * 5;
+    var wingRise = -5 - flap * 5;
+    c.save();
+    c.translate(ex, ey);
+    c.rotate(this.eagleTilt);
+    // Body
+    c.fillStyle = '#16101a';
+    c.beginPath();
+    c.ellipse(0, 0, 4.5, 2.2, 0, 0, Math.PI * 2);
+    c.fill();
+    // Tail feathers
+    c.beginPath();
+    c.moveTo(-4, 0); c.lineTo(-8, -1.5); c.lineTo(-8, 1.5); c.closePath();
+    c.fill();
+    // Head (tilts down when eating)
+    var headY = this.eating ? 2.5 : 0;
+    var headX = this.eating ? 3 : 3.5;
+    c.beginPath();
+    c.ellipse(headX, headY, 2.3, 1.8, 0, 0, Math.PI * 2);
+    c.fill();
+    // Beak (hooked)
+    c.fillStyle = '#2e1c14';
+    c.beginPath();
+    c.moveTo(headX + 1.8, headY);
+    c.lineTo(headX + 4.5, headY + (this.eating ? 1.5 : 0.8));
+    c.lineTo(headX + 2, headY + 1.2);
+    c.closePath();
+    c.fill();
+    // Wings — curved, flapping
+    c.strokeStyle = '#16101a';
+    c.lineWidth = 2.8;
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    // Left wing
+    c.beginPath();
+    c.moveTo(-2, -0.5);
+    c.quadraticCurveTo(-wingSpan * 0.5, wingRise, -wingSpan - 2, wingRise - 1);
+    c.stroke();
+    // Right wing
+    c.beginPath();
+    c.moveTo(2, -0.5);
+    c.quadraticCurveTo(wingSpan * 0.5, wingRise, wingSpan + 2, wingRise - 1);
+    c.stroke();
+    // Feather tips
+    c.lineWidth = 1.2;
+    c.strokeStyle = 'rgba(40,28,42,0.85)';
+    c.beginPath();
+    c.moveTo(-wingSpan * 0.55, wingRise * 0.55);
+    c.lineTo(-wingSpan - 2, wingRise - 1);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(wingSpan * 0.55, wingRise * 0.55);
+    c.lineTo(wingSpan + 2, wingRise - 1);
+    c.stroke();
+    c.restore();
+  }
+}
+};
+window.showLiverPopup = function() { new window.LiverPopup(); };
+
 // ====== HEAL EXIT LINK HANDLER ======
 // Fires the stat heal animation then navigates via a hidden Harlowe link.
 // Used in recovery passages because <script> inside (link:) hooks isn't reliable.
@@ -22322,6 +22631,7 @@ setupInput();serve();updateScore();loop();
 (set: $hasLiver to false)\
 (set: $confidence to $confidence + 15)\
 (set: $sobriety to $sobriety + 12)
+<script>setTimeout(function(){ if(window.showLiverPopup) window.showLiverPopup(); }, 200);</script>
 <div class="verse">
 To love, and bear; to hope till Hope creates<br>
 <br>From its own wreck the thing it contemplates

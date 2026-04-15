@@ -3555,13 +3555,17 @@ _build() {
   canvasWrap.style.cssText = 'padding:18px 28px 0;';
   this.card.appendChild(canvasWrap);
 
-  // Canvas
+  // Canvas (taller to accommodate the lips above the glass)
   this.canvas = document.createElement('canvas');
   this.canvas.width = 160;
-  this.canvas.height = 200;
+  this.canvas.height = 260;
   this.canvas.style.cssText = 'cursor:pointer;display:block;';
   this.ctx = this.canvas.getContext('2d');
   canvasWrap.appendChild(this.canvas);
+  // Lip animation state
+  this.lipOpen = 0;         // 0 = closed, 1 = parted for drinking
+  this.lipOpenTarget = 0.18; // resting parted-kiss position
+  this.streamT = 0;         // time accumulator for stream dashes
 
   // Prompt text
   this.prompt = document.createElement('div');
@@ -3649,12 +3653,10 @@ _startLoop() {
     }
     // Smooth tilt
     self.tiltAngle += (self.tiltTarget - self.tiltAngle) * 4 * dt;
-    // Idle bob (gentle float when upright and not pouring)
-    if (!self.drinking && !self.filling) {
-      self.idleBob = Math.sin(self.t * 1.25) * 1.6;
-    } else {
-      self.idleBob = 0;
-    }
+    // Idle bob disabled — clean pour, no floaty glass
+    self.idleBob = 0;
+    // Lip-open target: parted for drinking, resting kiss otherwise
+    self.lipOpenTarget = self.drinking && !self.filling ? 1.0 : 0.18;
     // Drain liquid while holding (only after fill is complete)
     if (self.drinking && !self.filling) {
       // Drain rate slows as you approach the minimum (can't down it)
@@ -3666,20 +3668,14 @@ _startLoop() {
         self.liquidLevel = self.minLevel;
         self.drinking = false;
         self.tiltTarget = 0;
-        self.wobbleDecay = 0.8;
         if (!self.closing) {
           self.closing = true;
           setTimeout(function() { self._fadeOut(); }, 700);
         }
       }
     }
-    // Wobble
-    if (self.wobbleDecay > 0.01) {
-      self.wobble = Math.sin(self.t * 12) * self.wobbleDecay * 0.04;
-      self.wobbleDecay *= (1 - 2 * dt);
-    } else {
-      self.wobble = Math.sin(self.t * 1.8) * 0.005; // gentle idle slosh
-    }
+    // Wobble removed — the pour stays steady and clean
+    self.wobble = 0;
     self._draw();
     requestAnimationFrame(loop);
   }
@@ -3687,7 +3683,7 @@ _startLoop() {
 }
 
 _draw() {
-  var c = this.ctx, W = 160, H = 200;
+  var c = this.ctx, W = 160, H = 260;
   c.clearRect(0, 0, W, H);
 
   var cfg = this.cfg;
@@ -3695,9 +3691,12 @@ _draw() {
   var wob = this.wobble;
   var bob = this.idleBob || 0;
 
+  // Smooth lip opening: target is set in the loop based on drinking state
+  this.lipOpen += (this.lipOpenTarget - this.lipOpen) * 0.2;
+
   // Ambient radial glow behind the glass (per-drink colour, fades with level)
   if (cfg.glow && lev > 0.05) {
-    var gCx = W / 2, gCy = H * 0.6 + bob;
+    var gCx = W / 2, gCy = H * 0.72 + bob;
     var grd = c.createRadialGradient(gCx, gCy, 0, gCx, gCy, 72);
     grd.addColorStop(0, cfg.glow);
     grd.addColorStop(1, 'rgba(0,0,0,0)');
@@ -3705,8 +3704,17 @@ _draw() {
     c.fillRect(0, 0, W, H);
   }
 
+  // Lips at the top of the frame
+  this._drawLips(c, W, cfg);
+
+  // Stream of liquid from glass rim up into the lips (only while tilting)
+  if (this.drinking && !this.filling && lev > this.minLevel + 0.01) {
+    this._drawStream(c, W, H, cfg, bob);
+  }
+
+  // Glass near the bottom, tilting on pivot
   c.save();
-  c.translate(W / 2, H * 0.85 + bob);
+  c.translate(W / 2, H * 0.88 + bob);
   c.rotate(this.tiltAngle);
 
   if (this.type === 'pint' || this.type === 'cider' || this.type === 'beer') {
@@ -3721,6 +3729,155 @@ _draw() {
     this._drawTumbler(c, cfg, lev, wob);
   }
 
+  c.restore();
+}
+
+// === LIPS (big Soho pout at top of frame) ===
+_drawLips(c, W, cfg) {
+  var cx = W / 2;
+  var cy = 50;             // vertical centre of the mouth
+  var lipW = 120;          // overall width
+  var upperH = 18;         // upper lip thickness
+  var lowerH = 22;         // lower lip thickness
+  var open = this.lipOpen * 14; // parted gap in px (0 closed → ~14 wide open)
+
+  c.save();
+
+  // --- Upper lip ---
+  // Classic M-curve (Cupid's bow) top, concave bottom where it meets the opening
+  c.fillStyle = '#b8162a';
+  c.beginPath();
+  c.moveTo(cx - lipW / 2, cy);
+  // Top edge: dip to left peak, rise to centre dip of cupid's bow, rise to right peak, down to right corner
+  c.bezierCurveTo(cx - lipW / 2 + 10, cy - upperH * 1.1, cx - 28, cy - upperH * 1.25, cx - 14, cy - upperH * 0.75);
+  c.quadraticCurveTo(cx - 4, cy - upperH * 0.15, cx, cy - upperH * 0.55); // centre dip
+  c.quadraticCurveTo(cx + 4, cy - upperH * 0.15, cx + 14, cy - upperH * 0.75);
+  c.bezierCurveTo(cx + 28, cy - upperH * 1.25, cx + lipW / 2 - 10, cy - upperH * 1.1, cx + lipW / 2, cy);
+  // Bottom edge of upper lip: gentle arch with the parted gap in the middle
+  c.lineTo(cx + lipW / 2 - 6, cy - 1);
+  c.quadraticCurveTo(cx + 20, cy + open * 0.3, cx, cy + open * 0.5);
+  c.quadraticCurveTo(cx - 20, cy + open * 0.3, cx - lipW / 2 + 6, cy - 1);
+  c.closePath();
+  c.fill();
+
+  // Upper-lip sheen (light glam highlight)
+  c.fillStyle = 'rgba(255,210,220,0.35)';
+  c.beginPath();
+  c.ellipse(cx - 18, cy - upperH * 0.6, 14, 3, -0.18, 0, Math.PI * 2);
+  c.fill();
+  c.beginPath();
+  c.ellipse(cx + 22, cy - upperH * 0.55, 10, 2.4, 0.16, 0, Math.PI * 2);
+  c.fill();
+
+  // --- Dark parted opening (visible when open > 0) ---
+  if (open > 0.2) {
+    c.fillStyle = '#180408';
+    c.beginPath();
+    c.moveTo(cx - 34, cy + 1);
+    c.quadraticCurveTo(cx, cy + open * 0.5, cx + 34, cy + 1);
+    c.quadraticCurveTo(cx, cy + open + 2, cx - 34, cy + 1);
+    c.closePath();
+    c.fill();
+    // A tiny puddle of the drink colour if we're mid-sip (catches the stream)
+    if (this.drinking && this.liquidLevel > this.minLevel + 0.01) {
+      c.fillStyle = cfg.liq;
+      c.globalAlpha = 0.75;
+      c.beginPath();
+      c.ellipse(cx, cy + open * 0.6, Math.min(28, open * 2.2), Math.max(1.5, open * 0.35), 0, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1;
+    }
+  }
+
+  // --- Lower lip ---
+  c.fillStyle = '#a00e22';
+  c.beginPath();
+  c.moveTo(cx - lipW / 2, cy);
+  c.quadraticCurveTo(cx - 20, cy + open * 0.35 + 1, cx, cy + open * 0.65 + 1);
+  c.quadraticCurveTo(cx + 20, cy + open * 0.35 + 1, cx + lipW / 2, cy);
+  // Bottom curve of lower lip — fuller, rounder than upper
+  c.bezierCurveTo(cx + lipW / 2 - 6, cy + lowerH * 1.05, cx + 20, cy + lowerH * 1.35, cx, cy + lowerH * 1.28);
+  c.bezierCurveTo(cx - 20, cy + lowerH * 1.35, cx - lipW / 2 + 6, cy + lowerH * 1.05, cx - lipW / 2, cy);
+  c.closePath();
+  c.fill();
+
+  // Lower-lip sheen (central glossy highlight — the classic pin-up pop)
+  c.fillStyle = 'rgba(255,200,210,0.55)';
+  c.beginPath();
+  c.ellipse(cx, cy + lowerH * 0.7, 18, 3, 0, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = 'rgba(255,240,240,0.45)';
+  c.beginPath();
+  c.ellipse(cx - 2, cy + lowerH * 0.65, 6, 1.6, 0, 0, Math.PI * 2);
+  c.fill();
+
+  // Subtle outer shadow under lips to ground them
+  c.fillStyle = 'rgba(0,0,0,0.25)';
+  c.beginPath();
+  c.ellipse(cx, cy + lowerH * 1.55, lipW * 0.42, 3, 0, 0, Math.PI * 2);
+  c.fill();
+
+  c.restore();
+}
+
+// === STREAM of liquid from glass rim up to the lips ===
+_drawStream(c, W, H, cfg, bob) {
+  this.streamT += 0.08;
+  // Origin: the glass pivot is at (W/2, H*0.88+bob). The tilt is negative (counter-clockwise),
+  // so the high side of the rim is on the right — liquid pours from the LEFT side of the rim.
+  // For visual simplicity, we have the stream emerge near the top-left of the glass and arc
+  // up toward the centre of the mouth.
+  var pivotY = H * 0.88 + bob;
+  // Approximate rim offset (works across glass types — rim ~60–100px above pivot)
+  var rimOffsetY = 62;
+  var rimOffsetX = -14;
+  // Rotate that offset by the current tilt
+  var a = this.tiltAngle;
+  var rx = Math.cos(a) * rimOffsetX - Math.sin(a) * (-rimOffsetY);
+  var ry = Math.sin(a) * rimOffsetX + Math.cos(a) * (-rimOffsetY);
+  var sx = W / 2 + rx;
+  var sy = pivotY + ry;
+
+  // Mouth target (just below upper lip, centred)
+  var ex = W / 2;
+  var ey = 50 + this.lipOpen * 4;
+
+  // Arcing control point so the stream curves elegantly upward
+  var cxp = (sx + ex) / 2 + 8;
+  var cyp = Math.min(sy, ey) - 28;
+
+  // Stream ribbon — a curved band rather than a straight line
+  c.save();
+  c.strokeStyle = cfg.liq;
+  c.lineWidth = 3.2;
+  c.lineCap = 'round';
+  c.globalAlpha = 0.92;
+  c.beginPath();
+  c.moveTo(sx, sy);
+  c.quadraticCurveTo(cxp, cyp, ex, ey);
+  c.stroke();
+
+  // Highlight down the middle of the ribbon
+  c.strokeStyle = cfg.hi || 'rgba(255,255,255,0.4)';
+  c.lineWidth = 1.2;
+  c.globalAlpha = 0.55;
+  c.beginPath();
+  c.moveTo(sx, sy);
+  c.quadraticCurveTo(cxp, cyp, ex, ey);
+  c.stroke();
+
+  // Droplets tumbling along the arc for motion (sampled at different t along the curve)
+  c.fillStyle = cfg.liq;
+  c.globalAlpha = 0.9;
+  for (var i = 0; i < 4; i++) {
+    var t = ((this.streamT + i * 0.25) % 1);
+    var bx = (1 - t) * (1 - t) * sx + 2 * (1 - t) * t * cxp + t * t * ex;
+    var by = (1 - t) * (1 - t) * sy + 2 * (1 - t) * t * cyp + t * t * ey;
+    c.beginPath();
+    c.arc(bx, by, 2, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
   c.restore();
 }
 

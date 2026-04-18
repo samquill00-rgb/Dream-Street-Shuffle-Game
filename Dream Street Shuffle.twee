@@ -3505,7 +3505,7 @@ constructor(drinkType) {
     wine:      { label: 'Wine',               liq: '#6a1028', hi: '#8a2040', foam: null,       bg: '#c8a86a', glow: 'rgba(160,30,60,0.25)' },
     champagne: { label: 'Champagne',          liq: '#e8d880', hi: '#f8f0b0', foam: '#f8f4e8', bg: '#c8a86a', glow: 'rgba(230,220,100,0.22)' },
     scotch:    { label: 'Scotch',             liq: '#d4a050', hi: '#e8c070', foam: null,       bg: '#c8a86a', glow: 'rgba(200,140,50,0.22)' },
-    cider:     { label: 'Cider',              liq: '#c8a030', hi: '#e0c060', foam: '#f0e8c8', bg: '#c8a86a', glow: 'rgba(190,160,40,0.20)' },
+    cider:     { label: 'Cidre',              liq: '#c8a030', hi: '#e0c060', foam: '#f0e8c8', bg: '#c8a86a', glow: 'rgba(190,160,40,0.20)' },
     vodka:     { label: 'Vodka Tonic',        liq: '#d8e8e8', hi: '#e8f4f4', foam: null,       bg: '#8ac8dc', glow: 'rgba(160,200,220,0.18)' },
     beer:      { label: 'Beer',               liq: '#c08020', hi: '#e0a840', foam: '#f0e8d0', bg: '#c8a86a', glow: 'rgba(190,150,30,0.20)' }
   };
@@ -3567,6 +3567,8 @@ _build() {
   this.lipOpen = 0;         // 0 = closed, 1 = parted for drinking
   this.lipOpenTarget = 0.18; // resting parted-kiss position
   this.streamT = 0;         // time accumulator for stream dashes
+  this.streamStrength = 0;  // 0 = no pour, 1 = full pour (ramps up/down for taper)
+  this.entryStrength = 0;   // 0 = no entry pour, 1 = stream pouring in during fill
 
   // Prompt text
   this.prompt = document.createElement('div');
@@ -3595,7 +3597,7 @@ _build() {
     if (self.liquidLevel <= self.minLevel + 0.01) return; // already hit bottom
     self.drinking = true;
     self.hasDrunk = true;
-    self.tiltTarget = -0.28;
+    self.tiltTarget = -0.55;
     self.wobbleDecay = 0.6;
     self.prompt.textContent = '';
   };
@@ -3677,6 +3679,13 @@ _startLoop() {
     }
     // Wobble removed — the pour stays steady and clean
     self.wobble = 0;
+    // Smooth stream strength: grows in when drinking, fades out when released
+    var streamWant = (self.drinking && !self.filling && self.liquidLevel > self.minLevel + 0.01) ? 1 : 0;
+    self.streamStrength += (streamWant - self.streamStrength) * 6 * dt;
+    // Entry-pour strength: ramps up fast while filling, tails off after the glass is full
+    var entryWant = self.filling ? 1 : 0;
+    var entryRate = self.filling ? 10 : 4;
+    self.entryStrength += (entryWant - self.entryStrength) * entryRate * dt;
     self._draw();
     requestAnimationFrame(loop);
   }
@@ -3712,9 +3721,14 @@ _draw() {
   // Lips below the glass, waiting to receive the pour
   this._drawLips(c, W, cfg, lipCy);
 
-  // Stream of liquid from glass rim down into the lips (only while tilting)
-  if (this.drinking && !this.filling && lev > this.minLevel + 0.01) {
+  // Stream of liquid from glass rim down into the lips (ramps in/out via streamStrength)
+  if (this.streamStrength > 0.02) {
     this._drawStream(c, W, H, cfg, bob, glassPivotY, lipCy);
+  }
+
+  // Entry pour: stream from above the canvas into the glass rim during the fill phase
+  if (this.entryStrength > 0.02) {
+    this._drawEntryPour(c, W, H, cfg, bob, glassPivotY);
   }
 
   // Glass up top, tilting on pivot (base of the glass)
@@ -3826,19 +3840,37 @@ _drawLips(c, W, cfg, cyArg) {
 }
 
 // === STREAM of liquid from glass rim DOWN into the lips ===
+// Per-glass rim offset (low side of the rim when tilted left): x = left rim, y = top of glass
+_getRimOffset() {
+  // Returns the LOW rim corner in the glass's own local coords (pivot at base, y up is negative)
+  if (this.type === 'pint' || this.type === 'cider' || this.type === 'beer') {
+    return { x: -20, y: -100 };   // topW=40, gH=100
+  } else if (this.type === 'wine') {
+    return { x: -13, y: -85 };    // bowl top ~-85, bowl half-width ~13 at top
+  } else if (this.type === 'champagne') {
+    return { x: -8, y: -97 };     // stem+flute = 32+65 = 97, fluteW=16
+  } else if (this.type === 'gin' || this.type === 'vodka') {
+    return { x: -15, y: -80 };    // topW=30, gH=80
+  }
+  // whisky / scotch / tumbler default
+  return { x: -22, y: -52 };      // topW=44, gH=52
+}
+
 _drawStream(c, W, H, cfg, bob, pivotYArg, lipCyArg) {
   this.streamT += 0.08;
-  // Glass is pivoted at its BASE (pivotYArg). Tilt is negative (counter-clockwise), so
-  // the high side of the rim is on the right — liquid pours from the LEFT side of the rim.
+  var strength = this.streamStrength;
+  if (strength < 0.02) return;
+
+  // Glass is pivoted at its BASE (pivotYArg). Tilt is negative (counter-clockwise),
+  // so liquid pours from the LEFT side of the rim (the low side).
   var pivotY = (typeof pivotYArg === 'number') ? pivotYArg : 115;
   pivotY += bob;
-  // Approximate rim offset above the pivot (glass top ~60px up, left side of rim)
-  var rimOffsetY = 62;
-  var rimOffsetX = -14;
-  // Rotate that offset by the current tilt
+
+  // Precise per-glass rim origin, rotated by current tilt
+  var rim = this._getRimOffset();
   var a = this.tiltAngle;
-  var rx = Math.cos(a) * rimOffsetX - Math.sin(a) * (-rimOffsetY);
-  var ry = Math.sin(a) * rimOffsetX + Math.cos(a) * (-rimOffsetY);
+  var rx = Math.cos(a) * rim.x - Math.sin(a) * rim.y;
+  var ry = Math.sin(a) * rim.x + Math.cos(a) * rim.y;
   var sx = W / 2 + rx;
   var sy = pivotY + ry;
 
@@ -3847,44 +3879,175 @@ _drawStream(c, W, H, cfg, bob, pivotYArg, lipCyArg) {
   var ex = W / 2;
   var ey = lipCy + this.lipOpen * 4;
 
-  // Arcing control point: let the stream curve gracefully downward,
-  // bowing slightly so it doesn't look like a laser beam.
-  var cxp = (sx + ex) / 2 - 6;
-  var cyp = (sy + ey) / 2 + 6;
+  // Arcing control point — stream bows outward-then-down into the mouth
+  var cxp = (sx + ex) / 2 - 4;
+  var cyp = (sy + ey) / 2 + 10;
 
-  // Stream ribbon — a curved band rather than a straight line
   c.save();
-  c.strokeStyle = cfg.liq;
-  c.lineWidth = 3.2;
   c.lineCap = 'round';
-  c.globalAlpha = 0.92;
-  c.beginPath();
-  c.moveTo(sx, sy);
-  c.quadraticCurveTo(cxp, cyp, ex, ey);
-  c.stroke();
+  c.lineJoin = 'round';
 
-  // Highlight down the middle of the ribbon
-  c.strokeStyle = cfg.hi || 'rgba(255,255,255,0.4)';
-  c.lineWidth = 1.2;
-  c.globalAlpha = 0.55;
-  c.beginPath();
-  c.moveTo(sx, sy);
-  c.quadraticCurveTo(cxp, cyp, ex, ey);
-  c.stroke();
-
-  // Droplets tumbling along the arc for motion (sampled at different t along the curve)
-  c.fillStyle = cfg.liq;
-  c.globalAlpha = 0.9;
-  for (var i = 0; i < 4; i++) {
-    var t = ((this.streamT + i * 0.25) % 1);
+  // --- Main ribbon: drawn as tapered segments along the curve ---
+  // Narrow at rim, swells in the middle, tapers as it enters the mouth.
+  var steps = 16;
+  var lastX = sx, lastY = sy;
+  c.strokeStyle = cfg.liq;
+  c.globalAlpha = 0.92 * strength;
+  for (var i = 1; i <= steps; i++) {
+    var t = i / steps;
     var bx = (1 - t) * (1 - t) * sx + 2 * (1 - t) * t * cxp + t * t * ex;
     var by = (1 - t) * (1 - t) * sy + 2 * (1 - t) * t * cyp + t * t * ey;
+    // Width profile: thin (1.8) at rim, peak (5.2) around t=0.45, thinner (2.2) at mouth
+    var bulge = 1 - Math.abs(t - 0.45) * 1.6;
+    if (bulge < 0) bulge = 0;
+    var w = (1.8 + bulge * 3.6) * strength;
+    if (w < 1) w = 1;
+    c.lineWidth = w;
     c.beginPath();
-    c.arc(bx, by, 2, 0, Math.PI * 2);
+    c.moveTo(lastX, lastY);
+    c.lineTo(bx, by);
+    c.stroke();
+    lastX = bx; lastY = by;
+  }
+
+  // --- Highlight down the middle of the ribbon ---
+  c.strokeStyle = cfg.hi || 'rgba(255,255,255,0.5)';
+  c.lineWidth = 1.3 * strength;
+  c.globalAlpha = 0.55 * strength;
+  c.beginPath();
+  c.moveTo(sx, sy);
+  c.quadraticCurveTo(cxp, cyp, ex, ey);
+  c.stroke();
+
+  // --- Droplets tumbling along the arc (more of them, varied sizes) ---
+  c.fillStyle = cfg.liq;
+  c.globalAlpha = 0.9 * strength;
+  var dropCount = 10;
+  for (var d = 0; d < dropCount; d++) {
+    var dt = ((this.streamT * 0.5 + d / dropCount) % 1);
+    var dx = (1 - dt) * (1 - dt) * sx + 2 * (1 - dt) * dt * cxp + dt * dt * ex;
+    var dy = (1 - dt) * (1 - dt) * sy + 2 * (1 - dt) * dt * cyp + dt * dt * ey;
+    var ds = (1.3 + Math.sin(d * 2.1 + this.streamT * 2) * 0.6) * strength;
+    if (ds < 0.5) ds = 0.5;
+    c.beginPath();
+    c.arc(dx, dy, ds, 0, Math.PI * 2);
     c.fill();
   }
+
+  // --- Splash at the lips: small droplets spraying sideways on impact ---
+  if (strength > 0.4) {
+    c.fillStyle = cfg.liq;
+    var splashN = 6;
+    for (var s = 0; s < splashN; s++) {
+      // Cycle each droplet through a short arc life so they look ejected
+      var life = ((this.streamT * 1.8 + s * 0.19) % 1);
+      var sideSign = (s % 2 === 0) ? 1 : -1;
+      var ang = sideSign * (0.4 + (s % 3) * 0.15);
+      var rOut = life * 14;                          // flies outward
+      var spx = ex + Math.cos(Math.PI / 2 + ang) * rOut * sideSign * 0.9;
+      var spy = ey - 2 + Math.sin(life * Math.PI) * -3 + life * 4; // tiny arc: up then down
+      var alpha = (1 - life) * 0.75 * strength;
+      var size = (1.3 - life * 0.7) * strength;
+      if (size < 0.4) continue;
+      c.globalAlpha = alpha;
+      c.beginPath();
+      c.arc(spx, spy, size, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
   c.globalAlpha = 1;
   c.restore();
+}
+
+// === ENTRY POUR: stream from above the canvas INTO the glass rim during fill ===
+_drawEntryPour(c, W, H, cfg, bob, glassPivotY) {
+  var strength = this.entryStrength;
+  if (strength < 0.02) return;
+
+  // Target: just below the centre of the glass rim (so the stream visibly ends inside the glass)
+  var rim = this._getRimOffset();
+  var glassTopY = glassPivotY + bob + rim.y;
+  var tx = W / 2;
+  var ty = glassTopY + 4;
+
+  // Source: offscreen above the glass, slightly offset so it's not a dead-straight column
+  var sx = W / 2 + 4;
+  var sy = 8;
+
+  // Gentle arc control point
+  var cxp = (sx + tx) / 2 - 3;
+  var cyp = (sy + ty) / 2 + 5;
+
+  c.save();
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+
+  // Tapered ribbon, drawn as short segments with a thickness profile
+  var steps = 18;
+  var lastX = sx, lastY = sy;
+  c.strokeStyle = cfg.liq;
+  c.globalAlpha = 0.88 * strength;
+  for (var i = 1; i <= steps; i++) {
+    var t = i / steps;
+    var bx = (1 - t) * (1 - t) * sx + 2 * (1 - t) * t * cxp + t * t * tx;
+    var by = (1 - t) * (1 - t) * sy + 2 * (1 - t) * t * cyp + t * t * ty;
+    // Width: narrow at source, swells mid-flow, narrows at rim
+    var bulge = 1 - Math.abs(t - 0.5) * 1.3;
+    if (bulge < 0) bulge = 0;
+    var w = (1.8 + bulge * 2.8) * strength;
+    if (w < 0.9) w = 0.9;
+    c.lineWidth = w;
+    c.beginPath();
+    c.moveTo(lastX, lastY);
+    c.lineTo(bx, by);
+    c.stroke();
+    lastX = bx; lastY = by;
+  }
+
+  // Highlight down the spine
+  c.strokeStyle = cfg.hi || 'rgba(255,255,255,0.5)';
+  c.lineWidth = 1.1 * strength;
+  c.globalAlpha = 0.5 * strength;
+  c.beginPath();
+  c.moveTo(sx, sy);
+  c.quadraticCurveTo(cxp, cyp, tx, ty);
+  c.stroke();
+
+  // Droplets tumbling down the pour
+  c.fillStyle = cfg.liq;
+  c.globalAlpha = 0.92 * strength;
+  for (var d = 0; d < 9; d++) {
+    var dt = ((this.t * 1.6 + d / 9) % 1);
+    var dx = (1 - dt) * (1 - dt) * sx + 2 * (1 - dt) * dt * cxp + dt * dt * tx;
+    var dy = (1 - dt) * (1 - dt) * sy + 2 * (1 - dt) * dt * cyp + dt * dt * ty;
+    var ds = (1.2 + Math.sin(d * 1.9 + this.t * 3) * 0.45) * strength;
+    if (ds < 0.5) ds = 0.5;
+    c.beginPath();
+    c.arc(dx, dy, ds, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  // Small ripple ring at the pour's impact point on the rim
+  if (strength > 0.35 && this.fillLevel > 0.04) {
+    c.strokeStyle = cfg.hi || cfg.liq;
+    c.globalAlpha = 0.45 * strength;
+    c.lineWidth = 1;
+    var ringR = 4 + Math.sin(this.t * 12) * 1.2;
+    c.beginPath();
+    c.ellipse(tx, ty + 1, ringR, 1.6, 0, 0, Math.PI * 2);
+    c.stroke();
+  }
+
+  c.globalAlpha = 1;
+  c.restore();
+}
+
+// Helper: given a liquid baseline y (in local glass coords) and a local x offset,
+// returns the y of a *world-horizontal* surface line at that x. Used so the liquid
+// stays level under gravity even while the glass is tilted.
+_tiltedY(baseY, x) {
+  return baseY - x * Math.tan(this.tiltAngle);
 }
 
 // === PINT GLASS ===
@@ -3903,25 +4066,30 @@ _drawPint(c, cfg, lev, wob) {
   c.strokeStyle = 'rgba(255,255,255,0.18)';
   c.lineWidth = 1.2;
   c.stroke();
-  // Liquid
+  // Liquid (top surface tilts to stay world-horizontal while the glass tilts)
   var liqH = gH * 0.88 * lev;
   var liqTop = -liqH;
   var lW = gW / 2 - 2 + (topW / 2 - gW / 2) * (liqH / gH);
+  var yL = Math.max(-gH + 2, this._tiltedY(liqTop, -lW));
+  var yR = Math.min(-1, this._tiltedY(liqTop, lW));
   c.fillStyle = cfg.liq;
   c.beginPath();
   c.moveTo(-gW / 2 + 2, 0);
-  c.lineTo(-lW, liqTop + wob * 200);
-  c.quadraticCurveTo(0, liqTop - wob * 400, lW, liqTop + wob * 200);
+  c.lineTo(-lW, yL + wob * 200);
+  c.quadraticCurveTo(0, (yL + yR) / 2 - wob * 400, lW, yR + wob * 200);
   c.lineTo(gW / 2 - 2, 0);
   c.closePath();
   c.fill();
-  // Foam head
+  // Foam head — counter-rotated so it sits flat on the world-horizontal surface
   if (cfg.foam && lev > 0.5) {
+    c.save();
+    c.translate(0, (yL + yR) / 2 + wob * 200);
+    c.rotate(-this.tiltAngle);
     c.fillStyle = cfg.foam;
-    var foamY = liqTop + wob * 200;
     c.beginPath();
-    c.ellipse(0, foamY, lW, 8, 0, 0, Math.PI * 2);
+    c.ellipse(0, 0, lW, 8, 0, 0, Math.PI * 2);
     c.fill();
+    c.restore();
   }
   // Glass highlight
   c.fillStyle = 'rgba(255,255,255,0.08)';
@@ -3951,15 +4119,17 @@ _drawTumbler(c, cfg, lev, wob) {
   c.strokeStyle = 'rgba(255,255,255,0.2)';
   c.lineWidth = 1.5;
   c.stroke();
-  // Liquid
+  // Liquid (top surface tilts to stay world-horizontal)
   var liqH = gH * 0.45 * lev;
   var liqTop = -liqH;
   var lW = gW / 2 - 2;
+  var yL = Math.max(-gH + 2, this._tiltedY(liqTop, -lW));
+  var yR = Math.min(-1, this._tiltedY(liqTop, lW));
   c.fillStyle = cfg.liq;
   c.beginPath();
   c.moveTo(-lW, 0);
-  c.lineTo(-lW - 1, liqTop + wob * 100);
-  c.quadraticCurveTo(0, liqTop - wob * 200, lW + 1, liqTop + wob * 100);
+  c.lineTo(-lW - 1, yL + wob * 100);
+  c.quadraticCurveTo(0, (yL + yR) / 2 - wob * 200, lW + 1, yR + wob * 100);
   c.lineTo(lW, 0);
   c.closePath();
   c.fill();
@@ -3982,13 +4152,17 @@ _drawTumbler(c, cfg, lev, wob) {
       }
     }
   }
-  // Liquid surface highlight
+  // Liquid surface highlight — counter-rotated to stay flat in world space
+  c.save();
+  c.translate(0, (yL + yR) / 2 + wob * 100);
+  c.rotate(-this.tiltAngle);
   c.fillStyle = cfg.hi;
   c.globalAlpha = 0.25;
   c.beginPath();
-  c.ellipse(0, liqTop + wob * 100, lW - 2, 3, 0, 0, Math.PI * 2);
+  c.ellipse(0, 0, lW - 2, 3, 0, 0, Math.PI * 2);
   c.fill();
   c.globalAlpha = 1;
+  c.restore();
   // Glass highlight
   c.fillStyle = 'rgba(255,255,255,0.07)';
   c.fillRect(-topW / 2 + 3, y0 + 3, 3, gH - 6);
@@ -4028,30 +4202,32 @@ _drawWine(c, cfg, lev, wob) {
   c.strokeStyle = 'rgba(255,255,255,0.18)';
   c.lineWidth = 1;
   c.stroke();
-  // Liquid in bowl
+  // Liquid in bowl (top surface tilts to stay world-horizontal)
   var liqH = bowlH * 0.55 * lev;
   var liqBot = -stemH;
   var liqTop = liqBot - liqH;
   var lW = 7 + (bowlW / 2 - 10) * (liqH / bowlH);
+  var yL = Math.max(-(stemH + bowlH) + 2, this._tiltedY(liqTop, -lW));
+  var yR = Math.min(liqBot - 1, this._tiltedY(liqTop, lW));
   // Base liquid colour
   c.fillStyle = cfg.liq;
   c.beginPath();
   c.moveTo(-7, liqBot);
-  c.quadraticCurveTo(-lW, liqTop + wob * 100, 0, liqTop - wob * 150);
-  c.quadraticCurveTo(lW, liqTop + wob * 100, 7, liqBot);
+  c.quadraticCurveTo(-lW, yL + wob * 100, 0, (yL + yR) / 2 - wob * 150);
+  c.quadraticCurveTo(lW, yR + wob * 100, 7, liqBot);
   c.closePath();
   c.fill();
   // Luster — light sheen on left inner bowl face
   if (liqH > 4) {
-    var luster = c.createLinearGradient(-lW, liqTop, lW * 0.3, liqBot);
+    var luster = c.createLinearGradient(-lW, (yL + yR) / 2, lW * 0.3, liqBot);
     luster.addColorStop(0, 'rgba(210,90,110,0.28)');
     luster.addColorStop(0.5, 'rgba(180,60,80,0.08)');
     luster.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = luster;
     c.beginPath();
     c.moveTo(-7, liqBot);
-    c.quadraticCurveTo(-lW, liqTop + wob * 100, 0, liqTop - wob * 150);
-    c.quadraticCurveTo(lW, liqTop + wob * 100, 7, liqBot);
+    c.quadraticCurveTo(-lW, yL + wob * 100, 0, (yL + yR) / 2 - wob * 150);
+    c.quadraticCurveTo(lW, yR + wob * 100, 7, liqBot);
     c.closePath();
     c.fill();
   }
@@ -4085,15 +4261,18 @@ _drawChampagne(c, cfg, lev, wob) {
   c.strokeStyle = 'rgba(255,255,255,0.18)';
   c.lineWidth = 1;
   c.stroke();
-  // Liquid
+  // Liquid (top surface tilts to stay world-horizontal)
   var liqH = fluteH * 0.75 * lev;
   var liqBot = -stemH;
   var liqTop = liqBot - liqH;
+  var lWf = fluteW / 2 - 2;
+  var yL = Math.max(-(stemH + fluteH) + 2, this._tiltedY(liqTop, -lWf));
+  var yR = Math.min(liqBot - 1, this._tiltedY(liqTop, lWf));
   c.fillStyle = cfg.liq;
   c.beginPath();
   c.moveTo(-fluteW / 2 + 3, liqBot);
-  c.lineTo(-fluteW / 2 + 2, liqTop + wob * 80);
-  c.quadraticCurveTo(0, liqTop - wob * 150, fluteW / 2 - 2, liqTop + wob * 80);
+  c.lineTo(-fluteW / 2 + 2, yL + wob * 80);
+  c.quadraticCurveTo(0, (yL + yR) / 2 - wob * 150, fluteW / 2 - 2, yR + wob * 80);
   c.lineTo(fluteW / 2 - 3, liqBot);
   c.closePath();
   c.fill();
@@ -4140,15 +4319,17 @@ _drawTallGlass(c, cfg, lev, wob) {
   c.strokeStyle = 'rgba(255,255,255,0.18)';
   c.lineWidth = 1.2;
   c.stroke();
-  // Liquid
+  // Liquid (top surface tilts to stay world-horizontal)
   var liqH = gH * 0.8 * lev;
   var liqTop = -liqH;
   var lW = gW / 2 - 2;
+  var yL = Math.max(-gH + 2, this._tiltedY(liqTop, -lW));
+  var yR = Math.min(-1, this._tiltedY(liqTop, lW));
   c.fillStyle = cfg.liq;
   c.beginPath();
   c.moveTo(-lW, 0);
-  c.lineTo(-lW - 1, liqTop + wob * 150);
-  c.quadraticCurveTo(0, liqTop - wob * 300, lW + 1, liqTop + wob * 150);
+  c.lineTo(-lW - 1, yL + wob * 150);
+  c.quadraticCurveTo(0, (yL + yR) / 2 - wob * 300, lW + 1, yR + wob * 150);
   c.lineTo(lW, 0);
   c.closePath();
   c.fill();
@@ -27345,17 +27526,17 @@ Jack Curtis tosses you a paddle. 'House rules.'
 (link: "Take the paddle")[(set: $ppScore to 0)(set: $oppScore to 0)(set: $opponent to "Jack Curtis")(go-to: "PP Pong")]
 
 :: Which drink at the French? {"position":"100,650","size":"100,100"}
-<svg viewBox="0 0 400 180" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;"><defs><linearGradient id="dfGold" x1="0" x2="1"><stop offset="0%" stop-color="#a06010" stop-opacity="0"/><stop offset="15%" stop-color="#c88020" stop-opacity="0.9"/><stop offset="50%" stop-color="#d4a040" stop-opacity="1"/><stop offset="85%" stop-color="#c88020" stop-opacity="0.9"/><stop offset="100%" stop-color="#a06010" stop-opacity="0"/></linearGradient><linearGradient id="dfBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a1008" stop-opacity="0.97"/><stop offset="100%" stop-color="#0e0804" stop-opacity="0.99"/></linearGradient><linearGradient id="dfRule" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="25%" stop-color="#c8a86a" stop-opacity="0.65"/><stop offset="75%" stop-color="#c8a86a" stop-opacity="0.65"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient><radialGradient id="dfGlow" cx="50%" cy="40%" r="40%"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0.07"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></radialGradient><linearGradient id="dfWine" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8a2030" stop-opacity="0.3"/><stop offset="100%" stop-color="#5a1020" stop-opacity="0.6"/></linearGradient><linearGradient id="dfCider" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c8a040" stop-opacity="0.2"/><stop offset="100%" stop-color="#a08020" stop-opacity="0.45"/></linearGradient></defs><!-- Background card --><rect x="10" y="6" width="380" height="168" rx="3" fill="url(#dfBg)" stroke="rgba(200,168,106,0.32)" stroke-width="1"/><rect x="18" y="14" width="364" height="152" rx="2" fill="url(#dfGlow)" stroke="rgba(200,168,106,0.13)" stroke-width="0.5"/><!-- Left vine with grape cluster --><g opacity="0.35" fill="none" stroke="#c8a86a" stroke-width="0.85"><path d="M28,65 C27,50 30,38 34,26 C37,18 41,12 38,6"/><path d="M33,45 C29,40 22,38 19,32"/><path d="M31,32 C27,26 29,20 26,14"/></g><g opacity="0.4" fill="#c8a86a"><path d="M33,45 C31,40 26,42 24,38 C28,37 32,40 33,45 Z"/><circle cx="20" cy="30" r="2.2" opacity="0.45"/><circle cx="24" cy="27" r="2" opacity="0.38"/><circle cx="22" cy="34" r="2.2" opacity="0.42"/><circle cx="17" cy="33" r="1.8" opacity="0.35"/></g><!-- Right vine with grape cluster --><g opacity="0.35" fill="none" stroke="#c8a86a" stroke-width="0.85"><path d="M372,65 C373,50 370,38 366,26 C363,18 359,12 362,6"/><path d="M367,45 C371,40 378,38 381,32"/><path d="M369,32 C373,26 371,20 374,14"/></g><g opacity="0.4" fill="#c8a86a"><path d="M367,45 C369,40 374,42 376,38 C372,37 368,40 367,45 Z"/><circle cx="380" cy="30" r="2.2" opacity="0.45"/><circle cx="376" cy="27" r="2" opacity="0.38"/><circle cx="378" cy="34" r="2.2" opacity="0.42"/><circle cx="383" cy="33" r="1.8" opacity="0.35"/></g><!-- Header --><text x="200" y="38" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="url(#dfGold)" letter-spacing="1" style="font-size:11px">You catch the barman&#8217;s eye.</text><!-- Divider --><line x1="80" y1="48" x2="320" y2="48" stroke="url(#dfRule)" stroke-width="0.6"/><polygon points="200,45 203,48 200,51 197,48" fill="#c8a86a" opacity="0.6"/><!-- French tricolour accents --><g opacity="0.3"><rect x="92" y="54" width="4" height="12" rx="0.5" fill="#002395"/><rect x="98" y="53" width="5" height="14" rx="0.5" fill="#f0f0f0"/><rect x="105" y="54" width="4" height="12" rx="0.5" fill="#ed2939"/><rect x="291" y="54" width="4" height="12" rx="0.5" fill="#002395"/><rect x="297" y="53" width="5" height="14" rx="0.5" fill="#f0f0f0"/><rect x="304" y="54" width="4" height="12" rx="0.5" fill="#ed2939"/></g><!-- BEAUJOLAIS wine glass (left) --><g opacity="0.8"><rect x="119" y="92" width="2" height="10" fill="rgba(200,168,106,0.3)"/><ellipse cx="120" cy="103" rx="9" ry="2.5" fill="rgba(200,168,106,0.22)"/><path d="M110,92 Q108,80 110,72 Q114,66 120,64 Q126,66 130,72 Q132,80 130,92 Z" fill="url(#dfWine)" stroke="rgba(180,140,90,0.4)" stroke-width="0.8"/><ellipse cx="120" cy="76" rx="8" ry="2" fill="rgba(138,32,48,0.3)"/></g><text x="120" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a2030" opacity="0.55" style="font-size:7px">Beaujolais</text><!-- CLARET wine glass (centre) --><g opacity="0.8"><rect x="199" y="92" width="2" height="10" fill="rgba(200,168,106,0.3)"/><ellipse cx="200" cy="103" rx="9" ry="2.5" fill="rgba(200,168,106,0.22)"/><path d="M190,92 Q188,80 190,72 Q194,66 200,64 Q206,66 210,72 Q212,80 210,92 Z" fill="url(#dfWine)" stroke="rgba(180,140,90,0.4)" stroke-width="0.8"/><ellipse cx="200" cy="76" rx="8" ry="2" fill="rgba(138,32,48,0.3)"/></g><text x="200" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a2030" opacity="0.55" style="font-size:7px">Claret</text><!-- BRETON CIDER tumbler (right) --><g opacity="0.8"><path d="M270,100 L273,66 L287,66 L290,100 Z" fill="rgba(180,160,80,0.12)" stroke="rgba(200,180,100,0.35)" stroke-width="0.8"/><path d="M271,100 L273,82 L287,82 L289,100 Z" fill="url(#dfCider)"/><circle cx="278" cy="88" r="0.8" fill="rgba(255,255,200,0.25)"/><circle cx="282" cy="92" r="0.6" fill="rgba(255,255,200,0.2)"/><circle cx="276" cy="94" r="0.5" fill="rgba(255,255,200,0.18)"/></g><text x="280" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#a08020" opacity="0.55" style="font-size:7px">Breton Cider</text><!-- Dots between glasses --><g fill="#c8a86a" opacity="0.4"><circle cx="152" cy="85" r="1.3"/><circle cx="160" cy="82" r="0.9"/><circle cx="168" cy="85" r="1.3"/><circle cx="232" cy="85" r="1.3"/><circle cx="240" cy="82" r="0.9"/><circle cx="248" cy="85" r="1.3"/></g><!-- Lower divider --><line x1="30" y1="130" x2="370" y2="130" stroke="url(#dfRule)" stroke-width="0.6"/><!-- Diamond row --><g fill="#c8a86a" opacity="0.4"><polygon points="160,140 163,144 160,148 157,144"/><polygon points="180,138 183,142 180,146 177,142"/><polygon points="200,136 204,140 200,144 196,140"/><polygon points="220,138 223,142 220,146 217,142"/><polygon points="240,140 243,144 240,148 237,144"/></g><!-- Bottom swags --><g opacity="0.2" fill="none" stroke="#c8a86a" stroke-width="0.7"><path d="M42,162 C68,153 105,158 135,151 C160,144 176,148 196,144"/><path d="M358,162 C332,153 295,158 265,151 C240,144 224,148 204,144"/></g><!-- Corner brackets --><g opacity="0.3" stroke="#c8a86a" stroke-width="0.9" fill="none"><polyline points="20,22 20,16 29,16"/><polyline points="380,22 380,16 371,16"/><polyline points="20,158 20,166 29,166"/><polyline points="380,158 380,166 371,166"/></g></svg>
+<svg viewBox="0 0 400 180" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;"><defs><linearGradient id="dfGold" x1="0" x2="1"><stop offset="0%" stop-color="#a06010" stop-opacity="0"/><stop offset="15%" stop-color="#c88020" stop-opacity="0.9"/><stop offset="50%" stop-color="#d4a040" stop-opacity="1"/><stop offset="85%" stop-color="#c88020" stop-opacity="0.9"/><stop offset="100%" stop-color="#a06010" stop-opacity="0"/></linearGradient><linearGradient id="dfBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a1008" stop-opacity="0.97"/><stop offset="100%" stop-color="#0e0804" stop-opacity="0.99"/></linearGradient><linearGradient id="dfRule" x1="0" x2="1"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0"/><stop offset="25%" stop-color="#c8a86a" stop-opacity="0.65"/><stop offset="75%" stop-color="#c8a86a" stop-opacity="0.65"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></linearGradient><radialGradient id="dfGlow" cx="50%" cy="40%" r="40%"><stop offset="0%" stop-color="#c8a86a" stop-opacity="0.07"/><stop offset="100%" stop-color="#c8a86a" stop-opacity="0"/></radialGradient><linearGradient id="dfWine" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8a2030" stop-opacity="0.3"/><stop offset="100%" stop-color="#5a1020" stop-opacity="0.6"/></linearGradient><linearGradient id="dfCider" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c8a040" stop-opacity="0.2"/><stop offset="100%" stop-color="#a08020" stop-opacity="0.45"/></linearGradient></defs><!-- Background card --><rect x="10" y="6" width="380" height="168" rx="3" fill="url(#dfBg)" stroke="rgba(200,168,106,0.32)" stroke-width="1"/><rect x="18" y="14" width="364" height="152" rx="2" fill="url(#dfGlow)" stroke="rgba(200,168,106,0.13)" stroke-width="0.5"/><!-- Left vine with grape cluster --><g opacity="0.35" fill="none" stroke="#c8a86a" stroke-width="0.85"><path d="M28,65 C27,50 30,38 34,26 C37,18 41,12 38,6"/><path d="M33,45 C29,40 22,38 19,32"/><path d="M31,32 C27,26 29,20 26,14"/></g><g opacity="0.4" fill="#c8a86a"><path d="M33,45 C31,40 26,42 24,38 C28,37 32,40 33,45 Z"/><circle cx="20" cy="30" r="2.2" opacity="0.45"/><circle cx="24" cy="27" r="2" opacity="0.38"/><circle cx="22" cy="34" r="2.2" opacity="0.42"/><circle cx="17" cy="33" r="1.8" opacity="0.35"/></g><!-- Right vine with grape cluster --><g opacity="0.35" fill="none" stroke="#c8a86a" stroke-width="0.85"><path d="M372,65 C373,50 370,38 366,26 C363,18 359,12 362,6"/><path d="M367,45 C371,40 378,38 381,32"/><path d="M369,32 C373,26 371,20 374,14"/></g><g opacity="0.4" fill="#c8a86a"><path d="M367,45 C369,40 374,42 376,38 C372,37 368,40 367,45 Z"/><circle cx="380" cy="30" r="2.2" opacity="0.45"/><circle cx="376" cy="27" r="2" opacity="0.38"/><circle cx="378" cy="34" r="2.2" opacity="0.42"/><circle cx="383" cy="33" r="1.8" opacity="0.35"/></g><!-- Header --><text x="200" y="38" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="url(#dfGold)" letter-spacing="1" style="font-size:11px">You catch the barman&#8217;s eye.</text><!-- Divider --><line x1="80" y1="48" x2="320" y2="48" stroke="url(#dfRule)" stroke-width="0.6"/><polygon points="200,45 203,48 200,51 197,48" fill="#c8a86a" opacity="0.6"/><!-- French tricolour accents --><g opacity="0.3"><rect x="92" y="54" width="4" height="12" rx="0.5" fill="#002395"/><rect x="98" y="53" width="5" height="14" rx="0.5" fill="#f0f0f0"/><rect x="105" y="54" width="4" height="12" rx="0.5" fill="#ed2939"/><rect x="291" y="54" width="4" height="12" rx="0.5" fill="#002395"/><rect x="297" y="53" width="5" height="14" rx="0.5" fill="#f0f0f0"/><rect x="304" y="54" width="4" height="12" rx="0.5" fill="#ed2939"/></g><!-- BEAUJOLAIS wine glass (left) --><g opacity="0.8"><rect x="119" y="92" width="2" height="10" fill="rgba(200,168,106,0.3)"/><ellipse cx="120" cy="103" rx="9" ry="2.5" fill="rgba(200,168,106,0.22)"/><path d="M110,92 Q108,80 110,72 Q114,66 120,64 Q126,66 130,72 Q132,80 130,92 Z" fill="url(#dfWine)" stroke="rgba(180,140,90,0.4)" stroke-width="0.8"/><ellipse cx="120" cy="76" rx="8" ry="2" fill="rgba(138,32,48,0.3)"/></g><text x="120" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a2030" opacity="0.55" style="font-size:7px">Beaujolais</text><!-- CLARET wine glass (centre) --><g opacity="0.8"><rect x="199" y="92" width="2" height="10" fill="rgba(200,168,106,0.3)"/><ellipse cx="200" cy="103" rx="9" ry="2.5" fill="rgba(200,168,106,0.22)"/><path d="M190,92 Q188,80 190,72 Q194,66 200,64 Q206,66 210,72 Q212,80 210,92 Z" fill="url(#dfWine)" stroke="rgba(180,140,90,0.4)" stroke-width="0.8"/><ellipse cx="200" cy="76" rx="8" ry="2" fill="rgba(138,32,48,0.3)"/></g><text x="200" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a2030" opacity="0.55" style="font-size:7px">Claret</text><!-- BRETON CIDER tumbler (right) --><g opacity="0.8"><path d="M270,100 L273,66 L287,66 L290,100 Z" fill="rgba(180,160,80,0.12)" stroke="rgba(200,180,100,0.35)" stroke-width="0.8"/><path d="M271,100 L273,82 L287,82 L289,100 Z" fill="url(#dfCider)"/><circle cx="278" cy="88" r="0.8" fill="rgba(255,255,200,0.25)"/><circle cx="282" cy="92" r="0.6" fill="rgba(255,255,200,0.2)"/><circle cx="276" cy="94" r="0.5" fill="rgba(255,255,200,0.18)"/></g><text x="280" y="118" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#a08020" opacity="0.55" style="font-size:7px">Breton Cidre</text><!-- Dots between glasses --><g fill="#c8a86a" opacity="0.4"><circle cx="152" cy="85" r="1.3"/><circle cx="160" cy="82" r="0.9"/><circle cx="168" cy="85" r="1.3"/><circle cx="232" cy="85" r="1.3"/><circle cx="240" cy="82" r="0.9"/><circle cx="248" cy="85" r="1.3"/></g><!-- Lower divider --><line x1="30" y1="130" x2="370" y2="130" stroke="url(#dfRule)" stroke-width="0.6"/><!-- Diamond row --><g fill="#c8a86a" opacity="0.4"><polygon points="160,140 163,144 160,148 157,144"/><polygon points="180,138 183,142 180,146 177,142"/><polygon points="200,136 204,140 200,144 196,140"/><polygon points="220,138 223,142 220,146 217,142"/><polygon points="240,140 243,144 240,148 237,144"/></g><!-- Bottom swags --><g opacity="0.2" fill="none" stroke="#c8a86a" stroke-width="0.7"><path d="M42,162 C68,153 105,158 135,151 C160,144 176,148 196,144"/><path d="M358,162 C332,153 295,158 265,151 C240,144 224,148 204,144"/></g><!-- Corner brackets --><g opacity="0.3" stroke="#c8a86a" stroke-width="0.9" fill="none"><polyline points="20,22 20,16 29,16"/><polyline points="380,22 380,16 371,16"/><polyline points="20,158 20,166 29,166"/><polyline points="380,158 380,166 371,166"/></g></svg>
 <div class="drink-menu french-drinks">
 (link: "Beaujolais")[(set: $lastDrink to "wine")(set: $drankAtFrench to true)(set: $sobriety to $sobriety - 12)(go-to: "French drink")]
 (link: "Claret")[(set: $lastDrink to "wine")(set: $drankAtFrench to true)(set: $sobriety to $sobriety - 12)(go-to: "French drink")]
-(link: "Breton Cider")[(set: $lastDrink to "cider")(set: $drankAtFrench to true)(set: $sobriety to $sobriety - 12)(go-to: "French drink")]
+(link: "Breton Cidre")[(set: $lastDrink to "cider")(set: $drankAtFrench to true)(set: $sobriety to $sobriety - 12)(go-to: "French drink")]
 </div>
 
 :: French drink [venue-french] {"position":"100,750","size":"100,100"}
 (set: $drankAtFrench to true)\
 <span id="french-drink-type" style="display:none;">(print: $lastDrink)</span>\
-<script>setTimeout(function(){ var dt=document.getElementById('french-drink-type'); var t=(dt&&dt.textContent.trim())||'wine'; window.showDrinkPopup(t); }, 200);</script>\
+<script>(function(){var dt=document.getElementById('french-drink-type');var t=(dt&&dt.textContent.trim())||'wine';setTimeout(function(){window.showDrinkPopup(t);},200);})();</script>\
 (go-to: "The French")
 
 :: Wrong door {"position":"1600,550","size":"100,100"}
@@ -27391,6 +27572,8 @@ As you turn, you strike, in the cool and marbling air, a vein of his perfume, wh
 (set: _hideStats to (a: "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "A Doorway on Dean Street", "Dawn", "PP Pong", "Fight starts", "Fight Round 1", "Fight Round 2", "Fight Round 3", "Fight R1 Back", "Fight R1 Block", "Fight R1 Duck", "Fight R2 Catch", "Fight R2 Counter", "Fight R2 Slip", "Fight R3 Clinch", "Fight R3 Headon", "Fight R3 Weave", "Fight Victory", "Fight Defeat"))
 (unless: _hideStats contains (passage:)'s name)[\
 (if: $confidence is a number and $confidence < 0)[(set: $confidence to 0)](if: $confidence is a number and $confidence > 100)[(set: $confidence to 100)](if: $sobriety is a number and $sobriety < 0)[(set: $sobriety to 0)](if: $sobriety is a number and $sobriety > 100)[(set: $sobriety to 100)]\
+(unless: $alba is an array)[(set: $alba to (a:))]\
+(unless: $haunts is an array)[(set: $haunts to (a:))]\
 (if: $haunts is an array)[\
 (if: $haunts's length >= 8)[(enchant: ?page, (css: "background: linear-gradient(180deg, #1a1e28 0%, #252a3a 50%, #1a1e28 100%); background-attachment: fixed"))]\
 (else-if: $haunts's length >= 6)[(enchant: ?page, (css: "background: linear-gradient(180deg, #171a20 0%, #212430 50%, #171a20 100%); background-attachment: fixed"))]\

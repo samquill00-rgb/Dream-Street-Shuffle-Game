@@ -23354,51 +23354,93 @@ document.addEventListener('keydown', function(e) {
 (function() {
   var petalObserver = null;
 
-  function spawnPetals() {
+  function startPetalStorm() {
     var wrap = document.createElement('div');
     wrap.className = 'dawn-petal-wrap';
     document.body.appendChild(wrap);
-    var count = 48;
-    for (var i = 0; i < count; i++) {
-      (function(idx) {
-        var delay = idx * 75 + Math.random() * 180;
+
+    var elapsed    = 0;    // seconds since storm began
+    var spawnRate  = 650;  // ms between batches — decreases over time
+    var active     = 0;
+    var maxPetals  = 280;
+
+    function spawnOne() {
+      if (active >= maxPetals) return;
+      active++;
+
+      // Probability of settling (accumulating) grows from 0 to 70% over ~55s
+      var settlePct = Math.min(0.70, elapsed / 55);
+      var settles   = Math.random() < settlePct;
+
+      var p = document.createElement('div');
+      p.className = settles ? 'dawn-petal settles' : 'dawn-petal';
+
+      var w   = settles ? (9 + Math.random() * 13) : (7 + Math.random() * 9);
+      var h   = w * (1.4 + Math.random() * 0.5);
+      var dur = settles
+        ? (7 + Math.random() * 7)      // 7–14s to settle
+        : (3 + Math.random() * 2.5);   // 3–5.5s to rise off-screen
+      var spinDir = Math.random() > 0.5 ? 1 : -1;
+      var spin    = spinDir * (60 + Math.random() * 220);
+      var r0      = (Math.random() * 360).toFixed(0);
+      var sx      = ((Math.random() - 0.5) * 120).toFixed(1) + 'px';
+      var sx2     = ((Math.random() - 0.5) * 80).toFixed(1)  + 'px';
+      var sx3     = ((Math.random() - 0.5) * 50).toFixed(1)  + 'px';
+
+      var styles = [
+        'width:'  + w.toFixed(1) + 'px',
+        'height:' + h.toFixed(1) + 'px',
+        'left:'   + (Math.random() * 100).toFixed(1) + '%',
+        '--dur:'  + dur.toFixed(2) + 's',
+        '--r0:'   + r0 + 'deg',
+        '--r1:'   + (parseFloat(r0) + spin * 0.25).toFixed(0) + 'deg',
+        '--r2:'   + (parseFloat(r0) + spin * 0.50).toFixed(0) + 'deg',
+        '--r3:'   + (parseFloat(r0) + spin * 0.75).toFixed(0) + 'deg',
+        '--r4:'   + (parseFloat(r0) + spin).toFixed(0)        + 'deg',
+        '--sx:'   + sx, '--sx2:' + sx2, '--sx3:' + sx3
+      ];
+
+      if (settles) {
+        // Peak height: low settlers cluster near bottom, later ones float higher
+        var peakVh = (12 + Math.random() * 58).toFixed(1);
+        styles.push('--peak:-' + peakVh + 'vh');
+        // Settlers linger then slowly fade
+        var lifeMs = (dur + 18 + Math.random() * 20) * 1000;
         setTimeout(function() {
-          var p = document.createElement('div');
-          p.className = 'dawn-petal';
-          var w = 7 + Math.random() * 9;
-          var h = w * (1.4 + Math.random() * 0.5);
-          var dur = (3.2 + Math.random() * 2.8).toFixed(2) + 's';
-          var left = (Math.random() * 100).toFixed(1) + '%';
-          var spinDir = Math.random() > 0.5 ? 1 : -1;
-          var spin = spinDir * (80 + Math.random() * 220);
-          var r0 = (Math.random() * 360).toFixed(0);
-          var sx  = ((Math.random() - 0.5) * 130).toFixed(1) + 'px';
-          var sx2 = ((Math.random() - 0.5) * 90).toFixed(1)  + 'px';
-          var sx3 = ((Math.random() - 0.5) * 60).toFixed(1)  + 'px';
-          p.style.cssText = [
-            'width:'  + w.toFixed(1) + 'px',
-            'height:' + h.toFixed(1) + 'px',
-            'left:'   + left,
-            '--dur:'  + dur,
-            '--r0:'   + r0 + 'deg',
-            '--r1:'   + (parseFloat(r0) + spin * 0.25).toFixed(0) + 'deg',
-            '--r2:'   + (parseFloat(r0) + spin * 0.50).toFixed(0) + 'deg',
-            '--r3:'   + (parseFloat(r0) + spin * 0.75).toFixed(0) + 'deg',
-            '--r4:'   + (parseFloat(r0) + spin).toFixed(0) + 'deg',
-            '--sx:'   + sx,
-            '--sx2:'  + sx2,
-            '--sx3:'  + sx3
-          ].join(';');
-          wrap.appendChild(p);
+          if (!p.parentNode) { active--; return; }
+          p.style.transition = 'opacity 4s ease-out';
+          p.style.opacity    = '0';
           setTimeout(function() {
             if (p.parentNode) p.parentNode.removeChild(p);
-          }, (parseFloat(dur) + 0.5) * 1000);
-        }, delay);
-      })(i);
+            active--;
+          }, 4000);
+        }, lifeMs);
+      } else {
+        styles.push('--rise:' + (105 + Math.random() * 15).toFixed(0) + 'vh');
+        setTimeout(function() {
+          if (p.parentNode) p.parentNode.removeChild(p);
+          active--;
+        }, (dur + 0.5) * 1000);
+      }
+
+      p.style.cssText = styles.join(';');
+      wrap.appendChild(p);
     }
-    setTimeout(function() {
-      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-    }, 16000);
+
+    function spawnBatch() {
+      elapsed += spawnRate / 1000;
+      // Batch size grows from 1 up to 10 over time
+      var batch = Math.min(10, Math.ceil(1 + elapsed / 7));
+      for (var i = 0; i < batch; i++) {
+        (function(ii) {
+          setTimeout(spawnOne, ii * (spawnRate / batch) + Math.random() * 80);
+        })(i);
+      }
+      spawnRate = Math.max(110, spawnRate - 5); // slowly accelerates
+      setTimeout(spawnBatch, spawnRate);
+    }
+
+    spawnBatch();
   }
 
   function setupPetalObserver() {
@@ -23409,7 +23451,7 @@ document.addEventListener('keydown', function(e) {
     petalObserver = new IntersectionObserver(function(entries) {
       if (entries[0].isIntersecting && !fired) {
         fired = true;
-        spawnPetals();
+        startPetalStorm();
         petalObserver.disconnect();
         petalObserver = null;
       }
@@ -24161,7 +24203,7 @@ Traveller, sleep!
 (set: $alba to (a: $alba1, $alba2, $alba3))
 (go-to: "White page")
 
-:: Dawn {"position":"1700,100","size":"100,100"}
+:: Dawn [dawn-end] {"position":"1700,100","size":"100,100"}
 <div class="ending-pane">Here you are, on Dean Street again, watching the light as it peels through its changes. First cobalt; then the brassic crown that grows rich and gilded; then the antiseptic mint while the corolla rises and blooms through the lobes (frontal, parietal, temporal, occipital), the blue-blooded, hemorrhaging sky. Then the cool white quivering lip of the dawn's bells and flowers when they're trying to settle.
 
 You have been awake for so long.
@@ -32199,6 +32241,52 @@ tw-passage[tags~="black-page"] .enchantment-link {
   border-bottom-color: rgba(232,228,216,0.3) !important;
 }
 
+/* ===== DAWN END PAGE ===== */
+tw-story[tags~="dawn-end"] {
+  background:
+    linear-gradient(175deg,
+      #1a1828 0%,
+      #2e2244 18%,
+      #6a2c50 38%,
+      #b85040 56%,
+      #e08040 72%,
+      #f0b060 84%,
+      #f8d888 100%
+    ) !important;
+  background-attachment: fixed !important;
+  color: #f0e4d0 !important;
+}
+tw-story[tags~="dawn-end"] .ending-pane {
+  background: rgba(18, 12, 24, 0.52);
+  box-shadow:
+    0 24px 90px rgba(180, 80, 64, 0.25),
+    0 0 60px rgba(240, 128, 64, 0.12),
+    inset 0 0 40px rgba(0,0,0,0.2);
+  color: #f0e4d0;
+}
+tw-story[tags~="dawn-end"] .ending-pane::before {
+  background: linear-gradient(135deg,
+    rgba(240,180,80,0.06) 0%,
+    rgba(200,80,60,0.04) 50%,
+    rgba(240,180,80,0.06) 100%
+  ) !important;
+}
+tw-story[tags~="dawn-end"] .ending-finis {
+  color: #f4c870;
+  background: linear-gradient(to right, transparent, rgba(240,160,64,0.4), transparent) top/60% 1px no-repeat;
+}
+tw-story[tags~="dawn-end"] .alba-final {
+  background: linear-gradient(180deg,
+    rgba(180,80,40,0.18) 0%,
+    rgba(200,100,40,0.12) 50%,
+    rgba(180,80,40,0.18) 100%
+  );
+  border-left-color: rgba(240,160,80,0.35);
+}
+tw-story[tags~="dawn-end"] .alba-final em {
+  color: #f0d0a0;
+}
+
 /* ===== DAWN PETALS ===== */
 .dawn-petal-wrap {
   position: fixed;
@@ -32211,17 +32299,28 @@ tw-passage[tags~="black-page"] .enchantment-link {
   position: absolute;
   bottom: -30px;
   border-radius: 50% 40% 60% 50% / 60% 50% 50% 40%;
-  background: rgba(255, 253, 248, 0.88);
-  box-shadow: 0 0 6px rgba(255, 250, 235, 0.6), 0 0 2px rgba(255, 255, 255, 0.9);
+  background: rgba(255, 248, 235, 0.82);
+  box-shadow: 0 0 8px rgba(255, 220, 160, 0.5), 0 0 2px rgba(255, 255, 255, 0.7);
   animation: dawnPetalRise var(--dur, 4s) ease-in-out forwards;
 }
 @keyframes dawnPetalRise {
-  0%   { transform: translateY(0)      translateX(0)          rotate(var(--r0)); opacity: 0; }
+  0%   { transform: translateY(0)                               translateX(0)          rotate(var(--r0)); opacity: 0; }
   6%   { opacity: 0.85; }
-  30%  { transform: translateY(-28vh)  translateX(var(--sx))  rotate(var(--r1)); opacity: 0.85; }
-  60%  { transform: translateY(-58vh)  translateX(0px)        rotate(var(--r2)); opacity: 0.7; }
-  85%  { transform: translateY(-86vh)  translateX(var(--sx2)) rotate(var(--r3)); opacity: 0.35; }
-  100% { transform: translateY(-110vh) translateX(var(--sx3)) rotate(var(--r4)); opacity: 0; }
+  30%  { transform: translateY(calc(var(--rise,110vh) * -0.26)) translateX(var(--sx))  rotate(var(--r1)); opacity: 0.85; }
+  60%  { transform: translateY(calc(var(--rise,110vh) * -0.55)) translateX(0px)        rotate(var(--r2)); opacity: 0.7; }
+  85%  { transform: translateY(calc(var(--rise,110vh) * -0.80)) translateX(var(--sx2)) rotate(var(--r3)); opacity: 0.35; }
+  100% { transform: translateY(calc(var(--rise,110vh) * -1))    translateX(var(--sx3)) rotate(var(--r4)); opacity: 0; }
+}
+@keyframes dawnPetalSettle {
+  0%   { transform: translateY(0)                                translateX(0)          rotate(var(--r0)); opacity: 0; }
+  8%   { opacity: 0.72; }
+  55%  { transform: translateY(var(--peak,-35vh))                translateX(var(--sx))  rotate(var(--r2)); opacity: 0.68; }
+  78%  { transform: translateY(calc(var(--peak,-35vh) + 10px))   translateX(var(--sx2)) rotate(var(--r3)); opacity: 0.62; }
+  100% { transform: translateY(calc(var(--peak,-35vh) - 5px))    translateX(var(--sx3)) rotate(var(--r4)); opacity: 0.55; }
+}
+.dawn-petal.settles {
+  animation-name: dawnPetalSettle;
+  animation-timing-function: ease-out;
 }
 
 /* ===== ENDING GLASS VINES ===== */

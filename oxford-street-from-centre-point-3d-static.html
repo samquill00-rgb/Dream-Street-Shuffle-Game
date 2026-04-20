@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Oxford Street from Centre Point — Dawn, London, 1973</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #08101c; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(232,170,110,0.55);
+  pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(210,190,160,0.42);
+  letter-spacing: 2px; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="datestamp">23.11.73</div>
+<div id="location">OXFORD STREET FROM CENTRE POINT — LONDON</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+
+// ============================================================
+// HELPERS
+// ============================================================
+function makeCanvasTexture(w, h, drawFunc) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  drawFunc(cx, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+// Seeded pseudo-random so the city stays stable across reloads
+var seed = 1973;
+function rand() {
+  seed = (seed * 9301 + 49297) % 233280;
+  return seed / 233280;
+}
+
+// ============================================================
+// SCENE SETUP
+// ============================================================
+//
+// Camera sits on the roof of Centre Point (~height 100m in reality,
+// here at y = 34, since 1 unit ≈ 3m), looking roughly WEST-SOUTH-WEST
+// down Oxford Street. BT Tower (Post Office Tower in 1973) sits to
+// the right at about 800m NNW of Centre Point.
+//
+// Scene axis convention:
+//   +X  = East        -X = West
+//   +Z  = South       -Z = North
+//   Oxford Street runs from viewer (near, +Z) into distance (-Z, slightly -X)
+//   BT Tower sits to the NORTH, i.e. -Z, +X — "right of frame"
+//
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a2038);
+// Fog: slightly sulphurous grey-mauve — 1973 London air was still dirty
+// enough for a visible smog layer at dawn, blending toward the warmer
+// horizon. Picks up a brown-yellow cast from the Belt-of-Venus band.
+scene.fog = new THREE.FogExp2(0x5e4e58, 0.0048);
+
+var camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 900);
+// Roof of Centre Point — looking slightly down and forward
+camera.position.set(0, 34, 6);
+camera.lookAt(-6, 22, -90);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// DAWN SKY — gradient dome
+// ============================================================
+// Palette (top → horizon):
+//   deep indigo:  #0a1628
+//   steel blue:   #1a2b48
+//   dusty mauve:  #48384e
+//   rose/salmon:  #a06860
+//   peach glow:   #d69068
+//   warm gold:    #e0a474
+// WESTERN sky at dawn — sun is BEHIND the viewer (east), so this sky has:
+//   - cool blue zenith
+//   - cool blue/lilac mid-sky
+//   - a soft pink "Belt of Venus" band above the horizon
+//   - a darker muted horizon (Earth's shadow) with a slight warm kiss
+var skyTex = makeCanvasTexture(256, 512, function(cx, w, h) {
+  var grad = cx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0.00, '#0a1428');   // zenith — deep cool indigo
+  grad.addColorStop(0.25, '#152038');
+  grad.addColorStop(0.45, '#2a2e4a');   // cool slate-blue
+  grad.addColorStop(0.60, '#423856');   // cool mauve
+  grad.addColorStop(0.72, '#6a5070');   // soft pink-mauve (Belt of Venus begins)
+  grad.addColorStop(0.80, '#9a6878');   // rose pink band
+  grad.addColorStop(0.86, '#b07878');   // warmest point of Belt of Venus
+  grad.addColorStop(0.92, '#8c6070');   // darker again (Earth's shadow beneath)
+  grad.addColorStop(0.97, '#584858');
+  grad.addColorStop(1.00, '#423848');   // subdued horizon
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, w, h);
+  // Very faint warm kiss along the horizon line (sunlight scattered round)
+  var horizonKiss = cx.createLinearGradient(0, h * 0.94, 0, h);
+  horizonKiss.addColorStop(0, 'rgba(220, 140, 110, 0)');
+  horizonKiss.addColorStop(1, 'rgba(200, 130, 100, 0.12)');
+  cx.fillStyle = horizonKiss;
+  cx.fillRect(0, h * 0.94, w, h * 0.06);
+  // Scattered soft cloud bands across the upper sky
+  cx.fillStyle = 'rgba(30, 40, 60, 0.12)';
+  for (var cb = 0; cb < 6; cb++) {
+    var cy = h * (0.15 + Math.random() * 0.35);
+    cx.fillRect(0, cy, w, 3 + Math.random() * 8);
+  }
+  // Morning stars — pre-dawn field across the upper sky, fading down into
+  // the Belt of Venus. A few are bright (Venus-style) with a soft bloom.
+  for (var s = 0; s < 70; s++) {
+    var sx = Math.random() * w;
+    // Star density falls off as we descend toward the Belt of Venus band
+    var syFrac = Math.pow(Math.random(), 1.6) * 0.42;
+    var sy = syFrac * h;
+    var bright = Math.random();
+    // Faint field stars
+    if (bright < 0.85) {
+      var alpha = 0.35 + Math.random() * 0.35;
+      // Fade toward horizon
+      alpha *= (1 - syFrac / 0.42) * 0.9 + 0.1;
+      cx.fillStyle = 'rgba(240,240,255,' + alpha.toFixed(2) + ')';
+      var sr = 0.4 + Math.random() * 0.8;
+      cx.beginPath();
+      cx.arc(sx, sy, sr, 0, Math.PI * 2);
+      cx.fill();
+    } else {
+      // Brighter "morning star" — soft halo bloom
+      var bloom = cx.createRadialGradient(sx, sy, 0, sx, sy, 4);
+      bloom.addColorStop(0,    'rgba(255,255,250,1.0)');
+      bloom.addColorStop(0.25, 'rgba(230,230,250,0.55)');
+      bloom.addColorStop(0.60, 'rgba(200,210,240,0.18)');
+      bloom.addColorStop(1,    'rgba(180,200,240,0)');
+      cx.fillStyle = bloom;
+      cx.fillRect(sx - 4, sy - 4, 8, 8);
+      cx.fillStyle = 'rgba(255,255,255,1)';
+      cx.beginPath();
+      cx.arc(sx, sy, 0.9, 0, Math.PI * 2);
+      cx.fill();
+    }
+  }
+});
+var skyGeo = new THREE.SphereGeometry(500, 32, 20);
+var skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false });
+var sky = new THREE.Mesh(skyGeo, skyMat);
+scene.add(sky);
+
+// ============================================================
+// LIGHTING — looking WEST at dawn. Sun is behind the viewer in the
+// east (+Z direction in scene, because camera looks toward -Z).
+// Warm directional light therefore comes from BEHIND and kisses the
+// west-facing tops of the buildings and the top of BT Tower.
+// ============================================================
+// Ambient: cool blue-lilac — fills shadows with the sky colour
+scene.add(new THREE.AmbientLight(0x384868, 1.10));
+
+// Dawn sun — low, warm, behind the viewer (+Z). Slightly overhead so
+// the whole scene reads clearly, but still low-angle enough to feel dawn.
+var dawnLight = new THREE.DirectionalLight(0xffb080, 1.45);
+dawnLight.position.set(15, 28, 60);
+scene.add(dawnLight);
+
+// Stronger warm rim from directly behind camera — kisses the rooftops/tops
+var rimLight = new THREE.DirectionalLight(0xffa870, 0.95);
+rimLight.position.set(0, 22, 80);
+scene.add(rimLight);
+
+// Cool sky-fill from the west — picks up the sky colour on shadowed facades
+var skyFill = new THREE.DirectionalLight(0x8a9abe, 0.55);
+skyFill.position.set(-10, 20, -40);
+scene.add(skyFill);
+
+// ============================================================
+// MATERIALS — rooftops, brick, stucco, tarred flat roofs
+// ============================================================
+
+// London brick — heavily sooted. Pre-1956 Clean Air Act accumulated grime,
+// coal smoke staining, blackened at the top and streaked down.
+function makeBrickTexture(variantHue) {
+  return makeCanvasTexture(128, 128, function(cx, w, h) {
+    // Darker base palette — century of soot baked in
+    var base = '#4a3428';
+    if (variantHue === 'pale')   base = '#5e5046';   // once-cream stucco gone grey-brown
+    if (variantHue === 'yellow') base = '#6a5a42';   // London stock brick, sooted
+    if (variantHue === 'sooty')  base = '#262018';   // almost black
+    cx.fillStyle = base;
+    cx.fillRect(0, 0, w, h);
+    // Brick rows
+    var rowH = 10;
+    for (var y = 0; y < h; y += rowH) {
+      var offset = (y / rowH) % 2 === 0 ? 0 : 14;
+      for (var x = -14; x < w; x += 28) {
+        var bx = x + offset;
+        cx.fillStyle = 'rgba(0,0,0,' + (0.15 + Math.random() * 0.22) + ')';
+        cx.fillRect(bx + 26, y, 2, rowH);
+        cx.fillRect(bx, y + rowH - 1, 28, 1);
+      }
+    }
+    // Individual brick tone variation — some bricks darker, some lighter
+    for (var by = 0; by < h; by += rowH) {
+      for (var bx = -14; bx < w; bx += 28) {
+        if (Math.random() < 0.35) {
+          var darkness = 0.08 + Math.random() * 0.28;
+          cx.fillStyle = 'rgba(0,0,0,' + darkness + ')';
+          var off = (by / rowH) % 2 === 0 ? 0 : 14;
+          cx.fillRect(bx + off, by, 26, rowH - 1);
+        }
+      }
+    }
+    // Heavy top-down soot — especially concentrated at the top third
+    var soot = cx.createLinearGradient(0, 0, 0, h);
+    soot.addColorStop(0,    'rgba(15,12,8,0.70)');
+    soot.addColorStop(0.25, 'rgba(18,14,10,0.40)');
+    soot.addColorStop(0.55, 'rgba(20,16,12,0.20)');
+    soot.addColorStop(1,    'rgba(22,18,14,0.10)');
+    cx.fillStyle = soot;
+    cx.fillRect(0, 0, w, h);
+    // Vertical soot streaks running down from the top — rain-washed grime
+    cx.strokeStyle = 'rgba(10,8,6,0.35)';
+    for (var rs = 0; rs < 14; rs++) {
+      cx.lineWidth = 1 + Math.random() * 2.2;
+      cx.beginPath();
+      var rx = Math.random() * w;
+      cx.moveTo(rx, 0);
+      var segs = 6 + Math.floor(Math.random() * 6);
+      for (var ss = 1; ss <= segs; ss++) {
+        rx += (Math.random() - 0.5) * 3;
+        cx.lineTo(rx, (h * ss) / segs);
+      }
+      cx.stroke();
+    }
+    // Occasional darker smudge patches
+    for (var pp = 0; pp < 6; pp++) {
+      var px = Math.random() * w;
+      var py = Math.random() * h;
+      var pr = 6 + Math.random() * 14;
+      var grad = cx.createRadialGradient(px, py, 0, px, py, pr);
+      grad.addColorStop(0, 'rgba(8,6,4,0.35)');
+      grad.addColorStop(1, 'rgba(8,6,4,0)');
+      cx.fillStyle = grad;
+      cx.beginPath();
+      cx.arc(px, py, pr, 0, Math.PI * 2);
+      cx.fill();
+    }
+  });
+}
+var brickRed    = new THREE.MeshStandardMaterial({ map: makeBrickTexture('red'), roughness: 0.95 });
+var brickYellow = new THREE.MeshStandardMaterial({ map: makeBrickTexture('yellow'), roughness: 0.95 });
+var brickPale   = new THREE.MeshStandardMaterial({ map: makeBrickTexture('pale'), roughness: 0.9 });
+var brickSooty  = new THREE.MeshStandardMaterial({ map: makeBrickTexture('sooty'), roughness: 0.95 });
+
+// Stucco / painted plaster — was once Portland-stone cream; a hundred
+// years of coal smoke has turned it grey-brown, blackening at the top
+// and streaking downward.
+var stuccoTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  cx.fillStyle = '#8a7e6e';
+  cx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 450; i++) {
+    cx.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.18) + ')';
+    cx.fillRect(Math.random() * w, Math.random() * h, 1, 1);
+  }
+  // Heavy top-concentrated soot shading
+  var soot = cx.createLinearGradient(0, 0, 0, h);
+  soot.addColorStop(0,    'rgba(18,14,10,0.75)');
+  soot.addColorStop(0.25, 'rgba(22,18,14,0.45)');
+  soot.addColorStop(0.6,  'rgba(30,24,18,0.22)');
+  soot.addColorStop(1,    'rgba(35,28,20,0.08)');
+  cx.fillStyle = soot;
+  cx.fillRect(0, 0, w, h);
+  // Black vertical streaks
+  cx.strokeStyle = 'rgba(10,8,6,0.40)';
+  for (var rs = 0; rs < 10; rs++) {
+    cx.lineWidth = 1 + Math.random() * 2.5;
+    cx.beginPath();
+    var rx = Math.random() * w;
+    cx.moveTo(rx, 0);
+    for (var ss = 1; ss <= 6; ss++) {
+      rx += (Math.random() - 0.5) * 4;
+      cx.lineTo(rx, (h * ss) / 6);
+    }
+    cx.stroke();
+  }
+  // Peeling paint / damp patches
+  for (var pp = 0; pp < 4; pp++) {
+    var px = Math.random() * w, py = Math.random() * h;
+    var pr = 6 + Math.random() * 12;
+    var grad = cx.createRadialGradient(px, py, 0, px, py, pr);
+    grad.addColorStop(0, 'rgba(40,32,22,0.4)');
+    grad.addColorStop(1, 'rgba(40,32,22,0)');
+    cx.fillStyle = grad;
+    cx.beginPath();
+    cx.arc(px, py, pr, 0, Math.PI * 2);
+    cx.fill();
+  }
+});
+var stuccoMat = new THREE.MeshStandardMaterial({ map: stuccoTex, roughness: 0.9 });
+
+// Tarred flat roof — dark, oil-stained
+var tarTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  cx.fillStyle = '#2a2620';
+  cx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 300; i++) {
+    cx.fillStyle = 'rgba(' + (20 + Math.random()*20) + ',' + (18 + Math.random()*18) + ',' + (14 + Math.random()*14) + ',0.6)';
+    cx.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random()*2, 1);
+  }
+});
+var tarMat = new THREE.MeshStandardMaterial({ map: tarTex, roughness: 0.9 });
+
+// Slate roof — dark Welsh slate, heavily sooted. Individual tiles vary
+// in tone from near-black to dark grey-green.
+var slateTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  cx.fillStyle = '#202428';
+  cx.fillRect(0, 0, w, h);
+  // Slate tiles with tonal variation
+  for (var y = 0; y < h; y += 8) {
+    for (var x = 0; x < w; x += 12) {
+      var offset = (y / 8) % 2 === 0 ? 0 : 6;
+      // Tile base — subtly different tone per tile
+      var tileTone = 32 + Math.random() * 24;
+      cx.fillStyle = 'rgb(' + tileTone + ',' + (tileTone+2) + ',' + (tileTone+4) + ')';
+      cx.fillRect(x + offset, y, 12, 8);
+      // Tile edge shadow
+      cx.fillStyle = 'rgba(0,0,0,0.45)';
+      cx.fillRect(x + offset, y + 7, 12, 1);
+      cx.fillStyle = 'rgba(0,0,0,0.3)';
+      cx.fillRect(x + offset + 11, y, 1, 8);
+    }
+  }
+  // Soot dustings across the roof
+  for (var s = 0; s < 60; s++) {
+    cx.fillStyle = 'rgba(10,8,6,' + (0.2 + Math.random() * 0.3) + ')';
+    cx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 5, 2 + Math.random() * 4);
+  }
+});
+slateTex.wrapS = THREE.RepeatWrapping;
+slateTex.wrapT = THREE.RepeatWrapping;
+var slateMat = new THREE.MeshStandardMaterial({ map: slateTex, roughness: 0.75, side: THREE.DoubleSide });
+
+// Warm-lit window glass — early-morning offices, kitchens, cabs
+var warmWindow = new THREE.MeshStandardMaterial({
+  color: 0x1a0c04, roughness: 0.3,
+  emissive: 0xe0a058, emissiveIntensity: 0.85, fog: true
+});
+// Cold fluorescent window — a few stair halls, early workers
+var coldWindow = new THREE.MeshStandardMaterial({
+  color: 0x080c10, roughness: 0.3,
+  emissive: 0x8090a8, emissiveIntensity: 0.28, fog: true
+});
+// Dark window reflecting dawn sky
+var darkWindow = new THREE.MeshStandardMaterial({
+  color: 0x14202e, roughness: 0.4, metalness: 0.3
+});
+
+// Asphalt — Oxford Street surface. Designed as a single repeating tile:
+// centred dashed line + two solid edge lines. The texture is repeated down
+// the length of the street so the dashes read at the right scale.
+var asphaltTex = makeCanvasTexture(128, 256, function(cx, w, h) {
+  // Much darker base — wet, sooted 1973 tarmac
+  cx.fillStyle = '#15151a';
+  cx.fillRect(0, 0, w, h);
+  // Noise — subtle, varying tones, keeps it from reading flat
+  for (var i = 0; i < 500; i++) {
+    var n = 18 + Math.random() * 14;
+    cx.fillStyle = 'rgba(' + n + ',' + (n-1) + ',' + (n+3) + ',0.75)';
+    cx.fillRect(Math.random()*w, Math.random()*h, 1+Math.random()*2, 1);
+  }
+  // Patchy puddle / grime overlays — push the darker end down
+  for (var pg = 0; pg < 10; pg++) {
+    cx.fillStyle = 'rgba(6,6,10,' + (0.25 + Math.random()*0.35) + ')';
+    cx.beginPath();
+    cx.ellipse(Math.random()*w, Math.random()*h, 12+Math.random()*22, 4+Math.random()*10, Math.random()*Math.PI, 0, Math.PI*2);
+    cx.fill();
+  }
+  // Edge lines — faded, broken, dull yellow-white (period paint weathered)
+  cx.fillStyle = 'rgba(150,140,110,0.28)';
+  for (var dy2 = 0; dy2 < h; dy2 += 32) {
+    if (Math.random() < 0.72) {
+      cx.fillRect(5, dy2, 2, 22 + Math.random()*6);
+      cx.fillRect(w - 7, dy2, 2, 22 + Math.random()*6);
+    }
+  }
+  // Faded dashed centre line — short, dim
+  for (var dy = 0; dy < h; dy += 48) {
+    cx.fillStyle = 'rgba(140,130,100,' + (0.22 + Math.random()*0.15) + ')';
+    cx.fillRect(w/2 - 1.5, dy + 4, 3, 14);
+  }
+  // Dark oil streaks down the lanes
+  for (var os = 0; os < 4; os++) {
+    cx.fillStyle = 'rgba(0,0,0,0.30)';
+    var ox = 22 + Math.random() * (w - 44);
+    cx.fillRect(ox, 0, 1 + Math.random()*2, h);
+  }
+});
+asphaltTex.wrapS = THREE.RepeatWrapping;
+asphaltTex.wrapT = THREE.RepeatWrapping;
+asphaltTex.repeat.set(1, 30);   // dashes repeat down the length
+var asphaltMat = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.95 });
+
+// Pavement stone
+var paveTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  cx.fillStyle = '#54524e';
+  cx.fillRect(0, 0, w, h);
+  cx.strokeStyle = 'rgba(20,18,14,0.5)';
+  cx.lineWidth = 1;
+  for (var gx = 0; gx <= w; gx += 32) {
+    cx.beginPath(); cx.moveTo(gx, 0); cx.lineTo(gx, h); cx.stroke();
+  }
+  for (var gy = 0; gy <= h; gy += 32) {
+    cx.beginPath(); cx.moveTo(0, gy); cx.lineTo(w, gy); cx.stroke();
+  }
+});
+var paveMat = new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.9 });
+
+// BT Tower concrete — mid-grey, slightly warmer than Centre Point
+var btConcreteTex = makeCanvasTexture(256, 256, function(cx, w, h) {
+  cx.fillStyle = '#a8a49c';
+  cx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 2000; i++) {
+    var tone = 140 + Math.random() * 50;
+    cx.fillStyle = 'rgba(' + tone + ',' + tone + ',' + (tone-8) + ',0.3)';
+    cx.fillRect(Math.random()*w, Math.random()*h, 1 + Math.random()*1.5, 1 + Math.random()*1.5);
+  }
+  // Vertical weather streaking
+  for (var vs = 0; vs < 20; vs++) {
+    cx.strokeStyle = 'rgba(60, 55, 48, 0.08)';
+    cx.lineWidth = 1;
+    cx.beginPath();
+    var vx = Math.random() * w;
+    cx.moveTo(vx, 0);
+    cx.lineTo(vx + (Math.random()-0.5)*10, h);
+    cx.stroke();
+  }
+});
+var btConcreteMat = new THREE.MeshStandardMaterial({ map: btConcreteTex, roughness: 0.78 });
+
+// BT Tower window band — the restaurant and observation deck
+var btWindowTex = makeCanvasTexture(512, 32, function(cx, w, h) {
+  cx.fillStyle = '#0a1420';
+  cx.fillRect(0, 0, w, h);
+  // Vertical window mullions
+  for (var vx = 0; vx < w; vx += 6) {
+    cx.fillStyle = 'rgba(120,120,110,0.6)';
+    cx.fillRect(vx, 0, 1, h);
+  }
+  // Reflection gradient — catches the dawn
+  var r = cx.createLinearGradient(0, 0, 0, h);
+  r.addColorStop(0, 'rgba(180, 120, 90, 0.4)');
+  r.addColorStop(0.5, 'rgba(80, 60, 70, 0.15)');
+  r.addColorStop(1, 'rgba(20, 26, 36, 0.05)');
+  cx.fillStyle = r;
+  cx.fillRect(0, 0, w, h);
+});
+var btWindowMat = new THREE.MeshStandardMaterial({
+  map: btWindowTex, roughness: 0.25, metalness: 0.55,
+  emissive: 0x301008, emissiveIntensity: 0.35
+});
+
+// ============================================================
+// GROUND — streets-level ground plane (mostly hidden by buildings)
+// ============================================================
+var ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(1200, 1200),
+  new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 0.95 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.2;
+scene.add(ground);
+
+// ============================================================
+// OXFORD STREET — the central avenue
+// ============================================================
+// Runs from camera (+Z) far into the distance (-Z), angled slightly west.
+// We'll model it as a rotated rectangle with painted markings.
+//
+// Centre Point is at the east end of Oxford St; the road curves just slightly
+// away to the west. We'll angle the street by ~6 degrees toward -X.
+var STREET_ANGLE = 0.06;   // radians — matches camera view-line (slight west lean into distance)
+var STREET_LEN   = 600;
+var STREET_WIDTH = 10;
+
+var street = new THREE.Mesh(
+  new THREE.PlaneGeometry(STREET_WIDTH, STREET_LEN),
+  asphaltMat
+);
+street.rotation.x = -Math.PI / 2;
+street.rotation.z = STREET_ANGLE;
+// Centre of street offset so it starts just west of camera
+street.position.set(
+  -4 - Math.sin(STREET_ANGLE) * STREET_LEN * 0.5,
+  0.02,
+  -STREET_LEN / 2 + 10
+);
+scene.add(street);
+
+// Pavements either side of Oxford Street
+function addPavement(offset) {
+  var pv = new THREE.Mesh(
+    new THREE.PlaneGeometry(4, STREET_LEN),
+    paveMat
+  );
+  pv.rotation.x = -Math.PI / 2;
+  pv.rotation.z = STREET_ANGLE;
+  var cx = Math.cos(STREET_ANGLE), sx = Math.sin(STREET_ANGLE);
+  pv.position.set(
+    -4 - sx * STREET_LEN * 0.5 + cx * offset,
+    0.05,
+    -STREET_LEN / 2 + 10 - sx * offset
+  );
+  scene.add(pv);
+}
+addPavement( STREET_WIDTH/2 + 2);
+addPavement(-STREET_WIDTH/2 - 2);
+
+// Zebra crossings — a couple spaced down Oxford Street for visual rhythm
+function addZebraCrossing(along) {
+  var crossingTex = makeCanvasTexture(64, 32, function(cx, w, h) {
+    cx.fillStyle = '#15151a';
+    cx.fillRect(0, 0, w, h);
+    for (var st = 0; st < 6; st++) {
+      // Weathered, muted — not the stark white of a new crossing
+      cx.fillStyle = 'rgba(150,140,110,' + (0.28 + Math.random()*0.12) + ')';
+      cx.fillRect(st * 11 + 2, 2, 7, h - 4);
+      // Soot streaks across
+      cx.fillStyle = 'rgba(0,0,0,' + (0.20 + Math.random()*0.15) + ')';
+      cx.fillRect(st * 11 + 2, 2 + Math.random()*(h-6), 7, 1 + Math.random()*2);
+    }
+  });
+  var cMat = new THREE.MeshStandardMaterial({ map: crossingTex, roughness: 0.85 });
+  var crossing = new THREE.Mesh(
+    new THREE.PlaneGeometry(STREET_WIDTH, 3),
+    cMat
+  );
+  crossing.rotation.x = -Math.PI / 2;
+  crossing.rotation.z = STREET_ANGLE;
+  var cosA = Math.cos(STREET_ANGLE), sinA = Math.sin(STREET_ANGLE);
+  var cx2 = -4 - Math.sin(STREET_ANGLE) * STREET_LEN * 0.5;
+  var cz2 = -STREET_LEN / 2 + 10;
+  crossing.position.set(
+    cx2 - sinA * (along - STREET_LEN/2),
+    0.04,
+    cz2 - cosA * (along - STREET_LEN/2)
+  );
+  scene.add(crossing);
+}
+addZebraCrossing(80);
+addZebraCrossing(180);
+addZebraCrossing(300);
+
+// Street lamps — sodium lamps on concrete columns, paired down both sides.
+// In 1973 these ran all the way down Oxford Street at ~25m spacing.
+var lampMat = new THREE.MeshStandardMaterial({ color: 0x2a2824, roughness: 0.85 });
+var lampBulbMat = new THREE.MeshStandardMaterial({
+  color: 0x3a2a10, emissive: 0xffc060, emissiveIntensity: 3.4, fog: true
+});
+function addStreetLamp(along, side) {
+  var cosA = Math.cos(STREET_ANGLE), sinA = Math.sin(STREET_ANGLE);
+  var cx2 = -4 - Math.sin(STREET_ANGLE) * STREET_LEN * 0.5;
+  var cz2 = -STREET_LEN / 2 + 10;
+  var baseX = cx2 + cosA * side - sinA * (along - STREET_LEN/2);
+  var baseZ = cz2 - sinA * side - cosA * (along - STREET_LEN/2);
+  // Column
+  var col = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.12, 3.0, 8),
+    lampMat
+  );
+  col.position.set(baseX, 1.5, baseZ);
+  scene.add(col);
+  // Arm reaching toward the street
+  var armDir = (side > 0) ? -1 : 1;
+  var arm = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.08, 0.08),
+    lampMat
+  );
+  arm.position.set(baseX + cosA * armDir * 0.5, 3.0, baseZ - sinA * armDir * 0.5);
+  arm.rotation.y = STREET_ANGLE;
+  scene.add(arm);
+  // Lamp head
+  var head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.35, 0.15, 0.2),
+    lampMat
+  );
+  head.position.set(baseX + cosA * armDir * 0.9, 2.92, baseZ - sinA * armDir * 0.9);
+  head.rotation.y = STREET_ANGLE;
+  scene.add(head);
+  // Glowing bulb
+  var bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 8, 6),
+    lampBulbMat
+  );
+  bulb.position.set(baseX + cosA * armDir * 0.9, 2.8, baseZ - sinA * armDir * 0.9);
+  scene.add(bulb);
+  // Sodium halo — a soft warm glow around the bulb. Reads strongly in fog.
+  var halo = new THREE.Sprite(haloMat);
+  halo.position.set(baseX + cosA * armDir * 0.9, 2.8, baseZ - sinA * armDir * 0.9);
+  halo.scale.set(5.2, 5.2, 1);
+  scene.add(halo);
+}
+
+// Sodium halo sprite — used by street lamps and shop fronts in fog.
+var haloTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  g.addColorStop(0,    'rgba(255, 235, 180, 0.92)');
+  g.addColorStop(0.15, 'rgba(255, 210, 130, 0.70)');
+  g.addColorStop(0.35, 'rgba(245, 175, 90, 0.42)');
+  g.addColorStop(0.65, 'rgba(210, 130, 60, 0.18)');
+  g.addColorStop(1,    'rgba(150, 90, 50, 0)');
+  cx.fillStyle = g;
+  cx.fillRect(0, 0, w, h);
+});
+var haloMat = new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, fog: true });
+
+for (var lp = 30; lp < STREET_LEN - 20; lp += 22) {
+  addStreetLamp(lp, STREET_WIDTH/2 + 1);
+  addStreetLamp(lp + 11, -(STREET_WIDTH/2 + 1));
+}
+
+// Shop fronts — warm ground-floor windows down both pavements. 1973
+// Oxford Street was a near-continuous line of lit shop displays, cafes
+// and window signs. Variety: mostly warm-lit, occasional cold fluorescent,
+// occasional closed/dark.
+var shopWarmMat = new THREE.MeshStandardMaterial({
+  color: 0x1a0f04, emissive: 0xe6a550, emissiveIntensity: 0.95, fog: true
+});
+var shopWarmDim = new THREE.MeshStandardMaterial({
+  color: 0x1a0f04, emissive: 0xc0803a, emissiveIntensity: 0.55, fog: true
+});
+var shopColdMat = new THREE.MeshStandardMaterial({
+  color: 0x080a10, emissive: 0x6078a0, emissiveIntensity: 0.40, fog: true
+});
+var shopDarkMat = new THREE.MeshStandardMaterial({
+  color: 0x0a0806, roughness: 0.85
+});
+var shopSignMat = new THREE.MeshStandardMaterial({ color: 0x1a1612, roughness: 0.85 });
+
+function addShopFront(along, side) {
+  var cosA = Math.cos(STREET_ANGLE), sinA = Math.sin(STREET_ANGLE);
+  var cx2 = -4 - Math.sin(STREET_ANGLE) * STREET_LEN * 0.5;
+  var cz2 = -STREET_LEN / 2 + 10;
+  var px = cx2 + cosA * side - sinA * (along - STREET_LEN/2);
+  var pz = cz2 - sinA * side - cosA * (along - STREET_LEN/2);
+  // Pick material — mostly warm, some dim, some cold, some closed
+  var r = rand();
+  var mat;
+  if      (r < 0.45) mat = shopWarmMat;
+  else if (r < 0.70) mat = shopWarmDim;
+  else if (r < 0.82) mat = shopColdMat;
+  else               mat = shopDarkMat;
+  // Shop window facing the street.
+  // Box default front = +Z. A shop on +side sits east of the street and must
+  // face west toward the road; a shop on -side faces east. After the street's
+  // yaw, the correct rotation is STREET_ANGLE - sign(side) * PI/2.
+  var faceRot = STREET_ANGLE - (side > 0 ? 1 : -1) * Math.PI / 2;
+  var winW = 2.0 + rand() * 0.6;
+  var winH = 1.4 + rand() * 0.3;
+  var winY = 0.25 + winH/2;
+  var win = new THREE.Mesh(new THREE.BoxGeometry(winW, winH, 0.2), mat);
+  win.position.set(px, winY, pz);
+  win.rotation.y = faceRot;
+  scene.add(win);
+  // Fascia / sign board above the window
+  var sign = new THREE.Mesh(new THREE.BoxGeometry(winW, 0.35, 0.35), shopSignMat);
+  sign.position.set(px, winY + winH/2 + 0.2, pz);
+  sign.rotation.y = faceRot;
+  scene.add(sign);
+  // Warm spill halo for lit shops — helps them read through fog
+  if (mat === shopWarmMat || mat === shopWarmDim) {
+    var shopHalo = new THREE.Sprite(haloMat);
+    shopHalo.position.set(px, winY, pz);
+    shopHalo.scale.set(2.4, 1.8, 1);
+    scene.add(shopHalo);
+  }
+}
+
+// Line the pavement on both sides, staggered
+for (var sp = 8; sp < STREET_LEN - 10; sp += 2.6) {
+  addShopFront(sp,              STREET_WIDTH/2 + 4);
+  addShopFront(sp + 1.3,       -(STREET_WIDTH/2 + 4));
+}
+
+// ============================================================
+// ROOFTOP CITY — procedural London rooftops around Oxford Street
+// ============================================================
+//
+// We generate a grid of buildings, skipping a strip where Oxford Street
+// runs and a zone where BT Tower will sit. Buildings get random heights,
+// roof types (pitched slate, flat tar), chimneys, dormers, window bands.
+//
+// Far-distance buildings get simplified to flat blocks for performance.
+//
+var buildingsGroup = new THREE.Group();
+scene.add(buildingsGroup);
+
+function inOxfordStreet(x, z) {
+  // Rotate point into street-aligned space
+  var cx = Math.cos(-STREET_ANGLE), sx = Math.sin(STREET_ANGLE);
+  var tx = -4 - Math.sin(STREET_ANGLE) * STREET_LEN * 0.5;
+  var tz = -STREET_LEN / 2 + 10;
+  var lx = (x - tx) * cx - (z - tz) * sx;
+  return Math.abs(lx) < STREET_WIDTH / 2 + 4;
+}
+
+function isBTTowerZone(x, z) {
+  // Reserve a footprint for BT Tower
+  var BT_X = 68, BT_Z = -110;
+  var dx = x - BT_X, dz = z - BT_Z;
+  return (dx*dx + dz*dz) < 12*12;
+}
+
+// Cache of warm/cold window mesh refs so we can skip some for fewer draw calls
+function addBuilding(x, z, w, d, h, opts) {
+  opts = opts || {};
+  var body;
+  var pickBrick = opts.brick || [brickYellow, brickRed, brickPale, stuccoMat, brickSooty][Math.floor(rand()*5)];
+
+  // Body
+  body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), pickBrick);
+  body.position.set(x, h/2, z);
+  buildingsGroup.add(body);
+
+  // Roof — pitched slate is the dominant London rooftop.
+  // Flat tarred roofs are reserved for taller commercial/postwar blocks.
+  var pitched = (h < 10) ? (rand() < 0.88) : (rand() < 0.25);
+  // Ridge orientation: randomised each building so the roofscape isn't
+  // a single aligned field. True/false for "ridge runs along z" vs "along x".
+  var ridgeAlongZ = rand() < 0.5;
+  if (pitched) {
+    var roofH = 1.6 + rand() * 1.6;  // steeper, more visible from above
+    var roofGeo = new THREE.BufferGeometry();
+    // Include a small eave overhang so the roof projects past the wall —
+    // gives the characteristic London silhouette and shadow line.
+    var overhang = 0.22;
+    var hx = w/2 + overhang, hz = d/2 + overhang;
+    var verts, uvs;
+    var uvK = 0.55;  // texture tiling: ~0.55 tiles per world metre
+    var slopeLen, ridgeLen;
+    if (ridgeAlongZ) {
+      // Ridge parallel to z-axis — gable ends face -x and +x
+      slopeLen = Math.sqrt(hx*hx + roofH*roofH);
+      ridgeLen = 2 * hz;
+      verts = new Float32Array([
+        // -x slope (tilted face)
+        -hx, 0,  hz,   -hx, 0, -hz,   0, roofH, -hz,
+        -hx, 0,  hz,    0, roofH, -hz,  0, roofH,  hz,
+        // +x slope
+         hx, 0,  hz,    0, roofH,  hz,   0, roofH, -hz,
+         hx, 0,  hz,    0, roofH, -hz,   hx, 0, -hz,
+        // gable ends
+        -hx, 0, -hz,    hx, 0, -hz,    0, roofH, -hz,
+        -hx, 0,  hz,    0, roofH,  hz,   hx, 0,  hz
+      ]);
+      uvs = new Float32Array([
+        // -x slope (U along ridge, V up the slope)
+        0,           0,
+        ridgeLen*uvK, 0,
+        ridgeLen*uvK, slopeLen*uvK,
+        0,           0,
+        ridgeLen*uvK, slopeLen*uvK,
+        0,           slopeLen*uvK,
+        // +x slope
+        0,           0,
+        0,           slopeLen*uvK,
+        ridgeLen*uvK, slopeLen*uvK,
+        0,           0,
+        ridgeLen*uvK, slopeLen*uvK,
+        ridgeLen*uvK, 0,
+        // -z gable
+        0,           0,
+        2*hx*uvK,    0,
+        hx*uvK,      roofH*uvK,
+        // +z gable
+        0,           0,
+        hx*uvK,      roofH*uvK,
+        2*hx*uvK,    0
+      ]);
+    } else {
+      // Ridge parallel to x-axis — gable ends face -z and +z
+      slopeLen = Math.sqrt(hz*hz + roofH*roofH);
+      ridgeLen = 2 * hx;
+      verts = new Float32Array([
+        // -z slope
+        -hx, 0, -hz,    hx, 0, -hz,    hx, roofH, 0,
+        -hx, 0, -hz,    hx, roofH, 0,  -hx, roofH, 0,
+        // +z slope
+        -hx, 0,  hz,   -hx, roofH, 0,   hx, roofH, 0,
+        -hx, 0,  hz,    hx, roofH, 0,   hx, 0,  hz,
+        // gable ends
+        -hx, 0, -hz,   -hx, 0,  hz,   -hx, roofH, 0,
+         hx, 0, -hz,    hx, roofH, 0,   hx, 0,  hz
+      ]);
+      uvs = new Float32Array([
+        // -z slope
+        0,           0,
+        ridgeLen*uvK, 0,
+        ridgeLen*uvK, slopeLen*uvK,
+        0,           0,
+        ridgeLen*uvK, slopeLen*uvK,
+        0,           slopeLen*uvK,
+        // +z slope
+        0,           0,
+        0,           slopeLen*uvK,
+        ridgeLen*uvK, slopeLen*uvK,
+        0,           0,
+        ridgeLen*uvK, slopeLen*uvK,
+        ridgeLen*uvK, 0,
+        // -x gable
+        0,           0,
+        2*hz*uvK,    0,
+        hz*uvK,      roofH*uvK,
+        // +x gable
+        0,           0,
+        hz*uvK,      roofH*uvK,
+        2*hz*uvK,    0
+      ]);
+    }
+    roofGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    roofGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    roofGeo.computeVertexNormals();
+    var roof = new THREE.Mesh(roofGeo, slateMat);
+    roof.position.set(x, h, z);
+    buildingsGroup.add(roof);
+
+    // Ridge cap — a raised course of tiles along the ridge line. Gives
+    // the roof a visible silhouette break instead of a bare peak.
+    var capGeo = new THREE.BoxGeometry(
+      ridgeAlongZ ? 0.42 : ridgeLen,
+      0.18,
+      ridgeAlongZ ? ridgeLen : 0.42
+    );
+    var ridgeCap = new THREE.Mesh(capGeo, brickSooty);
+    ridgeCap.position.set(x, h + roofH - 0.02, z);
+    buildingsGroup.add(ridgeCap);
+
+    // Eave fascia — a dark strip along the bottom edge of each slope.
+    // Just a thin box at the overhang line; reads as roof shadow from above.
+    var fasciaMat = new THREE.MeshStandardMaterial({ color: 0x1a1612, roughness: 0.9 });
+    var fasciaH = 0.12;
+    if (ridgeAlongZ) {
+      var fNeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, fasciaH, 2*hz), fasciaMat);
+      fNeg.position.set(x - hx + 0.09, h - fasciaH/2 + 0.05, z);
+      buildingsGroup.add(fNeg);
+      var fPos = new THREE.Mesh(new THREE.BoxGeometry(0.18, fasciaH, 2*hz), fasciaMat);
+      fPos.position.set(x + hx - 0.09, h - fasciaH/2 + 0.05, z);
+      buildingsGroup.add(fPos);
+    } else {
+      var fNeg2 = new THREE.Mesh(new THREE.BoxGeometry(2*hx, fasciaH, 0.18), fasciaMat);
+      fNeg2.position.set(x, h - fasciaH/2 + 0.05, z - hz + 0.09);
+      buildingsGroup.add(fNeg2);
+      var fPos2 = new THREE.Mesh(new THREE.BoxGeometry(2*hx, fasciaH, 0.18), fasciaMat);
+      fPos2.position.set(x, h - fasciaH/2 + 0.05, z + hz - 0.09);
+      buildingsGroup.add(fPos2);
+    }
+
+    // Chimney stacks — almost every London pitched roof has at least one.
+    // Stacks sit on the ridge line or at the gable ends.
+    var chimCount = (rand() < 0.9) ? (1 + Math.floor(rand() * 3)) : 0;
+    for (var ci = 0; ci < chimCount; ci++) {
+      var cw = 0.4 + rand() * 0.35;
+      var cH = 1.0 + rand() * 0.9;
+      var chim = new THREE.Mesh(
+        new THREE.BoxGeometry(cw, cH, cw * 1.3),
+        brickSooty
+      );
+      var chimX, chimZ;
+      if (ridgeAlongZ) {
+        chimX = x + (rand() - 0.5) * 0.3;
+        chimZ = z + (rand() - 0.5) * d * 0.85;
+      } else {
+        chimX = x + (rand() - 0.5) * w * 0.85;
+        chimZ = z + (rand() - 0.5) * 0.3;
+      }
+      chim.position.set(chimX, h + roofH * 0.9 + cH/2 - 0.1, chimZ);
+      buildingsGroup.add(chim);
+      // Chimney pots — the distinctive London terracotta cluster
+      var potCount = 2 + Math.floor(rand()*3);
+      for (var pc = 0; pc < potCount; pc++) {
+        var pot = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.08, 0.1, 0.32, 6),
+          new THREE.MeshStandardMaterial({ color: 0x6a3828, roughness: 0.85 })
+        );
+        var offAlong = (pc - (potCount-1)/2) * 0.22;
+        pot.position.set(
+          chimX + offAlong * (ridgeAlongZ ? 0 : 1),
+          chim.position.y + cH/2 + 0.16,
+          chimZ + offAlong * (ridgeAlongZ ? 1 : 0)
+        );
+        buildingsGroup.add(pot);
+      }
+    }
+
+    // Occasional dormer window poking through the slate
+    if (rand() < 0.25 && h > 5) {
+      var dormerMat = (rand() < 0.5) ? warmWindow : darkWindow;
+      var dormer = new THREE.Mesh(
+        new THREE.BoxGeometry(0.7, 0.8, 0.7),
+        stuccoMat
+      );
+      var dpx = ridgeAlongZ ? (x + (rand() < 0.5 ? -hx : hx) * 0.6) : (x + (rand()-0.5) * w * 0.5);
+      var dpz = ridgeAlongZ ? (z + (rand()-0.5) * d * 0.5) : (z + (rand() < 0.5 ? -hz : hz) * 0.6);
+      dormer.position.set(dpx, h + roofH * 0.35, dpz);
+      buildingsGroup.add(dormer);
+      var dormerGlass = new THREE.Mesh(
+        new THREE.BoxGeometry(0.45, 0.45, 0.06),
+        dormerMat
+      );
+      dormerGlass.position.set(dpx, h + roofH * 0.35, dpz + 0.38);
+      buildingsGroup.add(dormerGlass);
+    }
+  } else {
+    // Flat tarred roof
+    var flat = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.3, d),
+      tarMat
+    );
+    flat.position.set(x, h + 0.15, z);
+    buildingsGroup.add(flat);
+    // Parapet
+    var parW = 0.25;
+    var parColor = rand() < 0.4 ? brickYellow : stuccoMat;
+    var pN = new THREE.Mesh(new THREE.BoxGeometry(w, 0.6, parW), parColor);
+    pN.position.set(x, h + 0.3, z - d/2 + parW/2); buildingsGroup.add(pN);
+    var pS = new THREE.Mesh(new THREE.BoxGeometry(w, 0.6, parW), parColor);
+    pS.position.set(x, h + 0.3, z + d/2 - parW/2); buildingsGroup.add(pS);
+    var pE = new THREE.Mesh(new THREE.BoxGeometry(parW, 0.6, d), parColor);
+    pE.position.set(x + w/2 - parW/2, h + 0.3, z); buildingsGroup.add(pE);
+    var pW = new THREE.Mesh(new THREE.BoxGeometry(parW, 0.6, d), parColor);
+    pW.position.set(x - w/2 + parW/2, h + 0.3, z); buildingsGroup.add(pW);
+    // Roof clutter: vent stack, water tank
+    if (rand() < 0.6) {
+      var tank = new THREE.Mesh(
+        new THREE.BoxGeometry(1 + rand()*1.5, 1 + rand(), 1 + rand()*1.2),
+        brickSooty
+      );
+      tank.position.set(
+        x + (rand()-0.5)*w*0.5,
+        h + 0.8,
+        z + (rand()-0.5)*d*0.5
+      );
+      buildingsGroup.add(tank);
+    }
+    if (rand() < 0.35) {
+      var vent = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.18, 0.8, 8),
+        new THREE.MeshStandardMaterial({ color: 0x3a342c, roughness: 0.8 })
+      );
+      vent.position.set(
+        x + (rand()-0.5)*w*0.6,
+        h + 0.6,
+        z + (rand()-0.5)*d*0.6
+      );
+      buildingsGroup.add(vent);
+    }
+  }
+
+  // Windows — rows of small lit/unlit panes on the visible faces
+  var storeyH = 2.2;
+  var storeys = Math.max(1, Math.floor((h - 0.5) / storeyH));
+  var winsPerFace = Math.max(1, Math.floor(w / 1.4));
+  for (var st = 0; st < storeys; st++) {
+    var winY = 0.8 + st * storeyH;
+    for (var wi = 0; wi < winsPerFace; wi++) {
+      var winX = -w/2 + 0.7 + wi * (w / winsPerFace);
+      // Front face (+Z) — facing camera
+      var r1 = rand();
+      var wmat1 = r1 < 0.08 ? warmWindow : (r1 < 0.13 ? coldWindow : darkWindow);
+      var win1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.06), wmat1);
+      win1.position.set(x + winX, winY, z + d/2 + 0.03);
+      buildingsGroup.add(win1);
+    }
+    // A handful of windows on the +X face (visible on right-facing buildings)
+    if (d > 3) {
+      var sideCount = Math.max(1, Math.floor(d / 1.4));
+      for (var wj = 0; wj < sideCount; wj++) {
+        if (rand() < 0.45) continue;   // skip many for perf
+        var winZ = -d/2 + 0.7 + wj * (d / sideCount);
+        var r2 = rand();
+        var wmat2 = r2 < 0.08 ? warmWindow : (r2 < 0.13 ? coldWindow : darkWindow);
+        var win2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.7), wmat2);
+        win2.position.set(x + w/2 + 0.03, winY, z + winZ);
+        buildingsGroup.add(win2);
+      }
+    }
+  }
+}
+
+// Generate the dense inner-city rooftops — 0 to 180 units out, grid cells
+// jittered heavily to break the Manhattan-grid feel. London is a medieval
+// patchwork, not a grid.
+var placedCount = 0;
+
+// Pre-generate a few "mews courtyard" gaps — larger voids where a mews or
+// small square would break up the grid
+var mewsGaps = [];
+for (var mg = 0; mg < 8; mg++) {
+  mewsGaps.push({
+    x: -80 + rand() * 160,
+    z: -180 + rand() * 200,
+    r: 4 + rand() * 5
+  });
+}
+
+for (var gx = -140; gx <= 140; gx += 5.2) {
+  for (var gz = -600; gz <= 42; gz += 5.2) {
+    // Skip Oxford Street corridor
+    if (inOxfordStreet(gx, gz)) continue;
+    // Skip BT Tower footprint
+    if (isBTTowerZone(gx, gz)) continue;
+    // Skip the immediate Centre Point footprint (the roof the camera is on)
+    if (Math.abs(gx) < 8 && Math.abs(gz) < 8) continue;
+    // Skip mews/courtyard gaps
+    var inMews = false;
+    for (var mgi = 0; mgi < mewsGaps.length; mgi++) {
+      var mgg = mewsGaps[mgi];
+      var ddx = gx - mgg.x, ddz = gz - mgg.z;
+      if (ddx*ddx + ddz*ddz < mgg.r * mgg.r) { inMews = true; break; }
+    }
+    if (inMews) continue;
+
+    // Distance from near-camera — affects skip rate and height cap so the
+    // far distance reads as a flat London terrace field, not a Midtown block.
+    var distFromCam = Math.sqrt(gx*gx + (gz - 40) * (gz - 40));
+    var skipProb = 0.24;
+    if (distFromCam > 120) skipProb = 0.38;
+    if (distFromCam > 260) skipProb = 0.50;
+    if (rand() < skipProb) continue;
+
+    // Heavy jitter so cells don't line up into grid rows
+    var jx = gx + (rand() - 0.5) * 3.2;
+    var jz = gz + (rand() - 0.5) * 3.2;
+    // Slightly wider, shallower footprints — London terrace proportions
+    var w = 3.4 + rand() * 3.8;
+    var d = 3.0 + rand() * 2.8;
+
+    // Height distribution — London 1973 was predominantly low-rise outside
+    // the City, but Oxford Street and the West End had plenty of 5-7 storey
+    // commercial blocks (Selfridges, M&S, John Lewis, postwar slabs) punctuating
+    // the terrace field.
+    // Near Oxford Street → commercial, so shift the distribution upward.
+    var cx2 = Math.cos(-STREET_ANGLE);
+    var sx2 = Math.sin(STREET_ANGLE);
+    var txA = -4 - Math.sin(STREET_ANGLE) * STREET_LEN * 0.5;
+    var tzA = -STREET_LEN / 2 + 10;
+    var lateral = Math.abs((gx - txA) * cx2 - (gz - tzA) * sx2);
+    var nearStreet = lateral < 18;
+    var hRoll = rand();
+    var h;
+    if (nearStreet) {
+      // Oxford Street frontage: mix of tall terraces and proper commercial blocks
+      if (hRoll < 0.40)       h = 4.5 + rand() * 2.5;   // 3 storey shop-and-flat
+      else if (hRoll < 0.72)  h = 7 + rand() * 3;        // 4-5 storey Edwardian
+      else if (hRoll < 0.92)  h = 11 + rand() * 4;       // 6-7 storey commercial block
+      else                    h = 16 + rand() * 7;       // big postwar slab (dept store, office)
+    } else {
+      // Streets off Oxford: dominant terrace with occasional larger blocks
+      if (hRoll < 0.62)       h = 3.2 + rand() * 2.8;   // 2-3 storey terrace (dominant)
+      else if (hRoll < 0.85)  h = 5.5 + rand() * 2.8;   // 4 storey Edwardian
+      else if (hRoll < 0.95)  h = 8 + rand() * 4;        // 5-7 storey commercial
+      else if (hRoll < 0.99)  h = 13 + rand() * 5;       // 6-8 storey block
+      else                    h = 18 + rand() * 6;       // rare landmark slab
+    }
+
+    // Far distance: gently ease heights down (but keep some blocks so the
+    // horizon has silhouette variety — a flat field alone reads as suburbia).
+    if (distFromCam > 220) h = Math.min(h, 9 + rand() * 4);
+    if (distFromCam > 360) h = Math.min(h, 6 + rand() * 3);
+
+    addBuilding(jx, jz, w, d, h);
+    placedCount++;
+  }
+}
+
+// (Removed far-distance silhouette ring — the detailed grid now extends
+// deep enough that the horizon dissolves naturally into fog.)
+
+// ============================================================
+// POST OFFICE TOWER (BT Tower from 1984) — 1973 configuration
+// ============================================================
+//
+// Proportion-accurate remodel based on reference image:
+// - Very tall narrow concrete shaft dominates (~75% of total height)
+// - Microwave-dish platform rings only on the upper half of the shaft
+// - Glazed restaurant pod ~85% height, wider than shaft
+// - Above pod: stacked concrete collars, a dark sign panel (no BT logo in 1973),
+//   narrower neck, and a lattice cap
+// - Tall tapering antenna spike at the very top
+//
+var btTower = new THREE.Group();
+var BT_X = 68, BT_Z = -110;
+
+// Shared materials
+var latticeMat = new THREE.MeshStandardMaterial({
+  color: 0x7a7670, roughness: 0.6, metalness: 0.35
+});
+var dishMat = new THREE.MeshStandardMaterial({
+  color: 0xb8b0a4, roughness: 0.4, metalness: 0.2
+});
+// Darker concrete for the upper sign-panel section
+var darkPanelMat = new THREE.MeshStandardMaterial({
+  color: 0x2a2820, roughness: 0.8
+});
+
+// Podium & base (three-storey squarish block)
+var btPodium = new THREE.Mesh(
+  new THREE.BoxGeometry(7, 3.0, 7),
+  btConcreteMat
+);
+btPodium.position.set(0, 1.5, 0);
+btTower.add(btPodium);
+
+// Slightly tapered lower cylinder — the "base expansion"
+var btBase = new THREE.Mesh(
+  new THREE.CylinderGeometry(2.6, 3.2, 5, 24),
+  btConcreteMat
+);
+btBase.position.set(0, 5.5, 0);
+btTower.add(btBase);
+
+// MAIN SHAFT — very tall, very narrow. This is the defining line.
+var SHAFT_BASE_Y = 8.0;
+var SHAFT_H      = 42;                // ~75% of total height
+var shaft = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.6, 1.8, SHAFT_H, 32),
+  btConcreteMat
+);
+shaft.position.set(0, SHAFT_BASE_Y + SHAFT_H/2, 0);
+btTower.add(shaft);
+
+// Vertical stripe detail — the faint vertical seam on the concrete
+for (var vs = 0; vs < 6; vs++) {
+  var va = (vs / 6) * Math.PI * 2;
+  var seam = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, SHAFT_H, 0.05),
+    new THREE.MeshStandardMaterial({ color: 0x4a4638, roughness: 0.9 })
+  );
+  seam.position.set(Math.cos(va)*1.62, SHAFT_BASE_Y + SHAFT_H/2, Math.sin(va)*1.62);
+  btTower.add(seam);
+}
+
+// LATTICE DISH PLATFORMS — only on the UPPER half of the shaft
+// Real Post Office Tower has them clustered ~65-80% height
+function addLatticeRing(centreY, radius, dishCount, dishSize) {
+  // Main platform ring
+  var ring = new THREE.Mesh(
+    new THREE.TorusGeometry(radius, 0.12, 6, 32),
+    latticeMat
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = centreY;
+  btTower.add(ring);
+  // Lower ring
+  var ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(radius - 0.1, 0.08, 6, 32),
+    latticeMat
+  );
+  ring2.rotation.x = Math.PI / 2;
+  ring2.position.y = centreY - 1.1;
+  btTower.add(ring2);
+  // Lattice struts between them
+  for (var ls = 0; ls < 16; ls++) {
+    var la = (ls / 16) * Math.PI * 2;
+    var strut = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 1.15, 0.06),
+      latticeMat
+    );
+    strut.position.set(Math.cos(la)*radius, centreY - 0.55, Math.sin(la)*radius);
+    btTower.add(strut);
+  }
+  // Microwave dishes
+  for (var di = 0; di < dishCount; di++) {
+    var da = (di / dishCount) * Math.PI * 2 + 0.05;
+    var dx = Math.cos(da) * (radius + dishSize * 0.45);
+    var dz = Math.sin(da) * (radius + dishSize * 0.45);
+    var dish = new THREE.Mesh(
+      new THREE.CylinderGeometry(dishSize * 0.95, dishSize, 0.18, 16, 1, true),
+      dishMat
+    );
+    dish.rotation.x = Math.PI / 2;
+    dish.rotation.z = -da + Math.PI / 2;
+    dish.position.set(dx, centreY - 0.1, dz);
+    btTower.add(dish);
+    // Dish hood (cover)
+    var hood = new THREE.Mesh(
+      new THREE.CylinderGeometry(dishSize * 0.7, dishSize * 0.95, 0.35, 16),
+      latticeMat
+    );
+    hood.rotation.x = Math.PI / 2;
+    hood.rotation.z = -da + Math.PI / 2;
+    hood.position.set(
+      Math.cos(da) * (radius + dishSize * 0.15),
+      centreY - 0.1,
+      Math.sin(da) * (radius + dishSize * 0.15)
+    );
+    btTower.add(hood);
+  }
+}
+
+// Three dish-platform rings clustered near the top of the shaft
+addLatticeRing(SHAFT_BASE_Y + 26, 2.6, 10, 0.65);
+addLatticeRing(SHAFT_BASE_Y + 31, 2.6, 10, 0.65);
+addLatticeRing(SHAFT_BASE_Y + 35, 2.5, 8, 0.55);
+
+// Top of shaft
+var shaftTopY = SHAFT_BASE_Y + SHAFT_H;   // y = 50
+
+// RESTAURANT POD — glazed rotating restaurant, wider than shaft,
+// sits just above the dish rings.
+var POD_Y = shaftTopY + 1.5;             // y = 51.5
+var POD_H = 2.6;
+// Lower concrete rim
+var podBot = new THREE.Mesh(
+  new THREE.CylinderGeometry(2.5, 2.3, 0.35, 32),
+  btConcreteMat
+);
+podBot.position.y = POD_Y - POD_H/2 - 0.15;
+btTower.add(podBot);
+// Glass restaurant band
+var podGlass = new THREE.Mesh(
+  new THREE.CylinderGeometry(2.55, 2.55, POD_H, 36, 1, true),
+  btWindowMat
+);
+podGlass.position.y = POD_Y;
+btTower.add(podGlass);
+// Upper concrete rim
+var podTop = new THREE.Mesh(
+  new THREE.CylinderGeometry(2.3, 2.5, 0.35, 32),
+  btConcreteMat
+);
+podTop.position.y = POD_Y + POD_H/2 + 0.15;
+btTower.add(podTop);
+
+// Above the pod: a narrower concrete neck with a small cap
+var neckY = POD_Y + POD_H/2 + 1.0;
+var neck = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.4, 1.6, 1.8, 24),
+  btConcreteMat
+);
+neck.position.y = neckY;
+btTower.add(neck);
+
+// Dark "sign panel" section (no BT logo in 1973 — just a dark band
+// representing the upper observation deck / signage area)
+var signY = neckY + 2.0;
+var signPanel = new THREE.Mesh(
+  new THREE.BoxGeometry(2.4, 1.2, 2.4),
+  darkPanelMat
+);
+signPanel.position.y = signY;
+btTower.add(signPanel);
+
+// A faint warm strip along the sign panel (lit signage glow)
+var signGlow = new THREE.Mesh(
+  new THREE.BoxGeometry(2.5, 0.35, 2.5),
+  new THREE.MeshStandardMaterial({
+    color: 0x2a1a0a, emissive: 0xc07030, emissiveIntensity: 0.55
+  })
+);
+signGlow.position.y = signY;
+btTower.add(signGlow);
+
+// Above sign: narrower concrete cap
+var topCapY = signY + 1.1;
+var topCap = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.0, 1.4, 1.0, 20),
+  btConcreteMat
+);
+topCap.position.y = topCapY;
+btTower.add(topCap);
+
+// Stepped lattice section above top cap — narrowing to mast
+var stepY1 = topCapY + 1.0;
+var step1 = new THREE.Mesh(
+  new THREE.BoxGeometry(1.4, 1.2, 1.4),
+  darkPanelMat
+);
+step1.position.y = stepY1;
+btTower.add(step1);
+
+var stepY2 = stepY1 + 1.0;
+var step2 = new THREE.Mesh(
+  new THREE.BoxGeometry(0.9, 0.9, 0.9),
+  darkPanelMat
+);
+step2.position.y = stepY2;
+btTower.add(step2);
+
+// MAIN ANTENNA MAST — long, thin, tapering to a point
+var mastBaseY = stepY2 + 0.6;
+var mast = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.04, 0.2, 5.5, 10),
+  latticeMat
+);
+mast.position.y = mastBaseY + 2.75;
+btTower.add(mast);
+
+// Fine spike tip
+var spike = new THREE.Mesh(
+  new THREE.ConeGeometry(0.05, 1.2, 8),
+  latticeMat
+);
+spike.position.y = mastBaseY + 6.1;
+btTower.add(spike);
+
+// Aviation warning lights (red) — on shaft and near top
+var btAvLight1 = new THREE.Mesh(
+  new THREE.SphereGeometry(0.12, 8, 6),
+  new THREE.MeshStandardMaterial({ color: 0x400000, emissive: 0xff2410, emissiveIntensity: 0.6 })
+);
+btAvLight1.position.set(0, SHAFT_BASE_Y + 18, 0);
+btTower.add(btAvLight1);
+
+var btAvLight2 = new THREE.Mesh(
+  new THREE.SphereGeometry(0.14, 8, 6),
+  new THREE.MeshStandardMaterial({ color: 0x400000, emissive: 0xff2410, emissiveIntensity: 0.6 })
+);
+btAvLight2.position.set(0, mastBaseY + 5.8, 0);
+btTower.add(btAvLight2);
+
+var btAvPointLight = new THREE.PointLight(0xff2410, 0.0, 20);
+btAvPointLight.position.set(0, mastBaseY + 5.8, 0);
+btTower.add(btAvPointLight);
+
+btTower.position.set(BT_X, 0, BT_Z);
+scene.add(btTower);
+
+// ============================================================
+// DISTANT LANDMARKS — one real 1973 landmark, kept subtle
+// ============================================================
+// Euston Tower (1970, 124m real height). Visible far north, softened
+// by haze. Positioned far right to sit to the right of BT Tower in
+// the wider skyline.
+var eustonTower = new THREE.Mesh(
+  new THREE.BoxGeometry(4, 18, 4),
+  new THREE.MeshStandardMaterial({ color: 0x30364a, roughness: 0.85 })
+);
+eustonTower.position.set(95, 9, -320);
+scene.add(eustonTower);
+
+// ============================================================
+// STREET-LEVEL DETAIL — a few headlight / taillight pairs on Oxford St
+// ============================================================
+// 1973 cars. Just small light points down the road.
+var carLights = [];
+var streetCos = Math.cos(STREET_ANGLE);
+var streetSin = Math.sin(STREET_ANGLE);
+var streetCX  = -4 - Math.sin(STREET_ANGLE) * STREET_LEN * 0.5;
+var streetCZ  = -STREET_LEN / 2 + 10;
+
+function addCarLight(along, side, colour, intensity) {
+  // `along` is distance from near end toward far end (0 → STREET_LEN)
+  // `side` is lateral offset (-STREET_WIDTH/2 .. STREET_WIDTH/2)
+  var px = streetCX + Math.cos(STREET_ANGLE) * side - Math.sin(STREET_ANGLE) * (along - STREET_LEN/2);
+  var pz = streetCZ + Math.sin(STREET_ANGLE) * side + Math.cos(STREET_ANGLE) * (along - STREET_LEN/2);
+  var lightMat = new THREE.MeshStandardMaterial({
+    color: colour, emissive: colour, emissiveIntensity: intensity, fog: true
+  });
+  var lightMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 6, 5),
+    lightMat
+  );
+  lightMesh.position.set(px, 0.6, pz);
+  scene.add(lightMesh);
+  carLights.push(lightMesh);
+}
+
+// A scattering of headlights moving away and taillights coming toward us.
+// London traffic drives on the LEFT: so near-lane (negative side) carries
+// traffic driving AWAY from the camera down Oxford St = shows tail-lights.
+// Far-lane (positive side) carries traffic coming toward us = headlights.
+for (var cl = 0; cl < 32; cl++) {
+  var along = 15 + rand() * (STREET_LEN - 30);
+  if (rand() < 0.5) {
+    // Tail lights — near lane
+    addCarLight(along, -3, 0xff2008, 1.8);
+    addCarLight(along - 1.8, -2, 0xff2008, 1.6);
+  } else {
+    // Headlights — far lane
+    addCarLight(along, 3, 0xfff4c8, 2.4);
+    addCarLight(along - 1.8, 4, 0xfff4c8, 2.2);
+  }
+}
+
+// ============================================================
+// CENTRE POINT ROOFTOP FOREGROUND — removed (was blocking the view)
+// ============================================================
+
+// ============================================================
+// ATMOSPHERIC FOG SPRITES — dawn mist hanging between buildings
+// ============================================================
+var fogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  g.addColorStop(0,    'rgba(200, 180, 180, 0.22)');
+  g.addColorStop(0.4,  'rgba(160, 140, 150, 0.11)');
+  g.addColorStop(1,    'rgba(100, 90, 100, 0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+});
+var warmFogTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  g.addColorStop(0,    'rgba(230, 160, 110, 0.22)');
+  g.addColorStop(0.4,  'rgba(190, 110, 80, 0.10)');
+  g.addColorStop(1,    'rgba(130, 70, 50, 0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+});
+
+var fogSprites = [];
+for (var fi = 0; fi < 60; fi++) {
+  var useWarm = fi < 25;
+  var fMat = new THREE.SpriteMaterial({
+    map: useWarm ? warmFogTex : fogTex,
+    transparent: true, opacity: 0.25 + Math.random() * 0.25,
+    fog: false
+  });
+  var fs = new THREE.Sprite(fMat);
+  // Scatter across the mid-distance
+  var fx = (Math.random() - 0.5) * 220;
+  var fz = -20 - Math.random() * 300;
+  var fy = 3 + Math.random() * 18;
+  fs.position.set(fx, fy, fz);
+  var fsc = 20 + Math.random() * 50;
+  fs.scale.set(fsc, fsc * 0.4, 1);
+  scene.add(fs);
+  fogSprites.push({
+    sprite: fs, baseX: fx,
+    drift: (Math.random() - 0.5) * 0.012,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: 0.0005 + Math.random() * 0.0015,
+    swayAmt: 1.5 + Math.random() * 3.0
+  });
+}
+
+// A low blanket of horizon glow-haze right on the skyline
+for (var hf = 0; hf < 14; hf++) {
+  var hfMat = new THREE.SpriteMaterial({
+    map: warmFogTex, transparent: true,
+    opacity: 0.45 + Math.random() * 0.2, fog: false
+  });
+  var hfs = new THREE.Sprite(hfMat);
+  hfs.position.set((Math.random() - 0.5) * 500, 4 + Math.random() * 5, -250 - Math.random() * 150);
+  var hfsc = 80 + Math.random() * 120;
+  hfs.scale.set(hfsc, hfsc * 0.28, 1);
+  scene.add(hfs);
+}
+
+// ============================================================
+// COAL SMOKE PLUMES — rising from chimneys across the rooftops.
+// 1973 London still had coal and gas central heating in most terraces;
+// at dawn on a cold November morning, hundreds of chimneys would be
+// smoking. We place a handful of visible plumes at varying distances.
+// ============================================================
+var smokeTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  g.addColorStop(0,   'rgba(80, 75, 68, 0.55)');
+  g.addColorStop(0.4, 'rgba(55, 52, 48, 0.28)');
+  g.addColorStop(1,   'rgba(30, 28, 26, 0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+});
+
+var smokePlumes = [];
+for (var sp = 0; sp < 22; sp++) {
+  // Plume rises from a random rooftop position
+  var sx = (Math.random() - 0.5) * 160;
+  var sz = -Math.random() * 200 - 10;
+  // Each plume is 4-6 sprites stacked vertically
+  var plumeHeight = 4 + Math.floor(Math.random() * 3);
+  var baseY = 6 + Math.random() * 14;
+  var plumeDrift = (Math.random() - 0.3) * 0.004;  // biased slight drift east→west
+  for (var ps = 0; ps < plumeHeight; ps++) {
+    var smoMat = new THREE.SpriteMaterial({
+      map: smokeTex, transparent: true,
+      opacity: (0.55 - ps * 0.08) * (0.7 + Math.random() * 0.3),
+      fog: true
+    });
+    var smoSpr = new THREE.Sprite(smoMat);
+    var yOff = baseY + ps * (1.2 + Math.random() * 0.5);
+    smoSpr.position.set(sx + (Math.random()-0.5)*0.8, yOff, sz);
+    var sSize = 1.4 + ps * 0.6 + Math.random() * 0.5;
+    smoSpr.scale.set(sSize, sSize, 1);
+    scene.add(smoSpr);
+    smokePlumes.push({
+      sprite: smoSpr,
+      baseX: smoSpr.position.x,
+      drift: plumeDrift,
+      phase: Math.random() * Math.PI * 2,
+      amplitude: 0.2 + Math.random() * 0.3,
+      speed: 0.0008 + Math.random() * 0.001
+    });
+  }
+}
+
+// ============================================================
+// ANIMATION
+// ============================================================
+var clock = new THREE.Clock();
+var avBlinkPhase = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+
+  // --- BT Tower aviation lights — slow red blink, slightly offset phases ---
+  avBlinkPhase += 0.018;
+  var avCycle1 = Math.sin(avBlinkPhase * 0.7);
+  var avCycle2 = Math.sin(avBlinkPhase * 0.7 + 0.8);
+  var on1 = avCycle1 > 0.82;
+  var on2 = avCycle2 > 0.82;
+  btAvLight1.material.emissiveIntensity = on1 ? 1.4 + (avCycle1 - 0.82) * 6 : 0.12;
+  btAvLight2.material.emissiveIntensity = on2 ? 1.4 + (avCycle2 - 0.82) * 6 : 0.12;
+  btAvPointLight.intensity = on2 ? (avCycle2 - 0.82) * 8 : 0;
+
+  // --- Dawn light gently warms/cools over time ---
+  var warmBreath = 0.95 + Math.sin(t * 0.05) * 0.04;
+  dawnLight.intensity = 0.85 * warmBreath;
+
+  // --- Fog drift ---
+  for (var fdi = 0; fdi < fogSprites.length; fdi++) {
+    var f = fogSprites[fdi];
+    f.sway += f.swaySpeed;
+    f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;
+    f.baseX += f.drift;
+    if (f.baseX > 130) f.baseX = -130;
+    if (f.baseX < -130) f.baseX = 130;
+  }
+
+  // --- Coal smoke drift (slow upward & lateral sway) ---
+  for (var sdi = 0; sdi < smokePlumes.length; sdi++) {
+    var sm = smokePlumes[sdi];
+    sm.phase += sm.speed;
+    sm.sprite.position.x = sm.baseX + Math.sin(sm.phase) * sm.amplitude + t * sm.drift;
+  }
+
+  // --- Very subtle camera breathing for life ---
+  var breath = Math.sin(t * 0.12) * 0.08;
+  camera.position.y = 34 + breath;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>

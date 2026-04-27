@@ -761,16 +761,18 @@ window.dssAudio = (function() {
     });
   }
   // ====== BACKGROUND MUSIC BED ======
-  // Looping theme that plays through the whole game (Dean Street and beyond).
+  // Dean Street theme — plays ONLY on the Dean Street home passage.
   // Volume ducks when any SFX fires (via the _play wrapper) and ramps back smoothly.
-  // Skipped on title / menu screens so music starts when the game proper starts.
+  // Stops + rewinds when the player leaves Dean Street, so it starts fresh on return.
   var MUSIC_FILE = 'Dream Street Shuffle experiment theme loop.mp3';
   var MUSIC_VOLUME_BASE = 0.30;     // resting volume (0-1) — tweak here to set overall level
   var MUSIC_VOLUME_DUCK = 0.10;     // dipped volume during SFX
   var MUSIC_DUCK_HOLD_MS = 350;     // hold the duck for this long before recovering
   var MUSIC_DUCK_RAMP_MS = 600;     // smooth ramp back to base
-  var MUSIC_SKIP_PASSAGES = {       // don't auto-start music on these passages
-    'Title':1,'Start':1,'Black page':1,'White page':1
+  // Allow-list — music only plays when current passage name is in this set.
+  // Add more passage names here to extend (e.g. 'A Doorway on Dean Street').
+  var MUSIC_PLAY_PASSAGES = {
+    'Dean Street':1
   };
   var musicEl = null, musicStarted = false, duckTimer = null, rampTimer = null;
   function _ensureMusic() {
@@ -781,19 +783,40 @@ window.dssAudio = (function() {
     musicEl.volume = MUSIC_VOLUME_BASE;
     return musicEl;
   }
-  function startMusic() {
-    if (musicStarted) return;
-    // Skip on title/menu screens — music should feel like the game's underscore
+  function _currentPassageName() {
     var cur = document.querySelector('tw-passage[data-name]');
-    var name = cur ? cur.getAttribute('data-name') : '';
-    if (MUSIC_SKIP_PASSAGES[name]) return;
+    return cur ? cur.getAttribute('data-name') : '';
+  }
+  function startMusic() {
+    // Only play on allow-listed passages
+    if (!MUSIC_PLAY_PASSAGES[_currentPassageName()]) return;
+    if (musicStarted) return;
     var el = _ensureMusic();
+    // Reset any pending duck/ramp from a previous session and restore base volume
+    if (duckTimer) { clearTimeout(duckTimer); duckTimer = null; }
+    if (rampTimer) { clearInterval(rampTimer); rampTimer = null; }
+    el.volume = MUSIC_VOLUME_BASE;
     var p = el.play();
     if (p && p.then) {
       p.then(function() { musicStarted = true; })
        .catch(function() { /* autoplay blocked — will retry on next user gesture */ });
     } else {
       musicStarted = true;
+    }
+  }
+  function stopMusic() {
+    if (!musicEl || !musicStarted) return;
+    try { musicEl.pause(); musicEl.currentTime = 0; } catch(e) {}
+    musicStarted = false;
+    if (duckTimer) { clearTimeout(duckTimer); duckTimer = null; }
+    if (rampTimer) { clearInterval(rampTimer); rampTimer = null; }
+  }
+  // Called on every passage change — starts on Dean Street, stops elsewhere.
+  function updateMusicForPassage() {
+    if (MUSIC_PLAY_PASSAGES[_currentPassageName()]) {
+      startMusic();
+    } else {
+      stopMusic();
     }
   }
   function _duckMusic() {
@@ -833,8 +856,10 @@ window.dssAudio = (function() {
     phoneBell: phoneBell, windFarnell: windFarnell,
     fireFarnell: fireFarnell, footstep: footstep,
     // Background music bed
-    startMusic: startMusic, pauseMusic: pauseMusic,
-    resumeMusic: resumeMusic, setMusicVolume: setMusicVolume,
+    startMusic: startMusic, stopMusic: stopMusic,
+    updateMusicForPassage: updateMusicForPassage,
+    pauseMusic: pauseMusic, resumeMusic: resumeMusic,
+    setMusicVolume: setMusicVolume,
     _duckMusic: _duckMusic
   };
 })();
@@ -5236,10 +5261,10 @@ window._passageGen = 0;
               var passageTags = passageNode.getAttribute('tags') || '';
               var tags = passageTags.split(/\s+/).filter(Boolean);
               if (window.dssAudio) {
-                // Background music — start once we're past the title screen.
-                // startMusic() itself checks the current passage name and skips
-                // Title/Start/etc. so we can call it freely on every nav.
-                if (window.dssAudio.startMusic) window.dssAudio.startMusic();
+                // Dean Street theme — starts on Dean Street, stops elsewhere.
+                // The function handles both start and stop based on the
+                // current passage name against the allow-list.
+                if (window.dssAudio.updateMusicForPassage) window.dssAudio.updateMusicForPassage();
                 // Page 47 found — paper rustle
                 if (passageNode.querySelector('.page-found')) {
                   setTimeout(function(){ window.dssAudio.pageRustle(); }, 180);

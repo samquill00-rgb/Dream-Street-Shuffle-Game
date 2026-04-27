@@ -2935,11 +2935,41 @@ box-shadow: none;
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
 tw-story {
-font-size: 1.1em;
+font-size: 1em;
 }
 
 tw-passage {
-padding: 1em;
+padding: 1em 0.8em;
+}
+
+/* Tighten stat bar so it fits narrow phones without overflowing */
+.stat-bars {
+padding: 12px 0.7em 9px;
+font-size: 0.7em;
+gap: 6px;
+}
+.stat-group {
+grid-template-columns: 54px 124px 2.4em;
+column-gap: 6px;
+row-gap: 6px;
+}
+.header-lily {
+width: 130px;
+opacity: 0.45;
+}
+/* Popups — make sure they don't overflow narrow viewports */
+.liver-popup-box,
+.venue-hint-box {
+max-width: calc(100vw - 24px);
+box-sizing: border-box;
+}
+/* Notebook dialog — give it breathing room on phones */
+tw-dialog .nb-page {
+font-size: 0.95em;
+}
+/* Verses & lore boxes — keep readable on narrow viewports */
+.verse, .lore-box {
+font-size: 0.95em;
 }
 }
 
@@ -4704,6 +4734,99 @@ window.addEventListener('popstate', function() {
   var first = document.querySelector('tw-sidebar tw-icon');
   if (first) first.click();
 });
+
+// ====== AUDIO — Web Audio synth (no external files) ======
+// Lazy-init AudioContext on first sound. Browsers block autoplay until the
+// user has interacted with the page; clicking BEGIN counts, so by the time
+// any of these fire we should have permission.
+window.dssAudio = (function() {
+  var ctx = null;
+  function getCtx() {
+    if (!ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try { ctx = new AC(); } catch(e) { return null; }
+    }
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch(e) {} }
+    return ctx;
+  }
+  // Soft pour — filtered noise, gentle envelope
+  function pour() {
+    var ac = getCtx(); if (!ac) return;
+    var dur = 0.95, now = ac.currentTime;
+    var bufLen = Math.floor(ac.sampleRate * dur);
+    var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * 0.5;
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var f = ac.createBiquadFilter(); f.type='lowpass';
+    f.frequency.setValueAtTime(900, now);
+    f.frequency.exponentialRampToValueAtTime(380, now+dur);
+    f.Q.value = 2;
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.18, now+0.06);
+    g.gain.exponentialRampToValueAtTime(0.001, now+dur);
+    src.connect(f); f.connect(g); g.connect(ac.destination);
+    src.start(now); src.stop(now+dur);
+  }
+  // Short sip / gulp — low warble
+  function sip() {
+    var ac = getCtx(); if (!ac) return;
+    var now = ac.currentTime;
+    var o = ac.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(170, now);
+    o.frequency.exponentialRampToValueAtTime(75, now+0.18);
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.16, now+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, now+0.22);
+    o.connect(g); g.connect(ac.destination);
+    o.start(now); o.stop(now+0.25);
+  }
+  // Old-school British phone ring — two short pulses, ~1.5s repeats
+  function phoneRing(rings) {
+    var ac = getCtx(); if (!ac) return;
+    rings = rings || 2;
+    var now = ac.currentTime;
+    for (var r = 0; r < rings; r++) {
+      var t0 = now + r * 2.0;
+      // Each "ring" is the British double-pulse: brrring brrring
+      [0, 0.4].forEach(function(off) {
+        var t = t0 + off;
+        [440, 480].forEach(function(freq) {
+          var o = ac.createOscillator(); o.type='sine'; o.frequency.value=freq;
+          var g = ac.createGain();
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.05, t+0.03);
+          g.gain.setValueAtTime(0.05, t+0.32);
+          g.gain.linearRampToValueAtTime(0, t+0.36);
+          o.connect(g); g.connect(ac.destination);
+          o.start(t); o.stop(t+0.4);
+        });
+      });
+    }
+  }
+  // Paper rustle — high-passed noise burst
+  function pageRustle() {
+    var ac = getCtx(); if (!ac) return;
+    var dur = 0.45, now = ac.currentTime;
+    var bufLen = Math.floor(ac.sampleRate * dur);
+    var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < bufLen; i++) {
+      var env = Math.exp(-i / (ac.sampleRate * 0.16));
+      d[i] = (Math.random()*2-1) * env * 0.5;
+    }
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var f = ac.createBiquadFilter(); f.type='highpass';
+    f.frequency.value = 1600; f.Q.value = 1.5;
+    var g = ac.createGain(); g.gain.value = 0.45;
+    src.connect(f); f.connect(g); g.connect(ac.destination);
+    src.start(now);
+  }
+  return { pour: pour, sip: sip, phoneRing: phoneRing, pageRustle: pageRustle };
+})();
 
 // ====== DEBUG / PLAYTESTING MENU (backtick ` key) ======
 // Strategy: store target passage in URL hash, reload page.
@@ -8203,6 +8326,7 @@ constructor(drinkType) {
   this._build();
   this._startLoop();
   window._drinkPopupOpen = true;
+  if (window.dssAudio) window.dssAudio.pour();
 }
 
 _build() {
@@ -8290,6 +8414,7 @@ _build() {
     self.tiltTarget = -0.55;
     self.wobbleDecay = 0.6;
     self.prompt.textContent = '';
+    if (window.dssAudio) window.dssAudio.sip();
   };
   var stopDrink = function(e) {
     e.preventDefault();
@@ -9086,6 +9211,18 @@ window._passageGen = 0;
         m.addedNodes.forEach(function(n) {
           if (n.nodeType === 1 && n.tagName === 'TW-PASSAGE') {
             window._passageGen++;
+            // Audio cues triggered by passage content / name
+            try {
+              var pName = n.getAttribute('data-name') || '';
+              if (window.dssAudio) {
+                if (n.querySelector('.page-found')) {
+                  setTimeout(function(){ window.dssAudio.pageRustle(); }, 180);
+                }
+                if (/phone call|dual ring|The phone call/i.test(pName)) {
+                  setTimeout(function(){ window.dssAudio.phoneRing(2); }, 250);
+                }
+              }
+            } catch(e) {}
             // Hide ceremony boxes (and the HAUNTS lore-box explainer that
             // sometimes appears alongside them) on first render. They'll
             // fade in once the drink popup has had its moment.
@@ -9940,17 +10077,17 @@ _draw() {
     var pulse = 1 + Math.sin(t * 2.4) * 0.10 * lv;
     // Ambient glow
     var lg = c.createRadialGradient(this.liverX, this.liverY, 0, this.liverX, this.liverY, 18 * pulse * lv);
-    lg.addColorStop(0, 'rgba(180,40,52,0.55)');
+    lg.addColorStop(0, 'rgba(120,30,38,0.42)');
     lg.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = lg;
     c.fillRect(this.liverX - 25, this.liverY - 25, 50, 50);
     // Liver body
-    c.fillStyle = '#841e2e';
+    c.fillStyle = '#6a1820';
     c.beginPath();
     c.ellipse(this.liverX, this.liverY, 9 * pulse * lv, 6 * pulse * lv, 0.2, 0, Math.PI * 2);
     c.fill();
     // Highlight
-    c.fillStyle = '#b04458';
+    c.fillStyle = '#8a2e34';
     c.beginPath();
     c.ellipse(this.liverX - 2, this.liverY - 1.5, 3.2 * lv, 1.8 * lv, 0.2, 0, Math.PI * 2);
     c.fill();
@@ -9965,7 +10102,7 @@ _draw() {
     var flecks = 4;
     for (var f = 0; f < flecks; f++) {
       var fa = Math.max(0, (0.4 - this.eatProgress * 0.35)) * (0.7 + Math.sin(t * 8 + f) * 0.3);
-      c.fillStyle = 'rgba(150,30,42,' + fa.toFixed(2) + ')';
+      c.fillStyle = 'rgba(120,28,32,' + fa.toFixed(2) + ')';
       c.beginPath();
       c.arc(this.liverX + (f - 1.5) * 4, this.liverY - 6 - this.eatProgress * 8 + Math.sin(t * 11 + f * 2) * 2, 1.3, 0, Math.PI * 2);
       c.fill();
@@ -41740,6 +41877,166 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="init" position="0,0" size="100,100">(set: $albaRevealed to false)\
 (set: $confidence to 70)\
 (set: $sobriety to 70)\
@@ -45716,6 +46013,7 @@ You both hang up, each leaving the other alone.&lt;/span&gt;
 &lt;div style=&quot;font-family:&#x27;Playfair Display&#x27;,Georgia,serif;font-size:3em;letter-spacing:0.15em;line-height:1.2;animation:dst-titleGlow 6s ease-in-out infinite;&quot;&gt;DREAM STREET&lt;br&gt;SHUFFLE&lt;/div&gt;
 &lt;div style=&quot;font-family:&#x27;Crimson Text&#x27;,Georgia,serif;font-size:1.05em;margin-top:1em;color:#a08060;letter-spacing:0.08em;animation:dst-breathe 8s ease-in-out infinite;&quot;&gt;by Three Blue Posts&lt;/div&gt;
 &lt;div class=&quot;title-begin&quot; style=&quot;margin-top:1.6em;font-size:1.6em;&quot;&gt;[[BEGIN|Start]]&lt;/div&gt;
+(if: (savedgames:) contains &quot;auto&quot;)[&lt;div class=&quot;title-begin&quot; style=&quot;margin-top:0.9em;font-size:0.95em;opacity:0.8;&quot;&gt;(link: &quot;CONTINUE WHERE I LEFT OFF&quot;)[(loadgame: &quot;auto&quot;)]&lt;/div&gt;]
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
@@ -45863,6 +46161,7 @@ You don&#x27;t understand and retreating, you strike, in the nifty, brisket air,
 [[Walk on|LINE 1]]
 &lt;/div&gt;</tw-passagedata>
 <tw-passagedata pid="155" name="header header" tags="header" position="700,50" size="100,100">(set: _hideStats to (a: &quot;White page&quot;, &quot;Black page&quot;, &quot;Title&quot;, &quot;Start&quot;, &quot;The Night Ahead&quot;, &quot;Name Your Book&quot;, &quot;A Doorway on Dean Street&quot;, &quot;Dawn&quot;, &quot;PP Pong&quot;, &quot;Fight starts&quot;, &quot;Fight Round 1&quot;, &quot;Fight Round 2&quot;, &quot;Fight Round 3&quot;, &quot;Fight R1 Back&quot;, &quot;Fight R1 Block&quot;, &quot;Fight R1 Duck&quot;, &quot;Fight R2 Catch&quot;, &quot;Fight R2 Counter&quot;, &quot;Fight R2 Slip&quot;, &quot;Fight R3 Clinch&quot;, &quot;Fight R3 Headon&quot;, &quot;Fight R3 Weave&quot;, &quot;Fight Victory&quot;, &quot;Fight Defeat&quot;))
+(unless: _hideStats contains (passage:)&#x27;s name)[(set: _saved to (savegame: &quot;auto&quot;, &quot;Auto save&quot;))]\
 (unless: _hideStats contains (passage:)&#x27;s name)[\
 (if: $confidence is a number and $confidence &lt; 0)[(set: $confidence to 0)](if: $confidence is a number and $confidence &gt; 100)[(set: $confidence to 100)](if: $sobriety is a number and $sobriety &lt; 0)[(set: $sobriety to 0)](if: $sobriety is a number and $sobriety &gt; 100)[(set: $sobriety to 100)]\
 (unless: $alba is an array)[(set: $alba to (a:))]\

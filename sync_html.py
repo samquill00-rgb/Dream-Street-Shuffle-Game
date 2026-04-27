@@ -6,11 +6,21 @@ and the <script id='twine-user-script'> tag."""
 import re
 import html
 import os
+import base64
 
 # Paths are relative to this script's own directory
 _here = os.path.dirname(os.path.abspath(__file__))
 twee_path = os.path.join(_here, "Dream Street Shuffle.twee")
 html_path = os.path.join(_here, "Dream Street Shuffle.html")
+
+# ============================================================
+# Audio embedding configuration
+# ============================================================
+# The MP3 below is base64-embedded directly into the HTML so the music
+# works when the file is opened locally (file://) without needing a server.
+# To swap the music, just change this filename and re-run sync_html.py.
+MUSIC_SOURCE_FILE = "Dream Street Shuffle experiment theme loop.mp3"
+MUSIC_PLACEHOLDER = "__DSS_MUSIC_DATA_URI__"  # must match value in .twee
 
 # ============================================================
 # 1. Parse the Twee file
@@ -147,6 +157,24 @@ if stylesheet_content:
 
 # Replace the UserScript (raw JS — NOT html-encoded, because it lives inside a <script> tag)
 if userscript_content:
+    # --- Embed the music MP3 as a base64 data URI ---
+    # The userscript contains the placeholder string MUSIC_PLACEHOLDER which
+    # we replace with a full data: URI of the MP3. This keeps the .twee file
+    # small and lets the HTML work from file:// without local-file restrictions.
+    music_path = os.path.join(_here, MUSIC_SOURCE_FILE)
+    if os.path.exists(music_path):
+        with open(music_path, "rb") as mf:
+            mp3_b64 = base64.b64encode(mf.read()).decode("ascii")
+        data_uri = "data:audio/mpeg;base64," + mp3_b64
+        if MUSIC_PLACEHOLDER in userscript_content:
+            userscript_content = userscript_content.replace(MUSIC_PLACEHOLDER, data_uri)
+            kb = len(mp3_b64) // 1024
+            print(f"Embedded music: {MUSIC_SOURCE_FILE} ({kb} KB base64)")
+        else:
+            print(f"WARNING: placeholder {MUSIC_PLACEHOLDER} not found in UserScript — music not embedded")
+    else:
+        print(f"WARNING: music file not found: {music_path} — music will not play")
+
     js_match = re.search(
         r'(<script role="script" id="twine-user-script" type="text/twine-javascript">).*?(</script>)',
         html_content,

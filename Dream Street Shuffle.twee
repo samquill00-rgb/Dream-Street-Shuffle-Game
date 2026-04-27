@@ -389,29 +389,46 @@ window.dssAudio = (function() {
   function coinFlip() {
     _play(function(ac) {
     var now = ac.currentTime;
-    // Spin: oscillator going up then back down (no LFO — keep it simple)
-    var o = ac.createOscillator(); o.type='triangle';
-    o.frequency.setValueAtTime(700, now);
-    o.frequency.linearRampToValueAtTime(1300, now + 0.35);
-    o.frequency.linearRampToValueAtTime(900, now + 0.7);
-    var g = ac.createGain();
-    g.gain.setValueAtTime(0.001, now);
-    g.gain.linearRampToValueAtTime(0.22, now + 0.05);
-    g.gain.linearRampToValueAtTime(0.16, now + 0.6);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
-    o.connect(g); g.connect(ac.destination);
-    o.start(now); o.stop(now + 0.78);
-    // Landing tink at ~0.85s
-    var t0 = now + 0.85;
-    var o2 = ac.createOscillator(); o2.type='sine';
-    o2.frequency.setValueAtTime(2400, t0);
-    o2.frequency.exponentialRampToValueAtTime(1800, t0 + 0.3);
-    var g2 = ac.createGain();
-    g2.gain.setValueAtTime(0.001, t0);
-    g2.gain.linearRampToValueAtTime(0.14, t0 + 0.005);
-    g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
-    o2.connect(g2); g2.connect(ac.destination);
-    o2.start(t0); o2.stop(t0 + 0.32);
+    // Jangling coin: a series of short metallic "tings" as it tumbles
+    // through the air, each with bell-like non-harmonic partials.
+    var jingles = [
+      { t: 0.00, base: 2400, amp: 0.10 },
+      { t: 0.09, base: 1900, amp: 0.08 },
+      { t: 0.20, base: 2700, amp: 0.09 },
+      { t: 0.34, base: 2100, amp: 0.07 },
+      { t: 0.50, base: 2500, amp: 0.06 }
+    ];
+    jingles.forEach(function(j) {
+      var t = now + j.t;
+      // Bell-like: fundamental + non-harmonic partials (2.76, 5.4 ratios)
+      [1, 2.76, 5.4].forEach(function(ratio, idx) {
+        var o = ac.createOscillator(); o.type='sine';
+        o.frequency.value = j.base * ratio;
+        var g = ac.createGain();
+        var amp = j.amp / (idx + 1);
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(amp, t + 0.003);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t); o.stop(t + 0.2);
+      });
+    });
+    // Landing rattle — coin settling on a hard surface, three quick bounces
+    var landTimes = [0.85, 0.92, 0.97];
+    landTimes.forEach(function(off, i) {
+      var t0 = now + off;
+      [2800, 4200].forEach(function(freq, idx) {
+        var o = ac.createOscillator(); o.type='sine';
+        o.frequency.value = freq + Math.random() * 200;
+        var g = ac.createGain();
+        var amp = (idx === 0 ? 0.10 : 0.05) * (1 - i * 0.3);
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(amp, t0 + 0.002);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t0); o.stop(t0 + 0.24);
+      });
+    });
       });
   }
   // Door creak then a tiny pub-bell ding
@@ -4940,8 +4957,7 @@ window._passageGen = 0;
             try {
               var pName = n.getAttribute('data-name') || '';
               if (window.dssAudio) {
-                // Soft wave-like whoosh on every passage transition
-                window.dssAudio.passageWhoosh();
+                // (passage whoosh removed — felt repetitive)
                 if (n.querySelector('.page-found')) {
                   setTimeout(function(){ window.dssAudio.pageRustle(); }, 180);
                 }
@@ -4983,6 +4999,12 @@ window._passageGen = 0;
                 ];
                 if (DOOR_PASSAGES.indexOf(pName) !== -1) {
                   setTimeout(function(){ window.dssAudio.doorCreak(); }, 120);
+                  // Whoosh on FIRST entry to a venue only — establishes the place
+                  if (!window._whooshSeen) window._whooshSeen = {};
+                  if (!window._whooshSeen[pName]) {
+                    window._whooshSeen[pName] = true;
+                    setTimeout(function(){ window.dssAudio.passageWhoosh(); }, 60);
+                  }
                 }
                 // Ambient bed: pub murmur / wind+sea / silence, by scene
                 var pubVenues = /venue-french|venue-coach|venue-colony|venue-trishas/;

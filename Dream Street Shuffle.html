@@ -4910,10 +4910,11 @@ window.dssAudio = (function() {
     _play(function(ac) {
     beats = beats || 3;
     var now = ac.currentTime;
+    var t0 = now;
+    // Each beat decelerates from the previous — the rhythm slows as the
+    // tension subsides (or the heart calms).
     for (var b = 0; b < beats; b++) {
-      var t0 = now + b * 0.95;
-      // Each beat: lub-dub. Slightly higher fundamental than a real heartbeat
-      // so it actually plays through laptop / earbud speakers.
+      var interval = 0.95 + b * 0.18;
       [0, 0.18].forEach(function(off, idx) {
         var t = t0 + off;
         var o = ac.createOscillator(); o.type='sine';
@@ -4927,6 +4928,7 @@ window.dssAudio = (function() {
         o.connect(g); g.connect(ac.destination);
         o.start(t); o.stop(t+0.18);
       });
+      t0 += interval;
     }
       });
   }
@@ -5195,6 +5197,175 @@ window.dssAudio = (function() {
       });
   }
   function ambientOff() { _stopAmbient(); }
+  // ====== FARNELL-STYLE PROCEDURAL MODELS ======
+  // British telephone bell — two iron gongs, magnetic clapper alternates
+  // between them at ~25 Hz. Each gong rings with several inharmonic modes.
+  // Modelled after Farnell, "Designing Sound" ch. on the telephone bell.
+  function phoneBell(rings) {
+    _play(function(ac) {
+    rings = rings || 2;
+    var now = ac.currentTime;
+    function strike(t, gongA) {
+      // Two gongs of slightly different size — each has 3 inharmonic partials
+      var partials = gongA
+        ? [{ f: 1380, a: 0.10, d: 0.18 },
+           { f: 2050, a: 0.06, d: 0.13 },
+           { f: 3120, a: 0.03, d: 0.09 }]
+        : [{ f: 1620, a: 0.10, d: 0.18 },
+           { f: 2410, a: 0.06, d: 0.13 },
+           { f: 3580, a: 0.03, d: 0.09 }];
+      partials.forEach(function(p) {
+        var o = ac.createOscillator(); o.type='sine';
+        // Tiny pitch drift so each strike isn't identical
+        o.frequency.value = p.f * (1 + (Math.random()-0.5) * 0.006);
+        var g = ac.createGain();
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(p.a, t + 0.001);
+        g.gain.exponentialRampToValueAtTime(0.001, t + p.d);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t); o.stop(t + p.d + 0.01);
+      });
+      // Metallic clapper-tap noise transient
+      var nLen = Math.floor(ac.sampleRate * 0.003);
+      var nbuf = ac.createBuffer(1, nLen, ac.sampleRate);
+      var nd = nbuf.getChannelData(0);
+      for (var k = 0; k < nLen; k++) nd[k] = (Math.random()*2-1) * Math.exp(-k/nLen * 8);
+      var nsrc = ac.createBufferSource(); nsrc.buffer = nbuf;
+      var nf = ac.createBiquadFilter(); nf.type='highpass';
+      nf.frequency.value = 2500;
+      var ng = ac.createGain(); ng.gain.value = 0.05;
+      nsrc.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+      nsrc.start(t);
+    }
+    // British double-pulse: brrring brrring (0.4s ring, 0.2s gap, 0.4s ring,
+    // then 2.0s pause), alternating gongs at ~25 Hz inside each ring.
+    for (var r = 0; r < rings; r++) {
+      var cycle = now + r * 2.0;
+      [0, 0.4].forEach(function(brrOff) {
+        var brrStart = cycle + brrOff;
+        for (var i = 0; i < 10; i++) {
+          strike(brrStart + i * 0.04, i % 2 === 0);
+        }
+      });
+    }
+    });
+  }
+  // Wind — three parallel filters (low howl, mid whistle, high sibilance)
+  // driven by white noise, with a slow LFO on the mid-band cutoff to gust.
+  // Modelled after Farnell's wind chapter.
+  function windFarnell() {
+    _play(function(ac) {
+    if (_ambient && _ambient.kind === 'wind') return;
+    _stopAmbient();
+    var now = ac.currentTime;
+    var dur = 12.0;
+    var bufLen = Math.floor(ac.sampleRate * dur);
+    var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * 0.6;
+    var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    // Three bands
+    var f1 = ac.createBiquadFilter(); f1.type='bandpass';
+    f1.frequency.value = 240; f1.Q.value = 2.5;          // low howl
+    var f2 = ac.createBiquadFilter(); f2.type='bandpass';
+    f2.frequency.value = 720; f2.Q.value = 3.0;          // mid whistle
+    var f3 = ac.createBiquadFilter(); f3.type='lowpass';
+    f3.frequency.value = 3200; f3.Q.value = 0.7;         // high sibilance
+    var g1 = ac.createGain(); g1.gain.value = 0.55;
+    var g2 = ac.createGain(); g2.gain.value = 0.65;
+    var g3 = ac.createGain(); g3.gain.value = 0.30;
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.20, now + 2.0);
+    // Gust LFO — slow sweep on the whistle band's cutoff
+    var lfo = ac.createOscillator(); lfo.type='sine';
+    lfo.frequency.value = 0.13;
+    var lfoG = ac.createGain(); lfoG.gain.value = 280;
+    lfo.connect(lfoG); lfoG.connect(f2.frequency);
+    lfo.start(now);
+    src.connect(f1); f1.connect(g1); g1.connect(g);
+    src.connect(f2); f2.connect(g2); g2.connect(g);
+    src.connect(f3); f3.connect(g3); g3.connect(g);
+    g.connect(ac.destination);
+    src.start(now);
+    _ambient = { src: src, g: g, kind: 'wind', lfo: lfo };
+    });
+  }
+  // Fire — pink noise with slow flicker, plus sparse crackle events baked in.
+  // Modelled after Farnell's fire chapter.
+  function fireFarnell() {
+    _play(function(ac) {
+    if (_ambient && _ambient.kind === 'fire') return;
+    _stopAmbient();
+    var now = ac.currentTime;
+    var dur = 15.0;
+    var bufLen = Math.floor(ac.sampleRate * dur);
+    var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+    var d = buf.getChannelData(0);
+    var b0=0, b1=0, b2=0;
+    for (var i = 0; i < bufLen; i++) {
+      var w = Math.random()*2-1;
+      b0 = 0.99*b0 + 0.07*w;
+      b1 = 0.96*b1 + 0.10*w;
+      b2 = 0.85*b2 + 0.12*w;
+      // Slow flicker baked into the loop
+      var ti = i / ac.sampleRate;
+      var flicker = 0.7 + 0.3 * Math.sin(ti * 2.3) * Math.sin(ti * 0.71);
+      d[i] = (b0 + b1 + b2) * 0.3 * flicker;
+      // Sparse crackle events ~5/sec
+      if (Math.random() < 0.0001) {
+        var clen = Math.floor(ac.sampleRate * 0.025);
+        for (var k = 0; k < clen && i + k < bufLen; k++) {
+          var env = Math.exp(-k / (ac.sampleRate * 0.005));
+          d[i+k] += (Math.random()*2-1) * env * 0.6;
+        }
+      }
+    }
+    var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    var f = ac.createBiquadFilter(); f.type='bandpass';
+    f.frequency.value = 600; f.Q.value = 0.5;
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.12, now + 2.0);
+    src.connect(f); f.connect(g); g.connect(ac.destination);
+    src.start(now);
+    _ambient = { src: src, g: g, kind: 'fire' };
+    });
+  }
+  // Footstep — heel + ball impacts, surface filter selects ground type.
+  // Call as footstep('wet'|'wood'|'carpet'|'gravel').
+  function footstep(surface) {
+    _play(function(ac) {
+    var now = ac.currentTime;
+    [0, 0.11].forEach(function(off, idx) {
+      var t = now + off;
+      var dur = 0.07;
+      var bufLen = Math.floor(ac.sampleRate * dur);
+      var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < bufLen; i++) {
+        var env = Math.exp(-i / bufLen * 9);
+        d[i] = (Math.random()*2-1) * env;
+      }
+      var src = ac.createBufferSource(); src.buffer = buf;
+      var f = ac.createBiquadFilter();
+      if (surface === 'wood') {
+        f.type='bandpass'; f.frequency.value = 220; f.Q.value = 2.5;
+      } else if (surface === 'carpet') {
+        f.type='lowpass'; f.frequency.value = 260; f.Q.value = 0.5;
+      } else if (surface === 'gravel') {
+        f.type='highpass'; f.frequency.value = 1600; f.Q.value = 0.6;
+      } else {
+        // wet pavement default — mid-band slap
+        f.type='bandpass'; f.frequency.value = 700; f.Q.value = 1.5;
+      }
+      var g = ac.createGain();
+      g.gain.value = (idx === 0 ? 0.07 : 0.045);
+      src.connect(f); f.connect(g); g.connect(ac.destination);
+      src.start(t);
+    });
+    });
+  }
   // Passage transition — a slow wave-like swell that fades.
   // Filtered noise with a gentle filter sweep: opens up as it crests, closes as it dies.
   // Quiet so it doesn't compete with passage-specific sounds (drinks, doors, etc.)
@@ -5226,7 +5397,10 @@ window.dssAudio = (function() {
     penScratch: penScratch, heartbeat: heartbeat,
     glassSmash: glassSmash, matchStrike: matchStrike, coinFlip: coinFlip,
     doorCreak: doorCreak, passageWhoosh: passageWhoosh,
-    ambientPub: ambientPub, ambientDream: ambientDream, ambientOff: ambientOff
+    ambientPub: ambientPub, ambientDream: ambientDream, ambientOff: ambientOff,
+    // Farnell-style procedural models
+    phoneBell: phoneBell, windFarnell: windFarnell,
+    fireFarnell: fireFarnell, footstep: footstep
   };
 })();
 
@@ -9649,10 +9823,12 @@ window._passageGen = 0;
                 if (passageNode.querySelector('.haunt-box')) {
                   setTimeout(function(){ window.dssAudio.penScratch(); }, 600);
                 }
-                // Phone calls — detected by .phone-scene class
+                // Phone calls — detected by .phone-scene class.
+                // Uses Farnell-style mechanical bell model.
                 if (passageNode.querySelector('.phone-scene')) {
-                  setTimeout(function(){ window.dssAudio.phoneRing(2); }, 250);
-                  setTimeout(function(){ window.dssAudio.heartbeat(3); }, 4400);
+                  setTimeout(function(){ window.dssAudio.phoneBell(2); }, 250);
+                  // Six beats — heartbeat decelerates as the call settles
+                  setTimeout(function(){ window.dssAudio.heartbeat(6); }, 4400);
                 }
                 // Glass smash — passage carries an .empty-glass-marker hint
                 if (passageNode.querySelector('.empty-glass-marker')) {
@@ -9677,6 +9853,26 @@ window._passageGen = 0;
                   }
                 }
                 window._currentVenue = newVenue;
+                // Ambient beds: pyre (fire) takes precedence over dream (wind).
+                // Both auto-stop when the player leaves the dream sequence.
+                var inDream = (tags.indexOf('dream') !== -1);
+                var inPyre = (tags.indexOf('pyre') !== -1);
+                if (inPyre) {
+                  window.dssAudio.fireFarnell();
+                } else if (inDream) {
+                  window.dssAudio.windFarnell();
+                } else if (window._wasInDream || window._wasInPyre) {
+                  window.dssAudio.ambientOff();
+                }
+                window._wasInDream = inDream;
+                window._wasInPyre = inPyre;
+                // Footsteps on the staircase — The Interval. Soft red-carpet
+                // descent: four steps, then a pause where the player freezes.
+                if (passageNode.querySelector('.staircase-marker')) {
+                  [0.4, 1.0, 1.6, 2.2].forEach(function(delay) {
+                    setTimeout(function(){ window.dssAudio.footstep('carpet'); }, delay * 1000);
+                  });
+                }
               }
             } catch(e) { if (window.console) console.error('[dssAudio]', e); }
               }, 80);
@@ -46665,6 +46861,486 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="init" position="0,0" size="100,100">(set: $albaRevealed to false)\
 (set: $confidence to 70)\
 (set: $sobriety to 70)\
@@ -47494,7 +48170,7 @@ In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It wil
 ]\
 ]\
 (set: $notebookUnlocked to true)</tw-passagedata>
-<tw-passagedata pid="52" name="Dido" position="100,1700" size="100,100">&lt;svg class=&quot;carthage-pyre&quot; viewBox=&quot;0 0 500 95&quot; width=&quot;100%&quot; height=&quot;95&quot; preserveAspectRatio=&quot;none&quot;&gt;&lt;defs&gt;&lt;radialGradient id=&quot;cpGlow&quot; cx=&quot;50%&quot; cy=&quot;85%&quot; r=&quot;70%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#d4600a&quot; stop-opacity=&quot;0.4&quot;/&gt;&lt;stop offset=&quot;30%&quot; stop-color=&quot;#c84a08&quot; stop-opacity=&quot;0.2&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#401808&quot; stop-opacity=&quot;0.08&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;linearGradient id=&quot;cpTopFade&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;35%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0.6&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;cpFade&quot; x1=&quot;0&quot; x2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;8%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;92%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;cpGround&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#3a2010&quot; stop-opacity=&quot;0.5&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#1a0a08&quot; stop-opacity=&quot;0.3&quot;/&gt;&lt;/linearGradient&gt;&lt;/defs&gt;&lt;rect x=&quot;0&quot; y=&quot;77&quot; width=&quot;500&quot; height=&quot;18&quot; fill=&quot;url(#cpGround)&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpGlow)&quot;/&gt;&lt;rect x=&quot;195&quot; y=&quot;77&quot; width=&quot;110&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#3a2818&quot; opacity=&quot;0.6&quot;/&gt;&lt;rect x=&quot;205&quot; y=&quot;72&quot; width=&quot;90&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#4a3020&quot; opacity=&quot;0.5&quot;/&gt;&lt;rect x=&quot;215&quot; y=&quot;67&quot; width=&quot;70&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#5a3828&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M220,67 Q210,50 225,28 Q230,40 240,18 Q248,35 250,8 Q255,30 262,14 Q268,38 275,22 Q280,45 285,67Z&quot; fill=&quot;#8a2800&quot; opacity=&quot;0.35&quot;/&gt;&lt;path d=&quot;M225,67 Q218,48 232,22 Q238,36 245,10 Q250,28 255,6 Q260,25 268,16 Q272,40 278,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M230,67 Q224,45 237,18 Q242,32 248,8 Q253,28 258,12 Q264,35 270,67Z&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M235,67 Q230,42 242,20 Q246,34 250,12 Q254,30 258,18 Q262,40 265,67Z&quot; fill=&quot;#e88020&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M240,67 Q237,44 246,24 Q249,36 252,18 Q255,34 258,26 Q259,42 260,67Z&quot; fill=&quot;#ffa040&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M245,67 Q243,48 249,30 Q251,42 253,34 Q254,48 255,67Z&quot; fill=&quot;#ffc868&quot; opacity=&quot;0.4&quot;/&gt;&lt;path d=&quot;M222,67 Q216,52 224,35 Q228,45 230,38 Q229,50 232,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.3&quot;/&gt;&lt;path d=&quot;M268,67 Q272,50 276,32 Q274,44 278,40 Q276,52 275,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;228&quot; cy=&quot;61&quot; r=&quot;4.5&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.55&quot;/&gt;&lt;rect x=&quot;232&quot; y=&quot;63&quot; width=&quot;32&quot; height=&quot;3&quot; rx=&quot;1&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M264,63 L266,63 L266,58 L264,58 Z&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M267,63 L269,63 L269,59 L267,59 Z&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.45&quot;/&gt;&lt;circle cx=&quot;245&quot; cy=&quot;4&quot; r=&quot;0.8&quot; fill=&quot;#ffa030&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;260&quot; cy=&quot;7&quot; r=&quot;0.6&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;238&quot; cy=&quot;10&quot; r=&quot;0.7&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;268&quot; cy=&quot;3&quot; r=&quot;0.5&quot; fill=&quot;#ff6010&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;252&quot; cy=&quot;2&quot; r=&quot;0.6&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;230&quot; cy=&quot;6&quot; r=&quot;0.5&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;272&quot; cy=&quot;12&quot; r=&quot;0.9&quot; fill=&quot;#ffa030&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;242&quot; cy=&quot;16&quot; r=&quot;0.5&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;256&quot; cy=&quot;14&quot; r=&quot;0.4&quot; fill=&quot;#ff6010&quot; opacity=&quot;0.25&quot;/&gt;&lt;rect x=&quot;80&quot; y=&quot;30&quot; width=&quot;5&quot; height=&quot;47&quot; fill=&quot;#705848&quot; opacity=&quot;0.45&quot;/&gt;&lt;rect x=&quot;78&quot; y=&quot;28&quot; width=&quot;9&quot; height=&quot;3&quot; rx=&quot;0.5&quot; fill=&quot;#806858&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M82,45 L84,55&quot; stroke=&quot;#3a2010&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.4&quot;/&gt;&lt;rect x=&quot;70&quot; y=&quot;74&quot; width=&quot;9&quot; height=&quot;4&quot; rx=&quot;1&quot; fill=&quot;#705848&quot; opacity=&quot;0.3&quot; transform=&quot;rotate(-15,74,76)&quot;/&gt;&lt;rect x=&quot;405&quot; y=&quot;22&quot; width=&quot;6&quot; height=&quot;55&quot; fill=&quot;#705848&quot; opacity=&quot;0.4&quot;/&gt;&lt;rect x=&quot;402&quot; y=&quot;20&quot; width=&quot;12&quot; height=&quot;3&quot; rx=&quot;0.5&quot; fill=&quot;#806858&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M408,35 Q410,42 407,50 Q410,58 408,65&quot; fill=&quot;none&quot; stroke=&quot;#d4600a&quot; stroke-width=&quot;0.4&quot; opacity=&quot;0.2&quot;/&gt;&lt;path d=&quot;M415,72 Q420,65 430,72&quot; fill=&quot;none&quot; stroke=&quot;#705848&quot; stroke-width=&quot;1.5&quot; opacity=&quot;0.3&quot;/&gt;&lt;rect x=&quot;140&quot; y=&quot;48&quot; width=&quot;3&quot; height=&quot;29&quot; fill=&quot;#503828&quot; opacity=&quot;0.25&quot;/&gt;&lt;rect x=&quot;350&quot; y=&quot;42&quot; width=&quot;3&quot; height=&quot;35&quot; fill=&quot;#503828&quot; opacity=&quot;0.2&quot;/&gt;&lt;path d=&quot;M348,42 L356,42&quot; stroke=&quot;#503828&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.15&quot;/&gt;&lt;circle cx=&quot;180&quot; cy=&quot;82&quot; r=&quot;0.8&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.25&quot;/&gt;&lt;circle cx=&quot;320&quot; cy=&quot;80&quot; r=&quot;0.6&quot; fill=&quot;#c84a08&quot; opacity=&quot;0.2&quot;/&gt;&lt;circle cx=&quot;160&quot; cy=&quot;84&quot; r=&quot;0.5&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.15&quot;/&gt;&lt;circle cx=&quot;340&quot; cy=&quot;83&quot; r=&quot;0.7&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.2&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpTopFade)&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpFade)&quot;/&gt;&lt;/svg&gt;
+<tw-passagedata pid="52" name="Dido" tags="dream pyre" position="100,1700" size="100,100">&lt;svg class=&quot;carthage-pyre&quot; viewBox=&quot;0 0 500 95&quot; width=&quot;100%&quot; height=&quot;95&quot; preserveAspectRatio=&quot;none&quot;&gt;&lt;defs&gt;&lt;radialGradient id=&quot;cpGlow&quot; cx=&quot;50%&quot; cy=&quot;85%&quot; r=&quot;70%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#d4600a&quot; stop-opacity=&quot;0.4&quot;/&gt;&lt;stop offset=&quot;30%&quot; stop-color=&quot;#c84a08&quot; stop-opacity=&quot;0.2&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#401808&quot; stop-opacity=&quot;0.08&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;linearGradient id=&quot;cpTopFade&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;35%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0.6&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;cpFade&quot; x1=&quot;0&quot; x2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;8%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;92%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;cpGround&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#3a2010&quot; stop-opacity=&quot;0.5&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#1a0a08&quot; stop-opacity=&quot;0.3&quot;/&gt;&lt;/linearGradient&gt;&lt;/defs&gt;&lt;rect x=&quot;0&quot; y=&quot;77&quot; width=&quot;500&quot; height=&quot;18&quot; fill=&quot;url(#cpGround)&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpGlow)&quot;/&gt;&lt;rect x=&quot;195&quot; y=&quot;77&quot; width=&quot;110&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#3a2818&quot; opacity=&quot;0.6&quot;/&gt;&lt;rect x=&quot;205&quot; y=&quot;72&quot; width=&quot;90&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#4a3020&quot; opacity=&quot;0.5&quot;/&gt;&lt;rect x=&quot;215&quot; y=&quot;67&quot; width=&quot;70&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#5a3828&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M220,67 Q210,50 225,28 Q230,40 240,18 Q248,35 250,8 Q255,30 262,14 Q268,38 275,22 Q280,45 285,67Z&quot; fill=&quot;#8a2800&quot; opacity=&quot;0.35&quot;/&gt;&lt;path d=&quot;M225,67 Q218,48 232,22 Q238,36 245,10 Q250,28 255,6 Q260,25 268,16 Q272,40 278,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M230,67 Q224,45 237,18 Q242,32 248,8 Q253,28 258,12 Q264,35 270,67Z&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M235,67 Q230,42 242,20 Q246,34 250,12 Q254,30 258,18 Q262,40 265,67Z&quot; fill=&quot;#e88020&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M240,67 Q237,44 246,24 Q249,36 252,18 Q255,34 258,26 Q259,42 260,67Z&quot; fill=&quot;#ffa040&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M245,67 Q243,48 249,30 Q251,42 253,34 Q254,48 255,67Z&quot; fill=&quot;#ffc868&quot; opacity=&quot;0.4&quot;/&gt;&lt;path d=&quot;M222,67 Q216,52 224,35 Q228,45 230,38 Q229,50 232,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.3&quot;/&gt;&lt;path d=&quot;M268,67 Q272,50 276,32 Q274,44 278,40 Q276,52 275,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;228&quot; cy=&quot;61&quot; r=&quot;4.5&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.55&quot;/&gt;&lt;rect x=&quot;232&quot; y=&quot;63&quot; width=&quot;32&quot; height=&quot;3&quot; rx=&quot;1&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M264,63 L266,63 L266,58 L264,58 Z&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M267,63 L269,63 L269,59 L267,59 Z&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.45&quot;/&gt;&lt;circle cx=&quot;245&quot; cy=&quot;4&quot; r=&quot;0.8&quot; fill=&quot;#ffa030&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;260&quot; cy=&quot;7&quot; r=&quot;0.6&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;238&quot; cy=&quot;10&quot; r=&quot;0.7&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;268&quot; cy=&quot;3&quot; r=&quot;0.5&quot; fill=&quot;#ff6010&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;252&quot; cy=&quot;2&quot; r=&quot;0.6&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;230&quot; cy=&quot;6&quot; r=&quot;0.5&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;272&quot; cy=&quot;12&quot; r=&quot;0.9&quot; fill=&quot;#ffa030&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;242&quot; cy=&quot;16&quot; r=&quot;0.5&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;256&quot; cy=&quot;14&quot; r=&quot;0.4&quot; fill=&quot;#ff6010&quot; opacity=&quot;0.25&quot;/&gt;&lt;rect x=&quot;80&quot; y=&quot;30&quot; width=&quot;5&quot; height=&quot;47&quot; fill=&quot;#705848&quot; opacity=&quot;0.45&quot;/&gt;&lt;rect x=&quot;78&quot; y=&quot;28&quot; width=&quot;9&quot; height=&quot;3&quot; rx=&quot;0.5&quot; fill=&quot;#806858&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M82,45 L84,55&quot; stroke=&quot;#3a2010&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.4&quot;/&gt;&lt;rect x=&quot;70&quot; y=&quot;74&quot; width=&quot;9&quot; height=&quot;4&quot; rx=&quot;1&quot; fill=&quot;#705848&quot; opacity=&quot;0.3&quot; transform=&quot;rotate(-15,74,76)&quot;/&gt;&lt;rect x=&quot;405&quot; y=&quot;22&quot; width=&quot;6&quot; height=&quot;55&quot; fill=&quot;#705848&quot; opacity=&quot;0.4&quot;/&gt;&lt;rect x=&quot;402&quot; y=&quot;20&quot; width=&quot;12&quot; height=&quot;3&quot; rx=&quot;0.5&quot; fill=&quot;#806858&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M408,35 Q410,42 407,50 Q410,58 408,65&quot; fill=&quot;none&quot; stroke=&quot;#d4600a&quot; stroke-width=&quot;0.4&quot; opacity=&quot;0.2&quot;/&gt;&lt;path d=&quot;M415,72 Q420,65 430,72&quot; fill=&quot;none&quot; stroke=&quot;#705848&quot; stroke-width=&quot;1.5&quot; opacity=&quot;0.3&quot;/&gt;&lt;rect x=&quot;140&quot; y=&quot;48&quot; width=&quot;3&quot; height=&quot;29&quot; fill=&quot;#503828&quot; opacity=&quot;0.25&quot;/&gt;&lt;rect x=&quot;350&quot; y=&quot;42&quot; width=&quot;3&quot; height=&quot;35&quot; fill=&quot;#503828&quot; opacity=&quot;0.2&quot;/&gt;&lt;path d=&quot;M348,42 L356,42&quot; stroke=&quot;#503828&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.15&quot;/&gt;&lt;circle cx=&quot;180&quot; cy=&quot;82&quot; r=&quot;0.8&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.25&quot;/&gt;&lt;circle cx=&quot;320&quot; cy=&quot;80&quot; r=&quot;0.6&quot; fill=&quot;#c84a08&quot; opacity=&quot;0.2&quot;/&gt;&lt;circle cx=&quot;160&quot; cy=&quot;84&quot; r=&quot;0.5&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.15&quot;/&gt;&lt;circle cx=&quot;340&quot; cy=&quot;83&quot; r=&quot;0.7&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.2&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpTopFade)&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpFade)&quot;/&gt;&lt;/svg&gt;
 
 On the pyre, Dido is burning where she has burnt for 2,000 years.
 
@@ -47786,7 +48462,7 @@ Miss them and you&#x27;ll end up just another Dean Street dream.
 &lt;/div&gt;
 
 [[Back to Dean Street|Dean Street]]</tw-passagedata>
-<tw-passagedata pid="69" name="Green Sea Approach" position="850,200" size="100,100">&lt;div id=&quot;gs-approach&quot;&gt;&lt;/div&gt;[[·|LINE 2]]</tw-passagedata>
+<tw-passagedata pid="69" name="Green Sea Approach" tags="dream" position="850,200" size="100,100">&lt;div id=&quot;gs-approach&quot;&gt;&lt;/div&gt;[[·|LINE 2]]</tw-passagedata>
 <tw-passagedata pid="70" name="LINE 2" position="900,200" size="100,100">&lt;svg class=&quot;green-sea-bar&quot; viewBox=&quot;0 0 500 110&quot; width=&quot;100%&quot; height=&quot;110&quot; preserveAspectRatio=&quot;none&quot;&gt;&lt;defs&gt;&lt;radialGradient id=&quot;gs2Win1&quot; cx=&quot;18%&quot; cy=&quot;28%&quot; r=&quot;22%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#9cd8e8&quot; stop-opacity=&quot;0.52&quot;/&gt;&lt;stop offset=&quot;55%&quot; stop-color=&quot;#5ab8cc&quot; stop-opacity=&quot;0.18&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#1a3a58&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;radialGradient id=&quot;gs2Win2&quot; cx=&quot;50%&quot; cy=&quot;18%&quot; r=&quot;24%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#a8e0d8&quot; stop-opacity=&quot;0.46&quot;/&gt;&lt;stop offset=&quot;55%&quot; stop-color=&quot;#4ab0b8&quot; stop-opacity=&quot;0.14&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#1a3a50&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;radialGradient id=&quot;gs2Win3&quot; cx=&quot;82%&quot; cy=&quot;26%&quot; r=&quot;21%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#94d4e4&quot; stop-opacity=&quot;0.50&quot;/&gt;&lt;stop offset=&quot;55%&quot; stop-color=&quot;#50b0c4&quot; stop-opacity=&quot;0.16&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#1a3858&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;radialGradient id=&quot;gs2Lamp&quot; cx=&quot;65%&quot; cy=&quot;100%&quot; r=&quot;28%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#d8c888&quot; stop-opacity=&quot;0.28&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#c0a858&quot; stop-opacity=&quot;0.08&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#c0a858&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;linearGradient id=&quot;gs2FH&quot; x1=&quot;0&quot; x2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#080c10&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;7%&quot; stop-color=&quot;#080c10&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;93%&quot; stop-color=&quot;#080c10&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#080c10&quot; stop-opacity=&quot;1&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;gs2FV&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#080c10&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;28%&quot; stop-color=&quot;#080c10&quot; stop-opacity=&quot;0.15&quot;/&gt;&lt;stop offset=&quot;58%&quot; stop-color=&quot;#080c10&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#080c10&quot; stop-opacity=&quot;0.08&quot;/&gt;&lt;/linearGradient&gt;&lt;/defs&gt;&lt;rect width=&quot;500&quot; height=&quot;110&quot; fill=&quot;#080e14&quot;/&gt;&lt;rect width=&quot;500&quot; height=&quot;110&quot; fill=&quot;url(#gs2Win1)&quot;/&gt;&lt;rect width=&quot;500&quot; height=&quot;110&quot; fill=&quot;url(#gs2Win2)&quot;/&gt;&lt;rect width=&quot;500&quot; height=&quot;110&quot; fill=&quot;url(#gs2Win3)&quot;/&gt;&lt;rect width=&quot;500&quot; height=&quot;110&quot; fill=&quot;url(#gs2Lamp)&quot;/&gt;&lt;path d=&quot;M55,110 L55,55 Q90,18 125,55 L125,110&quot; fill=&quot;#3a8a9a&quot; opacity=&quot;0.05&quot;/&gt;&lt;path d=&quot;M55,110 L55,55 Q90,18 125,55 L125,110&quot; fill=&quot;none&quot; stroke=&quot;#8ad8e8&quot; stroke-width=&quot;0.9&quot; opacity=&quot;0.22&quot;/&gt;&lt;path d=&quot;M190,110 L190,40 Q250,0 310,40 L310,110&quot; fill=&quot;#3a90a0&quot; opacity=&quot;0.05&quot;/&gt;&lt;path d=&quot;M190,110 L190,40 Q250,0 310,40 L310,110&quot; fill=&quot;none&quot; stroke=&quot;#9ae0e8&quot; stroke-width=&quot;1.1&quot; opacity=&quot;0.20&quot;/&gt;&lt;path d=&quot;M375,110 L375,58 Q410,22 445,58 L445,110&quot; fill=&quot;#3a8898&quot; opacity=&quot;0.05&quot;/&gt;&lt;path d=&quot;M375,110 L375,58 Q410,22 445,58 L445,110&quot; fill=&quot;none&quot; stroke=&quot;#88d4e4&quot; stroke-width=&quot;0.9&quot; opacity=&quot;0.21&quot;/&gt;&lt;rect x=&quot;126&quot; y=&quot;28&quot; width=&quot;4&quot; height=&quot;82&quot; fill=&quot;#7ab8c8&quot; opacity=&quot;0.09&quot;/&gt;&lt;rect x=&quot;187&quot; y=&quot;22&quot; width=&quot;5&quot; height=&quot;88&quot; fill=&quot;#7ab8c8&quot; opacity=&quot;0.07&quot;/&gt;&lt;rect x=&quot;308&quot; y=&quot;22&quot; width=&quot;5&quot; height=&quot;88&quot; fill=&quot;#7ab8c8&quot; opacity=&quot;0.07&quot;/&gt;&lt;rect x=&quot;373&quot; y=&quot;28&quot; width=&quot;4&quot; height=&quot;82&quot; fill=&quot;#7ab8c8&quot; opacity=&quot;0.09&quot;/&gt;&lt;line x1=&quot;40&quot; y1=&quot;28&quot; x2=&quot;460&quot; y2=&quot;28&quot; stroke=&quot;#4a7888&quot; stroke-width=&quot;0.6&quot; opacity=&quot;0.16&quot;/&gt;&lt;line x1=&quot;30&quot; y1=&quot;20&quot; x2=&quot;470&quot; y2=&quot;20&quot; stroke=&quot;#3a6878&quot; stroke-width=&quot;0.4&quot; opacity=&quot;0.09&quot;/&gt;&lt;g opacity=&quot;0.08&quot; stroke=&quot;#a0e0d8&quot; stroke-width=&quot;0.5&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M60,11 Q80,7 100,11 Q120,15 140,11&quot;/&gt;&lt;path d=&quot;M65,17 Q85,13 105,17 Q125,21 145,17&quot;/&gt;&lt;path d=&quot;M350,9 Q370,5 390,9 Q410,13 430,9&quot;/&gt;&lt;path d=&quot;M355,16 Q375,12 395,16 Q415,20 435,16&quot;/&gt;&lt;path d=&quot;M200,7 Q218,3 236,7 Q254,11 272,7&quot;/&gt;&lt;/g&gt;&lt;g opacity=&quot;0.06&quot; stroke=&quot;#88b898&quot; stroke-width=&quot;0.5&quot; fill=&quot;none&quot;&gt;&lt;line x1=&quot;50&quot; y1=&quot;96&quot; x2=&quot;450&quot; y2=&quot;96&quot;/&gt;&lt;line x1=&quot;40&quot; y1=&quot;103&quot; x2=&quot;460&quot; y2=&quot;103&quot;/&gt;&lt;line x1=&quot;130&quot; y1=&quot;91&quot; x2=&quot;130&quot; y2=&quot;110&quot;/&gt;&lt;line x1=&quot;200&quot; y1=&quot;90&quot; x2=&quot;200&quot; y2=&quot;110&quot;/&gt;&lt;line x1=&quot;270&quot; y1=&quot;90&quot; x2=&quot;270&quot; y2=&quot;110&quot;/&gt;&lt;line x1=&quot;340&quot; y1=&quot;90&quot; x2=&quot;340&quot; y2=&quot;110&quot;/&gt;&lt;line x1=&quot;410&quot; y1=&quot;91&quot; x2=&quot;410&quot; y2=&quot;110&quot;/&gt;&lt;/g&gt;&lt;circle cx=&quot;330&quot; cy=&quot;110&quot; r=&quot;55&quot; fill=&quot;#c8a858&quot; opacity=&quot;0.06&quot;/&gt;&lt;rect x=&quot;233&quot; y=&quot;40&quot; width=&quot;34&quot; height=&quot;44&quot; fill=&quot;none&quot; stroke=&quot;#b8a870&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.14&quot;/&gt;&lt;rect x=&quot;236&quot; y=&quot;43&quot; width=&quot;28&quot; height=&quot;38&quot; fill=&quot;#a09060&quot; opacity=&quot;0.03&quot;/&gt;&lt;g fill=&quot;#b8d8d0&quot; opacity=&quot;0.16&quot;&gt;&lt;circle cx=&quot;72&quot; cy=&quot;44&quot; r=&quot;0.7&quot;/&gt;&lt;circle cx=&quot;140&quot; cy=&quot;32&quot; r=&quot;0.5&quot;/&gt;&lt;circle cx=&quot;175&quot; cy=&quot;48&quot; r=&quot;0.6&quot;/&gt;&lt;circle cx=&quot;248&quot; cy=&quot;26&quot; r=&quot;0.8&quot;/&gt;&lt;circle cx=&quot;295&quot; cy=&quot;41&quot; r=&quot;0.5&quot;/&gt;&lt;circle cx=&quot;368&quot; cy=&quot;30&quot; r=&quot;0.7&quot;/&gt;&lt;circle cx=&quot;432&quot; cy=&quot;45&quot; r=&quot;0.5&quot;/&gt;&lt;/g&gt;&lt;rect width=&quot;500&quot; height=&quot;110&quot; fill=&quot;url(#gs2FH)&quot;/&gt;&lt;rect width=&quot;500&quot; height=&quot;110&quot; fill=&quot;url(#gs2FV)&quot;/&gt;&lt;/svg&gt;
 
 Just off the beach is a bar called The Green Sea. It&#x27;s mostly old men playing cribbage, and on its wall is a portrait of Ban Ali, though standards have slipped or morals have grown less important; there are women here now, white women, at least.
@@ -47855,7 +48531,7 @@ Salvu Copper, who is proportioned brutally, opens the door and leans over the th
 [[&#x27;Sorry, I think I&#x27;ve got the wrong door.&#x27;|Wrong door]]
 &lt;svg viewBox=&quot;0 0 300 40&quot; width=&quot;100%&quot; height=&quot;40&quot; preserveAspectRatio=&quot;none&quot;&gt;&lt;defs&gt;&lt;linearGradient id=&quot;mgEdge2&quot; x1=&quot;0&quot; x2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#6b2020&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;15%&quot; stop-color=&quot;#6b2020&quot; stop-opacity=&quot;0.5&quot;/&gt;&lt;stop offset=&quot;85%&quot; stop-color=&quot;#6b2020&quot; stop-opacity=&quot;0.5&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#6b2020&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/linearGradient&gt;&lt;/defs&gt;&lt;line x1=&quot;0&quot; y1=&quot;4&quot; x2=&quot;300&quot; y2=&quot;4&quot; stroke=&quot;url(#mgEdge2)&quot; stroke-width=&quot;1.5&quot;/&gt;&lt;line x1=&quot;0&quot; y1=&quot;36&quot; x2=&quot;300&quot; y2=&quot;36&quot; stroke=&quot;url(#mgEdge2)&quot; stroke-width=&quot;0.8&quot;/&gt;&lt;g transform=&quot;translate(150,20)&quot; fill=&quot;none&quot; stroke=&quot;#8b3030&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.55&quot;&gt;&lt;path d=&quot;M0,-10 L4,-4 L10,0 L4,4 L0,10 L-4,4 L-10,0 L-4,-4 Z&quot;/&gt;&lt;circle cx=&quot;0&quot; cy=&quot;0&quot; r=&quot;2.5&quot; stroke-width=&quot;0.8&quot;/&gt;&lt;/g&gt;&lt;/svg&gt;
 &lt;/div&gt;</tw-passagedata>
-<tw-passagedata pid="75" name="Maritime interlude" position="300,1000" size="100,100">&lt;div class=&quot;maritime-scene&quot;&gt;
+<tw-passagedata pid="75" name="Maritime interlude" tags="dream" position="300,1000" size="100,100">&lt;div class=&quot;maritime-scene&quot;&gt;
 &lt;div class=&quot;maritime-lamp&quot;&gt;&lt;/div&gt;
 &lt;div class=&quot;maritime-lightning&quot;&gt;&lt;/div&gt;
 &lt;span class=&quot;maritime-svg-wrap&quot;&gt;&lt;svg viewBox=&quot;0 0 1200 18&quot; preserveAspectRatio=&quot;none&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;&lt;path d=&quot;M0,9 C25,2 50,16 75,9 C100,2 125,16 150,9 C175,2 200,16 225,9 C250,2 275,16 300,9 C325,2 350,16 375,9 C400,2 425,16 450,9 C475,2 500,16 525,9 C550,2 575,16 600,9 C625,2 650,16 675,9 C700,2 725,16 750,9 C775,2 800,16 825,9 C850,2 875,16 900,9 C925,2 950,16 975,9 C1000,2 1025,16 1050,9 C1075,2 1100,16 1125,9 C1150,2 1175,16 1200,9&quot; fill=&quot;none&quot; stroke=&quot;#4a7090&quot; stroke-width=&quot;1.5&quot; opacity=&quot;0.8&quot;/&gt;&lt;/svg&gt;&lt;/span&gt;
@@ -49756,7 +50432,7 @@ For a moment you think he might let you go. Then his eyes harden.
 (set: $oppScore to 0)\
 (set: $ppScore to 0)\
 (go-to: &quot;The Night Ahead&quot;)</tw-passagedata>
-<tw-passagedata pid="121" name="Stay in Carthage" position="100,1950" size="100,100">&lt;svg class=&quot;carthage-pyre&quot; viewBox=&quot;0 0 500 95&quot; width=&quot;100%&quot; height=&quot;95&quot; preserveAspectRatio=&quot;none&quot;&gt;&lt;defs&gt;&lt;radialGradient id=&quot;cpGlow&quot; cx=&quot;50%&quot; cy=&quot;85%&quot; r=&quot;70%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#d4600a&quot; stop-opacity=&quot;0.4&quot;/&gt;&lt;stop offset=&quot;30%&quot; stop-color=&quot;#c84a08&quot; stop-opacity=&quot;0.2&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#401808&quot; stop-opacity=&quot;0.08&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;linearGradient id=&quot;cpTopFade&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;35%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0.6&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;cpFade&quot; x1=&quot;0&quot; x2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;8%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;92%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;cpGround&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#3a2010&quot; stop-opacity=&quot;0.5&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#1a0a08&quot; stop-opacity=&quot;0.3&quot;/&gt;&lt;/linearGradient&gt;&lt;/defs&gt;&lt;rect x=&quot;0&quot; y=&quot;77&quot; width=&quot;500&quot; height=&quot;18&quot; fill=&quot;url(#cpGround)&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpGlow)&quot;/&gt;&lt;rect x=&quot;195&quot; y=&quot;77&quot; width=&quot;110&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#3a2818&quot; opacity=&quot;0.6&quot;/&gt;&lt;rect x=&quot;205&quot; y=&quot;72&quot; width=&quot;90&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#4a3020&quot; opacity=&quot;0.5&quot;/&gt;&lt;rect x=&quot;215&quot; y=&quot;67&quot; width=&quot;70&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#5a3828&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M220,67 Q210,50 225,28 Q230,40 240,18 Q248,35 250,8 Q255,30 262,14 Q268,38 275,22 Q280,45 285,67Z&quot; fill=&quot;#8a2800&quot; opacity=&quot;0.35&quot;/&gt;&lt;path d=&quot;M225,67 Q218,48 232,22 Q238,36 245,10 Q250,28 255,6 Q260,25 268,16 Q272,40 278,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M230,67 Q224,45 237,18 Q242,32 248,8 Q253,28 258,12 Q264,35 270,67Z&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M235,67 Q230,42 242,20 Q246,34 250,12 Q254,30 258,18 Q262,40 265,67Z&quot; fill=&quot;#e88020&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M240,67 Q237,44 246,24 Q249,36 252,18 Q255,34 258,26 Q259,42 260,67Z&quot; fill=&quot;#ffa040&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M245,67 Q243,48 249,30 Q251,42 253,34 Q254,48 255,67Z&quot; fill=&quot;#ffc868&quot; opacity=&quot;0.4&quot;/&gt;&lt;path d=&quot;M222,67 Q216,52 224,35 Q228,45 230,38 Q229,50 232,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.3&quot;/&gt;&lt;path d=&quot;M268,67 Q272,50 276,32 Q274,44 278,40 Q276,52 275,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;228&quot; cy=&quot;61&quot; r=&quot;4.5&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.55&quot;/&gt;&lt;rect x=&quot;232&quot; y=&quot;63&quot; width=&quot;32&quot; height=&quot;3&quot; rx=&quot;1&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M264,63 L266,63 L266,58 L264,58 Z&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M267,63 L269,63 L269,59 L267,59 Z&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.45&quot;/&gt;&lt;circle cx=&quot;245&quot; cy=&quot;4&quot; r=&quot;0.8&quot; fill=&quot;#ffa030&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;260&quot; cy=&quot;7&quot; r=&quot;0.6&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;238&quot; cy=&quot;10&quot; r=&quot;0.7&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;268&quot; cy=&quot;3&quot; r=&quot;0.5&quot; fill=&quot;#ff6010&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;252&quot; cy=&quot;2&quot; r=&quot;0.6&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;230&quot; cy=&quot;6&quot; r=&quot;0.5&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;272&quot; cy=&quot;12&quot; r=&quot;0.9&quot; fill=&quot;#ffa030&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;242&quot; cy=&quot;16&quot; r=&quot;0.5&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;256&quot; cy=&quot;14&quot; r=&quot;0.4&quot; fill=&quot;#ff6010&quot; opacity=&quot;0.25&quot;/&gt;&lt;rect x=&quot;80&quot; y=&quot;30&quot; width=&quot;5&quot; height=&quot;47&quot; fill=&quot;#705848&quot; opacity=&quot;0.45&quot;/&gt;&lt;rect x=&quot;78&quot; y=&quot;28&quot; width=&quot;9&quot; height=&quot;3&quot; rx=&quot;0.5&quot; fill=&quot;#806858&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M82,45 L84,55&quot; stroke=&quot;#3a2010&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.4&quot;/&gt;&lt;rect x=&quot;70&quot; y=&quot;74&quot; width=&quot;9&quot; height=&quot;4&quot; rx=&quot;1&quot; fill=&quot;#705848&quot; opacity=&quot;0.3&quot; transform=&quot;rotate(-15,74,76)&quot;/&gt;&lt;rect x=&quot;405&quot; y=&quot;22&quot; width=&quot;6&quot; height=&quot;55&quot; fill=&quot;#705848&quot; opacity=&quot;0.4&quot;/&gt;&lt;rect x=&quot;402&quot; y=&quot;20&quot; width=&quot;12&quot; height=&quot;3&quot; rx=&quot;0.5&quot; fill=&quot;#806858&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M408,35 Q410,42 407,50 Q410,58 408,65&quot; fill=&quot;none&quot; stroke=&quot;#d4600a&quot; stroke-width=&quot;0.4&quot; opacity=&quot;0.2&quot;/&gt;&lt;path d=&quot;M415,72 Q420,65 430,72&quot; fill=&quot;none&quot; stroke=&quot;#705848&quot; stroke-width=&quot;1.5&quot; opacity=&quot;0.3&quot;/&gt;&lt;rect x=&quot;140&quot; y=&quot;48&quot; width=&quot;3&quot; height=&quot;29&quot; fill=&quot;#503828&quot; opacity=&quot;0.25&quot;/&gt;&lt;rect x=&quot;350&quot; y=&quot;42&quot; width=&quot;3&quot; height=&quot;35&quot; fill=&quot;#503828&quot; opacity=&quot;0.2&quot;/&gt;&lt;path d=&quot;M348,42 L356,42&quot; stroke=&quot;#503828&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.15&quot;/&gt;&lt;circle cx=&quot;180&quot; cy=&quot;82&quot; r=&quot;0.8&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.25&quot;/&gt;&lt;circle cx=&quot;320&quot; cy=&quot;80&quot; r=&quot;0.6&quot; fill=&quot;#c84a08&quot; opacity=&quot;0.2&quot;/&gt;&lt;circle cx=&quot;160&quot; cy=&quot;84&quot; r=&quot;0.5&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.15&quot;/&gt;&lt;circle cx=&quot;340&quot; cy=&quot;83&quot; r=&quot;0.7&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.2&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpTopFade)&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpFade)&quot;/&gt;&lt;/svg&gt;
+<tw-passagedata pid="121" name="Stay in Carthage" tags="dream" position="100,1950" size="100,100">&lt;svg class=&quot;carthage-pyre&quot; viewBox=&quot;0 0 500 95&quot; width=&quot;100%&quot; height=&quot;95&quot; preserveAspectRatio=&quot;none&quot;&gt;&lt;defs&gt;&lt;radialGradient id=&quot;cpGlow&quot; cx=&quot;50%&quot; cy=&quot;85%&quot; r=&quot;70%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#d4600a&quot; stop-opacity=&quot;0.4&quot;/&gt;&lt;stop offset=&quot;30%&quot; stop-color=&quot;#c84a08&quot; stop-opacity=&quot;0.2&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#401808&quot; stop-opacity=&quot;0.08&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;linearGradient id=&quot;cpTopFade&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;35%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0.6&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;cpFade&quot; x1=&quot;0&quot; x2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;stop offset=&quot;8%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;92%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#0a0a12&quot; stop-opacity=&quot;1&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;cpGround&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#3a2010&quot; stop-opacity=&quot;0.5&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#1a0a08&quot; stop-opacity=&quot;0.3&quot;/&gt;&lt;/linearGradient&gt;&lt;/defs&gt;&lt;rect x=&quot;0&quot; y=&quot;77&quot; width=&quot;500&quot; height=&quot;18&quot; fill=&quot;url(#cpGround)&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpGlow)&quot;/&gt;&lt;rect x=&quot;195&quot; y=&quot;77&quot; width=&quot;110&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#3a2818&quot; opacity=&quot;0.6&quot;/&gt;&lt;rect x=&quot;205&quot; y=&quot;72&quot; width=&quot;90&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#4a3020&quot; opacity=&quot;0.5&quot;/&gt;&lt;rect x=&quot;215&quot; y=&quot;67&quot; width=&quot;70&quot; height=&quot;6&quot; rx=&quot;1&quot; fill=&quot;#5a3828&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M220,67 Q210,50 225,28 Q230,40 240,18 Q248,35 250,8 Q255,30 262,14 Q268,38 275,22 Q280,45 285,67Z&quot; fill=&quot;#8a2800&quot; opacity=&quot;0.35&quot;/&gt;&lt;path d=&quot;M225,67 Q218,48 232,22 Q238,36 245,10 Q250,28 255,6 Q260,25 268,16 Q272,40 278,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M230,67 Q224,45 237,18 Q242,32 248,8 Q253,28 258,12 Q264,35 270,67Z&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M235,67 Q230,42 242,20 Q246,34 250,12 Q254,30 258,18 Q262,40 265,67Z&quot; fill=&quot;#e88020&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M240,67 Q237,44 246,24 Q249,36 252,18 Q255,34 258,26 Q259,42 260,67Z&quot; fill=&quot;#ffa040&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M245,67 Q243,48 249,30 Q251,42 253,34 Q254,48 255,67Z&quot; fill=&quot;#ffc868&quot; opacity=&quot;0.4&quot;/&gt;&lt;path d=&quot;M222,67 Q216,52 224,35 Q228,45 230,38 Q229,50 232,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.3&quot;/&gt;&lt;path d=&quot;M268,67 Q272,50 276,32 Q274,44 278,40 Q276,52 275,67Z&quot; fill=&quot;#c04808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;228&quot; cy=&quot;61&quot; r=&quot;4.5&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.55&quot;/&gt;&lt;rect x=&quot;232&quot; y=&quot;63&quot; width=&quot;32&quot; height=&quot;3&quot; rx=&quot;1&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M264,63 L266,63 L266,58 L264,58 Z&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M267,63 L269,63 L269,59 L267,59 Z&quot; fill=&quot;#1a0a06&quot; opacity=&quot;0.45&quot;/&gt;&lt;circle cx=&quot;245&quot; cy=&quot;4&quot; r=&quot;0.8&quot; fill=&quot;#ffa030&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;260&quot; cy=&quot;7&quot; r=&quot;0.6&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;238&quot; cy=&quot;10&quot; r=&quot;0.7&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;268&quot; cy=&quot;3&quot; r=&quot;0.5&quot; fill=&quot;#ff6010&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;252&quot; cy=&quot;2&quot; r=&quot;0.6&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;230&quot; cy=&quot;6&quot; r=&quot;0.5&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;272&quot; cy=&quot;12&quot; r=&quot;0.9&quot; fill=&quot;#ffa030&quot; opacity=&quot;0.35&quot;/&gt;&lt;circle cx=&quot;242&quot; cy=&quot;16&quot; r=&quot;0.5&quot; fill=&quot;#ffc050&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;256&quot; cy=&quot;14&quot; r=&quot;0.4&quot; fill=&quot;#ff6010&quot; opacity=&quot;0.25&quot;/&gt;&lt;rect x=&quot;80&quot; y=&quot;30&quot; width=&quot;5&quot; height=&quot;47&quot; fill=&quot;#705848&quot; opacity=&quot;0.45&quot;/&gt;&lt;rect x=&quot;78&quot; y=&quot;28&quot; width=&quot;9&quot; height=&quot;3&quot; rx=&quot;0.5&quot; fill=&quot;#806858&quot; opacity=&quot;0.5&quot;/&gt;&lt;path d=&quot;M82,45 L84,55&quot; stroke=&quot;#3a2010&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.4&quot;/&gt;&lt;rect x=&quot;70&quot; y=&quot;74&quot; width=&quot;9&quot; height=&quot;4&quot; rx=&quot;1&quot; fill=&quot;#705848&quot; opacity=&quot;0.3&quot; transform=&quot;rotate(-15,74,76)&quot;/&gt;&lt;rect x=&quot;405&quot; y=&quot;22&quot; width=&quot;6&quot; height=&quot;55&quot; fill=&quot;#705848&quot; opacity=&quot;0.4&quot;/&gt;&lt;rect x=&quot;402&quot; y=&quot;20&quot; width=&quot;12&quot; height=&quot;3&quot; rx=&quot;0.5&quot; fill=&quot;#806858&quot; opacity=&quot;0.45&quot;/&gt;&lt;path d=&quot;M408,35 Q410,42 407,50 Q410,58 408,65&quot; fill=&quot;none&quot; stroke=&quot;#d4600a&quot; stroke-width=&quot;0.4&quot; opacity=&quot;0.2&quot;/&gt;&lt;path d=&quot;M415,72 Q420,65 430,72&quot; fill=&quot;none&quot; stroke=&quot;#705848&quot; stroke-width=&quot;1.5&quot; opacity=&quot;0.3&quot;/&gt;&lt;rect x=&quot;140&quot; y=&quot;48&quot; width=&quot;3&quot; height=&quot;29&quot; fill=&quot;#503828&quot; opacity=&quot;0.25&quot;/&gt;&lt;rect x=&quot;350&quot; y=&quot;42&quot; width=&quot;3&quot; height=&quot;35&quot; fill=&quot;#503828&quot; opacity=&quot;0.2&quot;/&gt;&lt;path d=&quot;M348,42 L356,42&quot; stroke=&quot;#503828&quot; stroke-width=&quot;0.8&quot; opacity=&quot;0.15&quot;/&gt;&lt;circle cx=&quot;180&quot; cy=&quot;82&quot; r=&quot;0.8&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.25&quot;/&gt;&lt;circle cx=&quot;320&quot; cy=&quot;80&quot; r=&quot;0.6&quot; fill=&quot;#c84a08&quot; opacity=&quot;0.2&quot;/&gt;&lt;circle cx=&quot;160&quot; cy=&quot;84&quot; r=&quot;0.5&quot; fill=&quot;#ff8020&quot; opacity=&quot;0.15&quot;/&gt;&lt;circle cx=&quot;340&quot; cy=&quot;83&quot; r=&quot;0.7&quot; fill=&quot;#d4600a&quot; opacity=&quot;0.2&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpTopFade)&quot;/&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;500&quot; height=&quot;95&quot; fill=&quot;url(#cpFade)&quot;/&gt;&lt;/svg&gt;
 &lt;div class=&quot;dream-sequence&quot;&gt;
 You stay for an hour or forever.
 
@@ -49915,7 +50591,8 @@ Opposite him is the only man who clocks you, who is thin like verdaccio and hard
 [[Leave the French|Dean Street]]
 [[The Colony Room is just round the corner.|The Colony Room Door]]]
 (display: &quot;French Rule SVG h24&quot;)&lt;/svg&gt;</tw-passagedata>
-<tw-passagedata pid="129" name="The Interval" position="900,250" size="100,100">(unless: $alba is an array)[(set: $alba to (a:))]
+<tw-passagedata pid="129" name="The Interval" position="900,250" size="100,100">&lt;span class=&quot;staircase-marker&quot; style=&quot;display:none&quot;&gt;&lt;/span&gt;
+(unless: $alba is an array)[(set: $alba to (a:))]
 (unless: $haunts is an array)[(set: $haunts to (a:))]
 (set: $visitedInterval to true)\
 (set: $exploredSinceFrench to true)
@@ -50385,8 +51062,8 @@ You know him as an old friend, from whom you are estranged over some personal bu
 [[Accept his offer|His round]]
 
 (display: &quot;French Rule SVG h24&quot;)&lt;/svg&gt;</tw-passagedata>
-<tw-passagedata pid="137" name="The coast of Carthage" position="100,1550" size="100,100">&lt;div id=&quot;carthage-approach&quot;&gt;&lt;/div&gt;[[·|Carthage shore]]</tw-passagedata>
-<tw-passagedata pid="138" name="Carthage shore" position="100,1650" size="100,100">You&#x27;ve left London. You are many miles and many centuries far off. You&#x27;ve found safe harbour in Carthage, which is not like you remember it at all. These days it is swamped with Romans.
+<tw-passagedata pid="137" name="The coast of Carthage" tags="dream" position="100,1550" size="100,100">&lt;div id=&quot;carthage-approach&quot;&gt;&lt;/div&gt;[[·|Carthage shore]]</tw-passagedata>
+<tw-passagedata pid="138" name="Carthage shore" tags="dream" position="100,1650" size="100,100">You&#x27;ve left London. You are many miles and many centuries far off. You&#x27;ve found safe harbour in Carthage, which is not like you remember it at all. These days it is swamped with Romans.
 
 Last time you were here, you recall only Scipio Aemilianus, who was your friend and student and who weeping said:
 

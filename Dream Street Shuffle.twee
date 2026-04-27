@@ -277,10 +277,11 @@ window.dssAudio = (function() {
     _play(function(ac) {
     beats = beats || 3;
     var now = ac.currentTime;
+    var t0 = now;
+    // Each beat decelerates from the previous — the rhythm slows as the
+    // tension subsides (or the heart calms).
     for (var b = 0; b < beats; b++) {
-      var t0 = now + b * 0.95;
-      // Each beat: lub-dub. Slightly higher fundamental than a real heartbeat
-      // so it actually plays through laptop / earbud speakers.
+      var interval = 0.95 + b * 0.18;
       [0, 0.18].forEach(function(off, idx) {
         var t = t0 + off;
         var o = ac.createOscillator(); o.type='sine';
@@ -294,6 +295,7 @@ window.dssAudio = (function() {
         o.connect(g); g.connect(ac.destination);
         o.start(t); o.stop(t+0.18);
       });
+      t0 += interval;
     }
       });
   }
@@ -562,6 +564,175 @@ window.dssAudio = (function() {
       });
   }
   function ambientOff() { _stopAmbient(); }
+  // ====== FARNELL-STYLE PROCEDURAL MODELS ======
+  // British telephone bell — two iron gongs, magnetic clapper alternates
+  // between them at ~25 Hz. Each gong rings with several inharmonic modes.
+  // Modelled after Farnell, "Designing Sound" ch. on the telephone bell.
+  function phoneBell(rings) {
+    _play(function(ac) {
+    rings = rings || 2;
+    var now = ac.currentTime;
+    function strike(t, gongA) {
+      // Two gongs of slightly different size — each has 3 inharmonic partials
+      var partials = gongA
+        ? [{ f: 1380, a: 0.10, d: 0.18 },
+           { f: 2050, a: 0.06, d: 0.13 },
+           { f: 3120, a: 0.03, d: 0.09 }]
+        : [{ f: 1620, a: 0.10, d: 0.18 },
+           { f: 2410, a: 0.06, d: 0.13 },
+           { f: 3580, a: 0.03, d: 0.09 }];
+      partials.forEach(function(p) {
+        var o = ac.createOscillator(); o.type='sine';
+        // Tiny pitch drift so each strike isn't identical
+        o.frequency.value = p.f * (1 + (Math.random()-0.5) * 0.006);
+        var g = ac.createGain();
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(p.a, t + 0.001);
+        g.gain.exponentialRampToValueAtTime(0.001, t + p.d);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t); o.stop(t + p.d + 0.01);
+      });
+      // Metallic clapper-tap noise transient
+      var nLen = Math.floor(ac.sampleRate * 0.003);
+      var nbuf = ac.createBuffer(1, nLen, ac.sampleRate);
+      var nd = nbuf.getChannelData(0);
+      for (var k = 0; k < nLen; k++) nd[k] = (Math.random()*2-1) * Math.exp(-k/nLen * 8);
+      var nsrc = ac.createBufferSource(); nsrc.buffer = nbuf;
+      var nf = ac.createBiquadFilter(); nf.type='highpass';
+      nf.frequency.value = 2500;
+      var ng = ac.createGain(); ng.gain.value = 0.05;
+      nsrc.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+      nsrc.start(t);
+    }
+    // British double-pulse: brrring brrring (0.4s ring, 0.2s gap, 0.4s ring,
+    // then 2.0s pause), alternating gongs at ~25 Hz inside each ring.
+    for (var r = 0; r < rings; r++) {
+      var cycle = now + r * 2.0;
+      [0, 0.4].forEach(function(brrOff) {
+        var brrStart = cycle + brrOff;
+        for (var i = 0; i < 10; i++) {
+          strike(brrStart + i * 0.04, i % 2 === 0);
+        }
+      });
+    }
+    });
+  }
+  // Wind — three parallel filters (low howl, mid whistle, high sibilance)
+  // driven by white noise, with a slow LFO on the mid-band cutoff to gust.
+  // Modelled after Farnell's wind chapter.
+  function windFarnell() {
+    _play(function(ac) {
+    if (_ambient && _ambient.kind === 'wind') return;
+    _stopAmbient();
+    var now = ac.currentTime;
+    var dur = 12.0;
+    var bufLen = Math.floor(ac.sampleRate * dur);
+    var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * 0.6;
+    var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    // Three bands
+    var f1 = ac.createBiquadFilter(); f1.type='bandpass';
+    f1.frequency.value = 240; f1.Q.value = 2.5;          // low howl
+    var f2 = ac.createBiquadFilter(); f2.type='bandpass';
+    f2.frequency.value = 720; f2.Q.value = 3.0;          // mid whistle
+    var f3 = ac.createBiquadFilter(); f3.type='lowpass';
+    f3.frequency.value = 3200; f3.Q.value = 0.7;         // high sibilance
+    var g1 = ac.createGain(); g1.gain.value = 0.55;
+    var g2 = ac.createGain(); g2.gain.value = 0.65;
+    var g3 = ac.createGain(); g3.gain.value = 0.30;
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.20, now + 2.0);
+    // Gust LFO — slow sweep on the whistle band's cutoff
+    var lfo = ac.createOscillator(); lfo.type='sine';
+    lfo.frequency.value = 0.13;
+    var lfoG = ac.createGain(); lfoG.gain.value = 280;
+    lfo.connect(lfoG); lfoG.connect(f2.frequency);
+    lfo.start(now);
+    src.connect(f1); f1.connect(g1); g1.connect(g);
+    src.connect(f2); f2.connect(g2); g2.connect(g);
+    src.connect(f3); f3.connect(g3); g3.connect(g);
+    g.connect(ac.destination);
+    src.start(now);
+    _ambient = { src: src, g: g, kind: 'wind', lfo: lfo };
+    });
+  }
+  // Fire — pink noise with slow flicker, plus sparse crackle events baked in.
+  // Modelled after Farnell's fire chapter.
+  function fireFarnell() {
+    _play(function(ac) {
+    if (_ambient && _ambient.kind === 'fire') return;
+    _stopAmbient();
+    var now = ac.currentTime;
+    var dur = 15.0;
+    var bufLen = Math.floor(ac.sampleRate * dur);
+    var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+    var d = buf.getChannelData(0);
+    var b0=0, b1=0, b2=0;
+    for (var i = 0; i < bufLen; i++) {
+      var w = Math.random()*2-1;
+      b0 = 0.99*b0 + 0.07*w;
+      b1 = 0.96*b1 + 0.10*w;
+      b2 = 0.85*b2 + 0.12*w;
+      // Slow flicker baked into the loop
+      var ti = i / ac.sampleRate;
+      var flicker = 0.7 + 0.3 * Math.sin(ti * 2.3) * Math.sin(ti * 0.71);
+      d[i] = (b0 + b1 + b2) * 0.3 * flicker;
+      // Sparse crackle events ~5/sec
+      if (Math.random() < 0.0001) {
+        var clen = Math.floor(ac.sampleRate * 0.025);
+        for (var k = 0; k < clen && i + k < bufLen; k++) {
+          var env = Math.exp(-k / (ac.sampleRate * 0.005));
+          d[i+k] += (Math.random()*2-1) * env * 0.6;
+        }
+      }
+    }
+    var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    var f = ac.createBiquadFilter(); f.type='bandpass';
+    f.frequency.value = 600; f.Q.value = 0.5;
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.12, now + 2.0);
+    src.connect(f); f.connect(g); g.connect(ac.destination);
+    src.start(now);
+    _ambient = { src: src, g: g, kind: 'fire' };
+    });
+  }
+  // Footstep — heel + ball impacts, surface filter selects ground type.
+  // Call as footstep('wet'|'wood'|'carpet'|'gravel').
+  function footstep(surface) {
+    _play(function(ac) {
+    var now = ac.currentTime;
+    [0, 0.11].forEach(function(off, idx) {
+      var t = now + off;
+      var dur = 0.07;
+      var bufLen = Math.floor(ac.sampleRate * dur);
+      var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < bufLen; i++) {
+        var env = Math.exp(-i / bufLen * 9);
+        d[i] = (Math.random()*2-1) * env;
+      }
+      var src = ac.createBufferSource(); src.buffer = buf;
+      var f = ac.createBiquadFilter();
+      if (surface === 'wood') {
+        f.type='bandpass'; f.frequency.value = 220; f.Q.value = 2.5;
+      } else if (surface === 'carpet') {
+        f.type='lowpass'; f.frequency.value = 260; f.Q.value = 0.5;
+      } else if (surface === 'gravel') {
+        f.type='highpass'; f.frequency.value = 1600; f.Q.value = 0.6;
+      } else {
+        // wet pavement default — mid-band slap
+        f.type='bandpass'; f.frequency.value = 700; f.Q.value = 1.5;
+      }
+      var g = ac.createGain();
+      g.gain.value = (idx === 0 ? 0.07 : 0.045);
+      src.connect(f); f.connect(g); g.connect(ac.destination);
+      src.start(t);
+    });
+    });
+  }
   // Passage transition — a slow wave-like swell that fades.
   // Filtered noise with a gentle filter sweep: opens up as it crests, closes as it dies.
   // Quiet so it doesn't compete with passage-specific sounds (drinks, doors, etc.)
@@ -593,7 +764,10 @@ window.dssAudio = (function() {
     penScratch: penScratch, heartbeat: heartbeat,
     glassSmash: glassSmash, matchStrike: matchStrike, coinFlip: coinFlip,
     doorCreak: doorCreak, passageWhoosh: passageWhoosh,
-    ambientPub: ambientPub, ambientDream: ambientDream, ambientOff: ambientOff
+    ambientPub: ambientPub, ambientDream: ambientDream, ambientOff: ambientOff,
+    // Farnell-style procedural models
+    phoneBell: phoneBell, windFarnell: windFarnell,
+    fireFarnell: fireFarnell, footstep: footstep
   };
 })();
 
@@ -5016,10 +5190,12 @@ window._passageGen = 0;
                 if (passageNode.querySelector('.haunt-box')) {
                   setTimeout(function(){ window.dssAudio.penScratch(); }, 600);
                 }
-                // Phone calls — detected by .phone-scene class
+                // Phone calls — detected by .phone-scene class.
+                // Uses Farnell-style mechanical bell model.
                 if (passageNode.querySelector('.phone-scene')) {
-                  setTimeout(function(){ window.dssAudio.phoneRing(2); }, 250);
-                  setTimeout(function(){ window.dssAudio.heartbeat(3); }, 4400);
+                  setTimeout(function(){ window.dssAudio.phoneBell(2); }, 250);
+                  // Six beats — heartbeat decelerates as the call settles
+                  setTimeout(function(){ window.dssAudio.heartbeat(6); }, 4400);
                 }
                 // Glass smash — passage carries an .empty-glass-marker hint
                 if (passageNode.querySelector('.empty-glass-marker')) {
@@ -5044,6 +5220,26 @@ window._passageGen = 0;
                   }
                 }
                 window._currentVenue = newVenue;
+                // Ambient beds: pyre (fire) takes precedence over dream (wind).
+                // Both auto-stop when the player leaves the dream sequence.
+                var inDream = (tags.indexOf('dream') !== -1);
+                var inPyre = (tags.indexOf('pyre') !== -1);
+                if (inPyre) {
+                  window.dssAudio.fireFarnell();
+                } else if (inDream) {
+                  window.dssAudio.windFarnell();
+                } else if (window._wasInDream || window._wasInPyre) {
+                  window.dssAudio.ambientOff();
+                }
+                window._wasInDream = inDream;
+                window._wasInPyre = inPyre;
+                // Footsteps on the staircase — The Interval. Soft red-carpet
+                // descent: four steps, then a pause where the player freezes.
+                if (passageNode.querySelector('.staircase-marker')) {
+                  [0.4, 1.0, 1.6, 2.2].forEach(function(delay) {
+                    setTimeout(function(){ window.dssAudio.footstep('carpet'); }, delay * 1000);
+                  });
+                }
               }
             } catch(e) { if (window.console) console.error('[dssAudio]', e); }
               }, 80);
@@ -25009,7 +25205,7 @@ In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It wil
 ]\
 (set: $notebookUnlocked to true)
 
-:: Dido {"position":"100,1700","size":"100,100"}
+:: Dido [dream pyre] {"position":"100,1700","size":"100,100"}
 <svg class="carthage-pyre" viewBox="0 0 500 95" width="100%" height="95" preserveAspectRatio="none"><defs><radialGradient id="cpGlow" cx="50%" cy="85%" r="70%"><stop offset="0%" stop-color="#d4600a" stop-opacity="0.4"/><stop offset="30%" stop-color="#c84a08" stop-opacity="0.2"/><stop offset="60%" stop-color="#401808" stop-opacity="0.08"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="0"/></radialGradient><linearGradient id="cpTopFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0a12" stop-opacity="1"/><stop offset="35%" stop-color="#0a0a12" stop-opacity="0.6"/><stop offset="60%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="0"/></linearGradient><linearGradient id="cpFade" x1="0" x2="1"><stop offset="0%" stop-color="#0a0a12" stop-opacity="1"/><stop offset="8%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="92%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="1"/></linearGradient><linearGradient id="cpGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3a2010" stop-opacity="0.5"/><stop offset="100%" stop-color="#1a0a08" stop-opacity="0.3"/></linearGradient></defs><rect x="0" y="77" width="500" height="18" fill="url(#cpGround)"/><rect x="0" y="0" width="500" height="95" fill="url(#cpGlow)"/><rect x="195" y="77" width="110" height="6" rx="1" fill="#3a2818" opacity="0.6"/><rect x="205" y="72" width="90" height="6" rx="1" fill="#4a3020" opacity="0.5"/><rect x="215" y="67" width="70" height="6" rx="1" fill="#5a3828" opacity="0.45"/><path d="M220,67 Q210,50 225,28 Q230,40 240,18 Q248,35 250,8 Q255,30 262,14 Q268,38 275,22 Q280,45 285,67Z" fill="#8a2800" opacity="0.35"/><path d="M225,67 Q218,48 232,22 Q238,36 245,10 Q250,28 255,6 Q260,25 268,16 Q272,40 278,67Z" fill="#c04808" opacity="0.45"/><path d="M230,67 Q224,45 237,18 Q242,32 248,8 Q253,28 258,12 Q264,35 270,67Z" fill="#d4600a" opacity="0.5"/><path d="M235,67 Q230,42 242,20 Q246,34 250,12 Q254,30 258,18 Q262,40 265,67Z" fill="#e88020" opacity="0.5"/><path d="M240,67 Q237,44 246,24 Q249,36 252,18 Q255,34 258,26 Q259,42 260,67Z" fill="#ffa040" opacity="0.45"/><path d="M245,67 Q243,48 249,30 Q251,42 253,34 Q254,48 255,67Z" fill="#ffc868" opacity="0.4"/><path d="M222,67 Q216,52 224,35 Q228,45 230,38 Q229,50 232,67Z" fill="#c04808" opacity="0.3"/><path d="M268,67 Q272,50 276,32 Q274,44 278,40 Q276,52 275,67Z" fill="#c04808" opacity="0.3"/><circle cx="228" cy="61" r="4.5" fill="#1a0a06" opacity="0.55"/><rect x="232" y="63" width="32" height="3" rx="1" fill="#1a0a06" opacity="0.5"/><path d="M264,63 L266,63 L266,58 L264,58 Z" fill="#1a0a06" opacity="0.5"/><path d="M267,63 L269,63 L269,59 L267,59 Z" fill="#1a0a06" opacity="0.45"/><circle cx="245" cy="4" r="0.8" fill="#ffa030" opacity="0.4"/><circle cx="260" cy="7" r="0.6" fill="#ff8020" opacity="0.35"/><circle cx="238" cy="10" r="0.7" fill="#ffc050" opacity="0.4"/><circle cx="268" cy="3" r="0.5" fill="#ff6010" opacity="0.3"/><circle cx="252" cy="2" r="0.6" fill="#ffc050" opacity="0.35"/><circle cx="230" cy="6" r="0.5" fill="#ff8020" opacity="0.3"/><circle cx="272" cy="12" r="0.9" fill="#ffa030" opacity="0.35"/><circle cx="242" cy="16" r="0.5" fill="#ffc050" opacity="0.3"/><circle cx="256" cy="14" r="0.4" fill="#ff6010" opacity="0.25"/><rect x="80" y="30" width="5" height="47" fill="#705848" opacity="0.45"/><rect x="78" y="28" width="9" height="3" rx="0.5" fill="#806858" opacity="0.5"/><path d="M82,45 L84,55" stroke="#3a2010" stroke-width="0.8" opacity="0.4"/><rect x="70" y="74" width="9" height="4" rx="1" fill="#705848" opacity="0.3" transform="rotate(-15,74,76)"/><rect x="405" y="22" width="6" height="55" fill="#705848" opacity="0.4"/><rect x="402" y="20" width="12" height="3" rx="0.5" fill="#806858" opacity="0.45"/><path d="M408,35 Q410,42 407,50 Q410,58 408,65" fill="none" stroke="#d4600a" stroke-width="0.4" opacity="0.2"/><path d="M415,72 Q420,65 430,72" fill="none" stroke="#705848" stroke-width="1.5" opacity="0.3"/><rect x="140" y="48" width="3" height="29" fill="#503828" opacity="0.25"/><rect x="350" y="42" width="3" height="35" fill="#503828" opacity="0.2"/><path d="M348,42 L356,42" stroke="#503828" stroke-width="0.8" opacity="0.15"/><circle cx="180" cy="82" r="0.8" fill="#d4600a" opacity="0.25"/><circle cx="320" cy="80" r="0.6" fill="#c84a08" opacity="0.2"/><circle cx="160" cy="84" r="0.5" fill="#ff8020" opacity="0.15"/><circle cx="340" cy="83" r="0.7" fill="#d4600a" opacity="0.2"/><rect x="0" y="0" width="500" height="95" fill="url(#cpTopFade)"/><rect x="0" y="0" width="500" height="95" fill="url(#cpFade)"/></svg>
 
 On the pyre, Dido is burning where she has burnt for 2,000 years.
@@ -25337,7 +25533,7 @@ Miss them and you'll end up just another Dean Street dream.
 
 [[Back to Dean Street|Dean Street]]
 
-:: Green Sea Approach {"position":"850,200","size":"100,100"}
+:: Green Sea Approach [dream] {"position":"850,200","size":"100,100"}
 <div id="gs-approach"></div>[[·|LINE 2]]
 
 :: LINE 2 {"position":"900,200","size":"100,100"}
@@ -25418,7 +25614,7 @@ Salvu Copper, who is proportioned brutally, opens the door and leans over the th
 <svg viewBox="0 0 300 40" width="100%" height="40" preserveAspectRatio="none"><defs><linearGradient id="mgEdge2" x1="0" x2="1"><stop offset="0%" stop-color="#6b2020" stop-opacity="0"/><stop offset="15%" stop-color="#6b2020" stop-opacity="0.5"/><stop offset="85%" stop-color="#6b2020" stop-opacity="0.5"/><stop offset="100%" stop-color="#6b2020" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="4" x2="300" y2="4" stroke="url(#mgEdge2)" stroke-width="1.5"/><line x1="0" y1="36" x2="300" y2="36" stroke="url(#mgEdge2)" stroke-width="0.8"/><g transform="translate(150,20)" fill="none" stroke="#8b3030" stroke-width="1.2" opacity="0.55"><path d="M0,-10 L4,-4 L10,0 L4,4 L0,10 L-4,4 L-10,0 L-4,-4 Z"/><circle cx="0" cy="0" r="2.5" stroke-width="0.8"/></g></svg>
 </div>
 
-:: Maritime interlude {"position":"300,1000","size":"100,100"}
+:: Maritime interlude [dream] {"position":"300,1000","size":"100,100"}
 <div class="maritime-scene">
 <div class="maritime-lamp"></div>
 <div class="maritime-lightning"></div>
@@ -27411,7 +27607,7 @@ For a moment you think he might let you go. Then his eyes harden.
 (set: $ppScore to 0)\
 (go-to: "The Night Ahead")
 
-:: Stay in Carthage {"position":"100,1950","size":"100,100"}
+:: Stay in Carthage [dream] {"position":"100,1950","size":"100,100"}
 <svg class="carthage-pyre" viewBox="0 0 500 95" width="100%" height="95" preserveAspectRatio="none"><defs><radialGradient id="cpGlow" cx="50%" cy="85%" r="70%"><stop offset="0%" stop-color="#d4600a" stop-opacity="0.4"/><stop offset="30%" stop-color="#c84a08" stop-opacity="0.2"/><stop offset="60%" stop-color="#401808" stop-opacity="0.08"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="0"/></radialGradient><linearGradient id="cpTopFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0a12" stop-opacity="1"/><stop offset="35%" stop-color="#0a0a12" stop-opacity="0.6"/><stop offset="60%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="0"/></linearGradient><linearGradient id="cpFade" x1="0" x2="1"><stop offset="0%" stop-color="#0a0a12" stop-opacity="1"/><stop offset="8%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="92%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="1"/></linearGradient><linearGradient id="cpGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3a2010" stop-opacity="0.5"/><stop offset="100%" stop-color="#1a0a08" stop-opacity="0.3"/></linearGradient></defs><rect x="0" y="77" width="500" height="18" fill="url(#cpGround)"/><rect x="0" y="0" width="500" height="95" fill="url(#cpGlow)"/><rect x="195" y="77" width="110" height="6" rx="1" fill="#3a2818" opacity="0.6"/><rect x="205" y="72" width="90" height="6" rx="1" fill="#4a3020" opacity="0.5"/><rect x="215" y="67" width="70" height="6" rx="1" fill="#5a3828" opacity="0.45"/><path d="M220,67 Q210,50 225,28 Q230,40 240,18 Q248,35 250,8 Q255,30 262,14 Q268,38 275,22 Q280,45 285,67Z" fill="#8a2800" opacity="0.35"/><path d="M225,67 Q218,48 232,22 Q238,36 245,10 Q250,28 255,6 Q260,25 268,16 Q272,40 278,67Z" fill="#c04808" opacity="0.45"/><path d="M230,67 Q224,45 237,18 Q242,32 248,8 Q253,28 258,12 Q264,35 270,67Z" fill="#d4600a" opacity="0.5"/><path d="M235,67 Q230,42 242,20 Q246,34 250,12 Q254,30 258,18 Q262,40 265,67Z" fill="#e88020" opacity="0.5"/><path d="M240,67 Q237,44 246,24 Q249,36 252,18 Q255,34 258,26 Q259,42 260,67Z" fill="#ffa040" opacity="0.45"/><path d="M245,67 Q243,48 249,30 Q251,42 253,34 Q254,48 255,67Z" fill="#ffc868" opacity="0.4"/><path d="M222,67 Q216,52 224,35 Q228,45 230,38 Q229,50 232,67Z" fill="#c04808" opacity="0.3"/><path d="M268,67 Q272,50 276,32 Q274,44 278,40 Q276,52 275,67Z" fill="#c04808" opacity="0.3"/><circle cx="228" cy="61" r="4.5" fill="#1a0a06" opacity="0.55"/><rect x="232" y="63" width="32" height="3" rx="1" fill="#1a0a06" opacity="0.5"/><path d="M264,63 L266,63 L266,58 L264,58 Z" fill="#1a0a06" opacity="0.5"/><path d="M267,63 L269,63 L269,59 L267,59 Z" fill="#1a0a06" opacity="0.45"/><circle cx="245" cy="4" r="0.8" fill="#ffa030" opacity="0.4"/><circle cx="260" cy="7" r="0.6" fill="#ff8020" opacity="0.35"/><circle cx="238" cy="10" r="0.7" fill="#ffc050" opacity="0.4"/><circle cx="268" cy="3" r="0.5" fill="#ff6010" opacity="0.3"/><circle cx="252" cy="2" r="0.6" fill="#ffc050" opacity="0.35"/><circle cx="230" cy="6" r="0.5" fill="#ff8020" opacity="0.3"/><circle cx="272" cy="12" r="0.9" fill="#ffa030" opacity="0.35"/><circle cx="242" cy="16" r="0.5" fill="#ffc050" opacity="0.3"/><circle cx="256" cy="14" r="0.4" fill="#ff6010" opacity="0.25"/><rect x="80" y="30" width="5" height="47" fill="#705848" opacity="0.45"/><rect x="78" y="28" width="9" height="3" rx="0.5" fill="#806858" opacity="0.5"/><path d="M82,45 L84,55" stroke="#3a2010" stroke-width="0.8" opacity="0.4"/><rect x="70" y="74" width="9" height="4" rx="1" fill="#705848" opacity="0.3" transform="rotate(-15,74,76)"/><rect x="405" y="22" width="6" height="55" fill="#705848" opacity="0.4"/><rect x="402" y="20" width="12" height="3" rx="0.5" fill="#806858" opacity="0.45"/><path d="M408,35 Q410,42 407,50 Q410,58 408,65" fill="none" stroke="#d4600a" stroke-width="0.4" opacity="0.2"/><path d="M415,72 Q420,65 430,72" fill="none" stroke="#705848" stroke-width="1.5" opacity="0.3"/><rect x="140" y="48" width="3" height="29" fill="#503828" opacity="0.25"/><rect x="350" y="42" width="3" height="35" fill="#503828" opacity="0.2"/><path d="M348,42 L356,42" stroke="#503828" stroke-width="0.8" opacity="0.15"/><circle cx="180" cy="82" r="0.8" fill="#d4600a" opacity="0.25"/><circle cx="320" cy="80" r="0.6" fill="#c84a08" opacity="0.2"/><circle cx="160" cy="84" r="0.5" fill="#ff8020" opacity="0.15"/><circle cx="340" cy="83" r="0.7" fill="#d4600a" opacity="0.2"/><rect x="0" y="0" width="500" height="95" fill="url(#cpTopFade)"/><rect x="0" y="0" width="500" height="95" fill="url(#cpFade)"/></svg>
 <div class="dream-sequence">
 You stay for an hour or forever.
@@ -27587,6 +27783,7 @@ Opposite him is the only man who clocks you, who is thin like verdaccio and hard
 (display: "French Rule SVG h24")</svg>
 
 :: The Interval {"position":"900,250","size":"100,100"}
+<span class="staircase-marker" style="display:none"></span>
 (unless: $alba is an array)[(set: $alba to (a:))]
 (unless: $haunts is an array)[(set: $haunts to (a:))]
 (set: $visitedInterval to true)\
@@ -28072,10 +28269,10 @@ You know him as an old friend, from whom you are estranged over some personal bu
 
 (display: "French Rule SVG h24")</svg>
 
-:: The coast of Carthage {"position":"100,1550","size":"100,100"}
+:: The coast of Carthage [dream] {"position":"100,1550","size":"100,100"}
 <div id="carthage-approach"></div>[[·|Carthage shore]]
 
-:: Carthage shore {"position":"100,1650","size":"100,100"}
+:: Carthage shore [dream] {"position":"100,1650","size":"100,100"}
 You've left London. You are many miles and many centuries far off. You've found safe harbour in Carthage, which is not like you remember it at all. These days it is swamped with Romans.
 
 Last time you were here, you recall only Scipio Aemilianus, who was your friend and student and who weeping said:

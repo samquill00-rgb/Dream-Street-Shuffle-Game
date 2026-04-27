@@ -16,10 +16,14 @@ html_path = os.path.join(_here, "Dream Street Shuffle.html")
 # ============================================================
 # Audio embedding configuration
 # ============================================================
-# The MP3 below is base64-embedded directly into the HTML so the music
+# The audio file below is base64-embedded directly into the HTML so the music
 # works when the file is opened locally (file://) without needing a server.
-# To swap the music, just change this filename and re-run sync_html.py.
-MUSIC_SOURCE_FILE = "Dream Street Shuffle experiment theme loop.mp3"
+# To swap the music, change this filename (and MIME type if format changes)
+# and re-run sync_html.py.
+# Using AAC (.m4a) for gapless looping — MP3 has inherent encoder padding
+# that produces an audible gap on the loop seam.
+MUSIC_SOURCE_FILE = "Dream Street Shuffle experiment theme loop.m4a"
+MUSIC_MIME = "audio/mp4"  # use "audio/mpeg" for .mp3, "audio/mp4" for .m4a/AAC, "audio/wav" for .wav
 MUSIC_PLACEHOLDER = "__DSS_MUSIC_DATA_URI__"  # must match value in .twee
 
 # ============================================================
@@ -165,7 +169,7 @@ if userscript_content:
     if os.path.exists(music_path):
         with open(music_path, "rb") as mf:
             mp3_b64 = base64.b64encode(mf.read()).decode("ascii")
-        data_uri = "data:audio/mpeg;base64," + mp3_b64
+        data_uri = "data:" + MUSIC_MIME + ";base64," + mp3_b64
         if MUSIC_PLACEHOLDER in userscript_content:
             userscript_content = userscript_content.replace(MUSIC_PLACEHOLDER, data_uri)
             kb = len(mp3_b64) // 1024

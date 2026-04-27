@@ -489,6 +489,7 @@ window.dssAudio = (function() {
   function _stopAmbient() {
     var ac = getCtx(); if (!ac || !_ambient) return;
     var prev = _ambient; _ambient = null;
+    if (prev.timer) { try { clearTimeout(prev.timer); } catch(e) {} }
     try {
       prev.g.gain.cancelScheduledValues(ac.currentTime);
       prev.g.gain.linearRampToValueAtTime(0, ac.currentTime + 0.5);
@@ -701,6 +702,97 @@ window.dssAudio = (function() {
     _ambient = { src: src, g: g, kind: 'fire' };
     });
   }
+  // Distant car horn — two square oscillators a major third apart (A4 + C#5,
+  // ~440 + 554 Hz, the classic dual-tone car horn), heavily lowpassed and
+  // quiet so it reads as far away. Triangle layer adds warmth.
+  function carHorn() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var dur = 0.25 + Math.random() * 0.35;
+      var f1 = 440 + (Math.random() - 0.5) * 30;
+      var f2 = f1 * 1.26; // major third
+      var amp = 0.045;
+      var lp = ac.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 1300; lp.Q.value = 0.7;
+      var g = ac.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(amp, now + 0.025);
+      g.gain.setValueAtTime(amp, now + dur - 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      lp.connect(g); g.connect(ac.destination);
+      [f1, f2].forEach(function(f) {
+        var sq = ac.createOscillator(); sq.type = 'square';
+        sq.frequency.value = f;
+        var sqG = ac.createGain(); sqG.gain.value = 0.5;
+        sq.connect(sqG); sqG.connect(lp);
+        sq.start(now); sq.stop(now + dur + 0.05);
+        var tr = ac.createOscillator(); tr.type = 'triangle';
+        tr.frequency.value = f * 1.002;
+        var trG = ac.createGain(); trG.gain.value = 0.4;
+        tr.connect(trG); trG.connect(lp);
+        tr.start(now); tr.stop(now + dur + 0.05);
+      });
+    });
+  }
+  // Distant traffic — heavily low-passed brown noise (under ~400Hz) with slow
+  // amplitude swells suggesting individual vehicles passing at distance.
+  // Schedules an occasional car horn (every 25-75s) while running, with a
+  // 30% chance of a double-toot. Lives in the _ambient slot, so swapping
+  // in any other ambient (wind, fire, pub) cleanly stops the horn timer too.
+  function distantTraffic() {
+    _play(function(ac) {
+      if (_ambient && _ambient.kind === 'traffic') return;
+      _stopAmbient();
+      var now = ac.currentTime;
+      var dur = 10.0;
+      var bufLen = Math.floor(ac.sampleRate * dur);
+      var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      var d = buf.getChannelData(0);
+      // Brown noise — integrate white noise, lots of low energy
+      var b = 0;
+      for (var i = 0; i < bufLen; i++) {
+        var w = Math.random() * 2 - 1;
+        b = (b + 0.04 * w) / 1.02;
+        d[i] = b * 3.5;
+      }
+      var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+      // Heavy lowpass — kills the highs (no road sibilance reaches us)
+      var lp = ac.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 380; lp.Q.value = 0.4;
+      // Highpass to trim sub-rumble that doesn't carry over distance
+      var hp = ac.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 60; hp.Q.value = 0.5;
+      var g = ac.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.14, now + 2.5);
+      // Slow swell LFO — vehicles passing
+      var lfo = ac.createOscillator(); lfo.type = 'sine';
+      lfo.frequency.value = 0.13;
+      var lfoG = ac.createGain(); lfoG.gain.value = 0.05;
+      lfo.connect(lfoG); lfoG.connect(g.gain);
+      lfo.start(now);
+      src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(ac.destination);
+      src.start(now);
+      _ambient = { src: src, g: g, kind: 'traffic', lfo: lfo, timer: null };
+      // Recursive horn scheduler — fires every 25-75s while traffic is active
+      function scheduleHorn() {
+        if (!_ambient || _ambient.kind !== 'traffic') return;
+        var delay = 25000 + Math.random() * 50000;
+        _ambient.timer = setTimeout(function() {
+          if (!_ambient || _ambient.kind !== 'traffic') return;
+          carHorn();
+          if (Math.random() < 0.3) {
+            setTimeout(function() {
+              if (_ambient && _ambient.kind === 'traffic') carHorn();
+            }, 180 + Math.random() * 200);
+          }
+          scheduleHorn();
+        }, delay);
+      }
+      scheduleHorn();
+    });
+  }
+  function stopDistantTraffic() { _stopAmbient(); }
   // Footstep — heel + ball impacts, surface filter selects ground type.
   // Call as footstep('wet'|'wood'|'carpet'|'gravel').
   function footstep(surface) {
@@ -923,6 +1015,8 @@ window.dssAudio = (function() {
     phoneBell: phoneBell, windFarnell: windFarnell,
     fireFarnell: fireFarnell, footstep: footstep,
     chimeBook: chimeBook,
+    distantTraffic: distantTraffic, stopDistantTraffic: stopDistantTraffic,
+    carHorn: carHorn,
     // Background music bed
     startMusic: startMusic, stopMusic: stopMusic,
     updateMusicForPassage: updateMusicForPassage,
@@ -5384,19 +5478,24 @@ window._passageGen = 0;
                   }
                 }
                 window._currentVenue = newVenue;
-                // Ambient beds: pyre (fire) takes precedence over dream (wind).
-                // Both auto-stop when the player leaves the dream sequence.
+                // Ambient beds: pyre (fire) > dream (wind) > outdoor (traffic).
+                // Each takes the _ambient slot; switching cleanly stops the
+                // previous one (and any horn timer it may have scheduled).
                 var inDream = (tags.indexOf('dream') !== -1);
                 var inPyre = (tags.indexOf('pyre') !== -1);
+                var inOutdoor = (tags.indexOf('outdoor') !== -1);
                 if (inPyre) {
                   window.dssAudio.fireFarnell();
                 } else if (inDream) {
                   window.dssAudio.windFarnell();
-                } else if (window._wasInDream || window._wasInPyre) {
+                } else if (inOutdoor) {
+                  window.dssAudio.distantTraffic();
+                } else if (window._wasInDream || window._wasInPyre || window._wasOutdoor) {
                   window.dssAudio.ambientOff();
                 }
                 window._wasInDream = inDream;
                 window._wasInPyre = inPyre;
+                window._wasOutdoor = inOutdoor;
                 // Footsteps on the staircase — The Interval. Soft red-carpet
                 // descent: four steps, then a pause where the player freezes.
                 if (passageNode.querySelector('.staircase-marker')) {
@@ -24810,7 +24909,7 @@ You surface upon Dean Street.
 "zoom": 0.6
 }
 
-:: A Doorway on Dean Street {"position":"700,550","size":"100,100"}
+:: A Doorway on Dean Street [outdoor] {"position":"700,550","size":"100,100"}
 (set: $hadBreather to true)\
 (set: $breatherReturns to $returns + 1)\
 (set: $confidence to $confidence + 18)\
@@ -24865,32 +24964,32 @@ So now, have you got anything to lose?
 
 (display: "French Rule SVG h24")</svg>
 
-:: Approach The French {"position":"1100,300","size":"100,100"}
+:: Approach The French [outdoor] {"position":"1100,300","size":"100,100"}
 (if: ($drankAtFrench is false) and ($haunts contains $haunt4) and (not (($haunts contains $haunt1) and ($haunts contains $haunt2))))[(go-to: "Which drink at the French?")]\
 <div id="fh-container"></div>[[·|The French]]
 
-:: Approach The Coach {"position":"1100,1400","size":"100,100"}
+:: Approach The Coach [outdoor] {"position":"1100,1400","size":"100,100"}
 <div id="ch-container"></div>[[·|Coach and Horses lock]]
 
-:: Approach The Pillars {"position":"300,1050","size":"100,100"}
+:: Approach The Pillars [outdoor] {"position":"300,1050","size":"100,100"}
 <div id="ph-container"></div>[[·|Entering The Pillars of Hercules]]
 
-:: Approach Lacklands Office {"position":"1200,1050","size":"100,100"}
+:: Approach Lacklands Office [outdoor] {"position":"1200,1050","size":"100,100"}
 <div id="lo-container"></div>[[·|Martin Lackland's Office]]
 
-:: Approach The Ginger Light {"position":"1200,300","size":"100,100"}
+:: Approach The Ginger Light [outdoor] {"position":"1200,300","size":"100,100"}
 <div id="ga-container"></div>[[·|At the Corner of Dean Street and Greek Street]]
 
-:: Approach The Colony Room {"position":"1200,500","size":"100,100"}
+:: Approach The Colony Room [outdoor] {"position":"1200,500","size":"100,100"}
 <div id="cr-container"></div>[[·|The Colony Room Door]]
 
-:: Approach Ronnie Scott's {"position":"1900,1400","size":"100,100"}
+:: Approach Ronnie Scott's [outdoor] {"position":"1900,1400","size":"100,100"}
 <div id="rs-container"></div>[[·|Ronnie Scott's]]
 
-:: Approach Coppers Lair {"position":"1600,650","size":"100,100"}
+:: Approach Coppers Lair [outdoor] {"position":"1600,650","size":"100,100"}
 <div id="cl-container"></div>[[·|Turn to Copper]]
 
-:: At the Corner of Dean Street and Greek Street {"position":"1200,400","size":"100,100"}
+:: At the Corner of Dean Street and Greek Street [outdoor] {"position":"1200,400","size":"100,100"}
 <!-- Ginger light -->
 <div class="ginger-lamp-wrap">
 <svg width="60" height="110" viewBox="0 0 60 110"><ellipse cx="30" cy="33" rx="40" ry="30" fill="rgba(200,100,5,0.10)"/><ellipse cx="30" cy="31" rx="24" ry="18" fill="rgba(220,130,10,0.18)"/><ellipse cx="30" cy="29" rx="13" ry="10" fill="rgba(255,190,60,0.22)"/><polygon points="27,2 30,0 33,2 32,7 28,7" fill="rgba(60,38,4,0.96)"/><path d="M13,7 Q30,4 47,7 L44,13 L16,13 Z" fill="rgba(60,38,4,0.96)"/><path d="M16,13 L44,13 L40,44 L20,44 Z" fill="rgba(130,75,8,0.45)" stroke="rgba(90,52,4,0.65)" stroke-width="1"/><path d="M19,15 L41,15 L37,42 L23,42 Z" fill="rgba(255,165,35,0.42)"/><ellipse cx="30" cy="29" rx="7" ry="10" fill="rgba(255,232,130,0.55)"/><ellipse cx="30" cy="27" rx="3" ry="4" fill="rgba(255,250,210,0.68)"/><rect x="22" y="44" width="16" height="6" rx="2.5" fill="rgba(60,38,4,0.96)"/><rect x="27" y="50" width="6" height="60" rx="2" fill="rgba(45,28,3,0.90)"/></svg>
@@ -24986,7 +25085,7 @@ You surface upon Dean Street.
 </div>
 (after: 7s)[(go-to: "Black page")]
 
-:: Cecil Court Approach {"position":"300,1500","size":"100,100"}
+:: Cecil Court Approach [outdoor] {"position":"300,1500","size":"100,100"}
 (set: $exploredSinceFrench to true)\
 <div id="cc-approach"></div>[[·|Cecil Court]]
 
@@ -25026,7 +25125,7 @@ Inis O'Flatterly sits at the thick wooden counter, reading what he's reading. He
 [[I was sent by Percy Ritson|O'Flatterly introduction]]
 
 
-:: Approach Chinese Fish and Chips {"position":"50,1300","size":"100,100"}
+:: Approach Chinese Fish and Chips [outdoor] {"position":"50,1300","size":"100,100"}
 <div id="fc-container"></div>[[·|Chinese Fish and Chips]]
 
 :: Chinese Fish and Chips {"position":"100,1300","size":"100,100"}
@@ -25285,7 +25384,7 @@ Better not tomorrow.
 
 </div>
 
-:: Dean Street [hub] {"position":"900,400","size":"100,100"}
+:: Dean Street [hub outdoor] {"position":"900,400","size":"100,100"}
 (set: $awaitingLacklandPwd to false)\
 <svg id="dean-lamp-svg" xmlns="http://www.w3.org/2000/svg" width="145" height="400" style="float:right;margin:0.3em -0.5em 1em 0.8em;overflow:hidden;"><defs><radialGradient id="dslamp" cx="55%" cy="5%" r="65%"><stop offset="0%" stop-color="#d4a060" stop-opacity="0.7"/><stop offset="25%" stop-color="#c89060" stop-opacity="0.35"/><stop offset="60%" stop-color="#c89060" stop-opacity="0.12"/><stop offset="100%" stop-color="#c89060" stop-opacity="0"/></radialGradient></defs><rect x="-40" y="-80" width="240" height="340" fill="url(#dslamp)"/><g fill="none" stroke="#c8a86a" stroke-linecap="round" stroke-linejoin="round"><line x1="90" y1="32" x2="90" y2="38" stroke-width="1.8"/><circle cx="90" cy="42" r="4" stroke-width="2.0"/><line x1="90" y1="46" x2="90" y2="56" stroke-width="1.8"/><line x1="90" y1="56" x2="68" y2="68" stroke-width="2.5"/><line x1="90" y1="56" x2="112" y2="68" stroke-width="2.5"/><line x1="66" y1="68" x2="114" y2="68" stroke-width="2.3"/><line x1="68" y1="68" x2="68" y2="104" stroke-width="2.3"/><line x1="112" y1="68" x2="112" y2="104" stroke-width="2.3"/><line x1="66" y1="104" x2="114" y2="104" stroke-width="2.3"/><line x1="90" y1="68" x2="90" y2="104" stroke-width="1.4"/><line x1="68" y1="86" x2="112" y2="86" stroke-width="1.4"/><path d="M90,104 L72,178 L100,238" stroke-width="3.0"/><ellipse cx="100" cy="240" rx="13" ry="4" stroke-width="1.8"/><line x1="100" y1="246" x2="100" y2="9999" stroke-width="3.8"/><ellipse cx="100" cy="385" rx="13" ry="4" stroke-width="1.8"/><ellipse cx="100" cy="530" rx="13" ry="4" stroke-width="1.8"/><rect x="84" y="692" width="32" height="8" rx="2" stroke-width="1.8"/></g></svg>
 <h1 class="game-title" style="font-size:1.7em;">DREAM STREET<span style="display:block;height:0.15em;"></span>SHUFFLE</h1>
@@ -27908,7 +28007,7 @@ At a table near the window sits an agent about whom you've heard all the mytholo
 <svg class="colony-fan-bottom" viewBox="0 0 300 52" width="100%" height="52" preserveAspectRatio="none"><defs><clipPath id="cf2"><rect x="0" y="0" width="300" height="50"/></clipPath><linearGradient id="cfL2" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="30%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="50%" stop-color="#c8b860" stop-opacity="0.8"/><stop offset="70%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient><radialGradient id="cfG2" cx="50%" cy="100%" r="55%"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0.08"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="300" height="52" fill="url(#cfG2)"/><g clip-path="url(#cf2)" opacity="0.3"><line x1="150" y1="54" x2="0"   y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="20"  y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="43"  y2="0" stroke="#8a9a50" stroke-width="0.7"/><line x1="150" y1="54" x2="67"  y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="86"  y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="108" y2="0" stroke="#9a8a30" stroke-width="0.7"/><line x1="150" y1="54" x2="130" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="150" y2="0" stroke="#c8b860" stroke-width="1.0"/><line x1="150" y1="54" x2="170" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="192" y2="0" stroke="#9a8a30" stroke-width="0.7"/><line x1="150" y1="54" x2="214" y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="233" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="257" y2="0" stroke="#8a9a50" stroke-width="0.7"/><line x1="150" y1="54" x2="280" y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="300" y2="0" stroke="#7aaa60" stroke-width="0.7"/></g><path d="M60,20 Q105,12 150,10 Q195,12 240,20" fill="none" stroke="#7aaa60" stroke-width="0.4" opacity="0.18"/><path d="M30,30 Q90,22 150,20 Q210,22 270,30" fill="none" stroke="#8a9a50" stroke-width="0.4" opacity="0.15"/><line x1="0" y1="43" x2="300" y2="43" stroke="url(#cfL2)" stroke-width="0.5"/><line x1="0" y1="47" x2="300" y2="47" stroke="url(#cfL2)" stroke-width="1.8"/><line x1="0" y1="50" x2="300" y2="50" stroke="url(#cfL2)" stroke-width="0.4" opacity="0.3"/><polygon points="150,40 155.5,45 150,50 144.5,45" fill="#c8b860" opacity="0.6"/><polygon points="150,42 153,45 150,48 147,45" fill="#e0d080" opacity="0.2"/><polygon points="120,44 123,47 120,50 117,47" fill="none" stroke="#7aaa60" stroke-width="0.7" opacity="0.4"/><polygon points="180,44 183,47 180,50 177,47" fill="none" stroke="#7aaa60" stroke-width="0.7" opacity="0.4"/><circle cx="95" cy="47" r="0.8" fill="#8a9a50" opacity="0.35"/><circle cx="205" cy="47" r="0.8" fill="#8a9a50" opacity="0.35"/></svg>
 </div>
 
-:: The Colony Room Door {"position":"1200,550","size":"100,100"}
+:: The Colony Room Door [outdoor] {"position":"1200,550","size":"100,100"}
 <div class="venue-back-btn">(link: "← Dean Street")[(go-to: "Dean Street")]</div>
 You think you know where The Colony Room is. You're not a member, but a friend brought you there once before.
 

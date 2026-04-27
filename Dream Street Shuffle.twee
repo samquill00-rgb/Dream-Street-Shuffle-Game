@@ -141,6 +141,8 @@ window.dssAudio = (function() {
     if (ac.state === 'suspended') {
       try { ac.resume(); } catch(e) {}
     }
+    // Duck the background music so the SFX cuts through clearly
+    try { _duckMusic(); } catch(e) {}
     try { fn(ac); }
     catch(e) { if (window.console && console.error) console.error('dssAudio:', e); }
   }
@@ -758,6 +760,68 @@ window.dssAudio = (function() {
       src.start(now); src.stop(now + dur);
     });
   }
+  // ====== BACKGROUND MUSIC BED ======
+  // Looping theme that plays through the whole game (Dean Street and beyond).
+  // Volume ducks when any SFX fires (via the _play wrapper) and ramps back smoothly.
+  // Skipped on title / menu screens so music starts when the game proper starts.
+  var MUSIC_FILE = 'Dream Street Shuffle experiment theme loop.mp3';
+  var MUSIC_VOLUME_BASE = 0.30;     // resting volume (0-1) — tweak here to set overall level
+  var MUSIC_VOLUME_DUCK = 0.10;     // dipped volume during SFX
+  var MUSIC_DUCK_HOLD_MS = 350;     // hold the duck for this long before recovering
+  var MUSIC_DUCK_RAMP_MS = 600;     // smooth ramp back to base
+  var MUSIC_SKIP_PASSAGES = {       // don't auto-start music on these passages
+    'Title':1,'Start':1,'Black page':1,'White page':1
+  };
+  var musicEl = null, musicStarted = false, duckTimer = null, rampTimer = null;
+  function _ensureMusic() {
+    if (musicEl) return musicEl;
+    musicEl = new Audio(encodeURI(MUSIC_FILE));
+    musicEl.loop = true;
+    musicEl.preload = 'auto';
+    musicEl.volume = MUSIC_VOLUME_BASE;
+    return musicEl;
+  }
+  function startMusic() {
+    if (musicStarted) return;
+    // Skip on title/menu screens — music should feel like the game's underscore
+    var cur = document.querySelector('tw-passage[data-name]');
+    var name = cur ? cur.getAttribute('data-name') : '';
+    if (MUSIC_SKIP_PASSAGES[name]) return;
+    var el = _ensureMusic();
+    var p = el.play();
+    if (p && p.then) {
+      p.then(function() { musicStarted = true; })
+       .catch(function() { /* autoplay blocked — will retry on next user gesture */ });
+    } else {
+      musicStarted = true;
+    }
+  }
+  function _duckMusic() {
+    if (!musicEl || !musicStarted) return;
+    if (rampTimer) { clearInterval(rampTimer); rampTimer = null; }
+    musicEl.volume = MUSIC_VOLUME_DUCK;
+    if (duckTimer) clearTimeout(duckTimer);
+    duckTimer = setTimeout(function() {
+      duckTimer = null;
+      var steps = 12, i = 0;
+      var startV = musicEl.volume;
+      rampTimer = setInterval(function() {
+        i++;
+        musicEl.volume = startV + (MUSIC_VOLUME_BASE - startV) * (i / steps);
+        if (i >= steps) {
+          musicEl.volume = MUSIC_VOLUME_BASE;
+          clearInterval(rampTimer);
+          rampTimer = null;
+        }
+      }, MUSIC_DUCK_RAMP_MS / 12);
+    }, MUSIC_DUCK_HOLD_MS);
+  }
+  function pauseMusic() { if (musicEl) musicEl.pause(); }
+  function resumeMusic() { if (musicEl) { musicEl.play(); musicStarted = true; } }
+  function setMusicVolume(v) {
+    MUSIC_VOLUME_BASE = Math.max(0, Math.min(1, v));
+    if (musicEl && !duckTimer && !rampTimer) musicEl.volume = MUSIC_VOLUME_BASE;
+  }
   return {
     pour: pour, sip: sip, phoneRing: phoneRing, pageRustle: pageRustle,
     typewriterTick: typewriterTick, itemFound: itemFound,
@@ -767,7 +831,11 @@ window.dssAudio = (function() {
     ambientPub: ambientPub, ambientDream: ambientDream, ambientOff: ambientOff,
     // Farnell-style procedural models
     phoneBell: phoneBell, windFarnell: windFarnell,
-    fireFarnell: fireFarnell, footstep: footstep
+    fireFarnell: fireFarnell, footstep: footstep,
+    // Background music bed
+    startMusic: startMusic, pauseMusic: pauseMusic,
+    resumeMusic: resumeMusic, setMusicVolume: setMusicVolume,
+    _duckMusic: _duckMusic
   };
 })();
 
@@ -5168,6 +5236,10 @@ window._passageGen = 0;
               var passageTags = passageNode.getAttribute('tags') || '';
               var tags = passageTags.split(/\s+/).filter(Boolean);
               if (window.dssAudio) {
+                // Background music — start once we're past the title screen.
+                // startMusic() itself checks the current passage name and skips
+                // Title/Start/etc. so we can call it freely on every nav.
+                if (window.dssAudio.startMusic) window.dssAudio.startMusic();
                 // Page 47 found — paper rustle
                 if (passageNode.querySelector('.page-found')) {
                   setTimeout(function(){ window.dssAudio.pageRustle(); }, 180);

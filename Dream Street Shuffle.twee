@@ -137,15 +137,12 @@ window.dssAudio = (function() {
   // If it's still suspending, wait for the resume promise then run.
   function _play(fn) {
     var ac = getCtx(); if (!ac) return;
-    var safe = function() {
-      try { fn(ac); }
-      catch(e) { if (window.console && console.error) console.error('dssAudio:', e); }
-    };
-    if (ac.state === 'running') safe();
-    else {
-      try { ac.resume().then(safe).catch(function(e){ if (window.console && console.error) console.error('dssAudio resume:', e); }); }
-      catch(e) { if (window.console && console.error) console.error('dssAudio outer:', e); }
+    // Fire-and-forget resume; don't wait for the promise (some browsers hang).
+    if (ac.state === 'suspended') {
+      try { ac.resume(); } catch(e) {}
     }
+    try { fn(ac); }
+    catch(e) { if (window.console && console.error) console.error('dssAudio:', e); }
   }
   // Soft pour — filtered noise, gentle envelope
   function pour() {
@@ -392,21 +389,16 @@ window.dssAudio = (function() {
   function coinFlip() {
     _play(function(ac) {
     var now = ac.currentTime;
-    // Spin: fluttering oscillator going up then back down
+    // Spin: oscillator going up then back down (no LFO — keep it simple)
     var o = ac.createOscillator(); o.type='triangle';
     o.frequency.setValueAtTime(700, now);
     o.frequency.linearRampToValueAtTime(1300, now + 0.35);
     o.frequency.linearRampToValueAtTime(900, now + 0.7);
     var g = ac.createGain();
-    g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.18, now + 0.05);
-    g.gain.linearRampToValueAtTime(0.12, now + 0.6);
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.linearRampToValueAtTime(0.22, now + 0.05);
+    g.gain.linearRampToValueAtTime(0.16, now + 0.6);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
-    // Add slight tremolo via a second gain modulator
-    var lfo = ac.createOscillator(); lfo.frequency.value = 22; lfo.type='sine';
-    var lfoG = ac.createGain(); lfoG.gain.value = 0.025;
-    lfo.connect(lfoG); lfoG.connect(g.gain);
-    lfo.start(now); lfo.stop(now + 0.75);
     o.connect(g); g.connect(ac.destination);
     o.start(now); o.stop(now + 0.78);
     // Landing tink at ~0.85s
@@ -415,8 +407,8 @@ window.dssAudio = (function() {
     o2.frequency.setValueAtTime(2400, t0);
     o2.frequency.exponentialRampToValueAtTime(1800, t0 + 0.3);
     var g2 = ac.createGain();
-    g2.gain.setValueAtTime(0, t0);
-    g2.gain.linearRampToValueAtTime(0.08, t0 + 0.005);
+    g2.gain.setValueAtTime(0.001, t0);
+    g2.gain.linearRampToValueAtTime(0.14, t0 + 0.005);
     g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
     o2.connect(g2); g2.connect(ac.destination);
     o2.start(t0); o2.stop(t0 + 0.32);
@@ -525,12 +517,37 @@ window.dssAudio = (function() {
       });
   }
   function ambientOff() { _stopAmbient(); }
+  // Passage transition — a soft wave-like swell that fades.
+  // Filtered noise with a filter sweep: opens up as it crests, closes as it dies.
+  // Quiet so it doesn't compete with passage-specific sounds (drinks, doors, etc.)
+  function passageWhoosh() {
+    _play(function(ac) {
+      var dur = 1.1, now = ac.currentTime;
+      var bufLen = Math.floor(ac.sampleRate * dur);
+      var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * 0.5;
+      var src = ac.createBufferSource(); src.buffer = buf;
+      var f = ac.createBiquadFilter(); f.type='lowpass';
+      f.frequency.setValueAtTime(220, now);
+      f.frequency.linearRampToValueAtTime(950, now + 0.38);
+      f.frequency.exponentialRampToValueAtTime(180, now + dur);
+      f.Q.value = 0.5;
+      var g = ac.createGain();
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(0.06, now + 0.32);
+      g.gain.linearRampToValueAtTime(0.04, now + 0.65);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      src.connect(f); f.connect(g); g.connect(ac.destination);
+      src.start(now); src.stop(now + dur);
+    });
+  }
   return {
     pour: pour, sip: sip, phoneRing: phoneRing, pageRustle: pageRustle,
     typewriterTick: typewriterTick, itemFound: itemFound,
     penScratch: penScratch, heartbeat: heartbeat,
     glassSmash: glassSmash, matchStrike: matchStrike, coinFlip: coinFlip,
-    doorCreak: doorCreak,
+    doorCreak: doorCreak, passageWhoosh: passageWhoosh,
     ambientPub: ambientPub, ambientDream: ambientDream, ambientOff: ambientOff
   };
 })();
@@ -4923,6 +4940,8 @@ window._passageGen = 0;
             try {
               var pName = n.getAttribute('data-name') || '';
               if (window.dssAudio) {
+                // Soft wave-like whoosh on every passage transition
+                window.dssAudio.passageWhoosh();
                 if (n.querySelector('.page-found')) {
                   setTimeout(function(){ window.dssAudio.pageRustle(); }, 180);
                 }
@@ -24893,7 +24912,7 @@ In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It wil
 
 <span class="guided-link">[[The Coach and Horses|Approach The Coach]]</span></div>](else:)[Where now?
 (if: $returns >= 2 and $visited's French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)<script>setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);</script>]
-(if: $returns >= 3 and ($confidence < 40 or $sobriety < 40) and $shownMoraleWarn is false)[(set: $shownMoraleWarn to true)<span id="mw-vals" style="display:none">(print: $confidence),(print: $sobriety)</span><script>setTimeout(function(){ var el=document.getElementById('mw-vals'); if(el && window.moraleWarningPopup){ var v=el.textContent.split(','); window.moraleWarningPopup(parseInt(v[0],10),parseInt(v[1],10)); } }, 400);</script>]]
+(if: $returns >= 3 and $confidence < 30 and $sobriety < 30)[<div class="choice-box">You're in a bad way. Get some grub, find a doorway, catch your breath.</div>](else-if: $returns >= 3 and $confidence < 40)[<div class="choice-box">Your confidence is slipping. Find somewhere to gather yourself.</div>](else-if: $returns >= 3 and $sobriety < 40)[<div class="choice-box">You've had a few too many. You could use some food to soak it up.</div>]]
 (if: $coachUrgent is false and _towerReady is false and not (($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2)))[[[To The French|Approach The French]] (if: $haunts contains $haunt4)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>](if: $haunts contains $haunt1)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>](if: $haunts contains $haunt2)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>]
 ](if: $coachUrgent is false and _towerReady is false and ($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2))[<span class="greyed-out">The French &#91;DONE FOR TONIGHT&#93;</span>
 ]\

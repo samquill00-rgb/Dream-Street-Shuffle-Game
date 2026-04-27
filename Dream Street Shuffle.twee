@@ -389,44 +389,56 @@ window.dssAudio = (function() {
   function coinFlip() {
     _play(function(ac) {
     var now = ac.currentTime;
-    // Jangling coin: a series of short metallic "tings" as it tumbles
-    // through the air, each with bell-like non-harmonic partials.
+    // Tinny coin: high-frequency metallic pings with very fast attack and
+    // short decay. Each ping is a brief noise transient (the tap) plus
+    // a high-frequency ring with inharmonic partials (the metal singing).
     var jingles = [
-      { t: 0.00, base: 2400, amp: 0.10 },
-      { t: 0.09, base: 1900, amp: 0.08 },
-      { t: 0.20, base: 2700, amp: 0.09 },
-      { t: 0.34, base: 2100, amp: 0.07 },
-      { t: 0.50, base: 2500, amp: 0.06 }
+      { t: 0.00, base: 4200, amp: 0.13 },
+      { t: 0.07, base: 4600, amp: 0.10 },
+      { t: 0.16, base: 3900, amp: 0.11 },
+      { t: 0.27, base: 4900, amp: 0.09 },
+      { t: 0.40, base: 4300, amp: 0.10 },
+      { t: 0.54, base: 4500, amp: 0.08 }
     ];
     jingles.forEach(function(j) {
       var t = now + j.t;
-      // Bell-like: fundamental + non-harmonic partials (2.76, 5.4 ratios)
-      [1, 2.76, 5.4].forEach(function(ratio, idx) {
+      // Tiny noise transient — the metallic "tap"
+      var nLen = Math.floor(ac.sampleRate * 0.004);
+      var nbuf = ac.createBuffer(1, nLen, ac.sampleRate);
+      var nd = nbuf.getChannelData(0);
+      for (var k = 0; k < nLen; k++) nd[k] = (Math.random()*2-1) * Math.exp(-k/nLen * 6);
+      var nsrc = ac.createBufferSource(); nsrc.buffer = nbuf;
+      var nf = ac.createBiquadFilter(); nf.type='highpass'; nf.frequency.value = 3500;
+      var ng = ac.createGain(); ng.gain.value = j.amp * 0.35;
+      nsrc.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+      nsrc.start(t);
+      // High metallic ring — fast attack, fast decay (~80ms)
+      [1, 1.94, 3.36, 5.12].forEach(function(ratio, idx) {
         var o = ac.createOscillator(); o.type='sine';
         o.frequency.value = j.base * ratio;
         var g = ac.createGain();
         var amp = j.amp / (idx + 1);
         g.gain.setValueAtTime(0.001, t);
-        g.gain.linearRampToValueAtTime(amp, t + 0.003);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        g.gain.linearRampToValueAtTime(amp, t + 0.001);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
         o.connect(g); g.connect(ac.destination);
-        o.start(t); o.stop(t + 0.2);
+        o.start(t); o.stop(t + 0.10);
       });
     });
-    // Landing rattle — coin settling on a hard surface, three quick bounces
-    var landTimes = [0.85, 0.92, 0.97];
+    // Landing — tinny triple-tap as the coin bounces and settles
+    var landTimes = [0.92, 0.98, 1.02];
     landTimes.forEach(function(off, i) {
       var t0 = now + off;
-      [2800, 4200].forEach(function(freq, idx) {
+      [4400, 5800, 7200].forEach(function(freq, idx) {
         var o = ac.createOscillator(); o.type='sine';
-        o.frequency.value = freq + Math.random() * 200;
+        o.frequency.value = freq + Math.random() * 250;
         var g = ac.createGain();
-        var amp = (idx === 0 ? 0.10 : 0.05) * (1 - i * 0.3);
+        var amp = (idx === 0 ? 0.10 : (idx === 1 ? 0.06 : 0.03)) * (1 - i * 0.35);
         g.gain.setValueAtTime(0.001, t0);
-        g.gain.linearRampToValueAtTime(amp, t0 + 0.002);
-        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+        g.gain.linearRampToValueAtTime(amp, t0 + 0.001);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
         o.connect(g); g.connect(ac.destination);
-        o.start(t0); o.stop(t0 + 0.24);
+        o.start(t0); o.stop(t0 + 0.13);
       });
     });
       });
@@ -478,31 +490,46 @@ window.dssAudio = (function() {
       prev.src.stop(ac.currentTime + 0.6);
     } catch(e) {}
   }
-  // Pub murmur — bandpass-filtered noise loop, quiet, suggesting distant chatter
+  // Pub murmur — pink noise filtered through two bandpass filters tuned to
+  // the human voice formants (F1 ~600Hz, F2 ~1500Hz), with rhythmic amplitude
+  // modulation baked into the buffer. Sounds like distant chatter rather than
+  // hiss.
   function ambientPub() {
     _play(function(ac) {
     if (_ambient && _ambient.kind === 'pub') return;
     _stopAmbient();
     var now = ac.currentTime;
-    var bufLen = Math.floor(ac.sampleRate * 4.0);
+    // Long buffer (8s) so the loop point isn't obvious
+    var bufLen = Math.floor(ac.sampleRate * 8.0);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
     var d = buf.getChannelData(0);
-    // Pink-ish noise with slow modulation
     var b0=0, b1=0, b2=0;
     for (var i = 0; i < bufLen; i++) {
       var w = Math.random()*2-1;
       b0 = 0.99*b0 + 0.07*w;
       b1 = 0.96*b1 + 0.10*w;
       b2 = 0.85*b2 + 0.12*w;
-      d[i] = (b0 + b1 + b2) * 0.3;
+      // Rhythmic amplitude modulation — voices coming and going.
+      // Two low-frequency sines at incommensurate rates so there's no obvious pulse.
+      var ti = i / ac.sampleRate;
+      var rhythm = 0.45 + 0.35 * Math.sin(ti * 1.7) + 0.20 * Math.sin(ti * 0.83 + 1.3);
+      if (rhythm < 0.15) rhythm = 0.15;
+      d[i] = (b0 + b1 + b2) * 0.3 * rhythm;
     }
     var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
-    var f = ac.createBiquadFilter(); f.type='bandpass';
-    f.frequency.value = 520; f.Q.value = 0.5;
+    // Two bandpass filters in parallel — formant character (vowels)
+    var f1 = ac.createBiquadFilter(); f1.type='bandpass';
+    f1.frequency.value = 620; f1.Q.value = 1.6;
+    var f2 = ac.createBiquadFilter(); f2.type='bandpass';
+    f2.frequency.value = 1500; f2.Q.value = 1.9;
+    var g1 = ac.createGain(); g1.gain.value = 1.0;
+    var g2 = ac.createGain(); g2.gain.value = 0.55;
     var g = ac.createGain();
     g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.13, now + 1.5);
-    src.connect(f); f.connect(g); g.connect(ac.destination);
+    g.gain.linearRampToValueAtTime(0.18, now + 1.5);
+    src.connect(f1); f1.connect(g1); g1.connect(g);
+    src.connect(f2); f2.connect(g2); g2.connect(g);
+    g.connect(ac.destination);
     src.start(now);
     _ambient = { src: src, g: g, kind: 'pub' };
       });
@@ -25293,7 +25320,7 @@ As he turns from his ginger light he kisses you and, as he does, you close your 
 
 <strong class="alba-counter alba-fade-first">THE FIRST LINE OF THREE</strong>
 
-[[Dream On|Alba Revealed]]
+[[Back to Dean Street|Dean Street]]
 
 :: Alba Revealed {"position":"900,200","size":"100,100"}
 <div class="quest-box">
@@ -25306,7 +25333,7 @@ Miss them and you'll end up just another Dean Street dream.
 <div class="quest-objective">TASK: FIND ALL  THREE LINES BEFORE DAWN</div>
 </div>
 
-[[Back to Dean Street|Dean Street]]
+[[Dream On|LINE 1]]
 
 :: Green Sea Approach {"position":"850,200","size":"100,100"}
 <div id="gs-approach"></div>[[·|LINE 2]]
@@ -28450,7 +28477,7 @@ Trisha's is close by and you can always try there. You're not a member these day
 
 You don't understand and retreating, you strike, in the nifty, brisket air, a vein of his perfume, which you recognise, because you once loved a woman who wore it, as lily-of-the-valley.
 
-[[Walk on|LINE 1]]
+[[Walk on|Alba Revealed]]
 </div>
 
 :: header header [header] {"position":"700,50","size":"100,100"}

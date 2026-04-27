@@ -117,9 +117,39 @@ window.dssAudio = (function() {
     if (ctx.state === 'suspended') { try { ctx.resume(); } catch(e) {} }
     return ctx;
   }
+  // Keep the audio context alive on every user interaction.
+  // Without this, browsers may suspend the context between sounds, and
+  // one-shot effects (coin, item pickup, etc.) can be silently dropped
+  // because their scheduled times slip into the past during suspension.
+  function _prime() {
+    if (ctx && ctx.state === 'suspended') {
+      try { ctx.resume(); } catch(e) {}
+    }
+  }
+  ['click','touchstart','keydown','pointerdown'].forEach(function(ev) {
+    try {
+      document.addEventListener(ev, _prime, { capture: true, passive: true });
+    } catch(e) {
+      document.addEventListener(ev, _prime, true);
+    }
+  });
+  // Helper: only schedule audio when the context is actually running.
+  // If it's still suspending, wait for the resume promise then run.
+  function _play(fn) {
+    var ac = getCtx(); if (!ac) return;
+    var safe = function() {
+      try { fn(ac); }
+      catch(e) { if (window.console && console.error) console.error('dssAudio:', e); }
+    };
+    if (ac.state === 'running') safe();
+    else {
+      try { ac.resume().then(safe).catch(function(e){ if (window.console && console.error) console.error('dssAudio resume:', e); }); }
+      catch(e) { if (window.console && console.error) console.error('dssAudio outer:', e); }
+    }
+  }
   // Soft pour — filtered noise, gentle envelope
   function pour() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var dur = 0.95, now = ac.currentTime;
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
@@ -136,10 +166,11 @@ window.dssAudio = (function() {
     g.gain.exponentialRampToValueAtTime(0.001, now+dur);
     src.connect(f); f.connect(g); g.connect(ac.destination);
     src.start(now); src.stop(now+dur);
+      });
   }
   // Short sip / gulp — low warble
   function sip() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var now = ac.currentTime;
     var o = ac.createOscillator(); o.type='sine';
     o.frequency.setValueAtTime(170, now);
@@ -150,10 +181,11 @@ window.dssAudio = (function() {
     g.gain.exponentialRampToValueAtTime(0.001, now+0.22);
     o.connect(g); g.connect(ac.destination);
     o.start(now); o.stop(now+0.25);
+      });
   }
   // Old-school British phone ring — two short pulses, ~1.5s repeats
   function phoneRing(rings) {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     rings = rings || 2;
     var now = ac.currentTime;
     for (var r = 0; r < rings; r++) {
@@ -173,10 +205,11 @@ window.dssAudio = (function() {
         });
       });
     }
+      });
   }
   // Typewriter key tick — short metallic click. Slight pitch variation per call.
   function typewriterTick() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var now = ac.currentTime;
     // Mechanical click: short noise burst with bandpass filter, tiny pitch jitter
     var dur = 0.04;
@@ -194,10 +227,11 @@ window.dssAudio = (function() {
     var g = ac.createGain(); g.gain.value = 0.18;
     src.connect(f); f.connect(g); g.connect(ac.destination);
     src.start(now);
+      });
   }
   // Item placed on table — soft thud + tiny resonance
   function itemFound() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var now = ac.currentTime;
     // Low thump
     var o = ac.createOscillator(); o.type='sine';
@@ -218,10 +252,11 @@ window.dssAudio = (function() {
     g2.gain.exponentialRampToValueAtTime(0.001, now+0.12);
     o2.connect(g2); g2.connect(ac.destination);
     o2.start(now); o2.stop(now+0.13);
+      });
   }
   // Pen scratch — short scratchy noise (writing in the notebook)
   function penScratch() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var dur = 0.55, now = ac.currentTime;
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
@@ -238,10 +273,11 @@ window.dssAudio = (function() {
     var g = ac.createGain(); g.gain.value = 0.22;
     src.connect(f); f.connect(g); g.connect(ac.destination);
     src.start(now);
+      });
   }
   // Heartbeat — two soft thuds, deep
   function heartbeat(beats) {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     beats = beats || 3;
     var now = ac.currentTime;
     for (var b = 0; b < beats; b++) {
@@ -261,10 +297,11 @@ window.dssAudio = (function() {
         o.start(t); o.stop(t+0.18);
       });
     }
+      });
   }
   // Paper rustle — high-passed noise burst
   function pageRustle() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var dur = 0.45, now = ac.currentTime;
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
@@ -279,10 +316,11 @@ window.dssAudio = (function() {
     var g = ac.createGain(); g.gain.value = 0.45;
     src.connect(f); f.connect(g); g.connect(ac.destination);
     src.start(now);
+      });
   }
   // Glass smash — sharp noise burst, high frequency content, short tail
   function glassSmash() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var dur = 0.7, now = ac.currentTime;
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
@@ -311,10 +349,11 @@ window.dssAudio = (function() {
       o.connect(og); og.connect(ac.destination);
       o.start(t0); o.stop(t0+0.2);
     }
+      });
   }
   // Match strike — quick scratch then warm flame whoosh
   function matchStrike() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var now = ac.currentTime;
     // Scratch (short noisy burst, mid-band)
     var scrDur = 0.12;
@@ -347,10 +386,11 @@ window.dssAudio = (function() {
     wg.gain.exponentialRampToValueAtTime(0.001, whoStart + whoDur);
     wsrc.connect(wf); wf.connect(wg); wg.connect(ac.destination);
     wsrc.start(whoStart); wsrc.stop(whoStart + whoDur);
+      });
   }
   // Coin flip — quick rising-falling tone (spinning) then small landing tink
   function coinFlip() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var now = ac.currentTime;
     // Spin: fluttering oscillator going up then back down
     var o = ac.createOscillator(); o.type='triangle';
@@ -359,8 +399,8 @@ window.dssAudio = (function() {
     o.frequency.linearRampToValueAtTime(900, now + 0.7);
     var g = ac.createGain();
     g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.06, now + 0.05);
-    g.gain.linearRampToValueAtTime(0.04, now + 0.6);
+    g.gain.linearRampToValueAtTime(0.18, now + 0.05);
+    g.gain.linearRampToValueAtTime(0.12, now + 0.6);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
     // Add slight tremolo via a second gain modulator
     var lfo = ac.createOscillator(); lfo.frequency.value = 22; lfo.type='sine';
@@ -380,10 +420,11 @@ window.dssAudio = (function() {
     g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
     o2.connect(g2); g2.connect(ac.destination);
     o2.start(t0); o2.stop(t0 + 0.32);
+      });
   }
   // Door creak then a tiny pub-bell ding
   function doorCreak() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     var now = ac.currentTime;
     // Creak: low-mid filtered noise with frequency wobble
     var crkDur = 0.7;
@@ -415,6 +456,7 @@ window.dssAudio = (function() {
       o.connect(og); og.connect(ac.destination);
       o.start(t0); o.stop(t0 + 1.0);
     });
+      });
   }
   // Ambient bed — single-slot state machine. Only one bed plays at a time.
   var _ambient = null;
@@ -429,7 +471,7 @@ window.dssAudio = (function() {
   }
   // Pub murmur — bandpass-filtered noise loop, quiet, suggesting distant chatter
   function ambientPub() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     if (_ambient && _ambient.kind === 'pub') return;
     _stopAmbient();
     var now = ac.currentTime;
@@ -454,10 +496,11 @@ window.dssAudio = (function() {
     src.connect(f); f.connect(g); g.connect(ac.destination);
     src.start(now);
     _ambient = { src: src, g: g, kind: 'pub' };
+      });
   }
   // Wind / sea — broader noise with slow filter sweep, suggesting open coast
   function ambientDream() {
-    var ac = getCtx(); if (!ac) return;
+    _play(function(ac) {
     if (_ambient && _ambient.kind === 'dream') return;
     _stopAmbient();
     var now = ac.currentTime;
@@ -479,6 +522,7 @@ window.dssAudio = (function() {
     src.connect(f); f.connect(g); g.connect(ac.destination);
     src.start(now);
     _ambient = { src: src, g: g, kind: 'dream', lfo: lfo };
+      });
   }
   function ambientOff() { _stopAmbient(); }
   return {
@@ -24028,9 +24072,6 @@ document.addEventListener('keydown', function(e) {
 
 
 :: Approach Centre Point {"position":"1650,50","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "CentrePoint" and $approached's CentrePoint is true)[(go-to: "Centre Point")]\
-(set: $approached's CentrePoint to true)\
 <div id="cp-container"></div>[[·|Centre Point]]
 
 :: PP Pong {"position":"1300,1550","size":"100,100"}
@@ -24386,51 +24427,27 @@ So now, have you got anything to lose?
 
 :: Approach The French {"position":"1100,300","size":"100,100"}
 (if: ($drankAtFrench is false) and ($haunts contains $haunt4) and (not (($haunts contains $haunt1) and ($haunts contains $haunt2))))[(go-to: "Which drink at the French?")]\
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "French" and $approached's French is true)[(go-to: "The French")]\
-(set: $approached's French to true)\
 <div id="fh-container"></div>[[·|The French]]
 
 :: Approach The Coach {"position":"1100,1400","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "Coach" and $approached's Coach is true)[(go-to: "Coach and Horses lock")]\
-(set: $approached's Coach to true)\
 <div id="ch-container"></div>[[·|Coach and Horses lock]]
 
 :: Approach The Pillars {"position":"300,1050","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "Pillars" and $approached's Pillars is true)[(go-to: "Entering The Pillars of Hercules")]\
-(set: $approached's Pillars to true)\
 <div id="ph-container"></div>[[·|Entering The Pillars of Hercules]]
 
 :: Approach Lacklands Office {"position":"1200,1050","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "Lacklands" and $approached's Lacklands is true)[(go-to: "Martin Lackland's Office")]\
-(set: $approached's Lacklands to true)\
 <div id="lo-container"></div>[[·|Martin Lackland's Office]]
 
 :: Approach The Ginger Light {"position":"1200,300","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "Ginger" and $approached's Ginger is true)[(go-to: "At the Corner of Dean Street and Greek Street")]\
-(set: $approached's Ginger to true)\
 <div id="ga-container"></div>[[·|At the Corner of Dean Street and Greek Street]]
 
 :: Approach The Colony Room {"position":"1200,500","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "Colony" and $approached's Colony is true)[(go-to: "The Colony Room Door")]\
-(set: $approached's Colony to true)\
 <div id="cr-container"></div>[[·|The Colony Room Door]]
 
 :: Approach Ronnie Scott's {"position":"1900,1400","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "Ronnies" and $approached's Ronnies is true)[(go-to: "Ronnie Scott's")]\
-(set: $approached's Ronnies to true)\
 <div id="rs-container"></div>[[·|Ronnie Scott's]]
 
 :: Approach Coppers Lair {"position":"1600,650","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "Coppers" and $approached's Coppers is true)[(go-to: "Turn to Copper")]\
-(set: $approached's Coppers to true)\
 <div id="cl-container"></div>[[·|Turn to Copper]]
 
 :: At the Corner of Dean Street and Greek Street {"position":"1200,400","size":"100,100"}
@@ -24570,9 +24587,6 @@ Inis O'Flatterly sits at the thick wooden counter, reading what he's reading. He
 
 
 :: Approach Chinese Fish and Chips {"position":"50,1300","size":"100,100"}
-(unless: $approached is a datamap)[(set: $approached to (dm:))]\
-(if: $approached contains "Chippy" and $approached's Chippy is true)[(go-to: "Chinese Fish and Chips")]\
-(set: $approached's Chippy to true)\
 <div id="fc-container"></div>[[·|Chinese Fish and Chips]]
 
 :: Chinese Fish and Chips {"position":"100,1300","size":"100,100"}

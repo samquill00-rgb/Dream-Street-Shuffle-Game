@@ -5123,6 +5123,7 @@ window.dssAudio = (function() {
     var ac = getCtx(); if (!ac || !_ambient) return;
     var prev = _ambient; _ambient = null;
     if (prev.timer) { try { clearTimeout(prev.timer); } catch(e) {} }
+    if (prev.dripTimer) { try { clearTimeout(prev.dripTimer); } catch(e) {} }
     try {
       prev.g.gain.cancelScheduledValues(ac.currentTime);
       prev.g.gain.linearRampToValueAtTime(0, ac.currentTime + 0.5);
@@ -5335,6 +5336,39 @@ window.dssAudio = (function() {
     _ambient = { src: src, g: g, kind: 'fire' };
     });
   }
+  // Single drip — short noise transient + brief pitched sine resonance with
+  // a small downward chirp (the cavity closing as the drop hits). Random
+  // frequency so each drop sounds different. Used as ambient texture in
+  // distantTraffic — water dripping from gutters, leaves, signs after rain.
+  function dripDrop() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var freq = 1400 + Math.random() * 2200; // 1400-3600 Hz
+      // Short noise impulse — the "tick" of impact
+      var impLen = Math.floor(ac.sampleRate * 0.005);
+      var impBuf = ac.createBuffer(1, impLen, ac.sampleRate);
+      var impData = impBuf.getChannelData(0);
+      for (var i = 0; i < impLen; i++) {
+        impData[i] = (Math.random() * 2 - 1) * Math.exp(-i / impLen * 6);
+      }
+      var impSrc = ac.createBufferSource(); impSrc.buffer = impBuf;
+      var impFilt = ac.createBiquadFilter();
+      impFilt.type = 'bandpass'; impFilt.frequency.value = freq * 1.3; impFilt.Q.value = 4;
+      var impGain = ac.createGain(); impGain.gain.value = 0.018;
+      impSrc.connect(impFilt); impFilt.connect(impGain); impGain.connect(ac.destination);
+      impSrc.start(now);
+      // Pitched sine resonance with downward chirp
+      var o = ac.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(freq * 1.15, now);
+      o.frequency.exponentialRampToValueAtTime(freq, now + 0.06);
+      var g = ac.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.022, now + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.12 + Math.random() * 0.05);
+      o.connect(g); g.connect(ac.destination);
+      o.start(now); o.stop(now + 0.2);
+    });
+  }
   // Distant car horn — two square oscillators a major third apart (A4 + C#5,
   // ~440 + 554 Hz, the classic dual-tone car horn), heavily lowpassed and
   // quiet so it reads as far away. Triangle layer adds warmth.
@@ -5344,9 +5378,9 @@ window.dssAudio = (function() {
       var dur = 0.25 + Math.random() * 0.35;
       var f1 = 440 + (Math.random() - 0.5) * 30;
       var f2 = f1 * 1.26; // major third
-      var amp = 0.045;
+      var amp = 0.022;
       var lp = ac.createBiquadFilter();
-      lp.type = 'lowpass'; lp.frequency.value = 1300; lp.Q.value = 0.7;
+      lp.type = 'lowpass'; lp.frequency.value = 850; lp.Q.value = 0.7;
       var g = ac.createGain();
       g.gain.setValueAtTime(0, now);
       g.gain.linearRampToValueAtTime(amp, now + 0.025);
@@ -5406,15 +5440,16 @@ window.dssAudio = (function() {
       lfo.start(now);
       src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(ac.destination);
       src.start(now);
-      _ambient = { src: src, g: g, kind: 'traffic', lfo: lfo, timer: null };
-      // Recursive horn scheduler — fires every 25-75s while traffic is active
+      _ambient = { src: src, g: g, kind: 'traffic', lfo: lfo, timer: null, dripTimer: null };
+      // Horn scheduler — fires every 8-22s while traffic is active.
+      // 25% chance of a double-toot 180-380ms after the first.
       function scheduleHorn() {
         if (!_ambient || _ambient.kind !== 'traffic') return;
-        var delay = 25000 + Math.random() * 50000;
+        var delay = 8000 + Math.random() * 14000;
         _ambient.timer = setTimeout(function() {
           if (!_ambient || _ambient.kind !== 'traffic') return;
           carHorn();
-          if (Math.random() < 0.3) {
+          if (Math.random() < 0.25) {
             setTimeout(function() {
               if (_ambient && _ambient.kind === 'traffic') carHorn();
             }, 180 + Math.random() * 200);
@@ -5422,7 +5457,18 @@ window.dssAudio = (function() {
           scheduleHorn();
         }, delay);
       }
+      // Drip scheduler — fires every 1.2-3.5s, irregular like real drops
+      function scheduleDrip() {
+        if (!_ambient || _ambient.kind !== 'traffic') return;
+        var delay = 1200 + Math.random() * 2300;
+        _ambient.dripTimer = setTimeout(function() {
+          if (!_ambient || _ambient.kind !== 'traffic') return;
+          dripDrop();
+          scheduleDrip();
+        }, delay);
+      }
       scheduleHorn();
+      scheduleDrip();
     });
   }
   function stopDistantTraffic() { _stopAmbient(); }
@@ -5639,7 +5685,7 @@ window.dssAudio = (function() {
       nFilt.type = 'bandpass'; nFilt.frequency.value = 2200; nFilt.Q.value = 0.9;
       var nGain = ac.createGain();
       nGain.gain.setValueAtTime(0, now);
-      nGain.gain.linearRampToValueAtTime(0.05, now + 0.05);
+      nGain.gain.linearRampToValueAtTime(0.03, now + 0.05);
       nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
       nSrc.connect(nFilt); nFilt.connect(nGain); nGain.connect(ac.destination);
       nSrc.start(now); nSrc.stop(now + 0.45);
@@ -5654,8 +5700,8 @@ window.dssAudio = (function() {
       vib.start(now + 0.15); vib.stop(now + dur);
       var g = ac.createGain();
       g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(0.16, now + 0.08); // slower, breathier attack
-      g.gain.linearRampToValueAtTime(0.13, now + 0.3);
+      g.gain.linearRampToValueAtTime(0.10, now + 0.08); // slower, breathier attack
+      g.gain.linearRampToValueAtTime(0.08, now + 0.3);
       g.gain.exponentialRampToValueAtTime(0.001, now + dur);
       o.connect(g); g.connect(ac.destination);
       o.start(now); o.stop(now + dur + 0.05);
@@ -5673,7 +5719,7 @@ window.dssAudio = (function() {
     fireFarnell: fireFarnell, footstep: footstep,
     chimeBook: chimeBook,
     distantTraffic: distantTraffic, stopDistantTraffic: stopDistantTraffic,
-    carHorn: carHorn,
+    carHorn: carHorn, dripDrop: dripDrop,
     // Background music bed
     startMusic: startMusic, stopMusic: stopMusic,
     updateMusicForPassage: updateMusicForPassage,
@@ -50193,6 +50239,486 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="init" position="0,0" size="100,100">(set: $albaRevealed to false)\
 (set: $confidence to 70)\
 (set: $sobriety to 70)\
@@ -51289,7 +51815,7 @@ Tonight, Soho will mark you. Here, in our mutual dream, we will call the marks &
 (if: $hasCleggBeermat is true)[&lt;div class=&quot;item-entry&quot;&gt;◈ A beer mat — Cecil Court / Carthage Short Hercules&#x27; Pillars&lt;/div&gt;](else:)[&lt;div class=&quot;greyed-out&quot;&gt;○ A beer mat&lt;/div&gt;]
 (if: $hasMissingPage is true)[&lt;div class=&quot;item-entry&quot;&gt;◈ Page 47 (for O&#x27;Flatterly)&lt;/div&gt;](else:)[&lt;div class=&quot;greyed-out&quot;&gt;○ A missing page&lt;/div&gt;]
 &lt;/div&gt;</tw-passagedata>
-<tw-passagedata pid="67" name="LINE 1" position="700,200" size="100,100">(set: $alba to $alba + (a: $alba1))
+<tw-passagedata pid="67" name="LINE 1" tags="outdoor" position="700,200" size="100,100">(set: $alba to $alba + (a: $alba1))
 (set: $albaGiven&#x27;s red to true)\
 (set: $albaRevealed to true)
 &#x27;Forget the work,&#x27; says Red, &#x27;it&#x27;s no way to live. Try this.&#x27;
@@ -54315,7 +54841,7 @@ Trisha&#x27;s is close by and you can always try there. You&#x27;re not a member
 
 [[They know me|Failure: Trisha&#x27;s]]
 &lt;span class=&quot;guided-link&quot;&gt;[[I might as well give it a try|Success: Trisha&#x27;s]]&lt;/span&gt;</tw-passagedata>
-<tw-passagedata pid="154" name="You speak to the poet" position="1400,450" size="100,100">(set: $metRed to true)\
+<tw-passagedata pid="154" name="You speak to the poet" tags="outdoor" position="1400,450" size="100,100">(set: $metRed to true)\
 &lt;!-- Ginger light --&gt;
 &lt;div class=&quot;ginger-lamp-wrap&quot;&gt;
 &lt;svg width=&quot;60&quot; height=&quot;110&quot; viewBox=&quot;0 0 60 110&quot;&gt;&lt;ellipse cx=&quot;30&quot; cy=&quot;33&quot; rx=&quot;40&quot; ry=&quot;30&quot; fill=&quot;rgba(200,100,5,0.10)&quot;/&gt;&lt;ellipse cx=&quot;30&quot; cy=&quot;31&quot; rx=&quot;24&quot; ry=&quot;18&quot; fill=&quot;rgba(220,130,10,0.18)&quot;/&gt;&lt;ellipse cx=&quot;30&quot; cy=&quot;29&quot; rx=&quot;13&quot; ry=&quot;10&quot; fill=&quot;rgba(255,190,60,0.22)&quot;/&gt;&lt;polygon points=&quot;27,2 30,0 33,2 32,7 28,7&quot; fill=&quot;rgba(60,38,4,0.96)&quot;/&gt;&lt;path d=&quot;M13,7 Q30,4 47,7 L44,13 L16,13 Z&quot; fill=&quot;rgba(60,38,4,0.96)&quot;/&gt;&lt;path d=&quot;M16,13 L44,13 L40,44 L20,44 Z&quot; fill=&quot;rgba(130,75,8,0.45)&quot; stroke=&quot;rgba(90,52,4,0.65)&quot; stroke-width=&quot;1&quot;/&gt;&lt;path d=&quot;M19,15 L41,15 L37,42 L23,42 Z&quot; fill=&quot;rgba(255,165,35,0.42)&quot;/&gt;&lt;ellipse cx=&quot;30&quot; cy=&quot;29&quot; rx=&quot;7&quot; ry=&quot;10&quot; fill=&quot;rgba(255,232,130,0.55)&quot;/&gt;&lt;ellipse cx=&quot;30&quot; cy=&quot;27&quot; rx=&quot;3&quot; ry=&quot;4&quot; fill=&quot;rgba(255,250,210,0.68)&quot;/&gt;&lt;rect x=&quot;22&quot; y=&quot;44&quot; width=&quot;16&quot; height=&quot;6&quot; rx=&quot;2.5&quot; fill=&quot;rgba(60,38,4,0.96)&quot;/&gt;&lt;rect x=&quot;27&quot; y=&quot;50&quot; width=&quot;6&quot; height=&quot;60&quot; rx=&quot;2&quot; fill=&quot;rgba(45,28,3,0.90)&quot;/&gt;&lt;/svg&gt;

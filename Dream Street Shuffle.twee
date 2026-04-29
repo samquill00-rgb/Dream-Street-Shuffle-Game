@@ -571,7 +571,18 @@ window.dssAudio = (function() {
   // British telephone bell — two iron gongs, magnetic clapper alternates
   // between them at ~25 Hz. Each gong rings with several inharmonic modes.
   // Modelled after Farnell, "Designing Sound" ch. on the telephone bell.
+  // Tracks scheduled oscillators in _phoneBellNodes so stopPhoneBell()
+  // can kill an in-flight bell when the passage changes.
+  var _phoneBellNodes = [];
+  function stopPhoneBell() {
+    _phoneBellNodes.forEach(function(node) {
+      try { if (node.stop) node.stop(); } catch(e) {}
+      try { node.disconnect(); } catch(e) {}
+    });
+    _phoneBellNodes = [];
+  }
   function phoneBell(rings) {
+    stopPhoneBell();
     _play(function(ac) {
     rings = rings || 2;
     var now = ac.currentTime;
@@ -594,6 +605,7 @@ window.dssAudio = (function() {
         g.gain.exponentialRampToValueAtTime(0.001, t + p.d);
         o.connect(g); g.connect(ac.destination);
         o.start(t); o.stop(t + p.d + 0.01);
+        _phoneBellNodes.push(o);
       });
       // Metallic clapper-tap noise transient
       var nLen = Math.floor(ac.sampleRate * 0.003);
@@ -606,6 +618,7 @@ window.dssAudio = (function() {
       var ng = ac.createGain(); ng.gain.value = 0.05;
       nsrc.connect(nf); nf.connect(ng); ng.connect(ac.destination);
       nsrc.start(t);
+      _phoneBellNodes.push(nsrc);
     }
     // British double-pulse: brrring brrring (0.4s ring, 0.2s gap, 0.4s ring,
     // then 2.0s pause), alternating gongs at ~25 Hz inside each ring.
@@ -1381,6 +1394,7 @@ window.dssAudio = (function() {
     phoneBell: phoneBell, windFarnell: windFarnell,
     fireFarnell: fireFarnell, footstep: footstep,
     chimeBook: chimeBook, lilyChime: lilyChime,
+    stopPhoneBell: stopPhoneBell,
     glassClink: glassClink, swallow: swallow,
     dodgeWhoosh: dodgeWhoosh, muffledThud: muffledThud, punchImpact: punchImpact,
     vialClink: vialClink, uncork: uncork,
@@ -5841,10 +5855,25 @@ window._passageGen = 0;
                 }
                 // Phone calls — detected by .phone-scene class.
                 // Uses Farnell-style mechanical bell model.
+                // Three rings (~5s) before dialogue begins; phone-type
+                // elements have a +3s base delay (see runPhoneFades).
+                // Gen-check before firing: if the passage has navigated
+                // away (e.g. (go-to: $lilyCallReturn)), don't ring on the
+                // NEXT passage. Also: if we navigate AWAY from a phone
+                // scene, kill any in-flight bell.
                 if (passageNode.querySelector('.phone-scene')) {
-                  setTimeout(function(){ window.dssAudio.phoneBell(2); }, 250);
-                  // Six beats — heartbeat decelerates as the call settles
-                  setTimeout(function(){ window.dssAudio.heartbeat(6); }, 4400);
+                  var phoneGen = window._passageGen;
+                  setTimeout(function(){
+                    if (window._passageGen !== phoneGen) return;
+                    window.dssAudio.phoneBell(3);
+                  }, 250);
+                  setTimeout(function(){
+                    if (window._passageGen !== phoneGen) return;
+                    window.dssAudio.heartbeat(6);
+                  }, 7400);
+                } else {
+                  // Non-phone passage: silence any bell still ringing.
+                  if (window.dssAudio.stopPhoneBell) window.dssAudio.stopPhoneBell();
                 }
                 // Glass smash — passage carries an .empty-glass-marker hint
                 if (passageNode.querySelector('.empty-glass-marker')) {
@@ -24810,13 +24839,17 @@ setInterval(function() {
 })();
 
 // ====== PHONE CALL FADE-IN ======
+// Base offset (ms) added to every phone-type element's --d. The phone bell
+// rings for ~5 seconds before any dialogue text appears, so the audio
+// clearly precedes the conversation.
 (function() {
+  var PHONE_FADE_OFFSET_MS = 3000;
   function runPhoneFades(els) {
     for (var i = 0; i < els.length; i++) {
       (function(el) {
         var dStr = el.style.getPropertyValue('--d') || '0s';
         var tStr = el.style.getPropertyValue('--t') || '1s';
-        var delay = parseFloat(dStr) * 1000;
+        var delay = parseFloat(dStr) * 1000 + PHONE_FADE_OFFSET_MS;
         setTimeout(function() {
           el.style.transition = 'opacity ' + tStr + ' ease';
           el.style.opacity = '1';
@@ -25897,7 +25930,7 @@ In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It wil
 (if: _towerReady is false and $coachUrgent is false and $sobriety < 40 and $hadBreather is false and $visited's Pillars is true and $hadChippy is false)[<div class="choice-box">You should have gone to the Gents when you had the chance. Look for a doorway.
 
 [[Step into the doorway|A Doorway on Dean Street]]</div>]\
-(if: _towerReady is false and $coachUrgent is false and $hadChippy is true and $hadBreather is false)[<div class="choice-box">[[Find another doorway|A Doorway on Dean Street]]</div>]\
+(if: _towerReady is false and $coachUrgent is false and $hadChippy is true and $hadBreather is false and $sobriety < 40)[<div class="choice-box">[[Find another doorway|A Doorway on Dean Street]]</div>]\
 (if: _towerReady is false and $coachUrgent is false and $confidence < 50 and $hadChippy is false)[<div class="choice-box">If you're in a bad way, there's a place you know called the Chinese Fish and Chips.
 
 [[Get some grub|Approach Chinese Fish and Chips]]</div>](else-if: _towerReady is false and $coachUrgent is false and $hadChippy is true and $tookLily1 is false)[<div class="choice-box">[[Back to the chippy — there was something you missed|Approach Chinese Fish and Chips]]</div>](else-if: _towerReady is false and $coachUrgent is false and $hadChippy is true)[<span class="greyed-out">Get some grub</span>
@@ -26194,7 +26227,7 @@ Tonight, Soho will mark you. Here, in our mutual dream, we will call the marks '
 <div class="items-tracker">
 <strong>OBJECTS</strong>
 (if: $hasTrishaMatchbook is true)[<div class="item-entry">◈ Trisha's matchbook (an invitation)</div>](else:)[<div class="greyed-out">○ A matchbook</div>]
-(if: $hasCleggBeermat is true)[<div class="item-entry">◈ A beer mat — Cecil Court / Carthage Short Hercules' Pillars</div>](else:)[<div class="greyed-out">○ A beer mat</div>]
+(if: $hasCleggBeermat is true)[<div class="item-entry">◈ A beer mat — Cecil Court / Carthage Short Hercules&#39; Pillars</div>](else:)[<div class="greyed-out">○ A beer mat</div>]
 (if: $hasMissingPage is true)[<div class="item-entry">◈ Page 47 (for O'Flatterly)</div>](else:)[<div class="greyed-out">○ A missing page</div>]
 </div>
 
@@ -26454,9 +26487,11 @@ Standing here you can see London, Carthage, Liverpool and everything else.
 <div class="pillars-dust"><span style="left:12%;bottom:18%;animation-duration:7s;animation-delay:0s;"></span><span style="left:32%;bottom:8%;animation-duration:9.5s;animation-delay:1.2s;"></span><span style="left:52%;bottom:28%;animation-duration:6.5s;animation-delay:2.8s;"></span><span style="left:72%;bottom:5%;animation-duration:11s;animation-delay:0.4s;"></span><span style="left:22%;bottom:38%;animation-duration:8.5s;animation-delay:1.8s;"></span><span style="left:82%;bottom:22%;animation-duration:10s;animation-delay:3.5s;"></span><span style="left:42%;bottom:12%;animation-duration:7.8s;animation-delay:0.8s;"></span><span style="left:62%;bottom:32%;animation-duration:9s;animation-delay:2.2s;"></span></div>
 <svg class="pillars-lattice" viewBox="0 0 300 36" width="100%" height="36" preserveAspectRatio="none"><defs><linearGradient id="latEdge" x1="0" x2="1"><stop offset="0%"   stop-color="#7ab8cc" stop-opacity="0"/><stop offset="15%"  stop-color="#7ab8cc" stop-opacity="0.55"/><stop offset="85%"  stop-color="#7ab8cc" stop-opacity="0.55"/><stop offset="100%" stop-color="#7ab8cc" stop-opacity="0"/></linearGradient><pattern id="dLat" x="0" y="0" width="42" height="24" patternUnits="userSpaceOnUse"><path d="M7,0 L14,12 L7,24 L0,12 Z" fill="rgba(160,35,25,0.26)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/><path d="M21,0 L28,12 L21,24 L14,12 Z" fill="rgba(185,215,235,0.07)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/><path d="M35,0 L42,12 L35,24 L28,12 Z" fill="rgba(28,108,52,0.22)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/></pattern><mask id="latMask"><rect x="0" y="0" width="300" height="36" fill="url(#latEdge)"/></mask></defs><rect x="0" y="0" width="300" height="36" fill="url(#dLat)" mask="url(#latMask)"/><line x1="0" y1="34" x2="300" y2="34" stroke="url(#latEdge)" stroke-width="1.2"/></svg>
 
+(unless: $bookTitle is a string)[(set: $bookTitle to "Untitled Manuscript")]\
+(if: $bookTitle is "")[(set: $bookTitle to "Untitled Manuscript")]\
 'None of us likes it.'
 
-<span class="guided-link">(link-goto: "Put //" + $bookTitle + "// on the table", "The critic's judgement")</span>
+<span class="guided-link">(link-goto: "Put //" + (text: $bookTitle) + "// on the table", "The critic's judgement")</span>
 </div>
 
 :: O'Flatterly introduction [venue-cecilcourt] {"position":"300,1700","size":"100,100"}
@@ -29508,7 +29543,7 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 (set: _nb to _nb + '</div>')\
 (set: _nb to _nb + '<div class="nb-section"><strong class="nb-heading">OBJECTS</strong>')\
 (if: $hasTrishaMatchbook is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> Trisha&#39;s matchbook (an invitation)</div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="op">○</span> A matchbook</div>')]\
-(if: $hasCleggBeermat is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> A beer mat — Cecil Court / Carthage Short Hercules' Pillars</div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="op">○</span> A beer mat</div>')]\
+(if: $hasCleggBeermat is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> A beer mat — Cecil Court / Carthage Short Hercules&#39; Pillars</div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="op">○</span> A beer mat</div>')]\
 (if: $hasMissingPage is true and $returnedPage is false)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> Page 47 (for O&#39;Flatterly)</div>')](else-if: $returnedPage is true)[(set: _nb to _nb + '<div class="nb-grey"><span class="op op-done">●</span> Page 47 (returned)</div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="op">○</span> A missing page</div>')]\
 (set: _nb to _nb + '</div>')\
 (set: _nb to _nb + '</div>')\
@@ -29619,7 +29654,10 @@ tw-passage {
 max-width: 650px;
 margin: 0 auto;
 padding: 110px 1.5em 1.5em;
-animation: passageFadeIn 0.6s ease-out 0.05s both;
+/* Delay fade-in until after the gap-cleanup (200ms) and dean-lamp
+ * resize (150ms) have run, so the passage never paints in its
+ * pre-cleaned, full-height state. */
+animation: passageFadeIn 0.55s ease-out 0.25s both;
 }
 
 @keyframes passageFadeIn {

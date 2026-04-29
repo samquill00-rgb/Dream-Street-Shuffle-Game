@@ -1,97 +1,83 @@
 # Dream Street Shuffle — Session Handoff
-Date: 28 April 2026 (late evening)
-Focus: Prose editing pass — French loops, Pillars, Colony Room, Trisha's, Cecil Court (partial).
-
----
+Date: 29 April 2026
+Focus: Full prose editing pass (all loops completed), mote visual enhancement.
 
 ## What this session did
 
-### French — artist loop (completed)
-- Talk to the Artists, The Spanish Artist, The Painter's Gaze, Sketch the Painter, Give him the painting — reviewed, no edits.
+### Cecil Court — O'Flatterly's Gift (completed)
+- Vial description simplified; "the poet" added; "his friend Trelawny"; "the liver for the heart"; "get too close to the end"
 
-### French — Stranger loop (completed)
-- The Stranger at the French, His round, The Empty Glass — reviewed, no edits.
+### Coach and Horses (completed)
+- "She moos; he drinks." → "She moos."
+- "Will you please do something about this cow?" / "Said Jeffrey Bernard." removed
+- "disappeared, perhaps to a timeshare on the seacoast of Bohemia"
 
-### French — Novelist loop (completed)
-- Approach the novelist, The novelist — reviewed, no edits.
+### Lackland's Office (completed)
+- Removed "(more scotch and soda)"
+- "'This isn't there.' You knew that." → "'This isn't there. You know'."
 
-### Pillars of Hercules loop (completed)
-**Entering The Pillars of Hercules:**
-- "When you pass" → "If you pass"
-- Removed "Whatever more you choose comes out in the wash:"
-- "The phone behind the bar rings. The barman calls your name." → "Behind the bar a phone rings and your name is called."
+### Lackland's Back Room (completed)
+- Full rewrite: Percy Ritson and Jack Curtis introduced with descriptions; "It's match point."
 
-**Talk to the critic:**
-- "a big scotch" → "a scotch"
+### Maritime / Carthage (completed)
+- "many miles and centuries far off"; "Roman Carthage" added
+- Dido: "means something about lily of the valley"; "England" (not "your England")
+- Stay in Carthage: no changes
 
-**The critic's judgement** — substantial rewrite:
-- Removed "He nods… He lights another cigarette." and "The bar, which had been very loud…"
-- New opening: "He pulls [book] close then opens it in the middle. He reads a little there, then turns to another page and reads there too. He does this several times, then: 'Not for me'…"
-- "You thank him, say goodbye, and make to leave but he calls you back" → "You say you've not, thank him, and make to leave when he calls you back."
-- Merged and reordered Copper/O'Flatterly lines: "'When you're next in Cecil Court, look for Inis O'Flatterly… And if you see him, tell Copper I said hello.'"
+### Centre Point + Endings (completed)
+- The Fetch: "who looks at you" (not "he looks")
+- Alba (both): comma after "sun"; "through its bruised capillaries"
+- Dawn: "Aoife" (spelling fixed); "breathlike"; "childbearing sun"
 
-### Colony Room loop (completed)
-**The Colony Room hub:**
-- "There is a touch of obscenity about the whole affair…" → "It has crepuscular gravity, of the kind a public house could never muster."
-- Red encounter rewritten: "you hold each other's eyes, like clutching pearls, and then he's gone."
-- Agent paragraph: full replacement with new extended prose on the nature of the talented agent.
+### Green Sea (completed)
+- "Ben Ali"; removed women sentence; "biggest table"; "children"
+- LINE 3: removed opening two sentences; "night's bandage"
 
-**Talk to the intimidating agent** — full rewrite:
-- New: "'You write, too?' she says, oddly. Tonight she's not working. So you leave, via the gents, because of which detour things sharpen. As you go, you remember, wholly and as a lone, remarkable thought: Ronnie Scott's. You'd forgotten it was there."
+### Cellar passages (completed)
+- Beaten: St. John sentence rewritten
+- St. John's Word: "hidden room"; "surface to Dean Street"
+- Watch the decider: Jack Curtis line reordered; Lackland exchange removed from Watch them play
 
-**Colony drink:**
-- Removed "You drink. The Colony Room tilts."
+### Ronnie Scott's (completed)
+- "jazz music" (not "sky scrapers")
+- Drink orders rewritten: Says one / You acquiesce / 'Bourbon.' / 'A Moscow Mule.' / 'Scotch.'
 
-**Davy Merkin:**
-- Removed "Even his silence leaves you no room to speak."
+### Copper's Lair (completed)
+- Copper confronts: last line removed
+- Stand your ground: simplified; "let you off"; "eyes melt again in his rage"
+- Fight starts: "'More than most get.'" removed
+- Fight Victory: "son"; "perfectly composed"; "Good work"; else-branch rewritten
 
-### Trisha's loop (completed)
-**Approach Shana:**
-- Rewritten: "Her lovers are always speechless, beautiful women; her male companions keep a tonsured silence."
+### Lily phone calls (completed)
+- Lily call 1: simplified opening; "might have gone better in rhyme"
+- Dual ring: Aoife rewritten; "The line goes dead"; Lily's ring simplified; last lines split; "take it easy"
 
-**Shana Reads:**
-- Removed opening action sentence.
+### The Interval (completed)
+- "And with that line, her risen face"
+- "on the spendthrift draft"
 
-**Shana Refused:**
-- All prose removed. "I'd rather not" link removed from Approach Shana — player must hand over the manuscript. Shana Refused is dead code.
+### Smaller passages (completed)
+- Escape success: shortened
+- Success: Trisha's: "still keeps"
+- Failure: Trisha's: "'You should have said. Come in.'"
+- Dream to Dean: "reeling and glistening"
+- Watkins, Dean Street intro, LINE 1, LINE 2 Oxford, Ginger Light/Red: no changes
 
-**Shana's Verdict** — full rewrite:
-- New: "'Nothing is particularly wrong with it,' she says, pushing it back towards you. You hide it in your bag like an injured thing. 'Bring it back to me in six months' time.'"
-
-**After Shana:**
-- New: "Six months… the kid'll be talking by then. Still, you smile and leave."
-- Haunt description: → "That hurts."
-
-### Cecil Court loop (partial — stopped at O'Flatterly's Gift)
-**O'Flatterly introduction:**
-- "it is the gentle steaming" → "with the gentle steaming"
-- Page pocket moment → "You hand him the page."
-
-**O'Flatterly's quest** — substantial rewrite:
-- "won't love it" → "won't need it"
-- "something more important" → "something"
-- "the tome" → "the cover"; removed wild hair line
-- "slate-grey clouds over Willesden Junction" → "the clouds over Willesden Junction"
-- Closing simplified: "'Page 47 is missing. Find it for me!'"
-
-**Return the page** — rewrite:
-- New: "You show him 47. O'Flatterly takes it, firmly and gently, then lays it into his papers, where it should be. He would shelve you, if he could, among his best books."
-
----
+## Mote visual enhancement (completed & synced)
+All mote types (haunt, revelation, page, item):
+- Size: 4px×10px → 8px×20px base
+- Blur: 1.8px → 0.6px
+- Peak opacity: 0.75 → 0.92
+- Duration: 3.8s → 5.5s
+- Count: 7–8 → 12 per box
 
 ## Where we stopped
-**O'Flatterly's Gift** — not yet reviewed. This is the next passage.
+Full prose pass complete. Motes enhanced. Synced. Playtesting in progress.
 
----
-
-## Remaining prose loops (not yet touched)
-- O'Flatterly's Gift (next up)
-- Coach and Horses
-- Lackland's Office
-- Maritime/Carthage dream
-- Centre Point + endings
-
----
+### Remaining / not yet reviewed
+- Lore boxes (skipped throughout — background material)
+- Maltese Gangsters doorstep (one line — not formally reviewed)
+- Meet Jeffrey Bernard passage
 
 ## File locations
 - Twee source: `Dream Street Shuffle.twee` (~33k lines)
@@ -100,20 +86,6 @@ Focus: Prose editing pass — French loops, Pillars, Colony Room, Trisha's, Ceci
 - Music source: `Dream Street Shuffle experiment theme loop.m4a`
 - Project rules: `CLAUDE.md`
 - Handoff (this file): `HANDOFF.md` (gitignored)
-
-## Workflow reminder
-1. Dr Quill picks a passage to edit.
-2. Show prose only (strip SVG/CSS/JS/Harlowe macros).
-3. He quotes line + new version, or says "next".
-4. Edit with `Edit` tool — never touch his creative text.
-5. After a loop: run `python3 sync_html.py` from the workspace folder.
-6. Tell him "synced, commit when ready" — never run git commands.
-
-## Critical rules
-- NO git commands from sandbox.
-- Verses keep `<br>` line breaks.
-- `HANDOFF*.md` is gitignored — safe to write.
-- Never read the compiled HTML.
 
 ## Commit status
 Multiple edits this session — synced. Working tree dirty. Dr Quill commits via GitHub Desktop.

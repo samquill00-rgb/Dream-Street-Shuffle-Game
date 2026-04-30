@@ -1716,6 +1716,23 @@ animation: hauntMoteRise 5.5s ease-out forwards;
 .page-mote-11 { animation-delay: 3.00s; width: 3px; height: 9px; }
 .page-mote-12 { animation-delay: 3.20s; width: 3px; height: 9px; }
 
+/* ===== MOTE LAYERING — keep collection-mote sparkles ABOVE the fixed
+   .stat-bars header strip (which sits at z-index: 1000). Raising z-index on
+   the mote alone isn't enough — the mote's stacking context is set by its
+   nearest positioned ancestor, so we also raise the parent boxes. The boxes
+   are normally in document flow, so this only matters when scrolling brings
+   them under the fixed header strip — at which point we want the motes (and,
+   incidentally, the box itself) to read in front of it. */
+.haunt-box, .item-box, .page-found, .revelation-box, .lore-box,
+.coin-overlay-box {
+  position: relative;
+  z-index: 1500;
+}
+.haunt-mote, .item-mote, .page-mote, .revelation-mote, .lore-mote,
+.haunt-box::after {
+  z-index: 1500 !important;
+}
+
 /* ===== ITEM MOTES (silver-blue — objects & passwords) ===== */
 .item-mote {
 position: absolute;
@@ -4138,6 +4155,12 @@ animation: bulbSwing 5s ease-in-out infinite;
 }
 
 /* ── TYPEWRITER PAGE (The Night Ahead) ──────────────────────────────── */
+/* The page is a FIXED-HEIGHT window — like the visible portion of paper
+   sticking up out of a real typewriter's platen. As the typewriter effect
+   reveals text downward, the page's scrollTop is bumped (in JS) to keep
+   the cursor at a fixed "carriage" line. The effect: the paper rolls up
+   through the typewriter as text is typed — opposite direction to the
+   revealing text. */
 .typewriter-page {
 position: relative;
 background: #f5f0e6 !important;
@@ -4150,7 +4173,10 @@ width: 90vw;
 max-width: 560px;
 overflow-wrap: break-word;
 word-wrap: break-word;
-min-height: 480px;
+height: 75vh;
+max-height: 620px;
+min-height: 360px;
+overflow: hidden;
 padding: 3.5em 4em 3em;
 margin: 1.5em auto;
 box-shadow:
@@ -4868,7 +4894,9 @@ window.dssAudio = (function() {
       });
   }
   // Typewriter key tick — short metallic click. Slight pitch variation per call.
-  function typewriterTick() {
+  // Optional `vol` argument (default 0.18) lets callers pass a quieter version,
+  // e.g. the ALBA reveal typewriter uses a softer click.
+  function typewriterTick(vol) {
     _play(function(ac) {
     var now = ac.currentTime;
     // Mechanical click: short noise burst with bandpass filter, tiny pitch jitter
@@ -4884,9 +4912,44 @@ window.dssAudio = (function() {
     var f = ac.createBiquadFilter(); f.type='bandpass';
     f.frequency.value = 1800 + Math.random()*600;
     f.Q.value = 4;
-    var g = ac.createGain(); g.gain.value = 0.18;
+    var g = ac.createGain(); g.gain.value = (typeof vol === 'number' ? vol : 0.18);
     src.connect(f); f.connect(g); g.connect(ac.destination);
     src.start(now);
+      });
+  }
+  // Typewriter clack — a much louder, heavier strike. Used for the dramatic
+  // "NAME YOUR BOOK" moment at the end of The Night Ahead's typewriter.
+  // Two layers: a noise burst (the keys hitting the platen) plus a low thump
+  // (the type bar's impact through the paper).
+  function typewriterClack() {
+    _play(function(ac) {
+    var now = ac.currentTime;
+    // Layer 1: heavier noise burst — hammer + ribbon + paper
+    var dur = 0.12;
+    var bufLen = Math.floor(ac.sampleRate * dur);
+    var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < bufLen; i++) {
+      var env = Math.exp(-i / (ac.sampleRate * 0.022));
+      d[i] = (Math.random()*2-1) * env;
+    }
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var f = ac.createBiquadFilter(); f.type='bandpass';
+    f.frequency.value = 1300;
+    f.Q.value = 2.2;
+    var g = ac.createGain(); g.gain.value = 0.55;
+    src.connect(f); f.connect(g); g.connect(ac.destination);
+    src.start(now);
+    // Layer 2: low thump — the type bar smacking paper
+    var o = ac.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(180, now);
+    o.frequency.exponentialRampToValueAtTime(75, now+0.07);
+    var og = ac.createGain();
+    og.gain.setValueAtTime(0, now);
+    og.gain.linearRampToValueAtTime(0.38, now+0.005);
+    og.gain.exponentialRampToValueAtTime(0.001, now+0.10);
+    o.connect(og); og.connect(ac.destination);
+    o.start(now); o.stop(now+0.11);
       });
   }
   // Item placed on table — soft thud + tiny resonance
@@ -6175,7 +6238,8 @@ window.dssAudio = (function() {
   }
   return {
     pour: pour, sip: sip, phoneRing: phoneRing, pageRustle: pageRustle,
-    typewriterTick: typewriterTick, itemFound: itemFound,
+    typewriterTick: typewriterTick, typewriterClack: typewriterClack,
+    itemFound: itemFound,
     penScratch: penScratch, heartbeat: heartbeat,
     glassSmash: glassSmash, matchStrike: matchStrike, coinFlip: coinFlip,
     doorCreak: doorCreak, passageWhoosh: passageWhoosh,
@@ -12799,10 +12863,10 @@ el.style.transition = 'opacity 1.2s ease-in';
 el.style.opacity = '1';
 el.style.pointerEvents = 'auto';
 });
-// Car horn as NAME YOUR BOOK reveals (Night Ahead only)
-if (window.dssAudio && window.dssAudio.carHorn &&
+// Loud typewriter clack as NAME YOUR BOOK reveals (Night Ahead only)
+if (window.dssAudio && window.dssAudio.typewriterClack &&
     /NAME YOUR BOOK/i.test(container.textContent || '')) {
-  window.dssAudio.carHorn();
+  window.dssAudio.typewriterClack();
 }
 // Trigger flash-reveal elements after typing completes
 var flashEls = container.querySelectorAll('.flash-reveal');
@@ -12827,6 +12891,18 @@ if (window.dssAudio && item.char !== ' ' && item.char !== '\n' && item.char !== 
 var parent = textNode.parentNode;
 if (parent && textNode.nextSibling !== cursor) {
 parent.insertBefore(cursor, textNode.nextSibling);
+}
+
+// "Carriage" effect — the page is a fixed-height window with overflow:hidden,
+// so as the cursor moves down past ~65% of the visible window, scroll the
+// page's contents UPWARD to keep the cursor at the carriage line. From the
+// player's perspective, the paper rolls up through the typewriter while the
+// cursor stays put — i.e. the page scrolls in the opposite direction to the
+// revealing text.
+var carriageY = container.clientHeight * 0.65;
+var desiredScroll = cursor.offsetTop - carriageY;
+if (desiredScroll > container.scrollTop) {
+  container.scrollTop = desiredScroll;
 }
 
 // Variable speed — natural reading pace
@@ -12905,9 +12981,10 @@ return;
 }
 var ch = fullText[i++];
 cursor.insertAdjacentText('beforebegin', ch);
-// Typewriter tick on each non-whitespace character
+// Quieter typewriter tick on each non-whitespace character — the alba reveal
+// is a hushed, dreamlike moment, so the click is softened (was 0.18, now 0.06).
 if (window.dssAudio && ch !== ' ' && ch !== '\n' && ch !== '\t') {
-  window.dssAudio.typewriterTick();
+  window.dssAudio.typewriterTick(0.06);
 }
 var delay;
 if (ch === '.' || ch === '!' || ch === '?') delay = 240;
@@ -12960,6 +13037,23 @@ new MutationObserver(function() {
 clearTimeout(soloDebounce);
 soloDebounce = setTimeout(checkSoloLink, 350);
 }).observe(document.body, { childList: true, subtree: true });
+})();
+
+// ====== LORE BOX OPENING SOUND ======
+// Lore boxes are wrapped in (link: "⟡ LORE: ...")[<div class="lore-box">...]
+// Harlowe replaces the link with the hook contents on click. We can't hook
+// into Harlowe's click directly, so use a delegated listener: any tw-link
+// click whose text contains "LORE" plays a soft page-rustle.
+(function() {
+  document.addEventListener('click', function(e) {
+    var link = e.target && e.target.closest && e.target.closest('tw-link');
+    if (!link) return;
+    var txt = (link.textContent || '').toUpperCase();
+    if (txt.indexOf('LORE') === -1) return;
+    if (window.dssAudio && window.dssAudio.pageRustle) {
+      window.dssAudio.pageRustle();
+    }
+  });
 })();
 
 // ====== DEAN STREET LAMP DYNAMIC HEIGHT ======
@@ -57694,6 +57788,326 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="init" position="0,0" size="100,100">(set: $albaRevealed to false)\
 (set: $confidence to 70)\
 (set: $sobriety to 70)\
@@ -58471,7 +58885,7 @@ Better not tomorrow.
 &lt;span class=&quot;scene-date&quot;&gt;(if: $afterMidnight)[24.11.73](else:)[23.11.73]&lt;/span&gt;
 &lt;span class=&quot;scene-location&quot;&gt;Dean Street, Soho, London.&lt;/span&gt;
 
-(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)&lt;div id=&quot;coin-overlay&quot;&gt;&lt;div class=&quot;coin-overlay-box&quot;&gt;&lt;div class=&quot;coin-overlay-stage&quot;&gt;&lt;div class=&quot;coin-overlay-disc&quot; id=&quot;coin-overlay-disc&quot;&gt;&lt;div class=&quot;cp-face cp-heads&quot;&gt;&lt;/div&gt;&lt;div class=&quot;cp-face cp-tails&quot;&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;p class=&quot;coin-overlay-text&quot;&gt;You found a coin on the pavement; a rare one, called a &amp;#39;Donkey&amp;#39;. There&amp;#39;s only one. Pocket it. You&amp;#39;ll want it later.&lt;/p&gt;&lt;span class=&quot;inventory-note&quot;&gt;&amp;#9734; COIN ACQUIRED&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn&quot; id=&quot;coin-toss-btn&quot;&gt;Toss it&lt;/button&gt;&lt;span class=&quot;coin-overlay-result&quot; id=&quot;coin-overlay-result&quot;&gt;&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn coin-overlay-dismiss&quot; id=&quot;coin-keep-btn&quot; style=&quot;display:none&quot;&gt;Pocket it&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&lt;script&gt;(function(){var tossCount=0,maxToss=2,stage=document.querySelector(&quot;.coin-overlay-stage&quot;);var sequence=[false,true];function sparks(){for(var i=0;12&gt;i;i++){var s=document.createElement(&quot;div&quot;);s.className=&quot;cp-spark&quot;;var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty(&quot;--sx&quot;,(Math.cos(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.setProperty(&quot;--sy&quot;,(Math.sin(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.animationDelay=(Math.random()*0.3)+&quot;s&quot;;s.style.animationDuration=(0.5+Math.random()*0.5)+&quot;s&quot;;stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById(&quot;coin-toss-btn&quot;).addEventListener(&quot;click&quot;,function(){var d=document.getElementById(&quot;coin-overlay-disc&quot;),r=document.getElementById(&quot;coin-overlay-result&quot;),b=this,o=document.getElementById(&quot;coin-overlay&quot;);if(d.classList.contains(&quot;cp-flipping&quot;))return;if(window.dssAudio)window.dssAudio.coinFlip();var heads=sequence[tossCount];tossCount++;var endDeg=heads?&quot;1440deg&quot;:&quot;1620deg&quot;;var restDeg=heads?&quot;0deg&quot;:&quot;180deg&quot;;d.style.setProperty(&quot;--cp-end&quot;,endDeg);d.classList.remove(&quot;cp-flipping&quot;);void d.offsetWidth;d.classList.add(&quot;cp-flipping&quot;);sparks();r.textContent=&quot;&quot;;b.classList.add(&quot;coin-btn-hidden&quot;);setTimeout(function(){r.textContent=heads?&quot;Heads.&quot;:&quot;Tails.&quot;;d.style.transform=&quot;rotateX(&quot;+restDeg+&quot;)&quot;;d.classList.remove(&quot;cp-flipping&quot;);if(tossCount&gt;=maxToss){setTimeout(function(){o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1800);}else{setTimeout(function(){r.textContent=&quot;&quot;;b.classList.remove(&quot;coin-btn-hidden&quot;);b.textContent=&quot;Toss again&quot;;var kb=document.getElementById(&quot;coin-keep-btn&quot;);if(kb)kb.style.display=&quot;inline-block&quot;;},2200);}},2000);});var keepBtn=document.getElementById(&quot;coin-keep-btn&quot;);if(keepBtn){keepBtn.addEventListener(&quot;click&quot;,function(){var o=document.getElementById(&quot;coin-overlay&quot;);var box=o&amp;&amp;o.querySelector(&quot;.coin-overlay-box&quot;);if(!o||!box)return;for(var k=1;k&lt;=12;k++){var m=document.createElement(&quot;span&quot;);m.className=&quot;item-mote item-mote-&quot;+k;box.appendChild(m);}this.style.display=&quot;none&quot;;setTimeout(function(){o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},3800);});}var ov=document.getElementById(&quot;coin-overlay&quot;);if(ov){ov.addEventListener(&quot;click&quot;,function(e){if(e.target===ov&amp;&amp;tossCount&gt;0){ov.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){ov.remove();},800);}});}})();&lt;/script&gt;]\
+(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)&lt;div id=&quot;coin-overlay&quot;&gt;&lt;div class=&quot;coin-overlay-box&quot;&gt;&lt;div class=&quot;coin-overlay-stage&quot;&gt;&lt;div class=&quot;coin-overlay-disc&quot; id=&quot;coin-overlay-disc&quot;&gt;&lt;div class=&quot;cp-face cp-heads&quot;&gt;&lt;/div&gt;&lt;div class=&quot;cp-face cp-tails&quot;&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;p class=&quot;coin-overlay-text&quot;&gt;You found a coin on the pavement; a rare one, called a &amp;#39;Donkey&amp;#39;. There&amp;#39;s only one. Pocket it. You&amp;#39;ll want it later.&lt;/p&gt;&lt;span class=&quot;inventory-note&quot;&gt;&amp;#9734; COIN ACQUIRED&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn&quot; id=&quot;coin-toss-btn&quot;&gt;Toss it&lt;/button&gt;&lt;span class=&quot;coin-overlay-result&quot; id=&quot;coin-overlay-result&quot;&gt;&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn coin-overlay-dismiss&quot; id=&quot;coin-keep-btn&quot;&gt;Pocket it&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&lt;script&gt;(function(){var tossCount=0,maxToss=2,stage=document.querySelector(&quot;.coin-overlay-stage&quot;);var sequence=[false,true];var pocketed=false;function sparks(){for(var i=0;12&gt;i;i++){var s=document.createElement(&quot;div&quot;);s.className=&quot;cp-spark&quot;;var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty(&quot;--sx&quot;,(Math.cos(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.setProperty(&quot;--sy&quot;,(Math.sin(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.animationDelay=(Math.random()*0.3)+&quot;s&quot;;s.style.animationDuration=(0.5+Math.random()*0.5)+&quot;s&quot;;stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById(&quot;coin-toss-btn&quot;).addEventListener(&quot;click&quot;,function(){var d=document.getElementById(&quot;coin-overlay-disc&quot;),r=document.getElementById(&quot;coin-overlay-result&quot;),b=this,o=document.getElementById(&quot;coin-overlay&quot;);if(pocketed)return;if(d.classList.contains(&quot;cp-flipping&quot;))return;if(window.dssAudio)window.dssAudio.coinFlip();var heads=sequence[tossCount];tossCount++;var endDeg=heads?&quot;1440deg&quot;:&quot;1620deg&quot;;var restDeg=heads?&quot;0deg&quot;:&quot;180deg&quot;;d.style.setProperty(&quot;--cp-end&quot;,endDeg);d.classList.remove(&quot;cp-flipping&quot;);void d.offsetWidth;d.classList.add(&quot;cp-flipping&quot;);sparks();r.textContent=&quot;&quot;;b.classList.add(&quot;coin-btn-hidden&quot;);setTimeout(function(){if(pocketed)return;r.textContent=heads?&quot;Heads.&quot;:&quot;Tails.&quot;;d.style.transform=&quot;rotateX(&quot;+restDeg+&quot;)&quot;;d.classList.remove(&quot;cp-flipping&quot;);if(tossCount&gt;=maxToss){setTimeout(function(){if(pocketed)return;o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1800);}else{setTimeout(function(){if(pocketed)return;r.textContent=&quot;&quot;;b.classList.remove(&quot;coin-btn-hidden&quot;);b.textContent=&quot;Toss again&quot;;},2200);}},2000);});var keepBtn=document.getElementById(&quot;coin-keep-btn&quot;);if(keepBtn){keepBtn.addEventListener(&quot;click&quot;,function(){if(pocketed)return;pocketed=true;var o=document.getElementById(&quot;coin-overlay&quot;);var box=o&amp;&amp;o.querySelector(&quot;.coin-overlay-box&quot;);if(!o||!box)return;var tb=document.getElementById(&quot;coin-toss-btn&quot;);if(tb){tb.classList.add(&quot;coin-btn-hidden&quot;);tb.style.pointerEvents=&quot;none&quot;;}for(var k=1;k&lt;=12;k++){var m=document.createElement(&quot;span&quot;);m.className=&quot;item-mote item-mote-&quot;+k;box.appendChild(m);}this.style.display=&quot;none&quot;;setTimeout(function(){o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById(&quot;coin-overlay&quot;);if(ov){ov.addEventListener(&quot;click&quot;,function(e){if(e.target===ov&amp;&amp;tossCount&gt;0){ov.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){ov.remove();},800);}});}})();&lt;/script&gt;]\
 \
 |deanIntro&gt;[A heavy afternoon lingers in rainfall on the pavements though the sky has cleared now and the newborn night is cut with moonshine.
 

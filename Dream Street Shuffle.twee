@@ -1319,6 +1319,135 @@ window.dssAudio = (function() {
       });
     });
   }
+  // Phone line — a faint, looping carrier hum/crackle for under call dialogue.
+  // Bandpass-filtered noise around the telephone band, with a slow LFO
+  // wobbling the filter frequency for a tape-like crackle.
+  var _phoneLineNodes = [];
+  function stopPhoneLine() {
+    _phoneLineNodes.forEach(function(node) {
+      try { if (node.stop) node.stop(); } catch(e) {}
+      try { node.disconnect(); } catch(e) {}
+    });
+    _phoneLineNodes = [];
+  }
+  function phoneLine() {
+    stopPhoneLine();
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var dur = 4.0;
+      var bufLen = Math.floor(ac.sampleRate * dur);
+      var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * 0.55;
+      var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+      var f = ac.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = 1800;
+      f.Q.value = 4.0;
+      var g = ac.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.045, now + 1.2); // gentle fade-in
+      // Slow LFO on filter freq — gives the line a soft, breathing crackle
+      var lfo = ac.createOscillator(); lfo.type = 'sine';
+      lfo.frequency.value = 0.13;
+      var lfoG = ac.createGain(); lfoG.gain.value = 220;
+      lfo.connect(lfoG); lfoG.connect(f.frequency);
+      lfo.start(now);
+      src.connect(f); f.connect(g); g.connect(ac.destination);
+      src.start(now);
+      _phoneLineNodes.push(src);
+      _phoneLineNodes.push(lfo);
+    });
+  }
+  // Hoof beat — a single clop. Short, low, with a cloth-on-ground noise.
+  function hoofBeat() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      // Low body — pitch drops fast
+      var o = ac.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(180, now);
+      o.frequency.exponentialRampToValueAtTime(70, now + 0.08);
+      var g = ac.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.22, now + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.10);
+      o.connect(g); g.connect(ac.destination);
+      o.start(now); o.stop(now + 0.12);
+      // Light noise scuff
+      var bufLen = Math.floor(ac.sampleRate * 0.05);
+      var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.018));
+      var src = ac.createBufferSource(); src.buffer = buf;
+      var f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 600; f.Q.value = 1.5;
+      var ng = ac.createGain(); ng.gain.value = 0.10;
+      src.connect(f); f.connect(ng); ng.connect(ac.destination);
+      src.start(now);
+    });
+  }
+  // Cow moo — long, throaty, descending pitch with vibrato.
+  function cowMoo() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var dur = 1.2;
+      // Main pitch — low oscillator with descending slide
+      var o = ac.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(190, now);
+      o.frequency.linearRampToValueAtTime(165, now + 0.25);
+      o.frequency.linearRampToValueAtTime(155, now + 0.7);
+      o.frequency.linearRampToValueAtTime(120, now + dur);
+      // Slight vibrato — throaty
+      var vib = ac.createOscillator(); vib.type = 'sine';
+      vib.frequency.value = 6;
+      var vibG = ac.createGain(); vibG.gain.value = 4;
+      vib.connect(vibG); vibG.connect(o.frequency);
+      vib.start(now); vib.stop(now + dur);
+      var f = ac.createBiquadFilter(); f.type = 'lowpass';
+      f.frequency.value = 750; f.Q.value = 0.8;
+      var g = ac.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.10, now + 0.18);
+      g.gain.linearRampToValueAtTime(0.085, now + 0.6);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      o.connect(f); f.connect(g); g.connect(ac.destination);
+      o.start(now); o.stop(now + dur);
+    });
+  }
+  // Thunder clap — distant rumble building to a crack, with a long tail.
+  // Modelled as: low rumble (filtered noise) + sharp transient + long roll.
+  function thunderClap() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var dur = 2.6;
+      // Low rumble — lowpass-filtered noise, swells then fades
+      var bufLen = Math.floor(ac.sampleRate * dur);
+      var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1);
+      var src = ac.createBufferSource(); src.buffer = buf;
+      var f = ac.createBiquadFilter(); f.type = 'lowpass';
+      f.frequency.setValueAtTime(180, now);
+      f.frequency.linearRampToValueAtTime(120, now + dur);
+      f.Q.value = 0.7;
+      var g = ac.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.32, now + 0.18);   // build
+      g.gain.linearRampToValueAtTime(0.55, now + 0.30);   // crack peak
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur); // long roll
+      src.connect(f); f.connect(g); g.connect(ac.destination);
+      src.start(now);
+      // Sharp crack transient at the peak
+      var cLen = Math.floor(ac.sampleRate * 0.08);
+      var cBuf = ac.createBuffer(1, cLen, ac.sampleRate);
+      var cD = cBuf.getChannelData(0);
+      for (var k = 0; k < cLen; k++) cD[k] = (Math.random() * 2 - 1) * Math.exp(-k / (ac.sampleRate * 0.012));
+      var cSrc = ac.createBufferSource(); cSrc.buffer = cBuf;
+      var cF = ac.createBiquadFilter(); cF.type = 'bandpass'; cF.frequency.value = 1400; cF.Q.value = 1.2;
+      var cG = ac.createGain(); cG.gain.value = 0.42;
+      cSrc.connect(cF); cF.connect(cG); cG.connect(ac.destination);
+      cSrc.start(now + 0.28);
+    });
+  }
   // Door knock — a few sharp wood knocks. Times defaults to 3.
   function doorKnock(times) {
     times = times || 3;
@@ -1395,10 +1524,12 @@ window.dssAudio = (function() {
     fireFarnell: fireFarnell, footstep: footstep,
     chimeBook: chimeBook, lilyChime: lilyChime,
     stopPhoneBell: stopPhoneBell,
+    phoneLine: phoneLine, stopPhoneLine: stopPhoneLine,
     glassClink: glassClink, swallow: swallow,
     dodgeWhoosh: dodgeWhoosh, muffledThud: muffledThud, punchImpact: punchImpact,
     vialClink: vialClink, uncork: uncork,
     uncannyBreath: uncannyBreath, distantBell: distantBell, doorKnock: doorKnock,
+    thunderClap: thunderClap, hoofBeat: hoofBeat, cowMoo: cowMoo,
     distantTraffic: distantTraffic, stopDistantTraffic: stopDistantTraffic,
     carHorn: carHorn, dripDrop: dripDrop,
     // Background music bed
@@ -5873,6 +6004,14 @@ window._passageGen = 0;
                     if (window._passageGen !== hbGen) return;
                     window.dssAudio.heartbeat(6);
                   }, 1500);
+                  // Subtle telephone-line ambient under the dialogue.
+                  setTimeout(function(){
+                    if (window._passageGen !== hbGen) return;
+                    if (window.dssAudio.phoneLine) window.dssAudio.phoneLine();
+                  }, 200);
+                } else {
+                  // Non-call passage: cut the phone-line ambient.
+                  if (window.dssAudio.stopPhoneLine) window.dssAudio.stopPhoneLine();
                 }
                 // Glass smash — passage carries an .empty-glass-marker hint
                 if (passageNode.querySelector('.empty-glass-marker')) {
@@ -7121,8 +7260,8 @@ if (window.dssAudio) {
 
 setTimeout(() => {
 if (practice && this.round === 2) {
-// practice-over narrative stripped
-setTimeout(() => { this.round = 3; this.startRound(); }, 1500);
+this.showNarrative("Practice over. Dodge: 2. Block: 1. Counter: 3 (risky). Need 4 to win.");
+setTimeout(() => { this.round = 3; this.startRound(); }, 3500);
 } else if (!practice && this.round >= 5) {
 this.endGame();
 } else {
@@ -7158,8 +7297,8 @@ if (window.dssAudio) window.dssAudio.punchImpact();
 
 setTimeout(() => {
 if (practice && this.round === 2) {
-// practice-over narrative stripped
-setTimeout(() => { this.round = 3; this.startRound(); }, 1500);
+this.showNarrative("Practice over. Dodge: 2. Block: 1. Counter: 3 (risky). Need 4 to win.");
+setTimeout(() => { this.round = 3; this.startRound(); }, 3500);
 } else if (!practice && this.round >= 5) {
 this.endGame();
 } else {
@@ -7888,11 +8027,20 @@ ctx.strokeStyle = 'rgba(220, 200, 120, ' + (aB + 0.1) + ')'; ctx.stroke();
 ctx.fillStyle = 'rgba(220, 200, 120, ' + (this.hoveredZone === 'block' ? 0.9 : 0.3) + ')';
 ctx.fillText('BLOCK', this.W / 2, 367);
 
-var aC = this.hoveredZone === 'counter' ? ha : alpha;
+// Counter discoverability — a subtle amber pulse on Counter during
+// PRACTICE rounds only, slower than the dodge glow so it doesn't
+// compete. After practice, it goes dim like the rest.
+var counterPulse = 0;
+if (practice && this.phase === 'telegraph' && this.telegraphT > 0.15) {
+  var cp = Math.min((this.telegraphT - 0.15) / 0.6, 1);
+  counterPulse = cp * 0.16 * (0.5 + 0.5 * Math.sin(Date.now() / 320));
+}
+var aC = this.hoveredZone === 'counter' ? ha : Math.max(alpha, counterPulse);
 ctx.fillStyle = 'rgba(255, 150, 100, ' + aC + ')';
 ctx.beginPath(); ctx.ellipse(this.W / 2, 190, 60, 65, 0, 0, Math.PI * 2); ctx.fill();
 ctx.strokeStyle = 'rgba(255, 150, 100, ' + (aC + 0.1) + ')'; ctx.lineWidth = 1; ctx.stroke();
-ctx.fillStyle = 'rgba(255, 150, 100, ' + (this.hoveredZone === 'counter' ? 0.9 : 0.3) + ')';
+var labelC = this.hoveredZone === 'counter' ? 0.9 : (counterPulse > 0.04 ? Math.min(0.85, 0.35 + counterPulse * 1.6) : 0.3);
+ctx.fillStyle = 'rgba(255, 150, 100, ' + labelC + ')';
 ctx.fillText('COUNTER', this.W / 2, 195);
 }
 
@@ -26347,6 +26495,14 @@ Salvu Copper, who is proportioned brutally, opens the door and leans over the th
 </div>
 
 :: Maritime interlude [dream] {"position":"300,1000","size":"100,100"}
+<script>
+// Wind is auto-triggered by the [dream] tag (see ambient bed logic).
+// Thunder is the only added sound here.
+if (window.dssAudio) {
+  setTimeout(function(){ window.dssAudio.thunderClap(); }, 1800);
+  setTimeout(function(){ window.dssAudio.thunderClap(); }, 6800);
+}
+</script>\
 <div class="maritime-scene">
 <div class="maritime-lamp"></div>
 <div class="maritime-lightning"></div>
@@ -28125,10 +28281,29 @@ clickFlash=nl; clickFlashAt=Date.now();
 /* ── Navigate to Harlowe passage ── */
 function navigate() {
 document.removeEventListener('keydown', onKey);
+if (audioTicker) { clearInterval(audioTicker); audioTicker = null; }
 var id = wonGame ? 'cow-go-win' : 'cow-go-lose';
 var sp = document.getElementById(id);
 if (sp){ var lk=sp.querySelector('tw-link'); if(lk) lk.click(); }
 }
+
+/* ── Audio: rhythmic hoof beats + occasional moo while riding ── */
+var lastHoofAt = 0, lastMooAt = 0, nextMooDelay = 5000 + Math.random() * 7000;
+var audioTicker = setInterval(function(){
+  if (gameOver) { clearInterval(audioTicker); audioTicker = null; return; }
+  var playing = (phase === 'practice' || phase === 'real');
+  if (!playing) return;
+  var nowT = Date.now();
+  if (nowT - lastHoofAt > 280) {
+    lastHoofAt = nowT;
+    if (window.dssAudio && window.dssAudio.hoofBeat) window.dssAudio.hoofBeat();
+  }
+  if (nowT - lastMooAt > nextMooDelay) {
+    lastMooAt = nowT;
+    nextMooDelay = 5000 + Math.random() * 7000;
+    if (window.dssAudio && window.dssAudio.cowMoo) window.dssAudio.cowMoo();
+  }
+}, 60);
 
 /* ── Game loop ── */
 function loop(){
@@ -29327,6 +29502,7 @@ You both hang up, each leaving the other alone.</span>
 
 :: Trisha's [venue-trishas] {"position":"700,1550","size":"100,100"}
 <div class="trishas-frame">
+<svg class="trishas-marquee" viewBox="0 0 300 48" width="100%" height="48" preserveAspectRatio="none"><defs><linearGradient id="trMq" x1="0" x2="1"><stop offset="0%" stop-color="#ff3294" stop-opacity="0"/><stop offset="20%" stop-color="#ff3294" stop-opacity="0.5"/><stop offset="50%" stop-color="#ff60b0" stop-opacity="0.78"/><stop offset="80%" stop-color="#ff3294" stop-opacity="0.5"/><stop offset="100%" stop-color="#ff3294" stop-opacity="0"/></linearGradient><linearGradient id="trMqT" x1="0" x2="1"><stop offset="0%" stop-color="#00b8a6" stop-opacity="0"/><stop offset="30%" stop-color="#00d7be" stop-opacity="0.55"/><stop offset="70%" stop-color="#00d7be" stop-opacity="0.55"/><stop offset="100%" stop-color="#00b8a6" stop-opacity="0"/></linearGradient><radialGradient id="trBlb" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffd0e8" stop-opacity="0.95"/><stop offset="40%" stop-color="#ff60b0" stop-opacity="0.55"/><stop offset="100%" stop-color="#ff3294" stop-opacity="0"/></radialGradient><filter id="trBlur"><feGaussianBlur stdDeviation="2"/></filter></defs><line x1="0" y1="6" x2="300" y2="6" stroke="url(#trMq)" stroke-width="1.5"/><line x1="0" y1="42" x2="300" y2="42" stroke="url(#trMq)" stroke-width="1.5"/><line x1="0" y1="9" x2="300" y2="9" stroke="url(#trMqT)" stroke-width="0.6" opacity="0.55"/><line x1="0" y1="39" x2="300" y2="39" stroke="url(#trMqT)" stroke-width="0.6" opacity="0.55"/><g transform="translate(150,24)" opacity="0.85"><polygon points="0,-12 6,-3 14,0 6,3 0,12 -6,3 -14,0 -6,-3" fill="none" stroke="#ff60b0" stroke-width="1" opacity="0.55"/><polygon points="0,-7 4,-2 9,0 4,2 0,7 -4,2 -9,0 -4,-2" fill="rgba(255,80,160,0.18)" stroke="#ffaad0" stroke-width="0.6" opacity="0.7"/><circle r="2" fill="#ffd0e8" opacity="0.85"/><line x1="-26" y1="0" x2="-16" y2="0" stroke="url(#trMqT)" stroke-width="0.7"/><line x1="16" y1="0" x2="26" y2="0" stroke="url(#trMqT)" stroke-width="0.7"/><line x1="-32" y1="0" x2="-30" y2="0" stroke="#00d7be" stroke-width="0.5" opacity="0.4"/><line x1="30" y1="0" x2="32" y2="0" stroke="#00d7be" stroke-width="0.5" opacity="0.4"/></g><g><circle cx="60" cy="24" r="4" fill="url(#trBlb)" filter="url(#trBlur)"/><circle cx="60" cy="24" r="1.4" fill="#ffe0ec"><animate attributeName="opacity" values="0.45;1;0.6;1;0.45" dur="3.2s" repeatCount="indefinite"/></circle></g><g><circle cx="240" cy="24" r="4" fill="url(#trBlb)" filter="url(#trBlur)"/><circle cx="240" cy="24" r="1.4" fill="#ffe0ec"><animate attributeName="opacity" values="0.55;0.9;0.4;1;0.55" dur="2.8s" repeatCount="indefinite"/></circle></g><g opacity="0.35"><line x1="20" y1="14" x2="38" y2="14" stroke="#ff60b0" stroke-width="0.4"/><line x1="262" y1="14" x2="280" y2="14" stroke="#ff60b0" stroke-width="0.4"/><line x1="20" y1="34" x2="38" y2="34" stroke="#ff60b0" stroke-width="0.4"/><line x1="262" y1="34" x2="280" y2="34" stroke="#ff60b0" stroke-width="0.4"/></g><g opacity="0.18"><circle cx="100" cy="16" r="0.7" fill="#ffaad0"/><circle cx="200" cy="16" r="0.7" fill="#ffaad0"/><circle cx="120" cy="34" r="0.7" fill="#00d7be"/><circle cx="180" cy="34" r="0.7" fill="#00d7be"/></g></svg>
 <span class="trishas-strip">· · · · · · · · · ·</span>
 (set: $confidence to $confidence + 15)\
 (set: $sobriety to $sobriety - 6)\
@@ -33674,8 +33850,11 @@ clip-path: polygon(32% 0%, 68% 0%, 82% 100%, 18% 100%);
 0%,19%,21%,23%,25%,54%,56%,100% { opacity:1; }
 20%,24%,55% { opacity:0.6; }
 }
-.trishas-frame { border:1.5px solid rgba(255,50,140,0.65); border-radius:2px; padding:1em 1.1em; background:rgba(255,30,120,0.025); animation:neonPulse 3.5s ease-in-out infinite, neonFlicker 8s step-end infinite; }
+.trishas-frame { position:relative; border:1.5px solid rgba(255,50,140,0.65); border-radius:2px; padding:1em 1.1em; background:rgba(255,30,120,0.025); animation:neonPulse 3.5s ease-in-out infinite, neonFlicker 8s step-end infinite; overflow:hidden; }
+.trishas-frame::before { content:""; position:absolute; top:-12%; left:50%; width:130%; height:60%; transform:translateX(-50%); background:radial-gradient(ellipse at 50% 0%, rgba(255,80,160,0.05) 0%, rgba(255,80,160,0) 60%); pointer-events:none; }
+.trishas-frame::after { content:""; position:absolute; bottom:-25%; left:0; width:100%; height:50%; background:linear-gradient(180deg, rgba(0,215,190,0) 0%, rgba(0,140,130,0.04) 60%, rgba(0,140,130,0) 100%); pointer-events:none; }
 .trishas-strip { display:block; text-align:center; letter-spacing:0.6em; font-size:0.65em; color:rgba(0,215,190,0.65); margin:0.6em 0; animation:tealPulse 2.6s ease-in-out infinite; }
+.trishas-marquee { display:block; width:100%; margin:-0.4em 0 0.3em; opacity:0.92; }
 
 /* ── CHINESE FISH AND CHIPS ──────────────────────────────────────────── */
 @keyframes fluoFlicker { 0%,97%,100% { opacity:1; } 98% { opacity:0.85; } 99% { opacity:1; } }

@@ -855,9 +855,20 @@ window.dssAudio = (function() {
   // Schedules an occasional car horn (every 25-75s) while running, with a
   // 30% chance of a double-toot. Lives in the _ambient slot, so swapping
   // in any other ambient (wind, fire, pub) cleanly stops the horn timer too.
-  function distantTraffic() {
+  function distantTraffic(volMul) {
     _play(function(ac) {
-      if (_ambient && _ambient.kind === 'traffic') return;
+      var TARGET = 0.06 * (typeof volMul === 'number' ? volMul : 1);
+      // If traffic is already running, smoothly adjust its gain to the new
+      // target rather than restarting. This lets passages like the alba
+      // revelations dim the bed without a hard restart.
+      if (_ambient && _ambient.kind === 'traffic') {
+        if (_ambient.g) {
+          _ambient.g.gain.cancelScheduledValues(ac.currentTime);
+          _ambient.g.gain.setValueAtTime(_ambient.g.gain.value, ac.currentTime);
+          _ambient.g.gain.linearRampToValueAtTime(TARGET, ac.currentTime + 1.2);
+        }
+        return;
+      }
       _stopAmbient();
       var now = ac.currentTime;
       var dur = 10.0;
@@ -880,7 +891,7 @@ window.dssAudio = (function() {
       hp.type = 'highpass'; hp.frequency.value = 60; hp.Q.value = 0.5;
       var g = ac.createGain();
       g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(0.06, now + 2.5);
+      g.gain.linearRampToValueAtTime(TARGET, now + 2.5);
       // Slow swell LFO — vehicles passing
       var lfo = ac.createOscillator(); lfo.type = 'sine';
       lfo.frequency.value = 0.13;
@@ -6123,12 +6134,16 @@ window._passageGen = 0;
                 var inDream = (tags.indexOf('dream') !== -1);
                 var inPyre = (tags.indexOf('pyre') !== -1);
                 var inOutdoor = (tags.indexOf('outdoor') !== -1);
+                // Alba revelation passages (LINE 1) carry [outdoor] but should
+                // feel hushed — duck the traffic bed to ~22% so it's a quiet
+                // murmur, not a road, while the line types itself out.
+                var hasRevelation = passageNode.querySelector('.revelation-box');
                 if (inPyre) {
                   window.dssAudio.fireFarnell();
                 } else if (inDream) {
                   window.dssAudio.windFarnell();
                 } else if (inOutdoor) {
-                  window.dssAudio.distantTraffic();
+                  window.dssAudio.distantTraffic(hasRevelation ? 0.22 : 1);
                 } else if (window._wasInDream || window._wasInPyre || window._wasOutdoor) {
                   window.dssAudio.ambientOff();
                 }

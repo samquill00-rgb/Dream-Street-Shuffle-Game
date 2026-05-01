@@ -34,6 +34,7 @@ AUDIO_EMBEDS = [
     ("__DSS_PIANO_DATA_URI__",       "piano-eoin-roe.mp3",                             "audio/mpeg"),
     ("__DSS_GENTS_DATA_URI__",       "the-gents-coach-toilet.mp3",                     "audio/mpeg"),
     ("__DSS_COACH_NIGHT_DATA_URI__", "the-coach-night-ambience.m4a",                   "audio/mp4"),
+    ("__DSS_SOHO_DAWN_DATA_URI__",   "the-soho-dawn-ambience.m4a",                     "audio/mp4"),
 ]
 
 # ============================================================

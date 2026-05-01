@@ -16,15 +16,21 @@ html_path = os.path.join(_here, "Dream Street Shuffle.html")
 # ============================================================
 # Audio embedding configuration
 # ============================================================
-# The audio file below is base64-embedded directly into the HTML so the music
-# works when the file is opened locally (file://) without needing a server.
-# To swap the music, change this filename (and MIME type if format changes)
-# and re-run sync_html.py.
-# Using AAC (.m4a) for gapless looping — MP3 has inherent encoder padding
-# that produces an audible gap on the loop seam.
-MUSIC_SOURCE_FILE = "Dream Street Shuffle experiment theme loop.m4a"
-MUSIC_MIME = "audio/mp4"  # use "audio/mpeg" for .mp3, "audio/mp4" for .m4a/AAC, "audio/wav" for .wav
-MUSIC_PLACEHOLDER = "__DSS_MUSIC_DATA_URI__"  # must match value in .twee
+# Each entry is a (placeholder, source-file, mime) tuple. At sync time, every
+# placeholder string in the .twee UserScript is replaced with a base64 data URI
+# of its source file, so the HTML works from file:// without a server.
+#
+# The hub theme uses AAC (.m4a) for sample-perfect gapless looping (MP3 has
+# encoder padding on the loop seam). Venue ambient beds tolerate MP3 fine —
+# they're field recordings at low volume, the seam is masked by texture.
+#
+# To add a new ambient bed: pick a placeholder name, drop the audio file in
+# this directory, add a tuple here, and add a registerAmbientBed({ ... }) call
+# in the .twee UserScript using the same placeholder string.
+AUDIO_EMBEDS = [
+    ("__DSS_MUSIC_DATA_URI__", "Dream Street Shuffle experiment theme loop.m4a", "audio/mp4"),
+    ("__DSS_PUB_DATA_URI__",   "the-french-pub-ambience.mp3",                    "audio/mpeg"),
+]
 
 # ============================================================
 # 1. Parse the Twee file
@@ -161,23 +167,24 @@ if stylesheet_content:
 
 # Replace the UserScript (raw JS — NOT html-encoded, because it lives inside a <script> tag)
 if userscript_content:
-    # --- Embed the music MP3 as a base64 data URI ---
-    # The userscript contains the placeholder string MUSIC_PLACEHOLDER which
-    # we replace with a full data: URI of the MP3. This keeps the .twee file
-    # small and lets the HTML work from file:// without local-file restrictions.
-    music_path = os.path.join(_here, MUSIC_SOURCE_FILE)
-    if os.path.exists(music_path):
-        with open(music_path, "rb") as mf:
-            mp3_b64 = base64.b64encode(mf.read()).decode("ascii")
-        data_uri = "data:" + MUSIC_MIME + ";base64," + mp3_b64
-        if MUSIC_PLACEHOLDER in userscript_content:
-            userscript_content = userscript_content.replace(MUSIC_PLACEHOLDER, data_uri)
-            kb = len(mp3_b64) // 1024
-            print(f"Embedded music: {MUSIC_SOURCE_FILE} ({kb} KB base64)")
+    # --- Embed each audio file as a base64 data URI ---
+    # Iterate AUDIO_EMBEDS; each placeholder in the userscript is replaced
+    # with a full data: URI. Keeps the .twee small and lets the HTML run from
+    # file:// without local-file restrictions.
+    for placeholder, source_file, mime in AUDIO_EMBEDS:
+        audio_path = os.path.join(_here, source_file)
+        if not os.path.exists(audio_path):
+            print(f"WARNING: audio file not found: {audio_path} — {placeholder} not embedded")
+            continue
+        with open(audio_path, "rb") as af:
+            audio_b64 = base64.b64encode(af.read()).decode("ascii")
+        data_uri = "data:" + mime + ";base64," + audio_b64
+        if placeholder in userscript_content:
+            userscript_content = userscript_content.replace(placeholder, data_uri)
+            kb = len(audio_b64) // 1024
+            print(f"Embedded audio: {source_file} ({kb} KB base64) -> {placeholder}")
         else:
-            print(f"WARNING: placeholder {MUSIC_PLACEHOLDER} not found in UserScript — music not embedded")
-    else:
-        print(f"WARNING: music file not found: {music_path} — music will not play")
+            print(f"WARNING: placeholder {placeholder} not found in UserScript — {source_file} not embedded")
 
     js_match = re.search(
         r'(<script role="script" id="twine-user-script" type="text/twine-javascript">).*?(</script>)',

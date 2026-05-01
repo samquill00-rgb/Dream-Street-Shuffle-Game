@@ -170,6 +170,18 @@ window.dssAudio = (function() {
           }
         } catch(e) {}
       }
+      // Venue ambient beds (pub, club, etc.) — already-playing field recordings.
+      if (typeof _ambientBeds !== 'undefined' && _ambientBeds) {
+        for (var bi = 0; bi < _ambientBeds.length; bi++) {
+          var _b = _ambientBeds[bi];
+          if (!_b.gain) continue;
+          try {
+            _b.gain.gain.cancelScheduledValues(ac.currentTime);
+            if (_b.duckTimer) { clearTimeout(_b.duckTimer); _b.duckTimer = null; }
+            _b.gain.gain.setValueAtTime(_muted ? 0 : _b.volume, ac.currentTime);
+          } catch(e) {}
+        }
+      }
     }
     // Notify any UI button listening for state changes.
     try {
@@ -186,8 +198,9 @@ window.dssAudio = (function() {
     if (ac.state === 'suspended') {
       try { ac.resume(); } catch(e) {}
     }
-    // Duck the background music so the SFX cuts through clearly
+    // Duck the background music + any venue ambient beds so the SFX cuts through clearly
     try { _duckMusic(); } catch(e) {}
+    try { _duckAllBeds(); } catch(e) {}
     try { fn(ac); }
     catch(e) { if (window.console && console.error) console.error('dssAudio:', e); }
   }
@@ -1204,6 +1217,138 @@ window.dssAudio = (function() {
       musicGain.gain.setValueAtTime(_muted ? 0 : MUSIC_VOLUME_BASE, ac.currentTime);
     }
   }
+  // ====== VENUE AMBIENT BEDS ======
+  // Generic looped field-recording ambience tied to passage tags. Distinct
+  // from the hub MUSIC bed: ambient beds are field recordings (pub, club,
+  // street) that play whenever the player is anywhere inside that venue.
+  //
+  // Each bed has its own buffer, source, gain, and tag-set. On every passage
+  // change, _updateAmbientBedsForPassage() iterates all registered beds and
+  // starts/stops each based on whether the new passage's tags match.
+  //
+  // Adding a new venue is a one-line config change here, plus a tuple in
+  // sync_html.py's AUDIO_EMBEDS list. The data-URI placeholder is what
+  // sync_html.py replaces with the base64 audio.
+  var _ambientBeds = [];
+  function _decodeBed(bed, cb) {
+    if (bed.buffer) { cb(bed.buffer); return; }
+    bed.decodeQueue.push(cb);
+    if (bed.decoding) return;
+    var ac = getCtx(); if (!ac) return;
+    bed.decoding = true;
+    fetch(bed.dataUri).then(function(r) { return r.arrayBuffer(); })
+      .then(function(ab) {
+        return new Promise(function(resolve, reject) {
+          ac.decodeAudioData(ab, resolve, reject);
+        });
+      })
+      .then(function(buf) {
+        bed.buffer = buf;
+        bed.decoding = false;
+        var queue = bed.decodeQueue.slice();
+        bed.decodeQueue.length = 0;
+        queue.forEach(function(fn) { try { fn(buf); } catch(e) {} });
+      })
+      .catch(function(err) {
+        bed.decoding = false;
+        if (window.console) console.error('[dssAudio] ambient bed decode failed:', bed.label || bed.dataUri.slice(0, 60), err);
+      });
+  }
+  function _bedShouldPlay(bed, passageNode) {
+    if (!passageNode) passageNode = document.querySelector('tw-passage');
+    if (!passageNode) return false;
+    var tagAttr = passageNode.getAttribute('tags') || '';
+    var tags = tagAttr.split(/\s+/).filter(Boolean);
+    for (var i = 0; i < tags.length; i++) {
+      if (bed.tags[tags[i]]) return true;
+    }
+    return false;
+  }
+  function _startBed(bed) {
+    if (bed.started) return;
+    var ac = getCtx(); if (!ac) return;
+    _decodeBed(bed, function(buf) {
+      // Re-check in case the player navigated away during decode
+      if (bed.started || !_bedShouldPlay(bed)) return;
+      var ac2 = getCtx(); if (!ac2) return;
+      if (bed.source) { try { bed.source.stop(); } catch(e) {} bed.source = null; }
+      var startGain = _muted ? 0 : bed.volume;
+      if (!bed.gain) {
+        bed.gain = ac2.createGain();
+        bed.gain.gain.value = startGain;
+        bed.gain.connect(ac2.destination);
+      } else {
+        bed.gain.gain.cancelScheduledValues(ac2.currentTime);
+        bed.gain.gain.setValueAtTime(startGain, ac2.currentTime);
+      }
+      bed.source = ac2.createBufferSource();
+      bed.source.buffer = buf;
+      bed.source.loop = true;
+      bed.source.connect(bed.gain);
+      bed.source.start(0);
+      bed.started = true;
+    });
+  }
+  function _stopBed(bed) {
+    if (!bed.started) return;
+    if (bed.source) {
+      try { bed.source.stop(); } catch(e) {}
+      try { bed.source.disconnect(); } catch(e) {}
+      bed.source = null;
+    }
+    bed.started = false;
+    if (bed.duckTimer) { clearTimeout(bed.duckTimer); bed.duckTimer = null; }
+  }
+  function _duckBed(bed) {
+    if (_muted) return;
+    if (!bed.started || !bed.gain) return;
+    var ac = getCtx(); if (!ac) return;
+    var now = ac.currentTime;
+    bed.gain.gain.cancelScheduledValues(now);
+    bed.gain.gain.setValueAtTime(bed.duckVolume, now);
+    if (bed.duckTimer) clearTimeout(bed.duckTimer);
+    bed.duckTimer = setTimeout(function() {
+      bed.duckTimer = null;
+      if (_muted) return;
+      if (!bed.gain) return;
+      var ac2 = getCtx(); if (!ac2) return;
+      var t = ac2.currentTime;
+      bed.gain.gain.cancelScheduledValues(t);
+      bed.gain.gain.setValueAtTime(bed.duckVolume, t);
+      bed.gain.gain.linearRampToValueAtTime(bed.volume, t + 0.6);
+    }, 350);
+  }
+  function _duckAllBeds() {
+    for (var i = 0; i < _ambientBeds.length; i++) _duckBed(_ambientBeds[i]);
+  }
+  function updateAmbientBedsForPassage(passageNode) {
+    for (var i = 0; i < _ambientBeds.length; i++) {
+      var bed = _ambientBeds[i];
+      if (_bedShouldPlay(bed, passageNode)) _startBed(bed);
+      else _stopBed(bed);
+    }
+  }
+  function registerAmbientBed(bed) {
+    bed.buffer = null;
+    bed.source = null;
+    bed.gain = null;
+    bed.started = false;
+    bed.decoding = false;
+    bed.decodeQueue = [];
+    bed.duckTimer = null;
+    if (typeof bed.volume !== 'number') bed.volume = 0.18;
+    if (typeof bed.duckVolume !== 'number') bed.duckVolume = bed.volume * 0.35;
+    _ambientBeds.push(bed);
+  }
+  // ----- Registered beds ---------------------------------------------------
+  // The French — pub field recording, plays on every venue-french passage.
+  registerAmbientBed({
+    label: 'pub-french',
+    dataUri: '__DSS_PUB_DATA_URI__',
+    tags: { 'venue-french': 1 },
+    volume: 0.20,
+    duckVolume: 0.07
+  });
   // Flute-like single tone — sine fundamental with a breathy noise attack
   // (air across the embouchure) and a subtle vibrato. Still one pitch.
   // Used when "NAME YOUR BOOK" appears at the end of The Night Ahead's typewriter.
@@ -1696,7 +1841,10 @@ window.dssAudio = (function() {
     pauseMusic: pauseMusic, resumeMusic: resumeMusic,
     setMusicVolume: setMusicVolume,
     setMuted: setMuted, isMuted: isMuted,
-    _duckMusic: _duckMusic
+    _duckMusic: _duckMusic,
+    // Venue ambient beds
+    registerAmbientBed: registerAmbientBed,
+    updateAmbientBedsForPassage: updateAmbientBedsForPassage
   };
 })();
 
@@ -6213,6 +6361,9 @@ window._passageGen = 0;
                 // Dean Street theme — starts on Dean Street, stops elsewhere.
                 // Detection is by tag (Dean Street is uniquely tagged 'hub').
                 if (window.dssAudio.updateMusicForPassage) window.dssAudio.updateMusicForPassage(passageNode);
+                // Venue ambient beds (pub, club, etc.) — start whichever bed
+                // matches this passage's tags; stop any that don't.
+                if (window.dssAudio.updateAmbientBedsForPassage) window.dssAudio.updateAmbientBedsForPassage(passageNode);
                 // Page 47 found — paper rustle
                 if (passageNode.querySelector('.page-found')) {
                   setTimeout(function(){ window.dssAudio.pageRustle(); }, 180);

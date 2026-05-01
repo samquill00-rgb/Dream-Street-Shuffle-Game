@@ -4227,6 +4227,34 @@ border: none !important;
 text-decoration: none !important;
 }
 
+/* ── LILY PETAL MOTE (collected flower → notebook) ────────────────────
+   Single white petal that drifts up to the notebook link when a lily hook
+   is clicked. Position is set via inline left/top; CSS variables --dx/--dy
+   carry the offset to the notebook for the second leg of the animation. */
+.lily-petal-mote {
+  position: fixed;
+  width: 18px;
+  height: 27px;
+  margin-left: -9px;
+  margin-top: -13px;
+  pointer-events: none;
+  z-index: 99999;
+  opacity: 0;
+  filter: drop-shadow(0 0 6px rgba(220, 205, 240, 0.55))
+          drop-shadow(0 0 14px rgba(200, 185, 230, 0.30));
+  animation: lilyPetalFloat 3.4s cubic-bezier(0.28, 0.10, 0.36, 1) forwards;
+  --dx: 0px;
+  --dy: -260px;
+}
+.lily-petal-mote svg { width: 100%; height: 100%; display: block; }
+@keyframes lilyPetalFloat {
+  0%   { opacity: 0; transform: translate(0, 0) scale(0.55) rotate(0deg); }
+  8%   { opacity: 0.95; transform: translate(2px, -10px) scale(1) rotate(-9deg); }
+  35%  { opacity: 0.85; transform: translate(calc(var(--dx) * 0.35), calc(var(--dy) * 0.40 - 8px)) scale(0.92) rotate(14deg); }
+  70%  { opacity: 0.55; transform: translate(calc(var(--dx) * 0.78), calc(var(--dy) * 0.78)) scale(0.7) rotate(28deg); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.32) rotate(46deg); }
+}
+
 /* ── MUTE BUTTON (corner toggle) ──────────────────────────────────────
    Subtle amber square in the bottom-right; goes a touch brighter on hover.
    The two SVG icons are stacked — CSS shows one based on [data-muted]. */
@@ -5935,14 +5963,17 @@ window.dssAudio = (function() {
       var ac2 = getCtx(); if (!ac2) return;
       // Defensive cleanup of any stray source
       if (musicSource) { try { musicSource.stop(); } catch(e) {} musicSource = null; }
-      // Create gain node lazily on first play
+      // Create gain node lazily on first play. Honour mute state — music
+      // restarts on passage tag changes, so without this, mute would silently
+      // unstick the moment the player walked into a music-tagged passage.
+      var startGain = _muted ? 0 : MUSIC_VOLUME_BASE;
       if (!musicGain) {
         musicGain = ac2.createGain();
-        musicGain.gain.value = MUSIC_VOLUME_BASE;
+        musicGain.gain.value = startGain;
         musicGain.connect(ac2.destination);
       } else {
         musicGain.gain.cancelScheduledValues(ac2.currentTime);
-        musicGain.gain.setValueAtTime(MUSIC_VOLUME_BASE, ac2.currentTime);
+        musicGain.gain.setValueAtTime(startGain, ac2.currentTime);
       }
       musicSource = ac2.createBufferSource();
       musicSource.buffer = buf;
@@ -5963,6 +5994,7 @@ window.dssAudio = (function() {
     if (duckTimer) { clearTimeout(duckTimer); duckTimer = null; }
   }
   function _duckMusic() {
+    if (_muted) return; // Honour mute — don't unstick gain by ducking/recovering.
     if (!musicStarted || !musicGain) return;
     var ac = getCtx(); if (!ac) return;
     var now = ac.currentTime;
@@ -5971,6 +6003,7 @@ window.dssAudio = (function() {
     if (duckTimer) clearTimeout(duckTimer);
     duckTimer = setTimeout(function() {
       duckTimer = null;
+      if (_muted) return;
       if (!musicGain) return;
       var ac2 = getCtx(); if (!ac2) return;
       var t = ac2.currentTime;
@@ -5993,7 +6026,7 @@ window.dssAudio = (function() {
     if (musicGain && !duckTimer) {
       var ac = getCtx(); if (!ac) return;
       musicGain.gain.cancelScheduledValues(ac.currentTime);
-      musicGain.gain.setValueAtTime(MUSIC_VOLUME_BASE, ac.currentTime);
+      musicGain.gain.setValueAtTime(_muted ? 0 : MUSIC_VOLUME_BASE, ac.currentTime);
     }
   }
   // Flute-like single tone — sine fundamental with a breathy noise attack
@@ -6530,11 +6563,50 @@ window.dssAudio = (function() {
   }
 })();
 
-// ====== LILY CLICK CHIME ======
+// ====== LILY CLICK CHIME + PETAL MOTE ======
 // Inline <script> tags inside (click-replace:) hooks don't execute when
 // Harlowe inserts them via innerHTML, so use a delegated click listener
-// to fire the chime when any lily hook is clicked.
+// to fire the chime AND spawn a single white lily-petal mote that floats
+// up toward the notebook link in the header.
 (function() {
+  function spawnLilyPetal(hook) {
+    var nb = document.querySelector('.notebook-link');
+    var hookRect = hook.getBoundingClientRect();
+    var startX = hookRect.left + hookRect.width / 2;
+    var startY = hookRect.top + hookRect.height / 2;
+    // If we can't find the notebook, just float upward and offscreen.
+    var dx = 0, dy = -260;
+    if (nb) {
+      var nbRect = nb.getBoundingClientRect();
+      dx = (nbRect.left + nbRect.width / 2) - startX;
+      dy = (nbRect.top + nbRect.height / 2) - startY;
+    }
+    var petal = document.createElement('div');
+    petal.className = 'lily-petal-mote';
+    petal.style.left = startX + 'px';
+    petal.style.top = startY + 'px';
+    petal.style.setProperty('--dx', dx + 'px');
+    petal.style.setProperty('--dy', dy + 'px');
+    petal.innerHTML = ''
+      + '<svg viewBox="0 0 24 36" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'
+      +   '<defs>'
+      +     '<radialGradient id="lpGrad" cx="50%" cy="40%" r="60%">'
+      +       '<stop offset="0%" stop-color="rgba(255,252,255,0.95)"/>'
+      +       '<stop offset="65%" stop-color="rgba(238,228,245,0.78)"/>'
+      +       '<stop offset="100%" stop-color="rgba(210,200,235,0.0)"/>'
+      +     '</radialGradient>'
+      +   '</defs>'
+      +   '<path d="M12,2 Q4,11 4,22 Q4,32 12,34 Q20,32 20,22 Q20,11 12,2 Z" '
+      +     'fill="url(#lpGrad)" stroke="rgba(220,205,235,0.55)" stroke-width="0.4"/>'
+      +   '<path d="M12,4 Q9,14 11,32" fill="none" '
+      +     'stroke="rgba(230,215,240,0.35)" stroke-width="0.5"/>'
+      + '</svg>';
+    document.body.appendChild(petal);
+    setTimeout(function() {
+      if (petal.parentNode) petal.parentNode.removeChild(petal);
+    }, 3700);
+  }
+
   document.addEventListener('click', function(e) {
     var hook = e.target.closest('tw-hook');
     if (!hook) return;
@@ -6543,6 +6615,8 @@ window.dssAudio = (function() {
       if (window.dssAudio && window.dssAudio.lilyChime) {
         window.dssAudio.lilyChime();
       }
+      // Defer one frame so the click has been visually acknowledged.
+      requestAnimationFrame(function() { spawnLilyPetal(hook); });
     }
   }, true);
 })();
@@ -62630,6 +62704,486 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="init" position="0,0" size="100,100">(set: $albaRevealed to false)\
 (set: $confidence to 70)\
 (set: $sobriety to 70)\
@@ -63443,7 +63997,7 @@ In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It wil
 (if: $coachUrgent is false and _towerReady is false and $visited&#x27;s French is true and $hadPhoneCall is true and $metCritic is false)[[[The Pillars — there was someone you wanted to talk to|Maritime interlude]] (if: $metCritic is true)[&lt;span class=&quot;pp pp-done&quot;&gt;▲&lt;/span&gt;](else:)[&lt;span class=&quot;pp pp-pending&quot;&gt;△&lt;/span&gt;](if: $haunts contains $haunt5)[&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt;](else:)[&lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt;]
 ](else-if: $coachUrgent is false and _towerReady is false and $visited&#x27;s French is true)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[&lt;span class=&quot;pp pp-done&quot;&gt;▲&lt;/span&gt;](else:)[&lt;span class=&quot;pp pp-pending&quot;&gt;△&lt;/span&gt;](if: $haunts contains $haunt5)[&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt;](else:)[&lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt;]
 ]\
-(if: $coachUrgent is false and _towerReady is false and $visited&#x27;s French is true)[[[Try the Colony Room|Approach The Colony Room]]
+(if: $coachUrgent is false and _towerReady is false and $visited&#x27;s French is true)[[[Try the Colony Room|Approach The Colony Room]] (if: $knowsLackland is true)[&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt;](else:)[&lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt;](if: $knowsRonnies is true)[&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt;](else:)[&lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt;]
 ]\
 (if: $coachUrgent is false and _towerReady is false and $knowsRonnies is true and (not ($visited is a datamap and $visited contains &quot;Ronnies&quot; and $visited&#x27;s Ronnies is true)))[[[Hear the jazz at Ronnie Scott&#x27;s|Approach Ronnie Scott&#x27;s]] (if: $haunts contains $haunt7)[&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt;](else:)[&lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt;]
 ](else-if: $coachUrgent is false and _towerReady is false and $knowsRonnies is true)[&lt;span class=&quot;greyed-out&quot;&gt;Ronnie Scott&#x27;s &amp;#91;CLOSED&amp;#93;&lt;/span&gt;

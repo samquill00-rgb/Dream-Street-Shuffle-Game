@@ -1969,9 +1969,16 @@ background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' pr
 }
 
 .lore-box strong {
+display: block;
 font-style: normal;
 color: #b8c4b0;
 letter-spacing: 0.08em;
+margin-bottom: 0.7em;
+}
+/* Extra breathing room between body text and notebook hints (used in the
+   haunt-explainer lore-box on first haunt) so it doesn't feel bunched. */
+.lore-box .notebook-hint:first-of-type {
+margin-top: 1.2em;
 }
 
 .lore-box p {
@@ -10812,11 +10819,8 @@ window._passageGen = 0;
                 }
                 if (newVenue && newVenue !== window._currentVenue) {
                   setTimeout(function(){ window.dssAudio.doorCreak(); }, 120);
-                  if (!window._whooshSeen) window._whooshSeen = {};
-                  if (!window._whooshSeen[newVenue]) {
-                    window._whooshSeen[newVenue] = true;
-                    setTimeout(function(){ window.dssAudio.passageWhoosh(); }, 60);
-                  }
+                  // Removed: passageWhoosh chime on first-visit to each venue
+                  // — Dr Quill found it competed with venue ambience.
                 }
                 window._currentVenue = newVenue;
                 // Ambient beds: pyre (fire) > dream (wind) > outdoor (traffic).
@@ -10873,10 +10877,22 @@ window._passageGen = 0;
                 var boxes = document.querySelectorAll(t.sel + ':not([data-motes])');
                 for (var i = 0; i < boxes.length; i++) {
                   boxes[i].setAttribute('data-motes', '1');
+                  // Spawn motes as position:fixed children of <body> at the
+                  // box's screen position. This guarantees they render above
+                  // the fixed .stat-bars (z-index 1000), regardless of any
+                  // stacking-context shenanigans further up the DOM tree.
+                  var rect = boxes[i].getBoundingClientRect();
+                  var startTop = rect.top + rect.height * 0.18;
+                  var startLeft = rect.left + rect.width * 0.78;
                   for (var k = 1; k <= t.n; k++) {
                     var m = document.createElement('span');
                     m.className = t.cls + ' ' + t.cls + '-' + k;
-                    boxes[i].appendChild(m);
+                    m.style.position = 'fixed';
+                    m.style.top = startTop + 'px';
+                    m.style.left = startLeft + 'px';
+                    m.style.right = 'auto';
+                    m.style.zIndex = '99999';
+                    document.body.appendChild(m);
                   }
                 }
               });
@@ -13063,10 +13079,10 @@ return;
 }
 var ch = fullText[i++];
 cursor.insertAdjacentText('beforebegin', ch);
-// Quieter typewriter tick on each non-whitespace character — the alba reveal
-// is a hushed, dreamlike moment, so the click is softened (was 0.18, now 0.06).
+// Whisper-quiet typewriter tick — the alba reveal is a hushed, dreamlike
+// moment, so the click is softened well below the default 0.18.
 if (window.dssAudio && ch !== ' ' && ch !== '\n' && ch !== '\t') {
-  window.dssAudio.typewriterTick(0.06);
+  window.dssAudio.typewriterTick(0.02);
 }
 var delay;
 if (ch === '.' || ch === '!' || ch === '?') delay = 240;
@@ -13123,9 +13139,11 @@ soloDebounce = setTimeout(checkSoloLink, 350);
 
 // ====== LORE BOX OPENING SOUND ======
 // Lore boxes are wrapped in (link: "⟡ LORE: ...")[<div class="lore-box">...]
-// Harlowe replaces the link with the hook contents on click. We can't hook
-// into Harlowe's click directly, so use a delegated listener: any tw-link
-// click whose text contains "LORE" plays a soft page-rustle.
+// Harlowe replaces the link with the hook contents on click. We use the
+// capture phase so we definitely get the event before Harlowe consumes it
+// or replaces the element. Belt-and-braces: also a MutationObserver that
+// fires the rustle whenever a NEW .lore-box appears in the DOM that wasn't
+// already there at passage load.
 (function() {
   document.addEventListener('click', function(e) {
     var link = e.target && e.target.closest && e.target.closest('tw-link');
@@ -13135,7 +13153,47 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     if (window.dssAudio && window.dssAudio.pageRustle) {
       window.dssAudio.pageRustle();
     }
-  });
+  }, true);
+
+  // Fallback: watch for lore-boxes appearing AFTER initial passage render.
+  // We tag every box that's already in the DOM at the time a new passage
+  // loads as "seen" so the haunt-explainer (rendered inline on first haunt)
+  // doesn't trigger the rustle.
+  var seen = new WeakSet();
+  function tagExisting() {
+    var boxes = document.querySelectorAll('.lore-box');
+    for (var i = 0; i < boxes.length; i++) seen.add(boxes[i]);
+  }
+  // Re-tag whenever Harlowe swaps in a new passage.
+  new MutationObserver(function(mutations) {
+    var passageSwapped = false;
+    for (var i = 0; i < mutations.length; i++) {
+      var m = mutations[i];
+      for (var j = 0; j < m.addedNodes.length; j++) {
+        var n = m.addedNodes[j];
+        if (n.nodeType !== 1) continue;
+        if (n.tagName === 'TW-PASSAGE') passageSwapped = true;
+      }
+    }
+    if (passageSwapped) {
+      // Slight delay so all the inline lore-boxes have rendered before tagging.
+      setTimeout(tagExisting, 50);
+    } else {
+      // No passage swap — any lore-box added now is from a click expansion.
+      var boxes = document.querySelectorAll('.lore-box');
+      for (var b = 0; b < boxes.length; b++) {
+        if (!seen.has(boxes[b])) {
+          seen.add(boxes[b]);
+          if (window.dssAudio && window.dssAudio.pageRustle) {
+            window.dssAudio.pageRustle();
+            break; // only one rustle per click expansion
+          }
+        }
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+  // Initial tag pass
+  tagExisting();
 })();
 
 // ====== DEAN STREET LAMP DYNAMIC HEIGHT ======
@@ -59470,6 +59528,166 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="init" position="0,0" size="100,100">(set: $albaRevealed to false)\
 (set: $confidence to 70)\
 (set: $sobriety to 70)\
@@ -63412,8 +63630,7 @@ Tonight, Soho will mark you. Here, in our mutual dream, we will call the marks &
 &lt;div class=&quot;phone-scene&quot;&gt;
 &lt;svg class=&quot;phone-rule&quot; viewBox=&quot;0 0 300 55&quot; width=&quot;100%&quot; height=&quot;55&quot; preserveAspectRatio=&quot;none&quot;&gt;&lt;defs&gt;&lt;filter id=&quot;phBl&quot;&gt;&lt;feGaussianBlur stdDeviation=&quot;5&quot;/&gt;&lt;/filter&gt;&lt;linearGradient id=&quot;phCd&quot; x1=&quot;0&quot; x2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#5a2818&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;20%&quot; stop-color=&quot;#7a3828&quot; stop-opacity=&quot;0.48&quot;/&gt;&lt;stop offset=&quot;50%&quot; stop-color=&quot;#8a4030&quot; stop-opacity=&quot;0.62&quot;/&gt;&lt;stop offset=&quot;80%&quot; stop-color=&quot;#7a3828&quot; stop-opacity=&quot;0.48&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#5a2818&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;phHd&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;1&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#4a1812&quot;/&gt;&lt;stop offset=&quot;40%&quot; stop-color=&quot;#7a2e20&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#5a2018&quot;/&gt;&lt;/linearGradient&gt;&lt;radialGradient id=&quot;phGw&quot; cx=&quot;50%&quot; cy=&quot;50%&quot; r=&quot;55%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#c08040&quot; stop-opacity=&quot;0.12&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#c08040&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;/defs&gt;&lt;!-- smoke wisps --&gt;&lt;ellipse cx=&quot;125&quot; cy=&quot;26&quot; rx=&quot;58&quot; ry=&quot;18&quot; fill=&quot;#a08060&quot; opacity=&quot;0.06&quot; filter=&quot;url(#phBl)&quot;/&gt;&lt;ellipse cx=&quot;190&quot; cy=&quot;30&quot; rx=&quot;45&quot; ry=&quot;14&quot; fill=&quot;#907050&quot; opacity=&quot;0.05&quot; filter=&quot;url(#phBl)&quot;/&gt;&lt;ellipse cx=&quot;150&quot; cy=&quot;27&quot; rx=&quot;95&quot; ry=&quot;24&quot; fill=&quot;url(#phGw)&quot;/&gt;&lt;!-- cord shadow for depth --&gt;&lt;path d=&quot;M14 29 Q20 14 26 29 Q32 44 38 29 Q44 14 50 29 Q56 44 62 29 Q68 15 74 29 Q79 40 84 29 Q89 20 94 29 Q98 35 102 29 Q105 26 108 29&quot; fill=&quot;none&quot; stroke=&quot;rgba(40,18,12,0.12)&quot; stroke-width=&quot;3&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;path d=&quot;M192 29 Q195 26 198 29 Q202 35 206 29 Q211 20 216 29 Q221 40 226 29 Q232 15 238 29 Q244 44 250 29 Q256 14 262 29 Q268 44 274 29 Q280 14 286 29&quot; fill=&quot;none&quot; stroke=&quot;rgba(40,18,12,0.12)&quot; stroke-width=&quot;3&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- coiled cord left --&gt;&lt;path d=&quot;M14 27 Q20 12 26 27 Q32 42 38 27 Q44 12 50 27 Q56 42 62 27 Q68 13 74 27 Q79 38 84 27 Q89 18 94 27 Q98 33 102 27 Q105 24 108 27&quot; fill=&quot;none&quot; stroke=&quot;url(#phCd)&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- coiled cord right --&gt;&lt;path d=&quot;M192 27 Q195 24 198 27 Q202 33 206 27 Q211 18 216 27 Q221 38 226 27 Q232 13 238 27 Q244 42 250 27 Q256 12 262 27 Q268 42 274 27 Q280 12 286 27&quot; fill=&quot;none&quot; stroke=&quot;url(#phCd)&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- cord connectors --&gt;&lt;circle cx=&quot;110&quot; cy=&quot;27&quot; r=&quot;2&quot; fill=&quot;#6a2820&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;190&quot; cy=&quot;27&quot; r=&quot;2&quot; fill=&quot;#6a2820&quot; opacity=&quot;0.4&quot;/&gt;&lt;!-- handset --&gt;&lt;g transform=&quot;translate(150,27) rotate(-12)&quot;&gt;&lt;path d=&quot;M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z&quot; fill=&quot;url(#phHd)&quot; opacity=&quot;0.62&quot;/&gt;&lt;circle cx=&quot;-16&quot; cy=&quot;-1.5&quot; r=&quot;1.2&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;-16&quot; cy=&quot;1.5&quot; r=&quot;1.2&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;-16&quot; cy=&quot;0&quot; r=&quot;1&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.22&quot;/&gt;&lt;circle cx=&quot;16&quot; cy=&quot;-1.5&quot; r=&quot;1.2&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;16&quot; cy=&quot;1.5&quot; r=&quot;1.2&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;16&quot; cy=&quot;0&quot; r=&quot;1&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.22&quot;/&gt;&lt;/g&gt;&lt;/svg&gt;
 
-&lt;div class=&quot;phone-type&quot; style=&quot;--d:0.3s;--t:0.8s&quot;&gt;The phone rings behind the bar.&lt;/div&gt;\
-&lt;div class=&quot;phone-type&quot; style=&quot;--d:1.4s;--t:0.35s&quot;&gt;It&#x27;s Aoife.&lt;/div&gt;\
+&lt;div class=&quot;phone-type&quot; style=&quot;--d:0.3s;--t:0.8s&quot;&gt;It&#x27;s Aoife.&lt;/div&gt;\
 &lt;div class=&quot;phone-type phone-her&quot; style=&quot;--d:2.1s;--t:1.6s&quot;&gt;&#x27;The heating&#x27;s gone. Will you be home soon? She won&#x27;t leave-off crying.&#x27;&lt;/div&gt;\
 &lt;div class=&quot;phone-type phone-you&quot; style=&quot;--d:4.0s;--t:0.45s&quot;&gt;&#x27;Later tonight.&#x27;&lt;/div&gt;\
 &lt;div class=&quot;phone-type phone-her&quot; style=&quot;--d:4.8s;--t:0.35s&quot;&gt;&#x27;Much later?&#x27;&lt;/div&gt;\
@@ -63454,7 +63671,7 @@ You both hang up, each leaving the other alone.&lt;/span&gt;
 &lt;div class=&quot;phone-scene&quot;&gt;
 &lt;svg class=&quot;phone-rule&quot; viewBox=&quot;0 0 300 55&quot; width=&quot;100%&quot; height=&quot;55&quot; preserveAspectRatio=&quot;none&quot;&gt;&lt;defs&gt;&lt;filter id=&quot;drBl&quot;&gt;&lt;feGaussianBlur stdDeviation=&quot;5&quot;/&gt;&lt;/filter&gt;&lt;linearGradient id=&quot;drCd&quot; x1=&quot;0&quot; x2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#5a2818&quot; stop-opacity=&quot;0&quot;/&gt;&lt;stop offset=&quot;20%&quot; stop-color=&quot;#7a3828&quot; stop-opacity=&quot;0.48&quot;/&gt;&lt;stop offset=&quot;50%&quot; stop-color=&quot;#8a4030&quot; stop-opacity=&quot;0.62&quot;/&gt;&lt;stop offset=&quot;80%&quot; stop-color=&quot;#7a3828&quot; stop-opacity=&quot;0.48&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#5a2818&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/linearGradient&gt;&lt;linearGradient id=&quot;drHd&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;1&quot; y2=&quot;1&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#4a1812&quot;/&gt;&lt;stop offset=&quot;40%&quot; stop-color=&quot;#7a2e20&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#5a2018&quot;/&gt;&lt;/linearGradient&gt;&lt;radialGradient id=&quot;drGw&quot; cx=&quot;50%&quot; cy=&quot;50%&quot; r=&quot;55%&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#c08040&quot; stop-opacity=&quot;0.12&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#c08040&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;/defs&gt;&lt;ellipse cx=&quot;125&quot; cy=&quot;26&quot; rx=&quot;58&quot; ry=&quot;18&quot; fill=&quot;#a08060&quot; opacity=&quot;0.06&quot; filter=&quot;url(#drBl)&quot;/&gt;&lt;ellipse cx=&quot;190&quot; cy=&quot;30&quot; rx=&quot;45&quot; ry=&quot;14&quot; fill=&quot;#907050&quot; opacity=&quot;0.05&quot; filter=&quot;url(#drBl)&quot;/&gt;&lt;ellipse cx=&quot;150&quot; cy=&quot;27&quot; rx=&quot;95&quot; ry=&quot;24&quot; fill=&quot;url(#drGw)&quot;/&gt;&lt;path d=&quot;M14 27 Q20 12 26 27 Q32 42 38 27 Q44 12 50 27 Q56 42 62 27 Q68 13 74 27 Q79 38 84 27 Q89 18 94 27 Q98 33 102 27 Q105 24 108 27&quot; fill=&quot;none&quot; stroke=&quot;url(#drCd)&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;path d=&quot;M192 27 Q195 24 198 27 Q202 33 206 27 Q211 18 216 27 Q221 38 226 27 Q232 13 238 27 Q244 42 250 27 Q256 12 262 27 Q268 42 274 27 Q280 12 286 27&quot; fill=&quot;none&quot; stroke=&quot;url(#drCd)&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;circle cx=&quot;110&quot; cy=&quot;27&quot; r=&quot;2&quot; fill=&quot;#6a2820&quot; opacity=&quot;0.4&quot;/&gt;&lt;circle cx=&quot;190&quot; cy=&quot;27&quot; r=&quot;2&quot; fill=&quot;#6a2820&quot; opacity=&quot;0.4&quot;/&gt;&lt;g transform=&quot;translate(150,27) rotate(-12)&quot;&gt;&lt;path d=&quot;M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z&quot; fill=&quot;url(#drHd)&quot; opacity=&quot;0.62&quot;/&gt;&lt;circle cx=&quot;-16&quot; cy=&quot;-1.5&quot; r=&quot;1.2&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;-16&quot; cy=&quot;1.5&quot; r=&quot;1.2&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;16&quot; cy=&quot;-1.5&quot; r=&quot;1.2&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.3&quot;/&gt;&lt;circle cx=&quot;16&quot; cy=&quot;1.5&quot; r=&quot;1.2&quot; fill=&quot;#1a0808&quot; opacity=&quot;0.3&quot;/&gt;&lt;/g&gt;&lt;/svg&gt;
 
-&lt;div class=&quot;phone-type&quot; style=&quot;--d:0.3s;--t:1.0s&quot;&gt;The phone behind the bar rings. It&#x27;s Aoife.&lt;/div&gt;\
+&lt;div class=&quot;phone-type&quot; style=&quot;--d:0.3s;--t:1.0s&quot;&gt;It&#x27;s Aoife.&lt;/div&gt;\
 &lt;div class=&quot;phone-type phone-her&quot; style=&quot;--d:1.6s;--t:1.4s&quot;&gt;&#x27;Where are you?&#x27;&lt;/div&gt;\
 &lt;div class=&quot;phone-type phone-you&quot; style=&quot;--d:3.4s;--t:0.8s&quot;&gt;&#x27;I&#x27;ll be home soon,&#x27;&lt;/div&gt;\
 &lt;div class=&quot;phone-type phone-her&quot; style=&quot;--d:4.6s;--t:1.0s&quot;&gt;&#x27;Just come back to us.&#x27;&lt;/div&gt;\
@@ -63498,7 +63715,7 @@ You both hang up, each leaving the other alone.&lt;/span&gt;
 &lt;div style=&quot;font-family:&#x27;Playfair Display&#x27;,Georgia,serif;font-size:3em;letter-spacing:0.15em;line-height:1.2;animation:dst-titleGlow 6s ease-in-out infinite;&quot;&gt;DREAM STREET&lt;br&gt;SHUFFLE&lt;/div&gt;
 &lt;div style=&quot;font-family:&#x27;Crimson Text&#x27;,Georgia,serif;font-size:1.05em;margin-top:1em;color:#a08060;letter-spacing:0.08em;animation:dst-breathe 8s ease-in-out infinite;&quot;&gt;by Three Blue Posts&lt;/div&gt;
 &lt;div class=&quot;title-begin&quot; style=&quot;margin-top:1.6em;font-size:1.6em;&quot;&gt;[[BEGIN|Start]]&lt;/div&gt;
-(if: (savedgames:) contains &quot;auto&quot;)[&lt;div class=&quot;title-begin&quot; style=&quot;margin-top:1.6em;font-size:0.8em;opacity:0.8;&quot;&gt;(link: &quot;(CONTINUE WHERE I LEFT OFF)&quot;)[(loadgame: &quot;auto&quot;)]&lt;/div&gt;]
+(if: (savedgames:) contains &quot;auto&quot;)[&lt;div class=&quot;title-begin&quot; style=&quot;margin-top:3em;font-size:0.8em;opacity:0.8;&quot;&gt;(link: &quot;(CONTINUE WHERE I LEFT OFF)&quot;)[(loadgame: &quot;auto&quot;)]&lt;/div&gt;]
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;

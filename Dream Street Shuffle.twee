@@ -6113,11 +6113,8 @@ window._passageGen = 0;
                 }
                 if (newVenue && newVenue !== window._currentVenue) {
                   setTimeout(function(){ window.dssAudio.doorCreak(); }, 120);
-                  if (!window._whooshSeen) window._whooshSeen = {};
-                  if (!window._whooshSeen[newVenue]) {
-                    window._whooshSeen[newVenue] = true;
-                    setTimeout(function(){ window.dssAudio.passageWhoosh(); }, 60);
-                  }
+                  // Removed: passageWhoosh chime on first-visit to each venue
+                  // — Dr Quill found it competed with venue ambience.
                 }
                 window._currentVenue = newVenue;
                 // Ambient beds: pyre (fire) > dream (wind) > outdoor (traffic).
@@ -6174,10 +6171,22 @@ window._passageGen = 0;
                 var boxes = document.querySelectorAll(t.sel + ':not([data-motes])');
                 for (var i = 0; i < boxes.length; i++) {
                   boxes[i].setAttribute('data-motes', '1');
+                  // Spawn motes as position:fixed children of <body> at the
+                  // box's screen position. This guarantees they render above
+                  // the fixed .stat-bars (z-index 1000), regardless of any
+                  // stacking-context shenanigans further up the DOM tree.
+                  var rect = boxes[i].getBoundingClientRect();
+                  var startTop = rect.top + rect.height * 0.18;
+                  var startLeft = rect.left + rect.width * 0.78;
                   for (var k = 1; k <= t.n; k++) {
                     var m = document.createElement('span');
                     m.className = t.cls + ' ' + t.cls + '-' + k;
-                    boxes[i].appendChild(m);
+                    m.style.position = 'fixed';
+                    m.style.top = startTop + 'px';
+                    m.style.left = startLeft + 'px';
+                    m.style.right = 'auto';
+                    m.style.zIndex = '99999';
+                    document.body.appendChild(m);
                   }
                 }
               });
@@ -8364,10 +8373,10 @@ return;
 }
 var ch = fullText[i++];
 cursor.insertAdjacentText('beforebegin', ch);
-// Quieter typewriter tick on each non-whitespace character — the alba reveal
-// is a hushed, dreamlike moment, so the click is softened (was 0.18, now 0.06).
+// Whisper-quiet typewriter tick — the alba reveal is a hushed, dreamlike
+// moment, so the click is softened well below the default 0.18.
 if (window.dssAudio && ch !== ' ' && ch !== '\n' && ch !== '\t') {
-  window.dssAudio.typewriterTick(0.06);
+  window.dssAudio.typewriterTick(0.02);
 }
 var delay;
 if (ch === '.' || ch === '!' || ch === '?') delay = 240;
@@ -8424,9 +8433,11 @@ soloDebounce = setTimeout(checkSoloLink, 350);
 
 // ====== LORE BOX OPENING SOUND ======
 // Lore boxes are wrapped in (link: "⟡ LORE: ...")[<div class="lore-box">...]
-// Harlowe replaces the link with the hook contents on click. We can't hook
-// into Harlowe's click directly, so use a delegated listener: any tw-link
-// click whose text contains "LORE" plays a soft page-rustle.
+// Harlowe replaces the link with the hook contents on click. We use the
+// capture phase so we definitely get the event before Harlowe consumes it
+// or replaces the element. Belt-and-braces: also a MutationObserver that
+// fires the rustle whenever a NEW .lore-box appears in the DOM that wasn't
+// already there at passage load.
 (function() {
   document.addEventListener('click', function(e) {
     var link = e.target && e.target.closest && e.target.closest('tw-link');
@@ -8436,7 +8447,47 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     if (window.dssAudio && window.dssAudio.pageRustle) {
       window.dssAudio.pageRustle();
     }
-  });
+  }, true);
+
+  // Fallback: watch for lore-boxes appearing AFTER initial passage render.
+  // We tag every box that's already in the DOM at the time a new passage
+  // loads as "seen" so the haunt-explainer (rendered inline on first haunt)
+  // doesn't trigger the rustle.
+  var seen = new WeakSet();
+  function tagExisting() {
+    var boxes = document.querySelectorAll('.lore-box');
+    for (var i = 0; i < boxes.length; i++) seen.add(boxes[i]);
+  }
+  // Re-tag whenever Harlowe swaps in a new passage.
+  new MutationObserver(function(mutations) {
+    var passageSwapped = false;
+    for (var i = 0; i < mutations.length; i++) {
+      var m = mutations[i];
+      for (var j = 0; j < m.addedNodes.length; j++) {
+        var n = m.addedNodes[j];
+        if (n.nodeType !== 1) continue;
+        if (n.tagName === 'TW-PASSAGE') passageSwapped = true;
+      }
+    }
+    if (passageSwapped) {
+      // Slight delay so all the inline lore-boxes have rendered before tagging.
+      setTimeout(tagExisting, 50);
+    } else {
+      // No passage swap — any lore-box added now is from a click expansion.
+      var boxes = document.querySelectorAll('.lore-box');
+      for (var b = 0; b < boxes.length; b++) {
+        if (!seen.has(boxes[b])) {
+          seen.add(boxes[b]);
+          if (window.dssAudio && window.dssAudio.pageRustle) {
+            window.dssAudio.pageRustle();
+            break; // only one rustle per click expansion
+          }
+        }
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+  // Initial tag pass
+  tagExisting();
 })();
 
 // ====== DEAN STREET LAMP DYNAMIC HEIGHT ======
@@ -29522,8 +29573,7 @@ Tonight, Soho will mark you. Here, in our mutual dream, we will call the marks '
 <div class="phone-scene">
 <svg class="phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="phBl"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="phCd" x1="0" x2="1"><stop offset="0%" stop-color="#5a2818" stop-opacity="0"/><stop offset="20%" stop-color="#7a3828" stop-opacity="0.48"/><stop offset="50%" stop-color="#8a4030" stop-opacity="0.62"/><stop offset="80%" stop-color="#7a3828" stop-opacity="0.48"/><stop offset="100%" stop-color="#5a2818" stop-opacity="0"/></linearGradient><linearGradient id="phHd" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1812"/><stop offset="40%" stop-color="#7a2e20"/><stop offset="100%" stop-color="#5a2018"/></linearGradient><radialGradient id="phGw" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#c08040" stop-opacity="0.12"/><stop offset="100%" stop-color="#c08040" stop-opacity="0"/></radialGradient></defs><!-- smoke wisps --><ellipse cx="125" cy="26" rx="58" ry="18" fill="#a08060" opacity="0.06" filter="url(#phBl)"/><ellipse cx="190" cy="30" rx="45" ry="14" fill="#907050" opacity="0.05" filter="url(#phBl)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#phGw)"/><!-- cord shadow for depth --><path d="M14 29 Q20 14 26 29 Q32 44 38 29 Q44 14 50 29 Q56 44 62 29 Q68 15 74 29 Q79 40 84 29 Q89 20 94 29 Q98 35 102 29 Q105 26 108 29" fill="none" stroke="rgba(40,18,12,0.12)" stroke-width="3" stroke-linecap="round"/><path d="M192 29 Q195 26 198 29 Q202 35 206 29 Q211 20 216 29 Q221 40 226 29 Q232 15 238 29 Q244 44 250 29 Q256 14 262 29 Q268 44 274 29 Q280 14 286 29" fill="none" stroke="rgba(40,18,12,0.12)" stroke-width="3" stroke-linecap="round"/><!-- coiled cord left --><path d="M14 27 Q20 12 26 27 Q32 42 38 27 Q44 12 50 27 Q56 42 62 27 Q68 13 74 27 Q79 38 84 27 Q89 18 94 27 Q98 33 102 27 Q105 24 108 27" fill="none" stroke="url(#phCd)" stroke-width="2" stroke-linecap="round"/><!-- coiled cord right --><path d="M192 27 Q195 24 198 27 Q202 33 206 27 Q211 18 216 27 Q221 38 226 27 Q232 13 238 27 Q244 42 250 27 Q256 12 262 27 Q268 42 274 27 Q280 12 286 27" fill="none" stroke="url(#phCd)" stroke-width="2" stroke-linecap="round"/><!-- cord connectors --><circle cx="110" cy="27" r="2" fill="#6a2820" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#6a2820" opacity="0.4"/><!-- handset --><g transform="translate(150,27) rotate(-12)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#phHd)" opacity="0.62"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="-16" cy="0" r="1" fill="#1a0808" opacity="0.22"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="16" cy="0" r="1" fill="#1a0808" opacity="0.22"/></g></svg>
 
-<div class="phone-type" style="--d:0.3s;--t:0.8s">The phone rings behind the bar.</div>\
-<div class="phone-type" style="--d:1.4s;--t:0.35s">It's Aoife.</div>\
+<div class="phone-type" style="--d:0.3s;--t:0.8s">It's Aoife.</div>\
 <div class="phone-type phone-her" style="--d:2.1s;--t:1.6s">'The heating's gone. Will you be home soon? She won't leave-off crying.'</div>\
 <div class="phone-type phone-you" style="--d:4.0s;--t:0.45s">'Later tonight.'</div>\
 <div class="phone-type phone-her" style="--d:4.8s;--t:0.35s">'Much later?'</div>\
@@ -29570,7 +29620,7 @@ You both hang up, each leaving the other alone.</span>
 <div class="phone-scene">
 <svg class="phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="drBl"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="drCd" x1="0" x2="1"><stop offset="0%" stop-color="#5a2818" stop-opacity="0"/><stop offset="20%" stop-color="#7a3828" stop-opacity="0.48"/><stop offset="50%" stop-color="#8a4030" stop-opacity="0.62"/><stop offset="80%" stop-color="#7a3828" stop-opacity="0.48"/><stop offset="100%" stop-color="#5a2818" stop-opacity="0"/></linearGradient><linearGradient id="drHd" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1812"/><stop offset="40%" stop-color="#7a2e20"/><stop offset="100%" stop-color="#5a2018"/></linearGradient><radialGradient id="drGw" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#c08040" stop-opacity="0.12"/><stop offset="100%" stop-color="#c08040" stop-opacity="0"/></radialGradient></defs><ellipse cx="125" cy="26" rx="58" ry="18" fill="#a08060" opacity="0.06" filter="url(#drBl)"/><ellipse cx="190" cy="30" rx="45" ry="14" fill="#907050" opacity="0.05" filter="url(#drBl)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#drGw)"/><path d="M14 27 Q20 12 26 27 Q32 42 38 27 Q44 12 50 27 Q56 42 62 27 Q68 13 74 27 Q79 38 84 27 Q89 18 94 27 Q98 33 102 27 Q105 24 108 27" fill="none" stroke="url(#drCd)" stroke-width="2" stroke-linecap="round"/><path d="M192 27 Q195 24 198 27 Q202 33 206 27 Q211 18 216 27 Q221 38 226 27 Q232 13 238 27 Q244 42 250 27 Q256 12 262 27 Q268 42 274 27 Q280 12 286 27" fill="none" stroke="url(#drCd)" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="27" r="2" fill="#6a2820" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#6a2820" opacity="0.4"/><g transform="translate(150,27) rotate(-12)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#drHd)" opacity="0.62"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0808" opacity="0.3"/></g></svg>
 
-<div class="phone-type" style="--d:0.3s;--t:1.0s">The phone behind the bar rings. It's Aoife.</div>\
+<div class="phone-type" style="--d:0.3s;--t:1.0s">It's Aoife.</div>\
 <div class="phone-type phone-her" style="--d:1.6s;--t:1.4s">'Where are you?'</div>\
 <div class="phone-type phone-you" style="--d:3.4s;--t:0.8s">'I'll be home soon,'</div>\
 <div class="phone-type phone-her" style="--d:4.6s;--t:1.0s">'Just come back to us.'</div>\
@@ -29618,7 +29668,7 @@ You both hang up, each leaving the other alone.</span>
 <div style="font-family:'Playfair Display',Georgia,serif;font-size:3em;letter-spacing:0.15em;line-height:1.2;animation:dst-titleGlow 6s ease-in-out infinite;">DREAM STREET<br>SHUFFLE</div>
 <div style="font-family:'Crimson Text',Georgia,serif;font-size:1.05em;margin-top:1em;color:#a08060;letter-spacing:0.08em;animation:dst-breathe 8s ease-in-out infinite;">by Three Blue Posts</div>
 <div class="title-begin" style="margin-top:1.6em;font-size:1.6em;">[[BEGIN|Start]]</div>
-(if: (savedgames:) contains "auto")[<div class="title-begin" style="margin-top:1.6em;font-size:0.8em;opacity:0.8;">(link: "(CONTINUE WHERE I LEFT OFF)")[(loadgame: "auto")]</div>]
+(if: (savedgames:) contains "auto")[<div class="title-begin" style="margin-top:3em;font-size:0.8em;opacity:0.8;">(link: "(CONTINUE WHERE I LEFT OFF)")[(loadgame: "auto")]</div>]
 </div>
 </div>
 </div>
@@ -31902,9 +31952,16 @@ background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' pr
 }
 
 .lore-box strong {
+display: block;
 font-style: normal;
 color: #b8c4b0;
 letter-spacing: 0.08em;
+margin-bottom: 0.7em;
+}
+/* Extra breathing room between body text and notebook hints (used in the
+   haunt-explainer lore-box on first haunt) so it doesn't feel bunched. */
+.lore-box .notebook-hint:first-of-type {
+margin-top: 1.2em;
 }
 
 .lore-box p {

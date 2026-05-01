@@ -4227,6 +4227,43 @@ border: none !important;
 text-decoration: none !important;
 }
 
+/* ── MUTE BUTTON (corner toggle) ──────────────────────────────────────
+   Subtle amber square in the bottom-right; goes a touch brighter on hover.
+   The two SVG icons are stacked — CSS shows one based on [data-muted]. */
+#dss-mute-btn {
+  position: fixed;
+  bottom: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 12, 8, 0.6);
+  border: 1px solid rgba(200, 168, 106, 0.30);
+  border-radius: 4px;
+  color: rgba(212, 165, 116, 0.65);
+  cursor: pointer;
+  z-index: 99500;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, opacity 0.2s;
+  opacity: 0.55;
+  -webkit-tap-highlight-color: transparent;
+}
+#dss-mute-btn:hover {
+  background: rgba(40, 24, 14, 0.85);
+  color: rgba(232, 195, 130, 0.95);
+  border-color: rgba(200, 168, 106, 0.55);
+  opacity: 1;
+}
+#dss-mute-btn:focus-visible {
+  outline: 1px solid rgba(220, 180, 110, 0.55);
+  outline-offset: 1px;
+}
+#dss-mute-btn .dss-mute-icon { display: none; }
+#dss-mute-btn[data-muted="0"] .dss-mute-icon-on { display: block; }
+#dss-mute-btn[data-muted="1"] .dss-mute-icon-off { display: block; color: rgba(220, 130, 100, 0.85); }
+
 .cellar-scene { position: relative; }
 .cellar-light {
 position: absolute; top:0; left:0; right:0; bottom:0; pointer-events:none;
@@ -4951,9 +4988,53 @@ window.dssAudio = (function() {
       document.addEventListener(ev, _prime, true);
     }
   });
+  // ====== MUTE STATE ======
+  // Master mute toggle. When true: _play() short-circuits (no SFX), musicGain
+  // is forced to 0, any active ambient bed is silenced. State persists across
+  // sessions via localStorage so the player doesn't have to re-mute on reload.
+  var _muted = false;
+  try {
+    var _savedMuted = localStorage.getItem('dssMuted');
+    if (_savedMuted === '1') _muted = true;
+  } catch(e) {}
+  function isMuted() { return _muted; }
+  function setMuted(b) {
+    _muted = !!b;
+    try { localStorage.setItem('dssMuted', _muted ? '1' : '0'); } catch(e) {}
+    var ac = ctx; // Use existing context only — don't force-create one to mute.
+    if (ac) {
+      // Music bed
+      if (typeof musicGain !== 'undefined' && musicGain) {
+        try {
+          musicGain.gain.cancelScheduledValues(ac.currentTime);
+          musicGain.gain.setValueAtTime(_muted ? 0 : MUSIC_VOLUME_BASE, ac.currentTime);
+        } catch(e) {}
+      }
+      // Ambient bed (wind, traffic, fire) — already-playing loops.
+      if (typeof _ambient !== 'undefined' && _ambient && _ambient.g) {
+        try {
+          _ambient.g.gain.cancelScheduledValues(ac.currentTime);
+          // Read current value before mute so we can restore (best effort).
+          if (_muted) {
+            _ambient._preMute = _ambient.g.gain.value;
+            _ambient.g.gain.setValueAtTime(0, ac.currentTime);
+          } else {
+            var restore = (typeof _ambient._preMute === 'number') ? _ambient._preMute : 0.06;
+            _ambient.g.gain.setValueAtTime(restore, ac.currentTime);
+          }
+        } catch(e) {}
+      }
+    }
+    // Notify any UI button listening for state changes.
+    try {
+      var btn = document.getElementById('dss-mute-btn');
+      if (btn) btn.setAttribute('data-muted', _muted ? '1' : '0');
+    } catch(e) {}
+  }
   // Helper: only schedule audio when the context is actually running.
   // If it's still suspending, wait for the resume promise then run.
   function _play(fn) {
+    if (_muted) return;
     var ac = getCtx(); if (!ac) return;
     // Fire-and-forget resume; don't wait for the promise (some browsers hang).
     if (ac.state === 'suspended') {
@@ -6406,8 +6487,47 @@ window.dssAudio = (function() {
     updateMusicForPassage: updateMusicForPassage,
     pauseMusic: pauseMusic, resumeMusic: resumeMusic,
     setMusicVolume: setMusicVolume,
+    setMuted: setMuted, isMuted: isMuted,
     _duckMusic: _duckMusic
   };
+})();
+
+// ====== MUTE BUTTON (bottom-right corner) ======
+// Single fixed-position toggle. Two SVG icons baked in (speaker on / speaker
+// off); CSS swaps them via [data-muted]. Persists state via dssAudio.setMuted
+// which writes to localStorage internally.
+(function() {
+  function buildMuteButton() {
+    if (document.getElementById('dss-mute-btn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'dss-mute-btn';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Mute audio');
+    btn.setAttribute('data-muted', (window.dssAudio && window.dssAudio.isMuted && window.dssAudio.isMuted()) ? '1' : '0');
+    btn.innerHTML = ''
+      + '<svg class="dss-mute-icon dss-mute-icon-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      +   '<path d="M4 9v6h4l5 4V5L8 9H4z"/>'
+      +   '<path d="M16 8.5c1.2 1 1.8 2.2 1.8 3.5s-0.6 2.5-1.8 3.5"/>'
+      +   '<path d="M19 6c2 1.7 3 3.7 3 6s-1 4.3-3 6"/>'
+      + '</svg>'
+      + '<svg class="dss-mute-icon dss-mute-icon-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      +   '<path d="M4 9v6h4l5 4V5L8 9H4z"/>'
+      +   '<line x1="16" y1="9" x2="22" y2="15"/>'
+      +   '<line x1="22" y1="9" x2="16" y2="15"/>'
+      + '</svg>';
+    btn.addEventListener('click', function() {
+      if (!window.dssAudio || !window.dssAudio.setMuted) return;
+      var next = !window.dssAudio.isMuted();
+      window.dssAudio.setMuted(next);
+      btn.setAttribute('data-muted', next ? '1' : '0');
+    });
+    document.body.appendChild(btn);
+  }
+  if (document.body) {
+    buildMuteButton();
+  } else {
+    document.addEventListener('DOMContentLoaded', buildMuteButton);
+  }
 })();
 
 // ====== LILY CLICK CHIME ======
@@ -30220,6 +30340,166 @@ document.addEventListener('keydown', function(e) {
   });
   dawnMO.observe(document.body, { childList: true, subtree: true });
 })();</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

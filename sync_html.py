@@ -28,8 +28,10 @@ html_path = os.path.join(_here, "Dream Street Shuffle.html")
 # this directory, add a tuple here, and add a registerAmbientBed({ ... }) call
 # in the .twee UserScript using the same placeholder string.
 AUDIO_EMBEDS = [
-    ("__DSS_MUSIC_DATA_URI__", "Dream Street Shuffle experiment theme loop.m4a", "audio/mp4"),
-    ("__DSS_PUB_DATA_URI__",   "the-french-pub-ambience.mp3",                    "audio/mpeg"),
+    ("__DSS_MUSIC_DATA_URI__",       "Dream Street Shuffle experiment theme loop.m4a", "audio/mp4"),
+    ("__DSS_PUB_DATA_URI__",         "the-french-pub-ambience.mp3",                    "audio/mpeg"),
+    ("__DSS_PILLARS_DATA_URI__",     "the-pillars-pub-ambience.wav",                   "audio/wav"),
+    ("__DSS_PIANO_DATA_URI__",       "piano-eoin-roe.mp3",                             "audio/mpeg"),
 ]
 
 # ============================================================

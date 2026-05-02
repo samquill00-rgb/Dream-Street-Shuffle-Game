@@ -30,6 +30,8 @@ Dream Street Shuffle
 (set: $hasDrawing to false)\
 (set: $metShana to false)\
 (set: $hasTrishaMatchbook to false)\
+(set: $metSalvu to false)\
+(set: $frenchVisits to 0)\
 (set: $knowsCecilCourt to false)\
 (set: $hasCleggBeermat to false)\
 (set: $knowsAboutPage to false)\
@@ -1265,8 +1267,13 @@ window.dssAudio = (function() {
     if (bed.started) return;
     var ac = getCtx(); if (!ac) return;
     _decodeBed(bed, function(buf) {
-      // Re-check in case the player navigated away during decode
-      if (bed.started || !_bedShouldPlay(bed)) return;
+      // Re-check in case the player navigated away during decode. Skip the
+      // tag-match check when the bed was started via startBedByLabel
+      // (manual start from a JS callsite — e.g. the Ronnie Scott's bar
+      // canvas hand-off — where the current passage's tags don't match
+      // the bed's tags by design).
+      if (bed.started) return;
+      if (!bed._forced && !_bedShouldPlay(bed)) return;
       var ac2 = getCtx(); if (!ac2) return;
       if (bed.source) { try { bed.source.stop(); } catch(e) {} bed.source = null; }
       var startGain = _muted ? 0 : bed.volume;
@@ -1287,6 +1294,7 @@ window.dssAudio = (function() {
     });
   }
   function _stopBed(bed) {
+    bed._forced = false; // clear manual-start flag on any stop
     if (!bed.started) return;
     if (bed.source) {
       try { bed.source.stop(); } catch(e) {}
@@ -1485,7 +1493,9 @@ window.dssAudio = (function() {
   }
   function startBedByLabel(label) {
     var bed = findBedByLabel(label);
-    if (bed) _startBed(bed);
+    if (!bed) return;
+    bed._forced = true;
+    _startBed(bed);
   }
   // Flute-like single tone — sine fundamental with a breathy noise attack
   // (air across the embouchure) and a subtle vibrato. Still one pitch.
@@ -2480,7 +2490,7 @@ window.moraleWarningPopup = function(conf, sobr) {
   var msg = '';
   if (conf < 30 && sobr < 30) msg = 'You\u2019re in a bad way. Get some grub, find a doorway, catch your breath.';
   else if (conf < 40) msg = 'Your confidence is slipping. Find somewhere to gather yourself.';
-  else if (sobr < 40) msg = 'You\u2019ve had a few too many. You could use some food to soak it up.';
+  else if (sobr < 40) msg = 'You should have gone to the gents earlier.';
   else return; // not low enough to warn
   var overlay = document.createElement('div');
   overlay.id = 'morale-warn-overlay';
@@ -5486,15 +5496,17 @@ _resultCarry() {
 var cp = this.carryPhase;
 var total = this.mScore + cp.glassesLeft;
 var perfect = cp.glassesLeft === 3;
-var win = cp.glassesLeft >= 2;
+var win = cp.glassesLeft >= 1;
 
 document.getElementById('bar-round-display').textContent = win ? '★ YOU MADE IT! ★' : '✗ SPILLED! ✗';
 var narr = document.getElementById('bar-narrative');
 
 if (perfect) {
   narr.innerHTML = '<em style="color:#4CFF00;">All three drinks delivered perfectly. The band erupts in cheers!</em>';
+} else if (cp.glassesLeft === 2) {
+  narr.innerHTML = '<em style="color:#d4a574;">Two drinks land safely. "Not bad, kid."</em>';
 } else if (win) {
-  narr.innerHTML = '<em style="color:#d4a574;">The drinks arrive. "Not bad, kid."</em>';
+  narr.innerHTML = '<em style="color:#c8a674;">One drink makes it. The band looks up. "It\'ll do."</em>';
 } else {
   narr.innerHTML = '<em style="color:#FF6B6B;">You spilled everything. The pianist sighs.</em>';
 }
@@ -5514,7 +5526,7 @@ c.fillStyle = '#0a0804';
 c.fillRect(0, 0, W, H);
 
 var total = this.mScore + this.carryPhase.glassesLeft;
-var isWin = this.carryPhase.glassesLeft >= 2;
+var isWin = this.carryPhase.glassesLeft >= 1;
 
 // Score display
 c.save();
@@ -6827,9 +6839,14 @@ window.showDrinkPopupSafe = function(typeOrFn, delay) {
   }, 0);
 };
 
-// ====== SPEW POPUP (hold-to-retch animation for the Coach and Horses Gents) ======
+// ====== SPEW POPUP (hold-to-retch / hold-to-piss animation) ======
+// Used in two places:
+//   mode 'gents'   — Coach and Horses Gents, the player vomits ("The Gents", "Hold to retch")
+//   mode 'doorway' — A doorway on Dean Street, the player pisses ("A Doorway", "Hold to piss")
+// Default is 'gents' for back-compat with any old callsites.
 window.SpewPopup = class SpewPopup {
-constructor() {
+constructor(mode) {
+  this.mode = (mode === 'doorway') ? 'doorway' : 'gents';
   this.done = false;
   this.closing = false;
   this.retching = false;
@@ -6870,7 +6887,7 @@ _build() {
     'font-style:italic;font-size:0.95em;',
     'letter-spacing:0.28em;color:#b8c4b0;',
   ].join('');
-  this.nameLabel.textContent = 'The Gents';
+  this.nameLabel.textContent = (this.mode === 'doorway') ? 'A Doorway' : 'The Gents';
   this.card.appendChild(this.nameLabel);
   // Sage separator under the label
   var sep = document.createElement('div');
@@ -6887,7 +6904,7 @@ _build() {
   canvasWrap.appendChild(this.canvas);
   this.prompt = document.createElement('div');
   this.prompt.style.cssText = 'position:relative;z-index:2;margin-top:12px;font-family:"Crimson Text",Georgia,serif;font-style:italic;font-size:0.95em;color:#c0c8b8;letter-spacing:0.02em;';
-  this.prompt.textContent = 'Press to piss';
+  this.prompt.textContent = (this.mode === 'doorway') ? 'Hold to piss' : 'Hold to retch';
   this.card.appendChild(this.prompt);
   var self = this;
   setTimeout(function() {
@@ -7052,7 +7069,7 @@ _draw() {
   c.stroke();
 }
 };
-window.showSpewPopup = function() { new window.SpewPopup(); };
+window.showSpewPopup = function(mode) { new window.SpewPopup(mode); };
 
 // ====== EAT POPUP (hold-to-eat animation for the Chinese Fish and Chips) ======
 window.EatPopup = class EatPopup {
@@ -25885,9 +25902,9 @@ document.addEventListener('keydown', function(e) {
     setTimeout(function() { finisEl.style.opacity = '1'; }, 50);
 
     var elapsed    = 0;    // seconds since storm began
-    var spawnRate  = 650;  // ms between batches — decreases over time
+    var spawnRate  = 220;  // ms between batches — already brisk at the start, decreases further
     var active     = 0;
-    var maxPetals  = 280;
+    var maxPetals  = 650;  // dense storm — petals near-fill the viewport
 
     function spawnOne() {
       if (active >= maxPetals) return;
@@ -25954,14 +25971,14 @@ document.addEventListener('keydown', function(e) {
 
     function spawnBatch() {
       elapsed += spawnRate / 1000;
-      // Batch size grows from 1 up to 10 over time
-      var batch = Math.min(10, Math.ceil(1 + elapsed / 7));
+      // Batch size starts at ~5 and grows quickly to 18 — dense from the off.
+      var batch = Math.min(18, Math.ceil(5 + elapsed / 3));
       for (var i = 0; i < batch; i++) {
         (function(ii) {
-          setTimeout(spawnOne, ii * (spawnRate / batch) + Math.random() * 80);
+          setTimeout(spawnOne, ii * (spawnRate / batch) + Math.random() * 60);
         })(i);
       }
-      spawnRate = Math.max(110, spawnRate - 5); // slowly accelerates
+      spawnRate = Math.max(60, spawnRate - 12); // accelerates fast
       setTimeout(spawnBatch, spawnRate);
     }
 
@@ -26103,9 +26120,9 @@ if(ball.x<-20){oppScore++;pointEnd(false);}
 else if(ball.x>W+20){playerScore++;pointEnd(true);}
 }
 function pointEnd(pw){
-updateScore();showNarrative(pw);paused=true;
+updateScore();paused=true;
 if(playerScore>=3||oppScore>=3){endGame(playerScore>=3);return;}
-setTimeout(function(){paused=false;document.getElementById('pp-narrative').style.opacity='0';serve();},2200);
+setTimeout(function(){paused=false;serve();},1100);
 }
 function endGame(pw){
 gameOver=true;
@@ -26301,7 +26318,7 @@ You surface upon Dean Street.
 (set: $breatherReturns to $returns + 1)\
 (set: $confidence to $confidence + 18)\
 (if: $hadChippy is true)[(set: $sobriety to $sobriety + 8)](else:)[(set: $sobriety to $sobriety + 18)]\
-<script>setTimeout(function(){ if (window.showSpewPopup) window.showSpewPopup(); }, 300);</script>\
+<script>setTimeout(function(){ if (window.showSpewPopup) window.showSpewPopup('doorway'); }, 300);</script>\
 (go-to: "Dean Street")
 
 :: Alba Display {"position":"900,50","size":"100,100"}
@@ -26538,10 +26555,10 @@ You're eating at the counter when somebody passes the window: that's Lily.
 :: Coach and Horses lock [venue-gents] {"position":"100,1400","size":"100,100"}
 (if: $lilyCount >= 1 and $hadLilyCall1 is false)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">A phone rings.
 
-[[Answer the phone|Lily phone call 1]]</div>]\
+[[Accept the call|Lily phone call 1]]</div>]\
 (if: $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">The phone behind the bar rings.
 
-[[Answer the phone|The dual ring]]</div>]\
+[[Accept the call|The dual ring]]</div>]\
 <svg class="coach-beam" viewBox="0 0 300 36" width="100%" height="36" preserveAspectRatio="none"><defs><linearGradient id="wdA" x1="0" x2="1"><stop offset="0%" stop-color="#3a2408" stop-opacity="0"/><stop offset="10%" stop-color="#5c3810" stop-opacity="1"/><stop offset="90%" stop-color="#5c3810" stop-opacity="1"/><stop offset="100%" stop-color="#3a2408" stop-opacity="0"/></linearGradient><linearGradient id="wdB" x1="0" x2="1"><stop offset="0%" stop-color="#3a2408" stop-opacity="0"/><stop offset="10%" stop-color="#7a5220" stop-opacity="0.7"/><stop offset="90%" stop-color="#7a5220" stop-opacity="0.7"/><stop offset="100%" stop-color="#3a2408" stop-opacity="0"/></linearGradient><linearGradient id="brA" x1="0" x2="1"><stop offset="0%" stop-color="#c8922a" stop-opacity="0"/><stop offset="50%" stop-color="#c8922a" stop-opacity="0.7"/><stop offset="100%" stop-color="#c8922a" stop-opacity="0"/></linearGradient><linearGradient id="wdGrain" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7a5220" stop-opacity="0.2"/><stop offset="50%" stop-color="#5c3810" stop-opacity="0"/><stop offset="100%" stop-color="#7a5220" stop-opacity="0.15"/></linearGradient></defs><rect x="0" y="6" width="300" height="24" fill="url(#wdA)"/><rect x="0" y="6" width="300" height="24" fill="url(#wdGrain)"/><line x1="0" y1="6" x2="300" y2="6" stroke="url(#wdB)" stroke-width="1.2"/><line x1="0" y1="30" x2="300" y2="30" stroke="url(#wdB)" stroke-width="1.2"/><line x1="0" y1="18" x2="300" y2="18" stroke="url(#brA)" stroke-width="1.5"/><g opacity="0.4" stroke="#7a5220" stroke-width="0.4" fill="none"><line x1="30" y1="6" x2="32" y2="30"/><line x1="80" y1="6" x2="78" y2="30"/><line x1="130" y1="6" x2="131" y2="30"/><line x1="170" y1="6" x2="169" y2="30"/><line x1="220" y1="6" x2="222" y2="30"/><line x1="270" y1="6" x2="268" y2="30"/></g><circle cx="50" cy="18" r="4" fill="#c8922a" opacity="0.5"/><circle cx="50" cy="17" r="1.5" fill="#ffe090" opacity="0.35"/><g transform="translate(150,18)" opacity="0.55"><path d="M-8,-6 Q-9,2 -6,6 Q-3,10 0,10 Q3,10 6,6 Q9,2 8,-6" fill="none" stroke="#c8922a" stroke-width="1.5" stroke-linecap="round"/><circle cx="-8" cy="-6" r="1.5" fill="#c8922a"/><circle cx="8" cy="-6" r="1.5" fill="#c8922a"/></g><circle cx="250" cy="18" r="4" fill="#c8922a" opacity="0.5"/><circle cx="250" cy="17" r="1.5" fill="#ffe090" opacity="0.35"/></svg>
 (set: $visitedCoach to true)\
 (set: $afterMidnight to true)\
@@ -26721,7 +26738,7 @@ Traveller, wake!
 
 [[Go!|Dawn Approach White]]</div>
 
-:: The Fetch [piano-bed] {"position":"1600,50","size":"100,100"}
+:: The Fetch {"position":"1600,50","size":"100,100"}
 <script>setTimeout(function(){ if (window.dssAudio) window.dssAudio.uncannyBreath(); }, 400);</script>\
 <div class="glass-pane">You see yourself walking to meet you, who looks at you, with a pitying grin, then turns and heads, quickly, towards Centre Point.
 
@@ -26817,9 +26834,9 @@ In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It wil
 
 <span class="guided-link">[[The Coach and Horses|Approach The Coach]]</span></div>](else:)[Where now?
 (if: $returns >= 2 and $visited's French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)<script>setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);</script>]
-(if: $returns >= 3 and $confidence < 30 and $sobriety < 30)[<div class="choice-box">You're in a bad way. Get some grub, find a doorway, catch your breath.</div>](else-if: $returns >= 3 and $confidence < 40)[<div class="choice-box">Your confidence is slipping. Find somewhere to gather yourself.</div>](else-if: $returns >= 3 and $sobriety < 40)[<div class="choice-box">You've had a few too many. You could use some food to soak it up.
+(if: $returns >= 3 and $confidence < 30 and $sobriety < 30)[<div class="choice-box">You're in a bad way. Get some grub, find a doorway, catch your breath.</div>](else-if: $returns >= 3 and $confidence < 40)[<div class="choice-box">Your confidence is slipping. Find somewhere to gather yourself.</div>](else-if: $returns >= 3 and $sobriety < 40)[<div class="choice-box">You should have gone to the gents earlier.
 
-(if: $hadChippy is false)[[[Get some grub|Approach Chinese Fish and Chips]]](else-if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]]
+(if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]](else-if: $hadChippy is false)[[[Get some grub|Approach Chinese Fish and Chips]]]
 </div>]]
 (if: $coachUrgent is false and _towerReady is false and not (($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2)))[[[To The French|Approach The French]] (if: $haunts contains $haunt4)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>](if: $haunts contains $haunt1)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>](if: $haunts contains $haunt2)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>]
 ](if: $coachUrgent is false and _towerReady is false and ($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2))[<span class="greyed-out">The French &#91;DONE FOR TONIGHT&#93;</span>
@@ -26836,12 +26853,11 @@ In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It wil
 ](else-if: $coachUrgent is false and _towerReady is false and $knowsLackland is true)[<span class="greyed-out">Lackland's Office &#91;NOT NOW. TRY ELSEWHERE&#93;</span>
 ]\
 (if: $coachUrgent is false and _towerReady is false and $knowsCecilCourt is true and $hasMissingPage is true and $returnedPage is false)[[[Return the page to O'Flatterly|O'Flatterly introduction]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>]
-](else-if: $coachUrgent is false and _towerReady is false and $knowsCecilCourt is true and $knowsAboutPage is true and $returnedPage is false)[[[Cecil Court|Cecil Court]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>]
+](else-if: $coachUrgent is false and _towerReady is false and $knowsCecilCourt is true and $knowsAboutPage is true and $returnedPage is false)[<span class="greyed-out">Cecil Court &#91;FIND PAGE 47 FIRST&#93;</span>
 ](else-if: $coachUrgent is false and _towerReady is false and $knowsCecilCourt is true and $returnedPage is false)[[[Visit the antiquarian in Cecil Court|Cecil Court Approach]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>]
 ](if: $coachUrgent is false and _towerReady is false and $returnedPage is true)[<span class="greyed-out">Cecil Court &#91;CLOSED&#93;</span>
 ]\
-(if: $coachUrgent is false and _towerReady is false and $hasTrishaMatchbook is true and $metShana is false and $haunts's length >= 6)[[[Try Trisha's|Failure: Trisha's]] (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>]
-](else-if: $coachUrgent is false and _towerReady is false and $hasTrishaMatchbook is true and $metShana is false)[<span class="greyed-out">Trisha's &#91;NOT YET&#93;</span>
+(if: $coachUrgent is false and _towerReady is false and $hasTrishaMatchbook is true and $metShana is false)[[[Try Trisha's|Failure: Trisha's]] (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>]
 ](else-if: $coachUrgent is false and _towerReady is false and $metShana is true)[<span class="greyed-out">Trisha's &#91;CLOSED&#93;</span> (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[<span class="hp">◇</span>]
 ]\
 (if: _towerReady is false and $coachUrgent is false and ($alba contains $alba1) and ($alba contains $alba2) and not ($alba contains $alba3))[<div class="choice-box"><span class="guided-link">[[The voice|The Fetch]]</span></div>
@@ -26891,10 +26907,10 @@ So, so happily I go, under shades.</span></div>]
 :: Entering The Pillars of Hercules [venue-pillars] {"position":"300,1100","size":"100,100"}
 (if: $lilyCount >= 1 and $hadLilyCall1 is false)[(set: $lilyCallReturn to "Entering The Pillars of Hercules")<div class="phone-ringing">A phone rings.
 
-[[Answer the phone|Lily phone call 1]]</div>]\
+[[Accept the call|Lily phone call 1]]</div>]\
 (if: $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false)[(set: $lilyCallReturn to "Entering The Pillars of Hercules")<div class="phone-ringing">The phone behind the bar rings.
 
-[[Answer the phone|The dual ring]]</div>]\
+[[Accept the call|The dual ring]]</div>]\
 <div class="pillars-scene">
 <div class="pillars-light"></div>
 <div class="pillars-smoke"></div>
@@ -26916,7 +26932,7 @@ If you pass the Pillars' threshold you've already made your choice.
 <div class="verse">Hobson has supt, and 's newly gon to bed.</div>
 (if: $hadPhoneCall is false)[<div class="phone-ringing">Behind the bar a phone rings and your name is called.
 
-[[Answer the phone|The phone call]]</div>]
+[[Accept the call|The phone call]]</div>]
 (else:)[Through the fumes, vapours and drink, you recognise a man.
 
 <div class="lore-box">
@@ -27251,6 +27267,7 @@ Two men, play: Percy Ritson, bookseller and poet; in his thirties, looks like a 
 [[Watch the decider|Watch the decider]]
 
 :: Maltese Gangsters {"position":"1400,550","size":"100,100"}
+(set: $metSalvu to true)\
 <script>setTimeout(function(){ if (window.dssAudio) window.dssAudio.doorKnock(3); }, 350);</script>\
 <div class="copper-door">
 <!-- Maltese cross rule — dark iron tones -->
@@ -27506,7 +27523,7 @@ Inis O'Flatterly is searching for a missing page — Page 47 of an impossible ma
 <div class="pp-score"><span class="pp-result-lose">DEFEAT</span></div>
 </div>
 
-(if: $opponent is "Jack Curtis")[(set: $hasTrishaMatchbook to true)
+(if: $opponent is "Jack Curtis" and $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)
 Curtis tosses you a matchbook.
 
 'Trisha's. Tell them Jack Curtis sent you.'
@@ -27542,8 +27559,6 @@ You flip it over. On the other side, is written: //Carthage Short Hercules' Pill
 </div>]]
 
 [[Back upstairs|Dean Street]]
-[[Head for The Pillars of Hercules|Approach The Pillars]]
-[[Head for Cecil Court|Cecil Court]]
 
 :: PP Final [venue-lackland-back] {"position":"1300,2450","size":"100,100"}
 (set: _roll to (random: 1, 10))
@@ -27713,7 +27728,7 @@ How do you play this point?
 <div class="pp-score"><span class="pp-result-win">★ VICTORY ★</span></div>
 </div>
 
-(if: $opponent is "Jack Curtis")[(set: $hasTrishaMatchbook to true)
+(if: $opponent is "Jack Curtis" and $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)
 Curtis tosses you a matchbook.
 
 'Trisha's. Tell them Jack Curtis sent you.'
@@ -27749,8 +27764,6 @@ You flip it over. On the other side, is written: //Carthage Short Hercules' Pill
 </div>]]
 
 [[Back upstairs|Dean Street]]
-[[Head for The Pillars of Hercules|Approach The Pillars]]
-[[Head for Cecil Court|Cecil Court]]
 
 :: ARCHIVE-RS Drink Orders [venue-ronnies] {"position":"1900,1650","size":"100,100"}
 (go-to: "Ronnie Scott's")
@@ -27863,7 +27876,8 @@ You pause, for a whole long minute, and think of yourself, so as to become, Trel
 <div class="page-found-header">⟡ PAGE 47 ⟡</div>
 <div class="page-found-body">You have Page 47. Return it to Inis O'Flatterly in Cecil Court.</div>
 </div>
-[[Return to Inis O'Flatterly|Return the page]]
+
+[[Wake from this dream|Dream to Dean]]
 
 :: Return the page [venue-cecilcourt] {"position":"500,1850","size":"100,100"}
 You show him 47. O'Flatterly takes it, firmly and gently, then lays it into his papers, where it should be. He would shelve you, if he could, among his best books.
@@ -29122,10 +29136,10 @@ The beast throws you onto the pissant cobblestones, trots off and never looks ba
 :: Ronnie Scott's [venue-ronnies] {"position":"1900,1500","size":"100,100"}
 (if: $lilyCount >= 1 and $hadLilyCall1 is false)[(set: $lilyCallReturn to "Ronnie Scott's")<div class="phone-ringing">A phone rings.
 
-[[Answer the phone|Lily phone call 1]]</div>]\
+[[Accept the call|Lily phone call 1]]</div>]\
 (if: $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false)[(set: $lilyCallReturn to "Ronnie Scott's")<div class="phone-ringing">The phone behind the bar rings.
 
-[[Answer the phone|The dual ring]]</div>]\
+[[Accept the call|The dual ring]]</div>]\
 <div class="venue-back-btn">(link: "← Dean Street")[(go-to: "Dean Street")]</div>
 <div class="ronnies-scene">
 <div class="ronnies-spot"></div>
@@ -29232,6 +29246,8 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $hasDrawing to false)\
 (set: $metShana to false)\
 (set: $hasTrishaMatchbook to false)\
+(set: $metSalvu to false)\
+(set: $frenchVisits to 0)\
 (set: $knowsCecilCourt to false)\
 (set: $hasCleggBeermat to false)\
 (set: $knowsAboutPage to false)\
@@ -29378,10 +29394,10 @@ As you go, you remember, wholly and as a lone, remarkable thought: Ronnie Scott'
 :: The Colony Room [venue-colony] {"position":"1200,700","size":"100,100"}
 (if: $lilyCount >= 1 and $hadLilyCall1 is false and $visited contains "Colony" and $visited's Colony is true)[(set: $lilyCallReturn to "The Colony Room")<div class="phone-ringing">A phone rings.
 
-[[Answer the phone|Lily phone call 1]]</div>]\
+[[Accept the call|Lily phone call 1]]</div>]\
 (if: $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and $visited contains "Colony" and $visited's Colony is true)[(set: $lilyCallReturn to "The Colony Room")<div class="phone-ringing">The phone behind the bar rings.
 
-[[Answer the phone|The dual ring]]</div>]\
+[[Accept the call|The dual ring]]</div>]\
 <div class="colony-scene">
 <svg class="colony-corner tl" viewBox="0 0 36 36"><path d="M3,34 L3,8 Q3,3 8,3 L34,3" fill="none" stroke="#6a9a50" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/><path d="M7,34 L7,12 Q7,7 12,7 L34,7" fill="none" stroke="#8a7a28" stroke-width="0.7" opacity="0.4" stroke-linecap="round"/><path d="M3,8 Q1,14 4,18 Q6,14 3,8" fill="#5a8a40" opacity="0.25"/><path d="M8,3 Q14,1 18,4 Q14,6 8,3" fill="#5a8a40" opacity="0.25"/><path d="M3,8 Q5,11 3,15" fill="none" stroke="#7aaa60" stroke-width="0.6" opacity="0.5"/><path d="M8,3 Q11,5 15,3" fill="none" stroke="#7aaa60" stroke-width="0.6" opacity="0.5"/><circle cx="3" cy="3" r="2.5" fill="none" stroke="#8a9a50" stroke-width="0.8" opacity="0.6"/><circle cx="3" cy="3" r="1" fill="#c8b860" opacity="0.55"/><circle cx="3" cy="3" r="0.4" fill="#e0d080" opacity="0.4"/></svg>
 <svg class="colony-corner tr" viewBox="0 0 36 36"><path d="M3,34 L3,8 Q3,3 8,3 L34,3" fill="none" stroke="#6a9a50" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/><path d="M7,34 L7,12 Q7,7 12,7 L34,7" fill="none" stroke="#8a7a28" stroke-width="0.7" opacity="0.4" stroke-linecap="round"/><path d="M3,8 Q1,14 4,18 Q6,14 3,8" fill="#5a8a40" opacity="0.25"/><path d="M8,3 Q14,1 18,4 Q14,6 8,3" fill="#5a8a40" opacity="0.25"/><path d="M3,8 Q5,11 3,15" fill="none" stroke="#7aaa60" stroke-width="0.6" opacity="0.5"/><path d="M8,3 Q11,5 15,3" fill="none" stroke="#7aaa60" stroke-width="0.6" opacity="0.5"/><circle cx="3" cy="3" r="2.5" fill="none" stroke="#8a9a50" stroke-width="0.8" opacity="0.6"/><circle cx="3" cy="3" r="1" fill="#c8b860" opacity="0.55"/><circle cx="3" cy="3" r="0.4" fill="#e0d080" opacity="0.4"/></svg>
@@ -29414,6 +29430,12 @@ At a table is an agent. There is an impulse among those who work in the book tra
 </div>
 
 :: The Colony Room Door [outdoor] {"position":"1200,550","size":"100,100"}
+(if: $visited is a datamap and $visited contains "Colony" and $visited's Colony is true)[\
+(go-to: "The Colony Room")\
+]\
+(if: $metSalvu is true)[\
+(go-to: "The Colony Room")\
+]\
 <div class="venue-back-btn">(link: "← Dean Street")[(go-to: "Dean Street")]</div>
 You think you know where The Colony Room is. You're not a member, but a friend brought you there once before.
 
@@ -29430,26 +29452,32 @@ On which do you knock?
 (if: $haunts is not an array)[(set: $haunts to (a:))]\
 (if: $lilyCount >= 1 and $hadLilyCall1 is false)[(set: $lilyCallReturn to "The French")<div class="phone-ringing">A phone rings.
 
-[[Answer the phone|Lily phone call 1]]</div>]\
+[[Accept the call|Lily phone call 1]]</div>]\
 (if: $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false)[(set: $lilyCallReturn to "The French")<div class="phone-ringing">The phone behind the bar rings.
 
-[[Answer the phone|The dual ring]]</div>]\
+[[Accept the call|The dual ring]]</div>]\
 <div class="venue-back-btn">(link: "← Dean Street")[(go-to: "Dean Street")]</div>
 (display: "French Rule SVG h60")
 (if: $visited is not a datamap)[(set: $visited to (dm:))]\
 (unless: $visited contains "French")[(set: $visited's French to false)]\
+(if: $frenchVisits is not a number)[(set: $frenchVisits to 0)]\
+(set: $frenchVisits to $frenchVisits + 1)\
 (if: $visited's French is false)[(set: $visited's French to true)\
 (set: $confidence to $confidence + 12)]\
 (if: $tookLily5 is false)[|lily5>[(display: "Lily SVG")]\
 (click-replace: ?lily5)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily5 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">Was that her passing the window, almost six-foot and with the gait of a newborn antelope?</span>]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
-As you walk in the bar drops down to silence, as if its speech were interrupted by a quick gasp for breath, the way a doe sometimes mistakes the wind in the grass for a wolf, stiffens, then goes about its day.
+(if: $frenchVisits is 1)[As you walk in the bar drops down to silence, as if its speech were interrupted by a quick gasp for breath, the way a doe sometimes mistakes the wind in the grass for a wolf, stiffens, then goes about its day.
 
 At one end of the bar are the artists; you know them, they are famous.
 
 Stuffed into a barstool which his arsecheeks overhang, like clouds waiting to rain, is a stout man with his back to you. His leather jacket, somehow both parched and sweating, falls short at the neck, flashing a collar of labial pink.
 
-Opposite him is the only man who clocks you, who is thin like verdaccio and hardly there at all.
+Opposite him is the only man who clocks you, who is thin like verdaccio and hardly there at all.](else-if: $frenchVisits is 2)[//[PLACEHOLDER — second-visit French opening to be written.]//
+
+Back through the door, back to the bar. The doe-quiet barely flickers this time; the room knows you came back.](else:)[//[PLACEHOLDER — third+ visit French opening to be written.]//
+
+A third time, and the bar barely lifts its head. You're a regular tonight, whether they like it or not.]
 
 (if: not ($haunts contains $haunt4))[<span class="guided-link">[[Approach|The Stranger at the French]]</span>]
 (if: ($haunts contains $haunt4) and not ($haunts contains $haunt1))[[[Approach the artists|Talk to the Artists]]]
@@ -29706,7 +29734,7 @@ He looks at you like, painterly, he looked when you were his subject.
 [[Sketch him on a napkin|Sketch the Painter]]
 [[Back to Dean Street|Dean Street]]
 
-:: Sketch the Painter [minigame] {"position":"500,1000","size":"100,100"}
+:: Sketch the Painter [venue-french] {"position":"500,1000","size":"100,100"}
 <style>
 .napkin-wrap { display: flex; flex-direction: column; align-items: center; margin: 1em 0; }
 .napkin-canvas { background: #f2e7c9; cursor: crosshair; border: 1px solid rgba(200,170,100,0.35); border-radius: 3px; box-shadow: 0 6px 28px rgba(0,0,0,0.55), inset 0 0 40px rgba(180,140,70,0.15); touch-action: none; max-width: 100%; height: auto; }
@@ -30177,7 +30205,8 @@ Save that, to die, I leave my love alone.//
 
 You both hang up, each leaving the other alone.</span>
 
-(after: 22s)[(go-to: $lilyCallReturn)]
+(after: 14s)[<div class="phone-exit">(link-goto: "Hang up.", $lilyCallReturn)</div>]
+(after: 28s)[(go-to: $lilyCallReturn)]
 
 
 
@@ -30213,7 +30242,8 @@ You both hang up, each leaving the other alone.</span>
 (set: $sobriety to $sobriety - 6)\
 <span class="lily-glimpse lily-fade">And the tears and the tears and the tears.</span>
 
-(after: 23s)[(set: $crashedAfterDualRing to true)(if: $sobriety > 8)[(set: $sobriety to 8)](if: $confidence > 18)[(set: $confidence to 18)](go-to: "Coach and Horses lock")]
+(after: 16s)[<div class="phone-exit">(link: "Hang up.")[(set: $crashedAfterDualRing to true)(if: $sobriety > 8)[(set: $sobriety to 8)](if: $confidence > 18)[(set: $confidence to 18)](go-to: "Coach and Horses lock")]</div>]
+(after: 28s)[(set: $crashedAfterDualRing to true)(if: $sobriety > 8)[(set: $sobriety to 8)](if: $confidence > 18)[(set: $confidence to 18)](go-to: "Coach and Horses lock")]
 
 :: Things turn up {"position":"1100,300","size":"100,100"}
 'Things turn up', said the poet.
@@ -32400,6 +32430,26 @@ margin: 0.5em 0;
 .phone-you {
   color: #d4b898;
   padding-left: 0.8em;
+}
+/* Manual exit link inside the Lily phone call / dual ring popups so the
+   player has a directed way out instead of waiting for the auto-redirect. */
+.phone-exit {
+  text-align: center;
+  margin: 1.6em 0 0.4em;
+  font-family: 'Special Elite', 'Courier New', monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+.phone-exit tw-link {
+  color: #c4a898;
+  border-bottom: 1px solid rgba(196, 168, 152, 0.4);
+  padding: 0.25em 0.6em;
+}
+.phone-exit tw-link:hover {
+  color: #ffe6c8;
+  border-bottom-color: #ffe6c8;
 }
 
 /* ===== LILY PHONE CALL ===== */

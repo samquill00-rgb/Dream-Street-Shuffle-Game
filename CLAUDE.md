@@ -1,5 +1,9 @@
 # Dream Street Shuffle — project rules for Claude
 
+## Session start
+
+If `HANDOFF.md` exists at the project root, read it before responding to the first message. It carries forward what the previous session worked on, the audit-of-the-whole, and a prioritized list of next items.
+
 ## NEVER read `Dream Street Shuffle.html`
 
 The HTML is a **compiled artifact** — it's generated from the .twee by `sync_html.py`.

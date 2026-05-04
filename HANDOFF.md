@@ -1,166 +1,118 @@
 # Dream Street Shuffle — Session Handoff
-Date: 2026-05-04
-Focus next session: **fix the map-pentangle reveal** (the visual isn't working — investigate first thing).
+Date: 2026-05-05
 
 ---
 
 ## What this session did
 
-A long session focused on the atmosphere-beats prose pass, a polish-pass audit, and the start of the esoteric layer (item #1: the lily pentangle).
+Fixed the magenta-banner bug (root cause was NOT the pentangle code) and rebuilt the pentangle map reveal cleanly.
 
-### Atmosphere beats — wired and prose drafted
+### The magenta-banner bug — actual root cause
 
-Four bespoke breath passages, all written by Dr Quill, all live:
+Previous HANDOFF blamed the broken `_lilyGlyph` map insertion. That was wrong on two counts:
+- The `_lilyGlyph` code was *not* fully reverted in the prior commit ("pent") — it was still in the .twee.
+- It was *also* not the cause of the `THERE ISN'T A TEMP VARIABLE NAMED _NB IN THIS PLACE` banners.
 
-- **`After the painter`** — fires after `Give him the painting`, before Dean Street. Removed the bail link from `The Painter's Gaze` so the only way out of the Painter sequence is to sketch him.
-- **`After the music`** — fires after `The Set`, before Dean Street. Removed the guided Pillars link from `The Set`. `Bar Canvas Lose` now also routes to `The Set` and sets `$completedSetlist` (so win/lose minigame outcomes match — only flavour-text and stat deltas differ).
-- **`After Cecil Court`** — fires after `O'Flatterly's Gift` (return-the-page exit only), before Dean Street. The first Cecil Court exit (post-quest-acceptance) stays bare.
-- **`After the call`** — fires on the next Dean Street arrival after `Lily phone call 1`, gated by `$pendingLilyBreath` flag. Memory-framing prose ("You remember that Lily rang…").
+The real cause was a **Harlowe scoping bug** introduced in commit `c92ec03 pentangle`. That commit changed [Build Notebook line 30534](Dream Street Shuffle.twee:30534) from a simple outer-scope assignment:
 
-### Cow ride and LINE 3 — unified
+```harlowe
+(set: _nb to '<div class="nb-page">')
+```
 
-- `Cow ride fail` now routes to `LINE 3` via "Look up." link (was Dean Street). Player gets alba 3 whether or not they ride the beast successfully.
-- `Cow ride success` had its bail link removed (only "Listen" → LINE 3 now).
-- LINE 3 still branches on `($alba contains $alba1) and ($alba contains $alba2)` — full alba complete → Centre Point chain; otherwise → Dean Street with "still lines hidden in the night."
+to a conditional that creates `_nb` *inside* `(if:)/(else:)` hooks:
 
-### Centre Point hint — first-return cleanup
+```harlowe
+(if: $lilyCount >= 5 and $sawPentangle is false)[(set: $sawPentangle to true)(set: _nb to '...queue...')](else:)[(set: _nb to '<div class="nb-page">')]
+```
 
-Removed the `_albaCount is 1` branch from Dean Street. The `[TWO MORE LINES OF THE ALBA]` greyed Centre Point no longer appears on the first return. The `[ONE MORE LINE OF THE ALBA]` branch (count = 2) survives.
+Modern Harlowe (3.3+) scopes temp variables to the hook they're created in. `_nb` set inside a hook dies when the hook ends. Subsequent `(set: _nb to _nb + ...)` lines outside the hook fail with the banner error. (The `(set: _nb to _nb + ...)` lines that *are* inside their own `(if:)` hooks update `_nb` correctly *only* because `_nb` already exists in outer scope — when it doesn't exist there, they all fail.)
 
-### Polish-pass audit — 9 items fixed
+**Fix:** initialise `_nb` at outer scope first, then conditionally override.
 
-Spawned a thorough readthrough, then worked the list:
+```harlowe
+(set: _nb to '<div class="nb-page">')\
+(if: $lilyCount >= 5 and $sawPentangle is false)[(set: $sawPentangle to true)(set: _nb to '<div class="nb-page" data-pentangle-queue="lily,map">')]\
+```
 
-1. **Lily breath collision** — `After the painter`, `After the music`, `After Cecil Court` now silently consume `$pendingLilyBreath` so the next-Dean-arrival redirect doesn't fire on top of a venue beat. No more two-breath stacks.
-2. **Venue-intro replay after Lily call** — added `$resumingFromCall` flag, set in `Lily phone call 1`, consumed in Coach gents / Pillars entry / Ronnie's intros. On the post-call return, the unconditional stat changes (-9 sob, -9 sob/+12 conf, +6 conf) and intro prose are skipped.
-3. **Trisha's dead code** — stripped the unreachable post-Shana branches (lines that printed "nothing more to do here" and the orphan Ronnie's link).
-4. **Persistent `← Dean Street` venue back-button** — Dr Quill's call: deleted entirely (5 instances + dead CSS). Subsumes the Lackland's-Office triple-exit issue.
-5. **Typos** — `you press your heels` (After the call), `an empty table` (The Spanish Artist).
-6. **Lily phone-call first-arrival timing** — Pillars / Ronnie's / French triggers now gated on `$visited's <Venue> is true`, matching Colony's existing pattern. Lily can only ring on the second visit onwards. Coach gents trigger left as-is (the disaster IS the right moment for an interruption).
-7. **Hub badges** — empty badges (◇ ✧ ○ △) hidden until `$hauntExplained is true`. First-time player gets a clean menu; once they have a haunt, the schema reveals.
-8. **Maritime → Pillars** — re-read the actual flow and concluded it's fine as-is. Skipped.
-9. **The Beast haunt-opens line** — reworded to acknowledge the player may already have the word from Davy Merkin.
+Verified end-to-end in Chrome. Dean Street loads cleanly, no banners.
 
-### Esoteric layer — six creative additions agreed
+### Pentangle map reveal — built, tested, working
 
-Long discussion landed on six planned deepenings. Saved to memory at `~/.claude/projects/.../memory/project_esoteric_layer.md` so future sessions don't have to re-derive them. The bank:
+Design (option 2 from this session's pitch — "the map remembers"):
 
-1. **Five lilies = pentacle** — *partially built this session, see below*
-2. **Eight haunts = I Ching trigrams** — procedural hexagram in notebook
-3. **Page 47** — plant additional 47s (bus, clock, address)
-4. **Tarot spread at Trisha's** — real Smith-Waite three-card spread, state-determined
-5. **Book title as true name** — surfaces in Shana, O'Flatterly, Lily call, Fetch
-6. **Seven venues = alchemical opus** — French=Calcinatio, Coach=Solutio, Colony=Separatio, Pillars=Coniunctio, Ronnie's=Fermentatio, Cecil Court=Distillatio, Trisha's=Coagulatio
+- When `$lilyCount >= 5`, Build Notebook's map SVG includes a `<polygon class='map-pentagram'>` and a `<g class='map-pent-lilies'>` containing 5 lily-of-the-valley glyphs at venue positions.
+- Default opacity baked into the SVG attributes: `0.20` for the polygon, `0.55` for the lily group. So whenever the map opens, the figure is faintly present.
+- On the *first* viewing after collection (gated by `$sawPentangle is false` setting `data-pentangle-queue="lily,map"`), CSS keyframes animate from invisible → bright peak (0.9 / 1.0) → settle to the same faint default. Forwards-fill holds the settled state.
 
-Decision: do these one at a time as Dr Quill asks. Layer #1 is the next coding task; layer #6 is the second priority (tomorrow's other strong candidate).
+**Pentagram geometry — final design:**
 
-### Lily pentangle — partially wired, MAP REVEAL REVERTED (broken parser)
+The five points are **Centre Point at the top apex** + four anchors underneath. Skip-2 traversal order:
 
-The plan: when the player collects all 5 lilies, three things happen:
-- Notebook **lily tab** — the 5 lily-row glyphs slide to centre and arrange themselves into a point-up pentagram with a faint star outline, hold ~1.5s, return to row.
-- Notebook **map tab** — a big gold pentagram polygon appears over the Soho map connecting the 5 venues that yielded lilies (Pillars, Coach, Ronnie's, Colony, French), with a lily-of-the-valley flower at each venue point.
-- **At the moment of collection** — the notebook auto-opens to the map tab and the map animation fires.
+```
+Centre Point (280,70) → Trisha's (490,450) → Lackland's (100,250) → Pillars (490,200) → French (230,455) → Centre Point
+```
 
-**Status as of session close:**
-- **Lily-tab pentangle: wired but untested.** Dr Quill hasn't confirmed it works visually. The lily-row glyphs in the notebook should converge → pentagram → return on the first LILLIES-tab view after gathering all 5.
-- **Map-tab pentangle: REVERTED at end of session.** The big-pentagram-on-Soho-map insertion (defs filter, polygon, group of 5 lily-of-the-valley SVGs using a `_lilyGlyph` intermediate temp var) broke Harlowe's parser. Result: every passage rendered repeated `THERE ISN'T A TEMP VARIABLE NAMED _NB IN THIS PLACE` error bars across the screen. Reverted Build Notebook's `_m` chain back to the prior clean state. Dean Street loads correctly now.
-- **Wiring still in place but inert:** `data-pentangle-queue` attribute on `.nb-page`, `nbSwitchTab` JS hook that toggles the trigger class, CSS `@keyframes nb-map-pent` and `nb-map-pent-lilies`, `dssRevealPentangleOnMap` JS function. None of it does anything visually because there's no map SVG element to target. None of it errors.
-- **Debug menu Tools section in place:** "⛤ Set 5 lilies + reveal pentangle on map" button. After revert, clicking it sets the lily flags and opens the notebook to the map tab — but no animation fires (nothing to animate).
-- **Legacy screen overlay** (`dssShowPentangleOverlay`) still defined for visual debug — Dr Quill rejected it ("just a little star showing up").
+- Centre Point label at top of map moved from x=490 to x=280 to sit centred above the apex.
+- Lackland's (not Colony) is the western point, Trisha's (not Coach) is the eastern point — Dr Quill's calls. The vertices are geographic/symbolic anchors, not all lily-yielders.
+- Coach's lily, Ronnie's lily, and Colony's lily all sit *inside* the inner pentagon — three flowers at the heart of the figure.
+- The five lilies-of-the-valley remain at the five lily-yielding venues (Pillars, Coach, Ronnie's, Colony, French). Lackland's and Trisha's have no lilies on them; they're pure geometric anchors.
 
-**Why the revert was needed:**
-The error pattern was: `_nb` reference failed throughout Dean Street, magenta error bars interleaved with every line of prose. The cause appears to be that the new map insertion's use of `(set: _lilyGlyph to "<long-string>")` followed by 5 `(set: _m to _m + "..." + _lilyGlyph + "...")` concatenations broke the silent-block scope somehow — by the time `_nb` was referenced later in Build Notebook, the temp scope had been corrupted. (Speculation — not confirmed; could also be a string-length issue or a quoting problem in the lily SVG path data.)
+**Files touched:**
+- [Dream Street Shuffle.twee:30501](Dream Street Shuffle.twee:30501) — Centre Point label x: 490 → 280
+- [Dream Street Shuffle.twee:30528](Dream Street Shuffle.twee:30528) — new `(if: $lilyCount >= 5)[...]` block adding the polygon + lily group
+- [Dream Street Shuffle.twee:30534](Dream Street Shuffle.twee:30534) — `_nb` scoping fix
+- [Dream Street Shuffle.twee:33190-33201](Dream Street Shuffle.twee:33190) — keyframes settle to faint instead of fading to 0
 
-**The working sketch to redo tomorrow:**
+**The lily-of-the-valley glyph used on the map:**
+Stem curving up + 3 hanging cream bells of decreasing size, scaled into a ~30px-tall figure. Inlined directly via `(set: _m to _m + "...")` calls (no `_lilyGlyph` intermediate temp var — that pattern wasn't actually broken but Harlowe handles inline strings cleanly).
 
-Build Notebook's `_m` chain has venue pins at:
-- Pillars: 490,200
-- Coach: 490,295
-- Ronnie's: 340,305
-- Colony: 230,250
-- French: 230,455
+### Workflow
 
-What we want to add (between the last venue pin block and the closing vignette rects):
-1. `<polygon class='map-pentagram' points='490,200 230,455 230,250 490,295 340,305' fill='none' stroke='#f5d070' stroke-width='2.4' opacity='0' pointer-events='none'/>` — connects the 5 venues in star-skip-2 order.
-2. A `<g class='map-pent-lilies' opacity='0' pointer-events='none'>` containing 5 lily-of-the-valley SVGs at those translate coordinates.
-
-Lessons:
-- **Inline each lily SVG directly into a `(set: _m to _m + "...")` call**, not via an intermediate temp variable. Match the existing pattern in Build Notebook (every other map element is built with direct concatenation — no `_xxx` temps used as building blocks in the SVG chain).
-- **Keep each `(set:)` line short.** The existing pattern has individual `(set: _m to _m + "...")` calls per logical map element. Don't try to chain 5 venue lilies onto one variable assignment.
-- **Test after each venue lily addition** by syncing and reloading Dean Street. If `_nb` errors return, the previous addition was the cause.
-- **Debug menu is `` ` `` (backtick) → Tools section.** Use "Set 5 lilies + reveal pentangle on map" to reproduce conditions.
-- The lily-of-the-valley SVG drafted last session is in git history if needed (look at the line numbers around the start of the session's edits in the .twee diff before revert).
-
-**Where to look first:**
-- `Dream Street Shuffle.twee:30527` — last venue pin (Ginger Light), end-of-pin section.
-- `Dream Street Shuffle.twee:30528` — currently the closing vignette rects + `</svg></div>`. Insert between line 30527 and 30528.
-- CSS keyframes already defined in UserStylesheet — the `nb-map-pentangle` class trigger is already wired; just need to add the SVG elements with matching class names (`.map-pentagram`, `.map-pent-lilies`).
-- `dssRevealPentangleOnMap` in UserScript already opens notebook + switches to map tab + adds 'map' to the queue. Should work once the SVG elements exist.
-
-### Other small fixes
-
-- Sketch the Painter — added a lighter border-color for the black colour swatch (was invisible against black).
-- Cecil Court breath prose — Dr Quill changed "purgatorial uterus" → "purgatorial womb".
+- `dssCollectAllLilies` (the JS debug helper) is broken — it relies on `Harlowe.API_ACCESS.STATE.variables` which no longer exposes itself globally in modern Harlowe. The Tools-section debug button "⛤ Set 5 lilies + reveal pentangle on map" is therefore inert in this Harlowe build.
+- For testing this session, used a temporary `:: Debug Set 5 Lilies` passage that did `(set:)` macros + `(goto: "Dean Street")`, jumped to it via `#dss-debug-jump=...` URL hash, then deleted the passage. This pattern works cleanly when needed in future sessions.
 
 ---
 
 ## Open items for next session
 
-### 1. Fix the map pentangle reveal (THIS SESSION'S BLOCKER)
+### 1. Verify in-game collection flow
 
-See "Where to look next" above. Probably an hour to debug + fix.
+Dr Quill should play through and collect all 5 lilies the natural way (Pillars, Coach, Colony, Ronnie's, French) to confirm the auto-trigger via `dssRevealPentangleOnMap` in the click handlers fires the animation correctly. Each lily's `(click-replace: ?lilyN)` runs `<script setTimeout>` calling that function on the 5th collection.
 
-### 2. Verify the lily-tab pentangle
+### 2. The lily-tab pentangle animation
 
-Dr Quill should test the LILLIES tab animation while we're in there — confirm it works as designed (5 lilies converge, fan out into pentagram, hold, return to row).
+Wired but not visually confirmed in this session. The 5 lily-row glyphs in the LILLIES tab should converge to pentagram points → star outline appears → return to row, on the first LILLIES-tab view after gathering all 5. Untouched this session.
 
-### 3. Once lily pentangle is working — esoteric layer #6 (alchemical opus)
+### 3. Esoteric layer #6 — alchemical opus
 
-Three layers planned:
-- **Layer 1 (whisper):** italic line in each venue's haunt-box: *"The work: Calcinatio."* etc. Cheap.
-- **Layer 2 (notebook):** new THE WORK section accumulating the seven stages with glyph icons.
-- **Layer 3 (dawn revelation):** at Centre Point, after alba complete, before fade — a single passage naming the seven stages and the seven venues. Operatic.
-
-Dr Quill said: "Okay let's do this bit tomorrow." Pitch landed; he wants it.
+Pitched and agreed last session, deferred. Three tiers planned (haunt-box italic line per venue → notebook THE WORK section → Centre Point dawn revelation). Memory at `~/.claude/projects/.../memory/project_esoteric_layer.md`.
 
 ### 4. Audio re-recording
 
-Dr Quill plans to go to Soho and record actual venue ambience to replace the current stock audio. Out of scope for Claude — just note it's coming.
+Out of scope for Claude — Dr Quill plans Soho field recordings. No action required.
 
-### 5. The other four esoteric items (banked)
+### 5. Banked esoteric items
 
-I Ching from haunts (#2), Page 47 plant (#3), Tarot spread at Trisha's (#4), book title as true name (#5). All canonical in `memory/project_esoteric_layer.md`.
-
----
-
-## Audit at session close
-
-144 passages (was 140 at the start of the session — net +4 from the four breath passages). Spot-checked:
-
-- All four "After X" breath passages exist with the right tags and exits.
-- `Cow ride fail` link target is `LINE 3`, link text "Look up.".
-- `Cow ride success` no longer has the bail link.
-- `Bar Canvas Lose` routes to `The Set` and sets `$completedSetlist`.
-- `Trisha's` post-Shana branches gone.
-- All 5 `venue-back-btn` instances and their CSS rules removed.
-- `$resumingFromCall` flag set in Lily phone call 1, consumed in Coach gents / Pillars / Ronnie's.
-- `$pendingLilyBreath` consumed in After the painter / music / Cecil Court.
-- Hub empty-badge spans wrapped in `(if: $hauntExplained is true)[...]` (14 hp, 3 al, 3 op, 2 pp).
-- Centre Point first-return hint branch (`_albaCount is 1`) gone.
-- Pentangle overlay function and reveal-on-map function defined; data-pentangle-queue logic in nbSwitchTab; debug menu Tools section in place. **The actual map render is broken.**
+I Ching from haunts (#2), Page 47 plant (#3), Tarot at Trisha's (#4), book-title-as-true-name (#5). Canonical bank in memory.
 
 ---
 
 ## Workflow notes (unchanged)
 
-- **Source of truth: `Dream Street Shuffle.twee`.** Never read `Dream Street Shuffle.html` (~3 MB compiled artifact).
+- **Source of truth:** `Dream Street Shuffle.twee`. Never read the compiled .html (~3 MB).
 - After edits: `python3 sync_html.py`, then "synced, commit when ready."
-- **Git stays in Dr Quill's hands** — no `git add` / `commit` / `push` from Claude.
-- `HANDOFF*.md` is gitignored; safe to overwrite this file in future sessions.
-- **NEW house rule (saved to memory):** always grep/read the .twee for current state before pitching design moves. Don't reason from "what I half-remember" — too many small errors compound. (`memory/feedback_reason_from_source.md`)
+- Git stays in Dr Quill's hands.
+- `HANDOFF*.md` is gitignored.
+- **House rule:** always grep the .twee for current state before pitching design moves. (`memory/feedback_reason_from_source.md`)
+- **New addition this session:** Harlowe temp-variable scoping in 3.3+ is *strict* — always create `_var` at outer scope before any `(if:)/(else:)` that reads or rewrites it. Reassigning an outer-scope `_var` from inside a hook works; *creating* one only inside hook branches doesn't.
 
 ---
 
 ## Commit status
 
-All changes synced to HTML. Working tree is ready to commit via GitHub Desktop. The map-pentangle bug is in the committed code — that's the first thing to fix tomorrow.
+All changes synced to HTML. Working tree:
+- `Dream Street Shuffle.twee` modified (4 changes: scoping fix + Centre Point x + polygon points + keyframes)
+- `Dream Street Shuffle.html` regenerated by sync_html.py
+- `HANDOFF.md` updated (this file)
+
+Ready to commit via GitHub Desktop.

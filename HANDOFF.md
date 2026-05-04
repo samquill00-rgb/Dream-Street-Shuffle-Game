@@ -1,105 +1,133 @@
 # Dream Street Shuffle — Session Handoff
-Date: 2026-05-03
-Focus: Audit-driven cleanup + opening restructure + dawn payoff expansion. Big-arc changes.
-
----
-
-## ⚠️ Note on the previous HANDOFF (2026-05-02)
-
-That handoff claimed the **Lily glimpse mechanic work was committed and pushed**. It wasn't. Commit `b3cc1fc updates` *did* land music volume, orphan archive cleanup, dual-ring timing, and the Lackland/Cecil Court badges — but the lily2 glimpse / first-glimpse hint / hover tooltip block never made it into the .twee. This session restored that work properly. Lesson: verify HANDOFF claims by grep before trusting.
+Date: 2026-05-04
+Focus next session: **atmosphere beats between acts** (Dr Quill is in the mood to write the prose).
 
 ---
 
 ## What this session did
 
-### Audit
+A long playtest pass with many small fixes plus one design move (haunt-box progress pointers).
 
-Read the .twee in passes (Title, Start, Night Ahead, Dean Street hub, both phone calls, Dawn, sample venues), then proposed an opinionated audit. Most of it landed this session. Kept open: atmosphere-beats item.
+### Opening flow — restructured around the new ordering
+Re-ordered the opening sequence per Dr Quill's spec:
 
-### Lily mechanic — RESTORED (the bit the previous handoff hallucinated)
-- `$tookLily2` + `$lilyHintShown` flags added to StoryInit and Start.
-- New **lily2 glimpse** in `Entering The Pillars of Hercules`, between threshold line and Hobson verse. Dr Quill's prose: *"There occurs, as you cross the threshold of the Pillars, a sonic peculiarity seen elsewhere, for instance, in the acoustic mirrors on Dungeness. If you stand in that precise spot and the atmospherics are favourable, you might hear a noise made at that same instant anywhere in Soho. You hear Lily laugh."*
-- **First-glimpse hint** *(Gather flowers. There are five to find.)* on all 5 glimpse passages — fires once, suppressed thereafter via `$lilyHintShown`.
-- **Hover tooltip** "X of 5 caught" added to the bells SVG, only present once `$lilyCount > 0`.
-- New CSS class `.lily-glimpse-hint`.
+1. Title → **Night Ahead Part 1** (cover-story typewriter) → link **"Step into the night"** → Dean Street.
+2. Dean Street first visit (Red corner only) → meet Red → first alba.
+3. **Night Ahead Part Two** (truth-revealing typewriter) → link **"Name your book"** → Name Your Book.
+4. Name Your Book → link **"Back to Dean Street."** → Dean Street (full hub).
 
-### Icon hints (gradual introduction)
-The hub used 4 icon families (◆ haunt, ✦ alba, ▲ word/meeting, ● object) with no explanation. Now: when the player first earns each type, a single italic gloss fades in below the choice list, then never again. Flags: `$hpHintShown`, `$alHintShown`, `$ppHintShown`, `$opHintShown`. CSS class `.icon-hint`. The four glosses are mine — Dr Quill can swap if they don't sit right.
+Manuscript line in Dean Street is now gated on `$returns is 1`: first visit reads "In your bag, you have your novel, in manuscript…" (no title); later visits read "…you have //{book title}//, your novel…". Dr Quill's call (option A).
 
-### Diegetic stat feedback (stat murmurs)
-Confidence and sobriety used to drop silently until something locked. Now: when each crosses 50 or 30 for the first time, a single-line italic murmur appears in the Dean Street hub. Flags: `$crossedConf50/30`, `$crossedSob50/30`. CSS class `.stat-murmur`. **Prose is Dr Quill's** (these are external voices in the bar, not internal sensations — much better than my proposed internal murmurs):
-- Confidence < 50: *(Look after yourself, alright?)*
-- Confidence < 30: *(Just be careful.)*
-- Sobriety < 50: *(Steady on!)*
-- Sobriety < 30: *(Are you sure you're alright? You don't look it.)*
+### Bug fixes — playtest-driven
 
-If the player crashes straight past 50 to under 30, the deeper murmur fires and the milder one is silently marked done — no double-narration.
+- **Stray `\` at the bottom of first Dean Street.** Trailing backslash on the closing `]` of the empty `(if: $metRed is true)[…]` block was rendering literally. Removed.
+- **Alba hint position.** `.alba-hint` text "One line is caught. Two more still to find." (was "One line caught. Two more, somewhere out there.") and "Three lines are hidden in the night" branch removed entirely. Pushed `bottom: -22px` so it sits below the alba count instead of overlapping.
+- **French visit counter.** Was using `(history:)'s last`, which in Harlowe 3.x includes the current passage — so the check never matched. Replaced with explicit `$frenchApproached` flag set in "Approach The French" and consumed in "The French". Lily-call returns and drink-loop returns now correctly leave the counter unchanged.
+- **Lore-box flash defensive fix.** Added an `animationend` listener that locks `tw-passage` opacity once the `passageFadeIn` animation completes, so any in-place mutation can't replay the fade. Whether this was the cause of the reported flash is unverified — Dr Quill should confirm.
+- **Coach and Horses gents.** Removed `[insert sponsored drink]` placeholder + the Krug drink popup. Renamed the recovery link from "Recover." to **"Retch."** so the existing `SpewPopup('gents')` animation reads as the action it triggers.
+- **Removed "Head for the night bus" link** from `The critic's judgement`. With the night-bus path gone, **`Meet Jeffrey Bernard` passage** (its only target) was orphaned and deleted. Bernard / cow ride is now reachable only via the Coach gents wake-up.
+- **Cow ride success — alba 3 leak.** The italic "Go For Dinner With Billy Piper." line was pre-revealing alba3. Removed. Alba3 is now revealed only after the player clicks "Listen → Closer" on `LINE 3`.
+- **Cow ride done-once.** Added `$cowRideDone` flag (set on either win or fail). The minigame's skip logic uses `$cowRideDone` to fast-forward to either `Cow ride success` or `Cow ride fail` on revisit. Defensive — the entry from Coach is one-shot anyway.
+- **LINE 3 reveal text + exit link.** Conditional on alba1 + alba2:
+  - All three caught → "It is written. You shall get out alive. **THE THIRD LINE. THE ALBA IS COMPLETE.**" + guided link "The dawn is coming" → Approach Centre Point.
+  - Otherwise → "**THE THIRD LINE.** There are still lines hidden in the night." + link → Dean Street.
+- **Things turn up passage** — deleted (was the dead-end after alba3 with the "Here is your throat back" prose).
+- **Moe D'Alcousin introduction.** At Ronnie Scott's: "Onstage there are three: Moe D'Alcousin on the saxophone, a pianist, and a guitarist." So when Moe nods later in `The Set`, the player knows who he is.
+- **Great Ham revisit.** Once `$metCritic`, the Pillars link is now `[The Great Ham [DONE FOR TONIGHT]]` (greyed) instead of replaying the dialog.
+- **Davy Merkin re-entry to Colony.** Dean Street greyed out the Colony Room as `[DONE FOR TONIGHT]` as soon as `$knowsRonnies` was true — so going to the famous agent first locked the player out of the drunk and the Lackland password. Now requires both `$knowsRonnies` AND `$knowsCopperSecret` to grey out.
+- **`$coachUrgent` was sticky.** Once it triggered (sob ≤ 0 + ≥3 haunts), it never reset, so the Dean Street menu stayed locked to the single Coach link forever — chippy and every other venue stayed hidden. Now reset to false on entry to the Coach gents.
+- **Bad-state hints had no links.** The "very bad way" branch (`conf<30 AND sob<30`) showed only prose. Now offers the chippy link (if not yet eaten) and the doorway link (if not yet used). The middle branch (`conf<40`) also offers the chippy.
+- **Camera shutter on napkin save.** Added `cameraShutter()` to the audio module — two-phase mechanical click (sharp open + heavier close ~85ms apart, with low triangle-wave thunks underneath). Fires the moment the napkin gets framed in `Sketch the Painter`, just before the localStorage save and the 1.8s pause to "Give him the painting".
+- **Third French visit spacing.** Added `\` line continuations after the haunt-conditional blocks so empty (hidden) ones don't leave naked newlines. "There is always a third." now sits one paragraph above "In the corner, you spot a familiar face…".
+- **Quest motes + notebook QUESTS section.** Added `quest-collected` class to the QUEST div in O'Flatterly's quest, registered with the mote spawner, styled `.quest-mote` as brass-gold. Added new QUESTS section in the notebook FINDS panel, gated on `$knowsAboutPage`: states cycle open → in-progress → returned.
+- **Password Deploy buttons in the notebook — two bugs.**
+  1. `$awaitingLacklandPwd` was never set to true anywhere in the source (only ever reset to false), so the Deploy button for Lackland never appeared. Fixed: set true when the password input renders in `Martin Lackland's Office`.
+  2. `deployPwd()` was clicking the hidden tw-link directly, but Harlowe's `Engine` refuses passage navigation while a `(dialog:)` is up. Refactored to the same close-then-navigate pattern as `eatLiver`: close the dialog via Harlowe's own close link, then `Engine.goToPassage` after a 60ms tick. Both Copper and Lackland deploys now route correctly.
 
-### Lily invite pulse
-The lily SVG already breathes perpetually. Layered a one-time stronger glow + scale (40%-peak at ~1.7s after passage load) on first render of an uncaught lily, to make the click-target slightly more inviting on first encounter. Caught lilies (wrapped in `.lily-taken`) skip the invite — they keep breathing quietly.
+### Design — haunt progress pointers (option X)
 
-### Great Ham flow fix
-The Ham editor's note in The Pillars used to render as an inline lore-box (interrupting the venue prose). Converted to the existing collapsible `(link: "⟡ LORE: ...")[<div class="lore-box">...]` pattern that Watkins/Red/Ronnie's already use. Joke preserved, flow restored. Dr Quill's call: keep the joke.
+After a discussion of how to expose progression more clearly, Dr Quill chose **Option X**: keep all gates as they are (NPC-driven, narrative), and surface progress in two places.
 
-### Vocab alignment
-The French passage used `[NOT NOW, TRY ELSEWHERE]` for its venue-exhausted state while the rest of the game used `[DONE FOR TONIGHT]`. Aligned to `[DONE FOR TONIGHT]`.
+- **Inline gate on Centre Point in the Dean Street menu**, mirroring the existing `[FIND PAGE 47 FIRST]` pattern:
+  - Alba count = 1 → `Centre Point [TWO MORE LINES OF THE ALBA]`
+  - Alba count = 2 → `Centre Point [ONE MORE LINE OF THE ALBA]`
+  - Alba count = 3 → existing `[The dawn is coming]` guided link.
+- **Haunt-box gets two new lines**:
+  - A `.haunt-progress` count under every haunt: `X of 8 caught` (small caps, dim).
+  - A `.haunt-opens` line above the count for the four haunts that flip a gate, in a thin gold rule:
+    - **The Refusal** → "*You know Cecil Court very well.*"
+    - **The Beast** → "*You know Martin Lackland, but you'll need a word to bring him.*"
+    - **The Debt** → "*Two doors open: The Pillars, The Colony.*"
+    - **The Game** → "*An invitation to Trisha's.*"
+  - The Sketch / Delivery / Head / Wound get count only.
 
-### Cleanup
-- Deleted 2 orphan passages with no callers: `Shana Refused`, `Success: Trisha's`. Dr Quill's call — said he doesn't value either and can recreate better later.
-- Deleted 10 dead variables (36 `(set:)` lines): `$albaGiven`, `$breatherReturns`, `$exploredSinceFrench`, `$fightScore`, `$frenchDrinkDone`, `$mapPosition`, `$mapSeen`, `$notebookUnlocked`, `$shownMoraleWarn`, `$visitedCoach`. All set, never read.
-- Deleted `TEST White page win` dev-test passage (dev shortcut).
-- Cleared two leftover Claude-Desktop worktrees (`infallible-dijkstra-d53a08`, `strange-chatelet-ca5b5c`) and their branches at the start of the session.
+Refusal and Beast prose are Dr Quill's own. Debt and Game lines are mine — placeholders if Dr Quill wants to revise.
 
-### THE OPENING — split (the big structural fix)
-The previous opening was a 25-line literary prose-poem before the player had any agency — gorgeous, but a wall for new players. Dr Quill suggested splitting at the natural fault line and revealing Part 2 after the first alba is collected. Done:
+### Map — design only, NOT yet implemented
 
-- **Night Ahead Part 1** (the cover story) ends on *"That'll work: it's a good book and God's a good man."* Same typewriter page. NAME YOUR BOOK button.
-- **New passage `Night Ahead Part Two`** — same typewriter manuscript wrapper, but the SVG marks are slightly varied (wine ring moved from top-right to lower-left, burn marks rearranged, faint vertical fold crease added). Same paper, different page. Contains the truth-revealing prose: aubade, Lily, ghosts, the dawn. Continue button: **Dream On** → Dean Street.
-- **`LINE 1` rerouted** — Red's farewell now goes `[[Dream On|Night Ahead Part Two]]` instead of straight to Dean Street. The flow: Red kisses you, the first alba line lands in your closed eyes, you walk away thinking — *"You've been thinking about the form of the aubade..."* — the truth surfaces.
-- **`$nightAheadPart2Shown` flag** gates the passage so it only fires once.
+Dr Quill confirmed the design but I haven't built it yet. Plan for the map (in the notebook) when next implemented:
 
-The "cover story" line in Part 2 (*"Sure, try to sell the book, it's your cover story."*) now works as a reveal — the player **lived** the cover story, and is told it was the cover story.
+- **Three-tier pins instead of two**: sealed (tiny dim dot, no name) / known but unvisited (current dim gold) / visited (current gold). No hints on the map itself — Dr Quill prefers progression cues stay in the menu and haunt-boxes.
+- **Centre Point as end-destination pin**: larger spire/crown glyph at the top of the map, gold halo that grows with alba lines, "*destination*" label.
 
-### THE DAWN — expanded (the second big one)
-Was 4 paragraphs. Now a designed final page:
-
-1. **THE DAWN** title (existing, unchanged)
-2. **`— (book title) —`** — book name surfaces in italic gold-amber under the title, with a letter-spacing tighten on fade-in. The manuscript arrives at the dawn.
-3. The existing 3 lines of prose ("You have been awake for so long..." etc.) — instant.
-4. **Staggered alba reveal** via `(after:)` macros — line 1 at 1.6s, line 2 at 3.4s, line 3 at 5.2s. The poem assembles like the morning arriving.
-5. Existing petal-trigger closing line — unchanged.
-6. **Lily flowering** at 6.4s — the bells SVG scaled to 150×170. With all 5 caught, it's an empty stem (petals released — matches the closing line). With fewer, the unclaimed bells remain visible.
-7. **`Three Blue Posts`** colophon at 8s — italic, gentle, with a hairline border above. Like a publisher's mark in the back of the book the player just finished writing.
-
-Dr Quill specifically rejected adding a "lily count" prose line (e.g. "X of 5 — the rest stay in the valley") — said *"not everything needs to be spelled out."* The bells visualization carries the meaning. Removed the placeholder text.
-
-Pacing endorsed by Dr Quill — the slow exhale (~10s total) feels right, "should feel impulsive."
+This is the next coding task after the atmosphere prose lands.
 
 ---
 
 ## Open items for next session
 
-In rough priority:
+### 1. Atmosphere beats between acts (THIS SESSION'S FOCUS)
 
-1. **Playthrough verification** — Dr Quill is testing now. Things to feel for:
-   - The new opening arc: Night Ahead Part 1 → NAME YOUR BOOK → Dean Street (Red corner only) → meet Red → first alba → Night Ahead Part Two → Dean Street (full hub opens)
-   - The icon hints firing correctly the first time each type is earned
-   - The stat murmurs firing at the right moments
-   - The lily invite pulse on first render of each glimpse
-   - The dawn ending fully — book name → staggered alba → bells flowering → colophon
-2. **Atmosphere beats between acts** — open audit item. The hub is dense with menus, the venues with ritual; pure atmosphere is rare. A single passage of just-Soho prose between acts (fog, a busker, the smell of beer and rain) would give breath. **Needs Dr Quill's prose.** Dr Quill said this is for next session.
-3. **Centre Point / "No more" ending parallel treatment** — the give-up path; could get its own modest expansion so it doesn't feel like an afterthought beside the new Dawn. Currently parked — Dr Quill didn't bite when offered.
+Carried from previous handoff. The hub is dense with menus, the venues with ritual; pure atmosphere is rare. A breath-passage in just-Soho prose between busy beats — fog, a busker, the smell of beer and rain — would give the player a moment to inhabit Soho without making decisions.
+
+**Dr Quill is in the mood to write the prose.** Two design questions to settle before scaffolding:
+
+- **Where it fires.** Candidates: between leaving a venue and arriving back at Dean Street; on a return after a phone call; on the second visit to a venue. Or one-off triggers tied to specific moments (after the first phone call, after the cow ride, after returning Page 47).
+- **Whether it's one passage that varies, or several.** A single reusable atmosphere passage with random or context-conditioned prose, vs. distinct hand-written breath beats placed at specific seams.
+
+Once Dr Quill knows the prose he wants and the seams he wants it at, the engineering is light: a passage (or several) tagged with a quiet ambient bed, an `(after:)` auto-advance link or a single click-through link, and a small set of `(go-to:)` redirects from the seams to the breath-passage and back.
+
+### 2. Map tier system + Centre Point destination treatment
+
+Designed and signed off, not yet implemented. See above.
+
+### 3. Lore-box flash — verify the defensive fix
+
+Dr Quill should playtest and confirm whether the `passageFadeIn` lock actually fixed the reported "page flashes when opening lore boxes" issue. If not, the next escalation is converting `<div class="lore-box">` inside `(link:)` hooks to `<span class="lore-box" style="display: block">` to prevent HTML-parser ejection of block-level children from inline link hooks.
+
+### 4. Em-dash audit (low priority)
+
+Dr Quill flagged a stray em-dash somewhere they want as a full stop, but I couldn't pin it down from the source alone. If it's still showing on a playthrough, send the screenshot or quote the line and I'll find it.
+
+---
+
+## Audit at session close
+
+Verified all changes from this session are present in the .twee and synced to .html (passage count: 140; was 142 at the start of the session — net -2 from `Things turn up` and `Meet Jeffrey Bernard` deletions). Spot-checked:
+
+- Opening reorder links present (`Step into the night`, `Name your book`, `Back to Dean Street.`).
+- First-visit manuscript gate fires on `$returns is 1`.
+- Alba hint repositioned to `bottom: -22px`, new text in place, old "Three lines are hidden..." branch gone.
+- `$frenchApproached` flag wired through StoryInit / approach / french / reset.
+- All four deletions clean (no stray references to night bus / Things turn up / Meet Jeffrey Bernard / sponsored drink).
+- `$cowRideDone` referenced in 5 places (init, success, fail, JS span, JS guard).
+- `cameraShutter` defined, exported, called.
+- `quest-collected` class on the O'Flatterly quest div, `quest-mote` styled and z-indexed, QUESTS section in notebook.
+- `$awaitingLacklandPwd to true` set in office; `deployPwd` uses `Engine.goToPassage`.
+- Centre Point progressive hints both branches present.
+- 10 `.haunt-progress` lines (8 boxes + CSS rule + something), 6 `.haunt-opens` (4 boxes + CSS rule + extras).
 
 ---
 
 ## Workflow notes (unchanged)
+
 - **Source of truth: `Dream Street Shuffle.twee`.** Never read `Dream Street Shuffle.html` (~3 MB compiled artifact with embedded base64 audio).
 - After edits: `python3 sync_html.py`, then "synced, commit when ready."
 - **Git stays in Dr Quill's hands** — no `git add` / `commit` / `push` from Claude. Dr Quill commits via GitHub Desktop.
 - `HANDOFF*.md` is gitignored; safe to overwrite this file in future sessions.
-- This session ran in the **main checkout** (not a worktree). Dr Quill switched away from the desktop app for this reason.
 
 ---
 
 ## Commit status
-All changes synced to HTML. Working tree is ready to commit via GitHub Desktop. Passage count: 142 in the .html (was 144 at start; net -2 from orphan deletions, plus new Night Ahead Part Two, minus TEST passage).
+
+All changes synced to HTML. Working tree is ready to commit via GitHub Desktop.

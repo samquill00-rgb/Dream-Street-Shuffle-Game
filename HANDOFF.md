@@ -5,114 +5,136 @@ Date: 2026-05-05
 
 ## What this session did
 
-Fixed the magenta-banner bug (root cause was NOT the pentangle code) and rebuilt the pentangle map reveal cleanly.
+Two big things:
 
-### The magenta-banner bug — actual root cause
+1. **Fixed the magenta-banner bug.** Root cause was a Harlowe temp-variable scoping issue at [Build Notebook line 30534](Dream Street Shuffle.twee:30534) — `_nb` was being created *inside* `(if:)/(else:)` hooks, dies when the hook ends, all subsequent references error. Fix: initialise `_nb` at outer scope first, then conditionally override. (Previous HANDOFF blamed the `_lilyGlyph` map insertion — that was wrong.)
 
-Previous HANDOFF blamed the broken `_lilyGlyph` map insertion. That was wrong on two counts:
-- The `_lilyGlyph` code was *not* fully reverted in the prior commit ("pent") — it was still in the .twee.
-- It was *also* not the cause of the `THERE ISN'T A TEMP VARIABLE NAMED _NB IN THIS PLACE` banners.
+2. **Built the lily-pentangle map reveal end-to-end.** Centre Point as the apex, four corner anchors below (Pillars, Trisha's, Lackland's, French), Coach/Ronnie's/Colony lilies nesting inside the inner pentagon. The full lily-of-the-valley glyph from the notebook (scale 1.0, all stamens/sepal-stripes/anther-dots/calyx visible). Map remembers — pentagram and flowers stay faintly visible (0.20 / 0.85 opacity) after the bright reveal animation settles.
 
-The real cause was a **Harlowe scoping bug** introduced in commit `c92ec03 pentangle`. That commit changed [Build Notebook line 30534](Dream Street Shuffle.twee:30534) from a simple outer-scope assignment:
+3. **Started designing the alchemy layer.** Long discussion landed on Path B: extend from 8 haunts to 12 haunts, mapping each to Ripley's 12-stage alchemical Wheel. Four new haunts to write — prose drafts in progress.
 
-```harlowe
-(set: _nb to '<div class="nb-page">')
-```
+---
 
-to a conditional that creates `_nb` *inside* `(if:)/(else:)` hooks:
+## Pentagram map reveal — final state
 
-```harlowe
-(if: $lilyCount >= 5 and $sawPentangle is false)[(set: $sawPentangle to true)(set: _nb to '...queue...')](else:)[(set: _nb to '<div class="nb-page">')]
-```
+**Reveal flow** (works):
 
-Modern Harlowe (3.3+) scopes temp variables to the hook they're created in. `_nb` set inside a hook dies when the hook ends. Subsequent `(set: _nb to _nb + ...)` lines outside the hook fail with the banner error. (The `(set: _nb to _nb + ...)` lines that *are* inside their own `(if:)` hooks update `_nb` correctly *only* because `_nb` already exists in outer scope — when it doesn't exist there, they all fail.)
+1. Player picks up the 5th lily at any venue. The `(click-replace: ?lilyN)` handler fires `<script>setTimeout(dssRevealPentangleOnMap, 900)</script>`.
+2. `dssRevealPentangleOnMap` (UserScript [line 84](Dream Street Shuffle.twee:84)) auto-opens the notebook, switches to the MAP tab, adds `'map'` to `data-pentangle-queue`.
+3. The MAP svg gets the `nb-map-pentangle` class. Two CSS keyframe animations fire: `nb-map-pent` (polygon) and `nb-map-pent-lilies` (5 flowers). Bright peak → settle to faint default opacity.
+4. The map remembers: `(if: $lilyCount >= 5)` block in Build Notebook always emits the polygon and lily group. Reopening the map shows them faintly without re-animating.
 
-**Fix:** initialise `_nb` at outer scope first, then conditionally override.
+**Vertices and lilies:**
 
-```harlowe
-(set: _nb to '<div class="nb-page">')\
-(if: $lilyCount >= 5 and $sawPentangle is false)[(set: $sawPentangle to true)(set: _nb to '<div class="nb-page" data-pentangle-queue="lily,map">')]\
-```
+| Vertex | Coords | Has lily? |
+|---|---|---|
+| Centre Point | (280, 70) | Yes |
+| Pillars | (490, 200) | Yes |
+| Trisha's | (490, 450) | Yes |
+| French | (230, 500) | Yes |
+| Lackland's | (100, 250) | Yes |
 
-Verified end-to-end in Chrome. Dean Street loads cleanly, no banners.
-
-### Pentangle map reveal — built, tested, working
-
-Design (option 2 from this session's pitch — "the map remembers"):
-
-- When `$lilyCount >= 5`, Build Notebook's map SVG includes a `<polygon class='map-pentagram'>` and a `<g class='map-pent-lilies'>` containing 5 lily-of-the-valley glyphs at venue positions.
-- Default opacity baked into the SVG attributes: `0.20` for the polygon, `0.55` for the lily group. So whenever the map opens, the figure is faintly present.
-- On the *first* viewing after collection (gated by `$sawPentangle is false` setting `data-pentangle-queue="lily,map"`), CSS keyframes animate from invisible → bright peak (0.9 / 1.0) → settle to the same faint default. Forwards-fill holds the settled state.
-
-**Pentagram geometry — final design:**
-
-The five points are **Centre Point at the top apex** + four anchors underneath. Skip-2 traversal order:
-
-```
-Centre Point (280,70) → Trisha's (490,450) → Lackland's (100,250) → Pillars (490,200) → French (230,455) → Centre Point
-```
-
-- Centre Point label at top of map moved from x=490 to x=280 to sit centred above the apex.
-- Lackland's (not Colony) is the western point, Trisha's (not Coach) is the eastern point — Dr Quill's calls. The vertices are geographic/symbolic anchors, not all lily-yielders.
-- Coach's lily, Ronnie's lily, and Colony's lily all sit *inside* the inner pentagon — three flowers at the heart of the figure.
-- The five lilies-of-the-valley remain at the five lily-yielding venues (Pillars, Coach, Ronnie's, Colony, French). Lackland's and Trisha's have no lilies on them; they're pure geometric anchors.
+The 3 interior venues (Coach, Ronnie's, Colony) revert to plain venue dots — only the 5 star points carry bells. Polygon points (skip-2 order): `280,70 490,450 100,250 490,200 230,500`.
 
 **Files touched:**
-- [Dream Street Shuffle.twee:30501](Dream Street Shuffle.twee:30501) — Centre Point label x: 490 → 280
-- [Dream Street Shuffle.twee:30528](Dream Street Shuffle.twee:30528) — new `(if: $lilyCount >= 5)[...]` block adding the polygon + lily group
-- [Dream Street Shuffle.twee:30534](Dream Street Shuffle.twee:30534) — `_nb` scoping fix
-- [Dream Street Shuffle.twee:33190-33201](Dream Street Shuffle.twee:33190) — keyframes settle to faint instead of fading to 0
+- [Dream Street Shuffle.twee:30501](Dream Street Shuffle.twee:30501) — Centre Point label moved to (280,40); apex marker added at (280,70). French House venue moved to (230,500).
+- [Dream Street Shuffle.twee:30528](Dream Street Shuffle.twee:30528) — `(if: $lilyCount >= 5)[...]` block: polygon + lily group via `_lilyG` temp var (works fine — the `_lilyGlyph` red herring from prior HANDOFF was unrelated).
+- [Dream Street Shuffle.twee:30534](Dream Street Shuffle.twee:30534) — `_nb` scoping fix.
+- [Dream Street Shuffle.twee:33188-33201](Dream Street Shuffle.twee:33188) — keyframes settle to faint instead of fading to 0.
 
-**The lily-of-the-valley glyph used on the map:**
-Stem curving up + 3 hanging cream bells of decreasing size, scaled into a ~30px-tall figure. Inlined directly via `(set: _m to _m + "...")` calls (no `_lilyGlyph` intermediate temp var — that pattern wasn't actually broken but Harlowe handles inline strings cleanly).
+**Lily-of-the-valley glyph:** the same multi-element design from the notebook LILLIES tab (lily-3), at scale 1.0, bell centred at venue. Strokes thickened from 0.15-0.55 → 0.4-0.9 so detail (sepal stripes, anther dots, calyx) survives the rendering.
 
-### Workflow
+---
 
-- `dssCollectAllLilies` (the JS debug helper) is broken — it relies on `Harlowe.API_ACCESS.STATE.variables` which no longer exposes itself globally in modern Harlowe. The Tools-section debug button "⛤ Set 5 lilies + reveal pentangle on map" is therefore inert in this Harlowe build.
-- For testing this session, used a temporary `:: Debug Set 5 Lilies` passage that did `(set:)` macros + `(goto: "Dean Street")`, jumped to it via `#dss-debug-jump=...` URL hash, then deleted the passage. This pattern works cleanly when needed in future sessions.
+## Alchemy layer — Path B in progress
+
+**Decision:** Replace the prior "7 venues = opus" plan (memory item #6) with **12 haunts = Ripley's 12-stage Wheel**. Path B, locked in. Dr Quill's reasoning: "It can't be an approximation, I need to either add haunts or delete them so it matches the actual alchemical practice." 8 isn't canonical, 7 (drop one) sacrifices a haunt, 12 (add four) extends the bank — he chose extension.
+
+**Mapping (8 existing + 4 new = 12, Ripley's Wheel):**
+
+| Haunt | Stage | Status |
+|---|---|---|
+| The Sketch | Calcinatio | existing |
+| The Refusal | Solutio | existing |
+| The Beast | Putrefactio | existing |
+| The Debt | Coniunctio | existing |
+| The Game | Fermentatio | existing |
+| The Delivery | Sublimatio | existing |
+| The Head | Congelatio | existing (formerly mapped to Coagulatio — Ripley uses Congelatio for fixation) |
+| The Wound | Projectio | existing |
+| **The Sorting** | **Separatio** | NEW — Lackland's back room |
+| **The Feeding** | **Cibatio** | NEW — Cecil Court / O'Flatterly's |
+| **The Spread** | **Multiplicatio** | NEW — Trisha's / Shana's reading |
+| **The Crown** | **Exaltatio** | NEW — Centre Point staircase ascent |
+
+**Prose status:** living in [Four New Haunts.docx](Four New Haunts.docx) at the project root. Dr Quill will smash out the prose for all four himself in the next session — chat workflow, one haunt at a time, he gives the exact text, Claude edits the doc.
+
+So far:
+- Haunt 9 (The Sorting): Dr Quill provided one line — *"The backroom differs from the front in a style of difference that is not usual; neither one curdles the other, rather, they are separate already in the abstract."* That's the entire prose for haunt 9 as of now (no Claude drafts surviving).
+- Haunts 10, 11, 12: placeholder text "[ awaiting Dr Quill ]" — needs Dr Quill's prose.
+
+**Build script** for the doc lives at `/tmp/build_haunts_doc.py` — fragile (likely gone after reboot). If lost, regenerate by reading this HANDOFF + the doc itself. Doc is the source of truth. Use python-docx unpack/edit/repack pattern from the docx skill if editing the doc programmatically.
+
+**Code work to do (after prose lands):**
+- Add `$haunt9` through `$haunt12` to StoryInit.
+- Add 4 new haunt-collection events:
+  - **The Sorting** — wraps into Lackland's back-room entry passage
+  - **The Feeding** — wraps into the existing return-Page-47 exit at Cecil Court / O'Flatterly's
+  - **The Spread** — wraps into Shana's three-card-reveal moment at Trisha's
+  - **The Crown** — slots into the Centre Point staircase ascent before the dawn revelation passage
+- Add 4 new notebook entries in Build Notebook's HAUNTS section.
+- Bump hub badge schema from 8 → 12 slots.
+- Add an italic alchemy-whisper line (e.g. *"The work: Separatio."*) in each haunt-box render — for all 12 haunts. (This is the "Layer 1 whisper" pattern from the original esoteric plan.)
+- Update the `$haunts's length >= 8` background trigger in header passage to handle 12 haunts (add a >= 12 tier, or rescale).
+
+Estimate: ~2 hours of code work once the prose is in.
 
 ---
 
 ## Open items for next session
 
-### 1. Verify in-game collection flow
+### 1. Dr Quill writes prose for haunts 10-12 (and finalises haunt 9)
 
-Dr Quill should play through and collect all 5 lilies the natural way (Pillars, Coach, Colony, Ronnie's, French) to confirm the auto-trigger via `dssRevealPentangleOnMap` in the click handlers fires the animation correctly. Each lily's `(click-replace: ?lilyN)` runs `<script setTimeout>` calling that function on the 5th collection.
+Walk through one at a time in chat. Show location/trigger/stage as context, get exact text, edit doc, move on. He provided haunt 9's line; 10/11/12 still empty.
 
-### 2. The lily-tab pentangle animation
+Once all four prose pieces are in, do the code work.
 
-Wired but not visually confirmed in this session. The 5 lily-row glyphs in the LILLIES tab should converge to pentagram points → star outline appears → return to row, on the first LILLIES-tab view after gathering all 5. Untouched this session.
+### 2. Dr Quill plans to "smash these out" next session
 
-### 3. Esoteric layer #6 — alchemical opus
+The phrasing suggests he wants to do all four in sequence quickly. Be ready to receive prose blocks rapid-fire, edit doc accordingly, then start the .twee work.
 
-Pitched and agreed last session, deferred. Three tiers planned (haunt-box italic line per venue → notebook THE WORK section → Centre Point dawn revelation). Memory at `~/.claude/projects/.../memory/project_esoteric_layer.md`.
+### 3. Verify the lily-tab pentangle animation
+
+Wired but not visually confirmed in this session. The 5 lily-row glyphs in the LILLIES tab should converge to pentagram points → star outline appears → return to row, on the first LILLIES-tab view after gathering all 5. Untouched.
 
 ### 4. Audio re-recording
 
-Out of scope for Claude — Dr Quill plans Soho field recordings. No action required.
+Out of scope for Claude — Dr Quill plans Soho field recordings.
 
-### 5. Banked esoteric items
+### 5. Banked esoteric items (still TODO)
 
-I Ching from haunts (#2), Page 47 plant (#3), Tarot at Trisha's (#4), book-title-as-true-name (#5). Canonical bank in memory.
+I Ching from haunts (#2), Page 47 plant (#3), Tarot at Trisha's (#4), book-title-as-true-name (#5). Memory at `~/.claude/projects/.../memory/project_esoteric_layer.md`. Note: the alchemy item (#6) is now in active progress and has been re-scoped from venues to haunts.
 
 ---
 
-## Workflow notes (unchanged)
+## Workflow notes (unchanged + one new)
 
 - **Source of truth:** `Dream Street Shuffle.twee`. Never read the compiled .html (~3 MB).
 - After edits: `python3 sync_html.py`, then "synced, commit when ready."
 - Git stays in Dr Quill's hands.
 - `HANDOFF*.md` is gitignored.
-- **House rule:** always grep the .twee for current state before pitching design moves. (`memory/feedback_reason_from_source.md`)
-- **New addition this session:** Harlowe temp-variable scoping in 3.3+ is *strict* — always create `_var` at outer scope before any `(if:)/(else:)` that reads or rewrites it. Reassigning an outer-scope `_var` from inside a hook works; *creating* one only inside hook branches doesn't.
+- **House rule:** always grep the .twee for current state before pitching design moves.
+- **Harlowe temp-variable scoping in 3.3+ is strict** — always create `_var` at outer scope before any `(if:)/(else:)` that reads or rewrites it. Reassigning an outer `_var` from inside a hook works; *creating* one only inside hook branches doesn't.
+- **For prose creation in docx workflow** (when generating new prose docs for Dr Quill): use python-docx (npm not available on this Mac). Build script in /tmp is fine for one-offs; the docx itself is the persistent artifact.
 
 ---
 
 ## Commit status
 
-All changes synced to HTML. Working tree:
-- `Dream Street Shuffle.twee` modified (4 changes: scoping fix + Centre Point x + polygon points + keyframes)
-- `Dream Street Shuffle.html` regenerated by sync_html.py
-- `HANDOFF.md` updated (this file)
+All code changes synced to HTML. Working tree:
+- `Dream Street Shuffle.twee` — pentagram + Centre Point apex + lily detail + scoping fix
+- `Dream Street Shuffle.html` — regenerated by sync_html.py
+- `Four New Haunts.docx` — new file, prose-in-progress (gitignored? check before committing)
+- `HANDOFF.md` — updated (this file)
 
-Ready to commit via GitHub Desktop.
+Ready to commit via GitHub Desktop. Note: confirm whether `Four New Haunts.docx` should be committed or kept local.

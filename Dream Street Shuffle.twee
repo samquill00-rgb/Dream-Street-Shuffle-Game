@@ -28686,7 +28686,7 @@ var LANE_X     = [LANE_W*0.5, LANE_W*1.5, LANE_W*2.5]; /* lane centres */
 var PLAYER_Y   = H - 80;                                /* near bottom */
 
 /* ── Timing ── */
-var PRACTICE_TIME = 12000;  /* 12s practice */
+var PRACTICE_TIME = 6000;   /* 6s practice — enough to learn the controls */
 var REAL_TIME     = 40000;  /* 40s real game */
 var phase         = 'title';      /* 'title' | 'practice' | 'countdown' | 'real' | 'over' */
 var phaseStart    = Date.now();
@@ -28697,6 +28697,7 @@ var wonGame   = false;
 var gameEnded = false;
 
 var lives       = 3;
+var dodged      = 0;       /* obstacles successfully passed during real game */
 var hitFlashAt  = 0;       /* timestamp of last hit (for invincibility flash) */
 var INVULN_TIME = 1200;    /* 1.2s invulnerability after a hit */
 
@@ -28736,21 +28737,27 @@ return TYPES[0];
 
 function spawnObstacle(){
 var t=pickType();
+var spd=getSpeed();
 
-/* ── Fairness: check which lanes are blocked near the top ── */
-/* Narrow danger zone so it doesn't over-restrict spawns */
+/* ── Fairness: project EVERY existing obstacle to the player's row,
+   accounting for drift, and use those projected lanes for blocking.
+   This guarantees there's always a path through the field. ── */
 var blocked=[false,false,false];
 var wideInZone=false;
 for(var bi=0;bi<obstacles.length;bi++){
 var ob=obstacles[bi];
-if(ob.y < 90){
+if(ob.y >= PLAYER_Y - 20) continue; /* already past — won't conflict with new spawn */
+var arrivalFrames = (PLAYER_Y - ob.y) / Math.max(0.5, spd * ob.type.spd);
+var projX = ob.x + (ob.drift || 0) * arrivalFrames;
+var projLane = Math.max(0, Math.min(LANE_COUNT-1, Math.floor(projX / LANE_W)));
 if(ob.type.wide){
 wideInZone=true;
-blocked[ob.lane]=true;
-if(ob.lane+1<LANE_COUNT) blocked[ob.lane+1]=true;
+blocked[projLane]=true;
+/* wide vehicles span 2 adjacent lanes */
+var second = (ob.lane === projLane) ? projLane + 1 : ob.lane;
+if(second>=0 && second<LANE_COUNT) blocked[second]=true;
 } else {
-blocked[ob.lane]=true;
-}
+blocked[projLane]=true;
 }
 }
 var freeCount=0;
@@ -28760,31 +28767,38 @@ for(var fc=0;fc<LANE_COUNT;fc++) if(!blocked[fc]) freeCount++;
 if(!t.wide && freeCount<=1){
 return; /* don't block the last free lane */
 }
-if(t.wide && (freeCount<3 || wideInZone)){
-/* wide vehicles need all lanes clear and no other wide vehicle nearby */
-return;
+if(t.wide){
+/* wide vehicles need 2 adjacent free lanes AND no other wide already in zone */
+var canPlaceWide=false;
+for(var wp=0;wp<LANE_COUNT-1;wp++){
+if(!blocked[wp] && !blocked[wp+1]){ canPlaceWide=true; break; }
+}
+if(!canPlaceWide || wideInZone) return;
 }
 
-var lane=Math.floor(Math.random()*LANE_COUNT);
-var x;
+var lane;
 if(t.wide){
-lane=Math.floor(Math.random()*(LANE_COUNT-1));
-x=(LANE_X[lane]+LANE_X[lane+1])/2;
+/* pick from adjacent free pairs */
+var widePairs=[];
+for(var wpa=0;wpa<LANE_COUNT-1;wpa++){
+if(!blocked[wpa] && !blocked[wpa+1]) widePairs.push(wpa);
+}
+lane = widePairs[Math.floor(Math.random()*widePairs.length)];
 } else {
-/* prefer spawning in a non-blocked lane if possible */
-if(blocked[lane] && freeCount>1){
-var tries=0;
-while(blocked[lane] && tries<10){
-lane=Math.floor(Math.random()*LANE_COUNT);
-tries++;
+/* always pick from free lanes */
+var freeLanes=[];
+for(var fl=0;fl<LANE_COUNT;fl++) if(!blocked[fl]) freeLanes.push(fl);
+lane = freeLanes[Math.floor(Math.random()*freeLanes.length)];
 }
-}
-x=LANE_X[lane];
-}
-var drift=0; /* lateral drift speed – increases in later tiers */
+var x = t.wide ? (LANE_X[lane]+LANE_X[lane+1])/2 : LANE_X[lane];
+
+/* Lateral drift — small and only in late tiers, capped so an obstacle
+   shifts at most ~10px between spawn and player row (much less than a
+   lane width). Prevents converging-lane impossible configurations. */
+var drift=0;
 var tier=getTier();
-if(tier>=4 && !t.wide){
-drift=(Math.random()-0.5) * (tier-3) * 0.4;
+if(tier>=5 && !t.wide){
+drift=(Math.random()-0.5) * 0.15;
 }
 obstacles.push({ type:t, x:x, y:-60, lane:lane, wobble:Math.random()*6.28, drift:drift });
 }
@@ -28863,7 +28877,10 @@ obstacles[i].x += obstacles[i].drift;
 if(obstacles[i].x < 30) obstacles[i].drift = Math.abs(obstacles[i].drift);
 if(obstacles[i].x > W-30) obstacles[i].drift = -Math.abs(obstacles[i].drift);
 }
-if(obstacles[i].y > H+80) obstacles.splice(i,1);
+if(obstacles[i].y > H+80){
+if(phase==='real') dodged++;
+obstacles.splice(i,1);
+}
 }
 
 /* collision (only in real game) */
@@ -28882,8 +28899,6 @@ hitFlashAt=now;
 obstacles.splice(j,1);
 if(lives<=0){
 gameOver=true; wonGame=false;
-/* navigate to fail passage */
-setTimeout(function(){ navigate(); },1200);
 return;
 }
 break; /* only one hit per frame */
@@ -28893,10 +28908,22 @@ break; /* only one hit per frame */
 /* win check */
 if(now-phaseStart >= REAL_TIME){
 gameOver=true; wonGame=true;
-/* navigate to win passage */
-setTimeout(function(){ navigate(); },1800);
 }
 }
+}
+
+/* ── Reset for a second ride (skips practice; fresh state) ── */
+function restart(){
+lives = 3;
+dodged = 0;
+hitFlashAt = 0;
+gameOver = false;
+wonGame = false;
+obstacles = [];
+_cowMusicRate = 1.0;
+if(_cowMusicEl) _cowMusicEl.playbackRate = 1.0;
+phase = 'countdown';
+countdownAt = Date.now();
 }
 
 /* ═══════════════════════════════════════════
@@ -29638,7 +29665,7 @@ ctx.fillText('Down Dean Street, through the night.',W/2,H/2-34);
 ctx.fillStyle='#807028'; ctx.font='11px monospace';
 ctx.fillText('\u2190 \u2192  arrow keys or click lane',W/2,H/2+10);
 ctx.fillText('dodge pigs, cabs & revellers',W/2,H/2+28);
-ctx.fillText('3 lives \u2013 survive 40 seconds',W/2,H/2+46);
+ctx.fillText('3 lives \u2013 ride to Charing Cross Road',W/2,H/2+46);
 /* start prompt */
 var pulse=0.5+0.5*Math.sin(Date.now()/400);
 ctx.fillStyle='rgba(232,192,96,'+pulse+')'; ctx.font='bold 14px monospace';
@@ -29714,6 +29741,11 @@ ctx.beginPath(); ctx.moveTo(lx-4,ly-4); ctx.lineTo(lx+4,ly+4); ctx.stroke();
 ctx.beginPath(); ctx.moveTo(lx+4,ly-4); ctx.lineTo(lx-4,ly+4); ctx.stroke();
 }
 }
+/* dodged counter — top right */
+ctx.textAlign='right';
+ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(W-78, 18, 70, 14);
+ctx.fillStyle='#e8c060'; ctx.font='bold 9px monospace';
+ctx.fillText('DODGED ' + dodged, W-12, 28);
 }
 /* controls hint */
 if(phase==='practice'||phase==='real'){
@@ -29722,25 +29754,49 @@ ctx.fillText('\u2190\u2192 or click lane',W-8,H-4);
 }
 }
 
+/* End-screen button hit zones (read by the click handler). */
+var END_BTN = { y: 0, h: 24, w: 110, leftX: 0, rightX: 0 };
+
 function drawEnd(){
 ctx.fillStyle='rgba(4,4,12,0.85)'; ctx.fillRect(0,0,W,H);
 ctx.textAlign='center';
 if(wonGame){
-ctx.fillStyle='#e8c060'; ctx.font='bold 28px serif';
-ctx.fillText('YOU RODE IT.',W/2,H/2-30);
-ctx.fillStyle='#a87830'; ctx.font='italic 14px serif';
-ctx.fillText('\u201cShe lay beside me',W/2,H/2+2);
-ctx.fillText('in the dawn.\u201d',W/2,H/2+22);
+ctx.fillStyle='#e8c060'; ctx.font='bold 26px serif';
+ctx.fillText('YOU RODE IT.',W/2,H/2-50);
+ctx.fillStyle='#d4a560'; ctx.font='italic 14px serif';
+ctx.fillText('You reach the end of Soho',W/2,H/2-22);
+ctx.fillText('at Charing Cross Road.',W/2,H/2-4);
 ctx.fillStyle='#786020'; ctx.font='10px monospace';
-ctx.fillText('click to continue',W/2,H/2+50);
+ctx.fillText('obstacles dodged: ' + dodged, W/2, H/2+22);
 } else {
 ctx.fillStyle='#8a6030'; ctx.font='bold 28px serif';
-ctx.fillText('THROWN.',W/2,H/2-30);
+ctx.fillText('THROWN.',W/2,H/2-50);
 ctx.fillStyle='#6a4020'; ctx.font='italic 14px serif';
-ctx.fillText('The street wins tonight.',W/2,H/2+2);
+ctx.fillText('The street wins tonight.',W/2,H/2-22);
 ctx.fillStyle='#504018'; ctx.font='10px monospace';
-ctx.fillText('click to continue',W/2,H/2+50);
+ctx.fillText('obstacles dodged: ' + dodged, W/2, H/2+2);
 }
+/* Two buttons: RIDE AGAIN | CONTINUE */
+END_BTN.y = H/2 + 50;
+END_BTN.leftX = W/2 - END_BTN.w - 8;
+END_BTN.rightX = W/2 + 8;
+ctx.textAlign='center';
+[ {x:END_BTN.leftX, label:'RIDE AGAIN'}, {x:END_BTN.rightX, label:'CONTINUE'} ].forEach(function(b){
+ctx.fillStyle='rgba(80,60,20,0.45)';
+ctx.fillRect(b.x, END_BTN.y, END_BTN.w, END_BTN.h);
+ctx.strokeStyle='rgba(200,160,60,0.55)'; ctx.lineWidth=1;
+ctx.strokeRect(b.x, END_BTN.y, END_BTN.w, END_BTN.h);
+ctx.fillStyle='#e8c060'; ctx.font='bold 11px monospace';
+ctx.fillText(b.label, b.x + END_BTN.w/2, END_BTN.y + 16);
+});
+}
+
+/* Test whether (cx, cy) hits one of the end-screen buttons. */
+function endBtnHit(cx, cy){
+if(cy < END_BTN.y || cy > END_BTN.y + END_BTN.h) return null;
+if(cx >= END_BTN.leftX && cx < END_BTN.leftX + END_BTN.w) return 'again';
+if(cx >= END_BTN.rightX && cx < END_BTN.rightX + END_BTN.w) return 'continue';
+return null;
 }
 
 /* ── Input: LEFT/RIGHT ── */
@@ -29769,10 +29825,16 @@ canvas.addEventListener('mouseleave',function(){ hoverLane=-1; });
 
 canvas.addEventListener('click',function(e){
 if(phase==='title'){ phase='practice'; phaseStart=Date.now(); startCowMusic(); return; }
-if(gameOver) return;
-if(phase==='countdown') return;
 var r=canvas.getBoundingClientRect();
 var cx=(e.clientX-r.left)*(W/r.width);
+var cy=(e.clientY-r.top)*(H/r.height);
+if(gameOver){
+var hit = endBtnHit(cx, cy);
+if(hit === 'again') restart();
+else if(hit === 'continue') navigate();
+return;
+}
+if(phase==='countdown') return;
 var nl=Math.max(0,Math.min(LANE_COUNT-1,Math.floor(cx/LANE_W)));
 playerLane=nl; targetX=LANE_X[nl];
 clickFlash=nl; clickFlashAt=Date.now();
@@ -29781,10 +29843,16 @@ clickFlash=nl; clickFlashAt=Date.now();
 canvas.addEventListener('touchstart',function(e){
 e.preventDefault();
 if(phase==='title'){ phase='practice'; phaseStart=Date.now(); startCowMusic(); return; }
-if(gameOver) return;
-if(phase==='countdown') return;
 var r=canvas.getBoundingClientRect();
 var cx=(e.touches[0].clientX-r.left)*(W/r.width);
+var cy=(e.touches[0].clientY-r.top)*(H/r.height);
+if(gameOver){
+var hit = endBtnHit(cx, cy);
+if(hit === 'again') restart();
+else if(hit === 'continue') navigate();
+return;
+}
+if(phase==='countdown') return;
 var nl=Math.max(0,Math.min(LANE_COUNT-1,Math.floor(cx/LANE_W)));
 playerLane=nl; targetX=LANE_X[nl];
 clickFlash=nl; clickFlashAt=Date.now();
@@ -29803,8 +29871,8 @@ if (sp){ var lk=sp.querySelector('tw-link'); if(lk) lk.click(); }
 /* ── Audio: rhythmic hoof beats + occasional moo while riding ── */
 var lastHoofAt = 0, lastMooAt = 0, nextMooDelay = 5000 + Math.random() * 7000;
 var audioTicker = setInterval(function(){
-  if (gameOver) { clearInterval(audioTicker); audioTicker = null; return; }
-  var playing = (phase === 'practice' || phase === 'real');
+  /* Don't self-clear on gameOver — the player may restart. navigate() clears us. */
+  var playing = (phase === 'practice' || phase === 'real') && !gameOver;
   if (!playing) return;
   var nowT = Date.now();
   if (nowT - lastHoofAt > 280) {

@@ -27,12 +27,16 @@
 Full detail in `memory/project_esoteric_layer.md`. Quick status:
 
 1. ✅ Five lilies = pentacle — built
-2. ⏸ Eight haunts = I Ching — conflicts with item 6 (12 haunts); on hold
+2. ⏸ Eight haunts = I Ching — superseded by item 6 (now 12 haunts); on hold
 3. ⏸ Page 47 hidden number — wanted, not yet
 4. 🏦 Tarot spread at Trisha's — fully banked
 5. ⏸ Book title as true name — wanted, not yet
-6. 🔄 Twelve haunts = Ripley's Wheel — four new haunts mapped, prose drafts in `Four New Haunts.docx`. Dr Quill writes prose; Claude does code after.
+6. ✅ Twelve haunts = Ripley's Wheel — built 2026-05-06. All 12 haunt-boxes carry "The work: [Stage]." whisper; notebook + background tiers + `bar-opus` + `dssOpusReveal` modal all wired. **Design call:** Crown is granted only in Alba Complete ending. Alba3 staircase-gift threshold rescaled 7 → 11 to preserve "all but one" feel.
+
+## Open thread on item 6
+No visual *Wheel* yet — only the gold OPUS STATE text-modal + bar-opus stat-bars + notebook list. Pentagram has a dramatic SVG reveal; the Wheel doesn't. Possible later addition.
 
 ## Next session
 - Dr Quill wants to explore new esoteric layer ideas beyond the current six
+- Possible: build a visual Wheel reveal (circular SVG diagram of the 12 stages, fires after OPUS STATE modal on the dawn screen)
 - Commit/push current fixes first

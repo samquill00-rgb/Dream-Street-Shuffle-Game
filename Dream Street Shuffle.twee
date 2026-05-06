@@ -370,13 +370,14 @@ window.dssAudio = (function() {
   function typewriterTick(vol) {
     _play(function(ac) {
     var now = ac.currentTime;
-    // Mechanical click: short noise burst with bandpass filter, tiny pitch jitter
-    var dur = 0.04;
+    // Mechanical click: short noise burst with bandpass filter, tiny pitch jitter.
+    // Tighter envelope + explicit stop so rapid typing doesn't leave a tail.
+    var dur = 0.02;
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
     var d = buf.getChannelData(0);
     for (var i = 0; i < bufLen; i++) {
-      var env = Math.exp(-i / (ac.sampleRate * 0.008));
+      var env = Math.exp(-i / (ac.sampleRate * 0.004));
       d[i] = (Math.random()*2-1) * env;
     }
     var src = ac.createBufferSource(); src.buffer = buf;
@@ -385,7 +386,7 @@ window.dssAudio = (function() {
     f.Q.value = 4;
     var g = ac.createGain(); g.gain.value = (typeof vol === 'number' ? vol : 0.18);
     src.connect(f); f.connect(g); g.connect(ac.destination);
-    src.start(now);
+    src.start(now); src.stop(now + dur + 0.005);
       });
   }
   // Typewriter clack — a heavy single strike for the dramatic "NAME YOUR
@@ -6672,6 +6673,16 @@ if (window.dssAudio) {
   if (window.dssAudio.stopBed) { try { window.dssAudio.stopBed('minigame-retro'); } catch(e) {} }
 }
 if (window._jazzMiniEl) { try { window._jazzMiniEl.pause(); window._jazzMiniEl.src=''; window._jazzMiniEl=null; } catch(e) {} }
+// Start the bar-mini music for the entire game (mixing + carry phases).
+// _startCarryTransition guards on !_jazzMiniEl so it won't restart it.
+if (window._jazzMiniDataUri) {
+  try {
+    var _jmInit = new Audio(window._jazzMiniDataUri);
+    _jmInit.volume = 0.28; _jmInit.loop = true;
+    _jmInit.play().catch(function(){});
+    window._jazzMiniEl = _jmInit;
+  } catch(e) {}
+}
 var _jmObs = new MutationObserver(function(mutations) {
   for (var m = 0; m < mutations.length; m++) {
     for (var n = 0; n < mutations[m].addedNodes.length; n++) {
@@ -9305,9 +9316,15 @@ container.appendChild(rollWrapper);
 var currentRoll = 0;
 
 var qIdx = 0;
-var baseSpeed = 28;
+var baseSpeed = 14;
+
+// Capture a generation tag so stale chains (from a passage swap or a re-run)
+// stop firing ticks the moment a newer typewriter starts.
+window._typewriterGen = (window._typewriterGen || 0) + 1;
+var myGen = window._typewriterGen;
 
 function typeNext() {
+if (myGen !== window._typewriterGen) return; // a newer typewriter took over
 if (qIdx >= queue.length) {
 // Typing complete — fade cursor, reveal link
 cursor.classList.add('tw-cursor-fade');
@@ -9361,16 +9378,16 @@ if (overshoot > 0) {
 // Variable speed — natural reading pace
 var ch = item.char;
 var delay = baseSpeed;
-if (ch === '.' || ch === '?' || ch === '!') delay = 240;
-else if (ch === ',' || ch === ';' || ch === ':') delay = 90;
-else if (ch === '\n') delay = 160;
-else delay = baseSpeed + Math.floor(Math.random() * 14) - 5;
+if (ch === '.' || ch === '?' || ch === '!') delay = 120;
+else if (ch === ',' || ch === ';' || ch === ':') delay = 50;
+else if (ch === '\n') delay = 80;
+else delay = baseSpeed + Math.floor(Math.random() * 10) - 4;
 
 setTimeout(typeNext, delay);
 }
 
 // Brief pause before typing starts
-setTimeout(typeNext, 900);
+setTimeout(typeNext, 450);
 }
 
 // Watch for .typewriter-page appearing in the DOM

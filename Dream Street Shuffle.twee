@@ -3289,7 +3289,9 @@ while (dist < maxScroll - 200) {
     var h1 = 30 + Math.random() * 15;
     var style2 = Math.floor(Math.random() * 3) + 1;
     var type2 = Math.floor(Math.random() * 3);
-    var gap1 = 300 + Math.random() * 60;
+    /* Jump airtime is ~1.3s ≈ 330px at full scroll speed, so the high
+       obstacle must be at least ~400px away to give time to land + duck. */
+    var gap1 = 410 + Math.random() * 90;
     var localGY1 = this._getTerrainY(dist);
     var localGY2 = this._getTerrainY(dist + gap1);
     this.carryPhase.obstacles.push({
@@ -3384,24 +3386,24 @@ for (var i = 0; i < cp.obstacles.length; i++) {
   }
 
   if (collides) {
-    // Bounce-back for high obstacles when jumping into them
-    if (obs.isHigh && cp.playerJumping) {
+    // Bounced back from a high obstacle while airborne — physics only, no
+    // automatic glass loss. The hit still routes through the wobble system
+    // below so the first time it's a "nearly lost it" wobble, not a drop.
+    var bouncedBack = obs.isHigh && cp.playerJumping;
+    if (bouncedBack) {
       cp.scrollPos = Math.max(0, cp.scrollPos - 100);
       cp.playerJumping = false;
       cp.playerVelY = 0;
       cp.playerY = cp.groundY;
-      cp.screenShake = 1.2;
-      cp.invulnTimer = 1.2;
       cp.staggerTimer = 0.9;
-      cp.glassesLeft = Math.max(0, cp.glassesLeft - 1);
-      continue;
     }
-    // Wobble mechanic: first hit wobbles, second hit loses a glass
+    // Wobble mechanic: first hit wobbles (drink stays on tray), a second hit
+    // within the wobble window is what actually drops a glass.
     if (!cp.wobbling) {
       cp.wobbling = true;
       cp.wobbleTimer = 3.0;
-      cp.invulnTimer = 1.0;
-      cp.screenShake = 0.6;
+      cp.invulnTimer = bouncedBack ? 1.2 : 1.0;
+      cp.screenShake = bouncedBack ? 1.2 : 0.6;
     } else {
       obs.hit = true;
       cp.glassesLeft = Math.max(0, cp.glassesLeft - 1);
@@ -5680,7 +5682,6 @@ c.restore();
 // ========== RESULT PHASE ==========
 _resultCarry() {
 var cp = this.carryPhase;
-var total = this.mScore + cp.glassesLeft;
 var perfect = cp.glassesLeft === 3;
 var win = cp.glassesLeft >= 1;
 
@@ -5688,13 +5689,13 @@ document.getElementById('bar-round-display').textContent = win ? '★ YOU MADE I
 var narr = document.getElementById('bar-narrative');
 
 if (perfect) {
-  narr.innerHTML = '<em style="color:#4CFF00;">All three drinks delivered perfectly. The band erupts in cheers!</em>';
+  narr.innerHTML = '<em style="color:#4CFF00;">All three drinks reach the stage. Moe nods. The band tightens.</em>';
 } else if (cp.glassesLeft === 2) {
-  narr.innerHTML = '<em style="color:#d4a574;">Two drinks land safely. "Not bad, kid."</em>';
+  narr.innerHTML = '<em style="color:#d4a574;">Two land safely. Moe shrugs. "Better than nothing."</em>';
 } else if (win) {
-  narr.innerHTML = '<em style="color:#c8a674;">One drink makes it. The band looks up. "It\'ll do."</em>';
+  narr.innerHTML = '<em style="color:#c8a674;">One drink left standing. Moe takes it. "It\'ll do."</em>';
 } else {
-  narr.innerHTML = '<em style="color:#FF6B6B;">You spilled everything. The pianist sighs.</em>';
+  narr.innerHTML = '<em style="color:#FF6B6B;">Empty tray. The pianist sighs. The band waits.</em>';
 }
 
 this.phase = 'result';
@@ -5711,36 +5712,41 @@ var c = this.ctx, W = this.W, H = this.H;
 c.fillStyle = '#0a0804';
 c.fillRect(0, 0, W, H);
 
-var total = this.mScore + this.carryPhase.glassesLeft;
-var isWin = this.carryPhase.glassesLeft >= 1;
+var glasses = this.carryPhase.glassesLeft;
+var isWin = glasses >= 1;
 
-// Score display
 c.save();
-c.font = 'bold 28px Georgia';
 c.textAlign = 'center';
-c.fillStyle = isWin ? '#4CFF00' : '#FF6B6B';
-c.fillText('SCORE: ' + total + '/9', W/2, 80);
 
-// Star rating
-var stars = Math.ceil(total / 2.5);
+// Headline — only delivery counts.
 c.font = 'bold 28px Georgia';
-for (var i = 0; i < Math.min(3, stars); i++) {
-  c.fillText('★', W/2 - 40 + i * 40, 130);
+c.fillStyle = isWin ? '#4CFF00' : '#FF6B6B';
+c.fillText('DELIVERED ' + glasses + '/3', W/2, 110);
+
+// Three star slots, lit per glass delivered.
+c.font = 'bold 32px Georgia';
+for (var i = 0; i < 3; i++) {
+  c.fillStyle = i < glasses ? '#e8c060' : 'rgba(232,192,96,0.18)';
+  c.fillText('★', W/2 - 50 + i * 50, 170);
 }
 
-// Completed drinks
-var dY = 200;
-c.font = 'bold 12px Georgia';
-c.fillStyle = '#d4a574';
-for (var i = 0; i < this.completedDrinks.length; i++) {
-  var cd = this.completedDrinks[i];
+// (per-drink summary removed — pour accuracy is decorative, not scored)
+/* DEAD_BLOCK_START
   var dText = cd.who + '\u2019s ' + cd.name + ' \u2014 ' + (cd.accuracy === 2 ? '★ Perfect' : cd.accuracy === 1 ? '◐ Close' : '○ Missed');
   c.fillText(dText, W/2, dY + i * 25);
 }
 
-// Glasses remaining
-dY += this.completedDrinks.length * 25 + 30;
-c.fillText('Glasses delivered: ' + this.carryPhase.glassesLeft + '/3', W/2, dY);
+DEAD_BLOCK_END */
+
+// One-line tagline keyed to the count.
+c.font = 'italic 14px Georgia';
+c.fillStyle = '#a8906a';
+var caption;
+if (glasses === 3) caption = 'A clean run.';
+else if (glasses === 2) caption = 'Most of it home.';
+else if (glasses === 1) caption = 'One survivor.';
+else caption = 'The tray came up short.';
+c.fillText(caption, W/2, 220);
 
 this._drawSparkles(c);
 c.restore();
@@ -28494,7 +28500,9 @@ They take the drinks: UNO… DOS… UNO, DOS, TRES, CUATRO!
 (display: "Ronnies Rule SVG h14")
 (set: $confidence to $confidence - 9)\
 (set: $completedSetlist to true)\
-They look at you a bit sadly. You got something wrong.
+The tray reaches the stage with nothing on it. Moe takes a long breath. 'Without, then.'
+
+The pianist counts it in anyway: UNO… DOS… UNO, DOS, TRES, CUATRO!
 
 [[Listen|The Set]]
 (display: "Ronnies Rule SVG h14")
@@ -30590,6 +30598,33 @@ He looks at you like, painterly, he looked when you were his subject.
   transition: border 0.4s ease, padding 0.4s ease, box-shadow 0.4s ease, transform 0.4s ease;
   transform: scale(1.02);
 }
+.napkin-erase {
+  background: #f2e7c9 !important;
+  color: #111;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: bold; font-size: 20px; line-height: 22px;
+  font-family: Georgia, serif;
+}
+.napkin-size {
+  width: 26px; height: 26px; cursor: pointer;
+  border: 2px solid rgba(0,0,0,0.25);
+  border-radius: 50%;
+  background: rgba(0,0,0,0.35);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s;
+}
+.napkin-size:hover { transform: scale(1.15); }
+.napkin-size.active {
+  border: 2px solid #f2e7c9;
+  box-shadow: 0 0 0 2px rgba(212,165,116,0.8);
+}
+.napkin-size-thin::after { content: ''; width: 4px; height: 4px; background: #d4a574; border-radius: 50%; }
+.napkin-size-thick::after { content: ''; width: 10px; height: 10px; background: #d4a574; border-radius: 50%; }
+.napkin-btn[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 </style>
 <div class="napkin-wrap">
 <canvas class="napkin-canvas" id="napkin-canvas" width="400" height="480"></canvas>
@@ -30599,8 +30634,12 @@ He looks at you like, painterly, he looked when you were his subject.
 <div class="napkin-color" data-color="#d81f1f" style="background:#d81f1f" title="Red"></div>
 <div class="napkin-color" data-color="#f5c518" style="background:#f5c518" title="Yellow"></div>
 <div class="napkin-color" data-color="#2aa14a" style="background:#2aa14a" title="Green"></div>
+<div class="napkin-color napkin-erase" data-color="#f2e7c9" title="Eraser">×</div>
+<div class="napkin-size napkin-size-thin active" data-size="thin" title="Thin line"></div>
+<div class="napkin-size napkin-size-thick" data-size="thick" title="Thick line"></div>
+<button class="napkin-btn" id="napkin-undo" disabled>Undo</button>
 <button class="napkin-btn" id="napkin-clear">Clear</button>
-<button class="napkin-btn" id="napkin-done">Done</button>
+<button class="napkin-btn" id="napkin-done" disabled>Done</button>
 </div>
 </div>
 
@@ -30705,9 +30744,22 @@ He looks at you like, painterly, he looked when you were his subject.
 
   var drawing = false;
   var color = '#111111';
+  var brushSize = 3.2;
   var lastX = 0, lastY = 0;
-  var strokes = []; // recorded user strokes: [{color, points:[{x,y}, ...]}, ...]
+  var strokes = []; // recorded user strokes: [{color, width, points:[{x,y}, ...]}, ...]
   var currentStroke = null;
+
+  function updateButtonStates() {
+    var doneBtn = document.getElementById('napkin-done');
+    var undoBtn = document.getElementById('napkin-undo');
+    if (strokes.length > 0) {
+      doneBtn.removeAttribute('disabled');
+      undoBtn.removeAttribute('disabled');
+    } else {
+      doneBtn.setAttribute('disabled', '');
+      undoBtn.setAttribute('disabled', '');
+    }
+  }
 
   function getPos(e) {
     var rect = canvas.getBoundingClientRect();
@@ -30727,20 +30779,21 @@ He looks at you like, painterly, he looked when you were his subject.
     drawing = true;
     var p = getPos(e);
     lastX = p.x; lastY = p.y;
-    currentStroke = { color: color, points: [{x: p.x, y: p.y}] };
+    currentStroke = { color: color, width: brushSize, points: [{x: p.x, y: p.y}] };
     strokes.push(currentStroke);
-    // Small dot on first click for single taps
+    // Small dot on first click for single taps — sized to current brush
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(lastX, lastY, 1.8, 0, Math.PI * 2);
+    ctx.arc(lastX, lastY, Math.max(brushSize / 2, 1), 0, Math.PI * 2);
     ctx.fill();
+    updateButtonStates();
   }
   function draw(e) {
     if (!drawing) return;
     e.preventDefault();
     var p = getPos(e);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 3.2;
+    ctx.lineWidth = brushSize;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -30770,14 +30823,15 @@ He looks at you like, painterly, he looked when you were his subject.
   function replayStrokes() {
     strokes.forEach(function(s){
       if (!s.points || s.points.length === 0) return;
+      var w = s.width || 3.2;
       ctx.strokeStyle = s.color;
       ctx.fillStyle = s.color;
-      ctx.lineWidth = 3.2;
+      ctx.lineWidth = w;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       if (s.points.length === 1) {
         ctx.beginPath();
-        ctx.arc(s.points[0].x, s.points[0].y, 1.8, 0, Math.PI * 2);
+        ctx.arc(s.points[0].x, s.points[0].y, Math.max(w / 2, 1), 0, Math.PI * 2);
         ctx.fill();
         return;
       }
@@ -30812,6 +30866,24 @@ He looks at you like, painterly, he looked when you were his subject.
   document.getElementById('napkin-clear').addEventListener('click', function(){
     clearStrokes();
     drawBackground();
+    updateButtonStates();
+  });
+
+  document.getElementById('napkin-undo').addEventListener('click', function(){
+    if (strokes.length === 0) return;
+    strokes.pop();
+    drawBackground();
+    replayStrokes();
+    updateButtonStates();
+  });
+
+  var sizeBtns = document.querySelectorAll('.napkin-size');
+  sizeBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      sizeBtns.forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      brushSize = (btn.getAttribute('data-size') === 'thick') ? 7 : 3.2;
+    });
   });
 
   document.getElementById('napkin-done').addEventListener('click', function(){

@@ -1,201 +1,72 @@
-# HANDOFF — 2026-05-07
+# HANDOFF — 2026-05-07 (evening session)
 
-A long polish session: a new post-cellar narrative beat (Standing + The dark pass), three new tactile interactions (cigarette / page-turn / cellar door knock), a wheel-reveal relocation, music ending re-rigging, and dozens of audit-driven fixes from real-player playthroughs. Everything is synced and ready to commit.
-
----
-
-## New narrative beats
-
-### Cellar → Standing → The dark pass
-
-Replaced the threadbare `Escape success` (one line of prose) with **`Standing`** — JSJ leans on the cellar doorframe at the top of the stairs, says "You lead a charmed life", falls in beside you onto Dean Street, drops the *"Red told Copper you had money"* line. Mirrors `Beaten` structurally but the tone is dry-impressed rather than reluctantly miffed.
-
-Both cellar exits (`Standing`, `Beaten`'s knowsCopperWord branch, `St. John's Word`) now route through a new transit passage **`The dark pass`** — a typewriter-page cold pass: you watch JSJ peel south down Dean Street, Red walks into the frame at the far end under the ginger light, neither sees the other. Routing updated:
-- `Fight Victory` → `Standing` (was `Escape success`)
-- `Beaten`'s matchbook branch → `The dark pass`
-- `St. John's Word` → `The dark pass`
-- `HUB_NAMES` JS object updated (`Escape success` → `Standing`)
-
-### Cigarette popup (hold-to-light)
-
-`window.showCigarettePopup()` — match strikes when you press, flame catches as you hold (1.5s LIGHT_MS), cigarette ember ignites and glows. Uses existing `matchStrike` audio, animates an inline SVG of paper + filter + matchstick + flame. Auto-fires 5.5s into *The dark pass* once the prose has settled. Reusable elsewhere.
-
-### Page-turn at the Critic
-
-Replaced the inline "He pulls *(book)* close, reads, …'Not for me'" prose block in *The critic's judgement* with an interactive book widget. Click **"Wait."** four times — a CSS 3D page-flip animation runs (1.1s rotateY transform), `pageRustle` audio fires per click, narration updates beneath the book. POV is the player's: you sit watching him read, time advancing on each click.
-- `He sets it on the table and opens it.`
-- → `He reads a page in the middle.`
-- → `He turns to another page and reads there too.`
-- → `He skips ahead, scans a third.`
-- → `He sets the book down. 'Not for me,' he says. 'Have you tried America?'`
-
-After the verdict, `.critic-aftermath` fades in (1.2s opacity transition) carrying the rest of his speech and the `PASSWORD LEARNED` item-box. Mote spawning for the password is **deferred** — pre-marked `data-motes="1"` so the global observer skips it, then `window.dssSpawnMotes()` is called manually 1.5s after aftermath reveals. Motes file the password away as the moment ends, not while he's still reading.
-
-### Coppers Lair — interactive knock
-
-`Maltese Gangsters` rewritten. Replaced the auto-firing `doorKnock(3)` with a player-driven ritual: three open circles `○ ○ ○` and a `KNOCK` button. Each click fires `doorKnock(1)`, fills one circle, with a 240ms anti-mash guard between clicks (knocking takes intent). Third knock disables the button, pauses 800ms, then `doorCreak` plays as Salvu's prose reveals; existing 4.5s navigation timer follows.
+A focused polish session on the Carthage shore / Dido cluster, plus a small structural extension of the icon system to lateral venue shortcuts and a literary survey of the prose narrative as a whole.
 
 ---
 
-## Audio system
+## Carthage shore / Dido — design + prose pass
 
-### `dssSpawnMotes` helper
+### "Sub umbras: watch her burn"
 
-Extracted the mote-spawn logic from the global passage observer into a window-exposed helper:
-```js
-window.dssSpawnMotes(box, cls, count)
-```
-Mirrors the observer's logic (start position, jitter, --mote-tx/ty CSS vars, notebook pulse). Used by The critic's judgement to defer the password's motes; available for future custom flows.
+The `[[Remain in Carthage|Stay in Carthage]]` link on the Dido passage was reading as a *losing* click — every textual cue around it (Dido's seductive "Stay... Lily is in her valley and will not return", the alternative line "Not yet. The game's not played to death.") pushed the player AWAY from a click that mechanically led to one of the most generous beats in the game (The Interval: +12 confidence, +10 sobriety, the only path to `$sawMemory1`, alba3 if haunts ≥ 11).
 
-### Mote strength buff
+Dr Quill workshopped the rewrite to **`Sub umbras: watch her burn`** — direct echo of Dido's just-read dying words from the LORE expand ("Sic sic inuat ire sub umbras"), the colon doing structural work like an epitaph. Active descent, not capitulation.
 
-Per Dr Quill's "make them stronger" — every mote type (haunt / revelation / page / item / quest):
-- **Count 12 → 18** in JS spawner; six new `-13` through `-18` rules per type with delays continuing 3.40s → 4.40s.
-- **Base size 8×20 → 12×28**; tail mote sizes scaled up (small-end was 3×9 → now still ends 3×7, but intermediate motes are 9×22, 8×19, 7×16, 6×15, 5×13, 5×12, 4×11, 4×10, 3×9, 3×8, 3×7).
-- **Brighter centres**: gradient inner alpha 0.85 → **0.98**, mid-stop 0.5 → **0.68**.
-- **Stronger glow**: box-shadow radii 18/36/60 → **26/52/88**; alphas 0.7/0.45/0.3 → **0.88/0.6/0.42**.
-- **Sharper**: `filter: blur(0.6px) → blur(0.3px)`.
-- **Higher peak opacity**: keyframe `0.92 → 1.0`, mid 0.80 → 0.92, late 0.45 → 0.55, scale 1.1 → 1.2.
+Also cut the **"Not yet. The game's not played to death."** narrator line that was actively cheerleading the alternatives. The (else:) block now wraps the Go-back / Wake-from-dream links bare. ([Dream Street Shuffle.twee:27995](Dream Street Shuffle.twee:27995), [Dream Street Shuffle.twee:27999](Dream Street Shuffle.twee:27999))
 
-### Music ends honestly
+### Carthage shore prose tightening
 
-New `dssAudio.letBedFinish(label)` — disables `loop` on the bed's `BufferSourceNode` and stops via `onended`. The bed's current pass plays through to its real coda then halts naturally. `startPetalStorm()` now calls `letBedFinish('piano-eoin')` instead of the previous `fadeBed`. Music reaches its actual end at the dawn rather than being faded mid-phrase.
-
-### Pong music + countdown
-
-The `_pongMiniDataUri` / `_jazzMiniDataUri` / `_cowGameDataUri` placeholders were never being substituted by `sync_html.py`. Added three new tuples to `AUDIO_EMBEDS` for `the-pongmini-loop.m4a`, `the-jazzmini-loop.m4a`, `the-cowgame-loop.m4a`. Pong music now plays.
-
-Also added a 2.4s 3-2-1 countdown to PP Pong before the first serve. Phase machine: `phase = 'countdown'` initially, becomes `'play'` after `COUNTDOWN_DUR ms`. Player's mouse moves the paddle during countdown so they can settle in; AI paddle holds; ball stays centred.
-
-### Typewriter timing + click cleanup
-
-Iterated through several speeds and bug fixes:
-- **`baseSpeed` 20ms → 55ms → 42ms** (final). Punctuation pauses scaled proportionally — period 260 → 220ms, comma 130 → 110ms, newline 200 → 170ms. Random jitter ±5.
-- **Intro delay 650ms → 350ms** so the first click lands while the page is still settling.
-- **Pre-warm tick** at typewriter init (silent `typewriterTick(0)`) to wake the AudioContext from suspend before the first real tick fires — fixes "first letters appear without sound" issue.
-- **Bass thump removed** from the click sound: 0.8ms attack fade-in + 1.5ms release fade-out on the buffer envelope (eliminates onset/offset transients), plus a pair of 700Hz highpass filters around the resonant 1800Hz bandpass (~36dB/octave below the band).
-- **Glass smash reverb**: rewrote `glassSmash()` with a synthetic 1.6s exponential-decay convolution IR. Wet/dry mix (0.55/0.85) plus a 5.5kHz lowpass on the wet path. Smash now sits in a room.
-
-### Alba reveal sound
-
-- `distantBell()` reframed for *morning donging*: dropped the 1850Hz "sparkle" partial, halved remaining amplitudes, decay 4.5s → 3.6s. Single soft dong.
-- Soft (vol 0.02) typewriter ticks **removed entirely** from `albaTypewriter()` — alba lines now type onto the page in absolute hush, just the bell + words.
-- `LINE 1` and `LINE 2` passages had their `[outdoor]` / `[green-sea]` venue tags removed so no ambient bed plays during the alba reveal moments. True breather.
-
-### `[venue-*]` tags stripped from atmosphere passages
-
-`After the music`, `After Cecil Court`, `After the painter`, `Cow ride success`, `Cow ride fail` — all had venue ambient tags. Removed. They now play **typewriter clicks** (the prose is being typed) **but no venue ambient**. Atmosphere comes from the prose itself.
-
-`After the call` is now `<div class="typewriter-page typewriter-static">` — new opt-out class that bypasses the type-on animation entirely while keeping the visual styling. Reads instantly at the player's pace.
-
-### Heartbeat under the dual ring
-
-The dual ring's *Aoife* portion gets the global header observer's heartbeat at 1.5s. Added an inline `<script>` in the passage that fires a second `heartbeat(6)` at 7.8s (when the Lily portion begins). Both calls now beat.
+- **"Roman Carthage" → "Carthage"** ([line 31470](Dream Street Shuffle.twee:31470)) — the explicit period-label fought against Dido's eternal pyre. The "swamped with Romans" line still does the period-signal work without flat-historical labelling.
+- **"He wept for Rome." inserted** before "You think about that still, sometimes, in England." ([line 31487](Dream Street Shuffle.twee:31487)) — repairs the Troy → Rome → England chain. Without this, Scipio's Homer quote was about Troy/Ilium and the protagonist's "in England" gloss skipped the Roman step. Three words and the whole imperial-decline chain snaps into place.
+- **"a woman" → "a queen"** in "On the hill a queen burns upon a pyre." ([line 31491](Dream Street Shuffle.twee:31491))
+- **"You see two paths:" → "There are two paths:"** ([line 31489](Dream Street Shuffle.twee:31489))
+- **Lore-box Flaubert line**: "or the house which we pretend that Flaubert knew" → "or the house that we pretend was his" ([line 31484](Dream Street Shuffle.twee:31484)) — removes the awkward Flaubert/Flaubert echo.
 
 ---
 
-## Game flow / gating
+## Inter-venue icon shortcuts (new addition)
 
-### After alba complete — keep playing
+The hub-icon vocabulary (✦/✧ alba, ◆/◇ haunt, ▲/△ pillar, ●/○ opus) was previously confined to Dean Street. Extended to lateral shortcuts where the player picks between *different venues* without going home first.
 
-Dean Street's `(if: _towerReady)/(else-if: $coachUrgent)/(else:)` chain split into three independent `(if:)` blocks. The dawn-link choice-box still appears prominently when alba is complete, but the venue list stays visible. Stripped `_towerReady is false` from every venue gate — venues remain available after alba completion. Player decides when to walk into the dawn.
+Survey concluded the DSS graph is genuinely hub-and-spoke — these are the **only three** meaningful lateral shortcuts:
 
-### The Fetch unmissable
+- **Carthage shore → "Go to The Green Sea"** ([line 31496](Dream Street Shuffle.twee:31496)) — carries ✦/✧ for `$alba2`. The (else:) fallback also gets ✧ when the link is gated out.
+- **The French (post-haunts) → "The Colony Room is just round the corner."** ([line 30791](Dream Street Shuffle.twee:30791)) — carries ◆/◇ × 2 for `$knowsLackland` and `$knowsRonnies`.
+- **Trisha's → "Ronnie Scott's is nearby."** ([line 31841](Dream Street Shuffle.twee:31841)) — carries ◆/◇ for `$haunts contains $haunt7`.
 
-Routes converged on The Fetch:
-- Dean Street's "The dawn is coming" link → `The Fetch` (was `Approach Centre Point`).
-- LINE 3's "The dawn is coming" link → `The Fetch`.
-- The Fetch's "Follow him" still goes to Approach Centre Point.
+All gated on `$hauntExplained` so pending jewels only appear once the player has caught their first haunt (consistent with Dean Street).
 
-Every winning route now passes through the see-yourself-walking-ahead beat.
+### Greyed-out styling for the Green Sea fallback
 
-### The Fetch — soft warning
+When the Green Sea link is gated out (`$haunts < 3` and no coin), the fallback now uses Dean Street's pattern: **`The Green Sea [YOU MUST NOT, YET, GO ANY DEEPER INLAND]`** wrapped in `.greyed-out`, with ✧ trailing once `$hauntExplained` is true. Mirrors the `[DONE FOR TONIGHT]` / `[LOOK ELSEWHERE FIRST]` vocabulary while preserving the dream-prose phrase.
 
-When `$lilyCount < 5` OR `$haunts's length < 12`, The Fetch passage shows:
+### Layout fixes on Carthage shore
 
-> *'You can leave now, perhaps it's wise to get out. But there are still flowers to gather in the night, and work yet to be done.'*
+- Blank line inserted before `Wake from this dream` so it reads as a separate option, not a third path
+- `\` line continuation after `[[Approach the pyre|Dido]]` to tighten the gap between Approach and the Green Sea conditional
 
-Soft hint, in-world voice, single-quoted to match. Doesn't appear at all when both lilies and haunts are complete.
+### Ruled out as candidates (for the record)
 
-### Wheel at the dawn, not on the 12th haunt
-
-`window.dssOpusReveal()` removed its self-gate (`prog.textContent === '12 of 12 caught'`). Removed from the haunt-box reveal logic. Added an inline script in the *Dawn* passage, gated on alba complete, that fires `dssOpusReveal()` 8 seconds after dawn loads — long enough for the alba lines to settle (1.6/3.4/5.2s) and a beat of reading time. Wheel comes up over the dawn view as the win-state coda.
-
-### Cellar / Carthage / Pillars — micro-fixes
-
-- **The Pillars [LOOK ELSEWHERE FIRST]** — was `[DONE FOR TONIGHT]`, misled the player into thinking nothing more was there.
-- **Carthage stays open until alba2 is caught** — `Seek the coast` link now stays available if `$visitedCarthage is false OR not ($alba contains $alba2)`. Player can return for the Green Sea line after a first Carthage visit.
-- **`Seek the coast — beyond The Pillars` → `through The Pillars`** — Carthage is in the Mediterranean, not past Gibraltar.
-- **The Voice link removed.** Was firing at 2/3 alba and reading as premature. The Fetch is now reached only via the alba-complete dawn link.
-- **`Remain in Carthage` no longer gated on `$confidence <= 15`** — always offered alongside the standard branches. The Interval is reachable regardless of stats.
-
-### Words to the Wise — modals
-
-All five inline `<div class="venue-hint-box">` blocks on Dean Street replaced with `wordToTheWisePopup(message)` triggers, gated once-per-session via `$shownLowBoth`, `$shownLowConf`, `$shownLowSobr`, `$shownChippyHint`. New generic `window.wordToTheWisePopup(message)` function alongside the existing `venueHintPopup` and `moraleWarningPopup`. Action links stay inline below; popup demands attention then dismisses to a page where you can act.
-
-### Burns / wine stains on every typewriter passage
-
-Added `.typewriter-page::after` pseudo-element with five radial-gradient marks: a wine-glass ring at top-right corner, four cigarette burns scattered. Applies globally to every typewriter passage. `.typewriter-paper-roll` bumped to `z-index: 1` so prose stays above the marks. `.typewriter-page::before` (the red margin line) also got `z-index: 0`.
-
-### Continue Where I Left Off
-
-Save trigger gated tighter — `$returns >= 1 AND not (_hideStats contains passage_name)`. Save only fires once the player has reached Dean Street at least once. Fresh first-run sees a clean Title; the link shows only after meaningful commitment.
-
-### Dual ring delay buffer
-
-New `$lilyCall1ReturnsAt` (init -999) stamped to current `$returns` when *Lily phone call 1* fires. Every dual-ring trigger across Coach lock / Pillars / Ronnie's / Colony / French now also requires `($returns - $lilyCall1ReturnsAt) >= 2` — at least two Dean Street returns must pass between the first call and the dual ring. No more back-to-back. Dual ring's hang-up handlers also explicitly `(set: $resumingFromCall to false)` so the Coach lock toilet sequence renders properly afterward.
-
-### Two haunts at once on page return
-
-The page-return scene at *O'Flatterly's Gift* drops both `THE DELIVERY` (haunt6) and `THE FEEDING` (haunt10). Wrapped THE FEEDING in `(after: 2.4s)[…]` so they arrive staggered.
-
-### Beast haunt clue removed
-
-Deleted the `<div class="haunt-opens">You know Martin Lackland. To bring him, you'll need a word — if you don't have it.</div>` line — no longer needed.
-
-### Inis spacing
-
-Added `.cecil-rule { display: block; margin: 0 0 1.6em; }` global CSS rule. Every Cecil Court passage's top SVG now has space above the prose.
-
-### Sonnet quote fade-in
-
-Added `.lily-fade-late` (10s `animation-delay`) class for Lily phone call 1's sonnet quote, `.lily-fade-very-late` (22s) for The dual ring's "And the tears…" line. Both still use the existing 2.5s `lilyFadeIn` animation, just with the start shifted so they fade in *after* the dialogue has played out.
-
-### Dawn colours — pink/gold/grey
-
-Replaced the navy gradient (`#060810` → `#142142` → `#0b2230`) with a top-to-horizon palette mapped from the `oxford-street-from-centre-point-3d-static.html` render: `#2a2620` (warm dark zenith) → `#585250`/`#6e6060` (cool grey) → `#785a52`/`#a07a6c`/`#c89878` (dusty rose, peach) → `#d69068` (warm horizon). Title `#f0c870` → `#c4ae88` (champagne). All ending-pane interior, alba-line block, "THE END" text, and book-name accent retuned.
-
-### Cow ride — adjacent-row protection
-
-Spawn fairness extended: any obstacle still in the top third of the field (`y < H * 0.34`) now also blocks lanes *directly adjacent* to it for the next spawn. Two obstacles arriving in adjacent rows at the same time should be impossible. Safety valve drops the adjacency rule (but keeps the projection rule) if it would leave zero free lanes — better a fairness slip than a long empty stretch.
+Cellar internals (Beaten / Standing / St. John's Word / Fight Defeat / Fight Victory / The dark pass) — pure linear funnel, single onward link per state. Cecil Court / Watkins / O'Flatterly's shop — linear chain. Approach passages (all of them) — single-link container-div transits. The Fetch — has two links but they're meta decisions (end / continue), not venue choices. Entering The Pillars — single onward link. Colony drink, Ronnie Scott's, Lackland's Office — internal branches and back-to-hub only, no lateral.
 
 ---
 
-## Bug fixes
+## Memory
 
-### Trisha's `makeCanvasTexture` ReferenceError
+New feedback memory: **`feedback_preserve_choices.md`** — when Dr Quill chose explicitly to keep the seemingly-redundant "Wake from this dream" safety valve on Carthage shore, he articulated *"too much of this [game] has now [had] choices taken away — I want to leave them and build them where I can."* Future passes should default to keeping/building player choices, not streamlining them. Indexed in MEMORY.md.
 
-The Trisha's IIFE (line 24228) used `makeCanvasTexture` from line 24278 onwards but never defined it inside its own scope. Other scene IIFEs each define it locally. Added the function inside `buildTSScene` right after `placeMesh`.
+---
 
-### Sonnets quote typos
+## Literary critique — open suggestions (not implemented)
 
-Three small fixes in *Lily phone call 1*:
-- Collapsed double space `…  '` → `… '`
-- Removed brackets around `[She doesn't reply.]`
-- Removed leading space `' And` → `'And`
+Dr Quill asked for a survey of the prose narrative as a whole. Long version is in the conversation; the open-thread items worth considering for future sessions:
 
-### Donkey coin
+- **The critic's-judgement aftermath deflects too quickly.** "Not for me. Have you tried America?" is a brutal joke; the password ("I said hello") absorbs it before the rejection has time to land. Worth one sentence holding the moment before the puzzle-text takes over.
+- **Alba Incomplete ending is under-built relative to the Dawn.** The Dawn ending earns its weight by staging *renunciation* (the forgotten lily-of-the-valley name, the embrace of Aoife and the daughter). The Incomplete ending currently just states non-arrival ("You did not find the poem. The dawn will come regardless.") — could stage a knowing-failure rather than absence.
+- **The Spanish Artist deserves more.** Benito de los Juncales del Oeste's line — *"You're selling something. It is making unhappy. You cannot force someone to see what you have made. You might make it; they might find it."* — is the thesis of the whole work in disguise, but currently passes quickly into the napkin-sketch interactive.
+- **Dense allusions.** The work is in the lineage of David Jones, late Yeats, Geoffrey Hill, Eliot's *Four Quartets*. The literary load is mostly carried gracefully, but the Carthage shore LORE expands and a couple of the Polybius/Scipio beats lean on classical literacy. One or two small framing phrases could let the unread player ride the emotional shape without losing face — only if Dr Quill wants the wider audience.
 
-- 70px → **120px** (perspective 350 → 420 to keep the flip feel right).
-- Position-shift bug fixed by switching `Pocket it` button from `display: none` → `visibility: hidden` so the box is the same height before and after the first toss.
-
-### Critic page-turn motes — too fast
-
-Originally the password's motes spawned ~1s after passage entry, while the player was still on click 1 of the page-turn. Now deferred to 1.5s after the verdict's aftermath fades in (see Page-turn at the Critic above).
-
-### Magenta "(if:) should be stored" error
-
-In the chippy-hint modal conversion, the second branch (`'probably hungry'`) opened a nested `(if: $shownChippyHint is false)[…` but I left the inner hook unclosed — `</script>` ended the line where there should've been `</script>]`. Added the missing `]`. Bracket-depth check across Dean Street ends at 0 again.
+He may or may not want any of these touched; surfacing them here so the next session can pick them up if asked.
 
 ---
 
@@ -203,14 +74,17 @@ In the chippy-hint modal conversion, the second branch (`'probably hungry'`) ope
 
 - `Dream Street Shuffle.twee` — 146 passages, all session changes synced
 - `Dream Street Shuffle.html` — compiled output (do not read; sync via `python3 sync_html.py`)
-- `sync_html.py` — added `__DSS_PONGMINI_DATA_URI__`, `__DSS_JAZZMINI_DATA_URI__`, `__DSS_COWGAME_DATA_URI__` substitutions
+- `~/.claude/projects/.../memory/feedback_preserve_choices.md` — new feedback memory
+- `~/.claude/projects/.../memory/MEMORY.md` — index updated
 
 ---
 
 ## Possible next threads
 
-- **Cow ride** — adjacent-row protection just landed; needs another playtest at mid/late tiers to confirm impossible configurations are gone.
-- **Heartbeat on the dual ring's Lily side** — inline script fires `heartbeat(6)` at 7.8s. If still inaudible to Dr Quill, move to the global observer or bump volume.
-- **Lily phone call 1 sonnet quote** — fade-in delay is 10s. Worth re-checking whether the typewriter-static *After the call* makes the sonnet feel less laggy by comparison.
-- **Items 6 & 7 from earlier "fun additions"** — the Lackland's record-skipping interaction and the photo at the bar were sketched but not built. Optional polish for after first-draft.
-- **General Dr Quill audit pass** — every change in this session was driven by his playtest notes; one more clean walkthrough would shake out anything missed.
+- **Critic's-judgement holding-beat** — one sentence between "Have you tried America?" and the password-deflection.
+- **Alba Incomplete ending re-build** — give the loss-state its own renunciation-shape rather than just absence.
+- **Spanish Artist expansion** — let Benito's permission-to-write line carry more weight before the napkin sketch.
+- **Cow ride mid-tier playtest** (rolled over from previous handoff — adjacent-row protection still wants verification).
+- **Heartbeat on dual ring's Lily side** (rolled over — confirm audibility).
+- **Items 6 & 7 from earlier "fun additions"** (rolled over — Lackland's record-skipping and the photo at the bar).
+- **General Dr Quill audit pass** (rolled over — clean walkthrough to shake out anything missed).

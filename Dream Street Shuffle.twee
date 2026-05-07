@@ -380,25 +380,31 @@ window.dssAudio = (function() {
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
     var d = buf.getChannelData(0);
-    // Soft 0.8ms attack — without it the instantaneous onset of the
-    // noise creates wideband click content that registers as a low
-    // bass thump under each tick on some speakers.
+    // Soft 0.8ms attack + 1.5ms release tapered to zero — eliminates
+    // BOTH onset and offset transients. Without the release, the
+    // exponential decay still has ~0.7% amplitude at 20ms, so the
+    // src.stop() snaps it to zero and creates a low-frequency click.
     var attackSamples = Math.floor(ac.sampleRate * 0.0008);
+    var releaseSamples = Math.floor(ac.sampleRate * 0.0015);
     for (var i = 0; i < bufLen; i++) {
       var attack = i < attackSamples ? (i / attackSamples) : 1;
-      var env = attack * Math.exp(-i / (ac.sampleRate * 0.004));
+      var release = (bufLen - i) < releaseSamples ? ((bufLen - i) / releaseSamples) : 1;
+      var env = attack * release * Math.exp(-i / (ac.sampleRate * 0.004));
       d[i] = (Math.random()*2-1) * env;
     }
     var src = ac.createBufferSource(); src.buffer = buf;
-    // Highpass first — strip any residual sub/bass that leaks through
-    // the bandpass's gentle low-side rolloff.
-    var hp = ac.createBiquadFilter(); hp.type='highpass';
-    hp.frequency.value = 400; hp.Q.value = 0.7;
+    // Two-stage highpass — first knocks out sub-bass, second runs after
+    // the bandpass to catch any low-frequency ringing the resonant
+    // bandpass introduces. Combined ~36dB/octave below 700Hz.
+    var hp1 = ac.createBiquadFilter(); hp1.type='highpass';
+    hp1.frequency.value = 700; hp1.Q.value = 0.9;
     var f = ac.createBiquadFilter(); f.type='bandpass';
     f.frequency.value = 1800 + Math.random()*600;
     f.Q.value = 4;
+    var hp2 = ac.createBiquadFilter(); hp2.type='highpass';
+    hp2.frequency.value = 700; hp2.Q.value = 0.7;
     var g = ac.createGain(); g.gain.value = (typeof vol === 'number' ? vol : 0.18);
-    src.connect(hp); hp.connect(f); f.connect(g); g.connect(ac.destination);
+    src.connect(hp1); hp1.connect(f); f.connect(hp2); hp2.connect(g); g.connect(ac.destination);
     src.start(now); src.stop(now + dur + 0.005);
       });
   }

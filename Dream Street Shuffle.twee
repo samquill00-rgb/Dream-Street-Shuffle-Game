@@ -60,6 +60,10 @@ Dream Street Shuffle
 (set: $resumingFromCall to false)\
 (set: $coachUrgent to false)
 (set: $shownVenueHint to false)\
+(set: $shownLowBoth to false)\
+(set: $shownLowConf to false)\
+(set: $shownLowSobr to false)\
+(set: $shownChippyHint to false)\
 (set: $tookLily1 to false)\
 (set: $tookLily2 to false)\
 (set: $tookLily3 to false)\
@@ -1628,6 +1632,19 @@ window.dssAudio = (function() {
     bed._forced = true;
     _startBed(bed);
   }
+  // Smooth fade to silence then stop. Used for the dawn ending so the
+  // piano doesn't loop forever as the petals fill the screen.
+  function fadeBedByLabel(label, durationMs) {
+    var bed = findBedByLabel(label);
+    if (!bed || !bed.started || !bed.gain) return;
+    var ac = getCtx(); if (!ac) return;
+    var ms = (typeof durationMs === 'number' && durationMs > 0) ? durationMs : 4000;
+    var t = ac.currentTime;
+    bed.gain.gain.cancelScheduledValues(t);
+    bed.gain.gain.setValueAtTime(bed.gain.gain.value, t);
+    bed.gain.gain.linearRampToValueAtTime(0.0001, t + ms / 1000);
+    setTimeout(function(){ _stopBed(bed); }, ms + 50);
+  }
   // Flute-like single tone — sine fundamental with a breathy noise attack
   // (air across the embouchure) and a subtle vibrato. Still one pitch.
   // Used when "NAME YOUR BOOK" appears at the end of The Night Ahead's typewriter.
@@ -1921,13 +1938,13 @@ window.dssAudio = (function() {
   function distantBell() {
     _play(function(ac) {
       var now = ac.currentTime;
-      var dur = 4.5;
+      var dur = 3.6; // shorter tail — a single morning dong, not a continuous peal
       var partials = [
-        { freq: 440,  amp: 0.08 },   // fundamental (A4)
-        { freq: 880,  amp: 0.05 },   // octave
-        { freq: 1180, amp: 0.035 },  // inharmonic — gives bell quality
-        { freq: 1850, amp: 0.022 },  // sparkle
-        { freq: 220,  amp: 0.045 }   // sub-hum
+        { freq: 440,  amp: 0.035 },  // fundamental (A4) — subtle, not loud
+        { freq: 880,  amp: 0.022 },  // octave
+        { freq: 1180, amp: 0.014 },  // inharmonic — gives bell quality
+        { freq: 220,  amp: 0.020 }   // sub-hum
+        // sparkle partial dropped — too bright for a far-off morning bell
       ];
       partials.forEach(function(p) {
         var o = ac.createOscillator(); o.type = 'sine';
@@ -2165,7 +2182,7 @@ window.dssAudio = (function() {
     // Venue ambient beds
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
-    startBed: startBedByLabel, stopBed: stopBedByLabel
+    startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel
   };
 })();
 
@@ -2700,6 +2717,31 @@ window.moraleWarningPopup = function(conf, sobr) {
     '</div>';
   document.body.appendChild(overlay);
   // Dismiss on any click (overlay or inner box) and on Escape.
+  function dismiss(){ if (overlay.parentNode) overlay.remove(); document.removeEventListener('keydown', onKey); }
+  function onKey(e){ if (e.key === 'Escape') dismiss(); }
+  overlay.addEventListener('click', dismiss);
+  document.addEventListener('keydown', onKey);
+};
+
+// ====== GENERIC WORD-TO-THE-WISE POPUP ======
+// Used by Dean Street's various morale / chippy hints. Twee-side gating
+// flags ($shownLowConf etc.) ensure each unique message only triggers once
+// per playthrough — the modal grabs attention, then dismisses on click or
+// Escape, leaving the underlying action links available on the page.
+window.wordToTheWisePopup = function(message) {
+  if (document.getElementById('wtw-overlay')) return;
+  var overlay = document.createElement('div');
+  overlay.id = 'wtw-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(4,3,8,0.85);display:flex;align-items:center;justify-content:center;z-index:19999;';
+  overlay.innerHTML =
+    '<div class="venue-hint-box">' +
+      '<div class="vh-mist vh-mist1"></div>' +
+      '<div class="vh-mist vh-mist2"></div>' +
+      '<div class="vh-mist vh-mist3"></div>' +
+      '<div class="vh-label">⟡ A WORD TO THE WISE ⟡</div>' +
+      '<div class="venue-hint-text">' + message + '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
   function dismiss(){ if (overlay.parentNode) overlay.remove(); document.removeEventListener('keydown', onKey); }
   function onKey(e){ if (e.key === 'Escape') dismiss(); }
   overlay.addEventListener('click', dismiss);
@@ -6967,7 +7009,9 @@ window._passageGen = 0;
                 }
               }
               if (window.hauntBackgroundGlow) window.hauntBackgroundGlow();
-              if (window.dssOpusReveal) window.dssOpusReveal();
+              // Wheel reveal moved to the Dawn passage — fires there when the
+              // alba is complete, over the dawn view, rather than mid-game on
+              // the 12th haunt collection.
             };
             setTimeout(function() {
               if (window._drinkPopupOpen) {
@@ -7066,11 +7110,10 @@ window.hauntBackgroundGlow = function() {
 };
 
 // ====== OPUS STATE REVEAL — Ripley's Wheel ======
-// Fires when the 12th haunt is collected (i.e. The Crown / Exaltatio in Alba Complete ending only).
-// Draws a 12-stage alchemical wheel in canonical Ripley order, holds, fades out.
+// Fires from the Dawn passage when the alba is complete. Drawn over the
+// dawn view as the win-state coda. Caller is responsible for gating; the
+// only safety check here is "don't double-spawn".
 window.dssOpusReveal = function() {
-  var prog = document.querySelector('.haunt-progress');
-  if (!prog || prog.textContent.trim() !== '12 of 12 caught') return;
   if (document.getElementById('dss-wheel-modal')) return;
 
   // Canonical Ripley sequence (Compound of Alchymy, 1471), clockwise from 12 o'clock.
@@ -26738,6 +26781,10 @@ document.addEventListener('keydown', function(e) {
   var petalObserver = null;
 
   function startPetalStorm() {
+    // The piano shouldn't loop into the credits — fade it as the petals rise.
+    if (window.dssAudio && window.dssAudio.fadeBed) {
+      try { window.dssAudio.fadeBed('piano-eoin', 6000); } catch(e) {}
+    }
     var wrap = document.createElement('div');
     wrap.className = 'dawn-petal-wrap';
     document.body.appendChild(wrap);
@@ -26748,9 +26795,9 @@ document.addEventListener('keydown', function(e) {
     finisEl.textContent = 'THE END';
     finisEl.style.cssText = [
       'position:fixed', 'bottom:7vh', 'left:50%', 'transform:translateX(-50%)',
-      'z-index:20', 'white-space:nowrap', 'color:#f4c870', 'font-size:1.7em',
+      'z-index:20', 'white-space:nowrap', 'color:#c4ae88', 'font-size:1.7em',
       'letter-spacing:0.55em', 'font-family:Playfair Display,Georgia,serif',
-      'text-shadow:0 0 24px rgba(240,160,40,0.7),0 0 8px rgba(255,220,120,0.5)',
+      'text-shadow:0 0 24px rgba(196,158,108,0.6),0 0 8px rgba(220,196,160,0.4)',
       'margin:0', 'padding-top:1.2em',
       'opacity:0', 'transition:opacity 2.5s 2s ease-in'
     ].join(';');
@@ -27389,7 +27436,6 @@ You take its bridle. It sneezes. When you look back he's disappeared, perhaps to
 <div class="haunt-name">THE BEAST</div>
 <div class="haunt-description">Is it New York or New Year?</div>
 <div class="haunt-work"><em>The work: Putrefactio.</em></div>
-<div class="haunt-opens">You know Martin Lackland. To bring him, you'll need a word — if you don't have it.</div>
 <div class="haunt-progress">(print: $haunts's length) of 12 caught</div>
 </div>
 (if: $haunts's length is 1)[(set: $hauntExplained to true)
@@ -27556,6 +27602,17 @@ Traveller, sleep!
 (if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[(go-to: "Alba Complete")](else:)[(go-to: "Alba Incomplete")]
 
 :: Dawn [dawn-end piano-bed] {"position":"1700,100","size":"100,100"}
+(if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[<script>
+// Win-state coda — Ripley's Wheel reveals over the dawn view a few beats
+// after the alba lines have settled. Only fires when the alba is complete.
+(function(){
+  var pgGen = window._passageGen;
+  setTimeout(function(){
+    if (window._passageGen !== pgGen) return;
+    if (window.dssOpusReveal) window.dssOpusReveal();
+  }, 8000);
+})();
+</script>]
 <div class="ending-pane"><div class="dawn-title">THE DAWN</div>
 <div class="dawn-bookname">// (print: $bookTitle) //</div>
 You have been awake for so long.
@@ -27627,57 +27684,59 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 (if: $returns > 1)[(enchant: ?deanIntro, (text-colour: "#4a4a4a") + (css: "opacity:0.6"))]
 
 
-(if: $metRed is false and _towerReady is false and $coachUrgent is false)[Someone's on the corner.
+(if: $metRed is false and $coachUrgent is false)[Someone's on the corner.
 
 [[See who's there|Approach The Ginger Light]]]
 (if: $metRed is true)[\
-(if: _towerReady)[<div class="choice-box"><span class="guided-link">[[The dawn is coming|Approach Centre Point]]</span></div>](else-if: $coachUrgent is true)[<div class="choice-box">'[Noises off. Blackout.]'
+(if: _towerReady)[<div class="choice-box"><span class="guided-link">[[The dawn is coming|The Fetch]]</span></div>]
+(if: $coachUrgent is true and _towerReady is false)[<div class="choice-box">'[Noises off. Blackout.]'
 
-<span class="guided-link">[[The Coach and Horses|Approach The Coach]]</span></div>](else:)[Where now?
+<span class="guided-link">[[The Coach and Horses|Approach The Coach]]</span></div>]
+(if: $coachUrgent is false)[Where now?
 (if: _albaCount is 2)[<div class="choice-box"><span class="greyed-out">Centre Point &#91;ONE MORE LINE OF THE ALBA&#93;</span></div>
 ]\
 (if: $returns >= 2 and $visited's French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)<script>setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);</script>]
-(if: $returns >= 3 and $confidence < 30 and $sobriety < 30)[<div class="venue-hint-box"><div class="vh-label">⟡ A WORD TO THE WISE ⟡</div><div class="venue-hint-text">You're in a bad way. Get some grub, find a doorway, catch your breath.</div></div>
+(if: $returns >= 3 and $confidence < 30 and $sobriety < 30)[(if: $shownLowBoth is false)[(set: $shownLowBoth to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You're in a bad way. Get some grub, find a doorway, catch your breath.");},300);</script>]
 (if: $hadChippy is false)[[[Get some grub|Approach Chinese Fish and Chips]]
 ](if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]]
-](else-if: $returns >= 3 and $confidence < 40)[<div class="venue-hint-box"><div class="vh-label">⟡ A WORD TO THE WISE ⟡</div><div class="venue-hint-text">Your confidence is slipping. Find somewhere to gather yourself.</div></div>
+](else-if: $returns >= 3 and $confidence < 40)[(if: $shownLowConf is false)[(set: $shownLowConf to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("Your confidence is slipping. Find somewhere to gather yourself.");},300);</script>]
 (if: $hadChippy is false)[[[Get some grub|Approach Chinese Fish and Chips]]]
-](else-if: $returns >= 3 and $sobriety < 40)[<div class="venue-hint-box"><div class="vh-label">⟡ A WORD TO THE WISE ⟡</div><div class="venue-hint-text">You should have gone to the gents earlier.</div></div>
+](else-if: $returns >= 3 and $sobriety < 40)[(if: $shownLowSobr is false)[(set: $shownLowSobr to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You should have gone to the gents earlier.");},300);</script>]
 (if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]](else-if: $hadChippy is false)[[[Get some grub|Approach Chinese Fish and Chips]]]
 ]]
-(if: $coachUrgent is false and _towerReady is false and not (($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2)))[[[To The French|Approach The French]] (if: $haunts contains $haunt4)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt1)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt2)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
-](if: $coachUrgent is false and _towerReady is false and ($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2))[<span class="greyed-out">The French &#91;DONE FOR TONIGHT&#93;</span>
+(if: $coachUrgent is false and not (($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2)))[[[To The French|Approach The French]] (if: $haunts contains $haunt4)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt1)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt2)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
+](if: $coachUrgent is false and ($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2))[<span class="greyed-out">The French &#91;DONE FOR TONIGHT&#93;</span>
 ]\
-(if: $coachUrgent is false and _towerReady is false and $visited's French is true and $hadPhoneCall is true and $metCritic is false)[[[The Pillars — there was someone you wanted to talk to|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
-](else-if: $coachUrgent is false and _towerReady is false and $visited's French is true and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
-](else-if: $coachUrgent is false and _towerReady is false and $visited's French is true and $metCritic is true and $knowsAboutPage is true and ($visitedCarthage is false or not ($alba contains $alba2)))[[[Seek the coast — beyond The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
-](else-if: $coachUrgent is false and _towerReady is false and $visited's French is true and $metCritic is true)[<span class="greyed-out">The Pillars &#91;LOOK ELSEWHERE FIRST&#93;</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
+(if: $coachUrgent is false and $visited's French is true and $hadPhoneCall is true and $metCritic is false)[[[The Pillars — there was someone you wanted to talk to|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
+](else-if: $coachUrgent is false and $visited's French is true and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
+](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $knowsAboutPage is true and ($visitedCarthage is false or not ($alba contains $alba2)))[[[Seek the coast — beyond The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
+](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true)[<span class="greyed-out">The Pillars &#91;LOOK ELSEWHERE FIRST&#93;</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ]\
-(if: $coachUrgent is false and _towerReady is false and $visited's French is true and not ($knowsRonnies is true and $knowsCopperSecret is true))[[[Try the Colony Room|Approach The Colony Room]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
-](else-if: $coachUrgent is false and _towerReady is false and $visited's French is true)[<span class="greyed-out">The Colony Room &#91;DONE FOR TONIGHT&#93;</span> (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] <span class="hp hp-done">◆</span>
+(if: $coachUrgent is false and $visited's French is true and not ($knowsRonnies is true and $knowsCopperSecret is true))[[[Try the Colony Room|Approach The Colony Room]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
+](else-if: $coachUrgent is false and $visited's French is true)[<span class="greyed-out">The Colony Room &#91;DONE FOR TONIGHT&#93;</span> (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] <span class="hp hp-done">◆</span>
 ]\
-(if: $coachUrgent is false and _towerReady is false and $knowsRonnies is true and $completedSetlist is false)[[[Hear the jazz at Ronnie Scott's|Approach Ronnie Scott's]] (if: $haunts contains $haunt7)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
-](else-if: $coachUrgent is false and _towerReady is false and $knowsRonnies is true and $completedSetlist is true)[<span class="greyed-out">Ronnie Scott's &#91;DONE FOR TONIGHT&#93;</span> (if: $haunts contains $haunt7)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
+(if: $coachUrgent is false and $knowsRonnies is true and $completedSetlist is false)[[[Hear the jazz at Ronnie Scott's|Approach Ronnie Scott's]] (if: $haunts contains $haunt7)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
+](else-if: $coachUrgent is false and $knowsRonnies is true and $completedSetlist is true)[<span class="greyed-out">Ronnie Scott's &#91;DONE FOR TONIGHT&#93;</span> (if: $haunts contains $haunt7)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
 ]\
-(if: $coachUrgent is false and _towerReady is false and $knowsLackland is true and $knowsCopperSecret is true)[[[Go to Lackland's Office|Approach Lacklands Office]]
-](else-if: $coachUrgent is false and _towerReady is false and $knowsLackland is true)[<span class="greyed-out">Lackland's Office &#91;NEED A WORD&#93;</span>
+(if: $coachUrgent is false and $knowsLackland is true and $knowsCopperSecret is true)[[[Go to Lackland's Office|Approach Lacklands Office]]
+](else-if: $coachUrgent is false and $knowsLackland is true)[<span class="greyed-out">Lackland's Office &#91;NEED A WORD&#93;</span>
 ]\
-(if: $coachUrgent is false and _towerReady is false and $knowsCecilCourt is true and $hasMissingPage is true and $returnedPage is false)[[[Return the page to O'Flatterly|O'Flatterly introduction]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op op-done">●</span>
-](else-if: $coachUrgent is false and _towerReady is false and $knowsCecilCourt is true and $knowsAboutPage is true and $returnedPage is false)[<span class="greyed-out">Cecil Court &#91;(if: $hasCleggBeermat is true)[FIND PAGE 93 — //CARTHAGE//](else:)[FIND PAGE 93 FIRST]&#93;</span> (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op">○</span>
-](else-if: $coachUrgent is false and _towerReady is false and $knowsCecilCourt is true and $returnedPage is false)[[[Visit the antiquarian in Cecil Court|Cecil Court Approach]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op">○</span>
-](if: $coachUrgent is false and _towerReady is false and $returnedPage is true)[<span class="greyed-out">Cecil Court &#91;CLOSED&#93;</span> (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op op-done">●</span>
+(if: $coachUrgent is false and $knowsCecilCourt is true and $hasMissingPage is true and $returnedPage is false)[[[Return the page to O'Flatterly|O'Flatterly introduction]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op op-done">●</span>
+](else-if: $coachUrgent is false and $knowsCecilCourt is true and $knowsAboutPage is true and $returnedPage is false)[<span class="greyed-out">Cecil Court &#91;(if: $hasCleggBeermat is true)[FIND PAGE 93 — //CARTHAGE//](else:)[FIND PAGE 93 FIRST]&#93;</span> (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op">○</span>
+](else-if: $coachUrgent is false and $knowsCecilCourt is true and $returnedPage is false)[[[Visit the antiquarian in Cecil Court|Cecil Court Approach]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op">○</span>
+](if: $coachUrgent is false and $returnedPage is true)[<span class="greyed-out">Cecil Court &#91;CLOSED&#93;</span> (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op op-done">●</span>
 ]\
-(if: $coachUrgent is false and _towerReady is false and $hasTrishaMatchbook is true and $hasLiver is true and $metShana is false)[[[Try Trisha's|Approach Trisha's]] (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
-](else-if: $coachUrgent is false and _towerReady is false and $metShana is true)[<span class="greyed-out">Trisha's &#91;CLOSED&#93;</span> (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
+(if: $coachUrgent is false and $hasTrishaMatchbook is true and $hasLiver is true and $metShana is false)[[[Try Trisha's|Approach Trisha's]] (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
+](else-if: $coachUrgent is false and $metShana is true)[<span class="greyed-out">Trisha's &#91;CLOSED&#93;</span> (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
 ]\
-(if: _towerReady is false and $coachUrgent is false and ($alba contains $alba1) and ($alba contains $alba2) and not ($alba contains $alba3))[<div class="choice-box"><span class="guided-link">[[The voice|The Fetch]]</span></div>
+(if: $coachUrgent is false and ($alba contains $alba1) and ($alba contains $alba2) and not ($alba contains $alba3))[<div class="choice-box"><span class="guided-link">[[The voice|The Fetch]]</span></div>
 ]\
-(if: _towerReady is false and $coachUrgent is false and $confidence < 50 and $hadChippy is false)[<div class="venue-hint-box"><div class="vh-label">⟡ A WORD TO THE WISE ⟡</div><div class="venue-hint-text">If you're in a bad way, there's a place you know called the Chinese Fish and Chips.</div></div>
-[[Get some grub|Approach Chinese Fish and Chips]]](else-if: _towerReady is false and $coachUrgent is false and $returns >= 5 and $hadChippy is false)[<div class="venue-hint-box"><div class="vh-label">⟡ A WORD TO THE WISE ⟡</div><div class="venue-hint-text">You're probably hungry. There's a place you know called the Chinese Fish and Chips.</div></div>
-[[Get some grub|Approach Chinese Fish and Chips]]](else-if: _towerReady is false and $coachUrgent is false and $hadChippy is true and $tookLily1 is false)[<div class="choice-box">[[Back to the chippy — there was something you missed|Approach Chinese Fish and Chips]]</div>](else-if: _towerReady is false and $coachUrgent is false and $hadChippy is true)[<span class="greyed-out">Get some grub</span>
+(if: $coachUrgent is false and $confidence < 50 and $hadChippy is false)[(if: $shownChippyHint is false)[(set: $shownChippyHint to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("If you're in a bad way, there's a place you know called the Chinese Fish and Chips.");},300);</script>]
+[[Get some grub|Approach Chinese Fish and Chips]]](else-if: $coachUrgent is false and $returns >= 5 and $hadChippy is false)[(if: $shownChippyHint is false)[(set: $shownChippyHint to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You're probably hungry. There's a place you know called the Chinese Fish and Chips.");},300);</script>
+[[Get some grub|Approach Chinese Fish and Chips]]](else-if: $coachUrgent is false and $hadChippy is true and $tookLily1 is false)[<div class="choice-box">[[Back to the chippy — there was something you missed|Approach Chinese Fish and Chips]]</div>](else-if: $coachUrgent is false and $hadChippy is true)[<span class="greyed-out">Get some grub</span>
 ]\
-(if: _towerReady is false and $coachUrgent is false and ($confidence < 10 or $sobriety < 10) and $hasLiver is true)[<div class="choice-box">'Perhaps you should eat Shelley's liver. It's in your notebook.'</div>]\
-(if: _towerReady is false and $coachUrgent is false and $confidence <= 5)[[[Give up on the night|No more]]
+(if: $coachUrgent is false and ($confidence < 10 or $sobriety < 10) and $hasLiver is true)[<div class="choice-box">'Perhaps you should eat Shelley's liver. It's in your notebook.'</div>]\
+(if: $coachUrgent is false and $confidence <= 5)[[[Give up on the night|No more]]
 ]\
 ]
 
@@ -27704,11 +27763,11 @@ So, so happily I go, under shades.</span></div>]
 
 [[Reach into the flames|Rescue the page]]]
 
-(if: $confidence <= 15)[[[Remain in Carthage|Stay in Carthage]]
+[[Remain in Carthage|Stay in Carthage]]
+
 (if: $haunts's length >= 3 or $hasCoin is true)[[[Try The Green Sea|Green Sea Approach]]](else:)[//You must not, yet, go any deeper inland.//]
 
-[[Return to the shore|The coast of Carthage]]]
-(else:)[Not yet. The game's not played to death.
+(if: $confidence <= 15)[[[Return to the shore|The coast of Carthage]]](else:)[Not yet. The game's not played to death.
 
 (if: $haunts's length >= 3 or $hasCoin is true)[[[Go back to shore|Carthage shore]]](else:)[[[Wake from this dream|Dream to Dean]]]]
 
@@ -27777,6 +27836,7 @@ You're lucky, you reflect, that he worked out you don't.
 </div>
 
 :: The dark pass [outdoor] {"position":"2300,1350","size":"100,100"}
+<div class="typewriter-page">
 You watch John St. John throw off his tail in the darkness, then surface again at the far end of the street, in the pool where the ginger light shines.
 
 Just as he does, Red walks into the frame, hands deep in his pockets; fag in his mouth, swaying like a conductor's baton.
@@ -27784,6 +27844,7 @@ Just as he does, Red walks into the frame, hands deep in his pockets; fag in his
 It seems, almost, like he wants to speak to John, who doesn't want to speak, and so ploughs his long stride deeper and into the night.
 
 [[Dean Street|Dean Street]]
+</div>
 
 :: Failure: Trisha's {"position":"700,1400","size":"100,100"}
 (if: $hasTrishaMatchbook is true)[The doorman's saying no tonight. You're about to fuck off, politely, when you think of the matchbook. You give it him. 'Jack Curtis,' he says. 'You should have said. Come in.'
@@ -28122,7 +28183,7 @@ The last line comes out of your own throat, as you cry, 'I wish that I was never
 
 <strong class="alba-counter">THE THIRD LINE. THE ALBA IS COMPLETE.</strong>
 
-<span class="guided-link">[[The dawn is coming|Approach Centre Point]]</span>](else:)[<strong class="alba-counter">THE THIRD LINE.</strong>
+<span class="guided-link">[[The dawn is coming|The Fetch]]</span>](else:)[<strong class="alba-counter">THE THIRD LINE.</strong>
 
 There are still lines hidden in the night.
 
@@ -30206,6 +30267,10 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $resumingFromCall to false)\
 (set: $coachUrgent to false)
 (set: $shownVenueHint to false)\
+(set: $shownLowBoth to false)\
+(set: $shownLowConf to false)\
+(set: $shownLowSobr to false)\
+(set: $shownChippyHint to false)\
 (set: $tookLily1 to false)\
 (set: $tookLily2 to false)\
 (set: $tookLily3 to false)\
@@ -31251,10 +31316,10 @@ Before you can answer, he says, 'I don't know.'
 <svg class="phone-rule lily-phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="lpBl"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="lpCd" x1="0" x2="1"><stop offset="0%" stop-color="#4a3858" stop-opacity="0"/><stop offset="20%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="50%" stop-color="#7a5888" stop-opacity="0.55"/><stop offset="80%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="100%" stop-color="#4a3858" stop-opacity="0"/></linearGradient><linearGradient id="lpHd" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a2048"/><stop offset="40%" stop-color="#5a3868"/><stop offset="100%" stop-color="#4a2858"/></linearGradient><radialGradient id="lpGw" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#b090c0" stop-opacity="0.10"/><stop offset="100%" stop-color="#b090c0" stop-opacity="0"/></radialGradient></defs><ellipse cx="130" cy="26" rx="55" ry="17" fill="#907098" opacity="0.05" filter="url(#lpBl)"/><ellipse cx="185" cy="30" rx="42" ry="13" fill="#806088" opacity="0.04" filter="url(#lpBl)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#lpGw)"/><path d="M14 27 Q20 12 26 27 Q32 42 38 27 Q44 12 50 27 Q56 42 62 27 Q68 13 74 27 Q79 38 84 27 Q89 18 94 27 Q98 33 102 27 Q105 24 108 27" fill="none" stroke="url(#lpCd)" stroke-width="2" stroke-linecap="round"/><path d="M192 27 Q195 24 198 27 Q202 33 206 27 Q211 18 216 27 Q221 38 226 27 Q232 13 238 27 Q244 42 250 27 Q256 12 262 27 Q268 42 274 27 Q280 12 286 27" fill="none" stroke="url(#lpCd)" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="27" r="2" fill="#5a3868" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#5a3868" opacity="0.4"/><g transform="translate(150,27) rotate(-8)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#lpHd)" opacity="0.55"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/></g></svg>
 
 <div class="phone-type lily-phone-narrate" style="--d:0.3s;--t:1.0s">The phone rings. It's Lily.</div>\
-<div class="phone-type lily-phone-her" style="--d:2.4s;--t:1.4s">'It was too funny not to tell you… somebody said…  'If he writes her a few sonnets, he loves her. If he writes her 300 sonnets, he loves sonnets.''</div>\
+<div class="phone-type lily-phone-her" style="--d:2.4s;--t:1.4s">'It was too funny not to tell you… somebody said… 'If he writes her a few sonnets, he loves her. If he writes her 300 sonnets, he loves sonnets.''</div>\
 <div class="phone-type lily-phone-you" style="--d:4.2s;--t:1.0s">'I think that was Don Paterson,' you say, plausibly and incorrectly.</div>\
-<div class="phone-type lily-phone-her" style="--d:5.6s;--t:1.4s">[She doesn't reply.]</div>\
-<div class="phone-type lily-phone-you" style="--d:7.4s;--t:0.6s">' And where does that leave 14 sonnets?'</div>\
+<div class="phone-type lily-phone-her" style="--d:5.6s;--t:1.4s">She doesn't reply.</div>\
+<div class="phone-type lily-phone-you" style="--d:7.4s;--t:0.6s">'And where does that leave 14 sonnets?'</div>\
 <div class="phone-type lily-phone-narrate" style="--d:8.4s;--t:1.2s">It was a stupid answering-back to an unanswerable position; it might have gone better in rhyme.</div>
 
 <svg class="phone-rule lily-phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="lpBl2"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="lpCd2" x1="0" x2="1"><stop offset="0%" stop-color="#4a3858" stop-opacity="0"/><stop offset="20%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="50%" stop-color="#7a5888" stop-opacity="0.55"/><stop offset="80%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="100%" stop-color="#4a3858" stop-opacity="0"/></linearGradient><linearGradient id="lpHd2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a2048"/><stop offset="40%" stop-color="#5a3868"/><stop offset="100%" stop-color="#4a2858"/></linearGradient><radialGradient id="lpGw2" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#b090c0" stop-opacity="0.10"/><stop offset="100%" stop-color="#b090c0" stop-opacity="0"/></radialGradient></defs><ellipse cx="170" cy="28" rx="50" ry="15" fill="#907098" opacity="0.05" filter="url(#lpBl2)"/><ellipse cx="110" cy="24" rx="38" ry="12" fill="#806088" opacity="0.04" filter="url(#lpBl2)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#lpGw2)"/><path d="M14 27 Q20 42 26 27 Q32 12 38 27 Q44 42 50 27 Q56 12 62 27 Q68 40 74 27 Q79 16 84 27 Q89 34 94 27 Q98 22 102 27 Q105 30 108 27" fill="none" stroke="url(#lpCd2)" stroke-width="2" stroke-linecap="round"/><path d="M192 27 Q195 30 198 27 Q202 22 206 27 Q211 34 216 27 Q221 16 226 27 Q232 40 238 27 Q244 12 250 27 Q256 42 262 27 Q268 12 274 27 Q280 42 286 27" fill="none" stroke="url(#lpCd2)" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="27" r="2" fill="#5a3868" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#5a3868" opacity="0.4"/><g transform="translate(150,27) rotate(10)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#lpHd2)" opacity="0.55"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/></g></svg>
@@ -31283,6 +31348,19 @@ You remember that Lily rang. You'd not heard her voice sustained so long in so m
 (set: $hadDualRing to true)\
 (set: $lilyCallCount to $lilyCallCount + 1)\
 (set: $confidence to $confidence - 7)
+<script>
+// Second heartbeat — fires when the Lily portion of the dual ring begins.
+// The global header observer fires one heartbeat at ~1.5s for the Aoife
+// scene; we layer a second one in at ~7.8s so the Lily call has its own
+// pulse rather than playing dry.
+(function(){
+  var hbGen = window._passageGen;
+  setTimeout(function(){
+    if (window._passageGen !== hbGen) return;
+    if (window.dssAudio && window.dssAudio.heartbeat) window.dssAudio.heartbeat(6);
+  }, 7800);
+})();
+</script>
 <div class="phone-scene">
 <svg class="phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="drBl"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="drCd" x1="0" x2="1"><stop offset="0%" stop-color="#5a2818" stop-opacity="0"/><stop offset="20%" stop-color="#7a3828" stop-opacity="0.48"/><stop offset="50%" stop-color="#8a4030" stop-opacity="0.62"/><stop offset="80%" stop-color="#7a3828" stop-opacity="0.48"/><stop offset="100%" stop-color="#5a2818" stop-opacity="0"/></linearGradient><linearGradient id="drHd" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1812"/><stop offset="40%" stop-color="#7a2e20"/><stop offset="100%" stop-color="#5a2018"/></linearGradient><radialGradient id="drGw" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#c08040" stop-opacity="0.12"/><stop offset="100%" stop-color="#c08040" stop-opacity="0"/></radialGradient></defs><ellipse cx="125" cy="26" rx="58" ry="18" fill="#a08060" opacity="0.06" filter="url(#drBl)"/><ellipse cx="190" cy="30" rx="45" ry="14" fill="#907050" opacity="0.05" filter="url(#drBl)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#drGw)"/><path d="M14 27 Q20 12 26 27 Q32 42 38 27 Q44 12 50 27 Q56 42 62 27 Q68 13 74 27 Q79 38 84 27 Q89 18 94 27 Q98 33 102 27 Q105 24 108 27" fill="none" stroke="url(#drCd)" stroke-width="2" stroke-linecap="round"/><path d="M192 27 Q195 24 198 27 Q202 33 206 27 Q211 18 216 27 Q221 38 226 27 Q232 13 238 27 Q244 42 250 27 Q256 12 262 27 Q268 42 274 27 Q280 12 286 27" fill="none" stroke="url(#drCd)" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="27" r="2" fill="#6a2820" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#6a2820" opacity="0.4"/><g transform="translate(150,27) rotate(-12)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#drHd)" opacity="0.62"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0808" opacity="0.3"/></g></svg>
 
@@ -31482,7 +31560,7 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 (unless: $knowsCecilCourt is a boolean)[(set: $knowsCecilCourt to false)]
 (if: $metCritic is true and $knowsCecilCourt is false)[(set: $knowsCecilCourt to true)]
 (set: _hideStats to (a: "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "A Doorway on Dean Street", "Dawn", "PP Pong", "Fight starts", "Fight Round 1", "Fight Round 2", "Fight Round 3", "Fight R1 Back", "Fight R1 Block", "Fight R1 Duck", "Fight R2 Catch", "Fight R2 Counter", "Fight R2 Slip", "Fight R3 Clinch", "Fight R3 Headon", "Fight R3 Weave", "Fight Victory", "Fight Defeat"))
-(unless: _hideStats contains (passage:)'s name)[(set: _saved to (savegame: "auto", "Auto save"))]\
+(if: $returns is a number and $returns >= 1 and not (_hideStats contains (passage:)'s name))[(set: _saved to (savegame: "auto", "Auto save"))]\
 (unless: _hideStats contains (passage:)'s name)[\
 (if: $confidence is a number and $confidence < 0)[(set: $confidence to 0)](if: $confidence is a number and $confidence > 100)[(set: $confidence to 100)](if: $sobriety is a number and $sobriety < 0)[(set: $sobriety to 0)](if: $sobriety is a number and $sobriety > 100)[(set: $sobriety to 100)]\
 (unless: $alba is an array)[(set: $alba to (a:))]\
@@ -35654,21 +35732,21 @@ border-right: 1px solid rgba(107,32,32,0.25);
   padding: 2em 2.5em;
 }
 .coin-overlay-stage {
-  width: 90px;
-  height: 90px;
+  width: 120px;
+  height: 120px;
   margin: 0 auto 2.4em;
-  perspective: 350px;
+  perspective: 420px;
 }
 .coin-overlay-disc {
-  width: 90px;
-  height: 90px;
+  width: 120px;
+  height: 120px;
   position: relative;
   transform-style: preserve-3d;
 }
 .coin-overlay-disc .cp-face {
   position: absolute;
-  width: 90px;
-  height: 90px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   backface-visibility: hidden;
   background-size: cover;
@@ -36352,7 +36430,44 @@ position: absolute;
 top: 0; bottom: 0; left: 3.2em;
 width: 1px;
 background: rgba(190, 60, 50, 0.18);
+z-index: 0;
 }
+/* Atmosphere — wine ring + cigarette burns scattered across the page.
+   Sits behind the text via pointer-events:none + low z-index. The
+   "roll" inner wrapper carries the prose at z-index 1. */
+.typewriter-page::after {
+content: '';
+position: absolute;
+inset: 0;
+pointer-events: none;
+z-index: 0;
+border-radius: inherit;
+background:
+  radial-gradient(circle 52px at 92% 6%,
+    transparent 30px,
+    rgba(112,20,30,0.34) 36px,
+    rgba(112,20,30,0.50) 39px,
+    rgba(112,20,30,0.34) 42px,
+    transparent 50px),
+  radial-gradient(circle 14px at 4% 18%,
+    rgba(50,22,4,0.55),
+    rgba(64,32,12,0.24) 40%,
+    transparent 80%),
+  radial-gradient(circle 12px at 96% 48%,
+    rgba(60,28,8,0.48),
+    rgba(70,36,14,0.20) 40%,
+    transparent 80%),
+  radial-gradient(circle 16px at 6% 78%,
+    rgba(50,22,4,0.50),
+    rgba(64,32,12,0.20) 40%,
+    transparent 80%),
+  radial-gradient(circle 10px at 94% 92%,
+    rgba(56,26,6,0.42),
+    rgba(70,34,12,0.18) 45%,
+    transparent 85%);
+background-repeat: no-repeat;
+}
+.typewriter-paper-roll { position: relative; z-index: 1; }
 .typewriter-page em, .typewriter-page i {
 font-style: normal;
 }
@@ -36634,36 +36749,41 @@ tw-passage[tags~="black-page"] .enchantment-link {
    alba poem block — the contrast is the point. Italics are suppressed
    globally on this page (the prose reads as plain, declarative). */
 tw-story[tags~="dawn-end"] {
+  /* Pink-gold-grey dawn — matched to the Centre Point 3D render's palette
+     (muted, hazy, warmer than the old navy version). Top is a warm dark
+     slate; the gradient walks through cool grey, dusty rose, and peach
+     toward the warm horizon glow. */
   background:
     linear-gradient(175deg,
-      #060810 0%,
-      #0a1024 18%,
-      #0e1a3a 35%,
-      #142142 52%,
-      #142a48 68%,
-      #102a40 84%,
-      #0b2230 100%
+      #2a2620 0%,
+      #3e3a38 16%,
+      #585250 34%,
+      #6e6060 50%,
+      #785a52 64%,
+      #a07a6c 78%,
+      #c89878 90%,
+      #d69068 100%
     ) !important;
   background-attachment: fixed !important;
-  color: #d4d8dc !important;
+  color: #c4b8a4 !important;
 }
 tw-story[tags~="dawn-end"] * {
   font-style: normal !important;
 }
 tw-story[tags~="dawn-end"] .ending-pane {
-  background: rgba(8, 14, 24, 0.62);
+  background: rgba(30, 22, 18, 0.55);
   box-shadow:
-    0 24px 90px rgba(15, 30, 55, 0.38),
-    0 0 60px rgba(40, 70, 110, 0.14),
-    inset 0 0 40px rgba(0,0,0,0.28);
-  color: #d4d8dc;
+    0 24px 90px rgba(40, 24, 18, 0.38),
+    0 0 60px rgba(150, 110, 80, 0.14),
+    inset 0 0 40px rgba(0,0,0,0.24);
+  color: #c4b8a4;
   padding-bottom: 3.5em;
 }
 tw-story[tags~="dawn-end"] .ending-pane::before {
   background: linear-gradient(135deg,
-    rgba(160,190,220,0.06) 0%,
-    rgba(120,160,200,0.04) 50%,
-    rgba(160,190,220,0.06) 100%
+    rgba(220,200,170,0.06) 0%,
+    rgba(200,160,130,0.04) 50%,
+    rgba(220,200,170,0.06) 100%
   ) !important;
 }
 .dawn-title {
@@ -36672,18 +36792,18 @@ tw-story[tags~="dawn-end"] .ending-pane::before {
   font-weight: 700;
   font-size: 2.2em;
   letter-spacing: 0.35em;
-  color: #f0c870;
-  text-shadow: 0 0 32px rgba(240,160,48,0.55), 0 0 10px rgba(255,220,140,0.35);
+  color: #c4ae88;
+  text-shadow: 0 0 32px rgba(196,158,108,0.5), 0 0 10px rgba(220,196,160,0.3);
   margin: 0 0 0.6em;
   padding-bottom: 0.6em;
-  background: linear-gradient(to right, transparent, rgba(240,170,80,0.42), transparent) bottom/55% 1px no-repeat;
+  background: linear-gradient(to right, transparent, rgba(196,158,108,0.38), transparent) bottom/55% 1px no-repeat;
 }
 .dawn-bookname {
   text-align: center;
   font-family: 'Crimson Text', Georgia, serif;
   font-style: italic;
   font-size: 1.05em;
-  color: rgba(240, 200, 112, 0.78);
+  color: rgba(196, 178, 142, 0.80);
   letter-spacing: 0.18em;
   margin: 0 0 2em;
   opacity: 0;
@@ -36728,17 +36848,17 @@ tw-story[tags~="dawn-end"] .ending-pane::before {
 }
 tw-story[tags~="dawn-end"] .alba-final {
   background: linear-gradient(180deg,
-    rgba(140,80,30,0.16) 0%,
-    rgba(160,95,35,0.10) 50%,
-    rgba(140,80,30,0.16) 100%
+    rgba(120,90,72,0.18) 0%,
+    rgba(168,128,100,0.12) 50%,
+    rgba(120,90,72,0.18) 100%
   );
-  border-top-color: rgba(232,170,90,0.32);
-  border-bottom-color: rgba(232,170,90,0.32);
-  border-left-color: rgba(240,170,80,0.4);
+  border-top-color: rgba(196,168,128,0.30);
+  border-bottom-color: rgba(196,168,128,0.30);
+  border-left-color: rgba(196,158,108,0.4);
 }
 tw-story[tags~="dawn-end"] .alba-final em,
 tw-story[tags~="dawn-end"] .alba-final .alba-line {
-  color: #f0c870;
+  color: #c4ae88;
 }
 
 /* ===== DAWN PETALS ===== */

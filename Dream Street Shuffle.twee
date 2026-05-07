@@ -64,6 +64,7 @@ Dream Street Shuffle
 (set: $shownLowConf to false)\
 (set: $shownLowSobr to false)\
 (set: $shownChippyHint to false)\
+(set: $lilyCall1ReturnsAt to -999)\
 (set: $tookLily1 to false)\
 (set: $tookLily2 to false)\
 (set: $tookLily3 to false)\
@@ -1660,6 +1661,20 @@ window.dssAudio = (function() {
     bed.gain.gain.linearRampToValueAtTime(0.0001, t + ms / 1000);
     setTimeout(function(){ _stopBed(bed); }, ms + 50);
   }
+  // Let an ambient bed finish its current loop iteration and stop
+  // naturally — the audio plays through to its honest ending point
+  // instead of being faded mid-phrase. Used by the dawn ending so the
+  // piano theme reaches its real coda before the petals settle.
+  function letBedFinishByLabel(label) {
+    var bed = findBedByLabel(label);
+    if (!bed || !bed.started || !bed.source) return;
+    try {
+      bed.source.loop = false;
+      bed.source.onended = function(){
+        try { _stopBed(bed); } catch(e) {}
+      };
+    } catch(e) {}
+  }
   // Flute-like single tone — sine fundamental with a breathy noise attack
   // (air across the embouchure) and a subtle vibrato. Still one pitch.
   // Used when "NAME YOUR BOOK" appears at the end of The Night Ahead's typewriter.
@@ -2197,7 +2212,7 @@ window.dssAudio = (function() {
     // Venue ambient beds
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
-    startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel
+    startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel
   };
 })();
 
@@ -7080,12 +7095,55 @@ window._passageGen = 0;
             // not hidden behind the drinking animation.
             var doReveal = function() {
               var TYPES = [
-                { sel: '.haunt-box',     cls: 'haunt-mote',       n: 12 },
-                { sel: '.revelation-box',cls: 'revelation-mote',  n: 12 },
-                { sel: '.page-found',    cls: 'page-mote',        n: 12 },
-                { sel: '.item-box',      cls: 'item-mote',        n: 12 },
-                { sel: '.quest-collected',cls: 'quest-mote',      n: 12 }
+                { sel: '.haunt-box',     cls: 'haunt-mote',       n: 18 },
+                { sel: '.revelation-box',cls: 'revelation-mote',  n: 18 },
+                { sel: '.page-found',    cls: 'page-mote',        n: 18 },
+                { sel: '.item-box',      cls: 'item-mote',        n: 18 },
+                { sel: '.quest-collected',cls: 'quest-mote',      n: 18 }
               ];
+              // Helper exposed for late-spawning motes from custom flows
+              // (e.g. the Critic page-turn waits until the verdict's
+              // aftermath fades in before firing). Mirrors the spawn logic
+              // below — kept in sync if either is updated.
+              if (!window.dssSpawnMotes) window.dssSpawnMotes = function(box, cls, count) {
+                if (!box || box.getAttribute('data-motes-fired') === '1') return;
+                box.setAttribute('data-motes-fired', '1');
+                count = count || 18;
+                var rect = box.getBoundingClientRect();
+                var startTop = rect.top + rect.height * 0.18;
+                var startLeft = rect.left + rect.width * 0.78;
+                var nbEl = document.querySelector('.notebook-link');
+                var nb = nbEl ? nbEl.getBoundingClientRect() : null;
+                var nbX = nb ? (nb.left + nb.width * 0.5) : null;
+                var nbY = nb ? (nb.top  + nb.height * 0.5) : null;
+                for (var k = 1; k <= count; k++) {
+                  var m = document.createElement('span');
+                  m.className = cls + ' ' + cls + '-' + k;
+                  m.style.position = 'fixed';
+                  m.style.top = startTop + 'px';
+                  m.style.left = startLeft + 'px';
+                  m.style.right = 'auto';
+                  m.style.zIndex = '99999';
+                  if (nbX !== null) {
+                    var jitterX = (Math.random() - 0.5) * 28;
+                    var jitterY = (Math.random() - 0.5) * 18;
+                    m.style.setProperty('--mote-tx', ((nbX - startLeft) + jitterX) + 'px');
+                    m.style.setProperty('--mote-ty', ((nbY - startTop) + jitterY) + 'px');
+                  } else {
+                    m.style.setProperty('--mote-tx', '210px');
+                    m.style.setProperty('--mote-ty', '-540px');
+                  }
+                  document.body.appendChild(m);
+                }
+                // Pulse the notebook link the same way the global observer does.
+                var nbLink = document.querySelector('.notebook-link');
+                if (nbLink) {
+                  nbLink.classList.remove('notebook-pulse');
+                  void nbLink.offsetWidth;
+                  nbLink.classList.add('notebook-pulse');
+                  setTimeout(function(){ if (nbLink) nbLink.classList.remove('notebook-pulse'); }, 7500);
+                }
+              };
               // Compute the NOTEBOOK link's viewport-centre once per reveal so
               // every spawned mote can target it. Motes that miss the notebook
               // ruin the "filed away" gesture, so we redirect each mote toward
@@ -9641,9 +9699,10 @@ var allEls = page.querySelectorAll('*');
 for (var k = 0; k < allEls.length; k++) {
 allEls[k].style.fontFamily = twFont;
 }
-// TESTING MODE: skip typewriter, show everything immediately
-// To re-enable typewriter effect, change skipTypewriter to false
-var skipTypewriter = false;
+// Per-page opt-out: pages marked .typewriter-static skip the type-on
+// animation entirely — useful for short atmosphere reflections where
+// the slow type-out feels like a wait rather than a beat.
+var skipTypewriter = page.classList.contains('typewriter-static');
 if (skipTypewriter) {
 // Just make sure the link is visible straight away
 var linkEls = page.querySelectorAll('tw-expression');
@@ -9701,11 +9760,8 @@ return;
 }
 var ch = fullText[i++];
 cursor.insertAdjacentText('beforebegin', ch);
-// Whisper-quiet typewriter tick — the alba reveal is a hushed, dreamlike
-// moment, so the click is softened well below the default 0.18.
-if (window.dssAudio && ch !== ' ' && ch !== '\n' && ch !== '\t') {
-  window.dssAudio.typewriterTick(0.02);
-}
+// The alba reveal plays under the morning bell — no typewriter ticks.
+// The line should land in true silence, just the chime + the words.
 var delay;
 if (ch === '.' || ch === '!' || ch === '?') delay = 240;
 else if (ch === ',' || ch === ';' || ch === ':') delay = 90;
@@ -26948,9 +27004,11 @@ document.addEventListener('keydown', function(e) {
   var petalObserver = null;
 
   function startPetalStorm() {
-    // The piano shouldn't loop into the credits — fade it as the petals rise.
-    if (window.dssAudio && window.dssAudio.fadeBed) {
-      try { window.dssAudio.fadeBed('piano-eoin', 6000); } catch(e) {}
+    // Let the piano theme play out to its real coda — disable looping
+    // on the source so the current pass finishes naturally and then
+    // stops, instead of being cut by a fade in the middle of a phrase.
+    if (window.dssAudio && window.dssAudio.letBedFinish) {
+      try { window.dssAudio.letBedFinish('piano-eoin'); } catch(e) {}
     }
     var wrap = document.createElement('div');
     wrap.className = 'dawn-petal-wrap';
@@ -27566,7 +27624,7 @@ You're eating at the counter when somebody passes the window: that's Lily.
 (if: $lilyCount >= 1 and $hadLilyCall1 is false and $hadPhoneCall is true)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">A phone rings.
 
 [[Accept the call|Lily phone call 1]]</div>]\
-(if: $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">The phone behind the bar rings.
+(if: $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and ($returns - $lilyCall1ReturnsAt) >= 2)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">The phone behind the bar rings.
 
 [[Accept the call|The dual ring]]</div>]\
 <svg class="coach-beam" viewBox="0 0 300 36" width="100%" height="36" preserveAspectRatio="none"><defs><linearGradient id="wdA" x1="0" x2="1"><stop offset="0%" stop-color="#3a2408" stop-opacity="0"/><stop offset="10%" stop-color="#5c3810" stop-opacity="1"/><stop offset="90%" stop-color="#5c3810" stop-opacity="1"/><stop offset="100%" stop-color="#3a2408" stop-opacity="0"/></linearGradient><linearGradient id="wdB" x1="0" x2="1"><stop offset="0%" stop-color="#3a2408" stop-opacity="0"/><stop offset="10%" stop-color="#7a5220" stop-opacity="0.7"/><stop offset="90%" stop-color="#7a5220" stop-opacity="0.7"/><stop offset="100%" stop-color="#3a2408" stop-opacity="0"/></linearGradient><linearGradient id="brA" x1="0" x2="1"><stop offset="0%" stop-color="#c8922a" stop-opacity="0"/><stop offset="50%" stop-color="#c8922a" stop-opacity="0.7"/><stop offset="100%" stop-color="#c8922a" stop-opacity="0"/></linearGradient><linearGradient id="wdGrain" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7a5220" stop-opacity="0.2"/><stop offset="50%" stop-color="#5c3810" stop-opacity="0"/><stop offset="100%" stop-color="#7a5220" stop-opacity="0.15"/></linearGradient></defs><rect x="0" y="6" width="300" height="24" fill="url(#wdA)"/><rect x="0" y="6" width="300" height="24" fill="url(#wdGrain)"/><line x1="0" y1="6" x2="300" y2="6" stroke="url(#wdB)" stroke-width="1.2"/><line x1="0" y1="30" x2="300" y2="30" stroke="url(#wdB)" stroke-width="1.2"/><line x1="0" y1="18" x2="300" y2="18" stroke="url(#brA)" stroke-width="1.5"/><g opacity="0.4" stroke="#7a5220" stroke-width="0.4" fill="none"><line x1="30" y1="6" x2="32" y2="30"/><line x1="80" y1="6" x2="78" y2="30"/><line x1="130" y1="6" x2="131" y2="30"/><line x1="170" y1="6" x2="169" y2="30"/><line x1="220" y1="6" x2="222" y2="30"/><line x1="270" y1="6" x2="268" y2="30"/></g><circle cx="50" cy="18" r="4" fill="#c8922a" opacity="0.5"/><circle cx="50" cy="17" r="1.5" fill="#ffe090" opacity="0.35"/><g transform="translate(150,18)" opacity="0.55"><path d="M-8,-6 Q-9,2 -6,6 Q-3,10 0,10 Q3,10 6,6 Q9,2 8,-6" fill="none" stroke="#c8922a" stroke-width="1.5" stroke-linecap="round"/><circle cx="-8" cy="-6" r="1.5" fill="#c8922a"/><circle cx="8" cy="-6" r="1.5" fill="#c8922a"/></g><circle cx="250" cy="18" r="4" fill="#c8922a" opacity="0.5"/><circle cx="250" cy="17" r="1.5" fill="#ffe090" opacity="0.35"/></svg>
@@ -27752,6 +27810,9 @@ Traveller, wake!
 <script>setTimeout(function(){ if (window.dssAudio) window.dssAudio.uncannyBreath(); }, 400);</script>\
 <div class="glass-pane">You see yourself walking to meet you, who looks at you, with a pitying grin, then turns and heads, quickly, towards Centre Point.
 
+(if: $lilyCount < 5 or $haunts's length < 12)['You can leave now, perhaps it's wise to get out. But there are still flowers to gather in the night, and work yet to be done.'
+
+]\
 [[Follow him|Approach Centre Point]]
 [[Not yet. Back to the night.|Dean Street]]</div>
 
@@ -27876,7 +27937,7 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 ]\
 (if: $coachUrgent is false and $visited's French is true and $hadPhoneCall is true and $metCritic is false)[[[The Pillars — there was someone you wanted to talk to|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
-](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $knowsAboutPage is true and ($visitedCarthage is false or not ($alba contains $alba2)))[[[Seek the coast — beyond The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
+](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $knowsAboutPage is true and ($visitedCarthage is false or not ($alba contains $alba2)))[[[Seek the coast — through The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true)[<span class="greyed-out">The Pillars &#91;LOOK ELSEWHERE FIRST&#93;</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ]\
 (if: $coachUrgent is false and $visited's French is true and not ($knowsRonnies is true and $knowsCopperSecret is true))[[[Try the Colony Room|Approach The Colony Room]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
@@ -27896,8 +27957,9 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 (if: $coachUrgent is false and $hasTrishaMatchbook is true and $hasLiver is true and $metShana is false)[[[Try Trisha's|Approach Trisha's]] (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
 ](else-if: $coachUrgent is false and $metShana is true)[<span class="greyed-out">Trisha's &#91;CLOSED&#93;</span> (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
 ]\
-(if: $coachUrgent is false and ($alba contains $alba1) and ($alba contains $alba2) and not ($alba contains $alba3))[<div class="choice-box"><span class="guided-link">[[The voice|The Fetch]]</span></div>
-]\
+<!-- The Voice link removed — was firing at 2/3 alba and reading as
+     premature. The Fetch is now reached only via "The dawn is coming"
+     (which itself only appears when alba is complete). -->\
 (if: $coachUrgent is false and $confidence < 50 and $hadChippy is false)[(if: $shownChippyHint is false)[(set: $shownChippyHint to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("If you're in a bad way, there's a place you know called the Chinese Fish and Chips.");},300);</script>]
 [[Get some grub|Approach Chinese Fish and Chips]]](else-if: $coachUrgent is false and $returns >= 5 and $hadChippy is false)[(if: $shownChippyHint is false)[(set: $shownChippyHint to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You're probably hungry. There's a place you know called the Chinese Fish and Chips.");},300);</script>]
 [[Get some grub|Approach Chinese Fish and Chips]]](else-if: $coachUrgent is false and $hadChippy is true and $tookLily1 is false)[<div class="choice-box">[[Back to the chippy — there was something you missed|Approach Chinese Fish and Chips]]</div>](else-if: $coachUrgent is false and $hadChippy is true)[<span class="greyed-out">Get some grub</span>
@@ -28003,7 +28065,7 @@ You're lucky, you reflect, that he worked out you don't.
 </div>
 
 :: The dark pass [outdoor] {"position":"2300,1350","size":"100,100"}
-<div class="typewriter-page typewriter-silent">
+<div class="typewriter-page">
 You watch John St. John throw off his tail in the darkness, then surface again at the far end of the street, in the pool where the ginger light shines.
 
 Just as he does, Red walks into the frame, hands deep in his pockets; fag in his mouth, swaying like a conductor's baton.
@@ -28293,7 +28355,7 @@ He's gone and you know that you owe something now, to him and to here.
 (if: $hasMissingPage is true)[<div class="item-entry">◈ Page 93 (for O'Flatterly)</div>](else:)[<div class="greyed-out">○ A missing page</div>]
 </div>
 
-:: LINE 1 [outdoor] {"position":"700,200","size":"100,100"}
+:: LINE 1 {"position":"700,200","size":"100,100"}
 (set: $alba to $alba + (a: $alba1))
 (set: $albaRevealed to true)
 'Forget the work,' says Red, 'it's no way to live. Try this.'
@@ -28311,7 +28373,7 @@ As he turns from his ginger light he kisses you and, as he does, you close your 
 :: Green Sea Approach [dream] {"position":"850,200","size":"100,100"}
 <div id="gs-approach"></div>[[·|LINE 2]]
 
-:: LINE 2 [green-sea] {"position":"900,200","size":"100,100"}
+:: LINE 2 {"position":"900,200","size":"100,100"}
 <svg class="green-sea-bar" viewBox="0 0 500 110" width="100%" height="110" preserveAspectRatio="none"><defs><radialGradient id="gs2Win1" cx="18%" cy="28%" r="22%"><stop offset="0%" stop-color="#9cd8e8" stop-opacity="0.52"/><stop offset="55%" stop-color="#5ab8cc" stop-opacity="0.18"/><stop offset="100%" stop-color="#1a3a58" stop-opacity="0"/></radialGradient><radialGradient id="gs2Win2" cx="50%" cy="18%" r="24%"><stop offset="0%" stop-color="#a8e0d8" stop-opacity="0.46"/><stop offset="55%" stop-color="#4ab0b8" stop-opacity="0.14"/><stop offset="100%" stop-color="#1a3a50" stop-opacity="0"/></radialGradient><radialGradient id="gs2Win3" cx="82%" cy="26%" r="21%"><stop offset="0%" stop-color="#94d4e4" stop-opacity="0.50"/><stop offset="55%" stop-color="#50b0c4" stop-opacity="0.16"/><stop offset="100%" stop-color="#1a3858" stop-opacity="0"/></radialGradient><radialGradient id="gs2Lamp" cx="65%" cy="100%" r="28%"><stop offset="0%" stop-color="#d8c888" stop-opacity="0.28"/><stop offset="60%" stop-color="#c0a858" stop-opacity="0.08"/><stop offset="100%" stop-color="#c0a858" stop-opacity="0"/></radialGradient><linearGradient id="gs2FH" x1="0" x2="1"><stop offset="0%" stop-color="#080c10" stop-opacity="1"/><stop offset="7%" stop-color="#080c10" stop-opacity="0"/><stop offset="93%" stop-color="#080c10" stop-opacity="0"/><stop offset="100%" stop-color="#080c10" stop-opacity="1"/></linearGradient><linearGradient id="gs2FV" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#080c10" stop-opacity="1"/><stop offset="28%" stop-color="#080c10" stop-opacity="0.15"/><stop offset="58%" stop-color="#080c10" stop-opacity="0"/><stop offset="100%" stop-color="#080c10" stop-opacity="0.08"/></linearGradient></defs><rect width="500" height="110" fill="#080e14"/><rect width="500" height="110" fill="url(#gs2Win1)"/><rect width="500" height="110" fill="url(#gs2Win2)"/><rect width="500" height="110" fill="url(#gs2Win3)"/><rect width="500" height="110" fill="url(#gs2Lamp)"/><path d="M55,110 L55,55 Q90,18 125,55 L125,110" fill="#3a8a9a" opacity="0.05"/><path d="M55,110 L55,55 Q90,18 125,55 L125,110" fill="none" stroke="#8ad8e8" stroke-width="0.9" opacity="0.22"/><path d="M190,110 L190,40 Q250,0 310,40 L310,110" fill="#3a90a0" opacity="0.05"/><path d="M190,110 L190,40 Q250,0 310,40 L310,110" fill="none" stroke="#9ae0e8" stroke-width="1.1" opacity="0.20"/><path d="M375,110 L375,58 Q410,22 445,58 L445,110" fill="#3a8898" opacity="0.05"/><path d="M375,110 L375,58 Q410,22 445,58 L445,110" fill="none" stroke="#88d4e4" stroke-width="0.9" opacity="0.21"/><rect x="126" y="28" width="4" height="82" fill="#7ab8c8" opacity="0.09"/><rect x="187" y="22" width="5" height="88" fill="#7ab8c8" opacity="0.07"/><rect x="308" y="22" width="5" height="88" fill="#7ab8c8" opacity="0.07"/><rect x="373" y="28" width="4" height="82" fill="#7ab8c8" opacity="0.09"/><line x1="40" y1="28" x2="460" y2="28" stroke="#4a7888" stroke-width="0.6" opacity="0.16"/><line x1="30" y1="20" x2="470" y2="20" stroke="#3a6878" stroke-width="0.4" opacity="0.09"/><g opacity="0.08" stroke="#a0e0d8" stroke-width="0.5" fill="none"><path d="M60,11 Q80,7 100,11 Q120,15 140,11"/><path d="M65,17 Q85,13 105,17 Q125,21 145,17"/><path d="M350,9 Q370,5 390,9 Q410,13 430,9"/><path d="M355,16 Q375,12 395,16 Q415,20 435,16"/><path d="M200,7 Q218,3 236,7 Q254,11 272,7"/></g><g opacity="0.06" stroke="#88b898" stroke-width="0.5" fill="none"><line x1="50" y1="96" x2="450" y2="96"/><line x1="40" y1="103" x2="460" y2="103"/><line x1="130" y1="91" x2="130" y2="110"/><line x1="200" y1="90" x2="200" y2="110"/><line x1="270" y1="90" x2="270" y2="110"/><line x1="340" y1="90" x2="340" y2="110"/><line x1="410" y1="91" x2="410" y2="110"/></g><circle cx="330" cy="110" r="55" fill="#c8a858" opacity="0.06"/><rect x="233" y="40" width="34" height="44" fill="none" stroke="#b8a870" stroke-width="0.8" opacity="0.14"/><rect x="236" y="43" width="28" height="38" fill="#a09060" opacity="0.03"/><g fill="#b8d8d0" opacity="0.16"><circle cx="72" cy="44" r="0.7"/><circle cx="140" cy="32" r="0.5"/><circle cx="175" cy="48" r="0.6"/><circle cx="248" cy="26" r="0.8"/><circle cx="295" cy="41" r="0.5"/><circle cx="368" cy="30" r="0.7"/><circle cx="432" cy="45" r="0.5"/></g><rect width="500" height="110" fill="url(#gs2FH)"/><rect width="500" height="110" fill="url(#gs2FV)"/></svg>
 
 Just off the beach is a bar called The Green Sea. It's mostly old men playing cribbage, and on its wall is a portrait of Ben Ali.
@@ -28437,8 +28499,8 @@ Salvu Copper, who is proportioned brutally, opens the door and leans over the th
     lastClick = now;
     knocks++;
     if (window.dssAudio && window.dssAudio.doorKnock) {
-      // Final knock is louder/firmer (two raps in quick sequence) for weight.
-      window.dssAudio.doorKnock(knocks === 3 ? 2 : 1);
+      // One knock per click — three deliberate raps, no doubled finish.
+      window.dssAudio.doorKnock(1);
     }
     render();
     if (knocks >= 3) {
@@ -28945,10 +29007,10 @@ Moe nods. 'Go sell a book,' he says.
 </div>]]
 [[Back to Dean Street|After the music]]
 
-:: After the music [venue-ronnies] {"position":"2050,2300","size":"100,100"}
+:: After the music {"position":"2050,2300","size":"100,100"}
 (set: $pendingLilyBreath to false)\
 (set: $resumingFromCall to false)\
-<div class="typewriter-page typewriter-silent">
+<div class="typewriter-page">
 Modalities of the afterdark; lighthead jazz pharaoh, with the spiked corona.
 
 Or some other way of putting it.
@@ -29025,10 +29087,10 @@ From beneath the counter he produces a small glass vial.
 
 [[Back to Dean Street|After Cecil Court]]
 
-:: After Cecil Court [venue-cecilcourt] {"position":"500,2050","size":"100,100"}
+:: After Cecil Court {"position":"500,2050","size":"100,100"}
 (set: $pendingLilyBreath to false)\
 (set: $resumingFromCall to false)\
-<div class="typewriter-page typewriter-silent">
+<div class="typewriter-page">
 To return to Soho from Cecil Court is to cross the Styx; in some or other direction. You wonder, limning Cambridge Circus, whether, to move from Cecil Court – that foxed God's acre, full of books that lived and died – into the purgatorial womb of Soho, where books are promised, midwifed, scuppered, dreamed, is to move from death to life or life to death.
 
 [[On.|Dean Street]]
@@ -29159,6 +29221,12 @@ var spd=getSpeed();
    This guarantees there's always a path through the field. ── */
 var blocked=[false,false,false];
 var wideInZone=false;
+/* Adjacent-row protection: also block lanes immediately neighbouring
+   any obstacle still near the top of the field. Two obstacles arriving
+   in adjacent rows at the same time leaves the player no time to
+   swerve between them — so the second can't be spawned next to the
+   first while the first is still high on screen. */
+var nearTopBlocked=[false,false,false];
 for(var bi=0;bi<obstacles.length;bi++){
 var ob=obstacles[bi];
 if(ob.y >= PLAYER_Y - 20) continue; /* already past — won't conflict with new spawn */
@@ -29174,7 +29242,27 @@ if(second>=0 && second<LANE_COUNT) blocked[second]=true;
 } else {
 blocked[projLane]=true;
 }
+/* If this obstacle is still in the top third of the field (so the
+   new spawn would arrive in an adjacent row to it), forbid lanes
+   directly next to it for the new spawn. */
+if(ob.y < H * 0.34){
+nearTopBlocked[projLane]=true;
+if(projLane-1 >= 0) nearTopBlocked[projLane-1]=true;
+if(projLane+1 < LANE_COUNT) nearTopBlocked[projLane+1]=true;
 }
+}
+/* Merge near-top adjacency blocks into the main blocked array, but
+   only if doing so still leaves at least one lane open. Otherwise
+   drop the adjacency constraint for this spawn rather than skip
+   spawning entirely (we'd rather have a spawn-fairness slip than
+   a long empty stretch). */
+var mergedBlocked=[false,false,false];
+var mergedFree=0;
+for(var mi=0;mi<LANE_COUNT;mi++){
+mergedBlocked[mi] = blocked[mi] || nearTopBlocked[mi];
+if(!mergedBlocked[mi]) mergedFree++;
+}
+if(mergedFree >= 1){ blocked = mergedBlocked; }
 var freeCount=0;
 for(var fc=0;fc<LANE_COUNT;fc++) if(!blocked[fc]) freeCount++;
 
@@ -30331,12 +30419,12 @@ loop();
 })();
 </script>
 
-:: Cow ride success [soho-dawn] {"position":"1200,1200","size":"100,100"}
+:: Cow ride success {"position":"1200,1200","size":"100,100"}
 (set: $cowRideWon to true)\
 (set: $cowRideDone to true)\
 (set: $confidence to $confidence + 12)\
 (set: $sobriety to $sobriety + 8)\
-<div class="typewriter-page typewriter-silent">
+<div class="typewriter-page">
 Greek, Frith, Dean, Wardour, Berwick, Poland.
 
 She knows the map.
@@ -30346,10 +30434,10 @@ It's coming up!
 [[Listen|LINE 3]]
 </div>
 
-:: Cow ride fail [soho-dawn] {"position":"900,1300","size":"100,100"}
+:: Cow ride fail {"position":"900,1300","size":"100,100"}
 (set: $confidence to $confidence - 6)\
 (set: $cowRideDone to true)\
-<div class="typewriter-page typewriter-silent">
+<div class="typewriter-page">
 The beast throws you onto the pissant cobblestones, trots off and never looks back.
 
 [[Look up.|LINE 3]]
@@ -30500,6 +30588,7 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $shownLowConf to false)\
 (set: $shownLowSobr to false)\
 (set: $shownChippyHint to false)\
+(set: $lilyCall1ReturnsAt to -999)\
 (set: $tookLily1 to false)\
 (set: $tookLily2 to false)\
 (set: $tookLily3 to false)\
@@ -31354,10 +31443,10 @@ He takes it, smiles and gives it back to you.
 
 [[Step out.|After the painter]]
 
-:: After the painter [venue-french] {"position":"500,1200","size":"100,100"}
+:: After the painter {"position":"500,1200","size":"100,100"}
 (set: $pendingLilyBreath to false)\
 (set: $resumingFromCall to false)\
-<div class="typewriter-page typewriter-silent">
+<div class="typewriter-page">
 The way you drew the painter is the way the world looks when you step out of the French. Things are faithful to your wild cartoon, until you blink. Then the place scrolls like a fruit machine and pays out Soho, all its stares and faces, its irresistible odds.
 
 [[On.|Dean Street]]
@@ -31476,8 +31565,8 @@ He pulls //(print: $bookTitle)// close.
 <div class="critic-book-base"></div>
 <div class="critic-book-flip" id="critBookFlip"></div>
 </div>
-<div class="critic-book-narrate" id="critBookNarrate">He sets it on the table.</div>
-<button class="critic-book-turn" id="critBookTurn">Turn the page</button>
+<div class="critic-book-narrate" id="critBookNarrate">He sets it on the table and opens it.</div>
+<button class="critic-book-turn" id="critBookTurn">Wait.</button>
 </div>
 
 <div class="critic-aftermath" id="critAftermath">
@@ -31486,7 +31575,7 @@ You say you've not, thank him, and make to leave when he calls you back.
 
 'When you're next in Cecil Court, look for Inis O'Flatterly. Quare fellow, knows a lot about books. I think he'd like to meet you. He's been trying to get to Carthage, on his way to The Pillars of Hercules. And if you see Copper, tell him I said hello.'
 
-(if: $knowsCopperWord is false)[<div class="item-box">
+(if: $knowsCopperWord is false)[<div class="item-box critic-deferred-motes" data-motes="1">
 <div class="item-header">⚿ PASSWORD LEARNED</div>
 <div class="item-name">"I said hello"</div>
 </div>]
@@ -31498,12 +31587,18 @@ You say you've not, thank him, and make to leave when he calls you back.
 
 <script>
 (function(){
+  // Page-turn narration is from the player's POV — they're sitting still,
+  // watching him read. Each click advances time ("Wait."), narration
+  // describes HIS action. Final click delivers the verdict; the aftermath
+  // (with the password item-box) only then fades in, and the motes for
+  // that item-box wait until after the aftermath has settled — they read
+  // as the moment of "filing it away," not as paperwork mid-conversation.
   var page = 0;
   var lines = [
-    "He opens it in the middle.",
-    "He reads a little there, then turns to another page.",
-    "And reads there too.",
-    "'Not for me,' he says. 'Have you tried America?'"
+    "He reads a page in the middle.",
+    "He turns to another page and reads there too.",
+    "He skips ahead, scans a third.",
+    "He sets the book down. 'Not for me,' he says. 'Have you tried America?'"
   ];
   var btn = document.getElementById('critBookTurn');
   var narr = document.getElementById('critBookNarrate');
@@ -31516,7 +31611,6 @@ You say you've not, thank him, and make to leave when he calls you back.
     flip.classList.remove('flipping');
     void flip.offsetWidth;
     flip.classList.add('flipping');
-    // Fade narration out → swap → fade in
     narr.style.opacity = '0';
     setTimeout(function(){
       narr.textContent = lines[page];
@@ -31526,6 +31620,17 @@ You say you've not, thank him, and make to leave when he calls you back.
         btn.style.display = 'none';
         setTimeout(function(){
           aftermath.classList.add('revealed');
+          // After the aftermath has fully faded in (matches the 1.2s
+          // CSS opacity transition + 0.3s settle), spawn the password's
+          // motes manually — held back from the global observer's
+          // initial pass via data-motes="1".
+          setTimeout(function(){
+            var box = aftermath.querySelector('.critic-deferred-motes');
+            if (box && window.dssSpawnMotes) {
+              box.removeAttribute('data-motes');
+              window.dssSpawnMotes(box, 'item-mote', 18);
+            }
+          }, 1500);
         }, 900);
       }
     }, 460);
@@ -31588,6 +31693,7 @@ Before you can answer, he says, 'I don't know.'
 (set: $lilyCallCount to $lilyCallCount + 1)\
 (set: $pendingLilyBreath to true)\
 (set: $resumingFromCall to true)\
+(set: $lilyCall1ReturnsAt to $returns)\
 (set: $confidence to $confidence - 6)
 <div class="phone-scene lily-phone-scene">
 <svg class="phone-rule lily-phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="lpBl"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="lpCd" x1="0" x2="1"><stop offset="0%" stop-color="#4a3858" stop-opacity="0"/><stop offset="20%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="50%" stop-color="#7a5888" stop-opacity="0.55"/><stop offset="80%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="100%" stop-color="#4a3858" stop-opacity="0"/></linearGradient><linearGradient id="lpHd" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a2048"/><stop offset="40%" stop-color="#5a3868"/><stop offset="100%" stop-color="#4a2858"/></linearGradient><radialGradient id="lpGw" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#b090c0" stop-opacity="0.10"/><stop offset="100%" stop-color="#b090c0" stop-opacity="0"/></radialGradient></defs><ellipse cx="130" cy="26" rx="55" ry="17" fill="#907098" opacity="0.05" filter="url(#lpBl)"/><ellipse cx="185" cy="30" rx="42" ry="13" fill="#806088" opacity="0.04" filter="url(#lpBl)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#lpGw)"/><path d="M14 27 Q20 12 26 27 Q32 42 38 27 Q44 12 50 27 Q56 42 62 27 Q68 13 74 27 Q79 38 84 27 Q89 18 94 27 Q98 33 102 27 Q105 24 108 27" fill="none" stroke="url(#lpCd)" stroke-width="2" stroke-linecap="round"/><path d="M192 27 Q195 24 198 27 Q202 33 206 27 Q211 18 216 27 Q221 38 226 27 Q232 13 238 27 Q244 42 250 27 Q256 12 262 27 Q268 42 274 27 Q280 12 286 27" fill="none" stroke="url(#lpCd)" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="27" r="2" fill="#5a3868" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#5a3868" opacity="0.4"/><g transform="translate(150,27) rotate(-8)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#lpHd)" opacity="0.55"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/></g></svg>
@@ -31615,7 +31721,7 @@ You both hang up, each leaving the other alone.</span>
 
 
 :: After the call {"position":"100,1300","size":"100,100"}
-<div class="typewriter-page typewriter-silent">
+<div class="typewriter-page typewriter-static">
 You remember that Lily rang. You'd not heard her voice sustained so long in so many, many years.  It flays you still, for all that you love others. You press your heels into Soho flagstones, breathe great gulps of its air. Anything to bring you back to here, which is the only place you'll live.
 
 [[On.|Dean Street]]
@@ -33720,34 +33826,40 @@ letter-spacing: 0.03em;
 position: absolute;
 top: 18%;
 right: 22%;
-width: 8px;
-height: 20px;
+width: 12px;
+height: 28px;
 border-radius: 50%;
-background: radial-gradient(ellipse, rgba(255,235,180,0.85) 0%, rgba(255,210,130,0.5) 45%, rgba(212,165,116,0) 90%);
-box-shadow: 0 0 18px rgba(255,225,150,0.7), 0 0 36px rgba(255,200,110,0.45), 0 0 60px rgba(212,165,116,0.3);
+background: radial-gradient(ellipse, rgba(255,242,195,0.98) 0%, rgba(255,215,140,0.68) 45%, rgba(212,165,116,0) 90%);
+box-shadow: 0 0 26px rgba(255,225,150,0.88), 0 0 52px rgba(255,200,110,0.6), 0 0 88px rgba(212,165,116,0.42);
 opacity: 0;
 pointer-events: none;
 z-index: 2;
-filter: blur(0.6px);
-animation: hauntMoteRise 5.5s ease-out forwards;
+filter: blur(0.3px);
+animation: hauntMoteRise 6.6s ease-out forwards;
 }
 .haunt-mote-1  { animation-delay: 1.00s; }
 .haunt-mote-2  { animation-delay: 1.20s; }
-.haunt-mote-3  { animation-delay: 1.40s; width: 6px; height: 16px; }
-.haunt-mote-4  { animation-delay: 1.60s; width: 6px; height: 16px; }
-.haunt-mote-5  { animation-delay: 1.80s; width: 5px; height: 14px; }
-.haunt-mote-6  { animation-delay: 2.00s; width: 5px; height: 14px; }
-.haunt-mote-7  { animation-delay: 2.20s; width: 4px; height: 12px; }
-.haunt-mote-8  { animation-delay: 2.40s; width: 4px; height: 12px; }
-.haunt-mote-9  { animation-delay: 2.60s; width: 4px; height: 11px; }
-.haunt-mote-10 { animation-delay: 2.80s; width: 3px; height: 10px; }
-.haunt-mote-11 { animation-delay: 3.00s; width: 3px; height: 9px; }
-.haunt-mote-12 { animation-delay: 3.20s; width: 3px; height: 9px; }
+.haunt-mote-3  { animation-delay: 1.40s; width: 9px; height: 22px; }
+.haunt-mote-4  { animation-delay: 1.60s; width: 9px; height: 22px; }
+.haunt-mote-5  { animation-delay: 1.80s; width: 8px; height: 19px; }
+.haunt-mote-6  { animation-delay: 2.00s; width: 8px; height: 19px; }
+.haunt-mote-7  { animation-delay: 2.20s; width: 7px; height: 16px; }
+.haunt-mote-8  { animation-delay: 2.40s; width: 7px; height: 16px; }
+.haunt-mote-9  { animation-delay: 2.60s; width: 6px; height: 15px; }
+.haunt-mote-10 { animation-delay: 2.80s; width: 5px; height: 13px; }
+.haunt-mote-11 { animation-delay: 3.00s; width: 5px; height: 12px; }
+.haunt-mote-12 { animation-delay: 3.20s; width: 4px; height: 11px; }
+.haunt-mote-13 { animation-delay: 3.40s; width: 4px; height: 10px; }
+.haunt-mote-14 { animation-delay: 3.60s; width: 4px; height: 10px; }
+.haunt-mote-15 { animation-delay: 3.80s; width: 3px; height: 9px; }
+.haunt-mote-16 { animation-delay: 4.00s; width: 3px; height: 8px; }
+.haunt-mote-17 { animation-delay: 4.20s; width: 3px; height: 8px; }
+.haunt-mote-18 { animation-delay: 4.40s; width: 3px; height: 7px; }
 @keyframes hauntMoteRise {
 0%   { transform: translate(0, 0) scale(0.4); opacity: 0; }
-8%   { transform: translate(calc(var(--mote-tx, 210px) * 0.025), calc(var(--mote-ty, -540px) * 0.025)) scale(1.1); opacity: 0.92; }
-40%  { transform: translate(calc(var(--mote-tx, 210px) * 0.27), calc(var(--mote-ty, -540px) * 0.34)) scale(1.0); opacity: 0.80; }
-75%  { transform: translate(calc(var(--mote-tx, 210px) * 0.66), calc(var(--mote-ty, -540px) * 0.70)) scale(0.55); opacity: 0.45; }
+8%   { transform: translate(calc(var(--mote-tx, 210px) * 0.025), calc(var(--mote-ty, -540px) * 0.025)) scale(1.2); opacity: 1; }
+40%  { transform: translate(calc(var(--mote-tx, 210px) * 0.27), calc(var(--mote-ty, -540px) * 0.34)) scale(1.05); opacity: 0.92; }
+75%  { transform: translate(calc(var(--mote-tx, 210px) * 0.66), calc(var(--mote-ty, -540px) * 0.70)) scale(0.6); opacity: 0.55; }
 100% { transform: translate(var(--mote-tx, 210px), var(--mote-ty, -540px)) scale(0.15); opacity: 0; }
 }
 
@@ -33781,87 +33893,105 @@ animation: hauntMoteRise 3.8s ease-out forwards;
 position: absolute;
 top: 18%;
 right: 22%;
-width: 8px;
-height: 20px;
+width: 12px;
+height: 28px;
 border-radius: 50%;
-background: radial-gradient(ellipse, rgba(180,200,255,0.85) 0%, rgba(120,150,225,0.5) 45%, rgba(80,100,200,0) 90%);
-box-shadow: 0 0 18px rgba(160,185,245,0.7), 0 0 36px rgba(110,140,215,0.45), 0 0 60px rgba(80,100,200,0.3);
+background: radial-gradient(ellipse, rgba(190,210,255,0.98) 0%, rgba(130,160,235,0.68) 45%, rgba(80,100,200,0) 90%);
+box-shadow: 0 0 26px rgba(170,195,250,0.88), 0 0 52px rgba(120,150,225,0.6), 0 0 88px rgba(80,100,200,0.42);
 opacity: 0;
 pointer-events: none;
 z-index: 2;
-filter: blur(0.6px);
-animation: hauntMoteRise 5.5s ease-out forwards;
+filter: blur(0.3px);
+animation: hauntMoteRise 6.6s ease-out forwards;
 }
 .revelation-mote-1  { animation-delay: 1.00s; }
 .revelation-mote-2  { animation-delay: 1.20s; }
-.revelation-mote-3  { animation-delay: 1.40s; width: 6px; height: 16px; }
-.revelation-mote-4  { animation-delay: 1.60s; width: 6px; height: 16px; }
-.revelation-mote-5  { animation-delay: 1.80s; width: 5px; height: 14px; }
-.revelation-mote-6  { animation-delay: 2.00s; width: 5px; height: 14px; }
-.revelation-mote-7  { animation-delay: 2.20s; width: 4px; height: 12px; }
-.revelation-mote-8  { animation-delay: 2.40s; width: 4px; height: 12px; }
-.revelation-mote-9  { animation-delay: 2.60s; width: 4px; height: 11px; }
-.revelation-mote-10 { animation-delay: 2.80s; width: 3px; height: 10px; }
-.revelation-mote-11 { animation-delay: 3.00s; width: 3px; height: 9px; }
-.revelation-mote-12 { animation-delay: 3.20s; width: 3px; height: 9px; }
+.revelation-mote-3  { animation-delay: 1.40s; width: 9px; height: 22px; }
+.revelation-mote-4  { animation-delay: 1.60s; width: 9px; height: 22px; }
+.revelation-mote-5  { animation-delay: 1.80s; width: 8px; height: 19px; }
+.revelation-mote-6  { animation-delay: 2.00s; width: 8px; height: 19px; }
+.revelation-mote-7  { animation-delay: 2.20s; width: 7px; height: 16px; }
+.revelation-mote-8  { animation-delay: 2.40s; width: 7px; height: 16px; }
+.revelation-mote-9  { animation-delay: 2.60s; width: 6px; height: 15px; }
+.revelation-mote-10 { animation-delay: 2.80s; width: 5px; height: 13px; }
+.revelation-mote-11 { animation-delay: 3.00s; width: 5px; height: 12px; }
+.revelation-mote-12 { animation-delay: 3.20s; width: 4px; height: 11px; }
+.revelation-mote-13 { animation-delay: 3.40s; width: 4px; height: 10px; }
+.revelation-mote-14 { animation-delay: 3.60s; width: 4px; height: 10px; }
+.revelation-mote-15 { animation-delay: 3.80s; width: 3px; height: 9px; }
+.revelation-mote-16 { animation-delay: 4.00s; width: 3px; height: 8px; }
+.revelation-mote-17 { animation-delay: 4.20s; width: 3px; height: 8px; }
+.revelation-mote-18 { animation-delay: 4.40s; width: 3px; height: 7px; }
 
 /* ===== PAGE MOTES (warm orange-ember — page 93) ===== */
 .page-mote {
 position: absolute;
 top: 18%;
 right: 22%;
-width: 8px;
-height: 20px;
+width: 12px;
+height: 28px;
 border-radius: 50%;
-background: radial-gradient(ellipse, rgba(255,195,100,0.85) 0%, rgba(225,140,50,0.5) 45%, rgba(190,100,20,0) 90%);
-box-shadow: 0 0 18px rgba(245,185,90,0.7), 0 0 36px rgba(215,130,40,0.45), 0 0 60px rgba(185,90,15,0.3);
+background: radial-gradient(ellipse, rgba(255,205,115,0.98) 0%, rgba(230,150,60,0.68) 45%, rgba(190,100,20,0) 90%);
+box-shadow: 0 0 26px rgba(248,190,100,0.88), 0 0 52px rgba(220,140,50,0.6), 0 0 88px rgba(185,90,15,0.42);
 opacity: 0;
 pointer-events: none;
 z-index: 2;
-filter: blur(0.6px);
-animation: hauntMoteRise 5.5s ease-out forwards;
+filter: blur(0.3px);
+animation: hauntMoteRise 6.6s ease-out forwards;
 }
 .page-mote-1  { animation-delay: 1.00s; }
 .page-mote-2  { animation-delay: 1.20s; }
-.page-mote-3  { animation-delay: 1.40s; width: 6px; height: 16px; }
-.page-mote-4  { animation-delay: 1.60s; width: 6px; height: 16px; }
-.page-mote-5  { animation-delay: 1.80s; width: 5px; height: 14px; }
-.page-mote-6  { animation-delay: 2.00s; width: 5px; height: 14px; }
-.page-mote-7  { animation-delay: 2.20s; width: 4px; height: 12px; }
-.page-mote-8  { animation-delay: 2.40s; width: 4px; height: 12px; }
-.page-mote-9  { animation-delay: 2.60s; width: 4px; height: 11px; }
-.page-mote-10 { animation-delay: 2.80s; width: 3px; height: 10px; }
-.page-mote-11 { animation-delay: 3.00s; width: 3px; height: 9px; }
-.page-mote-12 { animation-delay: 3.20s; width: 3px; height: 9px; }
+.page-mote-3  { animation-delay: 1.40s; width: 9px; height: 22px; }
+.page-mote-4  { animation-delay: 1.60s; width: 9px; height: 22px; }
+.page-mote-5  { animation-delay: 1.80s; width: 8px; height: 19px; }
+.page-mote-6  { animation-delay: 2.00s; width: 8px; height: 19px; }
+.page-mote-7  { animation-delay: 2.20s; width: 7px; height: 16px; }
+.page-mote-8  { animation-delay: 2.40s; width: 7px; height: 16px; }
+.page-mote-9  { animation-delay: 2.60s; width: 6px; height: 15px; }
+.page-mote-10 { animation-delay: 2.80s; width: 5px; height: 13px; }
+.page-mote-11 { animation-delay: 3.00s; width: 5px; height: 12px; }
+.page-mote-12 { animation-delay: 3.20s; width: 4px; height: 11px; }
+.page-mote-13 { animation-delay: 3.40s; width: 4px; height: 10px; }
+.page-mote-14 { animation-delay: 3.60s; width: 4px; height: 10px; }
+.page-mote-15 { animation-delay: 3.80s; width: 3px; height: 9px; }
+.page-mote-16 { animation-delay: 4.00s; width: 3px; height: 8px; }
+.page-mote-17 { animation-delay: 4.20s; width: 3px; height: 8px; }
+.page-mote-18 { animation-delay: 4.40s; width: 3px; height: 7px; }
 
 /* ===== QUEST MOTES (brass-gold — quest accepted) ===== */
 .quest-mote {
 position: absolute;
 top: 18%;
 right: 22%;
-width: 8px;
-height: 20px;
+width: 12px;
+height: 28px;
 border-radius: 50%;
-background: radial-gradient(ellipse, rgba(255,225,140,0.85) 0%, rgba(225,180,75,0.5) 45%, rgba(180,140,40,0) 90%);
-box-shadow: 0 0 18px rgba(245,210,120,0.7), 0 0 36px rgba(215,170,65,0.45), 0 0 60px rgba(180,135,40,0.3);
+background: radial-gradient(ellipse, rgba(255,232,150,0.98) 0%, rgba(230,190,85,0.68) 45%, rgba(180,140,40,0) 90%);
+box-shadow: 0 0 26px rgba(248,215,130,0.88), 0 0 52px rgba(220,178,75,0.6), 0 0 88px rgba(180,135,40,0.42);
 opacity: 0;
 pointer-events: none;
 z-index: 2;
-filter: blur(0.6px);
-animation: hauntMoteRise 5.5s ease-out forwards;
+filter: blur(0.3px);
+animation: hauntMoteRise 6.6s ease-out forwards;
 }
 .quest-mote-1  { animation-delay: 1.00s; }
 .quest-mote-2  { animation-delay: 1.20s; }
-.quest-mote-3  { animation-delay: 1.40s; width: 6px; height: 16px; }
-.quest-mote-4  { animation-delay: 1.60s; width: 6px; height: 16px; }
-.quest-mote-5  { animation-delay: 1.80s; width: 5px; height: 14px; }
-.quest-mote-6  { animation-delay: 2.00s; width: 5px; height: 14px; }
-.quest-mote-7  { animation-delay: 2.20s; width: 4px; height: 12px; }
-.quest-mote-8  { animation-delay: 2.40s; width: 4px; height: 12px; }
-.quest-mote-9  { animation-delay: 2.60s; width: 4px; height: 11px; }
-.quest-mote-10 { animation-delay: 2.80s; width: 3px; height: 10px; }
-.quest-mote-11 { animation-delay: 3.00s; width: 3px; height: 9px; }
-.quest-mote-12 { animation-delay: 3.20s; width: 3px; height: 9px; }
+.quest-mote-3  { animation-delay: 1.40s; width: 9px; height: 22px; }
+.quest-mote-4  { animation-delay: 1.60s; width: 9px; height: 22px; }
+.quest-mote-5  { animation-delay: 1.80s; width: 8px; height: 19px; }
+.quest-mote-6  { animation-delay: 2.00s; width: 8px; height: 19px; }
+.quest-mote-7  { animation-delay: 2.20s; width: 7px; height: 16px; }
+.quest-mote-8  { animation-delay: 2.40s; width: 7px; height: 16px; }
+.quest-mote-9  { animation-delay: 2.60s; width: 6px; height: 15px; }
+.quest-mote-10 { animation-delay: 2.80s; width: 5px; height: 13px; }
+.quest-mote-11 { animation-delay: 3.00s; width: 5px; height: 12px; }
+.quest-mote-12 { animation-delay: 3.20s; width: 4px; height: 11px; }
+.quest-mote-13 { animation-delay: 3.40s; width: 4px; height: 10px; }
+.quest-mote-14 { animation-delay: 3.60s; width: 4px; height: 10px; }
+.quest-mote-15 { animation-delay: 3.80s; width: 3px; height: 9px; }
+.quest-mote-16 { animation-delay: 4.00s; width: 3px; height: 8px; }
+.quest-mote-17 { animation-delay: 4.20s; width: 3px; height: 8px; }
+.quest-mote-18 { animation-delay: 4.40s; width: 3px; height: 7px; }
 
 /* ===== MOTE LAYERING — keep collection-mote sparkles ABOVE the fixed
    .stat-bars header strip (which sits at z-index: 1000). Raising z-index on
@@ -33884,29 +34014,35 @@ animation: hauntMoteRise 5.5s ease-out forwards;
 position: absolute;
 top: 18%;
 right: 22%;
-width: 8px;
-height: 20px;
+width: 12px;
+height: 28px;
 border-radius: 50%;
-background: radial-gradient(ellipse, rgba(200,220,245,0.85) 0%, rgba(150,185,225,0.5) 45%, rgba(100,145,200,0) 90%);
-box-shadow: 0 0 18px rgba(185,210,240,0.7), 0 0 36px rgba(140,175,220,0.45), 0 0 60px rgba(100,145,200,0.3);
+background: radial-gradient(ellipse, rgba(210,228,250,0.98) 0%, rgba(160,195,232,0.68) 45%, rgba(100,145,200,0) 90%);
+box-shadow: 0 0 26px rgba(195,218,245,0.88), 0 0 52px rgba(150,185,228,0.6), 0 0 88px rgba(100,145,200,0.42);
 opacity: 0;
 pointer-events: none;
 z-index: 2;
-filter: blur(0.6px);
-animation: hauntMoteRise 5.5s ease-out forwards;
+filter: blur(0.3px);
+animation: hauntMoteRise 6.6s ease-out forwards;
 }
 .item-mote-1  { animation-delay: 1.00s; }
 .item-mote-2  { animation-delay: 1.20s; }
-.item-mote-3  { animation-delay: 1.40s; width: 6px; height: 16px; }
-.item-mote-4  { animation-delay: 1.60s; width: 6px; height: 16px; }
-.item-mote-5  { animation-delay: 1.80s; width: 5px; height: 14px; }
-.item-mote-6  { animation-delay: 2.00s; width: 5px; height: 14px; }
-.item-mote-7  { animation-delay: 2.20s; width: 4px; height: 12px; }
-.item-mote-8  { animation-delay: 2.40s; width: 4px; height: 12px; }
-.item-mote-9  { animation-delay: 2.60s; width: 4px; height: 11px; }
-.item-mote-10 { animation-delay: 2.80s; width: 3px; height: 10px; }
-.item-mote-11 { animation-delay: 3.00s; width: 3px; height: 9px; }
-.item-mote-12 { animation-delay: 3.20s; width: 3px; height: 9px; }
+.item-mote-3  { animation-delay: 1.40s; width: 9px; height: 22px; }
+.item-mote-4  { animation-delay: 1.60s; width: 9px; height: 22px; }
+.item-mote-5  { animation-delay: 1.80s; width: 8px; height: 19px; }
+.item-mote-6  { animation-delay: 2.00s; width: 8px; height: 19px; }
+.item-mote-7  { animation-delay: 2.20s; width: 7px; height: 16px; }
+.item-mote-8  { animation-delay: 2.40s; width: 7px; height: 16px; }
+.item-mote-9  { animation-delay: 2.60s; width: 6px; height: 15px; }
+.item-mote-10 { animation-delay: 2.80s; width: 5px; height: 13px; }
+.item-mote-11 { animation-delay: 3.00s; width: 5px; height: 12px; }
+.item-mote-12 { animation-delay: 3.20s; width: 4px; height: 11px; }
+.item-mote-13 { animation-delay: 3.40s; width: 4px; height: 10px; }
+.item-mote-14 { animation-delay: 3.60s; width: 4px; height: 10px; }
+.item-mote-15 { animation-delay: 3.80s; width: 3px; height: 9px; }
+.item-mote-16 { animation-delay: 4.00s; width: 3px; height: 8px; }
+.item-mote-17 { animation-delay: 4.20s; width: 3px; height: 8px; }
+.item-mote-18 { animation-delay: 4.40s; width: 3px; height: 7px; }
 
 /* ===== ITEM / PASSWORD COLLECT BOX ===== */
 .item-box {

@@ -27746,11 +27746,22 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     try { audioEl.pause(); audioEl.src = ''; } catch (e) {}
     audioEl = null;
   }
-  /* Stop audio if the player navigates away mid-game. */
-  var pgGen = window._passageGen;
-  var watchGen = setInterval(function(){
-    if (window._passageGen !== pgGen) { stopAudio(); clearInterval(watchGen); }
-  }, 300);
+  /* Stop audio if the player navigates away mid-game. The gen snapshot is
+     deferred one tick because Harlowe runs passage <script> tags
+     synchronously during rendering, BEFORE the MutationObserver
+     increments _passageGen for this passage — same race fix as Dawn
+     wheel / dual ring heartbeat. Without the defer the very first frame
+     trips the navigated-away guard and the canvas stays blank.
+
+     pgGen stays null until the deferred snapshot lands, and the frame
+     loop treats null as "still mounting, don't bail". */
+  var pgGen = null;
+  setTimeout(function(){
+    pgGen = window._passageGen;
+    var watchGen = setInterval(function(){
+      if (window._passageGen !== pgGen) { stopAudio(); clearInterval(watchGen); }
+    }, 300);
+  }, 0);
 
   /* ── State ── */
   var startedAt = 0;        /* performance.now() at first user gesture */
@@ -27945,7 +27956,9 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
 
   /* ── Main loop ── */
   function frame() {
-    if (window._passageGen !== pgGen) return;
+    /* pgGen is null until the deferred snapshot lands — keep rendering
+       through the mounting window instead of bailing. */
+    if (pgGen !== null && window._passageGen !== pgGen) return;
     drawBackground();
     drawLanes();
     if (!running) {

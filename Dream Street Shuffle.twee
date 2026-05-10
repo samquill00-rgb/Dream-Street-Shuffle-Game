@@ -27788,6 +27788,7 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
   var ended = false;
   var hitFlash = [0, 0, 0]; /* per-lane hit timestamp */
   var ripples = [];         /* {x, y, t0} */
+  var sparks  = [];         /* {x, y, vx, vy, t0, life} — gold sparks on hit */
 
   function elapsedMs() { return running ? (performance.now() - startedAt) : 0; }
 
@@ -27812,8 +27813,24 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     /* ±220ms hit window */
     if (bestIdx >= 0 && bestDelta <= 220) {
       notes[bestIdx].hit = true;
-      hitFlash[laneIdx] = performance.now();
-      ripples.push({ x: LANES[laneIdx].x, y: TARGET_Y, t0: performance.now() });
+      var now = performance.now();
+      hitFlash[laneIdx] = now;
+      ripples.push({ x: LANES[laneIdx].x, y: TARGET_Y, t0: now });
+      /* Burst 10 gold sparks outward — a small flourish for hitting in time. */
+      var sparkX = LANES[laneIdx].x;
+      var sparkY = TARGET_Y;
+      for (var k = 0; k < 10; k++) {
+        var ang = (Math.PI * 2) * (k / 10) + (Math.random() - 0.5) * 0.5;
+        var spd = 90 + Math.random() * 120;        /* px/sec */
+        sparks.push({
+          x:  sparkX,
+          y:  sparkY,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 40,            /* slight upward bias */
+          t0: now,
+          life: 500 + Math.random() * 350           /* ms */
+        });
+      }
     }
   }
   function onKey(e) {
@@ -27887,12 +27904,12 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     /* t = ms when the pool reaches the player line. x is the pool's
        horizontal centre at the player line (perspective narrows it in
        the distance). col is "r,g,b". r is base radius at the player line. */
-    { t:  5500, x: W * 0.28, r: 80,  col: '208, 80, 70'   },  /* red shop */
-    { t:  9000, x: W * 0.72, r: 80,  col: '110,170, 90'   },  /* green */
-    { t: 12500, x: W * 0.22, r: 76,  col: '120,140,210'   },  /* blue */
-    { t: 16000, x: W * 0.78, r: 78,  col: '178,108,188'   },  /* violet */
-    { t: 19500, x: W * 0.32, r: 80,  col: '212,124, 78'   },  /* warm red */
-    { t: 23000, x: W * 0.68, r: 80,  col: ' 96,184,176'   }   /* teal */
+    { t:  5500, x: W * 0.28, r: 125, col: '208, 80, 70'   },  /* red shop */
+    { t:  9000, x: W * 0.72, r: 125, col: '110,170, 90'   },  /* green */
+    { t: 12500, x: W * 0.22, r: 120, col: '120,140,210'   },  /* blue */
+    { t: 16000, x: W * 0.78, r: 122, col: '178,108,188'   },  /* violet */
+    { t: 19500, x: W * 0.32, r: 125, col: '212,124, 78'   },  /* warm red */
+    { t: 23000, x: W * 0.68, r: 200, col: ' 96,184,176'   }   /* teal — bigger still, transitions you into the amber */
   ];
   function drawPools() {
     var t = elapsedMs();
@@ -28023,11 +28040,35 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
       if (age > 700) { ripples.splice(i, 1); continue; }
       var p = age / 700;
       var radius = 18 + p * 50;
-      ctx.strokeStyle = 'rgba(244,232,208,' + (0.7 * (1 - p)) + ')';
-      ctx.lineWidth = 1.5;
+      /* Gold ring — matches the destination amber palette. */
+      ctx.strokeStyle = 'rgba(248,208,128,' + (0.78 * (1 - p)) + ')';
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
       ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
       ctx.stroke();
+    }
+  }
+  function drawSparks() {
+    var now = performance.now();
+    for (var i = sparks.length - 1; i >= 0; i--) {
+      var s = sparks[i];
+      var age = now - s.t0;
+      if (age >= s.life) { sparks.splice(i, 1); continue; }
+      var p = age / s.life;                       /* 0..1 */
+      /* Integrate position with mild gravity */
+      var dt = age / 1000;
+      var px = s.x + s.vx * dt;
+      var py = s.y + s.vy * dt + 110 * dt * dt;   /* gravity */
+      var alpha = 0.95 * (1 - p);
+      /* Two-tone gold: bright core + warmer halo. */
+      ctx.fillStyle = 'rgba(252,232,164,' + alpha + ')';
+      ctx.beginPath();
+      ctx.arc(px, py, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(248,192, 96,' + (alpha * 0.55) + ')';
+      ctx.beginPath();
+      ctx.arc(px, py, 3.6, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
   function drawCountIn() {
@@ -28080,6 +28121,7 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
       drawDestinationAmber();
       drawCountIn();
       drawRipples();
+      drawSparks();
       if (elapsedMs() >= TOTAL_MS) {
         ended = true;
         var onward = document.getElementById('waltz-onward');

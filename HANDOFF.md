@@ -82,7 +82,7 @@ Music piece itself is parked — Dr Quill writing original music rather than emb
 
 ## Files of note
 
-- `Dream Street Shuffle.twee` — 148 passages now (+1 for `Benito's Hour`)
+- `Dream Street Shuffle.twee` — **126 passages now** (was 148 at session start: +1 for `Benito's Hour`, then −22 from the fossils audit deletions below)
 - `Dream Street Shuffle.html` — synced via `python3 sync_html.py`
 - New memories under `~/.claude/projects/.../memory/` — see above
 
@@ -136,5 +136,26 @@ Likely leftover from an earlier notebook/inventory-viewer layout. The current ha
 - Twine engine specials (`StoryData`, `StoryTitle`, `UserScript`, `UserStylesheet`, `header header`) — read by name by the engine.
 - CSS pseudo-element selectors that my regex wrongly matched as passage names (`-webkit-scrollbar*`).
 
-### Open question
-Nothing was deleted in the audit pass — only flagged. If you want any of A / B / C removed, say which and I'll do it. My instinct: **A (Centre Point router) is a clean delete**, mirrors the fallback removal we just did. **B (PP Twee arc)** wants a quick prose-mining pass first to see if any of the round-resolution lines are good enough to lift into the canvas's narrative panel before binning. **C (Display sub-passages)** — your call whether any are reserved for future use.
+### Cleanup actions taken (post-audit)
+
+All three clusters resolved on Dr Quill's nod:
+
+- **A. Centre Point router — DELETED.** One passage gone, plus its `'Centre Point':1` entry in the `HUB_NAMES` JS classification map.
+- **B. PP Twee arc — DELETED, 17 passages.** Prose-mined first; nothing worth lifting (pure mechanics, no flavor prose). The "16" original count grew to 17 once `PP Final` was added by transitivity (only reachable via dead `PP Point 5`). `PP Defeat` and `PP Victory` kept — they're the canvas mini-game's exits and carry the live haunt acquisition (THE GAME) and item drops (Trisha's Matchbook, Beer Mat, Cecil Court password).
+- **C. Display sub-passages — partial delete.** `Alba Display`, `Haunt Display`, `Items Display`, `Secrets Display` removed (their logic is duplicated inline in `Build Notebook`, the live notebook UI). `Deco Divider` **kept** as a parked reusable visual component. JS classification entries (`ENDING_NAMES`, `DISPLAY_NAMES`) cleaned up to match.
+
+**Total deletions:** 22 passages. **Net session change:** 148 → 126 passages (also +1 from adding `Benito's Hour`, so really +1 / −23). Zero broken references — verified by grep across the file post-deletion. Functional equivalence: nothing the player sees has changed.
+
+### Pattern worth remembering for future audits
+
+The same fossil shape kept recurring this session and the prior one:
+
+> *Refactor consolidates functionality into a new home, but the old building blocks are left in place because nothing references them anymore so nothing breaks.*
+
+Examples:
+- The `Alba Incomplete` fallback line in Dawn (deleted earlier this session) — the win/loss split was moved upstream into the dedicated Alba Incomplete passage; the Dawn-passage fallback became redundant.
+- The `Centre Point` router — `Approach Centre Point` started routing direct to Alba Complete/Incomplete; the in-between router was bypassed.
+- The PP Twee arc — the canvas mini-game absorbed the whole multi-round resolution; the round-by-round Twee passages became unreachable.
+- The Display sub-passages — the modular widgets got inlined into `Build Notebook` as one big string-concatenation block; the modular originals stayed in place.
+
+If a future audit looks for similar fossils, the heuristic is: **find places where two different parts of the codebase do the same job, and check whether one of them is reached.**

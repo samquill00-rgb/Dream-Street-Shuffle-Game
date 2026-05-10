@@ -1,144 +1,140 @@
-# HANDOFF — 2026-05-10
+# HANDOFF — 2026-05-10 (session 2)
 
-A long playthrough-feedback pass: 18 items raised across two messages, all touched. Plus a structural gating audit that surfaced one real dead-end (Pillars) and prompted the lily-revisit safety net. Plus a small CSS fix for the wine-stain double-ring.
-
----
-
-## Playthrough fixes (in order surfaced)
-
-### Drink with him
-The smash sound at "The Empty Glass" is unique to that passage — anchored to the narrative line "He drops it; it smashes." All other drink popups share `glassClink + pour + sip + swallow` only. No edit; just confirmed intentional.
-
-### Word to the Wise popups self-fade
-Modal hint popups now auto-dismiss after 5.5s with a 0.8s opacity transition. Click and Esc still dismiss instantly. [Dream Street Shuffle.twee:2890](Dream Street Shuffle.twee:2890)
-
-### Critic book widget
-Each "Wait." click now spawns a fresh `.critic-book-flip` element on the stage and animates from 0° → −178°. Sidesteps the class-toggle race that was leaving subsequent flips visually inert (the original `remove → void offsetWidth → add` pattern wasn't reliably resetting the transition state). Pages stack — visually reads as a real page-turn each click. [Dream Street Shuffle.twee:31661](Dream Street Shuffle.twee:31661)
-
-### Colony Room sneak text
-First-entry now opens with "At the top of the stairs, the doorman lifts an eyebrow. You drop the name of the friend who brought you here once before. He gives you the briefest of nods and lets you pass." — the membership question lands. [Dream Street Shuffle.twee:30782](Dream Street Shuffle.twee:30782)
-
-### Perfect Score (9-point fight)
-Fight engine now exposes the score via `window._lastFightScore` and routes a 9-point win to a new `Fight Victory Perfect` passage. End-screen reads PERFECT SCORE rather than STANDING. New prose: Copper looks at his own hands "as if they belonged to someone else"; Quiet Frankie folds his arms and grins; Salvu branch presses both the matchbook AND a small leather-bound notebook into your hand "for the road." +26 confidence, +8 sobriety on the Salvu path. [Dream Street Shuffle.twee:8703](Dream Street Shuffle.twee:8703), new passage at [:28166](Dream Street Shuffle.twee:28166)
-
-### Copper "shouts" → "calls after you"
-Standing passage: "Copper shouts" → "Copper calls after you — half-genial, half-mocking". [Dream Street Shuffle.twee:28083](Dream Street Shuffle.twee:28083)
-
-### "Through the Pillars" link rename
-Dean Street's `Seek the coast — through The Pillars` link (the post-critic Carthage path) renamed to **"Walk west — beyond the gates"** to drop the venue-name confusion. [Dream Street Shuffle.twee:27971](Dream Street Shuffle.twee:27971)
-
-### Carthage hint at Maritime "Seek the shore"
-The Maritime interlude's "Seek the shore" now leads with an italic anticipation:
-- With beermat: *"A beer-mat hand, in your pocket: Carthage Short Hercules' Pillars."*
-- Without: *"Somewhere out past the breakers, an older shore."*
-
-[Dream Street Shuffle.twee:28608](Dream Street Shuffle.twee:28608)
-
-### Reach into flames return path
-`Rescue the page` now returns to **Carthage shore** rather than straight to "Dream to Dean". Player picks "Wake from this dream" themselves — preserves the choice. [Dream Street Shuffle.twee:29031](Dream Street Shuffle.twee:29031)
-
-### Double haunt at Isis
-THE FEEDING (haunt10) was firing on a 2.4s delay after THE DELIVERY (haunt6) at `O'Flatterly's Gift`, reading as "two haunts at once". THE FEEDING moved earlier in the arc — now collected at `O'Flatterly's quest` (when Inis first sets the Page-93 quest). THE DELIVERY stays at the page-return. [Dream Street Shuffle.twee:28717](Dream Street Shuffle.twee:28717)
-
-### Critic line gating in the Pillars
-After meeting the critic, the entire "Through the fumes, vapours and drink, you recognise a man." block + lore-expand + greyed-out `[DONE FOR TONIGHT]` is now hidden. Pillars cleanly drops the thread. [Dream Street Shuffle.twee:28063](Dream Street Shuffle.twee:28063)
-
-### Phonecalls in succession
-The dual ring required `($returns - $lilyCall1ReturnsAt) >= 2` only at the Coach lock; the four venue triggers (Pillars, French, Colony, Ronnie's) didn't have the spacing gate. Added at all four. Result: two Dean Street returns minimum between Lily call 1 and the dual ring — i.e. ~1–2 venue trips of breathing room.
-
-### "And the tears…" line timing
-The dual ring's final fading line (`.lily-fade-very-late`) was set to fade in at 22s, but the hang-up button also appeared at 22s and the auto-go fired at 32s — players were hanging up before it landed. Bumped to: hang-up appears at 28s, auto-go at 40s. ~6s of clear visibility before the link is offered, ~16s before forced exit. [Dream Street Shuffle.twee:31790](Dream Street Shuffle.twee:31790)
-
-### Lacklands office front
-Couldn't reproduce the bypass — every link to `Martin Lackland's Office` routes through `Approach Lacklands Office` (the 3D scene), and the Davy Merkin path (which sets `$knowsCopperSecret`) only exits to Dean Street. The 3D approach uses a 300ms poller. Flagged back; awaiting a click-by-click repro from Dr Quill if it recurs.
-
-### Beermat after ping pong
-PP Defeat (and PP Victory's matched copy) now gates the beermat acquisition behind `$hasCleggBeermat is false and $hasMissingPage is false and $returnedPage is false`. If the player has already done the Cecil Court arc by another path, Percy gives a knowing nod instead — *"You've got the lay of it already," says Percy Ritson, recognising what's already in your pocket. He nods, like one finished man to another.* [Dream Street Shuffle.twee:28723](Dream Street Shuffle.twee:28723), [:28929](Dream Street Shuffle.twee:28929)
-
-### Morale attrition (the big balance fix)
-Before: confidence stuck near 100 by mid-game because gains (+12, +18, +22) far outpaced drops (−6, −9). Added passive bleed in the Dean Street hub keyed off `$returns`:
-
-- returns 2–3: −2 confidence
-- returns 4–5: −3 confidence
-- returns 6+: −4 confidence
-
-Compounds: ten returns ≈ −28 cumulative passive drag. Venue gains still keep the player ahead unless they're genuinely circling. The clamps below already prevent it from going negative. [Dream Street Shuffle.twee:27913](Dream Street Shuffle.twee:27913)
-
-### Shelley's liver — bird animation + sobriety
-The `Eat Shelleys Liver` passage was firing `(go-to: "Dean Street")` synchronously while the popup setTimeouts were still pending — bird animation was getting torn down or never showing, and the +18 sobriety set silently. Two fixes:
-
-1. `LiverPopup._fadeOut` now dispatches a `liverpopup:closed` custom event on close.
-2. The Twee passage stages a hidden `[[·|Dean Street]]` link, runs the popup directly (not via setTimeout), and a small script binds a one-time listener that clicks the link when the popup closes. 25s safety fallback in case the popup never closes.
-
-The +22 confidence and +18 sobriety sets stay; they were correct, just looked broken because the popup never showed. [Dream Street Shuffle.twee:27356](Dream Street Shuffle.twee:27356)
-
-### Last Lily memory
-Parked per Dr Quill — wants to revisit later.
+A short, focused session that cleared the rolled-over text-voice threads in one sweep and made a small audio addition to the Lackland scene. Plus a leftover-fossils audit of the codebase, prompted by the Alba Incomplete fallback removal.
 
 ---
 
-## Structural gating audit + fixes
+## What shipped
 
-Triggered by Dr Quill's note: *"the gating is still a mess. Especially towards the end game. Passages and routes shut down before it is possible to collect everything from them."*
+### (1) Critic's-judgement holding-beat — landed
+Between the verdict and the existing transition at [`The critic's judgement`, Dream Street Shuffle.twee:31647](Dream Street Shuffle.twee:31647), inserted an italicised player-POV beat:
 
-### Pillars dead-end bug (introduced + fixed in same session)
-The earlier critic-line gating edit ([above](#critic-line-gating-in-the-pillars)) accidentally left the `Entering The Pillars of Hercules` passage with **no exit link** when both `$hadPhoneCall` and `$metCritic` were true. Player would land in the pub with the verse and nowhere to click. Fixed: when both flags are true, the passage now lands on:
+> *America, you think of new-found-land.*
 
-> The room hums on without you. Your business here is finished.
->
-> [[Back to Dean Street|Dean Street]]
+Donne — *"O my America, my new-found-land"* — the writer-protagonist's private flash of memory against the critic's brush-off. The verdict now has time to land before the critic pivots to the Cecil Court signpost.
 
-[Dream Street Shuffle.twee:28072](Dream Street Shuffle.twee:28072)
+### (2) Alba Incomplete renunciation-shape — landed
+The diagnosis was that the loss-state was *the win-state minus its centre* — defined entirely by negation ("you did not find") and by inversion of the win-imperative. Two changes:
 
-### Lily revisit safety net (the structural fix)
-Each of the four lily-bearing venues that closes mid-game now offers a **"back to X — there was something you missed"** link in the Dean Street menu when its lily is still uncollected. Mirrors the existing Chippy/Lily 1 pattern.
+- **Replaced the middle line** at [Dream Street Shuffle.twee:27846](Dream Street Shuffle.twee:27846):
+  > *You did not find the poem. Sometimes the night is its own work, and the dawn will come regardless.*
 
-| Venue | Lily | Closes when… | Revisit |
-|---|---|---|---|
-| Chippy | 1 | `$hadChippy` | (already existed) |
-| The Pillars | 2 | `$metCritic AND $visitedCarthage AND $alba contains $alba2` | added — [:27972](Dream Street Shuffle.twee:27972) |
-| Ronnie Scott's | 3 | `$completedSetlist` | added — [:27978](Dream Street Shuffle.twee:27978) |
-| The Colony Room | 4 | `$knowsRonnies AND $knowsCopperSecret` | added — [:27975](Dream Street Shuffle.twee:27975) |
-| The French | 5 | haunts 1+2+4 collected | added — [:27967](Dream Street Shuffle.twee:27967) |
+  The renunciation-shape now lives in the "night is its own work" clause — the loss-state has positive content of its own.
 
-All gated on `$coachUrgent is false` — once sobriety hits zero and the night collapses to the Coach, lily collection stops being possible. Same as the Chippy revisit. **Open question for Dr Quill**: whether to lift the `$coachUrgent` gate so lily revisits remain accessible right up to the dawn.
+- **Deleted the redundant fallback block** in the shared `Dawn` passage at [:27879](Dream Street Shuffle.twee:27879). The fallback was restating "you didn't find the poem" in the visual slot where the win-state fades in three alba lines. With the renunciation already spoken upstream in Alba Incomplete, the fallback was a duplicated negation. Loss-state Dawn now flows: *Better not tomorrow* → silent beat where the alba would have bloomed → *And the last weight peeled from the dawn…* → Lily SVG → colophon.
 
-### Closures NOT touched (because they're safe)
-- **Cecil Court** — closes on `$returnedPage`. Haunt6 (THE DELIVERY) fires *before* the closure flag, on the same passage. No missable lily inside.
-- **Trisha's** — closes on `$metShana`. Haunts 8 + 11 fire on the linear flow inside Trisha's; metShana is set on entry to Approach Shana, but the flow funnels you through Verdict → After Shana before exit.
-- **Lackland's** — gated by `$knowsCopperSecret` rather than closed; no lily.
+  **To verify on a losing playthrough:** the silent slot may collapse visually because the `alba-final` div is no longer in the DOM at all. If the spacing collapses and the rhythm needs holding, easy fix is to add an empty placeholder div with a `min-height` to preserve the beat.
+
+### (3) Spanish Artist expansion → new `Benito's Hour` passage — landed
+Split the Spanish Artist beat across two passages so Benito's longer speech could breathe and the player would have to opt in to hearing it.
+
+- **`The Spanish Artist`** keeps the pour and the diagnosis, now closed at *"…what you have made."* New link: **Listen** → Benito's Hour.
+- **`Benito's Hour`** (new passage at [Dream Street Shuffle.twee:31146](Dream Street Shuffle.twee:31146), `[venue-french]` tag, position 500,850) carries Dr Quill's full speech: pilgrimage at El Rocío → the painting that waited under the bed → permission-to-write closing on *"It wants only to live."* Single-quote opens at the start of each paragraph, single close-quote at the very end. Friend's inner line in double quotes per the existing convention. Closing link **Let him look** → The Painter's Gaze, so the THE SKETCH haunt acquisition is unchanged.
+- Typo fixed: *at at window* → *at a window*.
+
+Passage count: 147 → 148.
+
+### (6) Lackland record audio — partial; needleLift SFX live, music parked
+Added a procedural **`needleLift`** SFX to `dssAudio` (around [Dream Street Shuffle.twee:2184](Dream Street Shuffle.twee:2184)): short bandpass-filtered "thup" + 0.42s fading vinyl-surface hiss + three random surface pops. All Web Audio, no samples. Exported via `window.dssAudio.needleLift`.
+
+Triggered in `Martin Lackland's Office` 700ms after passage mount, so the player has read *"He lifts the needle from his record"* before the click lands.
+
+Music piece itself is parked — Dr Quill writing original music rather than embedding the copyrighted Ponderosa Twins track. When file arrives:
+- Spec sent: `.mp3` or `.m4a`, 15s+, loopable preferred, mastered slightly under normal music bed (heard from across a room on a Garrard 401), `the-lackland-record.m4a` style filename
+- I'll add a `MUSIC_SOURCE`-style constant to `sync_html.py` mirroring the existing venue-bed pattern, base64-embed the file, wire it to start on Office passage entry, cut at the same 700ms beat as needleLift, optionally add a `needleDrop` SFX + fade-in on the leave-link if he wants the bookend
 
 ---
 
-## Wine stain — double-ring → single-ring
-The two `typewriter-page` SVG overlays (Night Ahead big stain + Night Ahead Part Two smaller stain) were each drawing **three** concentric circles: outer red, inner darker overlay at the same radius, AND a smaller-radius fainter ring inside. The third circle (`r="79"` and `r="65"` respectively) was the new inner ring that had appeared. Removed in both instances; back to single-ring look. [Dream Street Shuffle.twee:30898](Dream Street Shuffle.twee:30898), [:30921](Dream Street Shuffle.twee:30921)
+## Memories saved
+
+- `feedback_character_voice_drafts.md` — drafting *as* a DSS character: short clauses, biographical/cultural specificity, painterly observation as texture, closing line that crystallises rather than explains. Validated on Benito drafts.
+- `feedback_no_player_visual.md` — no portraits, photos, mirrors, or anything that commits to the protagonist's appearance. Killed the bar-photo thread.
+- `feedback_chair_task_vocab.md` — "chair-task" is shared vocab; means work I can finish without him in the loop.
+
+---
+
+## Killed
+
+- **Bar photo** (the second half of the (6) "fun additions" cluster) — Dr Quill ruled it out: doesn't want to suggest what the player looks like. Standard second-person IF principle — the player projects in.
 
 ---
 
 ## Open / parked
 
-- **Last Lily memory** — Dr Quill parked it; will revisit.
-- **Lacklands 3D office front** — couldn't repro; awaiting click-by-click path.
-- **`$coachUrgent` gating on lily revisits** — currently blocks them; ask Dr Quill if he wants them to survive the Coach trigger.
-- **Dual ring spacing tuning** — currently `>= 2` returns of cooldown after Lily call 1. Easy knob to tighten (`>= 1`) or relax (`>= 3`). Awaiting playtest feedback.
-- **Morale attrition curve** — −2 / −3 / −4 step. Curve might need flattening or steepening once Dr Quill plays through it.
+- **Lackland's record music** — awaiting Dr Quill's composition.
+- **Last Lily memory** — parked twice now; he'll know when it's ready.
+- **Cow ride mid-tier playtest** — needs him to play.
+- **Heartbeat on dual ring's Lily side** — needs him to listen with sound on. The heartbeat IS already there at 7.8s in [`The dual ring`, Dream Street Shuffle.twee:31826](Dream Street Shuffle.twee:31826); thread is whether it needs different rhythm/quality from the Aoife-side heartbeat.
+- **General audit pass** (the (7) thread) — clean linear walkthrough; Dr Quill's task.
+- **Lacklands 3D office front bypass** — couldn't reproduce; awaiting click-by-click if it recurs.
+- **Tuning knobs** — dual-ring spacing (`>= 2` returns), morale curve (−2/−3/−4 step). Judgment calls he can give me by feel, but they'd benefit from a playthrough first.
 
 ---
 
 ## Possible next threads
 
-- **Critic's-judgement holding-beat** (rolled over from prior handoff) — one sentence between "Have you tried America?" and the password-deflection.
-- **Alba Incomplete ending re-build** (rolled over) — give the loss-state its own renunciation-shape rather than just absence.
-- **Spanish Artist expansion** (rolled over) — let Benito's permission-to-write line carry more weight.
-- **Cow ride mid-tier playtest** (rolled over).
-- **Heartbeat on dual ring's Lily side** (rolled over).
-- **Lackland record-skipping + bar photo** (rolled over from earlier "fun additions").
-- **General Dr Quill audit pass** (rolled over) — clean walkthrough.
+- **Lackland music wiring** when his composition arrives.
+- **Loss-state Dawn spacing** — verify the silent slot reads as held space rather than as a missing element; fix with a min-height placeholder if needed.
+- **Benito's Hour pacing** — verify the Listen → Benito's Hour flow reads as opt-in rather than as a nag, and that the haunt acquisition still triggers cleanly when the player lands on The Painter's Gaze.
+- **needleLift balance** — listen with sound on, tune volume / timing / texture knobs.
 
 ---
 
 ## Files of note
 
-- `Dream Street Shuffle.twee` — 147 passages now (+1 for Fight Victory Perfect)
+- `Dream Street Shuffle.twee` — 148 passages now (+1 for `Benito's Hour`)
 - `Dream Street Shuffle.html` — synced via `python3 sync_html.py`
-- `~/.claude/projects/.../memory/feedback_preserve_choices.md` — still load-bearing; lily revisit pattern is the latest expression of it
+- New memories under `~/.claude/projects/.../memory/` — see above
+
+---
+
+## Fossils audit
+
+Targeted pass to find vestigial structures of the same shape as the Alba Incomplete fallback we just deleted: passages with no inbound link, branches gated on flags that can no longer be true, variables set-but-never-read, redundant parallel beats.
+
+**Variable check is clean.** Of 87 unique `$variables` in the .twee, zero are set-but-never-read elsewhere. State management is healthy. Nothing to flag.
+
+**Three real fossil clusters in the passage graph:**
+
+### A. The `Centre Point` router passage
+Currently at [Dream Street Shuffle.twee:27907](Dream Street Shuffle.twee:27907) — a one-line passage:
+
+```
+:: Centre Point [piano-bed] {"position":"1650,75","size":"100,100"}
+(if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[(go-to: "Alba Complete")](else:)[(go-to: "Alba Incomplete")]
+```
+
+**Same fossil shape as the Alba Incomplete fallback we just deleted.** The comment block at [:25567-25568](Dream Street Shuffle.twee:25567) actually documents the change: *"Approach Centre Point's hidden tw-link now targets Alba Complete / Alba Incomplete directly (the Centre Point router passage was [bypassed])."* `Approach Centre Point` at [:27208](Dream Street Shuffle.twee:27208) routes straight to Alba Complete / Alba Incomplete, skipping the router. Nothing reaches `Centre Point` anymore — confirmed by grep across the whole file. (The `'Centre Point':1` entry in the `HUB_NAMES` JS map at [:2388](Dream Street Shuffle.twee:2388) is just classification metadata, not a navigation reference.)
+
+**Recommendation:** safe to delete.
+
+### B. The Twee multi-round ping-pong arc (16 passages)
+The canvas mini-game in `PP Pong` plays the whole match end-to-end and exits to `PP Victory` or `PP Defeat` directly via `<span id="pp-go-win">[[Victory|PP Victory]]</span>` / `<span id="pp-go-lose">[[Defeat|PP Defeat]]</span>`. It never routes through any of the round-by-round Twee passages.
+
+The original Twee implementation — Round 1 entry → `PP Aggressive 1` / `PP Steady 1` / `PP Trick 1` → resolve → `PP Point 2` → choose strategy → `PP Aggressive/Steady/Trick 2` → resolve → … → `PP Point 5` — has been entirely absorbed by the canvas. The Round 1 entry passages have no inbound link, which makes the whole downstream chain unreachable.
+
+Dead passages, in full:
+- `PP Aggressive 1`, `PP Aggressive 2`, `PP Aggressive 3`, `PP Aggressive 4`
+- `PP Steady 1`, `PP Steady 2`, `PP Steady 3`, `PP Steady 4`
+- `PP Trick 1`, `PP Trick 2`, `PP Trick 3`, `PP Trick 4`
+- `PP Point 2`, `PP Point 3`, `PP Point 4`, `PP Point 5`
+
+That's 16 passages in the [:28800–:29044](Dream Street Shuffle.twee:28800) range.
+
+**Recommendation:** safe to delete — but worth checking whether any of the resolution prose was good enough to be worth lifting into the canvas mini-game's narrative panel (`#pp-narrative`) before deletion. The narrative arrays inside PP Pong's JS are currently per-opponent quips ("Jack Curtis nods. A veteran's approval."), not round-by-round prose — there might be material in the dead arc worth promoting before binning.
+
+### C. Five "Display" sub-passages
+`Alba Display`, `Haunt Display`, `Items Display`, `Secrets Display`, `Deco Divider` — all defined as passages but never `(display:)`-ed or linked to anywhere in the codebase. Listed in JS classification maps for grouping (`HUB_NAMES`, `ENDING_NAMES`) but nothing actually navigates to or renders them.
+
+Likely leftover from an earlier notebook/inventory-viewer layout. The current haunt / item / lily display logic lives inline in venue passages (haunt-boxes, item-boxes, the Lily SVG `(display:)` calls).
+
+**Recommendation:** safe to delete unless one of them is being saved for a planned re-use — `Alba Display` and `Deco Divider` in particular sound like they could be deliberate parking spots.
+
+### False positives the audit flagged but cleared
+- `Eat Shelleys Liver` — reached via JS at [:2707](Dream Street Shuffle.twee:2707) (`var TARGET = 'Eat Shelleys Liver'; ... Engine.goToPassage(TARGET)`) for the bird-animation handler. Live.
+- `The critic's judgement` — reached via dynamic `(link-goto: "Put //" + (text: $bookTitle) + "// on the table", "The critic's judgement")` at [:28753](Dream Street Shuffle.twee:28753). Live.
+- Twine engine specials (`StoryData`, `StoryTitle`, `UserScript`, `UserStylesheet`, `header header`) — read by name by the engine.
+- CSS pseudo-element selectors that my regex wrongly matched as passage names (`-webkit-scrollbar*`).
+
+### Open question
+Nothing was deleted in the audit pass — only flagged. If you want any of A / B / C removed, say which and I'll do it. My instinct: **A (Centre Point router) is a clean delete**, mirrors the fallback removal we just did. **B (PP Twee arc)** wants a quick prose-mining pass first to see if any of the round-resolution lines are good enough to lift into the canvas's narrative panel before binning. **C (Display sub-passages)** — your call whether any are reserved for future use.

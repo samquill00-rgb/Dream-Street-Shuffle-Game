@@ -27695,12 +27695,33 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     { key: 'ArrowDown',  alt: 's', x: W * 0.50, glyph: '↓', label: 'DOWN'  },
     { key: 'ArrowRight', alt: 'd', x: W * 0.82, glyph: '→', label: 'RIGHT' }
   ];
-  var TARGET_Y = 110;
-  var SPAWN_Y  = H + 50;
-  /* Notes travel from SPAWN_Y up to TARGET_Y over one bar (2s) so the player
-     reads them an entire bar ahead. */
-  var APPROACH_MS = BAR_MS;
-  var PIXELS_PER_MS = (SPAWN_Y - TARGET_Y) / APPROACH_MS;
+  /* The street runs UP the canvas: the player's feet are at TARGET_Y
+     near the bottom, and marks first appear at SPAWN_Y near the top
+     (the distance / vanishing line) and drift DOWN toward the player as
+     the player "walks forward". */
+  var TARGET_Y = H - 78;
+  var SPAWN_Y  = 36;
+  var VAN_X    = W / 2;       /* vanishing-point x — directly ahead */
+  var VAN_NARROW = 0.30;      /* lane spread at the vanishing line, relative to player line */
+  var APPROACH_MS = BAR_MS;   /* one bar of lead-in before a mark reaches the player */
+  var PIXELS_PER_MS = (TARGET_Y - SPAWN_Y) / APPROACH_MS;
+
+  /* tFactor: 0 at the vanishing line (top), 1 at the player line (bottom). */
+  function tFactor(y) {
+    var t = (y - SPAWN_Y) / (TARGET_Y - SPAWN_Y);
+    return t < 0 ? 0 : t > 1.05 ? 1.05 : t;
+  }
+  /* Lane x at a given y, with perspective convergence. At the player line
+     lanes sit at full spread; at the vanishing line they pull toward VAN_X. */
+  function laneXAt(laneIdx, y) {
+    var t = tFactor(y);
+    var spread = VAN_NARROW + (1 - VAN_NARROW) * t;
+    return VAN_X + (LANES[laneIdx].x - VAN_X) * spread;
+  }
+  /* Mark size scales with depth — small in the distance, full at your feet. */
+  function sizeAt(y) {
+    return 0.46 + 0.54 * tFactor(y);
+  }
 
   /* ── Beat schedule ──
      Beats 0-5:   bars 1-2, intro music, no notes (4s).
@@ -27821,53 +27842,92 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
 
   /* ── Drawing ── */
   function drawBackground() {
-    /* Cobblestone pavement — dark with faint chalk grid. */
-    ctx.fillStyle = '#1a1612';
+    var t = running ? elapsedMs() : 0;
+    /* Pavement base */
+    ctx.fillStyle = '#15110d';
     ctx.fillRect(0, 0, W, H);
-    /* Faint chalk dust haze */
-    var grad = ctx.createRadialGradient(W/2, H*0.6, 40, W/2, H*0.6, H*0.7);
-    grad.addColorStop(0, 'rgba(232,220,196,0.05)');
-    grad.addColorStop(1, 'rgba(232,220,196,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-    /* Cobblestone hint — subtle dotted pattern */
-    ctx.fillStyle = 'rgba(80,68,52,0.16)';
-    for (var y = 30; y < H; y += 40) {
-      for (var x = 12; x < W; x += 22) {
-        var jx = x + ((y / 40) % 2 === 0 ? 0 : 11);
+    /* Cobblestones — a tile pattern that scrolls DOWN at the same speed
+       as the marks, so a stone and a chalk-mark beside it stay rigid
+       relative to each other (the ground itself is stationary in world
+       space; the camera moves up the street). */
+    var TILE_H = 22;
+    var scroll = (t * PIXELS_PER_MS) % TILE_H;
+    var rowIdx = Math.floor((-scroll) / TILE_H);
+    for (var ry = -TILE_H + scroll; ry < H + TILE_H; ry += TILE_H) {
+      rowIdx++;
+      var depthT = tFactor(ry);
+      /* fade stones into distance — barely visible at vanishing line */
+      var alpha = 0.04 + 0.36 * depthT;
+      var sz    = 0.45 + 0.55 * depthT;
+      var spread = VAN_NARROW + (1 - VAN_NARROW) * depthT;
+      var halfStreet = W * 0.48;
+      /* Draw a row of cobbles, perspectively narrowed */
+      var stones = 9;
+      for (var s = 0; s < stones; s++) {
+        var u = (s - (stones - 1) / 2) / ((stones - 1) / 2);   /* -1..+1 */
+        var off = (rowIdx % 2 === 0) ? 0 : (1 / stones);
+        var x = VAN_X + (u + off) * halfStreet * spread;
+        ctx.fillStyle = 'rgba(70,58,44,' + alpha + ')';
         ctx.beginPath();
-        ctx.ellipse(jx, y, 9, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(x, ry, 11 * sz, 5 * sz, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+    /* Distance haze — fades the top so things vanish into fog */
+    var haze = ctx.createLinearGradient(0, 0, 0, SPAWN_Y + 80);
+    haze.addColorStop(0, 'rgba(21,17,13,0.95)');
+    haze.addColorStop(1, 'rgba(21,17,13,0)');
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, W, SPAWN_Y + 80);
+    /* Subtle gold pool around the player line — the lamplight you're
+       walking under */
+    var pool = ctx.createRadialGradient(VAN_X, TARGET_Y + 18, 30, VAN_X, TARGET_Y + 18, 220);
+    pool.addColorStop(0, 'rgba(212,176,108,0.08)');
+    pool.addColorStop(1, 'rgba(212,176,108,0)');
+    ctx.fillStyle = pool;
+    ctx.fillRect(0, 0, W, H);
   }
   function drawLanes() {
+    /* Three converging chalk lines — the dance lanes drawn on the
+       pavement, perspective-narrowed toward the vanishing point. */
     for (var i = 0; i < LANES.length; i++) {
-      var L = LANES[i];
-      /* Lane chalk column */
-      ctx.strokeStyle = 'rgba(220,196,158,0.12)';
+      var topX = laneXAt(i, SPAWN_Y);
+      var botX = laneXAt(i, H - 8);
+      ctx.strokeStyle = 'rgba(220,196,158,0.18)';
       ctx.lineWidth = 1;
-      ctx.setLineDash([4, 8]);
+      ctx.setLineDash([4, 7]);
       ctx.beginPath();
-      ctx.moveTo(L.x, TARGET_Y - 30);
-      ctx.lineTo(L.x, H - 20);
+      ctx.moveTo(topX, SPAWN_Y);
+      ctx.lineTo(botX, H - 8);
       ctx.stroke();
       ctx.setLineDash([]);
-      /* Target circle (chalked) */
-      var sinceHit = performance.now() - hitFlash[i];
+    }
+    /* Player line — three chalk circles where your feet will pass over
+       each lane. These are the "now" zone: marks that reach this line
+       are hit. */
+    for (var j = 0; j < LANES.length; j++) {
+      var L = LANES[j];
+      var sinceHit = performance.now() - hitFlash[j];
       var glow = sinceHit < 500 ? Math.max(0, 1 - sinceHit / 500) : 0;
       ctx.strokeStyle = 'rgba(220,196,158,' + (0.45 + 0.5 * glow) + ')';
       ctx.lineWidth = 1.4 + 1.6 * glow;
       ctx.beginPath();
       ctx.arc(L.x, TARGET_Y, 26, 0, Math.PI * 2);
       ctx.stroke();
-      /* Lane glyph in target zone */
       ctx.fillStyle = 'rgba(232,220,196,' + (0.55 + 0.4 * glow) + ')';
       ctx.font = '22px serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(L.glyph, L.x, TARGET_Y);
     }
+    /* Faint horizon bar at the vanishing line — gives the eye a "far end"
+       to the street. */
+    ctx.strokeStyle = 'rgba(220,196,158,0.22)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.32, SPAWN_Y);
+    ctx.lineTo(W * 0.68, SPAWN_Y);
+    ctx.stroke();
   }
   function drawNotes() {
     var t = elapsedMs();
@@ -27876,28 +27936,29 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
       if (n.hit) continue;
       var noteT = n.beatIdx * BEAT_MS;
       var delta = noteT - t;
-      /* Auto-mark missed if it sails past the target by 250ms */
+      /* Auto-mark missed if it sails past the player by 250ms */
       if (delta < -250 && !n.missed) n.missed = true;
-      /* Visible window: from when it spawns (delta=APPROACH_MS) until shortly after target (delta=-300) */
+      /* Visible window: from spawn (delta = APPROACH_MS, near vanishing
+         line) until shortly after the player line (delta = -400ms). */
       if (delta > APPROACH_MS || delta < -400) continue;
-      var y = TARGET_Y + delta * PIXELS_PER_MS;
+      /* Position along the street: delta=APPROACH_MS → SPAWN_Y; delta=0 →
+         TARGET_Y; delta<0 → past the player (off the bottom). */
+      var y = TARGET_Y - delta * PIXELS_PER_MS;
+      var x = laneXAt(n.lane, y);
+      var sz = sizeAt(y);
       var L = LANES[n.lane];
       var alpha = n.missed ? 0.18 : 0.92;
-      /* Footprint: a chalk-drawn arrow pointing toward the target */
       ctx.save();
-      ctx.translate(L.x, y);
+      ctx.translate(x, y);
       ctx.fillStyle = 'rgba(232,220,196,' + alpha + ')';
       ctx.strokeStyle = 'rgba(244,232,208,' + (alpha * 0.9) + ')';
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = 1.6 * sz;
       ctx.beginPath();
-      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.arc(0, 0, 18 * sz, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      /* Chalked arrow inside the disc */
-      ctx.strokeStyle = 'rgba(28,22,18,' + (alpha * 0.85) + ')';
-      ctx.lineWidth = 2.4;
-      ctx.font = 'bold 22px serif';
       ctx.fillStyle = 'rgba(28,22,18,' + (alpha * 0.85) + ')';
+      ctx.font = 'bold ' + Math.round(22 * sz) + 'px serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(L.glyph, 0, 1);

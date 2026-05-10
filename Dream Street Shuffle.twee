@@ -27661,11 +27661,9 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
 
 :: Cecil Court Waltz [venue-cecilcourt waltz-game] {"position":"300,1610","size":"100,100"}
 <div class="waltz-frame">
-<div class="waltz-prelude">The pavement chalks itself underfoot — three steps, repeating; an old set of dance instructions someone has drawn here, that you remember as your feet remember.</div>
 <canvas id="waltz-canvas" width="360" height="540" style="display:block;margin:0.6em auto;"></canvas>
 <div class="waltz-keys">&larr; &nbsp; &darr; &nbsp; &rarr; <span class="waltz-keys-aux">&nbsp;&nbsp;or A &nbsp; S &nbsp; D</span></div>
 <div id="waltz-onward" style="display:none;text-align:center;margin-top:1em;">[[Onward, then.|O'Flatterly's shop]]</div>
-<div class="waltz-skip"><span id="waltz-skip-link">[[(walk on)|O'Flatterly's shop]]</span></div>
 </div>
 <script>
 (function(){
@@ -27879,12 +27877,64 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     haze.addColorStop(1, 'rgba(21,17,13,0)');
     ctx.fillStyle = haze;
     ctx.fillRect(0, 0, W, SPAWN_Y + 80);
-    /* Subtle gold pool around the player line — the lamplight you're
-       walking under */
-    var pool = ctx.createRadialGradient(VAN_X, TARGET_Y + 18, 30, VAN_X, TARGET_Y + 18, 220);
-    pool.addColorStop(0, 'rgba(212,176,108,0.08)');
-    pool.addColorStop(1, 'rgba(212,176,108,0)');
-    ctx.fillStyle = pool;
+  }
+
+  /* Small coloured pools of light cast on the pavement from unseen shop
+     windows — they scroll past at the same rate as the cobblestones, so
+     each one is rigidly placed in the world and you walk through it.
+     The big amber at the end is O'Flatterly's scrumpy amber arrival. */
+  var POOLS = [
+    /* t = ms when the pool reaches the player line. x is the pool's
+       horizontal centre at the player line (perspective narrows it in
+       the distance). col is "r,g,b". r is base radius at the player line. */
+    { t:  5500, x: W * 0.28, r: 80,  col: '208, 80, 70'   },  /* red shop */
+    { t:  9000, x: W * 0.72, r: 80,  col: '110,170, 90'   },  /* green */
+    { t: 12500, x: W * 0.22, r: 76,  col: '120,140,210'   },  /* blue */
+    { t: 16000, x: W * 0.78, r: 78,  col: '178,108,188'   },  /* violet */
+    { t: 19500, x: W * 0.32, r: 80,  col: '212,124, 78'   },  /* warm red */
+    { t: 23000, x: W * 0.68, r: 80,  col: ' 96,184,176'   }   /* teal */
+  ];
+  function drawPools() {
+    var t = elapsedMs();
+    for (var i = 0; i < POOLS.length; i++) {
+      var p = POOLS[i];
+      var delta = p.t - t;
+      if (delta > APPROACH_MS + 400) continue;     /* hasn't appeared yet */
+      if (delta < -APPROACH_MS) continue;          /* long passed */
+      var y = TARGET_Y - delta * PIXELS_PER_MS;
+      if (y < SPAWN_Y - 20 || y > H + 80) continue;
+      var tf = tFactor(y);
+      /* Perspective-narrow the pool's centre x same way lanes narrow */
+      var spread = VAN_NARROW + (1 - VAN_NARROW) * tf;
+      var px = VAN_X + (p.x - VAN_X) * spread;
+      var rad = p.r * (0.35 + 0.65 * tf);
+      /* Soften pools that are far ahead OR sailing past behind you */
+      var alphaBase = 0.55;
+      if (delta < 0) alphaBase *= Math.max(0.25, 1 + delta / APPROACH_MS);
+      var grad = ctx.createRadialGradient(px, y, 0, px, y, rad);
+      grad.addColorStop(0,   'rgba(' + p.col + ',' + (alphaBase * 0.7) + ')');
+      grad.addColorStop(0.45,'rgba(' + p.col + ',' + (alphaBase * 0.30) + ')');
+      grad.addColorStop(1,   'rgba(' + p.col + ',0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+  /* The destination amber — O'Flatterly's lit-late window. Doesn't
+     scroll past; it grows under you as you arrive. Fades in over the
+     last 8 seconds, so by Onward you're standing inside it. */
+  function drawDestinationAmber() {
+    var t = elapsedMs();
+    var fadeStart = TOTAL_MS - 8000;
+    if (t < fadeStart) return;
+    var p = Math.min(1, (t - fadeStart) / 8000);
+    var ease = p * p;                              /* slow, then bloom */
+    var rad = 110 + 360 * ease;
+    var alpha = 0.62 * ease;
+    var grad = ctx.createRadialGradient(VAN_X, TARGET_Y + 14, 0, VAN_X, TARGET_Y + 14, rad);
+    grad.addColorStop(0,   'rgba(248,208,128,' + alpha + ')');
+    grad.addColorStop(0.45,'rgba(218,160, 70,' + (alpha * 0.55) + ')');
+    grad.addColorStop(1,   'rgba(160,108, 38,0)');
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
   }
   function drawLanes() {
@@ -28008,11 +28058,8 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     ctx.fillText('← ↓ →     follow the steps', W / 2, H / 2 + 16);
   }
   function drawEnd() {
-    ctx.fillStyle = 'rgba(232,220,196,0.78)';
-    ctx.font = 'italic 19px Georgia, serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('The waltz settles back into the stones.', W / 2, H / 2);
+    /* Intentionally empty — the canvas keeps its final pavement/lanes
+       state and the Onward link fades in below it. No outro copy. */
   }
 
   /* ── Main loop ── */
@@ -28021,13 +28068,16 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
        through the mounting window instead of bailing. */
     if (pgGen !== null && window._passageGen !== pgGen) return;
     drawBackground();
+    if (running) drawPools();
     drawLanes();
     if (!running) {
       drawIdle();
     } else if (ended) {
+      drawDestinationAmber();
       drawEnd();
     } else {
       drawNotes();
+      drawDestinationAmber();
       drawCountIn();
       drawRipples();
       if (elapsedMs() >= TOTAL_MS) {

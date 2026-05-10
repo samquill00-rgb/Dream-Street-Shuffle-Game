@@ -1551,6 +1551,7 @@ window.dssAudio = (function() {
   window._cowGameDataUri = '__DSS_COWGAME_DATA_URI__';
   window._jazzMiniDataUri = '__DSS_JAZZMINI_DATA_URI__';
   window._pongMiniDataUri = '__DSS_PONGMINI_DATA_URI__';
+  window._waltzMiniDataUri = '__DSS_WALTZ_DATA_URI__';
   // Ronnie Scott's — jazz-bar people ambience (La Fontaine, Copenhagen).
   // Plays on every venue-ronnies passage: the club itself, the bar canvas
   // results, and The Set.
@@ -2691,23 +2692,33 @@ window.flipCoinPopup = function() {
 
 // ====== SWALLOW SHELLEY'S LIVER (notebook button) ======
 window.eatLiver = function() {
-  // Close any liver inspect popup if open
+  /* Close any liver inspect popup if open */
   var lp = document.getElementById('liver-popup-overlay');
   if (lp) lp.remove();
-  // Close the notebook dialog properly via Harlowe's own close link.
-  // The notebook is created by (dialog:), and its close target is
-  // tw-dialog-links tw-link — clicking that lets Harlowe end the dialog
-  // cleanly so the engine will accept a subsequent goToPassage call.
+  /* Close the notebook dialog properly via Harlowe's own close link.
+     The notebook is created by (dialog:), and its close target is
+     tw-dialog-links tw-link — clicking that lets Harlowe end the dialog
+     cleanly so the engine will accept a subsequent goToPassage call. */
   var closeLink = document.querySelector('tw-dialog-links tw-link');
   if (closeLink) closeLink.click();
-  // Wait one tick for the dialog to tear down, then navigate.
-  // The "Eat Shelleys Liver" passage triggers the bird/eagle animation
-  // (window.showLiverPopup) and then go-tos Dean Street.
-  setTimeout(function() {
-    var TARGET = 'Eat Shelleys Liver';
-    if (window.Engine && Engine.goToPassage) { Engine.goToPassage(TARGET); }
-    else if (window.Engine && Engine.go) { Engine.go(TARGET); }
-  }, 60);
+  /* Two-stage retry: 60ms is sometimes too short for the (dialog:) tear-down
+     to release Harlowe's render lock, leaving Engine.go a no-op and the
+     player marooned with the notebook gone but no passage transition.
+     Fire at 80ms; if we don't see "Eat Shelleys Liver" on tw-passage by
+     320ms, retry once. */
+  var TARGET = 'Eat Shelleys Liver';
+  function jump(){
+    if (window.Engine && Engine.goToPassage) { Engine.goToPassage(TARGET); return; }
+    if (window.Engine && Engine.go) { Engine.go(TARGET); return; }
+  }
+  setTimeout(function(){
+    jump();
+    setTimeout(function(){
+      var p = document.querySelector('tw-passage');
+      var pn = p && p.getAttribute('data-name');
+      if (pn !== TARGET) jump();
+    }, 240);
+  }, 80);
 };
 
 // ====== SHELLEY'S LIVER POPUP (notebook) ======
@@ -27598,13 +27609,13 @@ You surface to Dean Street.
 (display: "Ending Vines SVG")
 (after: 6.2s)[EXPLICIT. LIBER. EST.]
 
-(after: 10s)[(link-goto: "PLUS. ULTRA.", "Dawn")]
+(after: 14s)[(link-goto: "PLUS. ULTRA.", "Dawn")]
 
 :: Black page [black-page piano-bed] {"position":"1700,200","size":"100,100"}
 (display: "Ending Vines SVG")
 (after: 6.2s)[EXPLICIT. LIBER. EST.]
 
-(after: 10s)[(link-goto: "PLUS. ULTRA.", "Dawn")]
+(after: 14s)[(link-goto: "PLUS. ULTRA.", "Dawn")]
 
 :: Dawn Approach White [dawn-approach dawn-approach-white piano-bed] {"position":"1850,150","size":"100,100"}
 <div class="dawn-approach">
@@ -27646,9 +27657,323 @@ A waltz strikes up, twice-muffled, as if it came both from inside the bookshop a
 
 You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it is Madame Blavatsky, she is waltzing with the Beast.
 
-[[Waltz on to the light|O'Flatterly's shop]]
+[[Waltz on to the light|Cecil Court Waltz]]
 
-:: O'Flatterly's shop [venue-cecilcourt] {"position":"300,1620","size":"100,100"}
+:: Cecil Court Waltz [venue-cecilcourt waltz-game] {"position":"300,1610","size":"100,100"}
+<div class="waltz-frame">
+<div class="waltz-prelude">The pavement chalks itself underfoot — three steps, repeating; an old set of dance instructions someone has drawn here, that you remember as your feet remember.</div>
+<canvas id="waltz-canvas" width="360" height="540" style="display:block;margin:0.6em auto;"></canvas>
+<div class="waltz-keys">&larr; &nbsp; &darr; &nbsp; &rarr; <span class="waltz-keys-aux">&nbsp;&nbsp;or A &nbsp; S &nbsp; D</span></div>
+<div id="waltz-onward" style="display:none;text-align:center;margin-top:1em;">[[Onward, then.|O'Flatterly's shop]]</div>
+<div class="waltz-skip"><span id="waltz-skip-link">[[(walk on)|O'Flatterly's shop]]</span></div>
+</div>
+<script>
+(function(){
+  /* ===========================================================
+     CECIL COURT WALTZ — three-lane rhythm minigame, no win state.
+     90 BPM, 3/4. 16 bars total: 2 bars intro + 1 count-in bar
+     + 12 bars of dance (six bars LDR, two bars RDL variation,
+     four bars LDR) + 1 bar outro. Total ~32 seconds.
+
+     Hits glow; misses are silent. Like the Sketch — the dance
+     is the point, not the score.
+     =========================================================== */
+  var canvas = document.getElementById('waltz-canvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+
+  /* ── Music timing ── */
+  var BPM = 90;
+  var BEAT_MS = 60000 / BPM;        /* 666.67 */
+  var BAR_MS  = BEAT_MS * 3;        /* 2000 */
+  var TOTAL_MS = BAR_MS * 16;       /* 32000 */
+
+  /* ── Lanes ── */
+  var LANES = [
+    { key: 'ArrowLeft',  alt: 'a', x: W * 0.18, glyph: '←', label: 'LEFT'  },
+    { key: 'ArrowDown',  alt: 's', x: W * 0.50, glyph: '↓', label: 'DOWN'  },
+    { key: 'ArrowRight', alt: 'd', x: W * 0.82, glyph: '→', label: 'RIGHT' }
+  ];
+  var TARGET_Y = 110;
+  var SPAWN_Y  = H + 50;
+  /* Notes travel from SPAWN_Y up to TARGET_Y over one bar (2s) so the player
+     reads them an entire bar ahead. */
+  var APPROACH_MS = BAR_MS;
+  var PIXELS_PER_MS = (SPAWN_Y - TARGET_Y) / APPROACH_MS;
+
+  /* ── Beat schedule ──
+     Beats 0-5:   bars 1-2, intro music, no notes (4s).
+     Beats 6-8:   bar 3, count-in (visual 3-2-1, no playable notes) (2s).
+     Beats 9-44:  bars 4-15, twelve bars of dance (24s).
+     Beats 45-47: bar 16, outro silence (2s). */
+  var notes = [];  /* { beatIdx, lane, hit:false, missed:false } */
+  function pushPattern(barStart, lanesByBeat) {
+    for (var b = 0; b < 3; b++) {
+      var ln = lanesByBeat[b];
+      if (ln === null || ln === undefined) continue;
+      notes.push({ beatIdx: barStart * 3 + b, lane: ln, hit: false, missed: false });
+    }
+  }
+  /* Bars 4-9 (six bars): LEFT, DOWN, RIGHT */
+  for (var bar = 3; bar <= 8; bar++) pushPattern(bar, [0, 1, 2]);
+  /* Bars 10-11 (two bars, the variation): RIGHT, DOWN, LEFT */
+  pushPattern(9,  [2, 1, 0]);
+  pushPattern(10, [2, 1, 0]);
+  /* Bars 12-15 (four bars): LEFT, DOWN, RIGHT */
+  for (var bar2 = 11; bar2 <= 14; bar2++) pushPattern(bar2, [0, 1, 2]);
+  /* Bar 16: silence */
+
+  /* ── Audio ── */
+  var audioEl = null;
+  var audioStarted = false;
+  function startAudio() {
+    if (audioStarted) return;
+    audioStarted = true;
+    var src = window._waltzMiniDataUri || '';
+    /* If the placeholder hasn't been replaced (track still parked), the URI
+       starts with __DSS_; in that case skip audio and play silently. */
+    if (!src || src.indexOf('__DSS_') === 0) return;
+    try {
+      audioEl = new Audio(src);
+      audioEl.volume = 0.42;
+      audioEl.loop = false;
+      audioEl.play().catch(function(){});
+    } catch (e) {}
+  }
+  function stopAudio() {
+    if (!audioEl) return;
+    try { audioEl.pause(); audioEl.src = ''; } catch (e) {}
+    audioEl = null;
+  }
+  /* Stop audio if the player navigates away mid-game. */
+  var pgGen = window._passageGen;
+  var watchGen = setInterval(function(){
+    if (window._passageGen !== pgGen) { stopAudio(); clearInterval(watchGen); }
+  }, 300);
+
+  /* ── State ── */
+  var startedAt = 0;        /* performance.now() at first user gesture */
+  var running = false;
+  var ended = false;
+  var hitFlash = [0, 0, 0]; /* per-lane hit timestamp */
+  var ripples = [];         /* {x, y, t0} */
+
+  function elapsedMs() { return running ? (performance.now() - startedAt) : 0; }
+
+  /* ── Input ── */
+  function laneForKey(k) {
+    var lower = k.toLowerCase();
+    for (var i = 0; i < LANES.length; i++) {
+      if (k === LANES[i].key || lower === LANES[i].alt) return i;
+    }
+    return -1;
+  }
+  function tryHit(laneIdx) {
+    var t = elapsedMs();
+    var bestIdx = -1, bestDelta = 9999;
+    for (var i = 0; i < notes.length; i++) {
+      var n = notes[i];
+      if (n.hit || n.missed || n.lane !== laneIdx) continue;
+      var noteT = n.beatIdx * BEAT_MS;
+      var delta = Math.abs(t - noteT);
+      if (delta < bestDelta) { bestDelta = delta; bestIdx = i; }
+    }
+    /* ±220ms hit window */
+    if (bestIdx >= 0 && bestDelta <= 220) {
+      notes[bestIdx].hit = true;
+      hitFlash[laneIdx] = performance.now();
+      ripples.push({ x: LANES[laneIdx].x, y: TARGET_Y, t0: performance.now() });
+    }
+  }
+  function onKey(e) {
+    var lane = laneForKey(e.key);
+    if (lane < 0) return;
+    e.preventDefault();
+    if (!running) {
+      running = true;
+      startedAt = performance.now();
+      startAudio();
+      return;
+    }
+    if (ended) return;
+    tryHit(lane);
+  }
+  document.addEventListener('keydown', onKey);
+  /* Click anywhere on canvas to start (also accessible for touch). */
+  canvas.addEventListener('click', function(e){
+    if (running) return;
+    running = true;
+    startedAt = performance.now();
+    startAudio();
+  });
+
+  /* ── Drawing ── */
+  function drawBackground() {
+    /* Cobblestone pavement — dark with faint chalk grid. */
+    ctx.fillStyle = '#1a1612';
+    ctx.fillRect(0, 0, W, H);
+    /* Faint chalk dust haze */
+    var grad = ctx.createRadialGradient(W/2, H*0.6, 40, W/2, H*0.6, H*0.7);
+    grad.addColorStop(0, 'rgba(232,220,196,0.05)');
+    grad.addColorStop(1, 'rgba(232,220,196,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    /* Cobblestone hint — subtle dotted pattern */
+    ctx.fillStyle = 'rgba(80,68,52,0.16)';
+    for (var y = 30; y < H; y += 40) {
+      for (var x = 12; x < W; x += 22) {
+        var jx = x + ((y / 40) % 2 === 0 ? 0 : 11);
+        ctx.beginPath();
+        ctx.ellipse(jx, y, 9, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  function drawLanes() {
+    for (var i = 0; i < LANES.length; i++) {
+      var L = LANES[i];
+      /* Lane chalk column */
+      ctx.strokeStyle = 'rgba(220,196,158,0.12)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 8]);
+      ctx.beginPath();
+      ctx.moveTo(L.x, TARGET_Y - 30);
+      ctx.lineTo(L.x, H - 20);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      /* Target circle (chalked) */
+      var sinceHit = performance.now() - hitFlash[i];
+      var glow = sinceHit < 500 ? Math.max(0, 1 - sinceHit / 500) : 0;
+      ctx.strokeStyle = 'rgba(220,196,158,' + (0.45 + 0.5 * glow) + ')';
+      ctx.lineWidth = 1.4 + 1.6 * glow;
+      ctx.beginPath();
+      ctx.arc(L.x, TARGET_Y, 26, 0, Math.PI * 2);
+      ctx.stroke();
+      /* Lane glyph in target zone */
+      ctx.fillStyle = 'rgba(232,220,196,' + (0.55 + 0.4 * glow) + ')';
+      ctx.font = '22px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(L.glyph, L.x, TARGET_Y);
+    }
+  }
+  function drawNotes() {
+    var t = elapsedMs();
+    for (var i = 0; i < notes.length; i++) {
+      var n = notes[i];
+      if (n.hit) continue;
+      var noteT = n.beatIdx * BEAT_MS;
+      var delta = noteT - t;
+      /* Auto-mark missed if it sails past the target by 250ms */
+      if (delta < -250 && !n.missed) n.missed = true;
+      /* Visible window: from when it spawns (delta=APPROACH_MS) until shortly after target (delta=-300) */
+      if (delta > APPROACH_MS || delta < -400) continue;
+      var y = TARGET_Y + delta * PIXELS_PER_MS;
+      var L = LANES[n.lane];
+      var alpha = n.missed ? 0.18 : 0.92;
+      /* Footprint: a chalk-drawn arrow pointing toward the target */
+      ctx.save();
+      ctx.translate(L.x, y);
+      ctx.fillStyle = 'rgba(232,220,196,' + alpha + ')';
+      ctx.strokeStyle = 'rgba(244,232,208,' + (alpha * 0.9) + ')';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      /* Chalked arrow inside the disc */
+      ctx.strokeStyle = 'rgba(28,22,18,' + (alpha * 0.85) + ')';
+      ctx.lineWidth = 2.4;
+      ctx.font = 'bold 22px serif';
+      ctx.fillStyle = 'rgba(28,22,18,' + (alpha * 0.85) + ')';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(L.glyph, 0, 1);
+      ctx.restore();
+    }
+  }
+  function drawRipples() {
+    var now = performance.now();
+    for (var i = ripples.length - 1; i >= 0; i--) {
+      var r = ripples[i];
+      var age = now - r.t0;
+      if (age > 700) { ripples.splice(i, 1); continue; }
+      var p = age / 700;
+      var radius = 18 + p * 50;
+      ctx.strokeStyle = 'rgba(244,232,208,' + (0.7 * (1 - p)) + ')';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  function drawCountIn() {
+    var t = elapsedMs();
+    /* Count-in is bar 3 (beats 6, 7, 8). Show a number on each beat. */
+    var countinStart = BAR_MS * 2;          /* end of bar 2 */
+    var countinEnd   = BAR_MS * 3;          /* end of bar 3 */
+    if (t < countinStart || t >= countinEnd) return;
+    var beatInBar = Math.floor((t - countinStart) / BEAT_MS);  /* 0..2 */
+    var num = 3 - beatInBar;                /* 3, 2, 1 */
+    var beatProgress = ((t - countinStart) % BEAT_MS) / BEAT_MS;
+    var alpha = Math.max(0, 1 - beatProgress);
+    ctx.fillStyle = 'rgba(232,220,196,' + (0.85 * alpha) + ')';
+    ctx.font = 'bold 88px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(num), W / 2, H / 2);
+  }
+  function drawIdle() {
+    /* Pre-start prompt — large chalk text */
+    ctx.fillStyle = 'rgba(232,220,196,0.78)';
+    ctx.font = '20px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Press a key, or click here, to begin.', W / 2, H / 2 - 14);
+    ctx.font = '14px Georgia, serif';
+    ctx.fillStyle = 'rgba(232,220,196,0.45)';
+    ctx.fillText('← ↓ →     follow the steps', W / 2, H / 2 + 16);
+  }
+  function drawEnd() {
+    ctx.fillStyle = 'rgba(232,220,196,0.78)';
+    ctx.font = 'italic 19px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('The waltz settles back into the stones.', W / 2, H / 2);
+  }
+
+  /* ── Main loop ── */
+  function frame() {
+    if (window._passageGen !== pgGen) return;
+    drawBackground();
+    drawLanes();
+    if (!running) {
+      drawIdle();
+    } else if (ended) {
+      drawEnd();
+    } else {
+      drawNotes();
+      drawCountIn();
+      drawRipples();
+      if (elapsedMs() >= TOTAL_MS) {
+        ended = true;
+        var onward = document.getElementById('waltz-onward');
+        if (onward) {
+          onward.style.display = 'block';
+          onward.style.opacity = '0';
+          onward.style.transition = 'opacity 1.4s ease';
+          setTimeout(function(){ onward.style.opacity = '1'; }, 80);
+        }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+:: O'Flatterly's shop [venue-cecilcourt] {"position":"300,1700","size":"100,100"}
 The sign reads: I. O'FLATTERLY, dealer in books.
 
 You go in.
@@ -27675,7 +28000,7 @@ You find it after some looking, where you always knew it was: the Chinese Fish a
 You're eating at the counter when somebody passes the window: that's Lily.
 
 (if: $tookLily1 is false)[|lily1>[(display: "Lily SVG")]\
-(click-replace: ?lily1)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily1 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">That must be her, as tall as the Amazon; her joints articulate how you remember.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[<script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
+(click-replace: ?lily1)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily1 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">That must be her, as tall as the Amazon; her joints articulate how you remember.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[(set: $confidence to $confidence + 12)(set: $sobriety to $sobriety + 8)<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">&#9734; MORALE +12 | SOBRIETY +8</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
 (link: "Eat.")[<script>setTimeout(function(){ window.showEatPopup('chips'); }, 200);</script>(go-to: "Dean Street")]
 <svg class="chippy-tube" viewBox="0 0 300 18" width="100%" height="18" preserveAspectRatio="none"><defs><filter id="fgB" x="-20%" y="-120%" width="140%" height="400%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="14" y="1" width="272" height="16" rx="6" fill="rgba(180,210,255,0.22)" filter="url(#fgB)"/><rect x="16" y="4" width="268" height="10" rx="4" fill="rgba(215,230,255,0.96)"/><rect x="18" y="6" width="264" height="4" rx="2" fill="rgba(240,248,255,1.0)"/><rect x="12"  y="3" width="7" height="12" rx="2" fill="rgba(130,135,145,0.75)"/><rect x="281" y="3" width="7" height="12" rx="2" fill="rgba(130,135,145,0.75)"/><line x1="22" y1="9" x2="278" y2="9" stroke="rgba(200,220,255,0.4)" stroke-width="0.7"/></svg>
@@ -27696,7 +28021,7 @@ You're eating at the counter when somebody passes the window: that's Lily.
 
 (if: $resumingFromCall is true)[(set: $resumingFromCall to false)](else:)[You've come-to in a cubicle, in what you think is the Gents toilet in the Coach and Horses.
 
-(if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to $sobriety + 32)(set: $confidence to $confidence + 22)(set: $crashedAfterDualRing to false)<span class="inventory-note">&#9734; SOBRIETY +32 | MORALE +22</span><script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]](else:)[(link: "Retch.")[(set: $sobriety to $sobriety + 12)<span class="inventory-note">&#9734; SOBRIETY +12</span><script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]]
+(if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to $sobriety + 32)(set: $confidence to $confidence + 22)(set: $crashedAfterDualRing to false)<span class="inventory-note">&#9734; SOBRIETY +32 | MORALE +22</span><script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]](else:)[(link: "Retch.")[(set: $sobriety to $sobriety + 22)(set: $confidence to $confidence + 12)<span class="inventory-note">&#9734; SOBRIETY +22 | MORALE +12</span><script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]]
 
 You gather your limbs to the bar.
 
@@ -27776,6 +28101,11 @@ He drinks so you drink and landing his glass he seems to clock you for the first
 
 You're hushed.
 
+[[Listen|Davy Merkin's tip]]
+</div>
+
+:: Davy Merkin's tip [venue-colony] {"position":"1400,1050","size":"100,100"}
+<div class="colony-scene">
 'Listen. I know what you're wanting and it's not me you're after, but let me give you advice. Do you know Martin Lackland? Office on Frith Street?'
 
 The mention of the name shocks you sober, instantly, then giddies you up to your drink again, just as quickly, and being so fast makes it double.
@@ -27876,7 +28206,7 @@ Traveller, wake!
 
 ]\
 [[Follow him|Approach Centre Point]]
-[[Not yet. Back to the night.|Dean Street]]</div>
+(if: $lilyCount < 5 or $haunts's length < 12)[[[Not yet. Back to the night.|Dean Street]]]</div>
 
 :: Alba Incomplete [piano-bed] {"position":"1550,100","size":"100,100"}
 <script>try { fetch('oxford-street-from-centre-point-3d-static.html'); } catch(e) {}</script>\
@@ -27991,7 +28321,7 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 (if: $coachUrgent is true and _towerReady is false)[<div class="choice-box">'[Noises off. Blackout.]'
 
 <span class="guided-link">[[The Coach and Horses|Approach The Coach]]</span></div>]
-(if: $coachUrgent is false)[Where now?
+(if: $coachUrgent is false and _towerReady is false)[Where now?
 (if: _albaCount is 2)[<div class="choice-box"><span class="greyed-out">Centre Point &#91;ONE MORE LINE OF THE ALBA&#93;</span></div>
 ]\
 (if: $returns >= 2 and $visited's French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)<script>setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);</script>]
@@ -28009,7 +28339,7 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 (if: $coachUrgent is false and $visited's French is true and $hadPhoneCall is true and $metCritic is false)[[[The Pillars — there was someone you wanted to talk to|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $knowsAboutPage is true and ($visitedCarthage is false or not ($alba contains $alba2)))[[[Walk west — beyond the gates|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
-](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $tookLily2 is false)[<div class="choice-box">[[Back to The Pillars — there was something you missed|Approach The Pillars]]</div> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
+](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $tookLily2 is false and ($visited's Colony is true or $knowsRonnies is true or $hadChippy is true))[<div class="choice-box">[[Back to The Pillars — there was something you missed|Approach The Pillars]]</div> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true)[<span class="greyed-out">The Pillars &#91;LOOK ELSEWHERE FIRST&#93;</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ]\
 (if: $coachUrgent is false and $visited's French is true and not ($knowsRonnies is true and $knowsCopperSecret is true))[[[Try the Colony Room|Approach The Colony Room]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
@@ -28097,9 +28427,10 @@ So, so happily I go, under shades.</span></div>]
 If you pass the Pillars' threshold you've already made your choice.]
 
 (if: $tookLily2 is false)[|lily2>[(display: "Lily SVG")]\
-(click-replace: ?lily2)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily2 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">There occurs, as you cross the threshold of the Pillars, a sonic peculiarity seen elsewhere, for instance, in the acoustic mirrors on Dungeness. If you stand in that precise spot and the atmospherics are favourable, you might hear a noise made at that same instant anywhere in Soho. You hear Lily laugh.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[<script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
+(click-replace: ?lily2)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily2 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">There occurs, as you cross the threshold of the Pillars, a sonic peculiarity seen elsewhere, for instance, in the acoustic mirrors on Dungeness. If you stand in that precise spot and the atmospherics are favourable, you might hear a noise made at that same instant anywhere in Soho. You hear Lily laugh.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[(set: $confidence to $confidence + 12)(set: $sobriety to $sobriety + 8)<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">&#9734; MORALE +12 | SOBRIETY +8</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
 <div class="verse">Hobson has supt, and 's newly gon to bed.</div>
+(if: $tookLily2 is false and $lilyCount >= 1)[<div class="lily-glimpse-hint" style="margin-top:0.4em;">(A flower, at the threshold.)</div>]
 (if: $hadPhoneCall is false)[<div class="phone-ringing">Behind the bar a phone rings and your name is called.
 
 [[Accept the call|The phone call]]</div>]
@@ -28479,7 +28810,7 @@ He speaks. The family roars on around, as his old sister winds a trick, him but 
 (set: $sawMemory2 to true)\
 <div class="lily-window">
 <span class="lily-thought">North Quad, St. John's College, Oxford. Late May night and the sexy airs of summer, the trees' munificence. Her staircase and then her, footsteps away. And in the night-blown roses of your ears, repeating what you've learned for your exams:</span>
-<div class="quest-box"><em>Annihilating all that's made<br>To a green thought in a green shade.</em></div>
+<div class="quest-box" style="color:#7ab078;text-shadow:0 0 14px rgba(122,176,120,0.32);"><em>Annihilating all that's made<br>To a <span style="color:#9ed68a;">green</span> thought in a <span style="color:#9ed68a;">green</span> shade.</em></div>
 </div>
 
 [[Return to Dean Street|Dean Street]]
@@ -28630,9 +28961,9 @@ A big hand splits the sky and a big voice booms:
 
 Do you keep going?
 
-[[Yes|Approach The Pillars]]
-(if: $hasCleggBeermat is true or $metCritic is true)[(if: $hasCleggBeermat is true)[//A beer-mat hand, in your pocket: //Carthage Short Hercules' Pillars.//// ](else:)[//Somewhere out past the breakers, an older shore. //]
-[[Seek the shore|The coast of Carthage]]](else:)[//There is no present horizon.//]
+(if: $tookLily2 is false or $metCritic is false)[[[Yes|Approach The Pillars]]
+](if: $hasCleggBeermat is true or $metCritic is true)[(if: $hasCleggBeermat is true)[//A beer-mat hand, in your pocket: //Carthage Short Hercules' Pillars.//// ](else:)[//Somewhere out past the breakers, an older shore. //]
+[[Seek the shore|The coast of Carthage]]](else-if: $tookLily2 is true and $metCritic is true)[//Your business at the Pillars is finished.//](else:)[//There is no present horizon.//]
 </div>
 
 :: Martin Lackland's Office {"position":"1200,1000","size":"100,100"}
@@ -30190,7 +30521,7 @@ return null;
 
 /* ── Input: LEFT/RIGHT ── */
 function onKey(e){
-if(phase==='title'){ phase='practice'; phaseStart=Date.now(); startCowMusic(); return; }
+if(phase==='title'){ startCowMusic(); startReal(); return; }
 if(gameOver) return;
 if(phase==='countdown') return;
 var now=Date.now(); if(now-lastKeyAt<120) return;
@@ -30213,7 +30544,7 @@ hoverLane=Math.max(0,Math.min(LANE_COUNT-1,Math.floor(cx/LANE_W)));
 canvas.addEventListener('mouseleave',function(){ hoverLane=-1; });
 
 canvas.addEventListener('click',function(e){
-if(phase==='title'){ phase='practice'; phaseStart=Date.now(); startCowMusic(); return; }
+if(phase==='title'){ startCowMusic(); startReal(); return; }
 var r=canvas.getBoundingClientRect();
 var cx=(e.clientX-r.left)*(W/r.width);
 var cy=(e.clientY-r.top)*(H/r.height);
@@ -30231,7 +30562,7 @@ clickFlash=nl; clickFlashAt=Date.now();
 
 canvas.addEventListener('touchstart',function(e){
 e.preventDefault();
-if(phase==='title'){ phase='practice'; phaseStart=Date.now(); startCowMusic(); return; }
+if(phase==='title'){ startCowMusic(); startReal(); return; }
 var r=canvas.getBoundingClientRect();
 var cx=(e.touches[0].clientX-r.left)*(W/r.width);
 var cy=(e.touches[0].clientY-r.top)*(H/r.height);
@@ -30350,7 +30681,7 @@ Ronnie Scott's, Ronnie Scott's, just like you pictured it: jazz music.
 Onstage there are three: Moe D'Alcousin on the saxophone, a pianist, and a guitarist.]
 
 (if: $tookLily3 is false)[|lily3>[(display: "Lily SVG")]\
-(click-replace: ?lily3)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily3 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">You've the sense, distinct and cordial, that Lily is sitting behind you, and will not look,</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[<script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
+(click-replace: ?lily3)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily3 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">You've the sense, distinct and cordial, that Lily is sitting behind you, and will not look,</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[(set: $confidence to $confidence + 12)(set: $sobriety to $sobriety + 8)<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">&#9734; MORALE +12 | SOBRIETY +8</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
 (link: "⟡ LORE: Ronnie Scott's ⟡")[<div class="lore-box">
 You hear four stories about Ronnie Scotts and half of them are true.
@@ -30499,7 +30830,9 @@ Her pyre burns down while you're close and all through the night, the body in it
 
 Polybius: What do you mean by England? Why do you damn your country with its name?
 
-[[Wake suddenly|The Interval]]
+(if: $hadLilyCall1 is false and $lilyCount >= 1)[(set: $lilyCallReturn to "Stay in Carthage")<div class="phone-ringing">A phone rings, far off — across some distance the night cannot measure.
+
+[[Accept the call|Lily phone call 1]]</div>](else:)[[[Wake suddenly|The Interval]]]
 </div>
 
 :: Talk to the Artists [venue-french] {"position":"500,650","size":"100,100"}
@@ -30610,13 +30943,13 @@ It has crepuscular gravity, of the kind a public house could never muster.
 (if: $metRed is true)[As you walk in, Red is leaving; you hold each other's eyes, like clutching pearls, and then he's gone.]](else:)[The room receives you as it always has.]
 
 (if: $tookLily4 is false)[|lily4>[(display: "Lily SVG")]\
-(click-replace: ?lily4)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily4 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">Someone in this crowd wears her perfume. You've looked and looked again, she is not here. You know though, that the scent perfume makes is not generic, it is particular to the flesh and blood of she who wears it, born of their live admixture.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[<script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
+(click-replace: ?lily4)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily4 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">Someone in this crowd wears her perfume. You've looked and looked again, she is not here. You know though, that the scent perfume makes is not generic, it is particular to the flesh and blood of she who wears it, born of their live admixture.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[(set: $confidence to $confidence + 12)(set: $sobriety to $sobriety + 8)<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">&#9734; MORALE +12 | SOBRIETY +8</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
 At a table is an agent. There is an impulse among those who work in the book trade, at the business-end of things, to elevate some from their ranks to celebrity. This would not be remarkable (it is done, after all, in most lines of work) were it not for the fact that they deal, in their daily employment, when the job is well done, with remarkable things, deserving of fame. The talented agent, that magus of retail and the markets, is sometimes encouraged, therefore, into a kind of absurd grandeur, which, in the way that prophecies can, will sometimes fulfil itself and serve, valet-like, as its own justification. Such was the agent who sat at the table.
 
-(if: $knowsRonnies is false)[[[Talk to the famous agent|Talk to the intimidating agent]]
-]
 [[Get a drink|Colony drink choice]]
+(if: $knowsRonnies is false)[
+[[Talk to the famous agent|Talk to the intimidating agent]]]
 <svg class="colony-fan-bottom" viewBox="0 0 300 52" width="100%" height="52" preserveAspectRatio="none"><defs><clipPath id="cf2"><rect x="0" y="0" width="300" height="50"/></clipPath><linearGradient id="cfL2" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="30%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="50%" stop-color="#c8b860" stop-opacity="0.8"/><stop offset="70%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient><radialGradient id="cfG2" cx="50%" cy="100%" r="55%"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0.08"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="300" height="52" fill="url(#cfG2)"/><g clip-path="url(#cf2)" opacity="0.3"><line x1="150" y1="54" x2="0"   y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="20"  y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="43"  y2="0" stroke="#8a9a50" stroke-width="0.7"/><line x1="150" y1="54" x2="67"  y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="86"  y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="108" y2="0" stroke="#9a8a30" stroke-width="0.7"/><line x1="150" y1="54" x2="130" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="150" y2="0" stroke="#c8b860" stroke-width="1.0"/><line x1="150" y1="54" x2="170" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="192" y2="0" stroke="#9a8a30" stroke-width="0.7"/><line x1="150" y1="54" x2="214" y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="233" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="257" y2="0" stroke="#8a9a50" stroke-width="0.7"/><line x1="150" y1="54" x2="280" y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="300" y2="0" stroke="#7aaa60" stroke-width="0.7"/></g><path d="M60,20 Q105,12 150,10 Q195,12 240,20" fill="none" stroke="#7aaa60" stroke-width="0.4" opacity="0.18"/><path d="M30,30 Q90,22 150,20 Q210,22 270,30" fill="none" stroke="#8a9a50" stroke-width="0.4" opacity="0.15"/><line x1="0" y1="43" x2="300" y2="43" stroke="url(#cfL2)" stroke-width="0.5"/><line x1="0" y1="47" x2="300" y2="47" stroke="url(#cfL2)" stroke-width="1.8"/><line x1="0" y1="50" x2="300" y2="50" stroke="url(#cfL2)" stroke-width="0.4" opacity="0.3"/><polygon points="150,40 155.5,45 150,50 144.5,45" fill="#c8b860" opacity="0.6"/><polygon points="150,42 153,45 150,48 147,45" fill="#e0d080" opacity="0.2"/><polygon points="120,44 123,47 120,50 117,47" fill="none" stroke="#7aaa60" stroke-width="0.7" opacity="0.4"/><polygon points="180,44 183,47 180,50 177,47" fill="none" stroke="#7aaa60" stroke-width="0.7" opacity="0.4"/><circle cx="95" cy="47" r="0.8" fill="#8a9a50" opacity="0.35"/><circle cx="205" cy="47" r="0.8" fill="#8a9a50" opacity="0.35"/></svg>
 </div>
 
@@ -30655,7 +30988,7 @@ On which do you knock?
 (if: $visited's French is false)[(set: $visited's French to true)\
 (set: $confidence to $confidence + 12)]\
 (if: $tookLily5 is false)[|lily5>[(display: "Lily SVG")]\
-(click-replace: ?lily5)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily5 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">Was that her passing the window, almost six-foot and with the gait of a newborn antelope?</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[<script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
+(click-replace: ?lily5)[(set: $lilyCount to $lilyCount + 1)(set: $tookLily5 to true)(display: "Lily SVG")<span class="lily-glimpse lily-fade">Was that her passing the window, almost six-foot and with the gait of a newborn antelope?</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">(Gather flowers. There are five to find.)</div>](if: $lilyCount is 5)[(set: $confidence to $confidence + 12)(set: $sobriety to $sobriety + 8)<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">&#9734; MORALE +12 | SOBRIETY +8</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
 (if: _fc is 1)[As you walk in the bar drops down to silence, as if its speech were interrupted by a quick gasp for breath, the way a doe sometimes mistakes the wind in the grass for a wolf, stiffens, then goes about its day.
 
@@ -31639,16 +31972,24 @@ You remember that Lily rang. You'd not heard her voice sustained so long in so m
 (set: $lilyCallCount to $lilyCallCount + 1)\
 (set: $confidence to $confidence - 7)
 <script>
-// Second heartbeat — fires when the Lily portion of the dual ring begins.
-// The global header observer fires one heartbeat at ~1.5s for the Aoife
-// scene; we layer a second one in at ~7.8s so the Lily call has its own
-// pulse rather than playing dry.
+/* Second heartbeat + second ring — the global header observer fires one
+   heartbeat at ~1.5s for the Aoife scene; we layer a second pulse + a
+   single phone-bell tone in at ~7.8s so the Lily call has its own audio
+   marker rather than blooming on screen with no cue.
+
+   Outer setTimeout(0) defers the _passageGen snapshot until after the
+   MutationObserver has incremented for this passage; without it the
+   inline-rendered script captures the stale value and the cancel-guard
+   always trips. Same race fix as showDrinkPopupSafe / Dawn wheel. */
 (function(){
-  var hbGen = window._passageGen;
   setTimeout(function(){
-    if (window._passageGen !== hbGen) return;
-    if (window.dssAudio && window.dssAudio.heartbeat) window.dssAudio.heartbeat(6);
-  }, 7800);
+    var hbGen = window._passageGen;
+    setTimeout(function(){
+      if (window._passageGen !== hbGen) return;
+      if (window.dssAudio && window.dssAudio.heartbeat) window.dssAudio.heartbeat(6);
+      if (window.dssAudio && window.dssAudio.phoneBell) window.dssAudio.phoneBell(1);
+    }, 7800);
+  }, 0);
 })();
 </script>
 <div class="phone-scene">
@@ -31696,7 +32037,28 @@ You remember that Lily rang. You'd not heard her voice sustained so long in so m
 <div style="font-family:'Playfair Display',Georgia,serif;font-size:3em;letter-spacing:0.15em;line-height:1.2;animation:dst-titleGlow 6s ease-in-out infinite;">DREAM STREET<br>SHUFFLE</div>
 <div style="font-family:'Crimson Text',Georgia,serif;font-size:1.05em;margin-top:1em;color:#a08060;letter-spacing:0.08em;animation:dst-breathe 8s ease-in-out infinite;">by Three Blue Posts</div>
 <div class="title-begin" style="margin-top:1.6em;font-size:1.6em;">[[BEGIN|Start]]</div>
-(if: (savedgames:) contains "auto")[<div class="title-begin" style="margin-top:5.5em;font-size:0.8em;opacity:0.8;">(link: "(CONTINUE WHERE I LEFT OFF)")[(loadgame: "auto")]</div>]
+(if: (savedgames:) contains "auto")[<div id="dss-continue-link" class="title-begin" style="margin-top:5.5em;font-size:0.8em;opacity:0.8;display:none;">(link: "(CONTINUE WHERE I LEFT OFF)")[(loadgame: "auto")]</div>]<script>
+/* Belt-and-braces gate: Harlowe's (savedgames:) sometimes reports stale or
+   phantom slots. Only reveal the Continue link if the localStorage row
+   for the auto save actually exists for THIS story (matched by IFID). */
+(function(){
+  var slot = document.getElementById('dss-continue-link');
+  if (!slot) return;
+  var ifid = '2CA3EC26-FACB-4F19-A2FA-6E1A6C2E4CB6';
+  var found = false;
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i) || '';
+      if (k.indexOf('Saved Game') === -1) continue;
+      if (k.toLowerCase().indexOf('auto') === -1) continue;
+      if (ifid && k.indexOf(ifid) === -1) continue;
+      var v = localStorage.getItem(k);
+      if (v && v.length > 50) { found = true; break; }
+    }
+  } catch (e) {}
+  if (found) slot.style.display = '';
+})();
+</script>
 </div>
 </div>
 </div>
@@ -31801,7 +32163,6 @@ Jack Curtis wins it. Smash to the corner.
 
 (link: "Challenge Jack Curtis")[(set: $ppScore to 0)(set: $oppScore to 0)(set: $opponent to "Jack Curtis")(go-to: "PP Pong")]
 (link: "Challenge Percy Ritson")[(set: $ppScore to 0)(set: $oppScore to 0)(set: $opponent to "Percy Ritson")(go-to: "PP Pong")]
-[[I'd rather just watch|Watch them play]]
 
 :: Watch them play [venue-lackland-back] {"position":"1400,1300","size":"100,100"}
 You watch them play.
@@ -31884,6 +32245,8 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 </div>
 <div class="alba-hint">(if: _ac is 1)[One line is caught. Two more still to find.](else-if: _ac is 2)[Two lines, now. The third always close.](else-if: _ac >= 3)[The Alba is complete. Centre Point waits.]</div>
 <div class="header-links"><div class="notebook-link">(link-repeat: "NOTEBOOK")[(display: "Build Notebook")]</div>
+(set: _backHide to (a: "Title", "Start", "The Night Ahead", "Name Your Book", "Dawn", "White page", "Black page", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "PP Pong", "Ride Jeffrey Bernard's cow", "Fight starts", "Fight Round 1", "Fight Round 2", "Fight Round 3", "Fight Victory", "Fight Defeat", "The phone call", "Lily phone call 1", "The dual ring", "After the call"))
+(unless: _backHide contains (passage:)'s name)[<div class="back-one-link">(link-undo: "← BACK")</div>]
 </div>
 </div>
 (set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)
@@ -34456,6 +34819,35 @@ letter-spacing: 0.2em;
 text-transform: uppercase;
 }
 
+.back-one-link {
+position: relative;
+height: 24px;
+padding: 0;
+margin-left: 1.4em;
+display: flex;
+align-items: center;
+font-family: 'Playfair Display', Georgia, serif;
+font-size: 0.85em;
+letter-spacing: 0.18em;
+text-transform: uppercase;
+opacity: 0.62;
+}
+.back-one-link tw-link {
+display: inline-block;
+color: #b8a890;
+font-weight: normal;
+border-bottom: 1px dashed rgba(184, 168, 144, 0.3);
+border-left: none;
+padding: 0 0 3px 0;
+margin: 0;
+transition: all 0.3s ease;
+}
+.back-one-link tw-link:hover {
+color: #e8d5b7;
+border-bottom-color: rgba(232, 213, 183, 0.55);
+opacity: 1;
+}
+
 .notebook-link tw-link {
 display: inline-block;
 color: #e8d5b7;
@@ -35628,6 +36020,31 @@ animation: lilyHintFadeIn 1.5s ease-in 1.2s forwards;
 max-width: 75%;
 }
 
+.pent-reveal-note {
+text-align: center;
+margin: 1.4em auto 0.6em;
+max-width: 78%;
+opacity: 0;
+animation: lilyHintFadeIn 1.6s ease-in 0.4s forwards;
+border-top: 1px solid rgba(212, 165, 116, 0.32);
+border-bottom: 1px solid rgba(212, 165, 116, 0.32);
+padding: 0.7em 0.4em;
+letter-spacing: 0.04em;
+}
+.pent-reveal-title {
+font-size: 0.95em;
+color: rgba(212, 165, 116, 0.9);
+letter-spacing: 0.32em;
+margin-bottom: 0.4em;
+}
+.pent-reveal-body {
+font-style: italic;
+color: rgba(228, 200, 168, 0.78);
+font-size: 0.92em;
+line-height: 1.45;
+margin-bottom: 0.5em;
+}
+
 @keyframes lilyHintFadeIn {
 from { opacity: 0; }
 to { opacity: 0.6; }
@@ -36081,6 +36498,48 @@ border-right: 1px solid rgba(107,32,32,0.25);
   margin: 0 0 1.6em;
 }
 
+/* ── CECIL COURT WALTZ — the rhythm minigame between Watkins and O'Flatterly. */
+.waltz-frame {
+  margin: 1.2em auto;
+  max-width: 380px;
+  text-align: center;
+}
+.waltz-prelude {
+  font-style: italic;
+  color: rgba(220, 196, 158, 0.72);
+  font-size: 0.95em;
+  line-height: 1.5;
+  margin: 0.4em 1em 1em;
+}
+#waltz-canvas {
+  border: 1px solid rgba(122, 92, 48, 0.45);
+  border-radius: 3px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5),
+              inset 0 0 36px rgba(40, 28, 18, 0.45);
+  cursor: pointer;
+  max-width: 100%;
+  height: auto;
+}
+.waltz-keys {
+  font-family: 'Crimson Text', Georgia, serif;
+  letter-spacing: 0.42em;
+  color: rgba(220, 196, 158, 0.55);
+  font-size: 1.2em;
+  margin-top: 0.6em;
+}
+.waltz-keys-aux {
+  letter-spacing: 0.18em;
+  font-size: 0.7em;
+  color: rgba(220, 196, 158, 0.35);
+}
+.waltz-skip {
+  margin-top: 0.8em;
+  font-size: 0.78em;
+  opacity: 0.45;
+  letter-spacing: 0.05em;
+}
+.waltz-skip:hover { opacity: 0.85; }
+
 /* ── COPPERS LAIR DOOR KNOCK ─────────────────────────────────────────── */
 .copper-knock-prompt {
   text-align: center;
@@ -36148,22 +36607,28 @@ border-right: 1px solid rgba(107,32,32,0.25);
 .critic-book-base {
   position: absolute;
   inset: 18px 0 0 0;
-  background: linear-gradient(180deg, #f4ead2 0%, #ebd9b6 100%);
+  /* Page color + spine fold drawn together so ::before/::after can host word marks */
+  background:
+    linear-gradient(90deg, transparent calc(50% - 0.5px), rgba(70,42,18,0.30) calc(50% - 0.5px), rgba(70,42,18,0.30) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(180deg, #f4ead2 0%, #ebd9b6 100%);
   border-radius: 2px 4px 4px 2px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.18), inset 0 0 22px rgba(60,38,12,0.12);
 }
+/* Left-page word marks — rows of broken dashes of varying width to suggest typed words */
 .critic-book-base::before {
-  content: ''; position: absolute; top: 0; bottom: 0; left: 50%;
-  width: 1px; background: rgba(70,42,18,0.28);
+  content: ''; position: absolute; top: 14px; left: 18px; width: 78px; height: 116px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='78' height='60' viewBox='0 0 78 60'><g fill='rgba(40,28,16,0.62)'><rect x='0' y='4' width='10' height='1.4'/><rect x='13' y='4' width='6' height='1.4'/><rect x='22' y='4' width='14' height='1.4'/><rect x='39' y='4' width='7' height='1.4'/><rect x='49' y='4' width='5' height='1.4'/><rect x='57' y='4' width='12' height='1.4'/><rect x='72' y='4' width='6' height='1.4'/><rect x='0' y='16' width='8' height='1.4'/><rect x='11' y='16' width='13' height='1.4'/><rect x='27' y='16' width='5' height='1.4'/><rect x='35' y='16' width='9' height='1.4'/><rect x='47' y='16' width='6' height='1.4'/><rect x='56' y='16' width='14' height='1.4'/><rect x='73' y='16' width='5' height='1.4'/><rect x='0' y='28' width='6' height='1.4'/><rect x='9' y='28' width='11' height='1.4'/><rect x='23' y='28' width='8' height='1.4'/><rect x='34' y='28' width='5' height='1.4'/><rect x='42' y='28' width='13' height='1.4'/><rect x='58' y='28' width='7' height='1.4'/><rect x='68' y='28' width='10' height='1.4'/><rect x='0' y='40' width='12' height='1.4'/><rect x='15' y='40' width='5' height='1.4'/><rect x='23' y='40' width='9' height='1.4'/><rect x='35' y='40' width='14' height='1.4'/><rect x='52' y='40' width='6' height='1.4'/><rect x='61' y='40' width='8' height='1.4'/><rect x='72' y='40' width='6' height='1.4'/><rect x='0' y='52' width='9' height='1.4'/><rect x='12' y='52' width='6' height='1.4'/><rect x='21' y='52' width='12' height='1.4'/><rect x='36' y='52' width='8' height='1.4'/><rect x='47' y='52' width='5' height='1.4'/><rect x='55' y='52' width='14' height='1.4'/><rect x='72' y='52' width='6' height='1.4'/></g></svg>") repeat-y;
+  background-size: 100% 60px;
+  opacity: 0.78;
+  pointer-events: none;
 }
+/* Right-page word marks — different cadence so the two pages don't read as a tile */
 .critic-book-base::after {
-  /* Faint typed lines on the right page */
-  content: ''; position: absolute; top: 14px; right: 18px; width: 80px; height: 110px;
-  background:
-    linear-gradient(transparent 0 5px, rgba(40,28,16,0.30) 5px 6px, transparent 6px 16px) repeat-y,
-    linear-gradient(rgba(40,28,16,0.18) 0 1px, transparent 1px 12px) repeat-y;
-  background-size: 100% 12px;
-  opacity: 0.7;
+  content: ''; position: absolute; top: 14px; right: 18px; width: 78px; height: 116px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='78' height='60' viewBox='0 0 78 60'><g fill='rgba(40,28,16,0.62)'><rect x='0' y='4' width='8' height='1.4'/><rect x='11' y='4' width='12' height='1.4'/><rect x='26' y='4' width='5' height='1.4'/><rect x='34' y='4' width='9' height='1.4'/><rect x='46' y='4' width='13' height='1.4'/><rect x='62' y='4' width='6' height='1.4'/><rect x='71' y='4' width='7' height='1.4'/><rect x='0' y='16' width='13' height='1.4'/><rect x='16' y='16' width='6' height='1.4'/><rect x='25' y='16' width='9' height='1.4'/><rect x='37' y='16' width='5' height='1.4'/><rect x='45' y='16' width='14' height='1.4'/><rect x='62' y='16' width='7' height='1.4'/><rect x='72' y='16' width='6' height='1.4'/><rect x='0' y='28' width='9' height='1.4'/><rect x='12' y='28' width='6' height='1.4'/><rect x='21' y='28' width='12' height='1.4'/><rect x='36' y='28' width='8' height='1.4'/><rect x='47' y='28' width='5' height='1.4'/><rect x='55' y='28' width='13' height='1.4'/><rect x='71' y='28' width='7' height='1.4'/><rect x='0' y='40' width='6' height='1.4'/><rect x='9' y='40' width='14' height='1.4'/><rect x='26' y='40' width='5' height='1.4'/><rect x='34' y='40' width='10' height='1.4'/><rect x='47' y='40' width='8' height='1.4'/><rect x='58' y='40' width='6' height='1.4'/><rect x='67' y='40' width='11' height='1.4'/><rect x='0' y='52' width='11' height='1.4'/><rect x='14' y='52' width='6' height='1.4'/><rect x='23' y='52' width='9' height='1.4'/><rect x='35' y='52' width='5' height='1.4'/><rect x='43' y='52' width='14' height='1.4'/><rect x='60' y='52' width='7' height='1.4'/><rect x='70' y='52' width='8' height='1.4'/></g></svg>") repeat-y;
+  background-size: 100% 60px;
+  opacity: 0.78;
+  pointer-events: none;
 }
 .critic-book-flip {
   position: absolute;

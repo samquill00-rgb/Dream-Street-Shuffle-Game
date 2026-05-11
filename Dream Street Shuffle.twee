@@ -9852,36 +9852,53 @@ observer.observe(document.body, { childList: true, subtree: true });
 // The .lily-glimpse spans (Pillars, French, etc.) used to just fade in.
 // Dr Quill wanted them typed out like the .typewriter-page prose — the
 // atmosphere reveal beats reading better as a measured cadence than as a
-// single opacity bloom. Watches for newly-inserted spans and types them
-// in place, also overriding the existing .lily-fade animation so the
-// reveal doesn't fight itself.
+// single opacity bloom. Walks text nodes so embedded italic / <br> / etc.
+// survive — earlier flat textContent approach destroyed the Sonnet 66
+// verse formatting in the Lily phone call.
 (function() {
   function typeLilyGlimpse(el) {
     if (!el || el.dataset.lilyTyped) return;
     el.dataset.lilyTyped = '1';
-    /* Capture full text (concatenate nested text nodes if any), wipe it,
-       reveal char by char. Preserves outer span so existing CSS still
-       matches; doesn't try to interleave with inner HTML (lily-glimpse
-       spans are plain text). */
-    var fullText = el.textContent || '';
-    if (!fullText.trim()) return;
-    el.textContent = '';
-    /* Disable the fade animation — we're reading character-by-character
-       reveal as the animation now. */
+    /* Collect every text-node descendant in order, blank each one, and
+       record its full text so we can replay character-by-character while
+       leaving the surrounding <i>/<em>/<br> structure intact. */
+    var entries = [];
+    (function walk(n) {
+      for (var i = 0; i < n.childNodes.length; i++) {
+        var c = n.childNodes[i];
+        if (c.nodeType === 3) {
+          var t = c.nodeValue;
+          if (t.length) {
+            entries.push({ node: c, full: t });
+            c.nodeValue = '';
+          }
+        } else if (c.nodeType === 1) {
+          walk(c);
+        }
+      }
+    })(el);
+    if (!entries.length) return;
+    /* Disable the fade animation — character reveal IS the animation now. */
     el.style.animation = 'none';
     el.style.opacity = '1';
-    var idx = 0;
+    var entryIdx = 0;
+    var charIdx = 0;
     var pgGen = window._passageGen || 0;
-    var speed = 32;        /* a touch quicker than the typewriter-page cadence */
+    var speed = 32;
+    var tickCount = 0;
     function tick() {
       if ((window._passageGen || 0) !== pgGen) return;
       if (!el.isConnected) return;
-      if (idx >= fullText.length) return;
-      el.textContent = fullText.substr(0, idx + 1);
-      idx++;
-      /* Soft typewriter tick — fires every few chars rather than every
-         one, so it doesn't drown the moment. */
-      if (idx % 3 === 0 && window.dssAudio && window.dssAudio.typewriterTick) {
+      if (entryIdx >= entries.length) return;
+      var cur = entries[entryIdx];
+      charIdx++;
+      cur.node.nodeValue = cur.full.substr(0, charIdx);
+      if (charIdx >= cur.full.length) {
+        entryIdx++;
+        charIdx = 0;
+      }
+      tickCount++;
+      if (tickCount % 3 === 0 && window.dssAudio && window.dssAudio.typewriterTick) {
         try { window.dssAudio.typewriterTick(0); } catch(e) {}
       }
       setTimeout(tick, speed);

@@ -1,164 +1,135 @@
-# HANDOFF — 2026-05-11
+# HANDOFF — 2026-05-11 (session 2)
 
-Long session. Dr Quill went from "play through and tell me what's broken" all the way to "I'm sending this to a playtester" — went through stat tuning, the parked-music wiring, big new content (the waltzing minigame), and a polish-everything pass on the late game. Audit at end was clean.
+Long session. Started with playthrough notes from Dr Quill, escalated into a full game audit (twice — first audit missed JS-side wiring; second pass corrected and went deeper), then worked through every actionable item.
+
+## What shipped this session
+
+### Playthrough fixes (early)
+- **Lily ring spacing**: added `$phoneCallReturnsAt`, gated all 5 venue Lily-1 rings with `($returns - $phoneCallReturnsAt) >= 1`. No more Aoife→Lily back-to-back.
+- **Pillars critic option after Aoife**: dropped the lily-not-taken "back to Dean Street" branch from "Entering The Pillars of Hercules". Critic option now appears immediately after the Aoife call. Flower hint and Dean Street recovery still cover the lily-skipped case.
+- **Donkey coin's Carthage uses removed**: stripped the Toss-the-Donkey flip widget from Carthage shore + the `or $hasCoin is true` Green Sea bypass on three gates. Coin's sole remaining utility is the Colony Door hex (first-time-always-Left).
+- **Lily-glimpse fade restored (was typewriter)**: removed the LILY-GLIMPSE TYPEWRITER JS block. CSS `lilyFadeIn` 2.5s animation does the reveal. Lily chime (`dssAudio.lilyChime`) still fires on click — was always wired, just masked by the removed typewriter ticks.
+- **Name Your Book page height**: bumped `.book-naming-tw` min-height 380px → 480px to match The Night Ahead. Title input stays at top.
+- **Outdoor traffic ambience on Soho transitions**: tagged `[outdoor]` onto five interlude passages (After the call, After the painter, After Cecil Court, After the music, Dream to Dean). They now run the brown-noise + car-horn + sparse-drip bed, same as the Red loop.
+- **Dawn Rule SVG top redrawn**: replaced the half-sun with Ripley's Wheel-style Sol — 9 long tapered ray wedges + 3 short rays at 12/4/8 o'clock (the equilateral fire-sigil hidden in Sol), concentric inner rings, central dot, soft halo. Warm dawn palette (`#ecceae` / `#f4d4b0`) instead of the wheel's gold. ViewBox 70 → 110 to fit full sun above horizon. Lily flourishes and horizon line preserved.
+
+### Audit — pass 1, pass 2 (corrections), then fixes
+
+The first audit missed a lot of JS-side wiring (notebook builder reading flags via `(if:)` in Build Notebook, plus localStorage for napkin drawing). Second pass caught:
+- `$hasDrawing` IS wired — the actual canvas drawing of Benito is saved to `localStorage['dss_napkin']` and rendered into the notebook EFFECTS tab `<img class="nb-napkin-img">`.
+- `$sawMemory1/2/3` surface as a MEMORIES section in the LILLIES notebook tab.
+- The Donkey is structural (Colony Door hex), not decorative.
+- **The fetch-glimpse at Dean Street** (line 28599): gated on `$wasBeaten AND $visitedInterval`, shows "*You see him then: yourself, walking ahead of you down Greek Street toward Centre Point*" on every Dean Street return once both flags are set. Reward for the LOSING player. Completely missed in pass 1.
+
+### Audit fixes applied (all six items)
+
+1. **Lackland soft-lock** — `$hasTrishaMatchbook is true` was closing Lackland's even when the matchbook came from the Copper fight, not Lackland's PP. A Pillars-first player who took the Donkey-forced Left at Colony and won the fight with the critic's password would lose access to haunt5 (Game) and haunt9 (Sorting), making the 12-haunt Ripley's Wheel reveal unreachable. Most natural play order triggered it. **Fixed**: Dean Street row now gates on `$haunts contains $haunt5` instead. Player can re-enter Lackland's to play PP regardless of where the matchbook came from. [Dean Street](Dream Street Shuffle.twee:28651).
+
+2. **Aoife "Hang up" double-charged Pillars sobriety** — `The phone call` didn't set `$resumingFromCall`, so the Pillars entry block re-ran on the bounce-back: -9 sob + "If you pass the Pillars' threshold…" prose, both shown twice. **Fixed**: `The phone call` now `(set: $resumingFromCall to true)` at the top. [The phone call](Dream Street Shuffle.twee:32184).
+
+3. **Lily phone calls now mandatory** — Aoife was already forced at Pillars first-entry (its overlay is the only branch shown until you've answered). Lily Call 1 and the Dual Ring were NOT forced — the ringing div sat at the top of each venue passage, but the rest of the venue's links were still clickable below, so a deliberate player could dodge every lily call. With the calls being the emotional spine of the night, Dr Quill wanted them mandatory. **Fixed**: rewrote all five venue passages (Coach, Pillars, Ronnie's, Colony, French) with a `(if: _lilyRing) ... (else-if: _dualRing) ... (else: venue content)` chain. Decoration SVGs and venue titles stay outside the gate (always visible); the ringing phone is now the only interactive element when active. Side benefit: the Coach-unreachable soft-lock for careful + call-ignoring players is closed — the dual ring forces the crash to Coach as soon as conditions are met. The `← BACK` header link still works as an out for players who really want to walk away.
+
+4. **The Interval was orphaned for page-quest players** — only reachable via `Dido → Sub umbras: watch her burn → Stay in Carthage → Wake suddenly → The Interval`. Players following the practical page-rescue path would never see it (or the fetch-glimpse it unlocks). Dr Quill's intent: the Interval is the reward for surrender, not for broader access — but once the page is rescued, the surrender path should become the guided/only option at Dido. **Fixed**: Dido's exits now branch on `$hasMissingPage OR $returnedPage`. Pre-rescue: standard Green Sea / shore / wake / sub umbras options. Post-rescue/return: standard exits hidden; only `[[Sub umbras: watch her burn|Stay in Carthage]]` as a `guided-link`. The Green Sea remains reachable from Carthage shore directly, so alba2-not-yet players aren't locked out. [Dido](Dream Street Shuffle.twee:28675).
+
+5. **Coach map marker** — `_hVisited` used `$cowRideWon`, so falling off the cow didn't tick the Coach as visited on the notebook map. **Fixed**: now `$cowRideDone`. [Build Notebook](Dream Street Shuffle.twee:32543).
+
+6. **Donkey hex history across reloads** — flagged but **intentionally skipped**. `_coinGateHistory` lives on `window` and resets on page reload, so a player reloading after first-tossing could re-trigger the "first always heads" rule. But the Colony Door auto-redirects to The Colony Room once `$visited's Colony` or `$metSalvu` is true, so the history is never actually consulted in normal play. Genuine edge case, not worth the persistence machinery.
+
+### Polish/refinements at the end of the audit
+
+- **Lackland prose now path-aware**: "You were sent here by Jeffrey?" was an old assumption from the Coach-route. Now branches: Davy if `$metDavy`, Jeffrey if `$cowRideDone`, fallback "You were sent here, then?". [Martin Lackland's Office](Dream Street Shuffle.twee:29288).
+- **Coach Retch on resume-bounce when sobriety ≤ 15**: tight edge case where a `$coachUrgent` crash + simultaneous lily-1 ring would skip the Retch link on the bounce-back, leaving the player to ride the cow at 0 sobriety. Added a low-sob Retch link to the resume branch so they can recover. Players bouncing through Coach without actually crashing don't see the link.
 
 ---
 
-## What shipped
+## State variables added this session
 
-### NEW: Cecil Court Waltz minigame
-A guitar-hero-style waltz between Watkins and O'Flatterly's. Player walks up the street, marks chalked on the pavement scroll toward them, hit on the beat.
+- `$phoneCallReturnsAt` — `-999` in init, set to `$returns` in The phone call. Gates Lily 1 ring with 1-return spacing after Aoife.
 
-- **Music: `the-cecil-court-waltz.m4a`** — 90 BPM, 3/4 time, 32 seconds, 16 bars. Composed by Dr Quill.
-- **Structure**: 2 bars intro + 1 bar count-in (visual `3/2/1`) + 12 bars dance + 1 bar outro with a single final RIGHT-step echo on the downbeat.
-- **Dance pattern**: 6 bars LDR (natural turn), 2 bars RDL (variation), 4 bars LDR, then the final echoed RIGHT on bar 16 beat 1.
-- **Visual**: street viewed in perspective (vanishing point at top centre), cobblestones scrolling DOWN at the same `PIXELS_PER_MS` as the marks — world is fixed, camera moves up the street. Six small coloured pools of light scroll past (red, green, blue, violet, warm-red, teal — the bigger teal at 23s leads into the destination amber). Destination amber blooms in over the last 8s and the cobblestones decelerate via a cubic ease-out so by the end you're standing still inside O'Flatterly's amber.
-- **Feedback**: gold ripple ring + 10-spark burst on hit. Per-lane procedural triangle-wave ding — F major triad (LEFT F5, DOWN A5, RIGHT C6) so a clean LDR bar reads as an arpeggio over the music.
-- **Lives at** [Dream Street Shuffle.twee:27620–28006](Dream Street Shuffle.twee:27620), CSS at [37725](Dream Street Shuffle.twee:37725).
+## Architecture notes for future sessions
 
-### Music wired in
-- **`the-cecil-court-waltz.m4a`** — for the waltz (above).
-- **`the-interval-radio.m4a`** — new ambient bed at volume 0.28, tag `interval-radio`. The Interval passage retagged from `[piano-bed]` to `[interval-radio]` so the piano-eoin track stays reserved for the Centre Point → Dawn arc. Registered in `dssAudio` [Dream Street Shuffle.twee:1525–1538](Dream Street Shuffle.twee:1525).
-- **`the-pongmini-loop.m4a`** — fresh version, same filename, drop-in.
+### Venue ring forcing pattern
 
-### Stats overhaul
-- **Floating delta indicator**: every passage change with a stat shift floats a `+N` (gold) or `−N` (red) up from the top-right of the relevant bar and fades over ~2.4s. So every cost/reward is legible. [header passage](Dream Street Shuffle.twee:32463), CSS at [33759](Dream Street Shuffle.twee:33759).
-- **Dean Street passive drain** (per-visit): −2/−1, −3/−2, −5/−3 (morale/sobriety) at visit-counts 2-3, 4-5, 6+. Originally morale-only −2/−3/−4; my first pass overshot to −5/−4 through −11/−9 (too punishing); current is the moderated version.
-- **Liver = lifeline**: bumped +22/+18 → **+40/+40**. Notebook button is now a native Harlowe link (was unreliable `Engine.go` from JS, which never fired cleanly after the dialog teardown). "Inspect" button removed; "Eat it" is the only action. Eagle popup fires + auto-returns to Dean Street on close.
-- **Retching**: regular retch +22 sobriety / +12 morale (was +12 / 0). Crashed-after-dual-ring retch unchanged at +32/+22.
-- **Pentacle reveal** (5th lily): +12 morale, +8 sobriety + atmospheric text block + the wheel reveal.
+All five "phone may ring" venues (Coach and Horses lock, Entering The Pillars of Hercules, Ronnie Scott's, The Colony Room, The French) now use this pattern:
 
-### Game difficulty pass
-Dr Quill said "harder than now but not so hard that perfect score is automatic". Cow was already fine — only nudged.
+```harlowe
+:: Venue [tags]
+[venue-specific entry bookkeeping like $coachUrgent setter]
+(set: _lilyRing to ($lilyCount >= 1 and $hadLilyCall1 is false and $hadPhoneCall is true and ($returns - $phoneCallReturnsAt) >= 1 [and venue-visited check if applicable]))
+(set: _dualRing to ($lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and ($returns - $lilyCall1ReturnsAt) >= 2 [and venue-visited check if applicable]))
 
-- **Fight counter chance**: `0.45 + sob/285` → `0.22 + sob/340`. At full sobriety: 80% → 51%. Perfect score (3 counters): 51% → 14%.
-- **Pong AI**:
-  - Jack Curtis: 100ms→75ms react, 3.2→4.4 paddle speed, ±20→±12 noise
-  - Percy Ritson: 50ms→35ms react, 5→6.2 paddle speed, 15%→30% accurate-prediction roll
-- **Bar (Ronnie's)**: pour tolerance perfect 0.05→0.04, close 0.12→0.10 (eased back from a tighter pass after Dr Quill said Ronnie's stood out as too hard); carry scrollSpeed 180→200.
-- **Cow ride**: speed curve `[1.4, 1.9, 2.5, 3.3, 4.4, 5.8, 7.4, 9.4]` (was `[1.3, 1.7, 2.2, 2.9, 3.8, 5.0, 6.5, 8.5]`). ~10% across.
+[SVG decoration that always renders]
+[venue title]
+[venue-specific bookkeeping like $afterMidnight setter]
 
-### Pillars flow rework (significant)
-Several iterative passes ending in this clean shape:
-
-- **Phone call exit** is now `[[Hang up|Entering The Pillars of Hercules]]` (was direct-to-critic). Player gets to come back to the pub.
-- **Entering The Pillars of Hercules** ladder: if no phone call yet → ringing prompt; if phone done but lily not taken → italic "*There is a flower at the threshold. Take it before anything else.*" + back-to-Dean (no critic option); if lily taken but critic not met → critic option appears; if both done → "Your business here is finished."
-- **Dean Street → Pillars** ladder now five states:
-  1. Phone done, critic not met → "The Pillars — there was someone you wanted to talk to"
-  2. First time, critic not met → "To The Pillars of Hercules"
-  3. **Critic + lily + page-quest known** (no Carthage done) → **"Walk west — beyond the gates"** → Maritime → Carthage path
-  4. Critic met, lily not taken → "Back to The Pillars — there was a flower you missed"
-  5. **Critic + lily both done, no page quest yet** → greyed `[DONE FOR TONIGHT]`
-- **Critic's monologue** now drops the "And if you see Copper, tell him I said hello" line if `$metSalvu is true` (you've already done the Copper loop), and the PASSWORD LEARNED item doesn't appear in the notebook in that case either. [Dream Street Shuffle.twee:32189](Dream Street Shuffle.twee:32189).
-
-### Davy / Copper plumbing fix
-Pre-existing latent bug: `$knowsCopperSecret` is set both by Davy AND by St. John's Word (after a fight loss). If you went the fight route first, you had the password but the Davy link was hidden everywhere. Fix:
-
-- New variable **`$metDavy`** initialised in StoryInit, set to true at top of Davy Merkin passage.
-- Both Davy-link sites (Colony Room main menu, Colony drink passage) now gate on `$metDavy is false` instead of `$knowsCopperSecret is false`.
-- New direct **"Sit with the man at the bar"** link on Colony Room main (was previously hidden behind Get-a-drink → drink-choice).
-
-### Lackland's three-state gate
-Used to stay open indefinitely once unlocked. Now:
-- Pre-password: greyed `[NEED A WORD]`
-- Active: "Go to Lackland's Office" — when password known AND `$hasTrishaMatchbook is false`
-- Post-content: greyed `[DONE FOR TONIGHT]` — once `$hasTrishaMatchbook is true` (i.e. back room done)
-
-### Dawn redesign
-- **Cooler palette**: pre-dawn slate (`#161a26`) → cool mauve → dusty rose → faint warm hint at horizon (`#cea8a0`). Old `#d69068` over-orange gone.
-- **Two new SVG decorations** as Display passages:
-  - **`Dawn Rule SVG top`** — horizon line + 3-arc rising sun + faint sun-rays + lily-of-the-valley flourishes on both ends.
-  - **`Dawn Rule SVG bottom`** — quieter petal-strand echo above the colophon.
-- **End-state summary box** (at 12s): "HAUNTS · N of 12" / "FLOWERS · N of 5".
-- **"Play again" button** (at 30s) — clears the auto-save in localStorage filtered to the story IFID and reloads.
-- **Wheel gate** simplified: now just `$haunts's length >= 12` (no alba requirement). To make the haunt path independent of alba, THE CROWN haunt moved from `Alba Complete` to **`The Fetch`**, and only auto-awards if `$haunts's length >= 11` (so the player has genuinely gathered the other eleven). Wheel only fires if you've actually completed the haunt thread.
-
-### Carthage shore
-- **Page icon** on the pyre-approach link: `○` if known but not grabbed, `●` if grabbed.
-- **`$visitedPyre`** tracks first visit to Dido (set at the top of that passage). On return, "Approach the pyre" link becomes **"Back to the pyre"** — same destination, different framing.
-- **Dido passage reordered**: page rescue → Try Green Sea → exits → **"Sub umbras: watch her burn"** (the commit) last. The commit lands as the climactic choice.
-
-### Word-to-the-Wise popups — ALL THREE of them
-There were three popup functions sharing the "A WORD TO THE WISE" header that I'd been fixing piecemeal:
-- `wordToTheWisePopup` — was the only one I'd touched. Fade made uniform, 3.5s autodismiss.
-- `venueHintPopup` — the "if a venue is still open" hint. Had **no autodismiss and no fade animation at all**. Now matches.
-- `moraleWarningPopup` — dead code, never called, same bugs. Fixed for future-proofing.
-
-All three now: start at opacity 0 → fade in 0.55s → sit ~2.4s → fade out 0.55s. Inner box uses `.wtw-no-enter` to disable its per-element `vhEnter` animation so the cadence is driven entirely by the overlay opacity.
-
-Stat-low popup logic also tightened:
-- Popups only fire if their recommended action is still available
-- Text adapts to what's offered (e.g. "Get some grub at the chippy" only if chippy still open)
-- "Should have gone to the gents earlier" — restored after I'd over-rewritten it; the gents/doorway pissing connection is the intent
-
-### Visual polish
-- **Critic's book widget**: page-fronts now have SVG word-marks (broken dashes in varying widths, two distinct patterns for left/right page) — actually reads as words.
-- **Wine stain on typewriter pages**: restored CSS wine ring on all `.typewriter-page::after`; **Night Ahead** and **Night Ahead Part Two** now carry a `[night-ahead]` tag and `tw-story[tags~="night-ahead"]` suppresses the small CSS ring so they only show their inline-SVG big ring (no duplication).
-- **Motes**: collected-thing motes now spawn from the **centre** of the haunt/item/page box (was the top-right corner offset, which read as haphazard).
-- **Lily-glimpse typewriter**: lily-glimpse spans now type out character-by-character. Initial version flattened `textContent` which destroyed the Sonnet 66 verse formatting in the Lily phone call; current version walks the DOM tree and types text nodes in order, leaving `<i>`/`<br>` structure intact.
-- **Plus Ultra timing**: pushed from 10s → 14s on White/Black page, so it lands as the SVG bells finish blooming rather than mid-bloom.
-- **Green thought**: text now actually rendered in green (with extra green on the word "green" itself).
-- **French intro prose** dimmed on return visits via `|frenchIntro>` hook + `(enchant: ?frenchIntro, ...)` — same pattern as Dean Street's `|deanIntro>`. So the intro text is kept (full first visit, dimmed thereafter) and the "A man cannot step into the same pub twice…" / "There is always a third." beats layer on top.
-- **Doorway music continuity**: Dean Street Doorway tagged `[outdoor hub]` so music stays running on the bounce (was tagged `[outdoor]` alone, which stopped + restarted the music every doorway use).
-- **Back-one button** in header: native Harlowe `(link-undo:)`, hidden on Title / cutscenes / minigames / phone calls.
-- **Save-state link on Title** belt-and-braces: a JS check on `localStorage` keys (filtered to the story IFID) before showing, in addition to the Harlowe `(savedgames:)` check.
-
-### Race condition pattern (note for future inline scripts)
-Several inline `<script>` blocks in passage bodies were silently failing because Harlowe runs them synchronously during render, BEFORE the MutationObserver microtask increments `_passageGen` for the new passage. So `var pgGen = window._passageGen` captures the stale value, the MO bumps it, and any `if (window._passageGen !== pgGen) return` guard then aborts.
-
-The fix pattern (same as `showDrinkPopupSafe` in `dssAudio`):
-```javascript
-(function(){
-  setTimeout(function(){
-    var pgGen = window._passageGen;     // captured AFTER MO has fired
-    setTimeout(function(){
-      if (window._passageGen !== pgGen) return;
-      // ... payload
-    }, MS);
-  }, 0);
-})();
+(if: _lilyRing)[(set: $lilyCallReturn to "Venue")<div class="phone-ringing">...accept link to Lily phone call 1</div>]
+(else-if: _dualRing)[(set: $lilyCallReturn to "Venue")<div class="phone-ringing">...accept link to The dual ring</div>]
+(else:)[
+  [all interactive venue content — lily glimpse, prose, drinks, NPC encounters, etc.]
+]
 ```
 
-Applied this session to: the Dawn wheel reveal, the dual-ring 2nd heartbeat + bell, the Cecil Court Waltz frame loop. Watch for it whenever an inline `<script>` snapshots `_passageGen` synchronously.
+If a new venue gets a phone-ring trigger, follow this template.
+
+### Dido exits gate
+
+```harlowe
+(if: $knowsAboutPage is true and $hasMissingPage is false)[page-rescue prompt + link]
+
+(if: $hasMissingPage is true or $returnedPage is true)[
+  guided-link: Sub umbras → Stay in Carthage
+]
+(else:)[
+  Green Sea / shore / wake exits + Sub umbras as standard option
+]
+```
+
+### Lackland row gate
+
+The `Go to Lackland's Office` / `DONE FOR TONIGHT` / `NEED A WORD` ladder on Dean Street now gates on `$haunts contains $haunt5` (i.e. PP played), not `$hasTrishaMatchbook`. The matchbook can come from PP Defeat vs Jack OR from Copper fight victory with the critic's password; only the haunt itself signals "Lackland's content actually played."
+
+### Lily call architecture
+
+- Aoife call (`The phone call`) — forced at Pillars first entry; sets `$hadPhoneCall`, `$phoneCallReturnsAt`, `$resumingFromCall`.
+- Lily call 1 — forced at any of the five venues if `$lilyCount >= 1`, `$hadPhoneCall is true`, `($returns - $phoneCallReturnsAt) >= 1`, and (for non-Coach venues) the venue has been visited before. Sets `$hadLilyCall1`, `$lilyCall1ReturnsAt`, `$resumingFromCall`, `$pendingLilyBreath`.
+- Dual ring — forced at any of the five venues if `$lilyCount >= 2`, `$hadLilyCall1 is true`, `$hadDualRing is false`, `($returns - $lilyCall1ReturnsAt) >= 2`, and (for non-Coach venues) the venue has been visited. Sets `$hadDualRing`, `$crashedAfterDualRing`, clamps sobriety to 8 and confidence to 18, forces `(go-to: "Coach and Horses lock")`.
+- Stay in Carthage uses its own Lily 1 prompt with the "phone rings far off — across some distance the night cannot measure" framing. Already used if/else gating; no fix needed.
 
 ---
 
 ## Memories saved (none today)
 
-Today's session was largely tactical — didn't surface anything that wasn't already covered in the existing memory files.
+Today's session was a fresh combination of bug-fixing and design audit; nothing surfaced that wasn't already in memory or wasn't session-specific.
 
 ---
 
-## Open / parked
+## Possible next threads
 
-Empty. PP music was the last parked item from the prior handoff and Dr Quill shipped his composition this session. All four parked items resolved or punted.
-
----
-
-## Possible next threads (for the playtester)
-
-- **The Trisha's gate** stays narrow by design: needs matchbook (from Lackland → PP victory vs Jack) AND liver (from O'Flatterly → page returned), then closes permanently on meeting Shana. Dr Quill said the small window was OK for now — flag if the playtester misses it entirely.
-- The **`$haunt5` indicator** on the Dean Street Pillars row is a pre-existing visual oddity: it shows the PP haunt ("The Game") in the Pillars row rather than the actual Pillars haunt ("THE REFUSAL" = `$haunt2`). Not touched. Worth a future audit but it's just an icon, not a gameplay bug.
-- **Lackland front-office prose** opens with "You were sent here by Jeffrey?" — assumes the Davy referral. Dr Quill considered making Lackland reachable earlier (and we built it, then reverted). The line stays narratively-grounded as long as Davy comes first, which is the default ordering. Flag only if a playtest path reaches Lackland cold.
+- **Lackland prose pass**: now that the referral line is path-aware, the rest of the Lackland office prose ("This isn't bad. Have you got a job? A wife?…") still assumes a particular tone. Worth a re-read in light of the two paths.
+- **Maritime "no present horizon" cosmetic**: when a player reaches Maritime pre-critic AND pre-beermat, both `[Yes → Approach The Pillars]` AND `//There is no present horizon.//` render together. The horizon line is meant to dim the absent Carthage option, but next to the active Pillars link it reads as contradictory. Could rephrase or hide entirely when other exits are present.
+- **The fetch-glimpse at Dean Street** (gated on `$wasBeaten AND $visitedInterval`) is currently a single static prose block. Could be elaborated — perhaps the fetch's distance changes with each return, or the prose escalates as the alba completes. Worth thinking about for the late-game atmospheric layer.
+- **`$pendingLilyBreath` → "After the call"** mechanism only fires for Lily call 1, not Aoife. Worth considering whether Aoife should also have a Dean-Street-bounce reflection passage. Currently the player goes from Aoife → Pillars critic (or back to Dean Street) without an interlude.
 
 ---
 
 ## Files of note
 
-- `Dream Street Shuffle.twee` — **130 passages** (was 128 at session start: +1 `Cecil Court Waltz`, +2 `Dawn Rule SVG top/bottom`, −1 reverted Lackland passage that was never added). Sources of truth.
-- `Dream Street Shuffle.html` — synced via `python3 sync_html.py`. ~44 MB with all audio embedded as base64.
-- `sync_html.py` — added two new `AUDIO_EMBEDS` entries: `__DSS_WALTZ_DATA_URI__` and `__DSS_INTERVAL_RADIO_DATA_URI__`.
+- `Dream Street Shuffle.twee` — 130 passages, unchanged count. Source of truth.
+- `Dream Street Shuffle.html` — synced via `python3 sync_html.py`. NEVER READ DIRECTLY.
+- `sync_html.py` — no changes this session.
 
 ---
 
 ## Audit at end of session
 
-- 0 broken `[[link|target]]` references
-- 0 unattached `(if:)/(unless:)/(else-if:)/(else:)` changers (3 false positives in JS comments)
-- 0 variables referenced but never set
-- All recently-added passages present
-- All apostrophe-target links resolve
-- All audio files present in folder + embedded
-- `sync_html.py` produces no warnings
+- Lackland row gate fixed (haunt5 instead of matchbook)
+- Aoife double-charge fixed
+- Five venues consistently force lily/dual rings
+- Dido guided to Interval post-rescue
+- Coach map marker on cowRideDone
+- Lackland prose path-aware
+- Coach low-sob Retch on resume-bounce
 
-Clean. Ready for playtest.
+Net effect: the soft-lock paths are closed. The lily phone calls are mandatory. The Interval is reachable by players who've earned it. The Coach is reachable structurally. The Ripley's Wheel reveal is achievable on a single playthrough without trap fork choices.
+
+Ready for playtest.

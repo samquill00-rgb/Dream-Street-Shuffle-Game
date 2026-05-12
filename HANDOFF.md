@@ -1,176 +1,194 @@
-# HANDOFF — 2026-05-12
+# HANDOFF — 2026-05-12 (session 2)
 
-Long session. Started with another playthrough pass by Dr Quill, then a deep map redesign (restoring the labelled venue layer that had quietly atrophied), then a full Phase 1 / Phase 2 / Phase 3 design pass for a new sefirot-on-the-map mechanic, with previews iterated to spec.
-
----
-
-## Bug fixes + tuning (early session)
-
-### Playthrough findings
-- **Carthage pyre lily call removed** — lily calls now only ring in pub venues, not in the dream layer (Stay in Carthage).
-- **"After the call" typewriter restored** — was static, now animates char-by-char.
-- **Alba counter premature lighting on cow ride** — removed eager `$alba3` sets from Cow ride success/fail and LINE 3 entry; alba3 now only sets inside the *Closer* click. Bug fix carried over: The Interval now properly awards alba3 + `$sawMemory3` when Lily speaks the line (haunts ≥ 11), and Carthage shore sets `$visitedCarthage = true` on entry (was only set at "Dream to Dean" — players who took the Sub umbras path silently missed this flag, leaving Pillars row open after a complete loop). [Dean Street:28643](Dream Street Shuffle.twee:28643).
-- **Failed Copper counter** now scores 1 (was 0) so one slip doesn't doom the fight.
-- **Colony Room** — single "Get a drink with the man at the bar" link replaces the two parallel options.
-- **Notebook header** — back and notebook links swapped (← BACK on left, NOTEBOOK on right).
-- **Pong scoring** — restructured as proper table tennis. First to 11, must win by 2 (deuce rules). Call-out subtitle uses "love" for 0, "deuce" at 10–10, "advantage you / advantage [opponent]", "match point — [side]". Rally-driven serve-speed escalation capped at 6 so the longer match doesn't outrun the player.
-- **Colony Room gated on haunt1** — forces a second French visit before Colony opens. Updated haunt-opens advertisements: haunt4 now reads "The Pillars opens"; haunt1 (THE SKETCH) now adds "The Colony Room opens".
-- **Morale rebalance** — cap → 90 (was 100), hub attrition bumped (returns 2-3: -2→-3; 4-5: -3→-5; 6+: -5→-8). Big reward gains cut: Eat Shelley's Liver +40→+22, Fight Victory Perfect totals +48→+30, Lackland's +22→+14, PP Victory +22→+14, O'Flatterly's Gift +22→+14, etc.
-- **Fetch glimpse disabled** — three-tier alba-count fetch text wrapped in `(if: false)[...]` at [Dean Street:28619](Dream Street Shuffle.twee:28619) so it doesn't fire; preserved for future restoration.
-- **Audit-pass nitpicks fixed** — *spendthrift draft* → *spendthrift draught* at The Interval; *Tir'd with all these* curly apostrophe applied; haunt1-12 init block in Start passage consolidated (StoryInit is now canonical; Dean Street's defensive `(unless: $haunt1 is a string)` heal remains as fallback).
-
-### LBRP polish (notebook map)
-- **Color**: gold (`#f5d070`) → silver (`#d8e0ec`).
-- **Opacity baseline**: 0.30 → 0.65 (settled state). Animation peak unchanged (0.95).
-- **Drop-shadow** strengthened for legibility on the dark base.
-
-### Esoteric layer additions
-- **LBRP** (gold → now silver) sits below the pentagram on the notebook map.
-- **Gawain endless-knot** ("And the English call it everywhere, as I hear, the endless knot.") added on the Centre Point 3D overlay (Dawn Approach White/Black), gated on `$lilyCount >= 5`.
-- **Eclipse** for Alba Incomplete: when alba is not complete, Dawn passage swaps Dawn Rule SVG top for new `Dawn Rule SVG eclipse` (dark disc + corona ring + diamond-ring bead "marriage ring" + stars). Triggered conditionally via `_albaComplete` set at top of Dawn.
-- **Shelley's Liver** — Promethean quote flash. When eagle finishes feeding (`eatProgress >= 1`), a gold caps line **"There is no part of me that is not of the Gods."** fades up inside the LiverPopup card. Post-eat hold extended 700ms → 2500ms so it's readable. Global low-stat hint in the header: when `$hasLiver && ($confidence < 10 or $sobriety < 10)`, a pulsing gold tip appears beneath the alba-hint reading *'You're running on fumes. Remember: Shelley's liver in your notebook.'*
-- **Tarot at Trisha's** — state-determined three-card spread. Hard exclusion: the **Hanged Man is never drawn** (preserves the Madame Sosostris callback). Card 1 = where you've come from (Fool/Empress/Lovers/Magician/Hierophant/World); Card 2 = where you are (Devil/Tower/Death/Magician/Chariot/Moon/Wheel); Card 3 = what awaits (Star/Sun/Judgement/Temperance/High Priestess/Justice/Strength). Dedupe guard at end. Each card has a minimal RWS-style SVG illustration; preview at `tarot-preview.html`. OPUS / STATE label swap on the gold stat bars when `$haunts's length >= 12`.
+Session built on yesterday's groundwork. Wired Tree of Life Phase 2/3 fully into the live `.twee`, restored the lily-pentangle's geometric alignment to sefirot venues, ran an extensive polish pass on the bell SVG and the LBRP backdrop, then designed and implemented the Lightning Flash as the Tree's culmination.
 
 ---
 
-## The map redesign — Phase 1
+## Tree of Life — Phase 2/3 live
 
-**Crucial discovery mid-session**: the labelled three-state venue map was never actually stripped. The code (`Build Notebook` passage, lines ~32650-32683) already had three-state rendering (here / visited / unvisited) for nine venues — Pillars, Coach, Trisha's, Ronnie's, Colony, French, Lackland's, Cecil Court, Ginger Light. I'd told Dr Quill earlier that labels had been removed, which was wrong. They'd been there all along, just dim in their unvisited state.
+Implemented from yesterday's preview spec:
 
-### Phase 1 changes applied to the live map
-- **All 9 existing venue labels retained** with three-state pattern (here = pulsing bright; visited = medium amber; unvisited = small dim grey).
-- **Chinese Fish and Chips added as 10th venue** — labelled simply "Chippy" on the map (full prose name preserved everywhere else). Detection via passage-name match.
-- **Four atmospheric street lamps removed** (the radial gradient circles at 230/370, 490/370, 100/200, 360/520) plus the three corner light-pools. They were scene-setting, not venue markers.
-- **Cecil Court converted to symbolic anchor** at (280, 668) — mirrors Centre Point at (280, 70). ▼ CECIL COURT label below the dot, ▲ CENTRE POINT above. The three-state rendering is gone for Cecil Court; it's now a static anchor.
-- **Soho Sq shrunk** (160×62 → 95×38) and nudged down + right (340,62 → 360,78), trees scaled, label moved to (408, 131).
-- **Venue label fonts** reduced from 16/15 to 13/12 for legibility.
-- **Vertical street lines** now start at y=160 (was y=135-140), so they don't crash through the WARDOUR/DEAN/FRITH/GREEK labels at y=146-148.
-- **WARDOUR** label → **WARDOUR ST** for consistency with the other vertical street labels.
-- **OLD COMPTON ST** label dropped from y=380 to y=392 to clear the horizontal street line at y=370.
+- **Hebrew sefirot labels** on every venue's three-state block (here/visited/unvisited) — 8 venues × 3 states + Centre Point + Cecil Court. Ginger Light intentionally left unmarked on the map (it's Da'at, the hidden eleventh).
+- **TREE notebook tab** inserted between POEM and MAP. Renders all 10 sefirot in canonical order with Hebrew + English + venue, plus a pastel-pink Da'at row at the foot (Hebrew only, no English/venue — the hidden eleventh stays a notebook reference only, never on the map).
+- **Reveal button** with `window.dssToggleSefirot` JS handler. Toggles `tree-on` class on the SVG (Hebrew fade in), auto-switches to MAP tab, forces a reflow so the 0.9s opacity transition is actually visible.
+- **CSS `.seph` class**: opacity 0 default, 0.88 when `tree-on`, red `#c83828`, drop-shadow for legibility on the dark map.
 
-### Venue positions (live code, final after Phase 1)
-| Venue | Position | Label side |
+---
+
+## Pentangle re-aligned to sefirot
+
+The existing lily-pentangle (at `$lilyCount >= 5`) had drifted-symbolic coordinates. Re-aligned to exact venue positions:
+
+| Sefira | Venue | Coord |
 |---|---|---|
-| Centre Point (symbolic) | (280, 70) | label above |
-| Pillars of Hercules | (510, 250) | left |
-| Trisha's | (470, 200) | right |
-| Colony Room | (230, 250) | right |
-| Chippy | (100, 250) | right |
-| Ronnie Scott's | (340, 305) | left |
-| Ginger Light | (230, 370) | right, label ABOVE marker (y=-12) to clear OLD COMPTON ST |
-| Lackland's | (100, 430) | right |
-| Coach & Horses | (490, 460) | left |
-| The French House | (230, 470) | right |
-| Cecil Court (symbolic) | (280, 668) | label below |
+| Keter | Centre Point | (280, 70) |
+| Chokmah | Trisha's | (470, 200) |
+| Netzach | Coach & Horses | (490, 460) |
+| Yesod | The French House | (230, 470) |
+| Binah | Chinese Fish & Chips | (100, 250) |
 
-Preview saved as `map-phase1-preview.html`.
+Updated in three places: notebook map polygon + lily-bell transforms + glow circles, and BOTH Dawn Approach overlays (White/Black). Lily-bells, LBRP recital, and dramatic flash reveal all unchanged behaviourally — just re-aligned.
 
 ---
 
-## Sefirot mapping — Phase 2 (preview only; NOT yet wired into live)
+## Bell SVG redesign
 
-Dr Quill agreed to map the 10 sefirot of the Tree of Life onto venues so the Tree's geometry is *approximately drawn* over Soho. After several iterations the mapping locked in as:
+Iterated through 4 variants (Current / Waxen / Botanical / Ghost) in `bell-preview.html`. Dr Quill picked a B+D hybrid: body opacity 0.35, separate outline stroke at 0.7 opacity, 7 ribbed veins fanning calyx-to-lip, small pistil dots. Stem and calyx greens dulled to pale sage (`#9aa888` stem, `#8a9678` calyx body, `#5a6850` calyx stroke).
 
-| Sefira | Hebrew | Venue | Map pos |
-|---|---|---|---|
-| Keter (Crown) | כתר | Centre Point | (280, 70) — top centre |
-| Chokmah (Wisdom) | חכמה | Trisha's | (470, 200) — upper right |
-| Binah (Understanding) | בינה | Chippy | (100, 250) — upper left |
-| Chesed (Mercy) | חסד | Pillars of Hercules | (500, 250) — mid right |
-| Gevurah (Severity) | גבורה | Ronnie Scott's | (340, 305) — mid (later swap, see note) |
-| Tiferet (Beauty) | תפארת | Colony Room | (230, 250) — left mid |
-| Netzach (Victory) | נצח | Coach & Horses | (490, 460) — lower right |
-| Hod (Glory) | הוד | Lackland's | (100, 430) — lower left |
-| Yesod (Foundation) | יסוד | The French House | (230, 470) — lower mid |
-| Malkuth (Kingdom) | מלכות | Cecil Court | (280, 668) — bottom centre |
-| Da'at (hidden) | דעת | The Ginger Light | unmarked on map |
-
-**Crucial swap late in design**: Ginger Light's Hebrew was given to Ronnie's (Gevurah moves from Ginger Light → Ronnie's), and Ronnie's old Hebrew Tiferet went to Colony Room. So Ginger Light remains *unmarked* on the map — it's the hidden Da'at, fitting the "Red sells you the alba1 ('Forget the work. Try this.')" transgression / threshold theme.
-
-### Map colour scheme for Phase 2
-- **Venue English names**: silver (`#d8e0ec`) — was amber.
-- **Hebrew on map**: red (`#c83828`), opacity 0.88. Bumped from font-size 13 to 15 (slightly bigger per Dr Quill's request).
-- **Hebrew in notebook list**: red ink (`#a02818`) on parchment.
-- **Ginger Light marker** distinct from others — inner circle `#d4682a` (ginger orange) with ginger-tinted outer glow rings.
-- **Pillars and Trisha's** "across the road" effect: Pillars at (500, 250) west-of-Greek-line, Trisha's at (480, 200) east-of-Greek-line. Heights staggered (Trisha's higher than Pillars per Dr Quill's request — closer to Soho Sq).
-- **French House** moved up from (230, 500) → (230, 470) per request.
-
-Preview saved as `map-phase2-preview.html`.
+Defined as `_bell` temp variable in Build Notebook; reused via concatenation in:
+- the pentangle bells (notebook map, lily ≥ 5 state)
+- both Dawn Approach overlays (White and Black, both via `_ll`)
+- all 5 notebook lily-row flowers (each at its own `scale(...)`: 0.821 / 0.893 / 1.0 / 0.857 / 0.714 — preserves the original size rhythm)
 
 ---
 
-## Phase 3 — the toggle (preview only; NOT yet wired into live)
+## Lily-row state contrast
 
-Dr Quill's final design call: Hebrew sefirot **should not always show**. They should be hidden by default; the map is the normal map. A new TREE OF LIFE notebook tab carries the sefirot list plus a button — **Reveal on the map** — that toggles Hebrew labels in/out with a fade.
+Replaced inline `opacity` attr with class-based state styling. Gathered vs ungathered now reads instantly:
 
-Preview implementation (interactive):
-- Map starts plain (CSS `.seph { opacity: 0 }`)
-- Tree of Life tab has the sefirot list on parchment (Hebrew + English + venue, all 10 sefirot)
-- Below the list, a pastel-pink Hebrew-only Da'at row (no English, no venue) — `style="color:#e8a8c0;"` — at the foot, with **no explanatory text**. The hidden eleventh.
-- Reveal button toggles `.tree-on` class on the map SVG → `.tree-on .seph { opacity: 0.88 }` with 0.9s fade transition.
-- Button text flips: "Reveal on the map" ↔ "Hide from the map".
+- `.nb-lily-empty`: opacity 0.22, `filter: grayscale(0.92) brightness(0.78)` — near-ghost grey silhouette
+- `.nb-lily-gathered`: opacity 1, layered gold drop-shadow halo — lit/present
 
-Preview saved as `map-phase3-preview.html`. **This is the spec Dr Quill is committing now.**
+Preview: `lily-states-preview.html` shows 0 / 3 / 5 collected states side by side.
+
+---
+
+## LBRP backdrop
+
+Added a translucent dark panel behind the LBRP recital. Iterated on width several times — final: `x=110 y=528 width=340 height=74 rx=5`, fill `rgba(8,6,4,0.78)`, faint gold border `rgba(212,165,116,0.22)` at stroke 0.5. Wider than the longest line, clears Wardour St (x=100) by 10px and Greek St (x=490) by 40px. CSS-animated to fade in with the same `nb-map-pent-lbrp` keyframes the text uses.
+
+---
+
+## Bell + Keter Hebrew positioning
+
+- Bell vertical offset changed from `translate(0,-35.5)` → `translate(0,-25)` (bell sits lower on the page, closer to the dot).
+- Keter Hebrew kept at original `y=22` but moved OUT of the Centre Point group and re-rendered as a SEPARATE text element after the pentangle bells block, so it draws *on top* of the bell — Hebrew red sits over translucent cream.
+- New `seph-keter` class overrides the base `.seph` rule: opacity 1 (no see-through tint), layered drop-shadow at 95%/90% so the bell's cream doesn't pinkify the red.
+
+---
+
+## Trisha's / Pillars label clearance
+
+Greek St (vertical line at x=490) was being crossed by both Trisha's label (x=18) and Pillars label (x=-18). Shifted to x=28 / x=-28 in all three states each (here/visited/unvisited), Hebrew and English.
+
+---
+
+## Lackland's two-line label
+
+Now reads:
+> Lackland's
+> Offices
+
+Implemented via `<tspan x='18' dy='14'>Offices</tspan>` on the label. Hebrew Hod moved from y=22 to y=36 to clear the new second line. All three states updated.
+
+---
+
+## THE LIGHTNING FLASH — Tree of Life culmination
+
+The Tree had no payoff state. It does now.
+
+### State
+
+- `$treeFlashed` (default false) — once-only flag. Fires when conditions met during notebook open.
+- `$visitedCentrePoint` (default false) — set true in the `Approach Centre Point` passage.
+- `$opusViaTree` (default false) — Tree-side path to OPUS STATE. Set true at the same moment as `$treeFlashed`.
+
+All three initialized in both StoryInit blocks (line 77ish + 31233ish reset).
+
+### Trigger
+
+In Build Notebook, computes `_treeAllVisited` from the 10 sefirot venue flags:
+- Centre Point: `$visitedCentrePoint`
+- Trisha's / Pillars / Colony / Ronnie's / French: `_tVisited / _pVisited / _cVisited / _rVisited / _fVisited` (`$visited` datamap)
+- Chippy: `_qVisited` (`$hadChippy`)
+- Coach: `_hVisited` (`$cowRideDone`)
+- Lackland's: `_lVisited` (`$knowsLackland`)
+- Cecil Court: `_eVisited` (`$knowsCecilCourt`)
+
+When `_treeAllVisited && $treeFlashed is false`: flip `$treeFlashed` and `$opusViaTree`, add `'tree'` to the page's pentangle-queue.
+
+Same once-only-consumption pattern as the lily pentangle. Player must press Reveal during the notebook session when the flag flips, or burns the flag.
+
+### Visuals
+
+`<g class='map-tree-lightning'>` element always rendered, hidden by default. Contains:
+- **9 `<line>` paths** in canonical descent order: Keter → Chokmah → Binah → Chesed → Gevurah → Tiferet → Netzach → Hod → Yesod → Malkuth. Stroke `#d8e0ec` (silver, matching LBRP), width 3, settled opacity **0.10** (exactly half the pentangle's 0.20 — Tree sits under it in prominence).
+- **10 `<circle>` sparks** (one per sefira). Bright warm pulse (rgba(255,245,200,1) at r=14) during ignition, fade to invisible.
+
+### Animation
+
+`.tree-flashing` class on the SVG fires sequential animations:
+- Each `tree-path-N` (1–9) has `animation-delay: (N-1) * 0.35s + 0.20s`, draws via stroke-dashoffset 1000→0 over 0.5s, peaks at opacity 0.95 (during draw) then settles to 0.10.
+- Each `tree-spark-N` (1–10) has `animation-delay: (N-1) * 0.35s`, pulses 0→1→0 opacity with r 3→14→6 over 0.7s.
+- Total flash ≈ 3.5s, then everything settles.
+
+### OPUS hookup
+
+The Lightning Flash is a second path to the OPUS STATE (the alchemical Wheel modal at 12/12 haunts). Both paths now feed the same final state:
+
+- **Stat-bar visuals**: confidence + sobriety bars switch to gold `bar-opus` fill when `$haunts's length >= 12 OR $opusViaTree is true`. Same for the OPUS/STATE label swaps and the 100% percentage labels (5 conditionals total in Build Notebook).
+- **Page background**: indigo gradient enchant fires on the same OR condition.
+- **OPUS modal**: `window.dssToggleSefirot` calls `window.dssOpusReveal()` via `setTimeout(4000)` after the Lightning Flash fires. The modal's internal guard prevents double-spawn if the player already triggered it via the Dawn passage.
+
+### `window.dssToggleSefirot` updated
+
+On Reveal press:
+1. Toggle button text/class
+2. Switch to MAP tab
+3. Force reflow
+4. Add `tree-on` to SVG (Hebrew fades in)
+5. If queue contains `'tree'`: remove + re-add `tree-flashing`, consume from queue, schedule OPUS modal
 
 ---
 
 ## State of the live code (.twee) at session close
 
-**Phase 1 is LIVE**: the map has 10 labelled venues with three-state rendering, Cecil Court as symbolic anchor, no street lamps, smaller fonts, WARDOUR ST label, Soho Sq shrunk + nudged, all the position fixes.
-
-**Phase 2/3 are NOT YET LIVE**: no Hebrew labels on the live map, no Tree of Life notebook tab, no toggle button. All of that lives only in the preview files for next session to implement.
+Everything above is LIVE in `Dream Street Shuffle.twee` and synced to `Dream Street Shuffle.html`. Commit pending.
 
 ---
 
-## Stage 3 plan (next session — implement Phase 2/3 in live code)
+## Esoteric layer status
 
-1. **Add Hebrew sefirot `<text>` elements to each venue's three-state block** in the live Build Notebook map SVG. Class `seph` with `font-family='David', 'SBL Hebrew', 'Times New Roman', serif`, font-size 15, fill `#c83828`, opacity initially 0.
-2. **Add a new TREE tab** to the notebook tab strip (`FINDS | EFFECTS | LILLIES | POEM | TREE | MAP` — order TBD; perhaps insert TREE before MAP).
-3. **Build the Tree of Life panel** in the Build Notebook passage. Lists 10 sefirot in canonical order with Hebrew (right column), English bold, venue right-aligned italic. Pastel-pink Da'at row at the bottom with Hebrew only.
-4. **Add the Reveal button** — clicking it should toggle a class on `.soho-map svg` (e.g. via `window.dssToggleSefirot()` JS function that flips between adding/removing `tree-on` on the map SVG). Persist state via Harlowe variable `$sefirotShown` so toggling sticks across tab switches.
-5. **CSS**: `.seph { opacity: 0; transition: opacity 0.9s ease; }` and `.soho-map svg.tree-on .seph { opacity: 0.88 }`.
-6. **Notebook map already has the venue labels** (Phase 1 done) so the Hebrew labels just slot in alongside English. Check positioning per venue — Phase 2 preview used `x=18 y=22` (right) or `x=-18 y=22 text-anchor=end` (left); some venues (Ginger Light) use different positioning because of the y=-12 English offset.
-7. **Centre Point and Cecil Court**: their Hebrew goes outside the three-state block (since they're symbolic). For Centre Point, Hebrew BELOW dot (`x=0 y=22 text-anchor=middle`). For Cecil Court, Hebrew ABOVE dot (`x=0 y=-14 text-anchor=middle`).
-8. **Ginger Light**: NO Hebrew on the map (it's Da'at, hidden). Just the English label.
-9. **Toggle button styling** in the preview is: dark brown background, gold serif italic, all-caps tracked. Active state: brighter gold + red shadow.
+Updated `project_esoteric_layer.md` memory. Status:
+
+**Built:** lily pentagram, alchemical Wheel + visual Wheel, Tarot at Trisha's, Tree of Life sefirot mapping, Lightning Flash culmination → OPUS STATE, plus all the smaller polish (Gawain endless-knot, eclipse for Alba Incomplete, Shelley's Liver flash, LBRP backing).
+
+**Off the table — never pitch again:** Book-as-true-name; Page 47/93 hidden numbers; I Ching trigrams (numbers don't fit 12-haunt count).
+
+**Banked for future:** Three Pillars overlay — Kabbalistic Mercy/Severity/Mildness columns tied to the existing Pillars of Hercules thematic. New memory file: `project_three_pillars.md`.
 
 ---
 
 ## Files of note
 
-- `Dream Street Shuffle.twee` — **132 passages**. Source of truth.
-- `Dream Street Shuffle.html` — synced via `python3 sync_html.py`. **NEVER READ DIRECTLY.**
-- `sync_html.py` — no changes this session.
-- `map-phase1-preview.html` — current live state of the map (no Hebrew).
-- `map-phase2-preview.html` — Phase 2 design reference (Hebrew always visible).
-- `map-phase3-preview.html` — Phase 3 design reference (toggle button, the spec to wire up).
-- `tarot-preview.html` — 19 Major Arcana RWS-style preview from earlier in the session.
-- `dark-sun-preview.html` — Sol Niger vs Eclipse comparison (Eclipse chosen for Alba Incomplete).
-- `sefirot-map-preview.html` — abandoned mid-design (replaced by Phase 2 preview).
+- `Dream Street Shuffle.twee` — 132 passages, source of truth.
+- `Dream Street Shuffle.html` — synced. NEVER READ DIRECTLY.
+- `sync_html.py` — unchanged.
+- `bell-preview.html` — 4 bell variants A/B/B+D/D for reference.
+- `lily-states-preview.html` — gathered vs empty contrast.
+- `pentangle-aligned-preview.html` — current live state of the map. Includes a **Call down the Lightning** button to replay the Lightning Flash animation without playing through.
+- `map-phase1/2/3-preview.html` — earlier design references, superseded by the live code.
 
 ---
 
-## Memories saved this session
+## Memories updated this session
 
-- `feedback_no_unrequested_prose.md` — Don't add or suggest DSS prose unless structurally necessary. Dr Quill writes the prose himself; even suggestions for atmospheric/connector prose read as window-dressing. Only flag a gap when a mechanic literally can't work without text.
-
----
-
-## Things considered and intentionally NOT changed
-
-- **Pillars stays at (490, 200)** through some swap iterations but ultimately at (500, 250) for Phase 2. Live code has (510, 250). Trisha's at (470, 200) live, (480, 200) Phase 2. Treat the Phase 2 numbers as the spec target for Stage 3 wiring.
-- **Map viewBox** stayed at 0 0 560 700 throughout — no widening despite Trisha's label being close to the right edge.
-- **Pentagram polygon points** unchanged — symbolic 5-point figure at (280,70), (490,200), (490,450), (230,500), (100,250). These don't move when venues do.
-- **Lily-bell markers at pentagram corners** also at the pentagram points, not at venue positions. They're independent of venue layout.
+- `project_esoteric_layer.md` — rewrote to reflect built/off-the-table/banked status; logged the three permanently-rejected ideas with reasoning.
+- `project_three_pillars.md` (new) — banked design tying Kabbalistic three pillars to the existing Pillars of Hercules naming.
+- `MEMORY.md` — updated entries for the two changed/new project files.
 
 ---
 
-## Audit at end of session
+## Things considered and intentionally NOT done
 
-Net effect:
-- Big map upgrade: labels back, fonts smaller, geography corrected, four lamps gone, Soho Sq shrunk, Cecil Court symbolised.
-- Esoteric layer significantly deepened: LBRP silver-polished, Gawain endless-knot at Centre Point, eclipse for Alba Incomplete, Promethean liver flash, low-stat liver hint global, state-determined RWS-style tarot at Trisha's.
-- Sefirot mapping fully specced in Phase 2/3 previews, toggle UX agreed, ready to wire into live in next session.
-- Multiple smaller fixes / polish items completed.
+- **Da'at on the map** — discussed and rejected. Da'at stays in the notebook list only (pink Hebrew, no English/venue), never on the map regardless of state. The hidden eleventh remains hidden.
+- **Tree completion requiring Alba Complete** — Tree completion fires OPUS via `$opusViaTree` regardless of alba state. This is an additional path to OPUS, parallel to the 12-haunt + Alba Complete path, not a stricter gate.
+- **Page 47/93 references** — explicitly off the table. The prop is actually Page 93 now (memory had it as 47).
+- **I Ching trigrams** — off the table; numbers don't fit the 12-haunt count.
+- **Book title as true name** — off the table.
 
-Ready for the next round.
+---
+
+## Ready for next round
+
+Lightning Flash + OPUS hookup is the end of this session's main thrust. Three pillars is the next major occult thread when Dr Quill comes back to it.

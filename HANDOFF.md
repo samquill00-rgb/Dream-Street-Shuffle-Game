@@ -120,10 +120,20 @@ The full-screen Three.js Approach scenes had no back button — players could on
 
 After the class-attribute bug fix:
 - All three stat labels (MORALE / SOBRIETY / ALBA) now identical: 0.65em, Playfair Display, 400 weight, 0.1em letter-spacing
-- Added `margin-left: -12px` on `.stat-label` to nudge all three labels ~3mm leftward (margin doesn't affect grid column positions, so the cigarette bars stay put)
+- `margin-left: -4px` on `.stat-label` — small leftward nudge from the bar (was tried at -12px, dialed back per Dr Quill). Margin doesn't affect grid column positions, so the cigarette bars stay put
 - BACK / NOTEBOOK header: gap increased from 0.5em → 1.8em for breathing room
 - Back button itself shrunk: font-size 0.85em → 0.7em, margin-left 1.4em → 0.6em
 - SOBRIETY cigarette ember: shrunk and pulled inward (`right: -9px width 20 height 30` → `right: 0px width 12 height 20`) so it sits cleanly inside the bar-fill end and doesn't clash with the gray-ash cigarette body
+
+## Stat delta flash (+12 / -9) made more noticeable
+
+Dr Quill: the "+12" / "-9" pop-ups that fly up next to a changing stat were too quick and easy to miss. Tuned:
+- Total duration 2.4s → **4.5s** (hangs around almost twice as long)
+- Peak at 7%: scale 1.4 + brightness 1.6 (single emphatic flash)
+- Settles back to scale 1 by 22%, then sits clearly visible for ~2.25 seconds
+- Drifts up and fades from 72% → 100%
+
+CSS: `.stat-delta` animation + `@keyframes stat-delta-drift`.
 
 ---
 
@@ -143,6 +153,7 @@ All changes synced to `Dream Street Shuffle.html`. Commit pending.
 ## Memories updated/added today
 
 - `project_harlowe_class_attr.md` (new) — the class-attribute trap that ate this session.
+- `feedback_use_chrome_mcp.md` (new) — Dr Quill has had Claude in Chrome installed for weeks. **Just open it and use it** for any DSS visual/runtime question. Don't ask permission, don't propose blind CSS fixes first.
 - `MEMORY.md` — index updated.
 
 ---

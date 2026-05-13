@@ -6270,7 +6270,7 @@ document.getElementById('bar-round-display').textContent = win ? '★ YOU MADE I
 var narr = document.getElementById('bar-narrative');
 
 if (perfect) {
-  narr.innerHTML = '<em style="color:#4CFF00;">All three drinks reach the stage. Moe nods. The band tightens.</em>';
+  narr.innerHTML = '<em style="color:#4CFF00;">All three drinks reach the stage. Moe nods. The band plays on.</em>';
 } else if (cp.glassesLeft === 2) {
   narr.innerHTML = '<em style="color:#d4a574;">Two land safely. Moe shrugs. "Better than nothing."</em>';
 } else if (win) {
@@ -27771,15 +27771,15 @@ ball.dx=d*sp*Math.cos(a);ball.dy=sp*Math.sin(a);
 serving=true;serveTime=Date.now();rallyCount++;
 }
 function callScore(){
-/* Table-tennis announcement: love for 0, deuce at 10-all+, advantage/match point as appropriate. */
+/* Table-tennis announcement: love for 0, deuce at 2-all+, advantage/match point as appropriate. */
 if(playerScore===0&&oppScore===0)return'love-all';
-if(playerScore>=10&&oppScore>=10){
+if(playerScore>=2&&oppScore>=2){
   if(playerScore===oppScore)return'deuce';
   if(playerScore>oppScore)return'advantage you \u2014 match point';
   return'advantage '+opponent+' \u2014 match point';
 }
-if(playerScore>=10&&playerScore>oppScore)return'match point \u2014 you';
-if(oppScore>=10&&oppScore>playerScore)return'match point \u2014 '+opponent;
+if(playerScore>=2&&playerScore>oppScore)return'match point \u2014 you';
+if(oppScore>=2&&oppScore>playerScore)return'match point \u2014 '+opponent;
 var n=function(x){return x===0?'love':String(x);};
 return n(playerScore)+'\u2013'+n(oppScore);
 }
@@ -27805,23 +27805,42 @@ else if(sobriety<50){ty+=(Math.random()-0.5)*15;actualY+=(ty-actualY)*0.12;}
 else{actualY+=(ty-actualY)*0.25;}
 pPad.y=Math.max(0,Math.min(H-pPad.h,actualY));
 }
+/* Rubber-band: returns -1 to +1.5 representing how much the AI should be
+   helped (+) or hindered (-). Positive when the AI is behind (so it plays
+   better), negative when ahead (plays worse). Once both players have hit
+   2 (deuce), bias goes to zero so the sudden-death rally is honest. */
+function aiBias(){
+if (playerScore >= 2 && oppScore >= 2) return 0;
+var lead = oppScore - playerScore;
+return Math.max(-1.5, Math.min(1.5, -lead * 1.0));
+}
 function updateAI(){
 var now=Date.now();
+var bias=aiBias();
+/* speedMul rides between ~0.55 (AI ahead) and ~1.45 (AI behind).
+   accMul shrinks reaction time and prediction noise when AI is behind. */
+var speedMul = 1 + bias * 0.45;
+var accMul   = Math.max(0.4, 1 - bias * 0.5);     // <1 = sharper when AI behind
+var noiseMul = Math.max(0.35, 1 - bias * 0.55);   // less noise when AI behind
 if(opponent==='Jack Curtis'){
 /* Jack — patient veteran. Reacts ~75ms, predicts cleanly with light noise. */
-if(now-aiLast<75)return;aiLast=now;
+var rt = 75 * accMul;
+if(now-aiLast<rt)return;aiLast=now;
 var py=ball.y;
 if(ball.dx>0){var f=(oPad.x-ball.x)/ball.dx;py=ball.y+ball.dy*f;while(py<0||py>H){if(py<0)py=-py;if(py>H)py=2*H-py;}}
-py+=(Math.random()-0.5)*12;aiTarget=py;
-var sp=4.4,c=oPad.y+oPad.h/2,d=aiTarget-c;
+py+=(Math.random()-0.5)*12*noiseMul;aiTarget=py;
+var sp=4.4*speedMul,c=oPad.y+oPad.h/2,d=aiTarget-c;
 if(Math.abs(d)>4)oPad.y+=Math.sign(d)*Math.min(sp,Math.abs(d));
 }else{
 /* Percy — wild but quicker now; the accurate-prediction roll fires more often. */
-if(now-aiLast<35)return;aiLast=now;
-var py=ball.y+ball.dy*8;py+=(Math.random()-0.5)*32;
-if(Math.random()<0.30){var f=ball.dx>0?(oPad.x-ball.x)/ball.dx:30;py=ball.y+ball.dy*f;while(py<0||py>H){if(py<0)py=-py;if(py>H)py=2*H-py;}}
+var rt = 35 * accMul;
+if(now-aiLast<rt)return;aiLast=now;
+var py=ball.y+ball.dy*8;py+=(Math.random()-0.5)*32*noiseMul;
+/* Accurate-prediction roll: 30% baseline, rises when AI is behind. */
+var predChance = Math.max(0.05, Math.min(0.85, 0.30 + bias * 0.35));
+if(Math.random()<predChance){var f=ball.dx>0?(oPad.x-ball.x)/ball.dx:30;py=ball.y+ball.dy*f;while(py<0||py>H){if(py<0)py=-py;if(py>H)py=2*H-py;}}
 aiTarget=py;
-var sp=6.2,c=oPad.y+oPad.h/2,d=aiTarget-c;
+var sp=6.2*speedMul,c=oPad.y+oPad.h/2,d=aiTarget-c;
 if(Math.abs(d)>3)oPad.y+=Math.sign(d)*Math.min(sp,Math.abs(d));
 }
 oPad.y=Math.max(0,Math.min(H-oPad.h,oPad.y));
@@ -27847,9 +27866,11 @@ else if(ball.x>W+20){playerScore++;pointEnd(true);}
 }
 function pointEnd(pw){
 updateScore();paused=true;
-/* Table-tennis end condition: first to 11, must win by 2 (deuce rules). */
-var pWin=playerScore>=11&&(playerScore-oppScore)>=2;
-var oWin=oppScore>=11&&(oppScore-playerScore)>=2;
+/* First to 3, win by 1 — short and decisive. The AI's difficulty is
+   rubber-banded (see aiBias) so the match almost always reaches 2-2,
+   then a single honest rally decides it. */
+var pWin=playerScore>=3&&(playerScore-oppScore)>=1;
+var oWin=oppScore>=3&&(oppScore-playerScore)>=1;
 if(pWin||oWin){endGame(pWin);return;}
 setTimeout(function(){paused=false;serve();},1100);
 }
@@ -29374,21 +29395,12 @@ Quiet Frankie has stopped reaching for his knife. He folds his arms and grins.
 <div id="fight-arena" style="display:none;">
 <div class="pp-arena">
 <div class="pp-score" id="round-display">🤜 PRACTICE ROUND 1/3 🤜</div>
-<div id="fight-instructions" style="text-align:center;color:#a07a4a;font-size:0.9em;margin:0.5em 0 0.8em;line-height:1.4;">
-<table style="margin:0 auto;border-collapse:collapse;font-family:'Courier New',monospace;">
-<thead><tr style="border-bottom:1px solid rgba(160,122,74,0.3);">
-<th style="padding:0.25em 1em;text-align:left;color:#d4a574;font-weight:bold;letter-spacing:0.1em;">Move</th>
-<th style="padding:0.25em 1em;text-align:left;color:#d4a574;font-weight:bold;letter-spacing:0.1em;">How</th>
-<th style="padding:0.25em 1em;text-align:right;color:#d4a574;font-weight:bold;letter-spacing:0.1em;">Pts</th>
-</tr></thead>
-<tbody>
-<tr><td style="padding:0.18em 1em;color:#ff9870;text-align:left;">Counter</td><td style="padding:0.18em 1em;text-align:left;">click on Copper</td><td style="padding:0.18em 1em;text-align:right;">3 <span style="opacity:0.55;">(risky)</span></td></tr>
-<tr><td style="padding:0.18em 1em;color:#aaffaa;text-align:left;">Dodge</td><td style="padding:0.18em 1em;text-align:left;">same side as the glowing glove</td><td style="padding:0.18em 1em;text-align:right;">2</td></tr>
-<tr><td style="padding:0.18em 1em;color:#e6c878;text-align:left;">Block</td><td style="padding:0.18em 1em;text-align:left;">click below</td><td style="padding:0.18em 1em;text-align:right;">1</td></tr>
-<tr><td style="padding:0.18em 1em;color:rgba(160,122,74,0.7);text-align:left;">Caught</td><td style="padding:0.18em 1em;text-align:left;color:rgba(160,122,74,0.6);">missed dodge / failed counter / no input</td><td style="padding:0.18em 1em;text-align:right;color:rgba(160,122,74,0.7);">0</td></tr>
-</tbody>
+<div id="fight-instructions" style="text-align:center;color:#a07a4a;font-size:0.95em;margin:0.4em 0 0.7em;line-height:1.5;font-family:'Courier New',monospace;">
+<table style="margin:0 auto;border-collapse:collapse;">
+<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#ff9870;font-weight:bold;letter-spacing:0.08em;">COUNTER</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click Copper</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">3pts, risky</td></tr>
+<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#aaffaa;font-weight:bold;letter-spacing:0.08em;">DODGE</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click the glove's side</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">2pts</td></tr>
+<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#e6c878;font-weight:bold;letter-spacing:0.08em;">BLOCK</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click below</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">1pt</td></tr>
 </table>
-<div style="margin-top:0.6em;color:#d4a574;font-size:0.92em;letter-spacing:0.08em;">3 rounds &middot; max 9 points &middot; score 5 to stay standing</div>
 </div>
 <canvas id="fight-canvas" width="560" height="400" style="display:block;width:100%;height:100%;cursor:crosshair;"></canvas>
 <div id="fight-narrative" style="text-align:center;padding:0.5em;min-height:2.5em;font-style:italic;color:#d4a574;transition:opacity 0.3s;"></div>

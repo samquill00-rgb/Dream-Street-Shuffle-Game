@@ -174,6 +174,26 @@ All changes synced to `Dream Street Shuffle.html`. Commit pending.
 
 ---
 
+## Map generator (2026-05-13)
+
+`generate_map.py` writes two writer's-eye-view files from the .twee:
+- `GAME-MAP.md` — every passage with tags, prose preview, choices out (with player-facing text), incoming links, returns (A↔B), cycles, orphans, dead-ends.
+- `GAME-MAP.html` — interactive vis-network graph. Click a node → side panel. Search box. Re-run the script to refresh.
+
+Both files regenerate from scratch — never edited by hand.
+
+## Astral-objects assets — banked for future esoteric use
+
+While testing `GAME-MAP.html`, the force-directed graph rendered the game's structure as a beautiful astral / constellation object — Dean Street as the radiant hub, venues arranged like satellites. Dr Quill took two screenshots and wants them set aside for possible inclusion in the game later.
+
+**Action for Dr Quill:** drag the two screenshots into the project folder. Suggested names:
+- `astral-map-1-diffuse.png` — the softer, undirected one
+- `astral-map-2-radiant.png` — the one with gold beams from Dean Street
+
+Possible uses (his call): visual on the title/end screen, an esoteric-layer reveal element, or a Sefirot/Tree-of-Life adjacent moment. Fits the same aesthetic family as the Three Pillars work already banked. Do not commit to a use — bank only.
+
+---
+
 ## Ready for next round
 
-Layout cleanly aligned, gating bugs caught, Chrome MCP available for future debugging.
+Layout cleanly aligned, gating bugs caught, Chrome MCP available for future debugging. Game map now generatable on demand.

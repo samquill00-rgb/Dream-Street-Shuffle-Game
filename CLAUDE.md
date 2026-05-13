@@ -37,6 +37,10 @@ grep -o '<tw-passagedata[^>]*name="Dean Street"[^>]*' "Dream Street Shuffle.html
 - **`HANDOFF*.md` is gitignored** — safe to write.
 - **Be token-efficient.** Targeted Greps + partial Reads. Don't re-read files already in context.
 
+## Notes batching
+
+When Dr Quill sends a message containing **two or more notes/items** (numbered, comma-separated, or new-line-separated), **immediately** build a `TodoWrite` list capturing every item before doing any work. Work through them in order, marking each completed as soon as it's done. This prevents accidentally skipping items in long lists — a pattern he's flagged as a recurring frustration. Single-item messages don't need this; the bar is "multiple notes in one message."
+
 ## Audio system reference
 
 The full audio system lives inside `window.dssAudio` in the .twee (around lines 109–900).

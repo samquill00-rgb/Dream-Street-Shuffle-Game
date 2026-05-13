@@ -194,6 +194,48 @@ Possible uses (his call): visual on the title/end screen, an esoteric-layer reve
 
 ---
 
+## Header layout iteration (2026-05-13, later)
+
+Polishing pass on the .stat-bars header — finalised after experimentation. **Current canonical state:**
+
+- Card centred: `transform: translateX(-50%)` (a 55px right-shift was tried and reverted — Dr Quill wanted it centred above everything else).
+- `.stat-pct` is now `text-align: right; padding-left: 0; display: block;` — so the "70%" sits flush with NOTEBOOK's right edge (was inboard before).
+- `.alba-count` is now `text-align: right;` — same alignment.
+- Grid columns in `.stat-group` and `.alba-strip`: third column narrowed from `3em → 1.8em` so labels + bars shift right toward the percentages.
+- `.stat-label` (both MORALE/SOBRIETY/ALBA and `.alba-strip .stat-label`): `margin-left: 14px` (was `-4px`) — labels sit closer to the bars.
+- `.header-links`: `gap: 42px` — places the BACK arrow tip aligned with the *left* end of the rolled-note (i.e. the start of the cigarette filter). NOTEBOOK is right-flush; that's the right-hand limit.
+- Powder line on MORALE bar lifted slightly: the "Bright white core" gradient stops shifted from 30/36/41/46/54/59/64/70 to 22/28/33/38/46/51/56/62 (only the linear gradient — the clumps untouched).
+
+If header alignment looks "off" after a change, the source of truth is this list.
+
+## Numbered-list rule baked into CLAUDE.md
+
+Dr Quill flagged a pattern: when he sends multi-item messages, items occasionally got skipped. New CLAUDE.md section ("Notes batching") makes it a rule: every multi-note message → immediate TodoWrite list before work starts. Future sessions inherit this.
+
+## 12-item batch fixes (2026-05-13, evening)
+
+Worked through a numbered list. All synced.
+
+1. **Punching scoring:** threshold lowered 6 → 5 (JS + Copper's dialogue + UI line). Counter is now viable to attempt — a failed counter can be recovered with one more counter + one dodge.
+2. **French-first gating:** verified, no change needed. After meeting Red, French is the only main venue link. Pillars/Colony/etc. all gated behind `$visited's French is true`.
+3. **Cecil Court waltz ignored mute:** the waltz used a plain `<audio>` element bypassing dssAudio's gain nodes. Now checks `dssAudio.isMuted()` at start AND polls every 250ms so toggling mute mid-game works.
+4. **"What book?" → "Which book?"** — single text fix.
+5. **Header off-centre:** reverted the 55px right shift from earlier in the session (Dr Quill wanted it centred above page content).
+6. **Pit music notes:** bumped from 6→10 notes, alpha 0.5→0.9, larger font, gold glow shadow, allowed to drift higher above the pit before clipping. (Code was always there — just too faint.)
+7. **Pentagram morale boost:** +12/+8 → +25/+15 morale/sobriety across all 5 lily-completion sites.
+8. **Haunt window:** `coachUrgent` haunt threshold raised from 3 → 10 — player can now collect most haunts before low sobriety locks them into the Coach ending.
+9. **Fish-and-chips popup:** full canvas redraw — newspaper with Daily Mirror headline + halftone photo block + body-text dashes + vinegar drips + crinkled batter with salt grains + varied chips with edge browning + Sarson's bottle.
+10. **"Home's cold;" → "Home's cold,"** — punctuation fix.
+11. **"reach the things" → "find the things"** on Dean Street (both returns=1 and returns>1 branches).
+12. **Midnight 23.11.73 → 24.11.73 transition:** new mechanic. When `$returns >= 7`, sets `$midnightJustPassed = true`. On that visit, the date animates (gold flare via `.scene-date-flip` class) and `dssAudio.distantBell()` chimes after 350ms. Flag clears after one display. **Action for Dr Quill if he wants prose at the moment:** there's a comment marker in the Dean Street passage right after the date `<span>` — insert a line of prose there.
+
+## Open threads for next session
+
+- **Music notes in the carry-tray pits** — code is now boosted (10 notes, brighter), but I never navigated through Ronnie's to verify with my own eyes. Worth a real playthrough confirmation.
+- **The fish-and-chips popup redraw** — I haven't seen the result in-browser; it's a substantial canvas rewrite, may need taste-level adjustments after Dr Quill sees it.
+- **Midnight transition prose** — mechanic ready, prose intentionally left to Dr Quill. Marker is in Dean Street passage.
+- **Three pillars** (Mercy / Severity / Mildness) — still banked.
+
 ## Ready for next round
 
-Layout cleanly aligned, gating bugs caught, Chrome MCP available for future debugging. Game map now generatable on demand.
+Layout cleanly aligned, gating bugs caught, batch of writer's notes worked through. Game map generatable on demand. Numbered-list rule now in CLAUDE.md.

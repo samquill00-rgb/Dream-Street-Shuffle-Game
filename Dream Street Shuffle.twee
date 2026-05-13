@@ -3342,6 +3342,12 @@ this.carryPhase = {
   wobbling: false,
   wobbleTimer: 0,
   staggerTimer: 0,
+  pitFalling: false,
+  pitFallPhase: null,
+  pitFallY: 0,
+  pitFallVel: 0,
+  pitFallBottomT: 0,
+  pitFallObs: null,
   terrain: [
     {x: 0, y: 320},
     {x: 900, y: 320},
@@ -3457,8 +3463,8 @@ _scorePour() {
 var d = this.drinks[this.mRound];
 var effectiveTarget = Math.max(0.1, Math.min(0.9, d.target + this.targetOff));
 var diff = Math.abs(this.pourLevel - effectiveTarget);
-if (diff < 0.04) { this.pourAccuracy = 2; }
-else if (diff < 0.10) { this.pourAccuracy = 1; }
+if (diff < 0.07) { this.pourAccuracy = 2; }
+else if (diff < 0.16) { this.pourAccuracy = 1; }
 else { this.pourAccuracy = 0; }
 var gx = this.W/2, gy = 270;
 this.mScore += this.pourAccuracy;
@@ -3795,9 +3801,20 @@ for (var i = 0; i < cp.obstacles.length; i++) {
       obs.scatterTime = this.t;
     }
   } else if (obs.isGap) {
-    // FLOOR GAP: you must be airborne to clear it
+    // FLOOR GAP: you must be airborne to clear it. Failing to jump
+    // doesn't just hit — the player falls into the pit and bounces
+    // out (handled in _updateCarry via pitFalling).
     var isAirborne = cp.playerY < cp.groundY - 15;
-    if (!isAirborne) collides = true;
+    if (!isAirborne) {
+      cp.pitFalling = true;
+      cp.pitFallPhase = 'fall';
+      cp.pitFallY = 0;
+      cp.pitFallVel = 0;
+      cp.pitFallBottomT = 0;
+      cp.pitFallObs = obs;
+      if (window.dssAudio && window.dssAudio.dodgeWhoosh) window.dssAudio.dodgeWhoosh();
+      return; // skip the rest of collision handling this frame
+    }
   } else {
     // LOW obstacles: you must jump over them.
     var isAirborne = cp.playerY < cp.groundY - 15;
@@ -3823,6 +3840,8 @@ for (var i = 0; i < cp.obstacles.length; i++) {
       cp.wobbleTimer = 3.0;
       cp.invulnTimer = bouncedBack ? 1.2 : 1.0;
       cp.screenShake = bouncedBack ? 1.2 : 0.6;
+      if (window.dssAudio && window.dssAudio.muffledThud) window.dssAudio.muffledThud();
+      if (window.dssAudio && window.dssAudio.glassClink) window.dssAudio.glassClink();
     } else {
       obs.hit = true;
       cp.glassesLeft = Math.max(0, cp.glassesLeft - 1);
@@ -3830,6 +3849,8 @@ for (var i = 0; i < cp.obstacles.length; i++) {
       cp.wobbleTimer = 0;
       cp.invulnTimer = 1.5;
       cp.screenShake = 1;
+      if (window.dssAudio && window.dssAudio.punchImpact) window.dssAudio.punchImpact();
+      if (window.dssAudio && window.dssAudio.glassClink) window.dssAudio.glassClink();
     }
   }
 }
@@ -3871,10 +3892,13 @@ this.liquidWobble *= 0.94;
 _updateMixing(dt) {
 this.wobT += dt * 0.004;
 
-// Oscillate target while pouring (harder: faster, wider, triple-harmonic)
+// Oscillate target while pouring. Four harmonics — slower low end for
+// the main drift, plus a higher-frequency jitter so the line twitches
+// unpredictably (player has wider scoring zones, so it can afford to
+// move more erratically without becoming unwinnable).
 if (this.pourCommitted && !this.pourDone) {
-  this.targetPhase += dt * 0.003;
-  this.targetOff = Math.sin(this.targetPhase * 1.3) * 0.20 + Math.sin(this.targetPhase * 2.1 + 1.7) * 0.14 + Math.sin(this.targetPhase * 3.7 + 0.9) * 0.06;
+  this.targetPhase += dt * 0.0026;
+  this.targetOff = Math.sin(this.targetPhase * 1.4) * 0.14 + Math.sin(this.targetPhase * 2.4 + 1.7) * 0.10 + Math.sin(this.targetPhase * 4.1 + 0.9) * 0.05 + Math.sin(this.targetPhase * 7.3 + 2.3) * 0.045;
 }
 
 // Sobriety hand shake
@@ -3937,6 +3961,66 @@ if (cp.staggerTimer > 0) {
   if (cp.invulnTimer > 0) cp.invulnTimer -= s;
   cp.screenShake *= 0.92;
   // Don't scroll or check collisions during stagger
+  return;
+}
+
+// Pit-fall animation — physics-based: player drops in under gravity,
+// hits bottom, then a sharp upward kick launches them clear of the pit
+// (overshoots groundY slightly, like a proper jump out).
+if (cp.pitFalling) {
+  var pitG     = 1600; // gravity for the pit-bounce (stronger than normal)
+  var pitDepth = 62;   // how deep into the pit
+  var pitKick  = -560; // initial upward velocity when bouncing out
+  if (cp.pitFallPhase === 'fall') {
+    cp.pitFallVel += pitG * s;
+    cp.pitFallY += cp.pitFallVel * s;
+    if (cp.pitFallY >= pitDepth) {
+      cp.pitFallY = pitDepth;
+      cp.pitFallVel = 0;
+      cp.pitFallPhase = 'bottom';
+      cp.pitFallBottomT = 0;
+      if (window.dssAudio && window.dssAudio.muffledThud) window.dssAudio.muffledThud();
+      if (window.dssAudio && window.dssAudio.glassClink) window.dssAudio.glassClink();
+    }
+  } else if (cp.pitFallPhase === 'bottom') {
+    cp.pitFallBottomT += s;
+    if (cp.pitFallBottomT >= 0.06) {
+      cp.pitFallVel = pitKick;
+      cp.pitFallPhase = 'rising';
+      if (window.dssAudio && window.dssAudio.dodgeWhoosh) window.dssAudio.dodgeWhoosh();
+    }
+  } else if (cp.pitFallPhase === 'rising') {
+    cp.pitFallVel += pitG * s;
+    cp.pitFallY += cp.pitFallVel * s;
+    // After overshoot, when falling back through ground level, end the animation.
+    if (cp.pitFallY <= 0 && cp.pitFallVel > 0) {
+      cp.pitFalling = false;
+      cp.pitFallPhase = null;
+      cp.playerY = cp.groundY;
+      cp.playerVelY = 0;
+      cp.playerJumping = false;
+      if (cp.pitFallObs) cp.pitFallObs.hit = true;
+      if (!cp.wobbling) {
+        cp.wobbling = true;
+        cp.wobbleTimer = 3.0;
+      } else {
+        cp.glassesLeft = Math.max(0, cp.glassesLeft - 1);
+        cp.wobbling = false;
+        cp.wobbleTimer = 0;
+      }
+      cp.invulnTimer = 1.4;
+      cp.screenShake = 0.7;
+      cp.pitFallObs = null;
+      if (cp.invulnTimer > 0) cp.invulnTimer -= s;
+      cp.screenShake *= 0.92;
+      return;
+    }
+  }
+  cp.playerY = cp.groundY + cp.pitFallY;
+  cp.playerVelY = 0;
+  cp.playerJumping = false;
+  if (cp.invulnTimer > 0) cp.invulnTimer -= s;
+  cp.screenShake *= 0.92;
   return;
 }
 
@@ -4060,14 +4144,37 @@ c.scale(glassScale, glassScale);
 c.translate(-gx, -gy);
 this._drawGlass(c, d.glass, gx, gy, this.pourLevel, d.target, d.liqCol, d.liqHi);
 
-// Target marker (drawn in scaled space so it matches glass)
-var targetY = this._liquidY(d.glass, gy, d.target + this.targetOff);
-c.strokeStyle = 'rgba(255, 100, 100, 0.3)';
+// Target marker + tolerance band — the band shows the "close enough"
+// zone visibly so the player can see the leniency they have. Inner
+// dashed line is the bullseye (perfect zone), outer is the pass zone.
+var effTarget = d.target + this.targetOff;
+var targetY    = this._liquidY(d.glass, gy, effTarget);
+var bandTop    = this._liquidY(d.glass, gy, effTarget + 0.16);
+var bandBottom = this._liquidY(d.glass, gy, effTarget - 0.16);
+var perfTop    = this._liquidY(d.glass, gy, effTarget + 0.07);
+var perfBottom = this._liquidY(d.glass, gy, effTarget - 0.07);
+// Outer pass-zone shading
+c.fillStyle = 'rgba(255, 200, 120, 0.07)';
+c.fillRect(gx - 30, bandTop, 60, bandBottom - bandTop);
+// Inner perfect-zone shading (just slightly brighter)
+c.fillStyle = 'rgba(120, 255, 120, 0.10)';
+c.fillRect(gx - 30, perfTop, 60, perfBottom - perfTop);
+// Centre target line
+c.strokeStyle = 'rgba(255, 100, 100, 0.45)';
 c.lineWidth = 1.5;
 c.beginPath();
 c.moveTo(gx - 30, targetY);
 c.lineTo(gx + 30, targetY);
 c.stroke();
+// Faint outer band edges
+c.strokeStyle = 'rgba(255, 200, 120, 0.20)';
+c.lineWidth = 0.8;
+c.setLineDash([3, 3]);
+c.beginPath();
+c.moveTo(gx - 30, bandTop);    c.lineTo(gx + 30, bandTop);
+c.moveTo(gx - 30, bandBottom); c.lineTo(gx + 30, bandBottom);
+c.stroke();
+c.setLineDash([]);
 c.restore();
 
 // Bubbles (Moscow Mule)
@@ -4122,12 +4229,6 @@ if (cd.accuracy === 2) {
 } else {
   c.fillText('○', dx + 35, dy + 75);
 }
-
-// Finish mark
-var finColor = cd.finishOk ? '#4CFF00' : '#FF6B6B';
-c.fillStyle = finColor;
-c.font = 'bold 12px Georgia';
-c.fillText(cd.finishOk ? '✓' : '✗', dx + 35, dy + 95);
 
 c.restore();
 }
@@ -4334,10 +4435,69 @@ c.closePath();
 c.fill();
 c.fillStyle = acc;
 c.fillRect(x + 6, y + h * 0.35, w - 12, h * 0.3);
-c.fillStyle = col;
-c.font = 'bold 11px Georgia';
-c.textAlign = 'center';
-c.fillText(lab, cx, y + h * 0.35 + h * 0.15 + 4);
+if (lab === 'WT') {
+  // Wild Turkey — a small turkey silhouette in profile on the cream label.
+  c.save();
+  c.translate(cx, y + h * 0.5);
+  c.fillStyle = col;
+  c.strokeStyle = col;
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  // Tail feathers — five lines fanning up and back to the left
+  c.lineWidth = 1.6;
+  c.beginPath();
+  for (var ti = 0; ti < 5; ti++) {
+    var ang = -Math.PI + 0.30 + ti * 0.30;
+    var len = 8.5;
+    c.moveTo(-1, 0);
+    c.lineTo(-1 + Math.cos(ang) * len, Math.sin(ang) * len);
+  }
+  c.stroke();
+  // Body
+  c.beginPath();
+  c.ellipse(0, 1, 6.5, 4.2, 0.05, 0, Math.PI * 2);
+  c.fill();
+  // Neck — curving up and to the right
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(3, -1);
+  c.quadraticCurveTo(5.5, -3.5, 6.5, -7);
+  c.stroke();
+  // Head
+  c.beginPath();
+  c.arc(6.6, -7.5, 1.9, 0, Math.PI * 2);
+  c.fill();
+  // Beak — small triangle pointing right
+  c.beginPath();
+  c.moveTo(8.2, -7.5);
+  c.lineTo(10.5, -7.0);
+  c.lineTo(8.2, -6.4);
+  c.closePath();
+  c.fill();
+  // Wattle — a small red dab below the beak
+  c.fillStyle = '#a01818';
+  c.beginPath();
+  c.arc(7.6, -5.5, 0.9, 0, Math.PI * 2);
+  c.fill();
+  // Tiny eye highlight on the head
+  c.fillStyle = acc;
+  c.beginPath();
+  c.arc(7.0, -8.0, 0.4, 0, Math.PI * 2);
+  c.fill();
+  // Two leg lines down from body
+  c.strokeStyle = col;
+  c.lineWidth = 0.9;
+  c.beginPath();
+  c.moveTo(-1, 4.5); c.lineTo(-1.5, 7);
+  c.moveTo(2, 4.5);  c.lineTo(2.5, 7);
+  c.stroke();
+  c.restore();
+} else {
+  c.fillStyle = col;
+  c.font = 'bold 11px Georgia';
+  c.textAlign = 'center';
+  c.fillText(lab, cx, y + h * 0.35 + h * 0.15 + 4);
+}
 c.fillStyle = '#555';
 c.fillRect(cx - nW/2 - 1, y - 3, nW + 2, 5);
 c.save();
@@ -8323,7 +8483,7 @@ _draw() {
     { x: -14, y: -69, w: 18, h: 6, a: -0.18, hi: 0.60 },
     { x:   1, y: -71, w: 10, h: 6, a:  0.06, hi: 0.60 },
     { x:  11, y: -68, w: 15, h: 6, a:  0.24, hi: 0.60 },
-    { x:  -3, y: -77, w: 14, h: 5, a:  0.14, hi: 0.65 },
+    { x:  -3, y: -73, w: 14, h: 5, a:  0.14, hi: 0.65 },
   ];
   var vis = 1 - eaten;
   for (var ci = 0; ci < chipDefs.length; ci++) {
@@ -8373,7 +8533,7 @@ _draw() {
   if (eaten < 0.85) {
     var fa = Math.max(0, 1 - eaten * 1.6);
     c.globalAlpha = fa;
-    var fishGrad = c.createRadialGradient(-10, -66, 2, -4, -64, 32);
+    var fishGrad = c.createRadialGradient(-10, -61, 2, -4, -59, 32);
     fishGrad.addColorStop(0, '#f0bb50');
     fishGrad.addColorStop(0.55, '#cc8420');
     fishGrad.addColorStop(1, '#8a4e08');

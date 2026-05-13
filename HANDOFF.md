@@ -236,6 +236,110 @@ Worked through a numbered list. All synced.
 - **Midnight transition prose** — mechanic ready, prose intentionally left to Dr Quill. Marker is in Dean Street passage.
 - **Three pillars** (Mercy / Severity / Mildness) — still banked.
 
+## Session 2026-05-14 — polish pass
+
+Long minigame + popup + title polish session, mostly driven live in Chrome MCP.
+
+### Ronnie's bar minigame (carry + pour)
+
+- **Music ignored mute** (same class of bug as Cecil Court waltz). `_jazzMiniEl` was a raw `<audio>` element bypassing `dssAudio`'s gain nodes. Fixed in three places: `startBarGame`, `_startCarryTransition`, and the passage-navigation `MutationObserver` that disposes the element. Each now sets `.muted` at creation and starts a 250ms polling `setInterval` so mid-game toggles take effect; the watcher is cleared when the audio dies.
+- **Pour leniency** — the target oscillation amplitude was wider than the entire pass zone, making perfect-pour scoring nearly chance. Widened the scoring zones (perfect ±0.04 → **±0.07**, pass ±0.10 → **±0.16**), slowed and reduced the oscillation, and **added a visible tolerance band** in the glass (green inner = perfect, amber outer dashed edges = pass). Later bumped erraticism slightly with a 4th high-frequency harmonic so the line still twitches unpredictably without the amplitude making it unfair.
+- **Removed vestigial UI**: the completed-drinks sidebar still drew ✓/✗ marks for a finish-question that no longer exists. Stripped them — sidebar now just shows the pour accuracy mark (★/◐/○).
+- **Wild Turkey label**: replaced the "WT" text on the bourbon bottle with a small turkey silhouette in profile (tail fan, body, neck, beak, wattle, legs) drawn in `_drawBottle` when `lab === 'WT'`. Other bottles keep their text labels.
+- **Drink popup**: said "band tightens" → "**band plays on**" when all three drinks reach the stage.
+
+### Carry-tray game — pit fall and bounce
+
+New mechanic: hitting a pit no longer just wobbles. The player now falls *into* the pit on a physics-based curve (gravity 1600, max depth 62px), pauses ~0.06s at the bottom, then takes a sharp upward kick (initial velocity -560) and overshoots groundY by ~28px before settling. Scroll pauses during the fall so the player stays over the pit. New state on `carryPhase`: `pitFalling`, `pitFallPhase` ('fall'|'bottom'|'rising'), `pitFallY`, `pitFallVel`, `pitFallBottomT`, `pitFallObs`. After bouncing out, the wobble system kicks in normally (or drops a glass if already wobbling) and `invulnTimer = 1.4` prevents the same pit from re-firing.
+
+**Sound effects added throughout the carry game**:
+- Edge of pit: `dodgeWhoosh()`
+- Bottom of pit (impact): `muffledThud() + glassClink()`
+- Bounce kick: `dodgeWhoosh()`
+- Regular obstacle hit (wobble): `muffledThud() + glassClink()`
+- Glass-loss hit: `punchImpact() + glassClink()`
+
+All routed through `dssAudio` so they respect mute and layer naturally over the jazz-mini track.
+
+### Boxing instructions simplified
+
+The 4-row dense table on the `Fight starts` passage was hard to parse. Now a clean 3-row colour-coded table:
+
+| COUNTER (red) | click Copper | 3pts, risky |
+| DODGE (green) | click the glove's side | 2pts |
+| BLOCK (amber) | click below | 1pt |
+
+Dropped the redundant "Caught = 0" row and the footer line (Copper's dialogue at the top covers it).
+
+### Pong rebalanced
+
+Multiple iterations:
+1. First-to-11 with deuce → **first-to-5** with deuce.
+2. Then experimented with **rubber-banded score** so the match always reached 2-2 deuce, then a single sudden-death rally decided it. *Five points total.* But that was visibly fixed (score didn't follow the ball) — easy for any attentive player to spot.
+3. **Final state: AI rubber-band**, not score rubber-band. The score is honest (whoever wins the rally gets the point), but the AI's paddle speed, prediction noise, and reaction time scale dynamically based on `oppScore - playerScore`. When AI is ahead by 1, its paddle goes ×0.55, noise ×1.55, reaction ×1.5. When behind by 1, ×1.45, noise ×0.45, reaction ×0.55. Bias zeroes once both players hit 2 (deuce), so the sudden-death rally is honest. End condition: first-to-3, win-by-1 (the next real point after deuce decides it).
+
+Also tweaked Percy's dialogue on the `Watch the decider` passage to justify the player's choice between Jack and Percy — "*'House rules,' says Percy Ritson, 'winner plays the stranger.' He turns to you. 'Unless the stranger fancies an easier task, in which case I'll take you off Jack's hands.'*" — previously the dialogue contradicted itself (winner-plays-stranger but you can pick either).
+
+### Midnight transition — re-gated
+
+Yesterday's mechanic kept the date flash + Big Ben chime but had no big text announcement. Today: changed the trigger from `$returns >= 7` to **`$tookLily5 is true AND $visited's Pillars is true`** so midnight fires only once the French is shut *and* the first Pillars visit is done. Dr Quill confirmed it's fine for midnight to fire late — November nights are long, and the game is in a dream world anyway.
+
+The old `<!-- MIDNIGHT TRANSITION: add prose here -->` comment was also removed since Dr Quill confirmed no announcement is wanted.
+
+### Fish-and-chips popup — many iterations
+
+Reshaped from a flat blob to a **proper rolled-cone cornet**: tapered point at the bottom, wide flared opening at the top, with abstract newsprint dashes inside (no readable text — "Daily Mirror" headline removed). Also:
+- **Removed the Sarson's vinegar bottle** entirely.
+- **Chips repositioned** so they cluster densely *at and above* the cone opening — nothing visible "through" the opaque paper. ~19 chips with varied lengths (8–19px) so the pile reads as natural rather than uniform-cut.
+- **Fish made longer and tapered** — wide rounded "head" end on the left, narrows to a "tail" on the right. Less oval, more like a real fillet.
+- **Fish drawn AFTER chips** so it sits visually on top of the pile.
+- **Lowered fish ~9 units** to close the gap between fish bottom and chip tops.
+- **Lowered the one floating top-crown chip** from y=-77 to y=-73 so it pokes up just behind the fish rather than levitating above it.
+
+### Drink popup — heavy polish session
+
+Worked on this with Dr Quill in Chrome MCP. The fish-and-chips taught us proportions; this taught us about translucency.
+
+**Tumbler (the rocks glass used for whisky/scotch/claret/beaujolais):**
+- Bigger: 40×52 → **56×76**, top width 44 → 64. Glass is now the visual focus rather than a small element.
+- **Chunky crystal base block** drawn as a separate lighter trapezoid at the bottom.
+- **Star-cut pattern on the base**: 6 primary rays (12px), 6 secondary rays at 30° offset, an outer ring (13×3.8 ellipse), an inner ring (5.5×1.7), brighter prismatic caps on the primary rays, central highlight dot. Reads as a heavy cut-crystal Caithness-style rocks glass.
+- Vertical fluting on the body was tried but removed — too noisy at this scale.
+
+**Whisky liquid:**
+- Portion halved: `gH * 0.45 * lev` → `gH * 0.22 * lev`. A pub double sits low in the glass.
+- Translucency increased: `globalAlpha 0.78` → **0.42**. The crystal-cut base reads clearly through the liquid.
+- Whisky colour changed `#a05a20 → #b88438` and highlight `#c08440 → #e0b870` — more golden amber, less orange juice.
+- Liquid uses a subtle gradient and the meniscus has a faint ellipse outline.
+
+**Lips:**
+- Tried smaller/duskier rose-brown ("a hint of mouth across a smoky pub") and a **profile silhouette** — both rejected (Dr Quill: *"if it's like this, I preferred the silliness of the cartoon like one before"*). Restored to original Soho-pout cartoon (lipW 120, upperH 18, lowerH 17, `#6e3a32`/`#5a2e28`). The silly cartoon plays the right role — a stylised "drink-me" icon rather than trying to depict an actual person.
+
+### Title screen — drifting petals
+
+Added animated falling petals as ambient decoration. Iterations:
+1. **First pass**: 7 falling teardrops in blue-grey, straight-down motion — read as rain.
+2. **Second pass**: shape changed to **almond/petal** with stroke outline and centre vein, pale blue (`#c0d8ec`/`#a8c4dc`). Two drift keyframes (A and B) with side-to-side sway and rotation.
+3. **More horizontal drift** — increased sway range from ±28px to ±60–75px.
+4. **More translucent + faster** — opacities 0.45–0.60 → **0.22–0.33**, durations 34–46s → **18–24s**, so they look like they're catching air rather than slowly sinking.
+5. **More natural drift** — keyframes redone with 10 stages each, asymmetric timing, multi-revolution rotation (~1.5 turns each), so the seven petals never sync up.
+6. **Reduced from 7 → 2 petals** — Dr Quill wanted them as "rare little hints". Two left, at 24% and 72%, with staggered animation delays (-3s and -15s) so they appear at different times.
+
+CSS keyframes `dst-petal-drift-a` / `dst-petal-drift-b` live in the `<style>` block in the `Title` passage.
+
+### Save-state debug note for next session
+
+Harlowe's `(savegame: "auto", "Auto save")` runs on every Dean Street visit, persisting state to `localStorage`. Closing and re-opening the page **restores the last save** — it's NOT a fresh start. To test cleanly: incognito window, manually clear `localStorage` (any key with "Saved Game" in it), or reach the Dawn ending and use its "Play again" button. Dr Quill briefly thought he'd broken French gating because of this — it was just a stale save.
+
+## Open threads for next session
+
+- **Title BEGIN link** — still bare text. Could be polished (gold-tint, small ornament) if Dr Quill wants. He liked the rest of the title screen.
+- **Other 3D approach scenes** (`cecil-court-3d-static.html`, `pillars-of-hercules-3d-static.html`, etc.) — never reviewed.
+- **Coin-toss overlay** (the "Donkey" coin on return 2) — Dr Quill flagged as a candidate for polish; we never got to it.
+- **Notebook page** — never reviewed.
+- **Three Pillars** (Mercy / Severity / Mildness) — still banked.
+- **Astral-map screenshots** — Dr Quill never confirmed filenames after dropping them in (or hasn't dropped them in yet).
+
 ## Ready for next round
 
-Layout cleanly aligned, gating bugs caught, batch of writer's notes worked through. Game map generatable on demand. Numbered-list rule now in CLAUDE.md.
+Big polish session — popups (drink + fish-and-chips), minigames (pong, fight, carry), title atmosphere all advanced. Drink popup, in particular, went through several rounds of taste-level tweaking with Dr Quill in the Chrome loop.

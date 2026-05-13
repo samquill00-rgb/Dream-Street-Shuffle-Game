@@ -1286,7 +1286,7 @@ tags: `venue-cellar` · pos: (2000, 1350)
 
 tags: `minigame` · pos: (2000, 550)
 
-> 🥊 THE CELLAR 🥊 'Three rounds,' says Copper. 'Three for practice, then three for real. Score six and you're standing.' Take your stance 🤜 PRACTICE ROUND 1/3 🤜 Move How Pts…
+> 🥊 THE CELLAR 🥊 'Three rounds,' says Copper. 'Three for practice, then three for real. Score five and you're standing.' Take your stance 🤜 PRACTICE ROUND 1/3 🤜 COUNTERclick…
 
 **Choices out:**
 - "·" → [Fight Victory](#fight-victory)
@@ -1586,7 +1586,7 @@ tags: `venue-cecilcourt` · pos: (300, 1700)
 
 **Choices out:**
 - "Show him the page" → [Return the page](#return-the-page)
-- "What book?" → [O'Flatterly's quest](#oflatterlys-quest)
+- "Which book?" → [O'Flatterly's quest](#oflatterlys-quest)
 
 **Linked from:**
 - [O'Flatterly's shop](#oflatterlys-shop) — "I was sent by Percy Ritson"
@@ -1620,7 +1620,7 @@ tags: `venue-cecilcourt` · pos: (300, 1850)
 - "I'll look for it" → [Dean Street](#dean-street)
 
 **Linked from:**
-- [O'Flatterly introduction](#oflatterly-introduction) — "What book?"
+- [O'Flatterly introduction](#oflatterly-introduction) — "Which book?"
 
 ---
 
@@ -2244,7 +2244,7 @@ tags: `venue-cellar` · pos: (1600, 850)
 
 tags: `venue-lackland-back` · pos: (1200, 1300)
 
-> Jack Curtis wins it. Smash to the corner. 'Fancy the game?' says Jack Curtis. 'House rules,' says Percy Ritson. 'Winner plays the stranger.'
+> Jack Curtis wins it. Smash to the corner. 'Fancy the game?' says Jack Curtis. 'House rules,' says Percy Ritson, 'winner plays the stranger.' He turns to you. 'Unless the stranger…
 
 **Choices out:**
 - _(auto/go-to)_ → [PP Pong](#pp-pong) ·go-to

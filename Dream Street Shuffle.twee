@@ -118,9 +118,54 @@ Dream Street Shuffle
 (set: $crossedThreshold to false)\
 (set: $sawInvertedPentangle to false)\
 (set: $sawHexagram to false)\
+(set: $lifetimeWorldsSeen to (a:))\
+<!-- Per-world gift flags (each fires its own Soho-responds branch) -->
+(set: $nazcaTracing to false)\
+(set: $easterGlyph to false)\
+(set: $pyramidNumber to false)\
+(set: $ezekielVision to false)\
+<!-- Per-character "recognised the gift" flags. Soho-responds branches
+     set these. Down-stream content (notebook, dawn, future branches)
+     reads them. -->
 (set: $critEndorsed to false)\
+(set: $lacklandRecognised to false)\
+(set: $inisRecognised to false)\
+(set: $redRecognised to false)\
+(set: $spanishArtistRecognised to false)\
 
 :: UserScript [script]
+
+// ====== V2-EXPANSION: WORLDS LIFETIME TRACKING ======
+// Worlds the player has completed across all playthroughs persist in
+// localStorage. The Third Pillar Portal passage reads this list in its
+// own <script> at render time and uses it to exclude already-seen
+// worlds from the roll. Cycle resets after all 5 are seen so the
+// player gets a fresh set on subsequent replays. No Harlowe internals
+// touched — JS handles the roll, then triggers a hidden Harlowe link
+// via .click() to navigate.
+window.DSS_WORLDS_ALL = ["himalayas", "nazca", "easter", "pyramid", "ezekiel"];
+window.DSS_WORLDS_KEY = "dssWorldsSeenCycle";
+window.dssLoadLifetimeWorlds = function() {
+  try {
+    var raw = localStorage.getItem(window.DSS_WORLDS_KEY);
+    if (!raw) return [];
+    var arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(function(w){ return window.DSS_WORLDS_ALL.indexOf(w) >= 0; });
+  } catch(e) { return []; }
+};
+window.dssSaveLifetimeWorlds = function(arr) {
+  try { localStorage.setItem(window.DSS_WORLDS_KEY, JSON.stringify(arr || [])); } catch(e) {}
+};
+window.dssMarkWorldSeen = function(name) {
+  if (window.DSS_WORLDS_ALL.indexOf(name) < 0) return;
+  var lifetime = window.dssLoadLifetimeWorlds();
+  if (lifetime.indexOf(name) < 0) lifetime.push(name);
+  // Cycle reset: once the player has completed all five lifetime, clear
+  // the list so a long-replaying player gets the worlds fresh again.
+  if (lifetime.length >= window.DSS_WORLDS_ALL.length) lifetime = [];
+  window.dssSaveLifetimeWorlds(lifetime);
+};
 
 // ====== PENTANGLE REVEAL ON MAP ======
 // Opens the notebook (if not already open), switches to MAP tab, and triggers
@@ -29072,10 +29117,36 @@ The sign reads: I. O'FLATTERLY, dealer in books.
 
 You go in.
 
-Inis O'Flatterly sits at the thick wooden counter, reading what he's reading. He does not look up to greet you, yet neither does his shop lack welcome.
+<!-- v2-expansion: second-visit branch. If the page is already returned
+     and the player has the Pyramid's resonant number, Inis recognises
+     the proportion and gives the player a second thing. Otherwise the
+     existing first-visit logic plays. -->
+(if: $returnedPage is true and $pyramidNumber is true and $inisRecognised is false)[<div class="claude-draft">
+Inis is at the counter as before, but he stands when you come in. He hasn't stood for you before.
+
+'You hummed,' he says, before you have spoken. 'I can hear it on you. Where did you hum?'
+
+You don't answer in words. You only let him hear it. He closes his eyes.
+
+When he opens them again he reaches under the counter and brings out a small black notebook, soft from being carried. He puts it in your hand.
+
+'I have been keeping the same number for forty years,' he says. 'Now there are two of us.'
+</div>
+(set: $inisRecognised to true)
+(set: $confidence to $confidence + 12)
+
+<div class="item-box">
+<div class="item-header">⚿ INIS'S NOTEBOOK</div>
+<div class="item-name">A small black notebook</div>
+</div>
+
+[[Leave the shop|After Cecil Court]]
+]
+(else:)[Inis O'Flatterly sits at the thick wooden counter, reading what he's reading. He does not look up to greet you, yet neither does his shop lack welcome.
 
 (if: $hasCleggBeermat is true)[[[I was sent by Percy Ritson|O'Flatterly introduction]]
 ](else:)[[[I'm looking for Inis O'Flatterly|O'Flatterly introduction]]]
+]
 
 
 :: Approach Chinese Fish and Chips [outdoor] {"position":"50,1300","size":"100,100"}
@@ -29431,6 +29502,18 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 (if: $metRed is false and $coachUrgent is false)[Someone's on the corner.
 
 [[See who's there|Approach The Ginger Light]]]
+<!-- v2-expansion: if the player has the Easter Island glyph and hasn't
+     shown Red yet, Red is back under the ginger light. He's the poet
+     who knows names. -->
+(if: $metRed is true and $easterGlyph is true and $redRecognised is false and $coachUrgent is false)[<div class="claude-draft">Red is under the lamp again. He looks like he's been waiting.</div>
+
+<div class="choice-box">[[Speak to Red — the rubbing|Red Recognises the Name]]</div>]
+<!-- v2-expansion: if the player has the Ezekiel vision and hasn't
+     shown Benito yet, the dying Spanish artist is back at the French
+     and has been seeing the wheel in his last visions. -->
+(if: $ezekielVision is true and $spanishArtistRecognised is false and $coachUrgent is false and $visited's French is true)[<div class="claude-draft">Word from the French — Benito is awake and has been asking after you.</div>
+
+<div class="choice-box">[[Find Benito — the vision|Benito Recognises the Wheel]]</div>]
 (if: $metRed is true)[\
 (if: _towerReady)[<div class="choice-box"><span class="guided-link">[[The dawn is coming|The Fetch]]</span></div>]
 (if: $coachUrgent is true and _towerReady is false)[<div class="choice-box">'[Noises off. Blackout.]'
@@ -29455,7 +29538,7 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $tookLily2 is true and $knowsAboutPage is true and ($visitedCarthage is false or not ($alba contains $alba2) or not ($alba contains $alba3)))[[[The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $tookLily2 is false)[<div class="choice-box">[[Back to The Pillars — there was a flower you missed|Approach The Pillars]]</div> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
-](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $tookLily2 is true)[<span class="greyed-out">The Pillars &#91;NOT NOW, LOOK ELSEWHERE&#93;</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
+](else-if: $coachUrgent is false and $visited's French is true and $metCritic is true and $tookLily2 is true)[[[Back to The Pillars|Approach The Pillars]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $hasMissingPage is true or $returnedPage is true)[<span class="op op-done">●</span>](else:)[(if: $hauntExplained is true)[<span class="op">○</span>]]
 ]\
 (if: $coachUrgent is false and $haunts contains $haunt1 and not ($knowsRonnies is true and $knowsCopperSecret is true))[[[Try the Colony Room|Approach The Colony Room]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
 ](else-if: $coachUrgent is false and $visited's French is true and $visited's Colony is true and $tookLily4 is false)[<div class="choice-box">[[Back to The Colony Room — there was something you missed|Approach The Colony Room]]</div> (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] <span class="hp hp-done">◆</span>
@@ -29472,7 +29555,11 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 (if: $coachUrgent is false and $knowsCecilCourt is true and $hasMissingPage is true and $returnedPage is false)[[[Return the page to O'Flatterly|O'Flatterly introduction]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op op-done">●</span>
 ](else-if: $coachUrgent is false and $knowsCecilCourt is true and $knowsAboutPage is true and $returnedPage is false)[<span class="greyed-out">Cecil Court &#91;(if: $hasCleggBeermat is true)[FIND PAGE 93 — //CARTHAGE//](else:)[FIND PAGE 93 FIRST]&#93;</span> (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op">○</span>
 ](else-if: $coachUrgent is false and $knowsCecilCourt is true and $returnedPage is false)[[[Visit the antiquarian in Cecil Court|Cecil Court Approach]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op">○</span>
-](if: $coachUrgent is false and $returnedPage is true)[<span class="greyed-out">Cecil Court &#91;CLOSED&#93;</span> (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op op-done">●</span>
+]<!-- v2-expansion: re-open Cecil Court if the player has the Pyramid
+     number and hasn't shown Inis yet. Inis is the bookman who can read
+     the proportions. After he's seen it, link goes back to CLOSED. -->
+(if: $coachUrgent is false and $returnedPage is true and $pyramidNumber is true and $inisRecognised is false)[[[Show Inis the number|Cecil Court Approach]] (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op op-done">●</span>
+](else-if: $coachUrgent is false and $returnedPage is true)[<span class="greyed-out">Cecil Court &#91;CLOSED&#93;</span> (if: $haunts contains $haunt6)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]<span class="op op-done">●</span>
 ]\
 (if: $coachUrgent is false and $hasTrishaMatchbook is true and $hasLiver is true and $metShana is false)[[[Try Trisha's|Approach Trisha's]] (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
 ](else-if: $coachUrgent is false and $metShana is true)[<span class="greyed-out">Trisha's &#91;CLOSED&#93;</span> (if: $haunts contains $haunt8)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
@@ -29573,15 +29660,21 @@ When Ian Hamilton occupied a similar position, two centuries later, nobody (I am
 
 [[Back to Dean Street|Dean Street]]]]
 <!-- v2-expansion: third-pillar portal option. Fires when Inis has tipped
-     the player off AND there's an unvisited world to roll. Independent of
-     critic/lily logic — sits as a parallel option once the column is
-     visible. Routes to the Portal passage which rolls $tonightsWorld. -->
-(if: $inisToldOfPillars is true and ($worldsVisited's length < 1))[
+     the player off AND the player has crossed fewer than 2 times this
+     playthrough (Variant B). Independent of critic/lily logic — sits as
+     a parallel option once the column is visible. Routes to the Portal
+     passage which rolls $tonightsWorld from the unvisited pool. -->
+(if: $inisToldOfPillars is true and ($worldsVisited's length < 2))[
 <div class="claude-draft">
 The third pillar holds the room still. The other two say nothing about it.
 </div>
 
 <div class="choice-box">[[Step through the third pillar|Third Pillar Portal]]</div>
+]
+(else-if: $inisToldOfPillars is true and ($worldsVisited's length >= 2))[
+<div class="claude-draft">
+The third pillar is duller tonight, or you are. Twice across is enough.
+</div>
 ]
 </div>
 
@@ -30179,7 +30272,27 @@ You lay //(print: $bookTitle)// down.
 
 He reads the first page; then the last; then a page from somewhere in the middle.
 
-(if: $confidence >= 60)[He sets it down as one might set a toddler down on the floor.
+<!-- v2-expansion: Nazca-tracing branch. The hummingbird tracing has been
+     slipped into the manuscript; Lackland sees it and recognises what
+     he's looking at. Overrides the confidence-based branches below. -->
+(if: $nazcaTracing is true and $lacklandRecognised is false)[<div class="claude-draft">
+He turns past the page, then back to it.
+
+He stops. He looks at the tracing for longer than he looked at any of the words. He doesn't move his hand for a count of seven.
+
+When he looks up he is a different man, and the room is a different room.
+
+'Where did you get this?' he says. Quietly. He doesn't expect an answer.
+
+He stands. He walks to the door at the back of the office and opens it himself, without a password.
+
+'Come through,' he says.
+</div>
+(set: $lacklandRecognised to true)
+(set: $confidence to $confidence + 18)
+
+[[Through the door|Lackland's Back Room]]]
+(else-if: $confidence >= 60)[He sets it down as one might set a toddler down on the floor.
 
 'This isn't bad. Have you got a job? A wife? How long can you give to me? You've something but there's work to do; lots of work.'
 
@@ -30506,22 +30619,30 @@ He glances at the door once more.
 [[Back to Dean Street|After Cecil Court]]
 
 :: Third Pillar Portal [dream] {"position":"500,2200","size":"100,100"}
-<!-- v2-expansion: rolls tonight's world from the unvisited pool and routes
-     the player to that world's opening passage. Currently only Himalayas
-     is in the rotation; extend the conditional chain as new worlds come
-     online. The roll itself happens silently — the player only sees the
-     prose and the link. The mystery of "which world tonight" lives here. -->
-(if: $tonightsWorld is "")[
-  (set: _available to (a:))
-  (if: not ($worldsVisited contains "himalayas"))[(set: _available to _available + (a: "himalayas"))]
-  <!-- Add more worlds to the pool here as they come online:
-       (if: not ($worldsVisited contains "nazca"))[(set: _available to _available + (a: "nazca"))]
-       (if: not ($worldsVisited contains "easter"))[(set: _available to _available + (a: "easter"))]
-       (if: not ($worldsVisited contains "pyramid"))[(set: _available to _available + (a: "pyramid"))]
-       (if: not ($worldsVisited contains "ezekiel"))[(set: _available to _available + (a: "ezekiel"))] -->
-  (if: _available's length > 0)[(set: $tonightsWorld to (either: ..._available))]
-]
+<!-- v2-expansion: world-roll happens in JS so the localStorage lifetime
+     tracking can actually guarantee replay variety. Hidden Harlowe
+     links are pre-rendered for each world; JS picks one (this-
+     playthrough exclusion + lifetime exclusion) and clicks the right
+     hidden link. No undocumented Harlowe internals; uses only standard
+     DOM dispatch. Falls back to a "Back to the Pillars" link when the
+     pool is empty. -->
 (set: $crossedThreshold to true)\
+
+<!-- Visited-list span — JS reads this to know which worlds have been
+     completed this playthrough. Harlowe prints arrays as comma-joined
+     strings, perfect for JS to split on. -->
+<span id="dss-pt-visited" style="display:none">(print: $worldsVisited)</span>
+
+<!-- Hidden Harlowe links — JS clicks the matching one to navigate. The
+     visible link text is the world identifier so JS can find it.
+     The whole container is display:none so the player never sees them. -->
+<div id="dss-portal-roll" style="display:none">
+[[himalayas-go|Airport Pub]]
+[[nazca-go|Nazca Approach]]
+[[easter-go|Easter Island Shore]]
+[[pyramid-go|Pyramid Mouth]]
+[[ezekiel-go|The Plain of Chebar]]
+</div>
 
 <div class="claude-draft">
 The column is warm and you don't ask how. The two broken pillars beside it lose their colour. The lattice above thins to a smoke.
@@ -30529,11 +30650,76 @@ The column is warm and you don't ask how. The two broken pillars beside it lose 
 A door, where no door was. You don't open it; it was open already.
 </div>
 
-(if: $tonightsWorld is "himalayas")[[[Step through|Airport Pub]]]
-(else-if: $tonightsWorld is "")[<div class="claude-draft">The column dims. Nothing opens tonight.</div>
+<div id="dss-portal-action"></div>
 
-[[Back to the Pillars|Entering The Pillars of Hercules]]]
-(else:)[<!-- Future worlds wire in here. -->[[Step through|Dean Street]]]
+<div id="dss-portal-fallback" style="display:none">
+<div class="claude-draft">The column dims. Nothing opens tonight.</div>
+
+[[Back to the Pillars|Entering The Pillars of Hercules]]
+</div>
+
+<script>
+(function(){
+  var all = ["himalayas","nazca","easter","pyramid","ezekiel"];
+  // Lifetime list comes straight from localStorage — no Harlowe bridge.
+  var lifetime = (window.dssLoadLifetimeWorlds && window.dssLoadLifetimeWorlds()) || [];
+  // Per-playthrough list comes from the hidden span Harlowe just rendered.
+  var visitedRaw = (document.getElementById('dss-pt-visited').textContent || '');
+  var visited = visitedRaw.split(',').map(function(s){return s.trim();})
+    .filter(function(s){return s.length > 0 && all.indexOf(s) >= 0;});
+
+  // Build the pool: exclude both lifetime and this-playthrough.
+  var pool = all.filter(function(w){
+    return visited.indexOf(w) < 0 && lifetime.indexOf(w) < 0;
+  });
+  // Graceful fallback: if lifetime exclusion empties the pool, drop it.
+  if (pool.length === 0) {
+    pool = all.filter(function(w){ return visited.indexOf(w) < 0; });
+  }
+
+  var actionEl = document.getElementById('dss-portal-action');
+  var fallbackEl = document.getElementById('dss-portal-fallback');
+  if (!actionEl) return;
+
+  if (pool.length === 0) {
+    if (fallbackEl) fallbackEl.style.display = 'block';
+    return;
+  }
+
+  var chosen = pool[Math.floor(Math.random() * pool.length)];
+
+  // Find the hidden Harlowe link whose text matches "<world>-go".
+  var hiddenLinks = document.querySelectorAll('#dss-portal-roll tw-link');
+  var targetLink = null;
+  for (var i = 0; i < hiddenLinks.length; i++) {
+    var txt = (hiddenLinks[i].textContent || '').trim();
+    if (txt === chosen + '-go') { targetLink = hiddenLinks[i]; break; }
+  }
+  if (!targetLink) {
+    if (fallbackEl) fallbackEl.style.display = 'block';
+    return;
+  }
+
+  // Build a visible "Step through" link that triggers the hidden
+  // Harlowe navigation. Uses <tw-link> so it picks up Harlowe's link
+  // styling automatically. .click() on the hidden tw-link triggers
+  // Harlowe's internal passage navigation.
+  var box = document.createElement('div');
+  box.className = 'choice-box';
+  var link = document.createElement('tw-link');
+  link.className = 'claude-draft';
+  link.setAttribute('role', 'link');
+  link.setAttribute('tabindex', '0');
+  link.style.cursor = 'pointer';
+  link.textContent = 'Step through';
+  link.addEventListener('click', function(){ targetLink.click(); });
+  link.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); targetLink.click(); }
+  });
+  box.appendChild(link);
+  actionEl.appendChild(box);
+})();
+</script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      v2-EXPANSION — HIMALAYAN TRIP (Pillar of Mildness / centre)
@@ -30629,6 +30815,7 @@ He sets the napkin between you.
 (set: $mantraComplete to true)\
 (unless: $worldsVisited contains "himalayas")[(set: $worldsVisited to $worldsVisited + (a: "himalayas"))]
 (set: $tonightsWorld to "")\
+<script>if(window.dssMarkWorldSeen)window.dssMarkWorldSeen("himalayas");</script>\
 <div class="item-box">
 <div class="item-header">⚿ MANTRA COMPLETED</div>
 <div class="item-name">Twelve syllables</div>
@@ -30719,6 +30906,652 @@ You wake on Dean Street with a napkin in your fist. Six syllables. The other six
 You're back on Dean Street. The pavement is wet. There's dust in your boots that doesn't belong to England.
 
 The mantra is in your mouth. You don't say it.
+</div>
+
+[[Dean Street|Dean Street]]
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     v2-EXPANSION — NAZCA, PERU (Pillar of Mercy / upper right)
+     5 passages: Nazca Approach → Walking the Pampa → The Ridge → The
+     Centre → Nazca Return. Gift: tracing of the hummingbird geoglyph.
+     Soho-responds: Lackland (the agent in his back room).
+     ═════════════════════════════════════════════════════════════════════════ -->
+
+:: Nazca Approach [dream nazca] {"position":"1700,2200","size":"100,100"}
+<div class="claude-draft">
+A bus on a coast road. Pacific to your right, salt-bleached and patient. The driver chews coca and doesn't look at you.
+
+By the time you reach Nazca it's noon and there's no shade. A man at the cantina has a propeller from a Cessna leaning against the wall behind him. He looks at your boots and shakes his head.
+
+'You'll need a hat,' he says. 'And longer than you think.'
+</div>
+
+<div class="claude-draft">[[Out onto the pampa|Walking the Pampa]]</div>
+
+:: Walking the Pampa [dream nazca] {"position":"1900,2200","size":"100,100"}
+(set: $sobriety to $sobriety - 6)\
+<div class="claude-draft">
+The pampa is a flat thing the colour of paper that has been left in the sun. The line you're walking is two stones wide. You can't tell, from here, what it's part of.
+
+You walk for an hour. The line bends, very slightly. You think.
+
+Up to your right is a low ridge. From there you could see.
+</div>
+<span class="inventory-note">&#9734; SOBRIETY -6</span>
+
+<div class="claude-draft">[[Climb the ridge|The Ridge]]
+[[Turn back from the heat|Nazca Turn-Back]]</div>
+
+:: The Ridge [dream nazca] {"position":"2100,2200","size":"100,100"}
+(set: $sobriety to $sobriety - 4)\
+<div class="claude-draft">
+You climb. It's not steep. Forty feet of broken rock, then a flat top with a single thorn-bush surviving.
+
+From here, you look down.
+
+The line you were walking is a wing. The wing is one of two. There is a long beak, narrow as a needle, pointing at something you can't make out. The whole figure is half a mile long.
+
+You did not see this from the ground. You could not have. You knew it was there only because a man in a paperback said so.
+</div>
+
+<div class="claude-draft">[[Down to the centre|The Centre — Nazca]]</div>
+
+:: The Centre — Nazca [dream nazca centre] {"position":"2300,2200","size":"100,100"}
+<!-- Completion passage for Nazca. Gold-linework hummingbird geoglyph
+     reveal on click. Sets $nazcaTracing + adds to $worldsVisited +
+     clears $tonightsWorld + persists in localStorage. -->
+<div class="claude-draft">
+You climb down. You find the centre of the bird where its heart would be — a small heap of stones the conquistadors didn't disturb.
+
+There's a man sitting on the heap. He has a notebook open and a charcoal pencil sharpened with a knife. He doesn't look up.
+
+'Hold still,' he says.
+
+He sketches you from below. When he's finished he tears the page out and holds it up. It isn't you on the page. It's the bird, complete, with you as a single black dot at its heart.
+
+He puts the page into your hand.
+
+'You'll know who wants it,' he says.
+</div>
+
+(click: "Take the tracing")[
+(set: $nazcaTracing to true)\
+(unless: $worldsVisited contains "nazca")[(set: $worldsVisited to $worldsVisited + (a: "nazca"))]
+(set: $tonightsWorld to "")\
+<script>if(window.dssMarkWorldSeen)window.dssMarkWorldSeen("nazca");</script>\
+<div class="item-box">
+<div class="item-header">⚿ TRACING</div>
+<div class="item-name">The Hummingbird, from above</div>
+</div>
+
+<!-- Hummingbird geoglyph SVG — gold linework, drawn in single strokes
+     based loosely on the actual Nazca hummingbird. Animates on render. -->
+<div class="nazca-glyph-wrap">
+<svg class="nazca-glyph-svg" viewBox="0 0 480 220" width="420" height="200">
+<defs>
+<linearGradient id="nazGold" x1="0" x2="1">
+<stop offset="0%" stop-color="#d4ae6a" stop-opacity="0.3"/>
+<stop offset="50%" stop-color="#f5d490" stop-opacity="0.95"/>
+<stop offset="100%" stop-color="#d4ae6a" stop-opacity="0.3"/>
+</linearGradient>
+<radialGradient id="nazHalo" cx="50%" cy="60%" r="60%">
+<stop offset="0%" stop-color="#f5d490" stop-opacity="0.18"/>
+<stop offset="100%" stop-color="#f5d490" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<rect width="480" height="220" fill="url(#nazHalo)"/>
+<g fill="none" stroke="url(#nazGold)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+<!-- Long needle beak pointing left -->
+<path d="M 10,140 L 130,135"/>
+<!-- Head / body outline -->
+<path d="M 130,135 Q 150,128 165,135 Q 180,140 195,140 L 240,140"/>
+<path d="M 240,140 Q 268,140 285,145 Q 295,150 295,160 Q 295,170 285,175 Q 270,180 245,178 L 195,170 Q 180,168 165,160 Q 150,150 130,135 Z"/>
+<!-- Upper wing — long sweep up and back -->
+<path d="M 200,140 Q 220,90 270,60 Q 320,40 380,50 Q 410,55 425,75 Q 430,90 415,100 Q 380,110 340,105 Q 290,100 250,120 Q 220,130 200,140"/>
+<!-- Lower wing — long sweep down and back -->
+<path d="M 220,165 Q 250,200 300,200 Q 350,200 395,185 Q 420,175 425,160 Q 422,150 408,148 Q 380,148 350,160 Q 310,175 270,165 Q 240,158 220,165"/>
+<!-- Tail — three pointed feathers at right -->
+<path d="M 295,160 L 380,140 L 360,160 L 410,158 L 380,175 L 415,175"/>
+<!-- Single eye dot -->
+<circle cx="138" cy="138" r="1.4" fill="#f5d490" stroke="none"/>
+<!-- Centre marker — where you stood -->
+<circle cx="240" cy="155" r="3" fill="none" stroke="url(#nazGold)" stroke-width="0.9"/>
+<circle cx="240" cy="155" r="1.2" fill="#f5d490" stroke="none"/>
+</g>
+</svg>
+</div>
+
+<script>
+if (window.dssAudio && window.dssAudio.loreUnravel) {
+  setTimeout(function(){ window.dssAudio.loreUnravel(); }, 200);
+}
+</script>
+
+<div class="claude-draft">
+The line on the page is older than paper.
+</div>
+
+[[Step into the heat|Nazca Return]]
+]
+
+:: Nazca Turn-Back [outdoor] {"position":"1900,2400","size":"100,100"}
+(set: $tonightsWorld to "")\
+<div class="claude-draft">
+You wake on Dean Street with sun-stripe across your face and grit under your tongue. The bird is still down there, finishing itself without you.
+</div>
+
+[[Dean Street|Dean Street]]
+
+:: Nazca Return [outdoor] {"position":"2300,2400","size":"100,100"}
+<script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.passageWhoosh)window.dssAudio.passageWhoosh();},200);</script>
+<div class="claude-draft">
+You're back on Dean Street. There's a folded paper in your inside pocket that wasn't there when you left. The sun has burnt the back of your neck and the rain is starting to undo the burn.
+</div>
+
+[[Dean Street|Dean Street]]
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     v2-EXPANSION — EASTER ISLAND / RAPA NUI (Pillar of Severity / upper left)
+     5 passages: Easter Island Shore → Among the Moai → The Listening Moai
+     → The Glyph → Easter Island Return. Gift: a Rongorongo glyph.
+     Soho-responds: Red (the poet).
+     ═════════════════════════════════════════════════════════════════════════ -->
+
+:: Easter Island Shore [dream easter] {"position":"1700,2600","size":"100,100"}
+<div class="claude-draft">
+A fishing boat with no fisherman puts you ashore at night. The boat shoves off without a goodbye and the moon catches the wake.
+
+The beach is basalt and the basalt is wet. You can see, without looking up, that there are figures further inland. Heads on shoulders. A row of them, with their backs to the sea.
+</div>
+
+<div class="claude-draft">[[Walk up the beach|Among the Moai]]</div>
+
+:: Among the Moai [dream easter] {"position":"1900,2600","size":"100,100"}
+<div class="claude-draft">
+You pass the first moai and it does not turn its head. You pass the second and the third and a fourth and a fifth. None of them turn.
+
+The sixth one is watching you.
+
+You'd swear it. You don't break stride; you don't want it to know that you know.
+</div>
+
+<div class="claude-draft">[[Approach the sixth|The Listening Moai]]
+[[Walk on past it|Easter Island Turn-Back]]</div>
+
+:: The Listening Moai [dream easter] {"position":"2100,2600","size":"100,100"}
+(set: $confidence to $confidence - 6)\
+<div class="claude-draft">
+You stand in front of it. It has a mouth and the mouth is open by about a fingerwidth.
+
+You can think of three things to do. None of them feel right.
+
+You wait. The sea keeps going about its business. You become aware that your breathing is matching the moai's. There is air going in and out of its open mouth. You can smell tobacco.
+
+It speaks once, briefly, in a word you don't recognise. Then it closes its mouth.
+
+Inside, before the lips meet, you see the wall of its throat is carved with a single sign.
+</div>
+<span class="inventory-note">&#9734; MORALE -6</span>
+
+<div class="claude-draft">[[Take a rubbing|The Glyph]]</div>
+
+:: The Glyph [dream easter centre] {"position":"2300,2600","size":"100,100"}
+<!-- Completion passage for Easter Island. Rongorongo glyph SVG reveal
+     on click. Sets $easterGlyph + standard exit hooks. -->
+<div class="claude-draft">
+You take a sheet of your own paper and a stick of charcoal from your pocket — you didn't know you had charcoal. You press the paper to the inside of the moai's mouth and rub.
+
+When you pull the paper back, the sign is on it. You don't know what it says. It is in no script you can read.
+
+You know whose name it is. You won't say it here.
+</div>
+
+(click: "Pocket the rubbing")[
+(set: $easterGlyph to true)\
+(unless: $worldsVisited contains "easter")[(set: $worldsVisited to $worldsVisited + (a: "easter"))]
+(set: $tonightsWorld to "")\
+<script>if(window.dssMarkWorldSeen)window.dssMarkWorldSeen("easter");</script>\
+<div class="item-box">
+<div class="item-header">⚿ RUBBING</div>
+<div class="item-name">A glyph in Rongorongo</div>
+</div>
+
+<!-- Rongorongo-style glyph — invented, abstract figure. Gold linework
+     within a charcoal-paper rectangle. -->
+<div class="easter-glyph-wrap">
+<svg class="easter-glyph-svg" viewBox="0 0 240 280" width="220" height="260">
+<defs>
+<linearGradient id="rrPaper" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#1c1812" stop-opacity="0.92"/>
+<stop offset="100%" stop-color="#0e0c08" stop-opacity="0.98"/>
+</linearGradient>
+<linearGradient id="rrGold" x1="0" x2="1">
+<stop offset="0%" stop-color="#d4ae6a" stop-opacity="0.4"/>
+<stop offset="50%" stop-color="#f5d490" stop-opacity="0.95"/>
+<stop offset="100%" stop-color="#d4ae6a" stop-opacity="0.4"/>
+</linearGradient>
+</defs>
+<rect x="6" y="6" width="228" height="268" rx="2" fill="url(#rrPaper)" stroke="rgba(200,168,106,0.32)" stroke-width="0.6"/>
+<g fill="none" stroke="url(#rrGold)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+<!-- Standing figure with raised arms — head -->
+<circle cx="120" cy="70" r="14"/>
+<!-- Headdress — three rising lines -->
+<path d="M 110,56 L 105,40"/>
+<path d="M 120,54 L 120,36"/>
+<path d="M 130,56 L 135,40"/>
+<!-- Body — trunk -->
+<path d="M 120,84 L 120,170"/>
+<!-- Arms — raised, hands holding shapes -->
+<path d="M 120,100 L 88,108 L 78,90"/>
+<path d="M 120,100 L 152,108 L 162,90"/>
+<!-- Left hand — small circle -->
+<circle cx="76" cy="85" r="6"/>
+<!-- Right hand — small spiral -->
+<path d="M 160,82 Q 168,82 168,90 Q 168,98 160,98 Q 154,98 154,92"/>
+<!-- Legs splayed -->
+<path d="M 120,170 L 96,220 L 90,242"/>
+<path d="M 120,170 L 144,220 L 150,242"/>
+<!-- Feet — small horizontal strokes -->
+<path d="M 84,242 L 96,244"/>
+<path d="M 144,244 L 156,242"/>
+<!-- Belt with two dots -->
+<path d="M 100,150 L 140,150"/>
+<circle cx="110" cy="150" r="1.5" fill="#f5d490" stroke="none"/>
+<circle cx="130" cy="150" r="1.5" fill="#f5d490" stroke="none"/>
+</g>
+</svg>
+</div>
+
+<script>
+if (window.dssAudio && window.dssAudio.loreUnravel) {
+  setTimeout(function(){ window.dssAudio.loreUnravel(); }, 200);
+}
+</script>
+
+<div class="claude-draft">
+The paper smells of fish and tobacco.
+</div>
+
+[[Down to the boat|Easter Island Return]]
+]
+
+:: Easter Island Turn-Back [outdoor] {"position":"1900,2800","size":"100,100"}
+(set: $tonightsWorld to "")\
+<div class="claude-draft">
+You wake on Dean Street with salt on your lips and the sea still going about its business in your inner ear. The sixth moai is still waiting.
+</div>
+
+[[Dean Street|Dean Street]]
+
+:: Easter Island Return [outdoor] {"position":"2300,2800","size":"100,100"}
+<script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.passageWhoosh)window.dssAudio.passageWhoosh();},200);</script>
+<div class="claude-draft">
+You're back on Dean Street. The paper in your pocket is colder than your hand. The rain finds it first.
+</div>
+
+[[Dean Street|Dean Street]]
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     v2-EXPANSION — THE GREAT PYRAMID (Pillar of Mercy / lower right)
+     5 passages: Pyramid Mouth → Descending Corridor → Grand Gallery →
+     King's Chamber → Pyramid Return. Gift: a resonant proportion.
+     Soho-responds: Inis O'Flatterly (he's been waiting for the
+     proportions).
+     ═════════════════════════════════════════════════════════════════════════ -->
+
+:: Pyramid Mouth [dream pyramid] {"position":"1700,3000","size":"100,100"}
+<div class="claude-draft">
+The pyramid is bigger than you have allowed for. Books had not prepared you, and books are what you have.
+
+The mouth is a small dark square halfway up a quarter of the way around. You climb to it through dust that doesn't move. Inside, the air is cooler than night and older than rooms.
+
+The guide left you at the foot. He took your money and he didn't take the stub.
+</div>
+
+<div class="claude-draft">[[Into the descending corridor|Descending Corridor]]</div>
+
+:: Descending Corridor [dream pyramid] {"position":"1900,3000","size":"100,100"}
+(set: $sobriety to $sobriety - 4)\
+<div class="claude-draft">
+You crouch. The ceiling is forty inches high and stays that way. The walls are limestone polished by people you do not know how to mourn.
+
+After a while you can't tell whether you're descending or whether the pyramid is rising around you.
+
+Then a turn, and another, and you're standing.
+</div>
+
+<div class="claude-draft">[[Up the gallery|Grand Gallery]]</div>
+
+:: Grand Gallery [dream pyramid] {"position":"2100,3000","size":"100,100"}
+(set: $confidence to $confidence - 5)\
+<div class="claude-draft">
+The Grand Gallery is a wedge of dark with corbelled stone climbing on either side of you. Your candle smells of mutton.
+
+At the top of the gallery is a low door and through it a single room.
+
+You could go in. You could also stand here and turn around. From here the air pulls.
+</div>
+<span class="inventory-note">&#9734; SOBRIETY -4 | MORALE -5</span>
+
+<div class="claude-draft">[[Into the chamber|King's Chamber]]
+[[Turn around — you've seen enough|Pyramid Turn-Back]]</div>
+
+:: King's Chamber [dream pyramid centre] {"position":"2300,3000","size":"100,100"}
+<!-- Completion passage for the Pyramid. Number/proportion gift —
+     the chamber's resonant frequency, abstracted as a small
+     geometric figure. -->
+<div class="claude-draft">
+The chamber is a stone box. There is an empty sarcophagus against the far wall, its lid lost. The walls are bare. The room has no ornament because the room is the ornament.
+
+You stand at the centre and you hum. You don't know why you hum, except that the architect did.
+
+The chamber holds the hum for longer than a chamber should. Then it gives you the note back, slightly different.
+
+The note has a number in it. You can almost see it.
+</div>
+
+(click: "Listen until it resolves")[
+(set: $pyramidNumber to true)\
+(unless: $worldsVisited contains "pyramid")[(set: $worldsVisited to $worldsVisited + (a: "pyramid"))]
+(set: $tonightsWorld to "")\
+<script>if(window.dssMarkWorldSeen)window.dssMarkWorldSeen("pyramid");</script>\
+<div class="item-box">
+<div class="item-header">⚿ PROPORTION</div>
+<div class="item-name">A resonant number</div>
+</div>
+
+<!-- Pyramid proportion SVG — outline of the chamber with a golden-ratio
+     spiral inside it. Gold linework. -->
+<div class="pyramid-figure-wrap">
+<svg class="pyramid-figure-svg" viewBox="0 0 320 240" width="300" height="220">
+<defs>
+<linearGradient id="pyGold" x1="0" x2="1">
+<stop offset="0%" stop-color="#d4ae6a" stop-opacity="0.45"/>
+<stop offset="50%" stop-color="#f5d490" stop-opacity="0.95"/>
+<stop offset="100%" stop-color="#d4ae6a" stop-opacity="0.45"/>
+</linearGradient>
+<radialGradient id="pyHalo" cx="50%" cy="55%" r="55%">
+<stop offset="0%" stop-color="#f5d490" stop-opacity="0.15"/>
+<stop offset="100%" stop-color="#f5d490" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<rect width="320" height="240" fill="url(#pyHalo)"/>
+<g fill="none" stroke="url(#pyGold)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+<!-- Pyramid outer triangle -->
+<path d="M 160,25 L 295,210 L 25,210 Z"/>
+<!-- King's chamber inner rectangle (in correct golden ratio 1:1.618) -->
+<rect x="100" y="135" width="120" height="74"/>
+<!-- Sarcophagus inside the chamber -->
+<rect x="180" y="170" width="32" height="22"/>
+<!-- Golden-spiral approximation inside the chamber -->
+<path d="M 160,209 Q 160,135 220,135 Q 220,177 178,177 Q 178,209 200,209 Q 200,193 190,193"/>
+<!-- Resonance lines — five concentric arcs above the chamber -->
+<path d="M 100,135 Q 160,90 220,135" opacity="0.7"/>
+<path d="M 88,135 Q 160,78 232,135" opacity="0.55"/>
+<path d="M 76,135 Q 160,66 244,135" opacity="0.4"/>
+<path d="M 64,135 Q 160,54 256,135" opacity="0.3"/>
+<!-- Centre marker — where the player stood -->
+<circle cx="160" cy="171" r="3"/>
+<circle cx="160" cy="171" r="1.2" fill="#f5d490" stroke="none"/>
+</g>
+</svg>
+</div>
+
+<script>
+if (window.dssAudio && window.dssAudio.loreUnravel) {
+  setTimeout(function(){ window.dssAudio.loreUnravel(); }, 200);
+}
+</script>
+
+<div class="claude-draft">
+The number is yours. You couldn't write it down if you tried; you don't need to.
+</div>
+
+[[Back the way you came|Pyramid Return]]
+]
+
+:: Pyramid Turn-Back [outdoor] {"position":"1900,3200","size":"100,100"}
+(set: $tonightsWorld to "")\
+<div class="claude-draft">
+You wake on Dean Street with limestone dust on your trousers. You almost heard the note. Almost.
+</div>
+
+[[Dean Street|Dean Street]]
+
+:: Pyramid Return [outdoor] {"position":"2300,3200","size":"100,100"}
+<script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.passageWhoosh)window.dssAudio.passageWhoosh();},200);</script>
+<div class="claude-draft">
+You're back on Dean Street. There's limestone in your hair. The note is in your throat and won't come up.
+</div>
+
+[[Dean Street|Dean Street]]
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     v2-EXPANSION — EZEKIEL'S WHEEL (Pillar of Severity / lower left)
+     5 passages: The Plain of Chebar → Storm from the North → Four Living
+     Creatures → The Wheel → Ezekiel Return. Gift: a transcribed
+     vision of the wheel-within-a-wheel. Soho-responds: the Spanish
+     Artist at the French (has been seeing this in his dying visions).
+     ═════════════════════════════════════════════════════════════════════════ -->
+
+:: The Plain of Chebar [dream ezekiel] {"position":"1700,3400","size":"100,100"}
+<div class="claude-draft">
+A river you have never named is running past a shore you have never walked on. The plain is bleached. The wind is from no direction you can find.
+
+You are alone, or you would be, if it weren't for the prophet who is sitting on a stone fifty yards off, with his back to you. He is rocking. He has been rocking for centuries.
+
+He does not turn his head. He is waiting for something to come down out of the sky.
+</div>
+
+<div class="claude-draft">[[Wait with him|Storm from the North]]</div>
+
+:: Storm from the North [dream ezekiel] {"position":"1900,3400","size":"100,100"}
+(set: $sobriety to $sobriety - 5)\
+<div class="claude-draft">
+The wind sharpens. The clouds north of the plain begin to fold inward on themselves, the way fabric does when something is being pushed through it from the other side.
+
+There is a great brightness in the centre of the cloud. The light is the colour of beaten amber. It is not warm.
+
+The prophet stops rocking. You think you are about to see something that will not let you sleep again.
+</div>
+
+<div class="claude-draft">[[Look up|Four Living Creatures]]</div>
+
+:: Four Living Creatures [dream ezekiel] {"position":"2100,3400","size":"100,100"}
+(set: $confidence to $confidence - 8)\
+<div class="claude-draft">
+Out of the cloud come the four. You cannot describe them and they do not allow you to look away. Each has four faces and each face is also each other face. They burn at their edges.
+
+The prophet is on his face in the sand. You do not understand how a man can be both standing and on his face at once.
+
+Below the four, the wheels begin.
+</div>
+<span class="inventory-note">&#9734; SOBRIETY -5 | MORALE -8</span>
+
+<div class="claude-draft">[[Look at the wheels|The Wheel]]</div>
+
+:: The Wheel [dream ezekiel centre] {"position":"2300,3400","size":"100,100"}
+<!-- Completion passage for Ezekiel. The wheel-within-a-wheel reveals
+     in stages: outer wheel, then inner wheel rotating perpendicular,
+     then eyes around the rim. Player transcribes what they saw. -->
+<div class="claude-draft">
+There are four wheels and each wheel is two wheels. The second wheel is inside the first and the second wheel is also at right angles to the first, so that when the wheels move they do not turn but go.
+
+Each rim is set with eyes. The eyes are open.
+
+You will be asked, later, what you saw. You will draw it. You will draw it the way a child draws a face, which is to say: the way it actually is.
+</div>
+
+(click: "Draw it down")[
+(set: $ezekielVision to true)\
+(unless: $worldsVisited contains "ezekiel")[(set: $worldsVisited to $worldsVisited + (a: "ezekiel"))]
+(set: $tonightsWorld to "")\
+<script>if(window.dssMarkWorldSeen)window.dssMarkWorldSeen("ezekiel");</script>\
+<div class="item-box">
+<div class="item-header">⚿ VISION</div>
+<div class="item-name">The wheel-within-a-wheel</div>
+</div>
+
+<!-- Ezekiel's wheel SVG — outer wheel, inner perpendicular wheel, eyes
+     around the rim. Gold linework. Most ornate of the world reveals;
+     fits the apocalyptic register. -->
+<div class="ezekiel-wheel-wrap">
+<svg class="ezekiel-wheel-svg" viewBox="0 0 320 320" width="290" height="290">
+<defs>
+<radialGradient id="ezGold" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#f5d490" stop-opacity="0.98"/>
+<stop offset="55%" stop-color="#d4ae6a" stop-opacity="0.8"/>
+<stop offset="100%" stop-color="#8a6a30" stop-opacity="0.25"/>
+</radialGradient>
+<radialGradient id="ezHalo" cx="50%" cy="50%" r="55%">
+<stop offset="0%" stop-color="#f5d490" stop-opacity="0.45"/>
+<stop offset="100%" stop-color="#f5d490" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<g transform="translate(160,160)">
+<circle r="155" fill="url(#ezHalo)"/>
+<!-- OUTER wheel — vertical orientation -->
+<circle r="135" fill="none" stroke="url(#ezGold)" stroke-width="1.4"/>
+<circle r="118" fill="none" stroke="url(#ezGold)" stroke-width="0.9"/>
+<!-- Outer wheel rim with eyes — 12 evenly spaced -->
+<g fill="url(#ezGold)" stroke="none" opacity="0.9">
+<circle cx="0" cy="-126.5" r="3.2"/>
+<circle cx="63.25" cy="-109.6" r="3.2"/>
+<circle cx="109.6" cy="-63.25" r="3.2"/>
+<circle cx="126.5" cy="0" r="3.2"/>
+<circle cx="109.6" cy="63.25" r="3.2"/>
+<circle cx="63.25" cy="109.6" r="3.2"/>
+<circle cx="0" cy="126.5" r="3.2"/>
+<circle cx="-63.25" cy="109.6" r="3.2"/>
+<circle cx="-109.6" cy="63.25" r="3.2"/>
+<circle cx="-126.5" cy="0" r="3.2"/>
+<circle cx="-109.6" cy="-63.25" r="3.2"/>
+<circle cx="-63.25" cy="-109.6" r="3.2"/>
+</g>
+<!-- Outer-wheel spokes — 8 -->
+<g fill="none" stroke="url(#ezGold)" stroke-width="0.7" opacity="0.55">
+<line x1="0" y1="-118" x2="0" y2="-18"/>
+<line x1="83.4" y1="-83.4" x2="12.7" y2="-12.7"/>
+<line x1="118" y1="0" x2="18" y2="0"/>
+<line x1="83.4" y1="83.4" x2="12.7" y2="12.7"/>
+<line x1="0" y1="118" x2="0" y2="18"/>
+<line x1="-83.4" y1="83.4" x2="-12.7" y2="12.7"/>
+<line x1="-118" y1="0" x2="-18" y2="0"/>
+<line x1="-83.4" y1="-83.4" x2="-12.7" y2="-12.7"/>
+</g>
+<!-- INNER wheel — perpendicular (rendered as ellipse foreshortened) -->
+<ellipse cx="0" cy="0" rx="78" ry="22" fill="none" stroke="url(#ezGold)" stroke-width="1.3"/>
+<ellipse cx="0" cy="0" rx="66" ry="18" fill="none" stroke="url(#ezGold)" stroke-width="0.85"/>
+<!-- Inner-wheel rim eyes -->
+<g fill="url(#ezGold)" stroke="none" opacity="0.9">
+<circle cx="-72" cy="0" r="2.5"/>
+<circle cx="-50" cy="-15" r="2.5"/>
+<circle cx="-20" cy="-21" r="2.5"/>
+<circle cx="14" cy="-21" r="2.5"/>
+<circle cx="46" cy="-16" r="2.5"/>
+<circle cx="72" cy="0" r="2.5"/>
+<circle cx="50" cy="15" r="2.5"/>
+<circle cx="20" cy="21" r="2.5"/>
+<circle cx="-14" cy="21" r="2.5"/>
+<circle cx="-46" cy="16" r="2.5"/>
+</g>
+<!-- Inner-wheel cross spokes -->
+<g fill="none" stroke="url(#ezGold)" stroke-width="0.7" opacity="0.55">
+<line x1="-66" y1="0" x2="66" y2="0"/>
+<line x1="-46" y1="-15" x2="46" y2="15"/>
+<line x1="-46" y1="15" x2="46" y2="-15"/>
+</g>
+<!-- Hub -->
+<circle r="6" fill="none" stroke="url(#ezGold)" stroke-width="1"/>
+<circle r="2" fill="#f5d490" stroke="none"/>
+</g>
+</svg>
+</div>
+
+<script>
+if (window.dssAudio && window.dssAudio.loreUnravel) {
+  setTimeout(function(){ window.dssAudio.loreUnravel(); }, 100);
+}
+if (window.dssAudio && window.dssAudio.distantBell) {
+  setTimeout(function(){ window.dssAudio.distantBell(); }, 900);
+}
+</script>
+
+<div class="claude-draft">
+You did not move and yet you went, with them, wherever they were going.
+</div>
+
+[[Come back|Ezekiel Return]]
+]
+
+:: Red Recognises the Name [outdoor] {"position":"2500,400","size":"100,100"}
+<!-- v2-expansion Soho-responds branch for the Easter Island glyph.
+     Red is the poet who knows names; he recognises the Rongorongo
+     sign on the rubbing and gives the player a line he's been
+     keeping. -->
+(set: $redRecognised to true)\
+(set: $confidence to $confidence + 10)\
+<div class="ginger-lamp-wrap">
+<svg width="60" height="110" viewBox="0 0 60 110"><ellipse cx="30" cy="33" rx="40" ry="30" fill="rgba(200,100,5,0.10)"/><ellipse cx="30" cy="31" rx="24" ry="18" fill="rgba(220,130,10,0.18)"/><ellipse cx="30" cy="29" rx="13" ry="10" fill="rgba(255,190,60,0.22)"/><polygon points="27,2 30,0 33,2 32,7 28,7" fill="rgba(60,38,4,0.96)"/><path d="M13,7 Q30,4 47,7 L44,13 L16,13 Z" fill="rgba(60,38,4,0.96)"/><path d="M16,13 L44,13 L40,44 L20,44 Z" fill="rgba(130,75,8,0.45)" stroke="rgba(90,52,4,0.65)" stroke-width="1"/><path d="M19,15 L41,15 L37,42 L23,42 Z" fill="rgba(255,165,35,0.42)"/><ellipse cx="30" cy="29" rx="7" ry="10" fill="rgba(255,232,130,0.55)"/><ellipse cx="30" cy="27" rx="3" ry="4" fill="rgba(255,250,210,0.68)"/><rect x="22" y="44" width="16" height="6" rx="2.5" fill="rgba(60,38,4,0.96)"/><rect x="27" y="50" width="6" height="60" rx="2" fill="rgba(45,28,3,0.90)"/></svg>
+</div>
+<div class="ginger-scene">
+<div class="ginger-light"></div>
+<div class="claude-draft">
+You pull the rubbing from your pocket and hand it to him without speaking. He takes it without looking at you.
+
+He looks at the glyph for a long time. His mouth shapes a word you don't hear; he doesn't intend that you should.
+
+When he gives it back, he keeps your wrist for a beat longer than necessary.
+
+'I've a line for you,' he says. 'I've been keeping it. You'll need it tomorrow.'
+
+He gives you a folded piece of paper. You don't open it. You won't, until the light is right.
+</div>
+
+<div class="item-box">
+<div class="item-header">⚿ A LINE FOR TOMORROW</div>
+<div class="item-name">Folded paper from Red</div>
+</div>
+
+[[Walk on|Dean Street]]
+</div>
+
+:: Benito Recognises the Wheel [venue-french] {"position":"2500,800","size":"100,100"}
+<!-- v2-expansion Soho-responds branch for the Ezekiel vision.
+     The dying Spanish artist Benito has been seeing the wheel in his
+     last visions. The player's sketch confirms it; he can let go. -->
+(set: $spanishArtistRecognised to true)\
+(set: $confidence to $confidence + 14)\
+(display: "French Rule SVG h60")
+<div class="claude-draft">
+Benito is at the same table, where the artists sat before they were too many. He is alone. His chablis is finished and not refilled.
+
+You set the sketch in front of him without speaking. He looks at it without surprise.
+
+'I have been seeing this,' he says. 'For weeks. Some nights it is all I see.'
+
+He places his hand flat on the page. He closes his eyes. He does not move for a long count.
+
+When he opens his eyes again the table is between you and him for the last time.
+
+'You will draw what I have not lived to draw,' he says. 'I won't ask for it back.'
+
+He pushes the page back across to you and folds his hands in his lap. The light is already changing in him.
+</div>
+
+<div class="item-box">
+<div class="item-header">⚿ INHERITANCE</div>
+<div class="item-name">An unfinished commission</div>
+</div>
+
+[[Leave him to the light|Dean Street]]
+
+:: Ezekiel Return [outdoor] {"position":"2300,3600","size":"100,100"}
+<script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.passageWhoosh)window.dssAudio.passageWhoosh();},200);</script>
+<div class="claude-draft">
+You're back on Dean Street. You can feel the eyes. There's a folded sheet of paper in your inside pocket and you are afraid to open it.
+
+The rain doesn't touch the paper.
 </div>
 
 [[Dean Street|Dean Street]]
@@ -33660,6 +34493,10 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
      $metCritic=true with $knowsCecilCourt=false. -->
 (unless: $knowsCecilCourt is a boolean)[(set: $knowsCecilCourt to false)]
 (if: $metCritic is true and $knowsCecilCourt is false)[(set: $knowsCecilCourt to true)]
+<!-- v2-expansion: $lifetimeWorldsSeen kept as a defensive default. The
+     actual lifetime tracking is JS-only (see dssLoadLifetimeWorlds in
+     UserScript and the Third Pillar Portal passage). -->
+(unless: $lifetimeWorldsSeen is an array)[(set: $lifetimeWorldsSeen to (a:))]
 (set: _hideStats to (a: "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "A Doorway on Dean Street", "Dawn", "PP Pong", "Fight starts", "Fight Round 1", "Fight Round 2", "Fight Round 3", "Fight R1 Back", "Fight R1 Block", "Fight R1 Duck", "Fight R2 Catch", "Fight R2 Counter", "Fight R2 Slip", "Fight R3 Clinch", "Fight R3 Headon", "Fight R3 Weave", "Fight Victory", "Fight Defeat"))
 (if: $returns is a number and $returns >= 1 and not (_hideStats contains (passage:)'s name))[(set: _saved to (savegame: "auto", "Auto save"))]\
 (unless: _hideStats contains (passage:)'s name)[\
@@ -33795,11 +34632,15 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 (if: $hasTrishaMatchbook is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> Trisha&#39;s matchbook (an invitation)</div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="op">○</span> A matchbook</div>')]\
 (if: $hasCleggBeermat is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> A beer mat — Cecil Court / Carthage Short Hercules&#39; Pillars</div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="op">○</span> A beer mat</div>')]\
 (if: $hasMissingPage is true and $returnedPage is false)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> Page 93 (for O&#39;Flatterly)</div>')](else-if: $returnedPage is true)[(set: _nb to _nb + '<div class="nb-grey"><span class="op op-done">●</span> Page 93 (returned)</div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="op">○</span> A missing page</div>')]\
-<!-- v2-expansion: mantra entry. Two states — half (Airport Pub only) and
-     complete (after Cave). Once worlds beyond the Himalayas are added,
-     consider splitting this into its own MANTRAS section. -->
+<!-- v2-expansion: world-gift entries. Each is a different register
+     (text/diagram/number/name/vision). All five complete = hexagram +
+     alt-dawn (to be wired). -->
 (if: $mantraComplete is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> A mantra (twelve syllables, complete)</div>')]\
 (else-if: $mantraHalf1 is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op">◐</span> Half a mantra (six syllables)</div>')]\
+(if: $nazcaTracing is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> The Hummingbird, traced from above</div>')]\
+(if: $easterGlyph is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> A rubbing — a glyph in Rongorongo</div>')]\
+(if: $pyramidNumber is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> A resonant number</div>')]\
+(if: $ezekielVision is true)[(set: _nb to _nb + '<div class="nb-item"><span class="op op-done">●</span> The wheel-within-a-wheel</div>')]\
 (set: _nb to _nb + '</div>')\
 (if: $knowsAboutPage is true)[(set: _nb to _nb + '<div class="nb-section"><strong class="nb-heading">QUESTS</strong>')\
 (if: $returnedPage is true)[(set: _nb to _nb + '<div class="nb-grey"><span class="op op-done">●</span> Page 93 returned to O&#39;Flatterly</div>')]\
@@ -38823,22 +39664,72 @@ clip-path: polygon(32% 0%, 68% 0%, 82% 100%, 18% 100%);
   100% { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* v2-expansion: Himalayan mandala portal — gold linework reveal grammar */
-.himalayan-mandala-wrap {
+/* v2-expansion: world-reveal SVG grammar — each world has its own
+   centre-passage reveal that emerges in gold linework, drama-then-fade.
+   Reuses one base keyframe with per-world variations (rotate amount,
+   start scale, easing). */
+.himalayan-mandala-wrap,
+.nazca-glyph-wrap,
+.easter-glyph-wrap,
+.pyramid-figure-wrap,
+.ezekiel-wheel-wrap {
   display: flex;
   justify-content: center;
   margin: 1.4em auto 1em;
 }
-.himalayan-mandala-svg {
+.himalayan-mandala-svg,
+.nazca-glyph-svg,
+.easter-glyph-svg,
+.pyramid-figure-svg,
+.ezekiel-wheel-svg {
   display: block;
   opacity: 0;
-  animation: mandalaForm 2.6s cubic-bezier(0.32, 0.08, 0.4, 1) forwards;
   filter: drop-shadow(0 0 12px rgba(245, 212, 144, 0.35));
+}
+.himalayan-mandala-svg {
+  animation: mandalaForm 2.6s cubic-bezier(0.32, 0.08, 0.4, 1) forwards;
 }
 @keyframes mandalaForm {
   0%   { opacity: 0; transform: scale(0.35) rotate(-32deg); }
   50%  { opacity: 0.6; }
   85%  { opacity: 0.95; transform: scale(1.03) rotate(-2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+/* Nazca — slides up from below as if seen from the ridge */
+.nazca-glyph-svg {
+  animation: nazcaForm 2.4s cubic-bezier(0.32, 0.08, 0.4, 1) forwards;
+}
+@keyframes nazcaForm {
+  0%   { opacity: 0; transform: translateY(40px) scale(0.85); }
+  50%  { opacity: 0.5; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Easter Island — the rubbing peels up like a sheet from a stone */
+.easter-glyph-svg {
+  animation: easterForm 2.2s cubic-bezier(0.4, 0.05, 0.35, 1) forwards;
+}
+@keyframes easterForm {
+  0%   { opacity: 0; transform: scaleY(0.05) translateY(-30px); transform-origin: bottom center; }
+  40%  { opacity: 0.6; transform: scaleY(1.05) translateY(5px); }
+  100% { opacity: 1; transform: scaleY(1) translateY(0); }
+}
+/* Pyramid — resolves from a centre point outward, like the chamber */
+.pyramid-figure-svg {
+  animation: pyramidForm 2.5s cubic-bezier(0.3, 0.1, 0.4, 1) forwards;
+}
+@keyframes pyramidForm {
+  0%   { opacity: 0; transform: scale(0.2); }
+  60%  { opacity: 0.7; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+/* Ezekiel — the wheel rotates in, slowest of the reveals (vision) */
+.ezekiel-wheel-svg {
+  animation: ezekielForm 3.2s cubic-bezier(0.25, 0.05, 0.4, 1) forwards;
+}
+@keyframes ezekielForm {
+  0%   { opacity: 0; transform: scale(0.25) rotate(-180deg); }
+  50%  { opacity: 0.65; transform: scale(0.95) rotate(-30deg); }
+  85%  { opacity: 0.95; transform: scale(1.04) rotate(6deg); }
   100% { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 

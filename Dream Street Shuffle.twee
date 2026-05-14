@@ -34238,7 +34238,7 @@ He pulls //(print: $bookTitle)// close.
 <div class="critic-book-flip" id="critBookFlip"></div>
 </div>
 <div class="critic-book-narrate" id="critBookNarrate">He sets it on the table and opens it.</div>
-<button class="critic-book-turn" id="critBookTurn">Wait.</button>
+<button class="critic-book-turn" id="critBookTurn">He turns the page.</button>
 </div>
 
 <div class="critic-aftermath" id="critAftermath">
@@ -34312,39 +34312,150 @@ He pulls a small notebook out of his inside pocket and writes a number on a torn
   var flip = document.getElementById('critBookFlip');
   var aftermath = document.getElementById('critAftermath');
   if (!btn || !narr || !flip || !aftermath) return;
+  // Generate a fresh per-page text pattern so each turned page reads as a
+  // different page of the manuscript. Picks one of four rhythms — dense
+  // prose, airy/dialogue, prose with paragraph breaks, or section heading
+  // — so the pages aren't a uniform pattern of dashes. The SVG is 78×96
+  // and sits with 18px top + bottom margins inside the 132px-tall base,
+  // so the text doesn't run to the page edges.
+  function _genPageTextSVG() {
+    var rhythm = Math.floor(Math.random() * 4);
+    var rows = [];
+    var allYs = [4, 16, 28, 40, 52, 64, 76, 88];
+    function rowDashes(y, opts) {
+      opts = opts || {};
+      var startX = opts.indent || 0;
+      var endX = (opts.endShort != null) ? opts.endShort : 78;
+      var minW = opts.minW || 4, maxW = opts.maxW || 12;
+      var minGap = opts.minGap || 2, maxGap = opts.maxGap || 4;
+      var x = startX;
+      while (x < endX) {
+        var w = minW + Math.floor(Math.random() * (maxW - minW + 1));
+        if (x + w > endX) w = endX - x;
+        if (w < 2) break;
+        rows.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="1.4"/>');
+        x += w + minGap + Math.floor(Math.random() * (maxGap - minGap + 1));
+      }
+    }
+    if (rhythm === 0) {
+      // DENSE PROSE — full rows, narrow gaps. Continuous block of writing.
+      allYs.forEach(function(y){ rowDashes(y, {minW:4, maxW:12, minGap:2, maxGap:4}); });
+    } else if (rhythm === 1) {
+      // AIRY / DIALOGUE — wider dashes, big gaps; some rows skipped (whitespace).
+      allYs.forEach(function(y){
+        if (Math.random() < 0.25) return; // 25% chance of empty row
+        rowDashes(y, {minW:6, maxW:18, minGap:6, maxGap:14});
+      });
+    } else if (rhythm === 2) {
+      // PARAGRAPH BREAKS — dense, but 2-3 rows end short, and the next row
+      // is indented (paragraph start).
+      var breakIdxs = [];
+      var n = 2 + Math.floor(Math.random() * 2);
+      while (breakIdxs.length < n) {
+        var idx = 1 + Math.floor(Math.random() * (allYs.length - 2));
+        if (breakIdxs.indexOf(idx) < 0) breakIdxs.push(idx);
+      }
+      allYs.forEach(function(y, i){
+        var indent = (breakIdxs.indexOf(i - 1) >= 0) ? 8 + Math.floor(Math.random() * 6) : 0;
+        var endShort = (breakIdxs.indexOf(i) >= 0) ? 30 + Math.floor(Math.random() * 30) : 78;
+        rowDashes(y, {indent:indent, endShort:endShort, minW:4, maxW:12, minGap:2, maxGap:4});
+      });
+    } else {
+      // SECTION HEADING — short centered title at top, blank row, then dense body.
+      var headW = 18 + Math.floor(Math.random() * 16);
+      var headX = Math.floor((78 - headW) / 2);
+      rows.push('<rect x="' + headX + '" y="4" width="' + headW + '" height="1.4"/>');
+      // y=16 stays blank (whitespace under the heading)
+      [28, 40, 52, 64, 76, 88].forEach(function(y){
+        rowDashes(y, {minW:4, maxW:12, minGap:2, maxGap:4});
+      });
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="78" height="96"><g fill="rgba(40,28,16,0.62)">' + rows.join('') + '</g></svg>';
+  }
+  function _setPageText(el, svg, side) {
+    // side: 'right' (default — anchored to right:18, used on the flip) or
+    // 'left' (anchored to left:18, used on the base). Both base and flip
+    // are 132px tall and start at stage y=18; placing the 96px-tall text
+    // at top:18 within each leaves matching 18px top/bottom margins.
+    var cls = 'critic-page-text' + (side === 'left' ? '-left' : '');
+    var overlay = el.querySelector('.' + cls);
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = cls;
+      var anchor = (side === 'left') ? 'left:18px' : 'right:18px';
+      overlay.style.cssText = 'position:absolute;top:18px;' + anchor + ';width:78px;height:96px;background-repeat:no-repeat;background-size:78px 96px;opacity:0.78;pointer-events:none;backface-visibility:hidden;transition:opacity 0.35s ease;';
+      el.appendChild(overlay);
+    }
+    overlay.style.backgroundImage = "url(\"data:image/svg+xml;utf8," + encodeURIComponent(svg) + "\")";
+  }
+  // Initial left + right page text. Two distinct rhythms, generated fresh
+  // so each player sees a different opening spread.
+  var _stageEl = flip.parentNode;
+  var _base = _stageEl.querySelector('.critic-book-base');
+  var _currentLeftSVG = _genPageTextSVG();
+  var _currentPageSVG = _genPageTextSVG();
+  if (_base) _setPageText(_base, _currentLeftSVG, 'left');
+  _setPageText(flip, _currentPageSVG);
   btn.addEventListener('click', function(){
     if (page >= lines.length) return;
-    if (window.dssAudio && window.dssAudio.pageShuffle) window.dssAudio.pageShuffle();
-    // Spawn a small flurry of pages so each click reads as a riffle, not a
-    // ceremonial single page-turn. Each page gets a randomised flip speed
-    // and a small stagger so they don't fire in lockstep.
+    // Lock the button during the flip — prevents pile-up if the player
+    // double-clicks. Re-enabled when the new narration appears.
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.pointerEvents = 'none';
+    // Soft single-page rustle, not the busy 4-5 burst shuffle. The critic
+    // is reading deliberately, not riffling.
+    if (window.dssAudio && window.dssAudio.pageRustle) window.dssAudio.pageRustle();
+    // Clean up any spawned pages from earlier clicks so the DOM doesn't
+    // grow without bound. The original right-page (id=critBookFlip)
+    // stays put — it's the visible right page underneath.
     var stage = flip.parentNode;
-    var pageCount = 4 + Math.floor(Math.random() * 2); // 4 or 5
-    for (var i = 0; i < pageCount; i++) {
-      (function(idx){
-        setTimeout(function(){
-          var freshPage = document.createElement('div');
-          freshPage.className = 'critic-book-flip';
-          // Quicker, slightly varied per-page flip duration. CSS default is
-          // 1.1s — way too slow for a shuffle. 0.45-0.75s feels like a thumb
-          // riffle.
-          var dur = (0.45 + Math.random() * 0.30).toFixed(2);
-          freshPage.style.transition = 'transform ' + dur + 's cubic-bezier(0.4, 0.05, 0.5, 1)';
-          stage.appendChild(freshPage);
-          // Force layout, then flip on the next frame.
-          requestAnimationFrame(function(){
-            requestAnimationFrame(function(){
-              freshPage.classList.add('flipping');
-            });
-          });
-        }, idx * (60 + Math.random() * 60)); // 60-120ms gaps
-      })(i);
+    var oldFlips = stage.querySelectorAll('.critic-book-flip');
+    for (var k = 0; k < oldFlips.length; k++) {
+      if (oldFlips[k].id !== 'critBookFlip') stage.removeChild(oldFlips[k]);
     }
+    // One deliberate page-turn. 1.2s with a gentle ease — reads as a
+    // finger placed on a page, not a thumb-riffle.
+    var freshPage = document.createElement('div');
+    freshPage.className = 'critic-book-flip';
+    freshPage.style.transition = 'transform 1.2s cubic-bezier(0.45, 0.05, 0.4, 1)';
+    // The spawned page carries the CURRENT text (the page being turned).
+    _setPageText(freshPage, _currentPageSVG);
+    stage.appendChild(freshPage);
+    // Generate two NEW pages — one for the left, one for the right —
+    // so each turn reveals a fresh spread. The new right text goes on the
+    // static flip (revealed once the spawn passes 90° via backface-hidden).
+    // The new left text gets a brief opacity fade so its change feels
+    // less abrupt — the user's eye is on the flipping page anyway, and
+    // the fade lets the swap settle by the time the flip lands.
+    _currentPageSVG = _genPageTextSVG();
+    _setPageText(flip, _currentPageSVG);
+    if (_base) {
+      var leftOverlay = _base.querySelector('.critic-page-text-left');
+      if (leftOverlay) leftOverlay.style.opacity = '0';
+      setTimeout(function(){
+        _currentLeftSVG = _genPageTextSVG();
+        _setPageText(_base, _currentLeftSVG, 'left');
+        var ov = _base.querySelector('.critic-page-text-left');
+        if (ov) ov.style.opacity = '0.78';
+      }, 400);
+    }
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        freshPage.classList.add('flipping');
+      });
+    });
+    // Narration timing: let the flip finish (1.2s) plus a read-pause
+    // (~0.4s) so we feel him reading the page before the verdict-fragment
+    // floats up. ~1.6s total per click.
     narr.style.opacity = '0';
     setTimeout(function(){
       narr.textContent = lines[page];
       narr.style.opacity = '1';
       page++;
+      btn.disabled = false;
+      btn.style.opacity = '';
+      btn.style.pointerEvents = '';
       if (page >= lines.length) {
         btn.style.display = 'none';
         setTimeout(function(){
@@ -34362,7 +34473,7 @@ He pulls a small notebook out of his inside pocket and writes a number on a torn
           }, 1500);
         }, 900);
       }
-    }, 760);
+    }, 1600);
   });
 })();
 </script>
@@ -39563,22 +39674,9 @@ border-right: 1px solid rgba(107,32,32,0.25);
   border-radius: 2px 4px 4px 2px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.18), inset 0 0 22px rgba(60,38,12,0.12);
 }
-/* Left-page word marks — rows of broken dashes of varying width to suggest typed words */
-.critic-book-base::before {
-  content: ''; position: absolute; top: 14px; left: 18px; width: 78px; height: 116px;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='78' height='60' viewBox='0 0 78 60'><g fill='rgba(40,28,16,0.62)'><rect x='0' y='4' width='10' height='1.4'/><rect x='13' y='4' width='6' height='1.4'/><rect x='22' y='4' width='14' height='1.4'/><rect x='39' y='4' width='7' height='1.4'/><rect x='49' y='4' width='5' height='1.4'/><rect x='57' y='4' width='12' height='1.4'/><rect x='72' y='4' width='6' height='1.4'/><rect x='0' y='16' width='8' height='1.4'/><rect x='11' y='16' width='13' height='1.4'/><rect x='27' y='16' width='5' height='1.4'/><rect x='35' y='16' width='9' height='1.4'/><rect x='47' y='16' width='6' height='1.4'/><rect x='56' y='16' width='14' height='1.4'/><rect x='73' y='16' width='5' height='1.4'/><rect x='0' y='28' width='6' height='1.4'/><rect x='9' y='28' width='11' height='1.4'/><rect x='23' y='28' width='8' height='1.4'/><rect x='34' y='28' width='5' height='1.4'/><rect x='42' y='28' width='13' height='1.4'/><rect x='58' y='28' width='7' height='1.4'/><rect x='68' y='28' width='10' height='1.4'/><rect x='0' y='40' width='12' height='1.4'/><rect x='15' y='40' width='5' height='1.4'/><rect x='23' y='40' width='9' height='1.4'/><rect x='35' y='40' width='14' height='1.4'/><rect x='52' y='40' width='6' height='1.4'/><rect x='61' y='40' width='8' height='1.4'/><rect x='72' y='40' width='6' height='1.4'/><rect x='0' y='52' width='9' height='1.4'/><rect x='12' y='52' width='6' height='1.4'/><rect x='21' y='52' width='12' height='1.4'/><rect x='36' y='52' width='8' height='1.4'/><rect x='47' y='52' width='5' height='1.4'/><rect x='55' y='52' width='14' height='1.4'/><rect x='72' y='52' width='6' height='1.4'/></g></svg>") repeat-y;
-  background-size: 100% 60px;
-  opacity: 0.78;
-  pointer-events: none;
-}
-/* Right-page word marks — different cadence so the two pages don't read as a tile */
-.critic-book-base::after {
-  content: ''; position: absolute; top: 14px; right: 18px; width: 78px; height: 116px;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='78' height='60' viewBox='0 0 78 60'><g fill='rgba(40,28,16,0.62)'><rect x='0' y='4' width='8' height='1.4'/><rect x='11' y='4' width='12' height='1.4'/><rect x='26' y='4' width='5' height='1.4'/><rect x='34' y='4' width='9' height='1.4'/><rect x='46' y='4' width='13' height='1.4'/><rect x='62' y='4' width='6' height='1.4'/><rect x='71' y='4' width='7' height='1.4'/><rect x='0' y='16' width='13' height='1.4'/><rect x='16' y='16' width='6' height='1.4'/><rect x='25' y='16' width='9' height='1.4'/><rect x='37' y='16' width='5' height='1.4'/><rect x='45' y='16' width='14' height='1.4'/><rect x='62' y='16' width='7' height='1.4'/><rect x='72' y='16' width='6' height='1.4'/><rect x='0' y='28' width='9' height='1.4'/><rect x='12' y='28' width='6' height='1.4'/><rect x='21' y='28' width='12' height='1.4'/><rect x='36' y='28' width='8' height='1.4'/><rect x='47' y='28' width='5' height='1.4'/><rect x='55' y='28' width='13' height='1.4'/><rect x='71' y='28' width='7' height='1.4'/><rect x='0' y='40' width='6' height='1.4'/><rect x='9' y='40' width='14' height='1.4'/><rect x='26' y='40' width='5' height='1.4'/><rect x='34' y='40' width='10' height='1.4'/><rect x='47' y='40' width='8' height='1.4'/><rect x='58' y='40' width='6' height='1.4'/><rect x='67' y='40' width='11' height='1.4'/><rect x='0' y='52' width='11' height='1.4'/><rect x='14' y='52' width='6' height='1.4'/><rect x='23' y='52' width='9' height='1.4'/><rect x='35' y='52' width='5' height='1.4'/><rect x='43' y='52' width='14' height='1.4'/><rect x='60' y='52' width='7' height='1.4'/><rect x='70' y='52' width='8' height='1.4'/></g></svg>") repeat-y;
-  background-size: 100% 60px;
-  opacity: 0.78;
-  pointer-events: none;
-}
+/* Left + right page word-marks are now generated per-turn by the widget's
+   JS and added as overlay <div>s on .critic-book-base (left) and on the
+   flipping page (right). See the critBookTurn click handler. */
 .critic-book-flip {
   position: absolute;
   top: 18px;

@@ -1,3 +1,42 @@
+# HANDOFF — 2026-05-14 (v2 expansion — occult enhancements #1–#5 built)
+
+Second half of 2026-05-14: the five occult enhancements (1–5) were built on top of the v2 architectural pass. Synthesis ritual + alt-dawn ending + cross-playthrough lifetime gift persistence + recurring slate-eyed guide + 22 Hebrew paths + deep-time stratigraphy texture. All synced; play-tested end-to-end through The Synthesis → hexagram → The Sanctum → Alt-Dawn → Dawn.
+
+## Today's later session — occult enhancements
+
+**#1 — Cross-playthrough gift persistence + 6th-world ritual.**
+- `dssLifetimeGifts` localStorage key tracks gifts permanently (never resets, even after cycle resets). Helpers in UserScript: `dssLoadLifetimeGifts`, `dssAddLifetimeGift`, `dssClearLifetimeGifts`.
+- At the Pillars of Hercules venue (post-Inis), a JS-revealed "Perform the synthesis" link appears when lifetime gifts ≥ 5.
+- New passage **The Synthesis** — player invokes each gift in sequence (Speak the mantra → Hold up the tracing → Show the rubbing → Hum the number → Draw the wheel). On the fifth, Solomon's-Seal hexagram materialises (two interlocking gold pentagrams over the Soho lily-pentangle) with `loreUnravel` + `distantBell` audio cues.
+- **The Sanctum** — sixth-world room beyond the third pillar. The slate-eyed guide sits with the player's book.
+- **Alt-Dawn** — alternate dawn ending stub. Routes back to v1's Dawn passage for now; Dr Quill to write the alternate-recipient ending here.
+
+**#2 — Mantra binding to the 12 haunts.** The 12 syllables of the Vajra Guru mantra (`$mantra` array) bind to the 12 haunts. Nth haunt collected reveals Nth syllable in the notebook's CHANT section and as a small `.mantra-cue` overlay on the haunt-collection moment.
+
+**#3 — Recurring slate-eyed guide.** A single figure with slate-coloured eyes recurs across all 5 world centres (The Cave, Centre — Nazca, The Glyph, King's Chamber, Four Living Creatures) and The Sanctum. Same eyes, different bodies. Implicit ancient-astronauts intermediary.
+
+**#4 — 22 Tarot/Hebrew paths in the notebook.** PATHS section in the Tree-of-Life panel: 22 Hebrew letters (א ב ג ד ה ו ז ח ט י כ ל מ נ ס ע פ צ ק ר ש ת) light up progressively as 22 specific story milestones fire. Player is never told which letter maps to which event; the count just ticks up. Map definition in [Dream Street Shuffle.twee:34954](Dream%20Street%20Shuffle.twee:34954); CSS at `.nb-path-letter` / `.nb-paths-row`.
+
+**#5 — Time stratigraphy / implicit ancient-astronauts frame.** Three deep-time anchor lines added in `.claude-draft` to:
+- The Cave (Himalayas) — slate-eyed man names a Tibetan monk in 1124, a Greek captain, a Sumerian as previous recipients.
+- The Glyph (Easter Island) — "The moai were carved to remember this script. The script was older than them."
+- The Sanctum (keystone) — a girl in Cairo, a sailor at Knossos, a priestess at a buried hilltop. "The book keeps coming back to me."
+
+## Harlowe gotchas that bit this session (now saved as memories)
+
+- `project_harlowe_class_attr.md` — macros inside HTML `class="..."` render as literal text. Recurred mid-session.
+- `project_harlowe_tw_hook_positioning.md` — `(if:)` wraps content in inline `<tw-hook>`; percentage positioning breaks. Fix: CSS override `tw-hook { display: block; position: static; }` in the relevant scope.
+- `project_harlowe_svg_newlines.md` — newlines inside `(link:)`/`(if:)` hooks get converted to `<br>`, which browsers strip from inside `<svg>`. **All 5 world centres** were silently broken before fix. Wrap multi-line SVGs in `{...}` or flatten them.
+
+## Open threads after this session
+
+- **The Synthesis prose** is scaffold; all wrapped in `.claude-draft`. Five gift-invocation lines + the hexagram reveal lines + the Sanctum prose + Alt-Dawn need Dr Quill's voice pass.
+- **Alt-Dawn ending body** currently routes to v1's Dawn. Decide whether to write a separate Alt-Dawn ending or keep convergence.
+- **The five world Cave/Centre passages still have draft prose** for the slate-eyed-guide moments. Most are tight already; some could be tightened further.
+- **No verification screenshot of the PATHS notebook section** — the MCP browser tab got stuck on a chrome-error URL during testing. Dr Quill: open the game manually and check the notebook → Tree-of-Life panel.
+
+---
+
 # HANDOFF — 2026-05-14 (v2 expansion — first major architectural pass)
 
 This session: v1 first draft was frozen and branched, then v2-expansion got its core architecture built out.

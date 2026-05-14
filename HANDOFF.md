@@ -1,6 +1,27 @@
-# HANDOFF — 2026-05-14 (v2 expansion — occult enhancements #1–#5 built)
+# HANDOFF — 2026-05-14 (v2 expansion — occult enhancements + SVG pass + prose drafts)
 
-Second half of 2026-05-14: the five occult enhancements (1–5) were built on top of the v2 architectural pass. Synthesis ritual + alt-dawn ending + cross-playthrough lifetime gift persistence + recurring slate-eyed guide + 22 Hebrew paths + deep-time stratigraphy texture. All synced; play-tested end-to-end through The Synthesis → hexagram → The Sanctum → Alt-Dawn → Dawn.
+Second half of 2026-05-14: the five occult enhancements (1–5) were built on top of the v2 architectural pass, **plus** a pass on the world-centre SVGs, **plus** two .docx files exporting the new prose for Dr Quill to work through.
+
+## Open this first
+
+- **`v2-prose-AS-WRITTEN.docx`** — every drafted prose block from this session, each preceded by a short note saying what the block is for.
+- **`v2-prose-REWRITE.docx`** — same blocks, rewritten to strip the recursive/paradoxical mannerisms ("X is not X but X-er than X", over-stacked short clauses, decorative biographical specificity). Read alongside the as-written version; pick lines from either column.
+- New memory `feedback_no_style_parody.md` captures the rule so future drafts don't repeat the mistake.
+
+## Occult enhancements #1–#5 (built)
+
+## SVG pass
+
+Six gold-linework SVGs improved in this session — most visible in the world centres and at the synthesis climax:
+
+- **Hexagram (synthesis climax)** — 10 luminous halo-stars at the 10 outer vertices, subtle inner pentagon, brighter centre, thicker pentagram strokes. The "two pentangles, ten points" prose lines up with what you now actually see.
+- **Easter Island Rongorongo** — replaced the previous stick-figure with a bird-headed humanoid (oval head + pointed beak, eye, crest feathers, body with belt lines, raised arm with staff, walking legs, filled foot-glyphs).
+- **King's Chamber pyramid** — replaced the squiggly path with a proper golden-ratio nautilus spiral (5 successive quarter-arcs at decreasing radii 74 → 46 → 28 → 17 → 11), added a glowing apex eye with halo and sight-lines from apex to chamber corners.
+- **Nazca hummingbird** — long iconic beak (closed shape extending most of the canvas), upper wing arch, lower wing with stepped tail feathers.
+- **Ezekiel wheel** — added the four living creatures at cardinal points (man face top, lion face right with mane/whiskers, ox face bottom with horns, eagle face left), keeping the 12 rim-eyes and the inner perspective ellipse.
+- **Himalayan mandala** — untouched (already solid: 5 concentric rings, 8 spokes, lotus petals).
+
+All SVGs are flattened single-line or wrapped in `{...}` so the newline-into-`<br>` Harlowe gotcha doesn't strip them.
 
 ## Today's later session — occult enhancements
 

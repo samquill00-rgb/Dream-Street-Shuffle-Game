@@ -49,6 +49,17 @@ AUDIO_EMBEDS = [
 ]
 
 # ============================================================
+# Image embedding configuration
+# ============================================================
+# Same pattern as audio: placeholders in the .twee (used in CSS or HTML) are
+# replaced with base64 data URIs of the source PNG. Means the game works from
+# file:// or anywhere, and an asset can't go 404 because it's part of the HTML.
+IMAGE_EMBEDS = [
+    ("__DSS_COIN_HEADS_DATA_URI__", "coin-heads.png", "image/png"),
+    ("__DSS_COIN_TAILS_DATA_URI__", "coin-tails.png", "image/png"),
+]
+
+# ============================================================
 # 1. Parse the Twee file
 # ============================================================
 
@@ -165,11 +176,31 @@ html_content = re.sub(
     html_content
 )
 
+# --- Embed images as base64 data URIs (both for CSS and inline HTML) ---
+# Build the substitutions once; apply to stylesheet, userscript, AND passages
+# so any reference to the placeholder anywhere ends up as a full data: URI.
+image_replacements = []
+for placeholder, source_file, mime in IMAGE_EMBEDS:
+    image_path = os.path.join(_here, source_file)
+    if not os.path.exists(image_path):
+        print(f"WARNING: image file not found: {image_path} — {placeholder} not embedded")
+        continue
+    with open(image_path, "rb") as imf:
+        img_b64 = base64.b64encode(imf.read()).decode("ascii")
+    data_uri = "data:" + mime + ";base64," + img_b64
+    image_replacements.append((placeholder, data_uri, source_file, len(img_b64)))
+    print(f"Embedded image: {source_file} ({len(img_b64)//1024} KB base64) -> {placeholder}")
+
+def _embed_images(text):
+    for placeholder, data_uri, _src, _kb in image_replacements:
+        text = text.replace(placeholder, data_uri)
+    return text
+
 # Replace the stylesheet
 if stylesheet_content:
     # Raw CSS — NOT html-encoded, because it lives inside a <style> tag
     # (same as <script> tags, browsers don't decode HTML entities in <style>)
-    encoded_css = stylesheet_content
+    encoded_css = _embed_images(stylesheet_content)
     css_match = re.search(
         r'(<style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">).*?(</style>)',
         html_content,
@@ -202,6 +233,9 @@ if userscript_content:
         else:
             print(f"WARNING: placeholder {placeholder} not found in UserScript — {source_file} not embedded")
 
+    # --- Embed images into the userscript too (for inline <img src=> via JS) ---
+    userscript_content = _embed_images(userscript_content)
+
     js_match = re.search(
         r'(<script role="script" id="twine-user-script" type="text/twine-javascript">).*?(</script>)',
         html_content,
@@ -218,7 +252,7 @@ if userscript_content:
 html_content = re.sub(r'<tw-passagedata[^>]*>.*?</tw-passagedata>', '', html_content, flags=re.DOTALL)
 
 # Insert new passages before </tw-storydata>
-new_passages_str = "\n".join(passage_elements)
+new_passages_str = _embed_images("\n".join(passage_elements))
 html_content = html_content.replace("</tw-storydata>", new_passages_str + "\n</tw-storydata>")
 
 # Write the updated HTML

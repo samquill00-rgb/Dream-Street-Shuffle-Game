@@ -2429,6 +2429,125 @@ window.dssAudio = (function() {
       }
     });
   }
+  // ── COSMIC SEWER SUCK ──────────────────────────────────────────────
+  // Long ~3.5s pipe-rush: filtered noise with a rising lowpass cutoff,
+  // a sub rumble that pitches up (we accelerate toward the end of the
+  // pipe), three submerged bubble pops scattered through the middle,
+  // and a wet splash at the end when the player breaks the surface.
+  // A short feedback delay across the whole graph gives it the vault-y
+  // "cosmic" depth that distinguishes it from a plain water flush.
+  function cosmicSewerSuck() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var DUR = 3.5;
+      // ── Delay/feedback network — used as a parallel send for the wet,
+      //    cathedral-ish tail. Light feedback, gentle highshelf cut so
+      //    the tail doesn't get harsh. ──
+      var delay = ac.createDelay(); delay.delayTime.value = 0.28;
+      var fbk   = ac.createGain();   fbk.gain.value = 0.35;
+      var dHpf  = ac.createBiquadFilter(); dHpf.type = 'highpass';
+      dHpf.frequency.value = 180;
+      var dWet  = ac.createGain();   dWet.gain.value = 0.45;
+      delay.connect(dHpf); dHpf.connect(fbk); fbk.connect(delay);
+      delay.connect(dWet); dWet.connect(ac.destination);
+      // ── 1. Long noise whoosh — main "we are travelling" body. Lowpass
+      //    opens as we accelerate; gain swells and tails off at the end. ──
+      var bufLen = Math.floor(ac.sampleRate * DUR);
+      var nbuf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      var nd = nbuf.getChannelData(0);
+      for (var i = 0; i < bufLen; i++) nd[i] = (Math.random() * 2 - 1);
+      var nSrc = ac.createBufferSource(); nSrc.buffer = nbuf;
+      var nLp  = ac.createBiquadFilter(); nLp.type = 'lowpass'; nLp.Q.value = 0.9;
+      nLp.frequency.setValueAtTime(320, now);
+      nLp.frequency.exponentialRampToValueAtTime(2400, now + DUR * 0.78);
+      nLp.frequency.exponentialRampToValueAtTime(4800, now + DUR);
+      var nHp = ac.createBiquadFilter(); nHp.type = 'highpass';
+      nHp.frequency.setValueAtTime(120, now);
+      var nG  = ac.createGain();
+      nG.gain.setValueAtTime(0.0001, now);
+      nG.gain.exponentialRampToValueAtTime(0.34, now + DUR * 0.55);
+      nG.gain.exponentialRampToValueAtTime(0.55, now + DUR * 0.85);
+      nG.gain.exponentialRampToValueAtTime(0.0001, now + DUR);
+      nSrc.connect(nLp); nLp.connect(nHp); nHp.connect(nG);
+      nG.connect(ac.destination); nG.connect(delay);
+      nSrc.start(now); nSrc.stop(now + DUR + 0.05);
+      // ── 2. Sub rumble — low oscillator that pitches up so we feel the
+      //    forward acceleration in the gut. Saw wave through a lowpass. ──
+      var rOsc = ac.createOscillator(); rOsc.type = 'sawtooth';
+      rOsc.frequency.setValueAtTime(34, now);
+      rOsc.frequency.exponentialRampToValueAtTime(110, now + DUR * 0.85);
+      rOsc.frequency.exponentialRampToValueAtTime(58, now + DUR);
+      var rLp  = ac.createBiquadFilter(); rLp.type = 'lowpass';
+      rLp.frequency.setValueAtTime(180, now);
+      rLp.frequency.exponentialRampToValueAtTime(420, now + DUR * 0.85);
+      var rG  = ac.createGain();
+      rG.gain.setValueAtTime(0.0001, now);
+      rG.gain.exponentialRampToValueAtTime(0.42, now + DUR * 0.55);
+      rG.gain.exponentialRampToValueAtTime(0.68, now + DUR * 0.85);
+      rG.gain.exponentialRampToValueAtTime(0.0001, now + DUR);
+      rOsc.connect(rLp); rLp.connect(rG);
+      rG.connect(ac.destination); rG.connect(delay);
+      rOsc.start(now); rOsc.stop(now + DUR + 0.05);
+      // ── 3. Three submerged bubble pops scattered through the middle ──
+      [0.45, 1.1, 1.9].forEach(function(off) {
+        var bt = now + off + (Math.random() - 0.5) * 0.18;
+        // Pop body: short low sine that drops in pitch (cavity closes)
+        var bOsc = ac.createOscillator(); bOsc.type = 'sine';
+        var f0 = 280 + Math.random() * 220;
+        bOsc.frequency.setValueAtTime(f0, bt);
+        bOsc.frequency.exponentialRampToValueAtTime(70, bt + 0.18);
+        var bG = ac.createGain();
+        bG.gain.setValueAtTime(0.0001, bt);
+        bG.gain.exponentialRampToValueAtTime(0.42, bt + 0.012);
+        bG.gain.exponentialRampToValueAtTime(0.0001, bt + 0.22);
+        bOsc.connect(bG); bG.connect(ac.destination); bG.connect(delay);
+        bOsc.start(bt); bOsc.stop(bt + 0.24);
+        // Pop click: tiny noise transient on top
+        var cLen = Math.floor(ac.sampleRate * 0.018);
+        var cBuf = ac.createBuffer(1, cLen, ac.sampleRate);
+        var cd = cBuf.getChannelData(0);
+        for (var j = 0; j < cLen; j++) {
+          cd[j] = (Math.random() * 2 - 1) * Math.exp(-j / (ac.sampleRate * 0.003));
+        }
+        var cSrc = ac.createBufferSource(); cSrc.buffer = cBuf;
+        var cBp = ac.createBiquadFilter(); cBp.type = 'bandpass';
+        cBp.frequency.value = 1400; cBp.Q.value = 1.6;
+        var cG = ac.createGain(); cG.gain.value = 0.22;
+        cSrc.connect(cBp); cBp.connect(cG);
+        cG.connect(ac.destination); cG.connect(delay);
+        cSrc.start(bt);
+      });
+      // ── 4. Final splash — wet ploom when the player breaks the
+      //    surface at the end of the pipe. Two layers: a low "thoom"
+      //    oscillator and a fast noise transient with a falling bandpass. ──
+      var spT = now + DUR * 0.86;
+      var spOsc = ac.createOscillator(); spOsc.type = 'sine';
+      spOsc.frequency.setValueAtTime(160, spT);
+      spOsc.frequency.exponentialRampToValueAtTime(48, spT + 0.45);
+      var spG = ac.createGain();
+      spG.gain.setValueAtTime(0.0001, spT);
+      spG.gain.exponentialRampToValueAtTime(0.62, spT + 0.02);
+      spG.gain.exponentialRampToValueAtTime(0.0001, spT + 0.55);
+      spOsc.connect(spG); spG.connect(ac.destination); spG.connect(delay);
+      spOsc.start(spT); spOsc.stop(spT + 0.6);
+      // Splash spray (noise transient with falling bandpass)
+      var sLen = Math.floor(ac.sampleRate * 0.45);
+      var sBuf = ac.createBuffer(1, sLen, ac.sampleRate);
+      var sd = sBuf.getChannelData(0);
+      for (var k = 0; k < sLen; k++) sd[k] = (Math.random() * 2 - 1);
+      var sSrc = ac.createBufferSource(); sSrc.buffer = sBuf;
+      var sBp = ac.createBiquadFilter(); sBp.type = 'bandpass'; sBp.Q.value = 1.4;
+      sBp.frequency.setValueAtTime(2400, spT);
+      sBp.frequency.exponentialRampToValueAtTime(420, spT + 0.4);
+      var sG = ac.createGain();
+      sG.gain.setValueAtTime(0.0001, spT);
+      sG.gain.exponentialRampToValueAtTime(0.45, spT + 0.015);
+      sG.gain.exponentialRampToValueAtTime(0.0001, spT + 0.5);
+      sSrc.connect(sBp); sBp.connect(sG);
+      sG.connect(ac.destination); sG.connect(delay);
+      sSrc.start(spT);
+    });
+  }
   return {
     pour: pour, sip: sip, phoneRing: phoneRing, pageRustle: pageRustle, pageShuffle: pageShuffle,
     startPissStream: startPissStream, startRetchStream: startRetchStream,
@@ -2452,6 +2571,7 @@ window.dssAudio = (function() {
     distantTraffic: distantTraffic, stopDistantTraffic: stopDistantTraffic,
     carHorn: carHorn, dripDrop: dripDrop,
     needleLift: needleLift,
+    cosmicSewerSuck: cosmicSewerSuck,
     // Background music bed
     startMusic: startMusic, stopMusic: stopMusic,
     updateMusicForPassage: updateMusicForPassage,
@@ -2980,6 +3100,12 @@ window.venueHintPopup = function() {
       '<div class="vh-mist vh-mist3"></div>' +
       '<div class="vh-label">⟡ A WORD TO THE WISE ⟡</div>' +
       '<div class="venue-hint-text">If a venue is still open it means there is more to explore there. Have another look.</div>' +
+      '<div class="vh-legend">' +
+        '<div class="vh-legend-row"><span class="hp hp-done">◆</span> a haunt &nbsp;·&nbsp; <span class="hp">◇</span> still to catch</div>' +
+        '<div class="vh-legend-row"><span class="pp pp-done">▲</span> a word &nbsp;·&nbsp; <span class="pp">△</span> still to learn</div>' +
+        '<div class="vh-legend-row"><span class="al al-done">✦</span> an alba line &nbsp;·&nbsp; <span class="al">✧</span> still to find</div>' +
+        '<div class="vh-legend-row"><span class="qp qp-done">★</span> a quest &nbsp;·&nbsp; <span class="qp">☆</span> still to do</div>' +
+      '</div>' +
     '</div>';
   document.body.appendChild(overlay);
   void overlay.offsetWidth;
@@ -2995,8 +3121,8 @@ window.venueHintPopup = function() {
   function onKey(e){ if (e.key === 'Escape') dismiss(); }
   overlay.addEventListener('click', dismiss);
   document.addEventListener('keydown', onKey);
-  /* Total visible window: 0.55s fade in + ~3s readable + 0.55s fade out. */
-  setTimeout(dismiss, 3500);
+  /* Slightly longer visible window — the legend takes a beat more to read. */
+  setTimeout(dismiss, 5500);
 };
 
 // ====== MORALE WARNING POPUP ======
@@ -6798,9 +6924,9 @@ _draw() {
 
   if (this.type === 'pint' || this.type === 'cider' || this.type === 'beer') {
     this._drawPint(c, cfg, lev, wob);
-  } else if (this.type === 'wine') {
+  } else if (this.type === 'wine' || this.type === 'claret' || this.type === 'beaujolais') {
     this._drawWine(c, cfg, lev, wob);
-  } else if (this.type === 'champagne') {
+  } else if (this.type === 'champagne' || this.type === 'krug') {
     this._drawChampagne(c, cfg, lev, wob);
   } else if (this.type === 'gin' || this.type === 'vodka') {
     this._drawTallGlass(c, cfg, lev, wob);
@@ -6905,9 +7031,9 @@ _getRimOffset() {
   // Returns the LOW rim corner in the glass's own local coords (pivot at base, y up is negative)
   if (this.type === 'pint' || this.type === 'cider' || this.type === 'beer') {
     return { x: -20, y: -100 };   // topW=40, gH=100
-  } else if (this.type === 'wine') {
+  } else if (this.type === 'wine' || this.type === 'claret' || this.type === 'beaujolais') {
     return { x: -13, y: -85 };    // bowl top ~-85, bowl half-width ~13 at top
-  } else if (this.type === 'champagne') {
+  } else if (this.type === 'champagne' || this.type === 'krug') {
     return { x: -8, y: -97 };     // stem+flute = 32+65 = 97, fluteW=16
   } else if (this.type === 'gin' || this.type === 'vodka') {
     return { x: -15, y: -80 };    // topW=30, gH=80
@@ -28141,14 +28267,18 @@ else if(sobriety<50){ty+=(Math.random()-0.5)*15;actualY+=(ty-actualY)*0.12;}
 else{actualY+=(ty-actualY)*0.25;}
 pPad.y=Math.max(0,Math.min(H-pPad.h,actualY));
 }
-/* Rubber-band: returns -1 to +1.5 representing how much the AI should be
-   helped (+) or hindered (-). Positive when the AI is behind (so it plays
-   better), negative when ahead (plays worse). Once both players have hit
-   2 (deuce), bias goes to zero so the sudden-death rally is honest. */
+/* Rubber-band: positive when AI is BEHIND (plays better), negative when
+   AHEAD (plays worse). The negative side stays uncapped at -1.5 so a 2-0
+   AI lead really feels easy; the positive (comeback) side is held to +0.8
+   so the AI can press, but isn't surgical when you're on match point —
+   the "final point feels unbeatable" complaint was the AI catching up at
+   the full +1.5 catchup multiplier. Once both players hit 2 (deuce), bias
+   goes to zero and sudden-death is honest. */
 function aiBias(){
 if (playerScore >= 2 && oppScore >= 2) return 0;
 var lead = oppScore - playerScore;
-return Math.max(-1.5, Math.min(1.5, -lead * 1.0));
+var raw = -lead * 1.0;
+return Math.max(-1.5, Math.min(0.8, raw));
 }
 function updateAI(){
 var now=Date.now();
@@ -29120,6 +29250,133 @@ You're eating at the counter when somebody passes the window: that's Lily.
 (set: $coachUrgent to false)\
 (set: _lilyRing to ($lilyCount >= 1 and $hadLilyCall1 is false and $hadPhoneCall is true and ($returns - $phoneCallReturnsAt) >= 1))\
 (set: _dualRing to ($lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and ($returns - $lilyCall1ReturnsAt) >= 2))\
+<script>setTimeout(function(){ if (window.dssAudio && window.dssAudio.cosmicSewerSuck) window.dssAudio.cosmicSewerSuck(); }, 40);</script>
+<div class="coach-plumbing-intro" aria-hidden="true">
+<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="cpiPipe" cx="50%" cy="50%" r="50%"><stop offset="0%"  stop-color="rgba(40,28,14,0.0)"/><stop offset="38%" stop-color="rgba(22,16,8,0.55)"/><stop offset="72%" stop-color="rgba(10,7,3,0.92)"/><stop offset="100%" stop-color="rgba(4,3,1,1)"/></radialGradient><radialGradient id="cpiCore" cx="50%" cy="50%" r="50%"><stop offset="0%"   stop-color="rgba(220,168,86,0.95)"/><stop offset="45%"  stop-color="rgba(160,112,48,0.7)"/><stop offset="100%" stop-color="rgba(80,52,20,0)"/></radialGradient><radialGradient id="cpiPorcelain" cx="50%" cy="42%" r="55%"><stop offset="0%"  stop-color="rgba(220,205,180,0.85)"/><stop offset="55%" stop-color="rgba(180,160,128,0.7)"/><stop offset="92%" stop-color="rgba(120,98,70,0.4)"/><stop offset="100%" stop-color="rgba(60,46,28,0)"/></radialGradient><radialGradient id="cpiVortexFill" cx="50%" cy="50%" r="50%"><stop offset="0%"   stop-color="rgba(98,86,40,0.7)"/><stop offset="45%"  stop-color="rgba(76,64,32,0.65)"/><stop offset="85%"  stop-color="rgba(46,38,18,0.4)"/><stop offset="100%" stop-color="rgba(20,16,8,0)"/></radialGradient><linearGradient id="cpiRust"   x1="0" x2="1"><stop offset="0%" stop-color="rgba(186,108,52,0)"/><stop offset="50%" stop-color="rgba(212,128,60,1)"/><stop offset="100%" stop-color="rgba(186,108,52,0)"/></linearGradient><linearGradient id="cpiSepia"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(160,124,72,0)"/><stop offset="50%" stop-color="rgba(196,150,86,1)"/><stop offset="100%" stop-color="rgba(160,124,72,0)"/></linearGradient><linearGradient id="cpiBrass"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(168,140,72,0)"/><stop offset="50%" stop-color="rgba(204,168,86,1)"/><stop offset="100%" stop-color="rgba(168,140,72,0)"/></linearGradient><linearGradient id="cpiSlime"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(108,124,68,0)"/><stop offset="50%" stop-color="rgba(146,166,88,1)"/><stop offset="100%" stop-color="rgba(108,124,68,0)"/></linearGradient><linearGradient id="cpiAlgae"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(78,96,56,0)"/><stop offset="50%" stop-color="rgba(110,134,72,1)"/><stop offset="100%" stop-color="rgba(78,96,56,0)"/></linearGradient><linearGradient id="cpiCopper" x1="0" x2="1"><stop offset="0%" stop-color="rgba(140,90,52,0)"/><stop offset="50%" stop-color="rgba(176,116,68,1)"/><stop offset="100%" stop-color="rgba(140,90,52,0)"/></linearGradient><linearGradient id="cpiOlive"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(96,86,40,0)"/><stop offset="50%" stop-color="rgba(132,116,52,1)"/><stop offset="100%" stop-color="rgba(96,86,40,0)"/></linearGradient><linearGradient id="cpiMurk"   x1="0" x2="1"><stop offset="0%" stop-color="rgba(80,62,38,0)"/><stop offset="50%" stop-color="rgba(110,86,50,1)"/><stop offset="100%" stop-color="rgba(80,62,38,0)"/></linearGradient><filter id="cpiGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b1"/><feGaussianBlur stdDeviation="5" result="b2"/><feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="cpiSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"/></filter><!-- Grime texture: turbulent noise to make the pipe wall feel encrusted --><filter id="cpiGrime" x="-50%" y="-50%" width="200%" height="200%"><feTurbulence baseFrequency="0.85" numOctaves="3" seed="7" result="noise"/><feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.22  0 0 0 0 0.10  0 0 0 0.55 0"/></filter></defs>
+<!-- Pipe-shaft blackness — heavy, no light reaches here -->
+<rect x="-100" y="-100" width="200" height="200" fill="rgba(4,3,1,1)"/>
+<!-- Encrusted grimy wall texture filling the periphery -->
+<rect x="-100" y="-100" width="200" height="200" fill="rgba(60,42,20,0.55)" filter="url(#cpiGrime)" opacity="0.9"/>
+<!-- Pipe-throat vignette — dark heart, dirty amber periphery -->
+<circle cx="0" cy="0" r="100" fill="url(#cpiPipe)" opacity="0.95"/>
+<!-- Stagnant brown-green sewer water pooled at the bottom of the pipe.
+     Translucent so the dark pipe shows through; the surface sloshes
+     side to side, the meniscus tilts, so the pool reads as restless. -->
+<g class="cpi-water" opacity="0.58">
+  <defs>
+    <linearGradient id="cpiWaterFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="rgba(76,82,42,0.45)"/>
+      <stop offset="30%"  stop-color="rgba(56,60,28,0.55)"/>
+      <stop offset="100%" stop-color="rgba(30,32,12,0.7)"/>
+    </linearGradient>
+    <linearGradient id="cpiWaterSheen" x1="0" x2="1">
+      <stop offset="0%"   stop-color="rgba(150,158,98,0)"/>
+      <stop offset="40%"  stop-color="rgba(176,186,118,0.7)"/>
+      <stop offset="60%"  stop-color="rgba(176,186,118,0.7)"/>
+      <stop offset="100%" stop-color="rgba(150,158,98,0)"/>
+    </linearGradient>
+  </defs>
+  <!-- Water body — wavy top edge, fills the bottom of the viewBox -->
+  <path class="cpi-water-body" d="M -100,48 Q -75,40 -50,46 Q -25,52 0,44 Q 25,38 50,46 Q 75,52 100,42 L 100,100 L -100,100 Z" fill="url(#cpiWaterFill)"/>
+  <!-- Meniscus highlight — bright skin on the surface -->
+  <path class="cpi-water-sheen" d="M -100,48 Q -75,40 -50,46 Q -25,52 0,44 Q 25,38 50,46 Q 75,52 100,42" fill="none" stroke="url(#cpiWaterSheen)" stroke-width="0.6" opacity="0.85"/>
+  <!-- A few scum patches floating on the surface -->
+  <ellipse cx="-40" cy="50" rx="14" ry="1.4" fill="rgba(96,108,52,0.55)"/>
+  <ellipse cx="22"  cy="46" rx="10" ry="1.2" fill="rgba(88,100,48,0.5)"/>
+  <ellipse cx="62"  cy="48" rx="8"  ry="1.0" fill="rgba(108,118,60,0.5)"/>
+  <!-- Surface bubbles — the kind you don't want to think about -->
+  <circle cx="-58" cy="49" r="1.4" fill="rgba(180,178,120,0.55)"/>
+  <circle cx="-18" cy="47" r="0.9" fill="rgba(170,168,110,0.45)"/>
+  <circle cx="44"  cy="45" r="1.2" fill="rgba(190,184,128,0.5)"/>
+  <circle cx="78"  cy="48" r="0.8" fill="rgba(176,170,116,0.45)"/>
+</g>
+<!-- Forward-motion streaks: bright dashes that elongate radially as we
+     accelerate down the pipe. Each streak rides its own keyframe; the
+     staggered delays make a chain of velocity-trails always on screen. -->
+<g class="cpi-streaks" filter="url(#cpiGlow)" opacity="0.9">
+  <line class="cpi-streak cpi-streak-1"  x1="0" y1="0" x2="0"   y2="-100" stroke="rgba(220,180,110,0.85)" stroke-width="0.7" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-2"  x1="0" y1="0" x2="71"  y2="-71"  stroke="rgba(208,160,90,0.85)"  stroke-width="0.7" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-3"  x1="0" y1="0" x2="100" y2="0"    stroke="rgba(190,148,82,0.85)"  stroke-width="0.7" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-4"  x1="0" y1="0" x2="71"  y2="71"   stroke="rgba(180,140,76,0.85)"  stroke-width="0.7" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-5"  x1="0" y1="0" x2="0"   y2="100"  stroke="rgba(170,130,72,0.85)"  stroke-width="0.7" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-6"  x1="0" y1="0" x2="-71" y2="71"   stroke="rgba(160,124,66,0.85)"  stroke-width="0.7" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-7"  x1="0" y1="0" x2="-100" y2="0"   stroke="rgba(168,128,70,0.85)"  stroke-width="0.7" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-8"  x1="0" y1="0" x2="-71" y2="-71"  stroke="rgba(200,150,80,0.85)"  stroke-width="0.7" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-9"  x1="0" y1="0" x2="38"  y2="-92"  stroke="rgba(140,110,60,0.7)"   stroke-width="0.55" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-10" x1="0" y1="0" x2="92"  y2="-38"  stroke="rgba(140,110,60,0.7)"   stroke-width="0.55" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-11" x1="0" y1="0" x2="92"  y2="38"   stroke="rgba(140,110,60,0.7)"   stroke-width="0.55" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-12" x1="0" y1="0" x2="38"  y2="92"   stroke="rgba(140,110,60,0.7)"   stroke-width="0.55" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-13" x1="0" y1="0" x2="-38" y2="92"   stroke="rgba(140,110,60,0.7)"   stroke-width="0.55" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-14" x1="0" y1="0" x2="-92" y2="38"   stroke="rgba(140,110,60,0.7)"   stroke-width="0.55" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-15" x1="0" y1="0" x2="-92" y2="-38"  stroke="rgba(140,110,60,0.7)"   stroke-width="0.55" stroke-linecap="round"/>
+  <line class="cpi-streak cpi-streak-16" x1="0" y1="0" x2="-38" y2="-92"  stroke="rgba(140,110,60,0.7)"   stroke-width="0.55" stroke-linecap="round"/>
+</g>
+<!-- Receding pipe rings — every ring is a rust/brass/slime band. They
+     are born tiny at the focal point and rocket outward; the staggered
+     starts plus iterating loops produce a constant chain rushing toward
+     the camera. -->
+<g class="cpi-tunnel" filter="url(#cpiGlow)">
+  <circle class="cpi-ring cpi-ring-1"  cx="0" cy="0" r="6" fill="none" stroke="#D4843C" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-2"  cx="0" cy="0" r="6" fill="none" stroke="#C49656" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-3"  cx="0" cy="0" r="6" fill="none" stroke="#CCA856" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-4"  cx="0" cy="0" r="6" fill="none" stroke="#92A658" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-5"  cx="0" cy="0" r="6" fill="none" stroke="#6E8648" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-6"  cx="0" cy="0" r="6" fill="none" stroke="#B07444" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-7"  cx="0" cy="0" r="6" fill="none" stroke="#846E36" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-8"  cx="0" cy="0" r="6" fill="none" stroke="#D4843C" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-9"  cx="0" cy="0" r="6" fill="none" stroke="#CCA856" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-10" cx="0" cy="0" r="6" fill="none" stroke="#92A658" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-11" cx="0" cy="0" r="6" fill="none" stroke="#B07444" stroke-width="2.2"/>
+  <circle class="cpi-ring cpi-ring-12" cx="0" cy="0" r="6" fill="none" stroke="#846E36" stroke-width="2.2"/>
+</g>
+<!-- Bubbles rising out of the murk: small irregular circles trail past
+     the camera, reinforcing the "we are submerged and ascending" read. -->
+<g class="cpi-bubbles" opacity="0.85" filter="url(#cpiSoft)">
+  <circle class="cpi-bubble cpi-bubble-1" cx="-22" cy="0" r="2.2" fill="rgba(196,178,128,0.7)"/>
+  <circle class="cpi-bubble cpi-bubble-2" cx="14"  cy="0" r="1.6" fill="rgba(176,156,108,0.7)"/>
+  <circle class="cpi-bubble cpi-bubble-3" cx="32"  cy="0" r="2.8" fill="rgba(208,184,132,0.65)"/>
+  <circle class="cpi-bubble cpi-bubble-4" cx="-44" cy="0" r="1.9" fill="rgba(166,144,96,0.7)"/>
+  <circle class="cpi-bubble cpi-bubble-5" cx="6"   cy="0" r="3.0" fill="rgba(214,190,140,0.7)"/>
+  <circle class="cpi-bubble cpi-bubble-6" cx="-12" cy="0" r="1.4" fill="rgba(192,168,118,0.7)"/>
+</g>
+<!-- Focal-point at the end of the pipe — starts small and grimy-amber
+     like a far bulb, ends as a SOLID bright disc filling the screen: the
+     literal end of the pipe, the porcelain mouth you arrive at. Two
+     layers: an outer halo that glows and grows, and an inner solid disc
+     that remains a hard-edged circle even as it consumes the viewport. -->
+<g class="cpi-focal">
+  <g filter="url(#cpiGlow)">
+    <circle cx="0" cy="0" r="26" fill="url(#cpiCore)"/>
+    <circle cx="0" cy="0" r="10" fill="rgba(232,182,98,0.92)"/>
+  </g>
+  <circle class="cpi-focal-disc" cx="0" cy="0" r="3.6" fill="rgba(252,230,180,1)"/>
+</g>
+<!-- Trippy rotating arms — pastel rainbow petals nesting inward. Each
+     arm is a different colour; the whole group spins as one. -->
+<g class="cpi-arms" filter="url(#cpiGlow)"><path d="M 0,-92 C 36,-74 66,-42 82,0 C 66,42 36,74 0,92 C -36,74 -66,42 -82,0 C -66,-42 -36,-74 0,-92 Z" fill="none" stroke="url(#cpiPink)" stroke-width="2.2" opacity="0.95"/><path d="M 0,-78 C 30,-62 56,-32 68,0 C 56,32 30,62 0,78 C -30,62 -56,32 -68,0 C -56,-32 -30,-62 0,-78 Z" fill="none" stroke="url(#cpiPeach)" stroke-width="2.0" opacity="0.92"/><path d="M 0,-64 C 24,-50 46,-24 56,0 C 46,24 24,50 0,64 C -24,50 -46,24 -56,0 C -46,-24 -24,-50 0,-64 Z" fill="none" stroke="url(#cpiLemon)" stroke-width="1.8" opacity="0.9"/><path d="M 0,-50 C 18,-38 36,-18 44,0 C 36,18 18,38 0,50 C -18,38 -36,18 -44,0 C -36,-18 -18,-38 0,-50 Z" fill="none" stroke="url(#cpiMint)" stroke-width="1.6" opacity="0.88"/><path d="M 0,-36 C 14,-28 26,-12 32,0 C 26,12 14,28 0,36 C -14,28 -26,12 -32,0 C -26,-12 -14,-28 0,-36 Z" fill="none" stroke="url(#cpiSky)" stroke-width="1.4" opacity="0.85"/><path d="M 0,-24 C 10,-18 18,-8 22,0 C 18,8 10,18 0,24 C -10,18 -18,8 -22,0 C -18,-8 -10,-18 0,-24 Z" fill="none" stroke="url(#cpiLav)" stroke-width="1.2" opacity="0.82"/></g>
+<!-- Counter-rotating rainbow ribbons at the outermost edge -->
+<g class="cpi-ribbon" filter="url(#cpiGlow)"><path d="M 0,-96 A 96,96 0 0 1 96,0" fill="none" stroke="url(#cpiPink)" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/><path d="M 96,0 A 96,96 0 0 1 0,96" fill="none" stroke="url(#cpiLemon)" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/><path d="M 0,96 A 96,96 0 0 1 -96,0" fill="none" stroke="url(#cpiMint)" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/><path d="M -96,0 A 96,96 0 0 1 0,-96" fill="none" stroke="url(#cpiLav)" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/></g>
+<!-- Toilet-water vortex — pastel rainbow swirl spinning at the bottom -->
+<g class="cpi-vortex" filter="url(#cpiSoft)"><circle cx="0" cy="0" r="58" fill="url(#cpiVortexFill)"/><path d="M 50,0  C 50,28 28,50 0,50  C -28,50 -50,28 -50,0  C -50,-28 -28,-50 0,-50  C 28,-50 50,-28 50,0 Z" fill="none" stroke="url(#cpiPink)" stroke-width="1.6"/><path d="M 40,0  C 40,22 22,40 0,40  C -22,40 -40,22 -40,0  C -40,-22 -22,-40 0,-40  C 22,-40 40,-22 40,0 Z" fill="none" stroke="url(#cpiPeach)" stroke-width="1.3" opacity="0.9"/><path d="M 30,0  C 30,17 17,30 0,30  C -17,30 -30,17 -30,0  C -30,-17 -17,-30 0,-30  C 17,-30 30,-17 30,0 Z" fill="none" stroke="url(#cpiMint)" stroke-width="1.0" opacity="0.85"/><path d="M 22,0  C 22,12 12,22 0,22  C -12,22 -22,12 -22,0  C -22,-12 -12,-22 0,-22  C 12,-22 22,-12 22,0 Z" fill="none" stroke="url(#cpiSky)" stroke-width="0.8" opacity="0.8"/><circle cx="0" cy="0" r="14" fill="url(#cpiCore)"/><circle cx="0" cy="0" r="4" fill="rgba(255,255,250,1)"/></g>
+<!-- Porcelain rim of the toilet bowl — we emerge through this -->
+<g class="cpi-bowl"><circle cx="0" cy="0" r="86" fill="none" stroke="rgba(248,242,250,0.95)" stroke-width="6"/><circle cx="0" cy="0" r="86" fill="url(#cpiPorcelain)" opacity="0.18"/><circle cx="0" cy="0" r="79" fill="none" stroke="rgba(210,196,232,0.55)" stroke-width="1.2"/></g>
+<!-- Splashing droplets — pastel rainbow flung outward as you surface -->
+<g class="cpi-splash" filter="url(#cpiGlow)">
+  <circle class="cpi-drop cpi-drop-1"  cx="0"   cy="-78" r="3.0" fill="#FFB2D9"/>
+  <circle class="cpi-drop cpi-drop-2"  cx="42"  cy="-66" r="2.6" fill="#FFD2AA"/>
+  <circle class="cpi-drop cpi-drop-3"  cx="72"  cy="-32" r="3.2" fill="#FFFAB2"/>
+  <circle class="cpi-drop cpi-drop-4"  cx="80"  cy="14"  r="2.6" fill="#B2FFD2"/>
+  <circle class="cpi-drop cpi-drop-5"  cx="58"  cy="56"  r="3.0" fill="#B2E1FF"/>
+  <circle class="cpi-drop cpi-drop-6"  cx="18"  cy="78"  r="3.2" fill="#D2BEFF"/>
+  <circle class="cpi-drop cpi-drop-7"  cx="-30" cy="74"  r="2.6" fill="#EBC8FA"/>
+  <circle class="cpi-drop cpi-drop-8"  cx="-62" cy="50"  r="3.0" fill="#FFB2D9"/>
+  <circle class="cpi-drop cpi-drop-9"  cx="-80" cy="6"   r="2.6" fill="#FFFAB2"/>
+  <circle class="cpi-drop cpi-drop-10" cx="-70" cy="-40" r="3.2" fill="#B2FFD2"/>
+  <circle class="cpi-drop cpi-drop-11" cx="-32" cy="-70" r="2.6" fill="#B2E1FF"/>
+  <circle class="cpi-drop cpi-drop-12" cx="36"  cy="-82" r="3.0" fill="#D2BEFF"/>
+</g>
+</svg>
+</div>
 <svg class="coach-beam" viewBox="0 0 300 36" width="100%" height="36" preserveAspectRatio="none"><defs><linearGradient id="wdA" x1="0" x2="1"><stop offset="0%" stop-color="#3a2408" stop-opacity="0"/><stop offset="10%" stop-color="#5c3810" stop-opacity="1"/><stop offset="90%" stop-color="#5c3810" stop-opacity="1"/><stop offset="100%" stop-color="#3a2408" stop-opacity="0"/></linearGradient><linearGradient id="wdB" x1="0" x2="1"><stop offset="0%" stop-color="#3a2408" stop-opacity="0"/><stop offset="10%" stop-color="#7a5220" stop-opacity="0.7"/><stop offset="90%" stop-color="#7a5220" stop-opacity="0.7"/><stop offset="100%" stop-color="#3a2408" stop-opacity="0"/></linearGradient><linearGradient id="brA" x1="0" x2="1"><stop offset="0%" stop-color="#c8922a" stop-opacity="0"/><stop offset="50%" stop-color="#c8922a" stop-opacity="0.7"/><stop offset="100%" stop-color="#c8922a" stop-opacity="0"/></linearGradient><linearGradient id="wdGrain" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7a5220" stop-opacity="0.2"/><stop offset="50%" stop-color="#5c3810" stop-opacity="0"/><stop offset="100%" stop-color="#7a5220" stop-opacity="0.15"/></linearGradient></defs><rect x="0" y="6" width="300" height="24" fill="url(#wdA)"/><rect x="0" y="6" width="300" height="24" fill="url(#wdGrain)"/><line x1="0" y1="6" x2="300" y2="6" stroke="url(#wdB)" stroke-width="1.2"/><line x1="0" y1="30" x2="300" y2="30" stroke="url(#wdB)" stroke-width="1.2"/><line x1="0" y1="18" x2="300" y2="18" stroke="url(#brA)" stroke-width="1.5"/><g opacity="0.4" stroke="#7a5220" stroke-width="0.4" fill="none"><line x1="30" y1="6" x2="32" y2="30"/><line x1="80" y1="6" x2="78" y2="30"/><line x1="130" y1="6" x2="131" y2="30"/><line x1="170" y1="6" x2="169" y2="30"/><line x1="220" y1="6" x2="222" y2="30"/><line x1="270" y1="6" x2="268" y2="30"/></g><circle cx="50" cy="18" r="4" fill="#c8922a" opacity="0.5"/><circle cx="50" cy="17" r="1.5" fill="#ffe090" opacity="0.35"/><g transform="translate(150,18)" opacity="0.55"><path d="M-8,-6 Q-9,2 -6,6 Q-3,10 0,10 Q3,10 6,6 Q9,2 8,-6" fill="none" stroke="#c8922a" stroke-width="1.5" stroke-linecap="round"/><circle cx="-8" cy="-6" r="1.5" fill="#c8922a"/><circle cx="8" cy="-6" r="1.5" fill="#c8922a"/></g><circle cx="250" cy="18" r="4" fill="#c8922a" opacity="0.5"/><circle cx="250" cy="17" r="1.5" fill="#ffe090" opacity="0.35"/></svg>
 (set: $afterMidnight to true)\
 <h2 class="venue-title">The Coach and Horses</h2>
@@ -29131,9 +29388,9 @@ You're eating at the counter when somebody passes the window: that's Lily.
 (else-if: _dualRing)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">The phone behind the bar rings.
 
 [[Accept the call|The dual ring]]</div>]
-(else:)[(if: $resumingFromCall is true)[(set: $resumingFromCall to false)(if: $sobriety <= 15)[(link: "Retch.")[(set: $sobriety to $sobriety + 22)(set: $confidence to $confidence + 12)<span class="inventory-note">&#9734; SOBRIETY +22 | MORALE +12</span><script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]]](else:)[You've come-to in a cubicle, in what you think is the Gents toilet in the Coach and Horses.
+(else:)[(if: $resumingFromCall is true)[(set: $resumingFromCall to false)(if: $sobriety <= 15)[(link: "Retch.")[(set: $sobriety to $sobriety + 14)<script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]]](else:)[You've come-to in a cubicle, in what you think is the gents in the Coach and Horses.
 
-(if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to $sobriety + 32)(set: $confidence to $confidence + 22)(set: $crashedAfterDualRing to false)<span class="inventory-note">&#9734; SOBRIETY +32 | MORALE +22</span><script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]](else:)[(link: "Retch.")[(set: $sobriety to $sobriety + 22)(set: $confidence to $confidence + 12)<span class="inventory-note">&#9734; SOBRIETY +22 | MORALE +12</span><script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]]
+(if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to $sobriety + 18)(set: $crashedAfterDualRing to false)<script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]](else:)[(link: "Retch.")[(set: $sobriety to $sobriety + 14)<script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]]
 
 You gather your limbs to the bar.
 
@@ -29464,7 +29721,7 @@ There is an atmosphere of the silver screen: as if Brando might emerge in a tigh
 (if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]](else-if: $hadChippy is false)[[[Get some grub|Approach Chinese Fish and Chips]]]
 ]]
 (if: $coachUrgent is false and not (($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2)))[[[To The French|Approach The French]] (if: $haunts contains $haunt4)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt1)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt2)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]
-](if: $coachUrgent is false and ($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2))[(if: $tookLily5 is false)[<div class="choice-box">[[Back to The French — there was something you missed|Approach The French]]</div>](else:)[[[Back to The French|Approach The French]]]
+](if: $coachUrgent is false and ($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2))[(if: $tookLily5 is false)[<div class="choice-box">[[Back to The French — there was something you missed|Approach The French]]</div>](else-if: not _towerReady)[[[Back to The French|Approach The French]]](else:)[<span class="greyed-out">The French &#91;CLOSED&#93;</span>]
 ]\
 (if: $coachUrgent is false and $visited's French is true and $hadPhoneCall is true and $metCritic is false)[[[The Pillars — there was someone you wanted to talk to|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]
 ](else-if: $coachUrgent is false and $visited's French is true and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]
@@ -30312,6 +30569,7 @@ You flip it over. On the other side, is written: //Carthage Short Hercules' Pill
 <div class="haunt-opens">An invitation to Trisha's.</div>
 <div class="haunt-progress">(print: $haunts's length) of 12 caught</div>
 </div>
+<script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.penScratch)window.dssAudio.penScratch();},700);</script>
 (if: $haunts's length is 1)[(set: $hauntExplained to true)
 <div class="lore-box">\
 <strong>⟡ HAUNTS ⟡</strong>\
@@ -30359,6 +30617,7 @@ You flip it over. On the other side, is written: //Carthage Short Hercules' Pill
 <div class="haunt-opens">An invitation to Trisha's.</div>
 <div class="haunt-progress">(print: $haunts's length) of 12 caught</div>
 </div>
+<script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.penScratch)window.dssAudio.penScratch();},700);</script>
 (if: $haunts's length is 1)[(set: $hauntExplained to true)
 <div class="lore-box">\
 <strong>⟡ HAUNTS ⟡</strong>\
@@ -30434,7 +30693,7 @@ Modalities of the afterdark; lighthead jazz pharaoh, with the spiked corona.
 
 Or some other way of putting it.
 
-Count yourself in lucky, count you out.
+Count yourself in, lucky, count you out.
 
 [[On.|Dean Street]]
 </div>
@@ -31836,7 +32095,31 @@ loop();
 (set: $confidence to $confidence + 8)\
 (set: $sobriety to $sobriety + 8)\
 <div class="typewriter-page">
+<div class="cow-soho-map" aria-hidden="true">
+<svg viewBox="0 0 360 200" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="csmRoad" x1="0" x2="1"><stop offset="0%" stop-color="rgba(212,165,116,0)"/><stop offset="50%" stop-color="rgba(212,165,116,0.9)"/><stop offset="100%" stop-color="rgba(212,165,116,0)"/></linearGradient></defs>
+<rect width="360" height="200" fill="rgba(20,14,8,0.55)"/>
+<!-- six streets, recited in order: Greek, Frith, Dean, Wardour, Berwick, Poland -->
+<line class="csm-st csm-greek"   x1="40"  y1="30"  x2="40"  y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
+<line class="csm-st csm-frith"   x1="100" y1="30"  x2="100" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
+<line class="csm-st csm-dean"    x1="160" y1="30"  x2="160" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
+<line class="csm-st csm-wardour" x1="220" y1="30"  x2="220" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
+<line class="csm-st csm-berwick" x1="280" y1="30"  x2="280" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
+<line class="csm-st csm-poland"  x1="320" y1="30"  x2="320" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
+<text class="csm-lb csm-lb-greek"   x="40"  y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">GREEK</text>
+<text class="csm-lb csm-lb-frith"   x="100" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">FRITH</text>
+<text class="csm-lb csm-lb-dean"    x="160" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">DEAN</text>
+<text class="csm-lb csm-lb-wardour" x="220" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">WARDOUR</text>
+<text class="csm-lb csm-lb-berwick" x="280" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">BERWICK</text>
+<text class="csm-lb csm-lb-poland"  x="320" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">POLAND</text>
+<!-- crossing east-west routes for texture -->
+<line x1="20" y1="100" x2="340" y2="100" stroke="rgba(180,150,90,0.22)" stroke-width="1"/>
+<line x1="20" y1="60"  x2="340" y2="60"  stroke="rgba(180,150,90,0.15)" stroke-width="0.8"/>
+<line x1="20" y1="140" x2="340" y2="140" stroke="rgba(180,150,90,0.15)" stroke-width="0.8"/>
+</svg>
+</div>
 Greek, Frith, Dean, Wardour, Berwick, Poland.
+
+//Go For Dinner With Billy Piper.//
 
 She knows the map.
 
@@ -33240,9 +33523,8 @@ Before you can answer, he says, 'I don't know.'
 //Tir’d with all these, from these would I be gone,
 Save that, to die, I leave my love alone.//
 
-You both hang up, each leaving the other alone.</span>
-
-(after: 10s)[<div class="phone-exit">(link-goto: "Hang up.", $lilyCallReturn)</div>]
+You both hang up, each leaving the other alone.</span>\
+(after: 10s)[<div class="phone-exit">(link-goto: "Hang up.", $lilyCallReturn)</div>]\
 (after: 30s)[(go-to: $lilyCallReturn)]
 
 
@@ -33504,7 +33786,7 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
      $metCritic=true with $knowsCecilCourt=false. -->
 (unless: $knowsCecilCourt is a boolean)[(set: $knowsCecilCourt to false)]
 (if: $metCritic is true and $knowsCecilCourt is false)[(set: $knowsCecilCourt to true)]
-(set: _hideStats to (a: "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "A Doorway on Dean Street", "Dawn", "PP Pong", "Fight starts", "Fight Round 1", "Fight Round 2", "Fight Round 3", "Fight R1 Back", "Fight R1 Block", "Fight R1 Duck", "Fight R2 Catch", "Fight R2 Counter", "Fight R2 Slip", "Fight R3 Clinch", "Fight R3 Headon", "Fight R3 Weave", "Fight Victory", "Fight Defeat"))
+(set: _hideStats to (a: "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "A Doorway on Dean Street", "Dawn", "Dawn Approach White", "Dawn Approach Black", "PP Pong", "Fight starts", "Fight Round 1", "Fight Round 2", "Fight Round 3", "Fight R1 Back", "Fight R1 Block", "Fight R1 Duck", "Fight R2 Catch", "Fight R2 Counter", "Fight R2 Slip", "Fight R3 Clinch", "Fight R3 Headon", "Fight R3 Weave", "Fight Victory", "Fight Defeat"))
 (if: $returns is a number and $returns >= 1 and not (_hideStats contains (passage:)'s name))[(set: _saved to (savegame: "auto", "Auto save"))]\
 (unless: _hideStats contains (passage:)'s name)[\
 (if: $confidence is a number and $confidence < 0)[(set: $confidence to 0)](if: $confidence is a number and $confidence > 100)[(set: $confidence to 100)](if: $sobriety is a number and $sobriety < 0)[(set: $sobriety to 0)](if: $sobriety is a number and $sobriety > 100)[(set: $sobriety to 100)]\
@@ -35836,7 +36118,7 @@ margin: 0.5em 0;
    player has a directed way out instead of waiting for the auto-redirect. */
 .phone-exit {
   text-align: center;
-  margin: 1.6em 0 0.4em;
+  margin: 0.6em 0 0.4em;
   font-family: 'Special Elite', 'Courier New', monospace;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -36926,6 +37208,23 @@ font-style: italic;
 color: #c0c8b8;
 line-height: 1.7;
 letter-spacing: 0.01em;
+}
+.vh-legend {
+  position: relative;
+  z-index: 2;
+  margin-top: 1.1em;
+  padding-top: 0.8em;
+  border-top: 1px dotted rgba(155, 145, 110, 0.32);
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.92em;
+  color: rgba(196, 200, 184, 0.85);
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  font-style: italic;
+}
+.vh-legend-row { margin: 0.18em 0; }
+.vh-legend .hp, .vh-legend .pp, .vh-legend .al, .vh-legend .qp {
+  margin: 0 0.15em;
 }
 
 /* ===== ENDING PANE (art-nouveau glass-pane) ===== */
@@ -38752,6 +39051,285 @@ clip-path: polygon(32% 0%, 68% 0%, 82% 100%, 18% 100%);
 /* ── COACH AND HORSES ────────────────────────────────────────────────── */
 .coach-beam        { display:block; width:100%; }
 .coach-beam-bottom { display:block; width:100%; transform:scaleY(-1); }
+/* Cow-ride success: streets light up in the order the cow recites them.
+   Each .csm-st/.csm-lb starts dim and brightens via staggered animation
+   delays, so the map "sorts itself" as the player reads the line. */
+.cow-soho-map {
+  margin: 0.6em auto 1.2em;
+  max-width: 360px;
+}
+.cow-soho-map svg { width: 100%; height: auto; display: block; }
+.cow-soho-map .csm-st, .cow-soho-map .csm-lb {
+  opacity: 0;
+  animation: csmStreetReveal 1.1s ease-out both;
+}
+.cow-soho-map .csm-greek,   .cow-soho-map .csm-lb-greek   { animation-delay: 0.3s; }
+.cow-soho-map .csm-frith,   .cow-soho-map .csm-lb-frith   { animation-delay: 0.8s; }
+.cow-soho-map .csm-dean,    .cow-soho-map .csm-lb-dean    { animation-delay: 1.3s; }
+.cow-soho-map .csm-wardour, .cow-soho-map .csm-lb-wardour { animation-delay: 1.8s; }
+.cow-soho-map .csm-berwick, .cow-soho-map .csm-lb-berwick { animation-delay: 2.3s; }
+.cow-soho-map .csm-poland,  .cow-soho-map .csm-lb-poland  { animation-delay: 2.8s; }
+@keyframes csmStreetReveal {
+  0%   { opacity: 0; filter: brightness(0.4); }
+  35%  { opacity: 1; filter: brightness(1.6); }
+  100% { opacity: 0.78; filter: brightness(1); }
+}
+/* Coach intro — full-screen "rising up out of the toilet plumbing" beat.
+   We look UP through a dark sewer pipe (receding rings of pipe-wall
+   getting smaller toward the deep), with a vortex of toilet-water at the
+   bottom. As the player surfaces, the rings rush outward (camera flying
+   up the pipe), the porcelain rim of the bowl emerges, and droplets
+   splash outward as you break through. Then the whole overlay fades
+   away to reveal the Coach passage proper. */
+.coach-plumbing-intro {
+  position: fixed;
+  inset: 0;
+  background: #050302;
+  z-index: 9500;
+  pointer-events: none;
+  animation: coachPlumbFade 3.6s ease-out both;
+  overflow: hidden;
+}
+.coach-plumbing-intro svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* Tunnel rings — each one is born tiny at the focal point and ROCKETS
+   outward via a strong ease-in (slow at the start, accelerating to a
+   blur at the camera). 1.0s per cycle, infinite — combined with the
+   staggered delays this produces a continuous wall of rings rushing
+   toward the viewer, a clear forward-motion read. */
+.coach-plumbing-intro .cpi-ring {
+  transform-origin: center;
+  animation: coachPlumbRing 1.0s cubic-bezier(0.5, 0, 0.75, 0) infinite both;
+}
+.coach-plumbing-intro .cpi-ring-1  { animation-delay: 0.00s; }
+.coach-plumbing-intro .cpi-ring-2  { animation-delay: 0.08s; }
+.coach-plumbing-intro .cpi-ring-3  { animation-delay: 0.16s; }
+.coach-plumbing-intro .cpi-ring-4  { animation-delay: 0.24s; }
+.coach-plumbing-intro .cpi-ring-5  { animation-delay: 0.33s; }
+.coach-plumbing-intro .cpi-ring-6  { animation-delay: 0.42s; }
+.coach-plumbing-intro .cpi-ring-7  { animation-delay: 0.50s; }
+.coach-plumbing-intro .cpi-ring-8  { animation-delay: 0.58s; }
+.coach-plumbing-intro .cpi-ring-9  { animation-delay: 0.66s; }
+.coach-plumbing-intro .cpi-ring-10 { animation-delay: 0.75s; }
+.coach-plumbing-intro .cpi-ring-11 { animation-delay: 0.83s; }
+.coach-plumbing-intro .cpi-ring-12 { animation-delay: 0.92s; }
+/* Velocity streaks — short rust dashes near the centre that elongate
+   into long bright trails as they shoot toward the camera. */
+.coach-plumbing-intro .cpi-streak {
+  transform-origin: 0 0;
+  animation: coachPlumbStreak 0.85s cubic-bezier(0.5, 0, 0.75, 0) infinite both;
+}
+.coach-plumbing-intro .cpi-streak-1  { animation-delay: 0.00s; }
+.coach-plumbing-intro .cpi-streak-2  { animation-delay: 0.05s; }
+.coach-plumbing-intro .cpi-streak-3  { animation-delay: 0.10s; }
+.coach-plumbing-intro .cpi-streak-4  { animation-delay: 0.15s; }
+.coach-plumbing-intro .cpi-streak-5  { animation-delay: 0.20s; }
+.coach-plumbing-intro .cpi-streak-6  { animation-delay: 0.25s; }
+.coach-plumbing-intro .cpi-streak-7  { animation-delay: 0.30s; }
+.coach-plumbing-intro .cpi-streak-8  { animation-delay: 0.35s; }
+.coach-plumbing-intro .cpi-streak-9  { animation-delay: 0.40s; }
+.coach-plumbing-intro .cpi-streak-10 { animation-delay: 0.45s; }
+.coach-plumbing-intro .cpi-streak-11 { animation-delay: 0.50s; }
+.coach-plumbing-intro .cpi-streak-12 { animation-delay: 0.55s; }
+.coach-plumbing-intro .cpi-streak-13 { animation-delay: 0.60s; }
+.coach-plumbing-intro .cpi-streak-14 { animation-delay: 0.65s; }
+.coach-plumbing-intro .cpi-streak-15 { animation-delay: 0.70s; }
+.coach-plumbing-intro .cpi-streak-16 { animation-delay: 0.75s; }
+/* Brown-green water at the bottom of the pipe — translucent body, the
+   whole pool sloshes side to side with a tilting meniscus and rolling
+   surface. The sheen rotates slightly faster than the body so the
+   surface skin reads as catching the light differently from the bulk. */
+.coach-plumbing-intro .cpi-water-body {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: coachPlumbSlosh 2.2s ease-in-out infinite both;
+}
+.coach-plumbing-intro .cpi-water-sheen {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: coachPlumbSloshSheen 1.7s ease-in-out infinite both;
+}
+@keyframes coachPlumbSlosh {
+  0%, 100% { transform: translate(0, 0)    rotate(0deg); }
+  25%      { transform: translate(-8px, 2px)  rotate(-2.2deg); }
+  50%      { transform: translate(0, -3px)    rotate(0deg); }
+  75%      { transform: translate(8px, 2px)   rotate(2.2deg); }
+}
+@keyframes coachPlumbSloshSheen {
+  0%, 100% { transform: translate(0, 0)    rotate(0deg); }
+  25%      { transform: translate(7px, -2px)  rotate(2.6deg); }
+  50%      { transform: translate(0, 3px)    rotate(0deg); }
+  75%      { transform: translate(-7px, -2px) rotate(-2.6deg); }
+}
+/* Bubbles drifting past as we ascend through the murk */
+.coach-plumbing-intro .cpi-bubble {
+  transform-origin: center;
+  animation: coachPlumbBubble 1.6s ease-out infinite both;
+}
+.coach-plumbing-intro .cpi-bubble-1 { animation-delay: 0.00s; }
+.coach-plumbing-intro .cpi-bubble-2 { animation-delay: 0.25s; }
+.coach-plumbing-intro .cpi-bubble-3 { animation-delay: 0.55s; }
+.coach-plumbing-intro .cpi-bubble-4 { animation-delay: 0.80s; }
+.coach-plumbing-intro .cpi-bubble-5 { animation-delay: 1.05s; }
+.coach-plumbing-intro .cpi-bubble-6 { animation-delay: 1.30s; }
+/* Dim grimy lamp at the end of the pipe — pulses, then bursts open as
+   we punch through the bowl rim into the gents. */
+.coach-plumbing-intro .cpi-focal {
+  transform-origin: center;
+  animation: coachPlumbFocal 3.6s ease-out both;
+}
+/* The hard-edged solid disc that grows to fill the screen — the
+   "arrival" shape: a clean circle, not a glow, so the end of the pipe
+   reads as a literal destination. */
+.coach-plumbing-intro .cpi-focal-disc {
+  transform-origin: center;
+  animation: coachPlumbDisc 3.6s cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+/* Trippy rainbow petal-arms spinning over the tunnel */
+.coach-plumbing-intro .cpi-arms {
+  transform-origin: center;
+  animation: coachPlumbArms 3.6s ease-out both;
+}
+/* Outer rainbow ribbon counter-rotating */
+.coach-plumbing-intro .cpi-ribbon {
+  transform-origin: center;
+  animation: coachPlumbRibbon 3.6s ease-out both;
+}
+/* Toilet-water vortex spins fast then washes away as we rise past it */
+.coach-plumbing-intro .cpi-vortex {
+  transform-origin: center;
+  animation: coachPlumbVortex 3.6s ease-out both;
+}
+/* Porcelain rim — invisible at first, emerges as we cross the bowl */
+.coach-plumbing-intro .cpi-bowl {
+  transform-origin: center;
+  opacity: 0;
+  animation: coachPlumbBowl 3.6s ease-out both;
+}
+/* Splash droplets — appear at the surface-break and fling outward */
+.coach-plumbing-intro .cpi-splash {
+  transform-origin: center;
+  opacity: 0;
+  animation: coachPlumbSplash 3.6s ease-out both;
+}
+.coach-plumbing-intro .cpi-drop {
+  transform-origin: center;
+  animation: coachPlumbDropFling 1.6s ease-out 1.7s both;
+}
+@keyframes coachPlumbFade {
+  /* Hold the overlay fully opaque almost to the end, then snap-fade in
+     the last 7% — by then the solid disc has filled the screen, so the
+     fade is dissolving the bright disc into the passage rather than
+     fading the tunnel away. */
+  0%   { opacity: 0; }
+  6%   { opacity: 1; }
+  93%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes coachPlumbRing {
+  /* Born minuscule at the vanishing point, then accelerates HARD outward
+     toward the camera — strong ease-in for a "we are falling forward
+     into it" feel. */
+  0%   { transform: scale(0.01); opacity: 0; }
+  18%  { opacity: 0.4; }
+  35%  { opacity: 0.95; }
+  100% { transform: scale(18); opacity: 0; }
+}
+@keyframes coachPlumbStreak {
+  /* Velocity dashes shoot from the focal point outward, elongating as
+     they accelerate. Hot near the camera, gone past the viewport. */
+  0%   { transform: scale(0.02, 0.04); opacity: 0; }
+  18%  { transform: scale(0.18, 0.45); opacity: 0.95; }
+  60%  { transform: scale(1.2, 2.4);   opacity: 1; }
+  100% { transform: scale(2.6, 6.0);   opacity: 0; }
+}
+@keyframes coachPlumbBubble {
+  /* Bubble rises past the camera, wobbling. Each one spawns at a
+     different radial point (per-bubble translate), accelerating outward. */
+  0%   { transform: scale(0.3) translate(0, 0); opacity: 0; }
+  18%  { opacity: 0.85; }
+  100% { transform: scale(2.4) translate(var(--cpi-bx, 0), var(--cpi-by, -40px)); opacity: 0; }
+}
+.coach-plumbing-intro .cpi-bubble-1 { --cpi-bx: -28px; --cpi-by: -42px; }
+.coach-plumbing-intro .cpi-bubble-2 { --cpi-bx:  18px; --cpi-by: -56px; }
+.coach-plumbing-intro .cpi-bubble-3 { --cpi-bx:  40px; --cpi-by: -32px; }
+.coach-plumbing-intro .cpi-bubble-4 { --cpi-bx: -52px; --cpi-by: -48px; }
+.coach-plumbing-intro .cpi-bubble-5 { --cpi-bx:   6px; --cpi-by: -62px; }
+.coach-plumbing-intro .cpi-bubble-6 { --cpi-bx: -14px; --cpi-by: -50px; }
+@keyframes coachPlumbFocal {
+  /* Dim sewer lamp at the end of the pipe — small and far, throbbing
+     amber as we close on it, then opening into the bright disc at the
+     mouth of the pipe. Stays opaque all the way through; the disc layer
+     below holds the hard-edged "we have arrived" shape. */
+  0%   { transform: scale(0.35); opacity: 0.85; filter: brightness(0.85); }
+  25%  { transform: scale(0.55); opacity: 1.0;  filter: brightness(1.05); }
+  55%  { transform: scale(0.95); opacity: 1.0;  filter: brightness(1.4); }
+  78%  { transform: scale(2.4);  opacity: 1.0;  filter: brightness(2.0); }
+  100% { transform: scale(8);    opacity: 1.0;  filter: brightness(2.4); }
+}
+@keyframes coachPlumbDisc {
+  /* The hard-edged disc — small dot at first, then ZOOMS to fill the
+     viewport as a solid bright circle. This is the "end of the pipe":
+     a literal solid shape you arrive at. Stays at full size + opacity
+     to the very end, when the parent overlay fades it into the passage. */
+  0%   { transform: scale(0.6); opacity: 0.95; }
+  20%  { transform: scale(1.1); opacity: 1.0; }
+  55%  { transform: scale(2.2); opacity: 1.0; }
+  78%  { transform: scale(8);   opacity: 1.0; }
+  100% { transform: scale(40);  opacity: 1.0; }
+}
+@keyframes coachPlumbArms {
+  0%   { transform: scale(0.4) rotate(0deg);    opacity: 0; }
+  18%  { opacity: 1; }
+  62%  { transform: scale(1.4) rotate(540deg);  opacity: 1; }
+  100% { transform: scale(4.2) rotate(900deg);  opacity: 0; }
+}
+@keyframes coachPlumbRibbon {
+  0%   { transform: scale(0.5) rotate(0deg);    opacity: 0; }
+  22%  { opacity: 1; }
+  62%  { transform: scale(1.2) rotate(-420deg); opacity: 0.95; }
+  100% { transform: scale(3.8) rotate(-720deg); opacity: 0; }
+}
+@keyframes coachPlumbVortex {
+  0%   { transform: scale(0.15) rotate(0deg);    opacity: 0; }
+  15%  { opacity: 1; }
+  55%  { transform: scale(1.0) rotate(720deg);   opacity: 0.9; }
+  78%  { transform: scale(2.6) rotate(1080deg);  opacity: 0.5; }
+  100% { transform: scale(5.6) rotate(1260deg);  opacity: 0; }
+}
+@keyframes coachPlumbBowl {
+  0%   { transform: scale(0.05); opacity: 0; }
+  55%  { transform: scale(0.55); opacity: 0; }
+  70%  { transform: scale(1.0);  opacity: 0.95; }
+  85%  { transform: scale(1.35); opacity: 0.85; }
+  100% { transform: scale(2.6);  opacity: 0; }
+}
+@keyframes coachPlumbSplash {
+  0%, 60% { opacity: 0; }
+  70%     { opacity: 1; }
+  100%    { opacity: 0; }
+}
+@keyframes coachPlumbDropFling {
+  0%   { transform: scale(0.3) translateY(0); opacity: 0; }
+  20%  { transform: scale(1.4) translateY(0); opacity: 1; }
+  100% { transform: scale(2.4) translate(var(--cpi-dx, 0), var(--cpi-dy, 0)); opacity: 0; }
+}
+/* Per-drop fling directions — radial outward, varying speeds */
+.coach-plumbing-intro .cpi-drop-1  { --cpi-dx:   0px; --cpi-dy: -60px; }
+.coach-plumbing-intro .cpi-drop-2  { --cpi-dx:  44px; --cpi-dy: -50px; }
+.coach-plumbing-intro .cpi-drop-3  { --cpi-dx:  68px; --cpi-dy: -22px; }
+.coach-plumbing-intro .cpi-drop-4  { --cpi-dx:  72px; --cpi-dy:  14px; }
+.coach-plumbing-intro .cpi-drop-5  { --cpi-dx:  52px; --cpi-dy:  46px; }
+.coach-plumbing-intro .cpi-drop-6  { --cpi-dx:  18px; --cpi-dy:  64px; }
+.coach-plumbing-intro .cpi-drop-7  { --cpi-dx: -26px; --cpi-dy:  60px; }
+.coach-plumbing-intro .cpi-drop-8  { --cpi-dx: -56px; --cpi-dy:  40px; }
+.coach-plumbing-intro .cpi-drop-9  { --cpi-dx: -68px; --cpi-dy:   8px; }
+.coach-plumbing-intro .cpi-drop-10 { --cpi-dx: -56px; --cpi-dy: -32px; }
+.coach-plumbing-intro .cpi-drop-11 { --cpi-dx: -28px; --cpi-dy: -58px; }
+.coach-plumbing-intro .cpi-drop-12 { --cpi-dx:  32px; --cpi-dy: -68px; }
 
 /* ── TRISHA'S ────────────────────────────────────────────────────────── */
 @keyframes neonPulse {

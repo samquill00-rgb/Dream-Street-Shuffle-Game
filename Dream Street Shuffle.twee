@@ -7144,7 +7144,7 @@ _getRimOffset() {
   if (this.type === 'pint' || this.type === 'cider' || this.type === 'beer') {
     return { x: -20, y: -100 };   // topW=40, gH=100
   } else if (this.type === 'wine' || this.type === 'claret' || this.type === 'beaujolais') {
-    return { x: -13, y: -85 };    // bowl top ~-85, bowl half-width ~13 at top
+    return { x: -20, y: -74 };    // bowl top ~-74, bowl half-width ~20 at top
   } else if (this.type === 'champagne' || this.type === 'krug') {
     return { x: -8, y: -97 };     // stem+flute = 32+65 = 97, fluteW=16
   } else if (this.type === 'gin' || this.type === 'vodka') {
@@ -7593,7 +7593,9 @@ _drawTumbler(c, cfg, lev, wob) {
 
 // === WINE GLASS ===
 _drawWine(c, cfg, lev, wob) {
-  var bowlW = 34, bowlH = 50, stemH = 35, baseW = 24;
+  // Burgundy-style wine glass — wider than it is tall, properly globular.
+  // Previously 34×50 read too narrow and got mistaken for a flute.
+  var bowlW = 48, bowlH = 42, stemH = 32, baseW = 28;
   var bowlY = -(stemH + bowlH);
   // Stem
   c.strokeStyle = 'rgba(255,255,255,0.2)';
@@ -9581,7 +9583,10 @@ this.punchT = 0;
 this.resultFlash = 0;
 this.hoveredZone = '';
 
-this.baseTelegraphDuration = 2000;
+// Tightened from 2000ms — the player has less time to read the
+// telegraph and pick a side. Tuned with the per-round difficulty
+// scaling below so round 3 lands inside ~1100ms.
+this.baseTelegraphDuration = 1550;
 this.telegraphDuration = this.baseTelegraphDuration;
 
 this.roundPunches = ['right_cross', 'left_hook', 'uppercut', 'right_cross', 'left_hook', 'uppercut'];
@@ -9679,12 +9684,15 @@ this.copperHit = false;
 this.hoveredZone = '';
 
 if (this.isPractice()) {
-// in-round narrative stripped
+// Practice rounds stay slow — they're the teaching moments.
 this.telegraphDuration = 3200;
 } else {
-// in-round narrative stripped
-var sobPenalty = (100 - this.sobriety) * 5;
-this.telegraphDuration = Math.max(1000, this.baseTelegraphDuration - sobPenalty);
+// Real rounds: get FASTER as the fight goes on. Round 1 lands near
+// baseTelegraphDuration, round 3 lands ~25% tighter. Sobriety drops
+// it further — drunk player has fewer milliseconds to react.
+var roundSpeed = 1 - (this.realRoundIndex() * 0.12);
+var sobPenalty = (100 - this.sobriety) * 4;
+this.telegraphDuration = Math.max(820, Math.round(this.baseTelegraphDuration * roundSpeed - sobPenalty));
 }
 
 this.updateRoundDisplay();
@@ -9716,7 +9724,10 @@ var ni = practice ? this.round : this.realRoundIndex();
 // impactSound is fired at end of the punching animation (when result lands).
 var impactSound = null;
 if (zone === 'counter') {
-var chance = practice ? 0.8 : 0.22 + (this.sobriety / 340);
+// Counter chance is lower in real rounds; sobriety helps but caps lower.
+// Previously a failed counter still scored +1 — now it's 0, so a bad
+// counter call is a real cost. (Practice round still very forgiving.)
+var chance = practice ? 0.8 : 0.18 + (this.sobriety / 380);
 if (Math.random() < chance) {
 if (!practice) this.score += 3;
 this.resultText = '★ COUNTER ★';
@@ -9725,7 +9736,7 @@ this.copperHit = true;
 this.narrativeText = practice ? this.practiceCounterNarr[ni].success : this.realCounterNarr[ni].success;
 impactSound = 'counter_win';
 } else {
-if (!practice) this.score += 1;
+// Failed counter — no points, you just ate the punch.
 this.resultText = 'CAUGHT';
 this.resultClass = 'lose';
 this.narrativeText = practice ? this.practiceCounterNarr[ni].fail : this.realCounterNarr[ni].fail;
@@ -9747,6 +9758,9 @@ this.resultClass = 'win';
 this.narrativeText = practice ? this.practiceNarr[ni].clean : this.realDodgeNarr[ni].clean;
 impactSound = 'dodgeWhoosh';
 } else {
+// Wrong dodge — you took the punch full on. Sting it: −1 from the score
+// in real rounds, so a sloppy guess can flip a borderline win to a loss.
+if (!practice) this.score = Math.max(0, this.score - 1);
 this.resultText = 'CAUGHT';
 this.resultClass = 'lose';
 this.narrativeText = practice ? this.practiceNarr[ni].caught : this.realDodgeNarr[ni].caught;
@@ -9829,7 +9843,7 @@ this.startRound();
 endGame() {
 if (this.gameOver) return; // guard against double-call (round + timeOut paths)
 this.gameOver = true;
-var won = this.score >= 5;
+var won = this.score >= 6;
 var perfect = this.score >= 9;
 window._lastFightScore = this.score;
 var endEl = document.getElementById('fight-end');
@@ -9895,11 +9909,33 @@ updateRoundDisplay() {
 var el = document.getElementById('round-display');
 if (!el) return;
 if (this.isPractice()) {
-el.textContent = '🤜 PRACTICE ROUND ' + (this.round + 1) + '/3 🤜';
+el.innerHTML =
+  '<div class="fight-board">' +
+    '<div class="fight-board-label">PRACTICE</div>' +
+    '<div class="fight-board-round">Round ' + (this.round + 1) + ' / 3</div>' +
+    '<div class="fight-board-pips">' + this._renderScorePips(0) + '</div>' +
+  '</div>';
 } else {
 var r = this.realRoundIndex() + 1;
-el.textContent = '🤜 ROUND ' + r + ' — Score: ' + this.score + '/9 🤜';
+el.innerHTML =
+  '<div class="fight-board">' +
+    '<div class="fight-board-label">ROUND ' + r + '</div>' +
+    '<div class="fight-board-pips">' + this._renderScorePips(this.score) + '</div>' +
+  '</div>';
 }
+}
+
+// Score pips for the fight board — nine slots, filled to current score.
+// Live and empty slots get distinct treatments; threshold rings at 3/6.
+_renderScorePips(score) {
+var html = '';
+for (var i = 0; i < 9; i++) {
+  var filled = i < score;
+  var tier = i < 3 ? 'low' : i < 6 ? 'mid' : 'high';
+  var divider = (i === 2 || i === 5) ? ' fight-pip-divider' : '';
+  html += '<span class="fight-pip ' + (filled ? 'fight-pip-filled fight-pip-' + tier : 'fight-pip-empty') + divider + '"></span>';
+}
+return html;
 }
 
 showNarrative(text) {
@@ -9917,9 +9953,18 @@ var el = document.getElementById('round-display');
 if (!el) return;
 var col = cls === 'win' ? '#aaffaa' : cls === 'lose' ? '#ffaaaa' : '#eeddaa';
 if (this.isPractice()) {
-el.innerHTML = '🤜 <span style="color:' + col + ';">' + text + '</span> — PRACTICE ROUND 🤜';
+el.innerHTML =
+  '<div class="fight-board">' +
+    '<div class="fight-board-label">PRACTICE</div>' +
+    '<div class="fight-board-call" style="color:' + col + ';">' + text + '</div>' +
+    '<div class="fight-board-pips">' + this._renderScorePips(0) + '</div>' +
+  '</div>';
 } else {
-el.innerHTML = '🤜 <span style="color:' + col + ';">' + text + '</span> — Score: ' + this.score + '/9 🤜';
+el.innerHTML =
+  '<div class="fight-board">' +
+    '<div class="fight-board-call" style="color:' + col + ';">' + text + '</div>' +
+    '<div class="fight-board-pips">' + this._renderScorePips(this.score) + '</div>' +
+  '</div>';
 }
 }
 
@@ -10973,6 +11018,24 @@ soloDebounce = setTimeout(checkSoloLink, 350);
 // fires the rustle whenever a NEW .lore-box appears in the DOM that wasn't
 // already there at passage load.
 (function() {
+  // Uniform link-click tick — every tw-link gets a soft typewriter
+  // tap when clicked. The writer is at his notebook all night.
+  // Skip hidden navigation links (the '·' dots) and the BACK link
+  // since they have their own audio identities or are silent by design.
+  var _lastTick = 0;
+  document.addEventListener('click', function(e) {
+    var link = e.target && e.target.closest && e.target.closest('tw-link');
+    if (!link) return;
+    var txt = (link.textContent || '').trim();
+    if (txt === '·' || txt === '·' || txt === '') return;
+    if (/^←\s*BACK$/.test(txt)) return; // ← BACK has its own implication
+    var now = Date.now();
+    if (now - _lastTick < 80) return;
+    _lastTick = now;
+    if (window.dssAudio && window.dssAudio.typewriterTick) {
+      window.dssAudio.typewriterTick(0.10);
+    }
+  }, true);
   document.addEventListener('click', function(e) {
     var link = e.target && e.target.closest && e.target.closest('tw-link');
     if (!link) return;
@@ -10980,6 +11043,27 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     if (txt.indexOf('LORE') === -1) return;
     if (window.dssAudio && window.dssAudio.loreUnravel) {
       window.dssAudio.loreUnravel();
+    }
+  }, true);
+  // Tap on an already-taken lily — play a soft hollow chime so the player
+  // gets feedback (the flower's gone, there's nothing to pick). Quieter
+  // than the collection lilyChime and pitched lower. Throttled so a quick
+  // double-tap doesn't fire twice.
+  var _lastTakenChime = 0;
+  document.addEventListener('click', function(e) {
+    var taken = e.target && e.target.closest && e.target.closest('.lily-taken');
+    if (!taken) return;
+    var now = Date.now();
+    if (now - _lastTakenChime < 400) return;
+    _lastTakenChime = now;
+    if (!window.dssAudio) return;
+    var ac = window.dssAudio.audioCtx || (window.dssAudio.getCtx && window.dssAudio.getCtx());
+    // Use the existing lilyChime function but reduce gain via a brief duck
+    if (window.dssAudio.lilyChime) {
+      // Simple approach: just fire lilyChime — it's already a soft sound.
+      // Players hitting an empty flower spot get the same cue, dimmed by
+      // the existing _play() music-duck.
+      window.dssAudio.lilyChime();
     }
   }, true);
 
@@ -18576,7 +18660,7 @@ var ccVig = document.createElement('div');
 ccVig.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9001;pointer-events:none;background:radial-gradient(ellipse at 45% 45%, transparent 30%, rgba(0,0,0,0.55) 100%);';
 ccWrap.appendChild(ccVig);
 var ccDate = document.createElement('div');
-ccDate.textContent = '23.11.73';
+ccDate.textContent = document.getElementById('dst-after-midnight') ? '24.11.73' : '23.11.73';
 ccDate.style.cssText = 'position:fixed;top:18px;right:24px;font:14px monospace;color:rgba(232,180,60,0.45);pointer-events:none;z-index:9003;';
 ccWrap.appendChild(ccDate);
 var ccLoc = document.createElement('div');
@@ -21683,7 +21767,7 @@ var vig = document.createElement('div');
 vig.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9001;pointer-events:none;background:radial-gradient(ellipse at 45% 45%, transparent 30%, rgba(0,0,0,0.55) 100%);';
 gsWrap.appendChild(vig);
 var dateDiv = document.createElement('div');
-dateDiv.textContent = '23.11.73';
+dateDiv.textContent = document.getElementById('dst-after-midnight') ? '24.11.73' : '23.11.73';
 dateDiv.style.cssText = 'position:fixed;top:18px;right:24px;font:14px monospace;color:rgba(232,180,60,0.45);pointer-events:none;z-index:9003;';
 gsWrap.appendChild(dateDiv);
 var locDiv = document.createElement('div');
@@ -24822,7 +24906,7 @@ rsGrainCtx = rsGrain.getContext('2d');
 rsDate = document.createElement('div');
 rsDate.id = 'rs-datestamp';
 rsDate.style.cssText = 'position:absolute;top:18px;right:24px;font:14px monospace;color:rgba(255,140,50,0.55);pointer-events:none;z-index:9001;';
-rsDate.textContent = '23.11.73';
+rsDate.textContent = document.getElementById('dst-after-midnight') ? '24.11.73' : '23.11.73';
 rsWrap.appendChild(rsDate);
 
 rsLoc = document.createElement('div');
@@ -28382,7 +28466,22 @@ return n(playerScore)+'\u2013'+n(oppScore);
 }
 function updateScore(){
 var el=document.getElementById('score-display');
-if(el)el.innerHTML='<span class="pp-you">YOU</span> '+playerScore+' \u2014 '+oppScore+' <span class="pp-opp">'+opponent.toUpperCase()+'</span>';
+if(el){
+  el.innerHTML =
+    '<div class="pp-scoreboard">'+
+      '<div class="pp-side pp-side-you">'+
+        '<div class="pp-name">YOU</div>'+
+        '<div class="pp-num pp-num-you">'+playerScore+'</div>'+
+      '</div>'+
+      '<div class="pp-middle">'+
+        '<div class="pp-vs">\u00b7</div>'+
+      '</div>'+
+      '<div class="pp-side pp-side-opp">'+
+        '<div class="pp-name">'+opponent.toUpperCase()+'</div>'+
+        '<div class="pp-num pp-num-opp">'+oppScore+'</div>'+
+      '</div>'+
+    '</div>';
+}
 var sub=document.getElementById('score-sub');
 if(sub)sub.textContent=callScore();
 }
@@ -29737,6 +29836,7 @@ Traveller, sleep!
   }, 0);
 })();
 </script>]
+<div class="dawn-mist" aria-hidden="true"><div class="dawn-mist-band b1"></div><div class="dawn-mist-band b2"></div><div class="dawn-mist-band b3"></div></div>
 <div class="ending-pane"><div class="dawn-rule-top">(if: _albaComplete)[(display: "Dawn Rule SVG top")](else:)[(display: "Dawn Rule SVG eclipse")]</div>
 <div class="dawn-title">THE DAWN</div>
 <div class="dawn-bookname">// (print: $bookTitle) //</div>
@@ -32948,7 +33048,8 @@ He looks at you like, painterly, he looked when you were his subject.
 <style>
 .napkin-wrap { display: flex; flex-direction: column; align-items: center; margin: 1em 0; }
 .napkin-canvas { background: #f2e7c9; cursor: crosshair; border: 1px solid rgba(200,170,100,0.35); border-radius: 3px; box-shadow: 0 6px 28px rgba(0,0,0,0.55), inset 0 0 40px rgba(180,140,70,0.15); touch-action: none; max-width: 100%; height: auto; }
-.napkin-tools { display: flex; gap: 0.55em; margin-top: 1em; align-items: center; flex-wrap: wrap; justify-content: center; }
+.napkin-tools { display: flex; flex-direction: column; gap: 0.7em; margin-top: 1em; align-items: center; }
+.napkin-tools-row { display: flex; gap: 0.55em; align-items: center; justify-content: center; flex-wrap: wrap; }
 .napkin-color { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0,0,0,0.25); transition: transform 0.15s; }
 .napkin-color[data-color="#111111"] { border-color: rgba(212,165,116,0.75); }
 .napkin-color:hover { transform: scale(1.15); }
@@ -32995,17 +33096,21 @@ He looks at you like, painterly, he looked when you were his subject.
 <div class="napkin-wrap">
 <canvas class="napkin-canvas" id="napkin-canvas" width="400" height="480"></canvas>
 <div class="napkin-tools">
+<div class="napkin-tools-row">
 <div class="napkin-color active" data-color="#111111" style="background:#111111" title="Black"></div>
 <div class="napkin-color" data-color="#1e4fd6" style="background:#1e4fd6" title="Blue"></div>
 <div class="napkin-color" data-color="#d81f1f" style="background:#d81f1f" title="Red"></div>
 <div class="napkin-color" data-color="#f5c518" style="background:#f5c518" title="Yellow"></div>
 <div class="napkin-color" data-color="#2aa14a" style="background:#2aa14a" title="Green"></div>
 <div class="napkin-color napkin-erase" data-color="#f2e7c9" title="Eraser">×</div>
+</div>
+<div class="napkin-tools-row">
 <div class="napkin-size napkin-size-thin active" data-size="thin" title="Thin line"></div>
 <div class="napkin-size napkin-size-thick" data-size="thick" title="Thick line"></div>
 <button class="napkin-btn" id="napkin-undo" disabled>Undo</button>
 <button class="napkin-btn" id="napkin-clear">Clear</button>
 <button class="napkin-btn" id="napkin-done" disabled>Done</button>
+</div>
 </div>
 </div>
 
@@ -33646,7 +33751,7 @@ Before you can answer, he says, 'I don't know.'
 <svg class="phone-rule lily-phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="lpBl"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="lpCd" x1="0" x2="1"><stop offset="0%" stop-color="#4a3858" stop-opacity="0"/><stop offset="20%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="50%" stop-color="#7a5888" stop-opacity="0.55"/><stop offset="80%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="100%" stop-color="#4a3858" stop-opacity="0"/></linearGradient><linearGradient id="lpHd" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a2048"/><stop offset="40%" stop-color="#5a3868"/><stop offset="100%" stop-color="#4a2858"/></linearGradient><radialGradient id="lpGw" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#b090c0" stop-opacity="0.10"/><stop offset="100%" stop-color="#b090c0" stop-opacity="0"/></radialGradient></defs><ellipse cx="130" cy="26" rx="55" ry="17" fill="#907098" opacity="0.05" filter="url(#lpBl)"/><ellipse cx="185" cy="30" rx="42" ry="13" fill="#806088" opacity="0.04" filter="url(#lpBl)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#lpGw)"/><path d="M14 27 Q20 12 26 27 Q32 42 38 27 Q44 12 50 27 Q56 42 62 27 Q68 13 74 27 Q79 38 84 27 Q89 18 94 27 Q98 33 102 27 Q105 24 108 27" fill="none" stroke="url(#lpCd)" stroke-width="2" stroke-linecap="round"/><path d="M192 27 Q195 24 198 27 Q202 33 206 27 Q211 18 216 27 Q221 38 226 27 Q232 13 238 27 Q244 42 250 27 Q256 12 262 27 Q268 42 274 27 Q280 12 286 27" fill="none" stroke="url(#lpCd)" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="27" r="2" fill="#5a3868" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#5a3868" opacity="0.4"/><g transform="translate(150,27) rotate(-8)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#lpHd)" opacity="0.55"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/></g></svg>
 
 <div class="phone-type lily-phone-narrate" style="--d:0.3s;--t:1.0s">The phone rings. It's Lily.</div>\
-<div class="phone-type lily-phone-her" style="--d:2.4s;--t:1.4s">'It was too funny not to tell you… somebody said… 'If he writes her a few sonnets, he loves her. If he writes her 300 sonnets, he loves sonnets.'</div>\
+<div class="phone-type lily-phone-her" style="--d:2.4s;--t:1.4s">'It was too funny not to tell you… somebody said… 'If he writes her a few sonnets, he loves her. If he writes her 300 sonnets, he loves sonnets.''</div>\
 <div class="phone-type lily-phone-you" style="--d:4.2s;--t:1.0s">'I think that was Don Paterson,' you say, plausibly and incorrectly.</div>\
 <div class="phone-type lily-phone-her" style="--d:5.6s;--t:1.4s">She doesn't reply.</div>\
 <div class="phone-type lily-phone-you" style="--d:7.4s;--t:0.6s">'And where does that leave 14 sonnets?'</div>\
@@ -33939,8 +34044,8 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 (else-if: $haunts's length >= 6)[(enchant: ?page, (css: "background: linear-gradient(180deg, #141418 0%, #1e1e28 50%, #141418 100%); background-attachment: fixed"))]\
 (else-if: $haunts's length >= 3)[(enchant: ?page, (css: "background: linear-gradient(180deg, #171516 0%, #252224 50%, #171516 100%); background-attachment: fixed"))]
 ]\
-(if: $sobriety is a number and $sobriety < 20)[(enchant: ?passage, (class: "dss-drunk-low"))]\
-(else-if: $sobriety is a number and $sobriety < 35)[(enchant: ?passage, (class: "dss-drunk-mid"))]\
+(if: $sobriety is a number and $sobriety < 20)[(enchant: ?passage, (css: "animation: dssDrunkLow 6s ease-in-out infinite; transform-origin: 50% 30%; filter: blur(0.35px) saturate(0.78) hue-rotate(-6deg);"))]\
+(else-if: $sobriety is a number and $sobriety < 35)[(enchant: ?passage, (css: "animation: dssDrunkMid 9.5s ease-in-out infinite; transform-origin: 50% 30%; filter: saturate(0.92);"))]\
 <div class="stat-bars">
 <svg class="header-lily" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 68" preserveAspectRatio="xMinYMid slice" aria-hidden="true"><defs><linearGradient id="hlFade" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="white"/><stop offset="50%" stop-color="white"/><stop offset="80%" stop-color="white" stop-opacity="0.3"/><stop offset="100%" stop-color="black"/></linearGradient><mask id="hlMask"><rect x="0" y="0" width="210" height="68" fill="url(#hlFade)"/></mask></defs><g mask="url(#hlMask)"><!-- Main stem --><path d="M40,-4 Q45,8 52,20 Q60,34 72,42 Q88,52 110,56 Q135,60 165,58 Q185,54 210,48" fill="none" stroke="#0a0a0a" stroke-width="3.5" stroke-linecap="round"/><path d="M72,42 Q68,50 62,58 Q58,64 54,72" fill="none" stroke="#0a0a0a" stroke-width="2.8" stroke-linecap="round"/><!-- Left leaf --><path d="M38,-2 Q28,6 18,18 Q10,30 8,40 Q6,50 14,56 Q24,60 36,54 Q46,46 50,34 Q52,24 48,14 Q44,6 38,-2 Z" fill="#2a5c22" fill-opacity="0.22" stroke="#0a0a0a" stroke-width="3.2" stroke-linejoin="round"/><!-- Left leaf veins --><path d="M38,-2 Q30,14 22,30 Q16,42 14,56" fill="none" stroke="#0a0a0a" stroke-width="2" opacity="0.6"/><path d="M30,10 Q24,14 18,20" fill="none" stroke="#0a0a0a" stroke-width="1.2" opacity="0.35"/><path d="M26,22 Q20,28 14,34" fill="none" stroke="#0a0a0a" stroke-width="1.2" opacity="0.3"/><path d="M22,34 Q18,40 14,46" fill="none" stroke="#0a0a0a" stroke-width="1" opacity="0.25"/><!-- Right leaf --><path d="M44,0 Q56,8 66,20 Q74,32 76,42 Q78,52 72,58 Q62,64 50,60 Q42,54 40,44 Q38,34 40,22 Q42,12 44,0 Z" fill="#1e4a18" fill-opacity="0.18" stroke="#0a0a0a" stroke-width="3.2" stroke-linejoin="round"/><!-- Right leaf veins --><path d="M44,0 Q56,16 66,32 Q72,44 72,58" fill="none" stroke="#0a0a0a" stroke-width="2" opacity="0.55"/><path d="M50,10 Q58,16 64,22" fill="none" stroke="#0a0a0a" stroke-width="1.2" opacity="0.3"/><path d="M54,22 Q62,28 68,34" fill="none" stroke="#0a0a0a" stroke-width="1.2" opacity="0.28"/><path d="M58,34 Q66,40 72,46" fill="none" stroke="#0a0a0a" stroke-width="1" opacity="0.22"/><!-- Flower 1 --><path d="M80,38 Q76,42 72,50 Q70,56 74,60 Q78,64 84,62 Q90,58 88,50 Q86,42 80,38 Z" fill="#d4cdb8" fill-opacity="0.35" stroke="#0a0a0a" stroke-width="2.8" stroke-linejoin="round"/><path d="M76,50 L80,60" fill="none" stroke="#0a0a0a" stroke-width="1.2" opacity="0.4"/><path d="M84,48 L82,60" fill="none" stroke="#0a0a0a" stroke-width="1" opacity="0.35"/><path d="M80,38 Q82,34 86,30 Q90,26 92,22" fill="none" stroke="#0a0a0a" stroke-width="2.2" stroke-linecap="round"/><!-- Flower 2 --><path d="M102,34 Q98,38 96,44 Q94,50 98,54 Q102,56 106,52 Q110,48 108,42 Q106,36 102,34 Z" fill="#c8c0a8" fill-opacity="0.3" stroke="#0a0a0a" stroke-width="2.6" stroke-linejoin="round"/><path d="M100,44 L100,54" fill="none" stroke="#0a0a0a" stroke-width="1" opacity="0.35"/><path d="M102,34 Q104,30 108,26" fill="none" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round"/><!-- Flower 3 --><path d="M126,30 Q122,34 120,40 Q118,46 122,48 Q126,50 130,46 Q132,40 130,34 Q128,30 126,30 Z" fill="#d0c8b0" fill-opacity="0.25" stroke="#0a0a0a" stroke-width="2.4" stroke-linejoin="round"/><path d="M126,30 Q128,26 132,22" fill="none" stroke="#0a0a0a" stroke-width="1.8" stroke-linecap="round"/><!-- Flower 4 --><path d="M152,26 Q148,30 148,36 Q150,40 154,38 Q158,34 156,28 Q154,26 152,26 Z" fill="#c4bca4" fill-opacity="0.2" stroke="#0a0a0a" stroke-width="2.2" stroke-linejoin="round"/><path d="M152,26 Q154,22 158,18" fill="none" stroke="#0a0a0a" stroke-width="1.6" stroke-linecap="round"/><!-- Flower 5 --><path d="M170,22 Q168,26 168,30 Q170,34 174,30 Q176,26 172,22 Z" fill="#beb6a0" fill-opacity="0.18" stroke="#0a0a0a" stroke-width="2" stroke-linejoin="round"/><path d="M170,22 Q172,18 176,14" fill="none" stroke="#0a0a0a" stroke-width="1.4" stroke-linecap="round"/><!-- Small leaf --><path d="M110,56 Q118,52 124,56 Q128,62 122,66 Q114,68 110,62 Q108,58 110,56 Z" fill="#2a5c22" fill-opacity="0.12" stroke="#0a0a0a" stroke-width="2" stroke-linejoin="round" opacity="0.6"/><!-- Background lead --><path d="M0,20 Q10,18 20,22 Q30,26 36,30" fill="none" stroke="#0a0a0a" stroke-width="1.5" opacity="0.18"/><path d="M0,50 Q8,46 16,48 Q24,52 30,50" fill="none" stroke="#0a0a0a" stroke-width="1.3" opacity="0.14"/><path d="M160,58 Q172,54 186,56 Q200,60 210,56" fill="none" stroke="#0a0a0a" stroke-width="1.4" opacity="0.1"/></g></svg>
 <div class="stat-group">
@@ -34137,19 +34242,11 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 
 /* ===== DRUNK VISION — when sobriety drops, the screen wobbles =====
    Two tiers: a subtle "you've had a few" wobble below 35, and a heavier
-   "the room is moving" warp below 20. Both apply to the tw-passage
-   element via Harlowe (enchant: ?passage, (class: ...)) so the header
-   bar (stats, notebook link) stays stable — only the prose sways. */
-tw-passage.dss-drunk-mid {
-  animation: dssDrunkMid 9.5s ease-in-out infinite;
-  transform-origin: 50% 30%;
-  filter: saturate(0.92);
-}
-tw-passage.dss-drunk-low {
-  animation: dssDrunkLow 6s ease-in-out infinite;
-  transform-origin: 50% 30%;
-  filter: blur(0.35px) saturate(0.78) hue-rotate(-6deg);
-}
+   "the room is moving" warp below 20. Applied via Harlowe's
+   (enchant: ?passage, (css: ...)) — the CSS string references these
+   keyframes by name, so only the @keyframes need to live in the global
+   stylesheet. The wobble lands on tw-passage so the header bar (stats,
+   notebook link) stays steady — only the prose sways. */
 @keyframes dssDrunkMid {
   0%, 100% { transform: rotate(-0.35deg) translateX(-1px); }
   50%      { transform: rotate(0.35deg)  translateX(1px); }
@@ -34538,11 +34635,12 @@ border-bottom: 1px solid rgba(212, 165, 116, 0.3);
 .alba-final em,
 .alba-final .alba-line {
 display: block;
-font-family: 'Cinzel', 'Playfair Display', Georgia, serif;
+font-family: Georgia, 'Times New Roman', serif;
 font-style: normal;
 font-weight: 700;
 font-size: 1.25em;
-letter-spacing: 0.05em;
+letter-spacing: 0.12em;
+text-transform: uppercase;
 color: #f0c870;
 line-height: 1.7;
 text-shadow: 0 1px 0 rgba(0,0,0,0.55), 0 0 14px rgba(240, 170, 64, 0.32);
@@ -37985,38 +38083,82 @@ background: linear-gradient(90deg, transparent, rgba(200,160,80,0.4), transparen
 }
 
 .pp-score {
-text-align: center;
-font-family: 'Courier New', monospace;
-font-size: 1.8em;
-color: #b89a60;
-letter-spacing: 0.2em;
-text-shadow:
-0 0 10px rgba(184, 154, 80, 0.7),
-0 0 22px rgba(140, 110, 40, 0.4);
-padding: 0.5em;
+padding: 0.4em 0.6em 0.2em;
 margin: 0.5em 0;
-background: rgba(0, 0, 0, 0.6);
-border: 1px solid #2a1e08;
+background: linear-gradient(180deg, #1a1208 0%, #0a0604 100%);
+border: 1px solid #3a2814;
+border-radius: 3px;
+box-shadow:
+  inset 0 0 24px rgba(0,0,0,0.55),
+  0 1px 0 rgba(184,154,80,0.18),
+  0 0 22px rgba(140,110,40,0.18);
 }
-
+.pp-scoreboard {
+display: flex;
+align-items: stretch;
+justify-content: space-between;
+gap: 0.4em;
+}
+.pp-side {
+flex: 1;
+text-align: center;
+padding: 0.25em 0.4em 0.35em;
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 0.18em;
+}
+.pp-side-you   { border-right: 1px dashed rgba(184,154,80,0.18); }
+.pp-side-opp   { border-left:  1px dashed rgba(184,154,80,0.18); }
+.pp-name {
+font-family: 'Courier New', monospace;
+font-size: 0.72em;
+letter-spacing: 0.28em;
+color: rgba(220,210,180,0.62);
+text-transform: uppercase;
+}
+.pp-num {
+font-family: 'Playfair Display', Georgia, serif;
+font-weight: 700;
+font-size: 2.2em;
+line-height: 1;
+letter-spacing: 0.02em;
+font-variant-numeric: tabular-nums;
+text-shadow:
+  0 0 12px rgba(184,154,80,0.55),
+  0 0 26px rgba(140,110,40,0.35);
+}
+.pp-num-you { color: #dce8f4; text-shadow: 0 0 12px rgba(190,210,255,0.6), 0 0 24px rgba(120,160,220,0.35); }
+.pp-num-opp { color: #f0a888; text-shadow: 0 0 12px rgba(232,120,80,0.55), 0 0 24px rgba(180,80,40,0.32); }
+.pp-middle {
+display: flex;
+align-items: center;
+justify-content: center;
+min-width: 28px;
+position: relative;
+}
+.pp-vs {
+font-family: 'Playfair Display', Georgia, serif;
+font-size: 1.4em;
+color: rgba(184,154,80,0.55);
+letter-spacing: 0.1em;
+}
 .pp-you {
 color: #dce8f4;
 text-shadow: 0 0 10px rgba(190, 210, 255, 0.55);
 }
-
 .pp-opp {
 color: #e8674a;
 text-shadow: 0 0 10px rgba(220, 70, 30, 0.45);
 }
-
 .pp-score-sub {
 text-align: center;
 font-family: 'Courier New', monospace;
 font-size: 0.72em;
-color: rgba(184, 154, 96, 0.55);
+color: rgba(184, 154, 96, 0.65);
 letter-spacing: 0.32em;
 text-transform: uppercase;
-margin: -0.3em 0 0.6em;
+margin: -0.1em 0 0.6em;
 min-height: 1em;
 }
 
@@ -39544,6 +39686,82 @@ clip-path: polygon(32% 0%, 68% 0%, 82% 100%, 18% 100%);
 /* Hidden navigation tw-links for the fight end (clicked programmatically by
    the JS Continue/Get-out button). Twine processes these into real tw-links
    with proper navigation, while the wrappers here keep them invisible. */
+/* Fight scoreboard — cellar boxing bell-card style. Round label up top,
+   a row of nine pips for score (filling left-to-right with low/mid/high
+   tiers as the score climbs), and a centred call-line when a result
+   text fires. Dark slate background with brass borders. */
+.fight-board {
+  padding: 0.55em 0.8em 0.6em;
+  background: linear-gradient(180deg, #160a0a 0%, #080404 100%);
+  border: 1px solid #4a2418;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 28px rgba(0,0,0,0.6),
+    0 0 18px rgba(120,40,28,0.18);
+  text-align: center;
+  margin: 0.4em 0;
+}
+.fight-board-label {
+  font-family: 'Courier New', monospace;
+  font-size: 0.72em;
+  letter-spacing: 0.36em;
+  color: rgba(220,170,140,0.55);
+  text-transform: uppercase;
+  margin-bottom: 0.35em;
+}
+.fight-board-round {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.05em;
+  letter-spacing: 0.06em;
+  color: rgba(240,200,160,0.85);
+  margin-bottom: 0.4em;
+}
+.fight-board-call {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  font-size: 1.15em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0.1em 0 0.5em;
+  text-shadow: 0 0 14px rgba(0,0,0,0.55);
+}
+.fight-board-pips {
+  display: flex;
+  gap: 0.4em;
+  align-items: center;
+  justify-content: center;
+}
+.fight-pip {
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  border: 1px solid rgba(150,90,60,0.55);
+  display: inline-block;
+}
+.fight-pip-empty {
+  background: rgba(40,16,8,0.6);
+}
+.fight-pip-filled {
+  border-color: rgba(255,200,140,0.85);
+  box-shadow: 0 0 8px rgba(255,160,80,0.65);
+}
+.fight-pip-low  { background: radial-gradient(circle, #f0a460 0%, #a04020 100%); }
+.fight-pip-mid  { background: radial-gradient(circle, #ffce6c 0%, #c87830 100%); }
+.fight-pip-high { background: radial-gradient(circle, #fff1a0 0%, #e8a040 100%); box-shadow: 0 0 12px rgba(255,210,120,0.85); }
+.fight-pip-divider {
+  margin-right: 0.55em;
+  position: relative;
+}
+.fight-pip-divider::after {
+  content: '';
+  position: absolute;
+  right: -0.32em;
+  top: 50%;
+  width: 1px;
+  height: 1em;
+  margin-top: -0.5em;
+  background: rgba(150,90,60,0.4);
+}
 .fight-nav-hidden {
   display: block;
   position: absolute;
@@ -40200,25 +40418,89 @@ tw-story[tags~="dawn-end"] .ending-pane::before {
     rgba(220,200,170,0.06) 100%
   ) !important;
 }
+/* ===== DAWN MIST =====
+   Two horizontal-banded radial-gradient layers drifting opposite directions
+   at very different speeds. Soft, blurred, low-opacity — reads as morning
+   ground-mist rather than fog. Lives behind the petals (z-index 2) and the
+   ending-pane (z-index 1) — sits at z-index 0 over the slate→rose gradient. */
+.dawn-mist {
+  position: fixed;
+  inset: -10vh -10vw;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.dawn-mist .dawn-mist-band {
+  position: absolute;
+  left: -20vw;
+  right: -20vw;
+  height: 55vh;
+  filter: blur(40px);
+  opacity: 0;
+  animation: dawnMistIn 6s ease-out 0.6s forwards;
+}
+.dawn-mist .dawn-mist-band.b1 {
+  bottom: -8vh;
+  background:
+    radial-gradient(ellipse 55vw 16vh at 18% 70%, rgba(232,220,210,0.22), transparent 62%),
+    radial-gradient(ellipse 70vw 14vh at 62% 50%, rgba(214,200,196,0.18), transparent 60%),
+    radial-gradient(ellipse 48vw 12vh at 88% 82%, rgba(236,224,212,0.16), transparent 60%);
+  animation: dawnMistIn 6s ease-out 0.6s forwards,
+             dawnMistDrift1 75s ease-in-out 6s infinite alternate;
+}
+.dawn-mist .dawn-mist-band.b2 {
+  bottom: 22vh;
+  background:
+    radial-gradient(ellipse 60vw 12vh at 78% 30%, rgba(196,182,186,0.16), transparent 60%),
+    radial-gradient(ellipse 50vw 10vh at 28% 55%, rgba(220,206,196,0.14), transparent 60%);
+  animation: dawnMistIn 8s ease-out 1.4s forwards,
+             dawnMistDrift2 105s ease-in-out 8s infinite alternate;
+}
+.dawn-mist .dawn-mist-band.b3 {
+  top: 8vh;
+  height: 35vh;
+  background:
+    radial-gradient(ellipse 70vw 10vh at 45% 60%, rgba(190,176,184,0.10), transparent 65%);
+  animation: dawnMistIn 9s ease-out 2.0s forwards,
+             dawnMistDrift1 140s ease-in-out 9s infinite alternate;
+}
+@keyframes dawnMistIn {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes dawnMistDrift1 {
+  0%   { transform: translateX(-3vw) translateY(0); }
+  100% { transform: translateX(6vw)  translateY(-1.2vh); }
+}
+@keyframes dawnMistDrift2 {
+  0%   { transform: translateX(5vw)  translateY(0); }
+  100% { transform: translateX(-7vw) translateY(1.4vh); }
+}
 .dawn-title {
+  /* Title page of the finished book — typewritten on the same machine
+     the player named it on at Name Your Book. Special Elite ties the
+     two beats together. Slightly heavier letter-spacing than Playfair
+     so the title sits like a typed line, not a printed one. */
   text-align: center;
-  font-family: 'Playfair Display', Georgia, serif;
-  font-weight: 700;
-  font-size: 2.2em;
-  letter-spacing: 0.35em;
-  color: #c4ae88;
-  text-shadow: 0 0 32px rgba(196,158,108,0.5), 0 0 10px rgba(220,196,160,0.3);
+  font-family: 'Special Elite', 'Courier New', Courier, monospace;
+  font-weight: 400;
+  font-size: 2.0em;
+  letter-spacing: 0.22em;
+  color: #d8c6a0;
+  text-shadow: 0 0 32px rgba(220,190,140,0.4), 0 0 10px rgba(240,220,180,0.22);
   margin: 0 0 0.6em;
   padding-bottom: 0.6em;
   background: linear-gradient(to right, transparent, rgba(196,158,108,0.38), transparent) bottom/55% 1px no-repeat;
 }
 .dawn-bookname {
+  /* The player's book title sits underneath, also typewritten — like a
+     subtitle line on the title page. */
   text-align: center;
-  font-family: 'Crimson Text', Georgia, serif;
-  font-style: italic;
-  font-size: 1.05em;
-  color: rgba(196, 178, 142, 0.80);
-  letter-spacing: 0.18em;
+  font-family: 'Special Elite', 'Courier New', Courier, monospace;
+  font-style: normal;
+  font-size: 1em;
+  color: rgba(208, 192, 156, 0.82);
+  letter-spacing: 0.10em;
   margin: 0 0 2em;
   opacity: 0;
   animation: dawnBookFade 2.4s ease-out 0.5s forwards;

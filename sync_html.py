@@ -134,6 +134,71 @@ if userscript_content:
     print(f"Found UserScript ({len(userscript_content)} chars)")
 
 # ============================================================
+# 1b. Build a passage-graph JSON for the astral reveal
+# ============================================================
+# Harlowe consumes <tw-passagedata> elements at boot, so we can't read the
+# graph at runtime. Instead we bake it here: for every passage we emit
+# {name, x, y, tags, links}. The userscript replaces __DSS_PASSAGE_GRAPH__
+# with this JSON literal, and the astral reveal reads it directly.
+#
+# Special / display-only passages are excluded so the constellation
+# matches the actual night's network of stops, not the SVG-builder utility
+# passages.
+import json
+_GRAPH_SKIP = {
+    "StoryInit", "StoryData", "UserScript",
+    "UserStylesheet", "StoryStylesheet",
+    "Lily SVG", "Deco Divider", "Build Notebook",
+    "Dawn Rule SVG top", "Dawn Rule SVG eclipse", "Dawn Rule SVG bottom",
+    "French Rule SVG h24", "French Rule SVG h60", "Ronnies Rule SVG h14",
+    "Ending Vines SVG",
+    # Now-orphaned passages — gameplay no longer routes through them after
+    # recent flow rewires. Skipping them keeps the constellation tight
+    # around stops the player actually reaches.
+    "Dream to Dean",        # superseded by The Interval (forced wake path)
+    "Eat Shelleys Liver",   # superseded by inline notebook "Eat it" button
+    "Failure: Trisha's",    # now unreachable; Trisha's gates at the hub
+}
+_link_re      = re.compile(r"\[\[([^\[\]]+?)\]\]")
+_goto_re      = re.compile(r"\(go-to:\s*[\"']([^\"']+)[\"']")
+_linkgoto_re  = re.compile(r"\(link-goto:\s*[\"'][^\"']*[\"']\s*,\s*[\"']([^\"']+)[\"']")
+_graph_passages = [p for p in passages if p["name"] not in _GRAPH_SKIP]
+_name_to_idx = {p["name"]: i for i, p in enumerate(_graph_passages)}
+_graph_json = []
+for src_idx, p in enumerate(_graph_passages):
+    px, py = (p["position"].split(",") + ["0", "0"])[:2]
+    try:
+        px, py = float(px), float(py)
+    except ValueError:
+        px, py = 0.0, 0.0
+    targets = set()
+    # [[A]], [[A|B]], [[A->B]]
+    for m in _link_re.finditer(p["content"]):
+        inner = m.group(1)
+        if "|" in inner:
+            t = inner.split("|")[-1]
+        elif "->" in inner:
+            t = inner.split("->")[-1]
+        else:
+            t = inner
+        targets.add(t.strip())
+    for m in _goto_re.finditer(p["content"]):
+        targets.add(m.group(1).strip())
+    for m in _linkgoto_re.finditer(p["content"]):
+        targets.add(m.group(1).strip())
+    link_idxs = sorted({_name_to_idx[t] for t in targets
+                        if t in _name_to_idx and _name_to_idx[t] != src_idx})
+    _graph_json.append({
+        "n": p["name"],
+        "x": px, "y": py,
+        "t": p["tags"],
+        "l": link_idxs,
+    })
+_graph_payload = "window._DSS_PASSAGE_GRAPH = " + json.dumps(_graph_json, separators=(",", ":")) + ";"
+print(f"Baked passage graph: {len(_graph_json)} nodes, "
+      f"{sum(len(p['l']) for p in _graph_json)} links")
+
+# ============================================================
 # 2. Update the HTML file
 # ============================================================
 
@@ -233,6 +298,16 @@ if userscript_content:
         else:
             print(f"WARNING: placeholder {placeholder} not found in UserScript — {source_file} not embedded")
 
+    # --- Bake the passage-graph JSON into the userscript ---
+    # The astral reveal at Centre Point needs the actual passage positions
+    # and link relationships. Harlowe drops <tw-passagedata> at boot so we
+    # can't read them at runtime; we substitute the JSON in here instead.
+    if "__DSS_PASSAGE_GRAPH__" in userscript_content:
+        userscript_content = userscript_content.replace("__DSS_PASSAGE_GRAPH__", _graph_payload)
+        print(f"Embedded passage graph -> __DSS_PASSAGE_GRAPH__")
+    else:
+        print(f"WARNING: __DSS_PASSAGE_GRAPH__ placeholder not in UserScript — astral reveal will be empty")
+
     # --- Embed images into the userscript too (for inline <img src=> via JS) ---
     userscript_content = _embed_images(userscript_content)
 
@@ -247,9 +322,22 @@ if userscript_content:
     else:
         print("WARNING: Could not find twine-user-script tag in HTML")
 
-# Replace all passage data
-# Remove old passages
-html_content = re.sub(r'<tw-passagedata[^>]*>.*?</tw-passagedata>', '', html_content, flags=re.DOTALL)
+# Replace all passage data — scope the cleanup regex to ONLY the
+# <tw-storydata>...</tw-storydata> block. Previously the regex ran over
+# the whole HTML, which meant any literal occurrence of "<tw-passagedata>"
+# inside a JS comment or string in the userscript would match and the
+# non-greedy `.*?` would scan forward to the next "</tw-passagedata>",
+# wiping out the entire passagedata block (and sometimes the closing
+# </tw-storydata> tag itself). Slicing the storydata bounds first
+# guarantees the cleanup can't escape that block.
+_sd_open = re.search(r'<tw-storydata[^>]*>', html_content)
+_sd_close = html_content.find('</tw-storydata>', _sd_open.end()) if _sd_open else -1
+if _sd_open and _sd_close >= 0:
+    _sd_inner = html_content[_sd_open.end():_sd_close]
+    _sd_inner = re.sub(r'<tw-passagedata[^>]*>.*?</tw-passagedata>', '', _sd_inner, flags=re.DOTALL)
+    html_content = html_content[:_sd_open.end()] + _sd_inner + html_content[_sd_close:]
+else:
+    print("WARNING: could not locate <tw-storydata>…</tw-storydata> block — skipping passage cleanup")
 
 # Insert new passages before </tw-storydata>
 new_passages_str = _embed_images("\n".join(passage_elements))

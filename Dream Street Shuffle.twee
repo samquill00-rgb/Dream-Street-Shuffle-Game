@@ -85,6 +85,7 @@ Dream Street Shuffle
 (set: $sawPentangle to false)\
 (set: $treeFlashed to false)\
 (set: $visitedCentrePoint to false)\
+(set: $sawAstralReveal to false)\
 (set: $opusViaTree to false)\
 (set: $lilyHintShown to false)\
 (set: $nightAheadPart2Shown to false)\
@@ -8448,6 +8449,191 @@ window.dssOpusReveal = function() {
 
   setTimeout(function() { modal.style.opacity = '0'; }, 7500);
   setTimeout(function() { if (modal.parentNode) modal.parentNode.removeChild(modal); }, 10500);
+};
+
+// ====== ASTRAL REVEAL — Centre Point cosmos =====
+// The night's wandering rendered as a galactic formation, built from the
+// ACTUAL game graph: every passage's editor position becomes a star, every
+// [[link]] / (go-to:) / (link-goto:) becomes a thread between them.
+// `window._DSS_PASSAGE_GRAPH` is a baked JSON array produced by sync_html.py
+// (Harlowe consumes its DOM passage elements at boot, so we can't read
+// them at runtime). The constellation is faithful to the .twee structure —
+// Dean Street where it actually is, the dream pyre off to one side,
+// Centre Point up top. The point of the reveal is "the city you walked
+// is this cosmic shape" — that lands only if the shape IS the city.
+// Fires once on first arrival at Centre Point.
+__DSS_PASSAGE_GRAPH__
+window.dssAstralReveal = function(onDone) {
+  if (document.getElementById('dss-astral-modal')) { if (onDone) onDone(); return; }
+  var graph = window._DSS_PASSAGE_GRAPH;
+  if (!graph || !graph.length) return;
+
+  // Unpack the baked graph into the working node/link arrays.
+  var nameToIdx = {};
+  var passages = [];
+  for (var pi = 0; pi < graph.length; pi++) {
+    var g = graph[pi];
+    nameToIdx[g.n] = passages.length;
+    passages.push({
+      name: g.n,
+      gx: g.x, gy: g.y,
+      tags: (g.t || '').trim().split(/\s+/),
+      linkTargets: g.l || []
+    });
+  }
+  var links = [];
+  for (var si = 0; si < passages.length; si++) {
+    var lt = passages[si].linkTargets;
+    for (var li = 0; li < lt.length; li++) {
+      var dst = lt[li];
+      if (dst < passages.length && dst !== si) links.push({ a: si, b: dst });
+    }
+  }
+
+  // ── 3. Normalise editor coordinates into the SVG viewBox. ──
+  // Maintain aspect ratio; centre the graph; pad the edges so big nodes
+  // don't get clipped at the viewport.
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (var pp = 0; pp < passages.length; pp++) {
+    var P = passages[pp];
+    if (P.gx < minX) minX = P.gx; if (P.gx > maxX) maxX = P.gx;
+    if (P.gy < minY) minY = P.gy; if (P.gy > maxY) maxY = P.gy;
+  }
+  // Layout: hub-centric quadrant-scaled radial. Each passage keeps its
+  // ANGLE relative to Dean Street (so geographic zones — cellar east,
+  // dream south-west, dawn north — stay spatially distinct). Distance
+  // is scaled per-direction so the cluster fills a CIRCLE rather than
+  // the editor's rectangular bounding box: north/south/east/west each
+  // get their own scale so the most-distant passage in each direction
+  // lands at the same rim distance. Result: a roughly spherical
+  // constellation, matching the Twine-editor screenshot's shape.
+  var hubGraph = null;
+  for (var hi = 0; hi < passages.length; hi++) {
+    if (passages[hi].name === 'Dean Street') { hubGraph = passages[hi]; break; }
+  }
+  if (!hubGraph) hubGraph = passages[0];
+  var maxN = 1, maxS = 1, maxE = 1, maxW = 1;
+  for (var mi = 0; mi < passages.length; mi++) {
+    var ddx = passages[mi].gx - hubGraph.gx;
+    var ddy = passages[mi].gy - hubGraph.gy;
+    if (ddx > maxE) maxE = ddx;
+    if (-ddx > maxW) maxW = -ddx;
+    if (ddy > maxS) maxS = ddy;
+    if (-ddy > maxN) maxN = -ddy;
+  }
+  var maxR = 440;
+  for (var qq = 0; qq < passages.length; qq++) {
+    var Q = passages[qq];
+    if (Q === hubGraph) { Q.nx = 500; Q.ny = 500; continue; }
+    var dx = Q.gx - hubGraph.gx, dy = Q.gy - hubGraph.gy;
+    // Normalise each axis component by its quadrant's max so the rim
+    // sits at the same distance in every direction.
+    var nxNorm = dx > 0 ? dx / maxE : dx / maxW;   // -1..+1
+    var nyNorm = dy > 0 ? dy / maxS : dy / maxN;   // -1..+1
+    var ang = Math.atan2(nyNorm, nxNorm);
+    var rawNorm = Math.sqrt(nxNorm * nxNorm + nyNorm * nyNorm);
+    if (rawNorm > 1) rawNorm = 1;
+    // sqrt curve gives the near-hub area more breathing room.
+    var r = Math.sqrt(rawNorm) * maxR;
+    Q.nx = 500 + r * Math.cos(ang);
+    Q.ny = 500 + r * Math.sin(ang);
+  }
+
+  // ── 4. Compute degree → node size. Most-linked passages render as the
+  //      brightest stars (Dean Street will be massive, lone passages tiny).
+  var degree = new Array(passages.length);
+  for (var di = 0; di < degree.length; di++) degree[di] = 0;
+  for (var L = 0; L < links.length; L++) {
+    degree[links[L].a]++; degree[links[L].b]++;
+  }
+  var maxDeg = 1;
+  for (var dd = 0; dd < degree.length; dd++) if (degree[dd] > maxDeg) maxDeg = degree[dd];
+
+  // ── 5. Classify each passage's colour by tag/identity. ──
+  // The Twine editor's tag colours map intuitively: dream/dawn passages
+  // read as otherworldly (blue), venues + outdoor scenes read as charged
+  // (red), hub passages stand out gold. Defaults to amber.
+  function kindFor(P) {
+    var tagSet = {};
+    for (var ti = 0; ti < P.tags.length; ti++) tagSet[P.tags[ti]] = 1;
+    if (P.name === 'Dean Street' || tagSet.hub) return 'hub';
+    if (tagSet.dream || tagSet.pyre || tagSet['dawn-end'] || tagSet['dawn-approach'] || tagSet['interval-radio'] || tagSet['carthage-cicadas']) return 'blue';
+    if (tagSet.outdoor || tagSet.pong || tagSet.minigame || /^Fight /.test(P.name) || /^PP /.test(P.name)) return 'red';
+    return 'main';
+  }
+
+  // ── 6. Build SVG. ──
+  var s = '<svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet">';
+  // Links first so they sit under the nodes. Stagger by distance from hub.
+  // Find the hub node (Dean Street) for stagger origin.
+  var hubIdx = nameToIdx['Dean Street'];
+  if (hubIdx === undefined) hubIdx = 0;
+  var hubX = passages[hubIdx].nx, hubY = passages[hubIdx].ny;
+  function distToHub(P) {
+    var dx = P.nx - hubX, dy = P.ny - hubY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+  var maxDist = 1;
+  for (var pdi = 0; pdi < passages.length; pdi++) {
+    var d = distToHub(passages[pdi]); if (d > maxDist) maxDist = d;
+  }
+  s += '<g class="ast-links">';
+  for (var Li = 0; Li < links.length; Li++) {
+    var A = passages[links[Li].a], B = passages[links[Li].b];
+    if (!A || !B) continue;
+    var avgDist = (distToHub(A) + distToHub(B)) / 2;
+    var delay = 0.45 + (avgDist / maxDist) * 1.6;
+    // Lighter stroke + lower opacity than before: dense clusters (cellar
+    // / fight) were reading as web rather than constellation. Thinning
+    // the links lets the stars breathe.
+    s += '<line x1="' + A.nx.toFixed(1) + '" y1="' + A.ny.toFixed(1) +
+         '" x2="' + B.nx.toFixed(1) + '" y2="' + B.ny.toFixed(1) +
+         '" stroke="#d4a820" stroke-width="0.4" opacity="0" style="animation: ast-link-in 1.4s ease-out ' + delay.toFixed(2) + 's forwards;"/>';
+  }
+  s += '</g>';
+  // Nodes — sized by degree, coloured by kind. Accent stars (red/blue)
+  // now punchier and with a wider halo so they read as distinct beats
+  // against the gold web rather than blending into the background.
+  s += '<g class="ast-nodes">';
+  for (var ni = 0; ni < passages.length; ni++) {
+    var N = passages[ni];
+    var k = kindFor(N);
+    var r = 2.4 + (degree[ni] / maxDeg) * 9.5;
+    if (k === 'hub') r = Math.max(r, 11);
+    if (k === 'red' || k === 'blue') r = Math.max(r, 4.5);
+    var col = k === 'hub'  ? '#f5d070' :
+              k === 'red'  ? '#ec5230' :
+              k === 'blue' ? '#7ac0e0' : '#d4a820';
+    var glow = k === 'hub'  ? '0 0 14px rgba(255,220,120,0.85)' :
+               k === 'red'  ? '0 0 9px rgba(236,82,48,0.85)) drop-shadow(0 0 18px rgba(220,60,30,0.35)' :
+               k === 'blue' ? '0 0 9px rgba(122,192,224,0.85)) drop-shadow(0 0 18px rgba(90,160,210,0.35)' : '';
+    var dist = distToHub(N);
+    var delay = 0.45 + (dist / maxDist) * 1.6;
+    if (ni === hubIdx) delay = 0;
+    s += '<circle cx="' + N.nx.toFixed(1) + '" cy="' + N.ny.toFixed(1) +
+         '" r="' + r.toFixed(1) + '" fill="' + col +
+         '" opacity="0" style="animation: ast-node-in 1.2s ease-out ' + delay.toFixed(2) + 's forwards;' +
+         (glow ? ' filter: drop-shadow(' + glow + ');' : '') + '"/>';
+  }
+  s += '</g>';
+  s += '</svg>';
+
+  var modal = document.createElement('div');
+  modal.id = 'dss-astral-modal';
+  modal.style.opacity = '0';
+  modal.innerHTML = s;
+  document.body.appendChild(modal);
+
+  // Force layout flush, then fade the overlay in.
+  void modal.offsetWidth;
+  modal.style.opacity = '1';
+
+  // Visible window: ~3s build, ~5s hold, ~2.5s fade-out.
+  setTimeout(function() { modal.style.opacity = '0'; }, 8500);
+  setTimeout(function() {
+    if (modal.parentNode) modal.parentNode.removeChild(modal);
+    if (onDone) onDone();
+  }, 11500);
 };
 
 // Safe DrinkPopup: cancelled if the player navigates away before the delay fires.
@@ -28394,6 +28580,24 @@ document.addEventListener('keydown', function(e) {
 
 :: Approach Centre Point [piano-bed] {"position":"1650,50","size":"100,100"}
 (set: $visitedCentrePoint to true)\
+(if: $sawAstralReveal is false)[(set: $sawAstralReveal to true)<script>
+/* First arrival at Centre Point — the city you walked tonight dissolves
+   into stars. Fires once. Deferred ~2.4s so the 3D scene paints in first;
+   then the astral graph rises over it, holds, fades. The dot link below
+   stays clickable underneath (z-index 9998 < pointer-events:none anyway).
+   Outer setTimeout(0) defers the _passageGen snapshot until after the
+   MutationObserver has incremented it for THIS passage; same race fix as
+   showDrinkPopupSafe and the Ripley's Wheel trigger. */
+(function(){
+  setTimeout(function(){
+    var pgGen = window._passageGen;
+    setTimeout(function(){
+      if (window._passageGen !== pgGen) return;
+      if (window.dssAstralReveal) window.dssAstralReveal();
+    }, 2400);
+  }, 0);
+})();
+</script>]
 (if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[<div id="cp-container"></div>[[·|Alba Complete]]](else:)[<div id="cp-container"></div>[[·|Alba Incomplete]]]
 
 :: PP Pong [pong] {"position":"1300,1550","size":"100,100"}
@@ -32536,6 +32740,7 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $sawPentangle to false)\
 (set: $treeFlashed to false)\
 (set: $visitedCentrePoint to false)\
+(set: $sawAstralReveal to false)\
 (set: $opusViaTree to false)\
 (set: $lilyHintShown to false)\
 (set: $nightAheadPart2Shown to false)\
@@ -35032,6 +35237,40 @@ to   { transform: rotate(0deg);   opacity: 1; }
 from { opacity: 0; }
 to   { opacity: 1; }
 }
+
+/* ===== ASTRAL REVEAL — Centre Point cosmos =====
+   The night's wandering rendered as a galactic formation. Fullscreen
+   overlay; nodes and links animate in via staggered inline transitions
+   on their own clocks. */
+#dss-astral-modal {
+position: fixed;
+top: 0;
+left: 0;
+width: 100vw;
+height: 100vh;
+z-index: 9998;
+pointer-events: none;
+display: flex;
+align-items: center;
+justify-content: center;
+background: radial-gradient(circle at center, rgba(8,6,2,0.62) 0%, rgba(4,3,1,0.86) 60%, rgba(0,0,0,0.94) 100%);
+transition: opacity 2.4s ease;
+}
+#dss-astral-modal svg {
+width: min(94vmin, 940px);
+height: min(94vmin, 940px);
+filter: drop-shadow(0 0 14px rgba(212,168,32,0.32)) drop-shadow(0 0 42px rgba(212,168,32,0.12));
+}
+@keyframes ast-node-in {
+0%   { opacity: 0; transform-origin: center; }
+30%  { opacity: 1; }
+100% { opacity: 0.85; }
+}
+@keyframes ast-link-in {
+0%   { opacity: 0; }
+100% { opacity: 0.42; }
+}
+
 /* Opus gold — all 12 haunts collected */
 .bar-opus {
 background:

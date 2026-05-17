@@ -3407,6 +3407,201 @@ window.showCigarettePopup = function(onLit) {
   });
 };
 
+// ====== NAPKIN PORTRAIT — KEEP WORKING ON IT ======
+// Player drew Benito on a napkin at The French. After leaving, the
+// notebook entry offers a "Work on it" button that reopens the drawing
+// canvas as a popup — load the saved PNG as the starting state, add
+// more strokes, save back. Lets the player return to the only thing
+// they've made tonight, over and over.
+window.showNapkinPopup = function() {
+  if (document.getElementById('napkin-popup-overlay')) return;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'napkin-popup-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(4,3,8,0.85);display:flex;align-items:center;justify-content:center;z-index:20000;flex-direction:column;';
+
+  overlay.innerHTML =
+    '<div class="napkin-popup-box">' +
+      '<canvas class="napkin-canvas" id="napkin-popup-canvas" width="400" height="480"></canvas>' +
+      '<div class="napkin-tools">' +
+        '<div class="napkin-tools-row">' +
+          '<div class="napkin-color active" data-color="#111111" style="background:#111111" title="Black"></div>' +
+          '<div class="napkin-color" data-color="#1e4fd6" style="background:#1e4fd6" title="Blue"></div>' +
+          '<div class="napkin-color" data-color="#d81f1f" style="background:#d81f1f" title="Red"></div>' +
+          '<div class="napkin-color" data-color="#f5c518" style="background:#f5c518" title="Yellow"></div>' +
+          '<div class="napkin-color" data-color="#2aa14a" style="background:#2aa14a" title="Green"></div>' +
+          '<div class="napkin-color napkin-erase" data-color="#f2e7c9" title="Eraser">×</div>' +
+        '</div>' +
+        '<div class="napkin-tools-row">' +
+          '<div class="napkin-size napkin-size-thin active" data-size="thin" title="Thin line"></div>' +
+          '<div class="napkin-size napkin-size-thick" data-size="thick" title="Thick line"></div>' +
+          '<button class="napkin-btn" id="napkin-popup-undo" disabled>Undo</button>' +
+          '<button class="napkin-btn" id="napkin-popup-done">Done</button>' +
+          '<button class="napkin-btn napkin-popup-close" id="napkin-popup-cancel">×</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  var canvas = document.getElementById('napkin-popup-canvas');
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  var color = '#111111';
+  var brushSize = 3.2;
+  var drawing = false;
+  var lastX = 0, lastY = 0;
+  /* Stroke stack for THIS session only — undo can roll back the
+     strokes added since the popup opened, but not the saved PNG
+     underneath (those strokes are now part of the loaded image). */
+  var strokes = [];
+  var currentStroke = null;
+  var baseImage = null;       // the loaded saved napkin as Image
+  var baseImageReady = false;
+
+  function paintBase() {
+    if (baseImage && baseImageReady) {
+      ctx.drawImage(baseImage, 0, 0, W, H);
+    } else {
+      // Fresh napkin if no saved data (shouldn't happen, but safe).
+      ctx.fillStyle = '#f2e7c9';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+  function replayStrokes() {
+    strokes.forEach(function(s){
+      if (!s.points || s.points.length === 0) return;
+      var w = s.width || 3.2;
+      ctx.strokeStyle = s.color;
+      ctx.fillStyle = s.color;
+      ctx.lineWidth = w;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      if (s.points.length === 1) {
+        ctx.beginPath();
+        ctx.arc(s.points[0].x, s.points[0].y, Math.max(w / 2, 1), 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
+      ctx.beginPath();
+      ctx.moveTo(s.points[0].x, s.points[0].y);
+      for (var i = 1; i < s.points.length; i++) {
+        ctx.lineTo(s.points[i].x, s.points[i].y);
+      }
+      ctx.stroke();
+    });
+  }
+  function updateButtons() {
+    var undo = document.getElementById('napkin-popup-undo');
+    if (strokes.length > 0) undo.removeAttribute('disabled');
+    else undo.setAttribute('disabled', '');
+  }
+  function getPos(e) {
+    var rect = canvas.getBoundingClientRect();
+    var sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+    var cx, cy;
+    if (e.touches && e.touches[0]) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
+    return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
+  }
+  function startDraw(e) {
+    e.preventDefault();
+    drawing = true;
+    var p = getPos(e);
+    lastX = p.x; lastY = p.y;
+    currentStroke = { color: color, width: brushSize, points: [{x: p.x, y: p.y}] };
+    strokes.push(currentStroke);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, Math.max(brushSize / 2, 1), 0, Math.PI * 2);
+    ctx.fill();
+    updateButtons();
+  }
+  function draw(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    var p = getPos(e);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    lastX = p.x; lastY = p.y;
+    if (currentStroke) currentStroke.points.push({x: p.x, y: p.y});
+  }
+  function stopDraw() { drawing = false; currentStroke = null; }
+
+  canvas.addEventListener('mousedown', startDraw);
+  canvas.addEventListener('mousemove', draw);
+  canvas.addEventListener('mouseup', stopDraw);
+  canvas.addEventListener('mouseleave', stopDraw);
+  canvas.addEventListener('touchstart', startDraw, { passive: false });
+  canvas.addEventListener('touchmove', draw, { passive: false });
+  canvas.addEventListener('touchend', stopDraw);
+
+  overlay.querySelectorAll('.napkin-color').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      overlay.querySelectorAll('.napkin-color').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      color = btn.getAttribute('data-color');
+    });
+  });
+  overlay.querySelectorAll('.napkin-size').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      overlay.querySelectorAll('.napkin-size').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      brushSize = (btn.getAttribute('data-size') === 'thick') ? 7 : 3.2;
+    });
+  });
+  document.getElementById('napkin-popup-undo').addEventListener('click', function() {
+    if (strokes.length === 0) return;
+    strokes.pop();
+    paintBase();
+    replayStrokes();
+    updateButtons();
+  });
+  function close() {
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+  document.getElementById('napkin-popup-cancel').addEventListener('click', close);
+  document.getElementById('napkin-popup-done').addEventListener('click', function() {
+    // Flatten current canvas state into the saved napkin so subsequent
+    // sessions build on it.
+    try { localStorage.setItem('dss_napkin', canvas.toDataURL('image/png')); } catch(e) {}
+    // Update any visible nb-napkin-img elements so the notebook
+    // immediately reflects the change.
+    var imgs = document.querySelectorAll('.nb-napkin-img');
+    imgs.forEach(function(img){ img.setAttribute('src', canvas.toDataURL('image/png')); });
+    if (window.dssAudio && window.dssAudio.cameraShutter) {
+      try { window.dssAudio.cameraShutter(); } catch(e) {}
+    }
+    close();
+  });
+
+  // Load the existing saved napkin (if any) as the canvas starting state.
+  var saved = null;
+  try { saved = localStorage.getItem('dss_napkin'); } catch(e) {}
+  if (saved) {
+    baseImage = new Image();
+    baseImage.onload = function() {
+      baseImageReady = true;
+      paintBase();
+    };
+    baseImage.src = saved;
+  } else {
+    // Fresh napkin background as fallback
+    ctx.fillStyle = '#f2e7c9';
+    ctx.fillRect(0, 0, W, H);
+    for (var i = 0; i < 2200; i++) {
+      var x = Math.random() * W, y = Math.random() * H;
+      ctx.fillStyle = 'rgba(170,140,80,' + (Math.random() * 0.05) + ')';
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+};
+
 // ====== GENERIC WORD-TO-THE-WISE POPUP ======
 // Used by Dean Street's various morale / chippy hints. Twee-side gating
 // flags ($shownLowConf etc.) ensure each unique message only triggers once
@@ -30710,7 +30905,7 @@ He speaks. The family roars on around, as his old sister winds a trick, him but 
 
 :: LINE 2 Oxford {"position":"1000,200","size":"100,100"}
 (set: $sawMemory2 to true)\
-<div class="memory-photo memory-photo-2"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl2" cx="78%" cy="22%" r="78%"><stop offset="0%" stop-color="#cce890" stop-opacity="0.95"/><stop offset="26%" stop-color="#5ca858" stop-opacity="0.55"/><stop offset="58%" stop-color="#1c3a20" stop-opacity="0.3"/><stop offset="100%" stop-color="#08180a" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl2)"/></svg><div class="mp-prose">Late May night and the sexy airs of summer, the trees' munificence. Her staircase and then her, footsteps away. And in the night-blown roses of your ears, repeating what you've learned for your exams:</div></div></div>
+<div class="memory-photo memory-photo-2"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl2" cx="78%" cy="22%" r="78%"><stop offset="0%" stop-color="#f8d088" stop-opacity="0.95"/><stop offset="26%" stop-color="#d89048" stop-opacity="0.5"/><stop offset="58%" stop-color="#2a2860" stop-opacity="0.3"/><stop offset="100%" stop-color="#0a0820" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl2)"/></svg><div class="mp-prose">Late May night and the sexy airs of summer, the trees' munificence. Her staircase and then her, footsteps away. And in the night-blown roses of your ears, repeating what you've learned for your exams:</div></div></div>
 <div class="quest-box" style="color:#7ab078;text-shadow:0 0 14px rgba(122,176,120,0.32);"><em>Annihilating all that's made<br>To a <span style="color:#9ed68a;">green</span> thought in a <span style="color:#9ed68a;">green</span> shade.</em></div>
 
 [[Return to Dean Street|Dean Street]]
@@ -30729,7 +30924,7 @@ The last line comes out of your own throat, as you cry, 'I wish that I was never
 <em>"$alba3"</em>
 </div>
 
-<div class="memory-photo memory-photo-3"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl3" cx="50%" cy="40%" r="88%"><stop offset="0%" stop-color="#f8c060" stop-opacity="1"/><stop offset="22%" stop-color="#e04820" stop-opacity="0.82"/><stop offset="52%" stop-color="#7a1808" stop-opacity="0.35"/><stop offset="100%" stop-color="#1a0606" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl3)"/></svg><div class="mp-prose">In a certain memory she sits on your bed, dressing; she is in her underwear, which is black and laced. Since then, and before it, life has rarely been so real. You'd burn Troy after Troy to see God's face like that again.</div></div></div>
+<div class="memory-photo memory-photo-3"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl3" cx="50%" cy="40%" r="88%"><stop offset="0%" stop-color="#f8c8a8" stop-opacity="1"/><stop offset="22%" stop-color="#e89878" stop-opacity="0.78"/><stop offset="52%" stop-color="#a05060" stop-opacity="0.32"/><stop offset="100%" stop-color="#1a0a18" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl3)"/></svg><div class="mp-prose">In a certain memory she sits on your bed, dressing; she is in her underwear, which is black and laced. Since then, and before it, life has rarely been so real. You'd burn Troy after Troy to see God's face like that again.</div></div></div>
 
 (if: ($alba contains $alba1) and ($alba contains $alba2))[It is written. You shall get out alive.
 
@@ -32963,7 +33158,7 @@ A flight of stairs, the kind you find leaving a theatre; red carpet worn thin as
 A woman passes; she is going up. Two steps down you freeze, stopped clock, right twice: you'd know that perfume anywhere. It's Lily.
 (set: $confidence to $confidence + 12)\
 (set: $sobriety to $sobriety + 10)\
-(if: $sawMemory1 is false)[(set: $sawMemory1 to true)<div class="memory-photo memory-photo-1"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl1" cx="70%" cy="75%" r="80%"><stop offset="0%" stop-color="#dca8f0" stop-opacity="0.95"/><stop offset="28%" stop-color="#8848c0" stop-opacity="0.6"/><stop offset="60%" stop-color="#3a1858" stop-opacity="0.28"/><stop offset="100%" stop-color="#100820" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl1)"/></svg><div class="mp-prose">A little earthquake in the heart upsets the world and you are twenty-one again, walking with her on your arm through the rain on St. Giles, past the funfair, before so very much went so far wrong.</div></div></div>]
+(if: $sawMemory1 is false)[(set: $sawMemory1 to true)<div class="memory-photo memory-photo-1"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl1" cx="70%" cy="75%" r="80%"><stop offset="0%" stop-color="#f5a868" stop-opacity="0.95"/><stop offset="28%" stop-color="#d8702a" stop-opacity="0.55"/><stop offset="60%" stop-color="#5a2018" stop-opacity="0.25"/><stop offset="100%" stop-color="#1a0a0a" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl1)"/></svg><div class="mp-prose">A little earthquake in the heart upsets the world and you are twenty-one again, walking with her on your arm through the rain on St. Giles, past the funfair, before so very much went so far wrong.</div></div></div>]
 She goes upstairs. You go down.
 <span class="lily-thought">(link: "Turn and follow her")[<span class="lily-fade-in">You take the stairs by doubles but when you get there she's gone. Lily-of-the-Valley is all that remains on the spendthrift draught.</span>]</span>
 </div>
@@ -34417,7 +34612,7 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 (set: _nb to _nb + '<div class="nb-inv-divider"></div>')\
 (if: $hasLiver is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ Shelley&#39;s Liver</div><div class="nb-inv-vial-wrap"><svg class="nb-inv-vial" viewBox="0 0 80 160" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="vialGlass" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="rgba(180,160,130,0.18)"/><stop offset="30%" stop-color="rgba(220,210,190,0.32)"/><stop offset="70%" stop-color="rgba(200,185,155,0.15)"/><stop offset="100%" stop-color="rgba(150,135,110,0.22)"/></linearGradient><linearGradient id="vialLiq" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(140,60,20,0.75)"/><stop offset="100%" stop-color="rgba(90,28,8,0.88)"/></linearGradient></defs><rect x="26" y="10" width="28" height="10" rx="3" fill="rgba(160,140,110,0.4)" stroke="rgba(130,110,80,0.6)" stroke-width="1.2"/><rect x="29" y="8" width="22" height="5" rx="2" fill="rgba(200,180,150,0.5)" stroke="rgba(150,130,100,0.5)" stroke-width="1"/><path d="M24 20 L18 45 L18 140 Q18 148 25 150 L55 150 Q62 148 62 140 L62 45 L56 20 Z" fill="url(#vialGlass)" stroke="rgba(160,140,110,0.55)" stroke-width="1.5"/><path d="M20 90 L20 140 Q20 147 26 149 L54 149 Q60 147 60 140 L60 90 Z" fill="url(#vialLiq)" opacity="0.82"/><ellipse cx="40" cy="90" rx="20" ry="4" fill="rgba(160,70,25,0.35)"/><path d="M26 48 Q27 120 27 140" fill="none" stroke="rgba(230,220,200,0.28)" stroke-width="2.5" stroke-linecap="round"/><path d="M32 45 Q33 80 33 100" fill="none" stroke="rgba(230,220,200,0.15)" stroke-width="1.2" stroke-linecap="round"/></svg></div><div class="nb-inv-btn nb-inv-eat" onclick="(function(){if(!window.showLiverPopup)return;window.showLiverPopup();if(window.dssAudio){try{setTimeout(function(){window.dssAudio.uncork();},250);setTimeout(function(){window.dssAudio.swallow();},1100);}catch(e){}}window.addEventListener(&#39;liverpopup:closed&#39;,function(){try{var s=(window.Harlowe&&Harlowe.API_ACCESS&&Harlowe.API_ACCESS.STATE&&Harlowe.API_ACCESS.STATE.variables)||null;if(s){s.hasLiver=false;s.confidence=Math.min(100,(typeof s.confidence===&#39;number&#39;?s.confidence:70)+22);s.sobriety=Math.min(100,(typeof s.sobriety===&#39;number&#39;?s.sobriety:70)+40);}}catch(e){}},{once:true});})();">Eat it</div></div>')](else:)[(set: _nb to _nb + '<div class="nb-inv-item nb-inv-locked"><div class="nb-grey">○ Shelley&#39;s liver</div></div>')]\
 (set: _nb to _nb + '<div class="nb-inv-divider"></div>')\
-(if: $hasDrawing is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ A Napkin Portrait</div><div class="nb-napkin-display"><img class="nb-napkin-img" alt="The painter, sketched on a napkin"/></div><div class="nb-napkin-caption">Sketched at The French.</div></div>')](else:)[(set: _nb to _nb + '<div class="nb-inv-item nb-inv-locked"><div class="nb-grey">○ A napkin portrait</div></div>')]\
+(if: $hasDrawing is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ A Napkin Portrait</div><div class="nb-napkin-display"><img class="nb-napkin-img" alt="The painter, sketched on a napkin"/></div><div class="nb-napkin-caption">Sketched at The French.</div><div class="nb-inv-btn" onclick="if(window.showNapkinPopup)window.showNapkinPopup();">Work on it</div></div>')](else:)[(set: _nb to _nb + '<div class="nb-inv-item nb-inv-locked"><div class="nb-grey">○ A napkin portrait</div></div>')]\
 (set: _nb to _nb + '<div class="nb-inv-divider"></div>')\
 (if: $hasTrishaMatchbook is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ Trisha&#39;s Matchbook</div><div class="nb-inv-graphic-wrap"><svg class="nb-inv-matchbook" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mbCover" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7a1818"/><stop offset="55%" stop-color="#9a2828"/><stop offset="100%" stop-color="#5a1010"/></linearGradient><linearGradient id="mbEdge" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="rgba(0,0,0,0.20)"/><stop offset="10%" stop-color="rgba(0,0,0,0)"/></linearGradient></defs><ellipse cx="40" cy="92" rx="26" ry="2.5" fill="rgba(0,0,0,0.22)"/><g transform="rotate(-3 40 50)"><rect x="20" y="14" width="40" height="72" rx="2.5" fill="url(#mbCover)" stroke="rgba(40,8,8,0.55)" stroke-width="0.5"/><rect x="20" y="14" width="40" height="72" rx="2.5" fill="url(#mbEdge)"/><line x1="20" y1="22" x2="60" y2="22" stroke="rgba(20,4,4,0.45)" stroke-width="0.4"/><circle cx="28" cy="18" r="0.6" fill="rgba(20,4,4,0.7)"/><circle cx="52" cy="18" r="0.6" fill="rgba(20,4,4,0.7)"/><text x="40" y="45" text-anchor="middle" fill="#e8c478" font-family="Playfair Display, Georgia, serif" font-size="6.5" font-style="italic" letter-spacing="0.6">TRISHA&#39;S</text><line x1="28" y1="50" x2="52" y2="50" stroke="rgba(232,196,120,0.5)" stroke-width="0.3"/><text x="40" y="58" text-anchor="middle" fill="rgba(232,196,120,0.6)" font-size="5">✦</text><line x1="28" y1="62" x2="52" y2="62" stroke="rgba(232,196,120,0.5)" stroke-width="0.3"/><text x="40" y="73" text-anchor="middle" fill="rgba(232,196,120,0.5)" font-family="Crimson Text, serif" font-size="3.4" letter-spacing="0.8">SOHO</text><rect x="24" y="82" width="32" height="2.4" fill="rgba(60,32,16,0.85)"/><line x1="27" y1="82" x2="27" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="32" y1="82" x2="32" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="37" y1="82" x2="37" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="42" y1="82" x2="42" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="47" y1="82" x2="47" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="52" y1="82" x2="52" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/></g></svg></div><div class="nb-match-row" aria-hidden="true">(if: $matchesLeft is a number and $matchesLeft >= 1)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 2)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 3)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 4)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 5)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>]</div><div class="nb-napkin-caption">An invitation. (if: $matchesLeft is a number and $matchesLeft > 0)[(print: $matchesLeft) match(if: $matchesLeft > 1)[es] left.](else:)[//The matches are all gone.//]</div>(if: $matchesLeft is a number and $matchesLeft > 0)[<div class="nb-inv-btn" onclick="if(window.showCigarettePopup)window.showCigarettePopup(function(){try{var s=(window.Harlowe&&Harlowe.API_ACCESS&&Harlowe.API_ACCESS.STATE&&Harlowe.API_ACCESS.STATE.variables)||null;if(s){s.matchesLeft=(typeof s.matchesLeft===\'number\'?s.matchesLeft:0)-1;if(s.matchesLeft<0)s.matchesLeft=0;s.confidence=(typeof s.confidence===\'number\'?s.confidence:70)+6;if(s.confidence>100)s.confidence=100;s.cigsTonight=(typeof s.cigsTonight===\'number\'?s.cigsTonight:0)+1;}}catch(e){}});">Light a cigarette</div>]</div>')](else:)[(set: _nb to _nb + '<div class="nb-inv-item nb-inv-locked"><div class="nb-grey">○ A matchbook</div></div>')]\
 (set: _nb to _nb + '<div class="nb-inv-divider"></div>')\
@@ -37944,6 +38139,121 @@ letter-spacing: 0.01em;
   margin-top: 0.3em;
 }
 
+/* ===== NAPKIN POPUP (continue drawing from the notebook) =====
+   Replicates the Sketch-the-Painter tool palette inside a fixed overlay
+   so the player can keep working on the napkin from anywhere they have
+   notebook access. The canvas loads the saved PNG as its starting state;
+   on Done the state is flattened back into localStorage and any visible
+   nb-napkin-img is refreshed. */
+.napkin-popup-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8em;
+  padding: 1.2em 1.4em;
+  background: rgba(20, 14, 10, 0.92);
+  border: 1px solid rgba(155, 120, 65, 0.45);
+  border-radius: 4px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.75), 0 0 24px rgba(140, 110, 60, 0.18);
+  max-height: 94vh;
+  overflow: auto;
+}
+.napkin-popup-box .napkin-canvas {
+  background: #f2e7c9;
+  cursor: crosshair;
+  border: 1px solid rgba(200, 170, 100, 0.4);
+  border-radius: 3px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.55), inset 0 0 40px rgba(180, 140, 70, 0.15);
+  touch-action: none;
+  max-width: min(86vmin, 400px);
+  height: auto;
+}
+.napkin-popup-box .napkin-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+  align-items: center;
+}
+.napkin-popup-box .napkin-tools-row {
+  display: flex;
+  gap: 0.55em;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.napkin-popup-box .napkin-color {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+.napkin-popup-box .napkin-color[data-color="#111111"] { border-color: rgba(212, 165, 116, 0.75); }
+.napkin-popup-box .napkin-color:hover { transform: scale(1.15); }
+.napkin-popup-box .napkin-color.active {
+  border: 2px solid #f2e7c9;
+  box-shadow: 0 0 0 2px rgba(212, 165, 116, 0.8);
+}
+.napkin-popup-box .napkin-erase {
+  background: #f2e7c9 !important;
+  color: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 20px;
+  line-height: 22px;
+  font-family: Georgia, serif;
+}
+.napkin-popup-box .napkin-size {
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+.napkin-popup-box .napkin-size:hover { transform: scale(1.15); }
+.napkin-popup-box .napkin-size.active {
+  border: 2px solid #f2e7c9;
+  box-shadow: 0 0 0 2px rgba(212, 165, 116, 0.8);
+}
+.napkin-popup-box .napkin-size-thin::after  { content: ''; width: 4px;  height: 4px;  background: #d4a574; border-radius: 50%; }
+.napkin-popup-box .napkin-size-thick::after { content: ''; width: 10px; height: 10px; background: #d4a574; border-radius: 50%; }
+.napkin-popup-box .napkin-btn {
+  background: rgba(0, 0, 0, 0.4);
+  color: #d4a574;
+  padding: 0.35em 0.95em;
+  border: 1px solid rgba(200, 170, 100, 0.4);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.9em;
+  letter-spacing: 0.05em;
+}
+.napkin-popup-box .napkin-btn:hover {
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffd699;
+  border-color: rgba(212, 165, 116, 0.7);
+}
+.napkin-popup-box .napkin-btn[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.napkin-popup-box .napkin-popup-close {
+  background: rgba(80, 30, 30, 0.4);
+  color: #d8a0a0;
+  border-color: rgba(180, 100, 80, 0.4);
+  font-weight: bold;
+  padding: 0.2em 0.65em;
+}
+
 /* ===== COIN PANEL ===== */
 .nb-coin-display {
   text-align: center;
@@ -38957,13 +39267,33 @@ z-index: 1;
     inset 0 0 1px rgba(0, 0, 0, 0.6);
   z-index: 5;
 }
+.memory-photo::after {
+  /* Coloured halo around the polaroid — sits as a wash on the WALL the
+     photo is pinned to, not on the photo itself. Hollow centre so the
+     colour doesn't bleed through onto the polaroid body, transitions
+     into a glow ring that peaks outside the polaroid edges, then fades
+     into the dark background. Halo colour set per memory via --halo. */
+  content: "";
+  position: absolute;
+  inset: -85px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center,
+    transparent 0%,
+    transparent 40%,
+    var(--halo, rgba(216, 168, 104, 0.55)) 60%,
+    transparent 92%);
+  filter: blur(34px);
+}
 @keyframes memPhotoIn {
   0%   { opacity: 0; transform: translateY(12px) rotate(var(--rot, -1deg)) scale(0.96); filter: blur(4px); }
   100% { opacity: 1; transform: translateY(0)    rotate(var(--rot, -1deg)) scale(1);    filter: blur(0); }
 }
-.memory-photo-1 { --rot: -1.7deg; }
-.memory-photo-2 { --rot:  1.3deg; }
-.memory-photo-3 { --rot: -0.9deg; }
+/* Each memory variant: slight rotation + the halo colour that bleeds
+   out around the polaroid. */
+.memory-photo-1 { --rot: -1.7deg; --halo: rgba(170,  98, 215, 0.55); }
+.memory-photo-2 { --rot:  1.3deg; --halo: rgba(108, 200,  90, 0.50); }
+.memory-photo-3 { --rot: -0.9deg; --halo: rgba(232, 110,  48, 0.58); }
 
 /* ===== LILY SVG TRACKER ===== */
 .lily-icon-svg {

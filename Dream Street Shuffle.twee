@@ -20471,21 +20471,22 @@ function buildCaScene() {
   foam2L.position.set(-5, -0.02, -9);
   scene.add(foam2L);
 
-  // Scattered foam patches — placed along the curved coastline
+  // Scattered foam patches — concentrated on the left half of the coastline
+  // where the rocky headland breaks the surf. Right side stays mostly open
+  // water with just light lapping foam, so the bay reads as calm.
   var foamPatches = [];
-  for (var fp = 0; fp < 28; fp++) {
+  for (var fp = 0; fp < 18; fp++) {
     var fpMat = new THREE.SpriteMaterial({
       map: foamSprayTex, transparent: true,
-      opacity: 0.2 + Math.random() * 0.2,
+      opacity: 0.18 + Math.random() * 0.18,
       depthWrite: false
     });
     var fpSprite = new THREE.Sprite(fpMat);
-    var fpSize = 1.5 + Math.random() * 3.0;
-    fpSprite.scale.set(fpSize, fpSize * 0.25, 1);
-    // Place along the curved coastline — left patches angled back
-    var fpX = -8 + Math.random() * 22;
-    // z follows the coast: further left = further back
-    var coastZ = -9 - Math.max(0, (-fpX - 2)) * 0.4;  // curves back on left side
+    var fpSize = 1.5 + Math.random() * 2.5;
+    fpSprite.scale.set(fpSize, fpSize * 0.22, 1);
+    // Biased to the rocky-headland left side; only a few patches stray right
+    var fpX = -12 + Math.random() * (fp < 14 ? 14 : 22);
+    var coastZ = -9 - Math.max(0, (-fpX - 2)) * 0.4;
     var fpZ = coastZ - Math.random() * 4;
     fpSprite.position.set(fpX, -0.06, fpZ);
     scene.add(fpSprite);
@@ -20972,10 +20973,53 @@ function buildCaScene() {
   var midLeafTex  = makeLeafClusterTex(95, 92, 50);
   var paleLeafTex = makeLeafClusterTex(180, 145, 70);
   var autumnLeafTex = makeLeafClusterTex(160, 105, 50);
-  // Dedicated bush textures — dark scrubby Mediterranean shrubs that read as
-  // solid masses rather than pale puffs
-  var bushLeafTex = makeLeafClusterTex(48, 58, 32);
-  var bushLeafTexB = makeLeafClusterTex(72, 72, 40);
+  // Dedicated bush textures — denser than tree-cluster textures (less radial
+  // fade, harder edges) so scrub reads as a solid mass instead of a soft puff
+  function makeBushClusterTex(baseR, baseG, baseB) {
+    return makeCanvasTexture(128, 128, function(cx, w, h) {
+      cx.clearRect(0, 0, w, h);
+      // Many small overlapping leaf shapes — denser packing than tree clusters
+      for (var i = 0; i < 90; i++) {
+        var lx = w * 0.18 + Math.random() * w * 0.64;
+        var ly = h * 0.18 + Math.random() * h * 0.64;
+        var lr = 7 + Math.random() * 14;
+        var rShift = Math.floor((Math.random() - 0.5) * 26);
+        var gShift = Math.floor((Math.random() - 0.5) * 22);
+        var bShift = Math.floor((Math.random() - 0.5) * 12);
+        var r = Math.max(0, Math.min(255, baseR + rShift));
+        var g = Math.max(0, Math.min(255, baseG + gShift));
+        var b = Math.max(0, Math.min(255, baseB + bShift));
+        cx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.85 + Math.random() * 0.13) + ')';
+        cx.save();
+        cx.translate(lx, ly);
+        cx.rotate(Math.random() * Math.PI);
+        cx.beginPath();
+        cx.ellipse(0, 0, lr, lr * 0.5, 0, 0, Math.PI * 2);
+        cx.fill();
+        cx.restore();
+      }
+      // Hard-edged radial mask — keeps the bush silhouette sharp instead of fuzzy
+      var fade = cx.createRadialGradient(w/2, h/2, w * 0.32, w/2, h/2, w * 0.46);
+      fade.addColorStop(0, 'rgba(0,0,0,0)');
+      fade.addColorStop(0.85, 'rgba(0,0,0,0.5)');
+      fade.addColorStop(1, 'rgba(0,0,0,1)');
+      cx.globalCompositeOperation = 'destination-out';
+      cx.fillStyle = fade;
+      cx.fillRect(0, 0, w, h);
+      cx.globalCompositeOperation = 'source-over';
+      // Warm sun-catch highlights on top — golden hour
+      for (var hi = 0; hi < 14; hi++) {
+        var hx = w * 0.25 + Math.random() * w * 0.5;
+        var hy = h * 0.22 + Math.random() * h * 0.35; // upper half catches light
+        cx.fillStyle = 'rgba(' + Math.min(255, baseR + 80) + ',' + Math.min(255, baseG + 55) + ',' + Math.min(255, baseB + 18) + ',' + (0.18 + Math.random() * 0.18) + ')';
+        cx.beginPath();
+        cx.arc(hx, hy, 3 + Math.random() * 6, 0, Math.PI * 2);
+        cx.fill();
+      }
+    });
+  }
+  var bushLeafTex = makeBushClusterTex(48, 58, 32);
+  var bushLeafTexB = makeBushClusterTex(72, 76, 42);
 
   function makeLeafSpriteMat(tex, opacity) {
     return new THREE.SpriteMaterial({
@@ -21096,11 +21140,14 @@ function buildCaScene() {
       root.rotation.x = Math.sin(rAngle) * 0.6;
       g.add(root);
     }
-    // Layered horizontal branch platforms — cedar's distinctive flat layers
-    var texes = [darkLeafTex, midLeafTex, paleLeafTex];
-    var layerCount = 5 + Math.floor(Math.random() * 3);
+    // Layered horizontal branch platforms — cedar's distinctive flat layers.
+    // Cedar leaves are characteristically dark — use dark + mid textures only,
+    // no pale golden (which would read as fluffy puffs). Fewer sprites per
+    // layer so the cedar reads as a clear silhouette, not a fog.
+    var texes = [darkLeafTex, darkLeafTex, midLeafTex];
+    var layerCount = 4 + Math.floor(Math.random() * 2);
     for (var layer = 0; layer < layerCount; layer++) {
-      var layerY = height * 0.35 + (layer / layerCount) * height * 0.6;
+      var layerY = height * 0.38 + (layer / layerCount) * height * 0.58;
       var layerSpread = (1.0 - layer / layerCount * 0.55) * height * 0.55;
       // Branch arm for each layer
       var brAngle = Math.random() * Math.PI * 2;
@@ -21113,17 +21160,17 @@ function buildCaScene() {
       branch.rotation.z = Math.cos(brAngle) * 0.5;
       branch.rotation.x = Math.sin(brAngle) * 0.5;
       g.add(branch);
-      // Foliage sprites for this layer — spread horizontally
-      var spriteCount = 5 + Math.floor(Math.random() * 4);
+      // Fewer foliage sprites — denser, more opaque
+      var spriteCount = 3 + Math.floor(Math.random() * 2);
       for (var si = 0; si < spriteCount; si++) {
         var tex = texes[Math.floor(Math.random() * texes.length)];
-        var lSprite = new THREE.Sprite(makeLeafSpriteMat(tex, 0.75 + Math.random() * 0.2));
-        var cSize = layerSpread * (0.4 + Math.random() * 0.5);
-        lSprite.scale.set(cSize, cSize * 0.45, 1); // wider than tall — flat cedar shape
+        var lSprite = new THREE.Sprite(makeLeafSpriteMat(tex, 0.9 + Math.random() * 0.08));
+        var cSize = layerSpread * (0.55 + Math.random() * 0.45);
+        lSprite.scale.set(cSize, cSize * 0.45, 1);
         lSprite.position.set(
-          (Math.random() - 0.5) * layerSpread,
-          layerY + (Math.random() - 0.5) * 0.3,
-          (Math.random() - 0.5) * layerSpread * 0.8
+          (Math.random() - 0.5) * layerSpread * 0.7,
+          layerY + (Math.random() - 0.5) * 0.2,
+          (Math.random() - 0.5) * layerSpread * 0.6
         );
         g.add(lSprite);
       }
@@ -21185,20 +21232,20 @@ function buildCaScene() {
         g.add(subBranch);
       }
     }
-    // Silver-olive foliage — base silver-sage; golden highlights inside the
-    // texture do the sun-catching work, so the base stays cool-silver.
+    // Silver-olive foliage — base silver-sage with golden highlights catching
+    // the sun. Fewer clusters than before, more opaque, less puffy stacking.
     var oliveTex = makeLeafClusterTex(105, 110, 78);
-    var texes = [oliveTex, paleLeafTex, autumnLeafTex, midLeafTex];
-    var clusterCount = 12 + Math.floor(Math.random() * 6);
+    var texes = [oliveTex, oliveTex, midLeafTex, autumnLeafTex];
+    var clusterCount = 7 + Math.floor(Math.random() * 4);
     for (var ci = 0; ci < clusterCount; ci++) {
       var tex = texes[Math.floor(Math.random() * texes.length)];
-      var lSprite = new THREE.Sprite(makeLeafSpriteMat(tex, 0.7 + Math.random() * 0.2));
-      var cSize = spread * (0.6 + Math.random() * 0.8);
-      lSprite.scale.set(cSize, cSize * (0.6 + Math.random() * 0.4), 1);
+      var lSprite = new THREE.Sprite(makeLeafSpriteMat(tex, 0.88 + Math.random() * 0.10));
+      var cSize = spread * (0.7 + Math.random() * 0.6);
+      lSprite.scale.set(cSize, cSize * (0.6 + Math.random() * 0.35), 1);
       lSprite.position.set(
-        (Math.random() - 0.5) * spread * 1.2,
-        height * 0.4 + Math.random() * spread * 0.8,
-        (Math.random() - 0.5) * spread * 0.9
+        (Math.random() - 0.5) * spread * 1.0,
+        height * 0.42 + Math.random() * spread * 0.7,
+        (Math.random() - 0.5) * spread * 0.75
       );
       g.add(lSprite);
     }
@@ -21369,21 +21416,22 @@ function buildCaScene() {
     return g;
   }
 
-  // BUSH BUILDER — dense, low scrubby Mediterranean shrub. Uses dedicated
-  // dark-bush textures so it reads as a solid mass, not a pale cloud puff.
+  // BUSH BUILDER — dense, low scrubby Mediterranean shrub. Fewer, fully
+  // opaque sprites with the sharper-edged bush texture so the bush reads
+  // as a single solid mass, not a stack of translucent puffs.
   function makeBush(x, z, size) {
     var g = new THREE.Group();
     var texes = [bushLeafTex, bushLeafTex, bushLeafTexB];
-    var count = 5 + Math.floor(Math.random() * 4);
+    var count = 3 + Math.floor(Math.random() * 2);
     for (var i = 0; i < count; i++) {
       var tex = texes[Math.floor(Math.random() * texes.length)];
-      var bSprite = new THREE.Sprite(makeLeafSpriteMat(tex, 0.82 + Math.random() * 0.15));
-      var bs = size * (0.7 + Math.random() * 0.9);
-      bSprite.scale.set(bs, bs * (0.6 + Math.random() * 0.4), 1);
+      var bSprite = new THREE.Sprite(makeLeafSpriteMat(tex, 0.95));
+      var bs = size * (0.85 + Math.random() * 0.5);
+      bSprite.scale.set(bs, bs * (0.6 + Math.random() * 0.35), 1);
       bSprite.position.set(
-        (Math.random() - 0.5) * size * 0.9,
-        bs * 0.35 + Math.random() * size * 0.25,
-        (Math.random() - 0.5) * size * 0.6
+        (Math.random() - 0.5) * size * 0.5,
+        bs * 0.32 + Math.random() * size * 0.18,
+        (Math.random() - 0.5) * size * 0.35
       );
       g.add(bSprite);
     }
@@ -21400,28 +21448,63 @@ function buildCaScene() {
     scene.add(g);
   }
 
-  // TALL GRASS — canvas textured tufts
+  // TALL GRASS — canvas textured tufts. Each blade starts at a randomised
+  // height near the base (not all at the exact bottom of the canvas), and
+  // the bottom-most strip of the texture fades to transparent so the grass
+  // doesn't terminate in a hard straight line when placed on the ground.
   var grassTex = makeCanvasTexture(64, 128, function(cx, w, h) {
     cx.clearRect(0, 0, w, h);
-    for (var bl = 0; bl < 18; bl++) {
-      var bx = w * 0.1 + Math.random() * w * 0.8;
+    for (var bl = 0; bl < 22; bl++) {
+      var bx = w * 0.08 + Math.random() * w * 0.84;
       var gv = Math.floor(Math.random() * 40);
-      // Dry coastal grass — pale straw with a sage undertone, sun-bleached but
-      // not banana-yellow
+      // Dry coastal grass — pale straw with sage undertone
       cx.strokeStyle = 'rgba(' + (120 + gv) + ',' + (110 + gv) + ',' + (70 + Math.floor(gv * 0.3)) + ',' + (0.5 + Math.random() * 0.35) + ')';
       cx.lineWidth = 1 + Math.random() * 2;
       cx.beginPath();
-      cx.moveTo(bx, h);
+      // Vary the blade's root within the bottom 18% of the canvas — gives a
+      // ragged base rather than a row of blades sharing one start line
+      var rootY = h - Math.random() * h * 0.18;
+      cx.moveTo(bx, rootY);
       var tipX = bx + (Math.random() - 0.5) * 25;
       var cpX = bx + (Math.random() - 0.5) * 18;
       cx.quadraticCurveTo(cpX, h * 0.3, tipX, h * 0.05 + Math.random() * h * 0.15);
       cx.stroke();
     }
+    // Bottom fade — soft transparency in the lowest strip so blades dissolve
+    // into the ground instead of stopping at a hard horizontal line
+    var fade = cx.createLinearGradient(0, h * 0.78, 0, h);
+    fade.addColorStop(0, 'rgba(0,0,0,0)');
+    fade.addColorStop(1, 'rgba(0,0,0,1)');
+    cx.globalCompositeOperation = 'destination-out';
+    cx.fillStyle = fade;
+    cx.fillRect(0, h * 0.78, w, h * 0.22);
+    cx.globalCompositeOperation = 'source-over';
   });
   var grassSpriteMat = new THREE.SpriteMaterial({
     map: grassTex, transparent: true, opacity: 0.8,
     depthWrite: false
   });
+
+  // Place a small CLUMP of grass at (x,z): three or four staggered sprites at
+  // slightly offset positions and sizes. Looks like a natural tuft rather
+  // than a single flat-plane sprite. Each blade in the clump has its own
+  // material clone so opacity varies slightly.
+  function placeGrassClump(x, z, baseSize) {
+    var bladeCount = 3 + Math.floor(Math.random() * 3);
+    for (var bi = 0; bi < bladeCount; bi++) {
+      var mat = grassSpriteMat.clone();
+      mat.opacity = 0.65 + Math.random() * 0.3;
+      var sprite = new THREE.Sprite(mat);
+      var sz = baseSize * (0.55 + Math.random() * 0.65);
+      sprite.scale.set(sz, sz * (1.4 + Math.random() * 0.5), 1);
+      // Tight x/z offsets — blades clustered together
+      var ox = (Math.random() - 0.5) * baseSize * 0.55;
+      var oz = (Math.random() - 0.5) * baseSize * 0.35;
+      // Slight vertical jitter so blades don't all sit on identical ground level
+      sprite.position.set(x + ox, sz * 0.46 + (Math.random() - 0.5) * 0.04, z + oz);
+      scene.add(sprite);
+    }
+  }
 
   // ---- PLACE VEGETATION ----
 
@@ -21444,27 +21527,23 @@ function buildCaScene() {
   makePalm(15, -6, 5.0, 0.06);   // pushed back from (12,-3,6.5)
   makePalm(-17, -5, 4.5, 0.15);
 
-  // BUSHES — bigger sizes
+  // BUSHES — scattered scrub. Avoid placing them right at the camera edge
+  // where their sprite edges read as cloud puffs; keep them midground+.
   makeBush(-4.5, 1.5, 1.0);
   makeBush(-7, -5, 0.9);
   makeBush(5, -5.5, 1.1);
-  makeBush(9, 2, 0.8);
   makeBush(-11, -0.5, 1.2);
   makeBush(3, -7, 0.7);
   makeBush(-2, -7.5, 0.85);
   makeBush(7, -6.5, 0.7);
-  makeBush(0, 3, 0.65);
   makeBush(-8, -6.5, 0.8);
   makeBush(11, -5, 0.6);
   makeBush(-3, -4, 0.75);
 
-  // Tall grass — bigger sprites
-  for (var gi = 0; gi < 28; gi++) {
-    var gSprite = new THREE.Sprite(grassSpriteMat.clone());
+  // Tall grass — placed as natural clumps rather than single sprites
+  for (var gi = 0; gi < 24; gi++) {
     var gSize = 0.6 + Math.random() * 0.8;
-    gSprite.scale.set(gSize, gSize * 1.6, 1);
-    gSprite.position.set(-15 + Math.random() * 30, gSize * 0.5, -7 + Math.random() * 6);
-    scene.add(gSprite);
+    placeGrassClump(-15 + Math.random() * 30, -7 + Math.random() * 6, gSize);
   }
 
   // Wildflowers
@@ -21588,19 +21667,15 @@ function buildCaScene() {
   var farLeftPlatform = new THREE.Mesh(new THREE.BoxGeometry(5, 0.4, 3), darkStone);
   farLeftPlatform.position.set(-13, 0.2, 1);
   scene.add(farLeftPlatform);
-  // Bushes filling gaps
-  makeBush(-15, 3, 1.3);
+  // Bushes filling gaps — kept midground+, away from camera-edge fluff
   makeBush(-13, -1, 1.0);
   makeBush(-16, -4, 0.9);
-  makeBush(-14, 5, 0.8);
-  makeBush(-12, 8, 1.1);
+  makeBush(-18, -2, 0.8);
+  makeBush(-15, -5, 1.1);
   // Tall grass clusters
-  for (var gli = 0; gli < 12; gli++) {
-    var glSprite = new THREE.Sprite(grassSpriteMat.clone());
+  for (var gli = 0; gli < 10; gli++) {
     var glSize = 0.5 + Math.random() * 0.7;
-    glSprite.scale.set(glSize, glSize * 1.6, 1);
-    glSprite.position.set(-12 - Math.random() * 6, glSize * 0.5, -5 + Math.random() * 14);
-    scene.add(glSprite);
+    placeGrassClump(-12 - Math.random() * 6, -5 + Math.random() * 14, glSize);
   }
   // Rubble scatter — organic dodecahedra
   for (var rlb = 0; rlb < 10; rlb++) {
@@ -21660,21 +21735,15 @@ function buildCaScene() {
   farRightStub.position.set(21, 0.6, 2);
   farRightStub.rotation.y = 0.4;
   scene.add(farRightStub);
-  // Bushes filling gaps between trees
-  makeBush(15, 1, 1.1);
-  makeBush(17, 4, 0.9);
+  // Bushes filling gaps between trees — kept away from near-camera positions
   makeBush(19, -3, 1.0);
   makeBush(16, -5, 0.8);
-  makeBush(20, 2, 0.7);
-  makeBush(22, 4, 0.85);
-  makeBush(14, 7, 1.0);
+  makeBush(22, -4, 0.85);
+  makeBush(20, -6, 0.9);
   // Tall grass
-  for (var gri = 0; gri < 12; gri++) {
-    var grSprite = new THREE.Sprite(grassSpriteMat.clone());
+  for (var gri = 0; gri < 10; gri++) {
     var grSize = 0.5 + Math.random() * 0.7;
-    grSprite.scale.set(grSize, grSize * 1.6, 1);
-    grSprite.position.set(14 + Math.random() * 10, grSize * 0.5, -5 + Math.random() * 14);
-    scene.add(grSprite);
+    placeGrassClump(14 + Math.random() * 10, -5 + Math.random() * 14, grSize);
   }
   // Rubble scatter — organic dodecahedra
   for (var rrb = 0; rrb < 10; rrb++) {
@@ -21772,15 +21841,33 @@ function buildCaScene() {
   ridge.position.set(-12, -0.5, -12);
   scene.add(ridge);
 
-  // Displace each hill's vertices with layered sine noise for lumpy silhouettes.
-  function displaceHill(geo, amp, freq) {
+  // Displace each hill's vertices for natural ridge + shoulder character.
+  // Adds: ridgeline carving (sharp creases), asymmetric peak bias, gully cuts,
+  // multi-octave fine detail. Heavier amplitude than before — the half-sphere
+  // is unrecognisable as a sphere by the time this finishes.
+  function displaceHill(geo, amp, freq, peakBias) {
     var pos = geo.attributes.position;
+    peakBias = peakBias || { x: 0, z: 0 };
     for (var vi = 0; vi < pos.count; vi++) {
       var x = pos.getX(vi), y = pos.getY(vi), z = pos.getZ(vi);
       if (y < 0.5) continue;
-      var noise = Math.sin(x * freq) * Math.cos(z * freq * 1.3) * 0.6
-                + Math.sin(x * freq * 2.3 + 1.7) * Math.cos(z * freq * 1.9 + 0.7) * 0.3
-                + Math.sin(x * freq * 4.1 + 2.1) * 0.15;
+      // Multi-octave smooth noise — broad shoulders, mid lumps, fine crags
+      var noise = Math.sin(x * freq) * Math.cos(z * freq * 1.3) * 0.7
+                + Math.sin(x * freq * 2.3 + 1.7) * Math.cos(z * freq * 1.9 + 0.7) * 0.45
+                + Math.sin(x * freq * 4.1 + 2.1) * Math.cos(z * freq * 3.6 + 1.1) * 0.25
+                + Math.sin(x * freq * 7.7 + 0.4) * Math.cos(z * freq * 6.5) * 0.12;
+      // Asymmetric ridge spine — sharp peak running across the hill
+      var ridgeAngle = Math.atan2(z - peakBias.z, x - peakBias.x);
+      var ridgeProfile = Math.cos(ridgeAngle * 3 + 1.1) * 0.5;
+      noise += ridgeProfile;
+      // Gully cuts — abs() creates sharp creases (gullies on the windward face)
+      var gully = -Math.abs(Math.sin(x * freq * 1.1 + z * freq * 0.4 + 0.6)) * 0.55;
+      noise += gully + 0.3;
+      // Peak boost — vertices near the bias point get pushed UP for a clear summit
+      var dxp = x - peakBias.x, dzp = z - peakBias.z;
+      var dPeak = Math.sqrt(dxp * dxp + dzp * dzp);
+      var peakBoost = Math.max(0, 1 - dPeak / 8) * 0.45;
+      noise += peakBoost;
       var r = Math.sqrt(x * x + y * y + z * z);
       if (r > 0.001) {
         var nx = x / r, ny = y / r, nz = z / r;
@@ -21790,11 +21877,12 @@ function buildCaScene() {
     pos.needsUpdate = true;
     geo.computeVertexNormals();
   }
-  displaceHill(hillGeo, 0.4, 0.18);
-  displaceHill(hill2Geo, 1.1, 0.15);
-  displaceHill(hill3Geo, 1.0, 0.17);
-  displaceHill(hill4Geo, 0.8, 0.2);
-  displaceHill(ridgeGeo, 0.4, 0.25);
+  // Pyre-hill peak slightly off-centre to the back — the pyre sits on this summit
+  displaceHill(hillGeo, 2.0, 0.20, { x: 2, z: 0 });
+  displaceHill(hill2Geo, 1.8, 0.18, { x: -2, z: 0 });
+  displaceHill(hill3Geo, 1.6, 0.20, { x: 0, z: 0 });
+  displaceHill(hill4Geo, 1.4, 0.22, { x: 0, z: 0 });
+  displaceHill(ridgeGeo, 0.9, 0.28, { x: 0, z: 0 });
 
   // RAGGED CLIFFS — dark rocky outcrops at the base of the hill where it meets the sea
   var cliffTex = makeCanvasTexture(256, 256, function(cx, w, h) {
@@ -21832,38 +21920,97 @@ function buildCaScene() {
       cx.fill();
     }
   });
-  var cliffMat = new THREE.MeshStandardMaterial({ map: cliffTex, roughness: 0.92 });
+  // Lighter weathered cliff stone — warm sandstone that catches the golden
+  // hour. Tinted brighter than the previous dark wet-rock base so cliffs
+  // stand out clearly against the silhouetted hill behind.
+  var cliffMat = new THREE.MeshStandardMaterial({
+    map: cliffTex, roughness: 0.92,
+    color: 0xa07848
+  });
   var darkCliffMat = new THREE.MeshStandardMaterial({
     map: cliffTex, roughness: 0.95,
-    color: 0x2a2018
+    color: 0x6a5030
   });
 
-  // RAGGED CLIFFS — protrude from the hill's visible right slope where it drops to the sea
-  // Positioned at the seaward edge of the hill, where camera can see them
-  // The hill's right slope is around x:-6 to x:-12, and the shore is at z:-8 to z:-12
+  // ============================================================
+  // ROCK BUILDER — replaces BoxGeometry cliffs with jagged, organic rock forms.
+  // Heavy box subdivisions + multi-octave noise displacement. Vertices are
+  // only ever pushed OUTWARD so the rock grows lumps and crags without ever
+  // shrinking, and the top gets dramatic jagged spurs and notches.
+  // ============================================================
+  function makeRockCliff(x, z, w, h, d, rotY, rotZ, dark, seedX) {
+    var geo = new THREE.BoxGeometry(w, h, d, 6, 10, 6);
+    var pos = geo.attributes.position;
+    var seed = ((x + 73.1) * 13.37 + (z + 19.3) * 7.71 + (seedX || 0) * 41.3);
+    var sA = Math.sin(seed) * 0.5 + 1.0;
+    var sB = Math.cos(seed * 1.3) * 0.4 + 1.2;
+    for (var vi = 0; vi < pos.count; vi++) {
+      var px = pos.getX(vi), py = pos.getY(vi), pz = pos.getZ(vi);
+      // Multi-octave noise — varied frequencies for crag character
+      var n1 = Math.sin(px * 1.4 * sA + seed)
+             * Math.cos(pz * 1.6 * sB + seed * 1.7);
+      var n2 = Math.sin(py * 1.8 + seed * 2.3) * 0.55;
+      var n3 = Math.sin(px * 3.6 + py * 2.1 + seed * 0.7)
+             * Math.cos(pz * 3.1 + seed * 1.1) * 0.35;
+      var n4 = Math.sin(px * 7.0 + pz * 6.2 + seed) * 0.18;
+      // Bias positive so rock only grows OUT, never inward (avoids shrinking)
+      var disp = Math.max(0, n1 + n2 + n3 + n4) * 0.35
+               + Math.abs(n4) * 0.10;
+      var rXZ = Math.sqrt(px * px + pz * pz);
+      if (rXZ > 0.001) {
+        pos.setX(vi, px + (px / rXZ) * disp * (w * 0.6));
+        pos.setZ(vi, pz + (pz / rXZ) * disp * (d * 0.6));
+      }
+      // Dramatic vertical jaggedness near the top — spurs and notches
+      var topness = Math.max(0, py / (h * 0.5));
+      if (topness > 0) {
+        var topJag = Math.sin(px * 4 + pz * 3.4 + seed * 2)
+                   + Math.sin(px * 8 + pz * 6 + seed * 1.5) * 0.5;
+        pos.setY(vi, py + topJag * 0.32 * topness);
+      }
+      // Side strata — horizontal grooves like sedimentary bands
+      if (Math.abs(py) < h * 0.45) {
+        var strata = Math.sin(py * 6 + seed) * 0.06;
+        if (rXZ > 0.001) {
+          pos.setX(vi, pos.getX(vi) + (px / rXZ) * strata);
+          pos.setZ(vi, pos.getZ(vi) + (pz / rXZ) * strata);
+        }
+      }
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+    var rock = new THREE.Mesh(geo, dark ? darkCliffMat : cliffMat);
+    rock.position.set(x, h * 0.35 - 0.3, z);
+    rock.rotation.y = rotY;
+    rock.rotation.z = rotZ;
+    rock.castShadow = true;
+    return rock;
+  }
+
+  // RAGGED CLIFFS — at the seaward edge of the hill, jutting into the surf.
+  // Pulled forward (smaller z) so they jut OUT of the hill silhouette rather
+  // than getting subsumed by it; mix of light & dark stone so they catch the
+  // warm light and read as separate from the hill mass behind.
   var cliffRocks = [];
   var cliffData = [
     // x, z, width, height, depth, rotY, rotZ
-    // Main cliff face — tall crags at the visible edge of the hill
-    [-8, -10, 2.5, 5.0, 2.2, 0.2, 0.05],
-    [-9.5, -11, 2.0, 6.0, 2.5, -0.15, 0.08],
-    [-7, -9.5, 2.2, 4.0, 1.8, 0.35, -0.04],
-    [-10.5, -11.5, 2.8, 5.5, 2.8, 0.1, -0.06],
-    [-6, -9, 1.8, 3.5, 1.5, -0.25, 0.06],
-    [-11.5, -12, 2.5, 4.8, 2.4, 0.18, -0.05],
-    [-8.5, -10.5, 1.5, 5.8, 1.6, -0.2, 0.07],
-    [-10, -10, 2.0, 4.2, 2.0, 0.3, -0.03],
-    [-7.5, -11, 1.6, 3.8, 1.5, -0.3, 0.04],
-    [-12, -12.5, 2.2, 4.0, 2.0, 0.12, 0.05]
+    [-7, -9, 2.4, 5.2, 2.0, 0.2, 0.05],
+    [-9, -10, 2.0, 6.4, 2.4, -0.15, 0.08],
+    [-6, -8.5, 2.2, 4.2, 1.8, 0.35, -0.04],
+    [-10, -10.5, 2.6, 5.6, 2.6, 0.1, -0.06],
+    [-5, -8, 1.8, 3.6, 1.5, -0.25, 0.06],
+    [-11, -11, 2.4, 4.6, 2.2, 0.18, -0.05],
+    [-8, -9.5, 1.5, 5.4, 1.6, -0.2, 0.07],
+    [-9.5, -9, 2.0, 4.0, 1.9, 0.3, -0.03],
+    [-7, -10, 1.6, 4.2, 1.5, -0.3, 0.04],
+    [-12, -11.5, 2.0, 3.8, 1.9, 0.12, 0.05]
   ];
   for (var ci = 0; ci < cliffData.length; ci++) {
     var cd = cliffData[ci];
-    var mat = ci % 3 === 0 ? darkCliffMat : cliffMat;
-    var rock = new THREE.Mesh(new THREE.BoxGeometry(cd[2], cd[3], cd[4]), mat);
-    rock.position.set(cd[0], cd[3] * 0.35 - 0.3, cd[1]);
-    rock.rotation.y = cd[5];
-    rock.rotation.z = cd[6];
-    rock.castShadow = true;
+    // Mostly light (catches the warm light); occasional dark for variation
+    var dark = (ci % 4 === 0);
+    var rock = makeRockCliff(cd[0], cd[1], cd[2], cd[3], cd[4], cd[5], cd[6],
+                             dark, ci * 2.3);
     scene.add(rock);
     cliffRocks.push(rock);
   }
@@ -21873,18 +22020,76 @@ function buildCaScene() {
     var cfW = 0.5 + Math.random() * 1.5;
     var cfH = 0.6 + Math.random() * 2.0;
     var cfD = 0.4 + Math.random() * 1.2;
-    var cfRock = new THREE.Mesh(
-      new THREE.BoxGeometry(cfW, cfH, cfD),
-      Math.random() > 0.4 ? cliffMat : darkCliffMat
-    );
-    cfRock.position.set(
+    var cfRock = makeRockCliff(
       -5 - Math.random() * 8,
-      cfH * 0.2 - 0.4,
-      -8.5 - Math.random() * 5
+      -8.5 - Math.random() * 5,
+      cfW, cfH, cfD,
+      Math.random() * Math.PI,
+      (Math.random() - 0.5) * 0.3,
+      Math.random() < 0.4,
+      cf * 5.7 + 17
     );
-    cfRock.rotation.y = Math.random() * Math.PI;
-    cfRock.rotation.z = (Math.random() - 0.5) * 0.3;
+    // Re-anchor smaller boulders so they sit half-submerged at water level
+    cfRock.position.y = cfH * 0.2 - 0.4;
     scene.add(cfRock);
+  }
+
+  // SHORELINE ROCKS — wider scatter along the curve where the hill base meets
+  // the sea. These belong at the water's edge, not climbing the hill: low,
+  // wet, broken stone half-buried in sand and surf.
+  for (var sr = 0; sr < 22; sr++) {
+    var srW = 0.35 + Math.random() * 1.2;
+    var srH = 0.25 + Math.random() * 0.75;
+    var srD = 0.35 + Math.random() * 1.1;
+    // Wide spread along the curving shoreline: hill side stretches further left
+    // than just the cliff zone, all the way back where the hill drops to the sea
+    var srX = -16 + Math.random() * 14;
+    var srZ = -7.5 - Math.random() * 6;
+    var srRock = makeRockCliff(srX, srZ, srW, srH, srD,
+      Math.random() * Math.PI,
+      (Math.random() - 0.5) * 0.4,
+      Math.random() < 0.45,
+      sr * 7.3 + 113
+    );
+    // Sit very low — most of the rock buried, just the crown shows
+    srRock.position.y = srH * 0.1 - 0.35;
+    scene.add(srRock);
+  }
+
+  // Stray sea boulders out in the shallow water — broken pieces fallen from
+  // the cliffs over centuries, now half-submerged offshore
+  for (var sbr = 0; sbr < 8; sbr++) {
+    var sbW = 0.4 + Math.random() * 0.9;
+    var sbH = 0.3 + Math.random() * 0.6;
+    var sbD = 0.4 + Math.random() * 0.8;
+    var sbX = -14 + Math.random() * 10;
+    var sbZ = -13 - Math.random() * 4;
+    var sbRock = makeRockCliff(sbX, sbZ, sbW, sbH, sbD,
+      Math.random() * Math.PI,
+      (Math.random() - 0.5) * 0.5,
+      Math.random() < 0.5,
+      sbr * 11.1 + 233
+    );
+    sbRock.position.y = sbH * 0.05 - 0.42;
+    scene.add(sbRock);
+  }
+
+  // RIGHT-SHORE ROCKS — far quieter, just a few rocks suggesting that the
+  // bay curves around. Subtle so the right side stays open & sea-dominant.
+  for (var rr = 0; rr < 7; rr++) {
+    var rrW = 0.35 + Math.random() * 0.9;
+    var rrH = 0.25 + Math.random() * 0.6;
+    var rrD = 0.35 + Math.random() * 0.8;
+    var rrX = 15 + Math.random() * 10;
+    var rrZ = -8 - Math.random() * 5;
+    var rrRock = makeRockCliff(rrX, rrZ, rrW, rrH, rrD,
+      Math.random() * Math.PI,
+      (Math.random() - 0.5) * 0.3,
+      Math.random() < 0.4,
+      rr * 4.7 + 311
+    );
+    rrRock.position.y = rrH * 0.1 - 0.38;
+    scene.add(rrRock);
   }
 
   // WAVE FOAM ON CLIFFS — big white foam that crashes against the rocks

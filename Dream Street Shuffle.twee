@@ -1399,10 +1399,63 @@ window.dssAudio = (function() {
   }
   function stopDistantTraffic() { _stopAmbient(); }
   // Footstep — heel + ball impacts, surface filter selects ground type.
-  // Call as footstep('wet'|'wood'|'carpet'|'gravel').
+  // Call as footstep('wet'|'wood'|'carpet'|'gravel'|'cobble').
+  // Cobble has a richer multi-layer implementation (bass thud + mid slap +
+  // short feedback-delay reverb for street echo) so it doesn't read as a
+  // typewriter click between venues.
   function footstep(surface) {
     _play(function(ac) {
     var now = ac.currentTime;
+
+    if (surface === 'cobble') {
+      // Shared per-call reverb send so both heel & ball reflect off the
+      // same "street" — wet Soho with buildings either side
+      var rvDelay = ac.createDelay(0.5);
+      rvDelay.delayTime.value = 0.075;
+      var rvFilter = ac.createBiquadFilter();
+      rvFilter.type = 'highpass'; rvFilter.frequency.value = 280;
+      var rvFb = ac.createGain();
+      rvFb.gain.value = 0.42;
+      var rvOut = ac.createGain();
+      rvOut.gain.value = 0.55;
+      rvDelay.connect(rvFilter);
+      rvFilter.connect(rvFb);
+      rvFb.connect(rvDelay);
+      rvFilter.connect(rvOut);
+      rvOut.connect(ac.destination);
+
+      [0, 0.34].forEach(function(off, idx) {
+        var t = now + off;
+        // Longer noise buffer than the click — gives a proper impact tail
+        var dur = 0.22;
+        var bufLen = Math.floor(ac.sampleRate * dur);
+        var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+        var d = buf.getChannelData(0);
+        for (var i = 0; i < bufLen; i++) {
+          var env = Math.exp(-i / bufLen * 6.5);
+          d[i] = (Math.random()*2-1) * env;
+        }
+        var src = ac.createBufferSource(); src.buffer = buf;
+        // Bass — body weight landing on stone
+        var bassF = ac.createBiquadFilter();
+        bassF.type = 'lowpass'; bassF.frequency.value = 130; bassF.Q.value = 1.4;
+        var bassG = ac.createGain();
+        bassG.gain.value = (idx === 0 ? 0.16 : 0.11);
+        src.connect(bassF); bassF.connect(bassG); bassG.connect(ac.destination);
+        // Mid slap — heel on wet cobble
+        var midF = ac.createBiquadFilter();
+        midF.type = 'bandpass'; midF.frequency.value = 850; midF.Q.value = 1.6;
+        var midG = ac.createGain();
+        midG.gain.value = (idx === 0 ? 0.055 : 0.04);
+        src.connect(midF); midF.connect(midG); midG.connect(ac.destination);
+        // Send the mid layer into the street reverb — long bass would
+        // muddy if reverbed, so keep it dry
+        midG.connect(rvDelay);
+        src.start(t);
+      });
+      return;
+    }
+
     [0, 0.11].forEach(function(off, idx) {
       var t = now + off;
       var dur = 0.07;
@@ -1421,9 +1474,6 @@ window.dssAudio = (function() {
         f.type='lowpass'; f.frequency.value = 260; f.Q.value = 0.5;
       } else if (surface === 'gravel') {
         f.type='highpass'; f.frequency.value = 1600; f.Q.value = 0.6;
-      } else if (surface === 'cobble') {
-        // Wet Soho cobblestones — sharp mid-high slap with a hint of bite
-        f.type='bandpass'; f.frequency.value = 1300; f.Q.value = 2.2;
       } else {
         // wet pavement default — mid-band slap
         f.type='bandpass'; f.frequency.value = 700; f.Q.value = 1.5;
@@ -3418,7 +3468,15 @@ window.showNapkinPopup = function() {
 
   var overlay = document.createElement('div');
   overlay.id = 'napkin-popup-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(4,3,8,0.85);display:flex;align-items:center;justify-content:center;z-index:20000;flex-direction:column;';
+  // z-index 999999 keeps the popup ABOVE the notebook dialog (and its
+  // close button at 100000), so the canvas is what the player sees as
+  // soon as they click "Work on it" — no need to close the notebook first.
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(4,3,8,0.85);display:flex;align-items:center;justify-content:center;z-index:999999;flex-direction:column;';
+  // Stop click bubbling so the notebook's outside-click-to-close handler
+  // can't fire when the player is drawing/clicking inside the popup.
+  overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+  overlay.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+  overlay.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
 
   overlay.innerHTML =
     '<div class="napkin-popup-box">' +
@@ -3731,7 +3789,17 @@ function consumeAndFire(tabKey, selector, triggerClass) {
   page.dataset.pentangleQueue = queue;
 }
 if (target === 'lily') consumeAndFire('lily', '.nb-lily-row', 'nb-lily-pentangle');
-if (target === 'map')  consumeAndFire('map',  '.soho-map svg', 'nb-map-pentangle');
+if (target === 'map')  {
+  var fired = false;
+  // Inline-snoop the queue first so we know if the map animation will fire
+  if (queue.indexOf('map') >= 0 && page.querySelector('.soho-map svg')) fired = true;
+  consumeAndFire('map',  '.soho-map svg', 'nb-map-pentangle');
+  // After the animation actually fires, set $sawPentangle so subsequent
+  // notebook opens don't keep re-queueing the reveal.
+  if (fired && window.Harlowe && window.Harlowe.API_ACCESS) {
+    try { window.Harlowe.API_ACCESS.STATE.variables.sawPentangle = true; } catch(e) {}
+  }
+}
 };
 
 // ====== TREE OF LIFE — sefirot reveal toggle ======
@@ -8154,7 +8222,10 @@ window._passageGen = 0;
                     'venue-coach':      'doorCreak',     // heavy pub door + brass shop-bell
                     'venue-trishas':    'doorSwingBell', // quick swing + brass ping
                     'venue-ronnies':    'doorThud',      // muffled velvet curtain
-                    'venue-cecilcourt': 'doorShopBell',  // tinkling antiquarian bell
+                    // venue-cecilcourt intentionally omitted — the street
+                    // passages (Cecil Court, Watkins, Waltz) are outdoors and
+                    // looking-through-windows; the shop bell fires only on
+                    // actually entering O'Flatterly's shop, handled below.
                     'venue-colony':     'doorCreak',     // old members-club door
                     'venue-french':     'doorCreak',     // old pub door
                     'venue-pillars':    'doorCreak'      // pub door
@@ -8162,6 +8233,16 @@ window._passageGen = 0;
                   var fn = doorMap[newVenue];
                   if (fn && window.dssAudio && window.dssAudio[fn]) {
                     setTimeout(function(){ window.dssAudio[fn](); }, 120);
+                  }
+                }
+                // Cecil Court shop bell — fires only when stepping inside
+                // O'Flatterly's shop (the only Cecil Court passage that's
+                // actually indoors). Detected via .shop-bell-marker in the
+                // passage HTML so we don't depend on the passage name.
+                if (passageNode.querySelector('.shop-bell-marker') && !window._heardOflatterlyBell) {
+                  window._heardOflatterlyBell = true;
+                  if (window.dssAudio && window.dssAudio.doorShopBell) {
+                    setTimeout(function(){ window.dssAudio.doorShopBell(); }, 120);
                   }
                 }
                 window._currentVenue = newVenue;
@@ -19832,12 +19913,24 @@ ccWrap.appendChild(ccFrame);
 var ccVig = document.createElement('div');
 ccVig.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9001;pointer-events:none;background:radial-gradient(ellipse at 45% 45%, transparent 30%, rgba(0,0,0,0.55) 100%);';
 ccWrap.appendChild(ccVig);
-var ccBtn = document.createElement('button');
+var ccBtn = document.createElement('div');
 ccBtn.textContent = 'ENTER CECIL COURT';
-ccBtn.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);padding:12px 24px;background:rgba(200,170,100,0.85);color:#1a1a1a;border:1px solid rgba(200,170,100,0.5);font:12px monospace;letter-spacing:4px;cursor:pointer;z-index:9004;transition:opacity 2s ease;opacity:0;';
-setTimeout(function() { ccBtn.style.opacity = '1'; }, 1800);
-ccBtn.addEventListener('mouseenter', function() { this.style.background = 'rgba(220,190,120,0.95)'; });
-ccBtn.addEventListener('mouseleave', function() { this.style.background = 'rgba(200,170,100,0.85)'; });
+ccBtn.style.cssText = [
+  'position:fixed','bottom:60px','left:50%','transform:translateX(-50%)',
+  'font:13px "Courier New",monospace','color:rgba(232,120,24,0.85)',
+  'letter-spacing:4px','cursor:pointer','padding:12px 28px',
+  'border:1px solid rgba(232,120,24,0.3)','background:rgba(0,0,0,0.4)',
+  'z-index:9004','white-space:nowrap','opacity:0','transition:opacity 1.5s ease'
+].join(';');
+setTimeout(function() { ccBtn.style.opacity = '1'; }, 1500);
+ccBtn.addEventListener('mouseenter', function() {
+  this.style.color = 'rgba(255,160,50,0.95)';
+  this.style.borderColor = 'rgba(232,120,24,0.6)';
+});
+ccBtn.addEventListener('mouseleave', function() {
+  this.style.color = 'rgba(232,120,24,0.85)';
+  this.style.borderColor = 'rgba(232,120,24,0.3)';
+});
 ccBtn.addEventListener('click', function() {
 ccWrap.style.transition = 'opacity 1.5s ease';
 ccWrap.style.opacity = '0';
@@ -23811,12 +23904,24 @@ gsWrap.appendChild(gsFrame);
 var vig = document.createElement('div');
 vig.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9001;pointer-events:none;background:radial-gradient(ellipse at 45% 45%, transparent 30%, rgba(0,0,0,0.55) 100%);';
 gsWrap.appendChild(vig);
-var btn = document.createElement('button');
+var btn = document.createElement('div');
 btn.textContent = 'ENTER THE GREEN SEA';
-btn.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);padding:12px 24px;background:rgba(200,170,100,0.85);color:#1a1a1a;border:1px solid rgba(200,170,100,0.5);font:12px monospace;letter-spacing:4px;cursor:pointer;z-index:9004;transition:opacity 2s ease;opacity:0;';
-setTimeout(function() { btn.style.opacity = '1'; }, 1800);
-btn.addEventListener('mouseenter', function() { this.style.background = 'rgba(220,190,120,0.95)'; });
-btn.addEventListener('mouseleave', function() { this.style.background = 'rgba(200,170,100,0.85)'; });
+btn.style.cssText = [
+  'position:fixed','bottom:60px','left:50%','transform:translateX(-50%)',
+  'font:13px "Courier New",monospace','color:rgba(232,120,24,0.85)',
+  'letter-spacing:4px','cursor:pointer','padding:12px 28px',
+  'border:1px solid rgba(232,120,24,0.3)','background:rgba(0,0,0,0.4)',
+  'z-index:9004','white-space:nowrap','opacity:0','transition:opacity 1.5s ease'
+].join(';');
+setTimeout(function() { btn.style.opacity = '1'; }, 1500);
+btn.addEventListener('mouseenter', function() {
+  this.style.color = 'rgba(255,160,50,0.95)';
+  this.style.borderColor = 'rgba(232,120,24,0.6)';
+});
+btn.addEventListener('mouseleave', function() {
+  this.style.color = 'rgba(232,120,24,0.85)';
+  this.style.borderColor = 'rgba(232,120,24,0.3)';
+});
 btn.addEventListener('click', function() {
 gsWrap.style.transition = 'opacity 1.5s ease';
 gsWrap.style.opacity = '0';
@@ -27728,7 +27833,7 @@ clWrap.appendChild(clWash);
 
 // Location
 var clLoc = document.createElement('div');
-clLoc.textContent = 'BENEATH GREEK STREET, SOHO';
+clLoc.textContent = 'BENEATH DEAN ST., SOHO';
 clLoc.style.cssText = 'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font:12px "Courier New",monospace;color:rgba(200,180,140,0.25);letter-spacing:2px;pointer-events:none;z-index:9003;white-space:nowrap;';
 clWrap.appendChild(clLoc);
 
@@ -28759,15 +28864,15 @@ cpWrap.appendChild(cpLoc);
 // Button: "CLIMB IT"
 var cpBtn = document.createElement('div');
 cpBtn.textContent = 'CLIMB IT';
-cpBtn.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);padding:14px 36px;font:16px "Courier New",monospace;color:rgba(200,170,100,0.85);border:1px solid rgba(200,170,100,0.3);letter-spacing:4px;cursor:pointer;z-index:9004;background:transparent;opacity:0;transition:opacity 2s ease;';
+cpBtn.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);padding:14px 36px;font:16px "Courier New",monospace;color:rgba(248,212,128,0.98);border:1px solid rgba(248,212,128,0.55);letter-spacing:4px;cursor:pointer;z-index:9004;background:transparent;opacity:0;transition:opacity 2s ease;text-shadow:0 0 18px rgba(248,212,128,0.45);';
 setTimeout(function() { cpBtn.style.opacity = '1'; }, 2500);
 cpBtn.addEventListener('mouseenter', function() {
-cpBtn.style.color = 'rgba(230,200,120,0.95)';
-cpBtn.style.borderColor = 'rgba(200,170,100,0.6)';
+cpBtn.style.color = 'rgba(255,232,160,1)';
+cpBtn.style.borderColor = 'rgba(255,232,160,0.85)';
 });
 cpBtn.addEventListener('mouseleave', function() {
-cpBtn.style.color = 'rgba(200,170,100,0.85)';
-cpBtn.style.borderColor = 'rgba(200,170,100,0.3)';
+cpBtn.style.color = 'rgba(248,212,128,0.98)';
+cpBtn.style.borderColor = 'rgba(248,212,128,0.55)';
 });
 cpBtn.addEventListener('click', function() {
 // Freeze the canvas animation immediately so the 3D scene doesn't keep
@@ -32595,7 +32700,7 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
 </script>
 
 :: O'Flatterly's shop [venue-cecilcourt] {"position":"300,1700","size":"100,100"}
-The sign reads: I. O'FLATTERLY, dealer in books.
+<span class="shop-bell-marker" style="display:none"></span>The sign reads: I. O'FLATTERLY, dealer in books.
 
 You go in.
 
@@ -32634,7 +32739,7 @@ You're eating at the counter when somebody passes the window: that's Lily.
 (set: _dualRing to ($lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and ($returns - $lilyCall1ReturnsAt) >= 2))\
 (if: $seenCoachPipe is false)[(set: $seenCoachPipe to true)<script>setTimeout(function(){ if (window.dssAudio && window.dssAudio.cosmicSewerSuck) window.dssAudio.cosmicSewerSuck(); }, 40);</script>
 <div class="coach-plumbing-intro" aria-hidden="true">
-<svg viewBox="-100 -100 200 200" preserveAspectRatio="none"><defs><radialGradient id="cpiPipe" cx="50%" cy="50%" r="50%"><stop offset="0%"  stop-color="rgba(40,28,14,0.0)"/><stop offset="38%" stop-color="rgba(22,16,8,0.55)"/><stop offset="72%" stop-color="rgba(10,7,3,0.92)"/><stop offset="100%" stop-color="rgba(4,3,1,1)"/></radialGradient><radialGradient id="cpiCore" cx="50%" cy="50%" r="50%"><stop offset="0%"   stop-color="rgba(220,168,86,0.95)"/><stop offset="45%"  stop-color="rgba(160,112,48,0.7)"/><stop offset="100%" stop-color="rgba(80,52,20,0)"/></radialGradient><radialGradient id="cpiPorcelain" cx="50%" cy="42%" r="55%"><stop offset="0%"  stop-color="rgba(220,205,180,0.85)"/><stop offset="55%" stop-color="rgba(180,160,128,0.7)"/><stop offset="92%" stop-color="rgba(120,98,70,0.4)"/><stop offset="100%" stop-color="rgba(60,46,28,0)"/></radialGradient><radialGradient id="cpiVortexFill" cx="50%" cy="50%" r="50%"><stop offset="0%"   stop-color="rgba(98,86,40,0.7)"/><stop offset="45%"  stop-color="rgba(76,64,32,0.65)"/><stop offset="85%"  stop-color="rgba(46,38,18,0.4)"/><stop offset="100%" stop-color="rgba(20,16,8,0)"/></radialGradient><linearGradient id="cpiRust"   x1="0" x2="1"><stop offset="0%" stop-color="rgba(186,108,52,0)"/><stop offset="50%" stop-color="rgba(212,128,60,1)"/><stop offset="100%" stop-color="rgba(186,108,52,0)"/></linearGradient><linearGradient id="cpiSepia"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(160,124,72,0)"/><stop offset="50%" stop-color="rgba(196,150,86,1)"/><stop offset="100%" stop-color="rgba(160,124,72,0)"/></linearGradient><linearGradient id="cpiBrass"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(168,140,72,0)"/><stop offset="50%" stop-color="rgba(204,168,86,1)"/><stop offset="100%" stop-color="rgba(168,140,72,0)"/></linearGradient><linearGradient id="cpiSlime"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(108,124,68,0)"/><stop offset="50%" stop-color="rgba(146,166,88,1)"/><stop offset="100%" stop-color="rgba(108,124,68,0)"/></linearGradient><linearGradient id="cpiAlgae"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(78,96,56,0)"/><stop offset="50%" stop-color="rgba(110,134,72,1)"/><stop offset="100%" stop-color="rgba(78,96,56,0)"/></linearGradient><linearGradient id="cpiCopper" x1="0" x2="1"><stop offset="0%" stop-color="rgba(140,90,52,0)"/><stop offset="50%" stop-color="rgba(176,116,68,1)"/><stop offset="100%" stop-color="rgba(140,90,52,0)"/></linearGradient><linearGradient id="cpiOlive"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(96,86,40,0)"/><stop offset="50%" stop-color="rgba(132,116,52,1)"/><stop offset="100%" stop-color="rgba(96,86,40,0)"/></linearGradient><linearGradient id="cpiMurk"   x1="0" x2="1"><stop offset="0%" stop-color="rgba(80,62,38,0)"/><stop offset="50%" stop-color="rgba(110,86,50,1)"/><stop offset="100%" stop-color="rgba(80,62,38,0)"/></linearGradient><filter id="cpiGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b1"/><feGaussianBlur stdDeviation="5" result="b2"/><feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="cpiSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"/></filter><!-- Grime texture: turbulent noise to make the pipe wall feel encrusted --><filter id="cpiGrime" x="-50%" y="-50%" width="200%" height="200%"><feTurbulence baseFrequency="0.85" numOctaves="3" seed="7" result="noise"/><feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.22  0 0 0 0 0.10  0 0 0 0.55 0"/></filter></defs>
+<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet"><defs><radialGradient id="cpiPipe" cx="50%" cy="50%" r="50%"><stop offset="0%"  stop-color="rgba(40,28,14,0.0)"/><stop offset="38%" stop-color="rgba(22,16,8,0.55)"/><stop offset="72%" stop-color="rgba(10,7,3,0.92)"/><stop offset="100%" stop-color="rgba(4,3,1,1)"/></radialGradient><radialGradient id="cpiCore" cx="50%" cy="50%" r="50%"><stop offset="0%"   stop-color="rgba(220,168,86,0.95)"/><stop offset="45%"  stop-color="rgba(160,112,48,0.7)"/><stop offset="100%" stop-color="rgba(80,52,20,0)"/></radialGradient><radialGradient id="cpiPorcelain" cx="50%" cy="42%" r="55%"><stop offset="0%"  stop-color="rgba(220,205,180,0.85)"/><stop offset="55%" stop-color="rgba(180,160,128,0.7)"/><stop offset="92%" stop-color="rgba(120,98,70,0.4)"/><stop offset="100%" stop-color="rgba(60,46,28,0)"/></radialGradient><radialGradient id="cpiVortexFill" cx="50%" cy="50%" r="50%"><stop offset="0%"   stop-color="rgba(98,86,40,0.7)"/><stop offset="45%"  stop-color="rgba(76,64,32,0.65)"/><stop offset="85%"  stop-color="rgba(46,38,18,0.4)"/><stop offset="100%" stop-color="rgba(20,16,8,0)"/></radialGradient><linearGradient id="cpiRust"   x1="0" x2="1"><stop offset="0%" stop-color="rgba(186,108,52,0)"/><stop offset="50%" stop-color="rgba(212,128,60,1)"/><stop offset="100%" stop-color="rgba(186,108,52,0)"/></linearGradient><linearGradient id="cpiSepia"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(160,124,72,0)"/><stop offset="50%" stop-color="rgba(196,150,86,1)"/><stop offset="100%" stop-color="rgba(160,124,72,0)"/></linearGradient><linearGradient id="cpiBrass"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(168,140,72,0)"/><stop offset="50%" stop-color="rgba(204,168,86,1)"/><stop offset="100%" stop-color="rgba(168,140,72,0)"/></linearGradient><linearGradient id="cpiSlime"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(108,124,68,0)"/><stop offset="50%" stop-color="rgba(146,166,88,1)"/><stop offset="100%" stop-color="rgba(108,124,68,0)"/></linearGradient><linearGradient id="cpiAlgae"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(78,96,56,0)"/><stop offset="50%" stop-color="rgba(110,134,72,1)"/><stop offset="100%" stop-color="rgba(78,96,56,0)"/></linearGradient><linearGradient id="cpiCopper" x1="0" x2="1"><stop offset="0%" stop-color="rgba(140,90,52,0)"/><stop offset="50%" stop-color="rgba(176,116,68,1)"/><stop offset="100%" stop-color="rgba(140,90,52,0)"/></linearGradient><linearGradient id="cpiOlive"  x1="0" x2="1"><stop offset="0%" stop-color="rgba(96,86,40,0)"/><stop offset="50%" stop-color="rgba(132,116,52,1)"/><stop offset="100%" stop-color="rgba(96,86,40,0)"/></linearGradient><linearGradient id="cpiMurk"   x1="0" x2="1"><stop offset="0%" stop-color="rgba(80,62,38,0)"/><stop offset="50%" stop-color="rgba(110,86,50,1)"/><stop offset="100%" stop-color="rgba(80,62,38,0)"/></linearGradient><filter id="cpiGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b1"/><feGaussianBlur stdDeviation="5" result="b2"/><feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="cpiSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"/></filter><!-- Grime texture: turbulent noise to make the pipe wall feel encrusted --><filter id="cpiGrime" x="-50%" y="-50%" width="200%" height="200%"><feTurbulence baseFrequency="0.85" numOctaves="3" seed="7" result="noise"/><feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.22  0 0 0 0 0.10  0 0 0 0.55 0"/></filter></defs>
 <!-- Pipe-shaft blackness — heavy, no light reaches here -->
 <rect x="-100" y="-100" width="200" height="200" fill="rgba(4,3,1,1)"/>
 <!-- Encrusted grimy wall texture filling the periphery -->
@@ -33021,7 +33126,7 @@ Better not tomorrow.
 <div class="dawn-summary-row"><span class="dawn-summary-label">FLOWERS</span><span class="dawn-summary-count">(print: _lilyDone) of 5</span></div>
 </div>]
 (after: 20s)[<div class="dawn-play-again">
-<button class="dawn-restart-btn" onclick="(function(){try{var ifid='2CA3EC26-FACB-4F19-A2FA-6E1A6C2E4CB6';for(var i=localStorage.length-1;i>=0;i--){var k=localStorage.key(i)||'';if(k.indexOf('Saved Game')!==-1&&k.indexOf(ifid)!==-1)localStorage.removeItem(k);}}catch(e){}location.reload();})()">Play again</button>
+<button class="dawn-restart-btn" onclick="(function(){try{localStorage.clear();}catch(e){}try{sessionStorage.clear();}catch(e){}window.location.href=window.location.pathname;})()">Play again</button>
 </div>]
 
 </div>
@@ -33172,8 +33277,15 @@ So, so happily I go, under shades.</span></div>]
 
 [[Reach into the flames|Rescue the page]]]
 
-(if: $hasMissingPage is true or $returnedPage is true)[<span class="guided-link">[[Lie down beside her|Stay in Carthage]]</span>]
-(else:)[(if: $haunts's length >= 3)[[[Try The Green Sea|Green Sea Approach]]](else:)[//You must not, yet, go any deeper inland.//]
+(set: _carthageDone to ($alba contains $alba2) and ($hasMissingPage is true or $returnedPage is true))\
+(if: _carthageDone)[\
+The fire will burn without you now. The only way back is up.
+
+<span class="guided-link">[[Wake from this dream|The Interval]]</span>
+
+[[Lie down beside her|Stay in Carthage]]
+](else-if: $hasMissingPage is true or $returnedPage is true)[<span class="guided-link">[[Lie down beside her|Stay in Carthage]]</span>]
+(else:)[(if: ($haunts's length >= 3) and not ($alba contains $alba2))[[[Try The Green Sea|Green Sea Approach]]](else-if: not ($haunts's length >= 3))[//You must not, yet, go any deeper inland.//]
 
 (if: $confidence <= 15)[[[Return to the shore|The coast of Carthage]]](else:)[(if: $haunts's length >= 3)[[[Go back to shore|Carthage shore]]](else:)[[[Wake from this dream|The Interval]]]]
 
@@ -34037,7 +34149,7 @@ The pianist counts it in anyway: UNO… DOS… UNO, DOS, TRES, CUATRO!
 <div class="ronnies-cone"></div>
 (display: "Ronnies Rule SVG h14")
 
-From jazz you can learn more about prose than you can about poetry.
+Jazz tells you more about prose than it does about poetry.
 
 The last note hangs itself from the rafters. The room's dead still.
 
@@ -34065,7 +34177,7 @@ Moe nods. 'Go sell a book,' he says.
 (set: $pendingLilyBreath to false)\
 (set: $resumingFromCall to false)\
 <div class="typewriter-page">
-Modalities of the afterdark; lighthead jazz pharaoh, with the spiked corona.
+Modalities of the afterdark; lightheaded jazz pharaoh, with the spiked corona.
 
 Or some other way of putting it.
 
@@ -35490,28 +35602,6 @@ loop();
 (set: $confidence to $confidence + 8)\
 (set: $sobriety to $sobriety + 8)\
 <div class="typewriter-page">
-<div class="cow-soho-map" aria-hidden="true">
-<svg viewBox="0 0 360 200" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="csmRoad" x1="0" x2="1"><stop offset="0%" stop-color="rgba(212,165,116,0)"/><stop offset="50%" stop-color="rgba(212,165,116,0.9)"/><stop offset="100%" stop-color="rgba(212,165,116,0)"/></linearGradient></defs>
-<rect width="360" height="200" fill="rgba(20,14,8,0.55)"/>
-<!-- six streets, recited in order: Greek, Frith, Dean, Wardour, Berwick, Poland -->
-<line class="csm-st csm-greek"   x1="40"  y1="30"  x2="40"  y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
-<line class="csm-st csm-frith"   x1="100" y1="30"  x2="100" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
-<line class="csm-st csm-dean"    x1="160" y1="30"  x2="160" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
-<line class="csm-st csm-wardour" x1="220" y1="30"  x2="220" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
-<line class="csm-st csm-berwick" x1="280" y1="30"  x2="280" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
-<line class="csm-st csm-poland"  x1="320" y1="30"  x2="320" y2="170" stroke="url(#csmRoad)" stroke-width="2"/>
-<text class="csm-lb csm-lb-greek"   x="40"  y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">GREEK</text>
-<text class="csm-lb csm-lb-frith"   x="100" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">FRITH</text>
-<text class="csm-lb csm-lb-dean"    x="160" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">DEAN</text>
-<text class="csm-lb csm-lb-wardour" x="220" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">WARDOUR</text>
-<text class="csm-lb csm-lb-berwick" x="280" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">BERWICK</text>
-<text class="csm-lb csm-lb-poland"  x="320" y="22" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="9" fill="#e4c890" letter-spacing="1.4">POLAND</text>
-<!-- crossing east-west routes for texture -->
-<line x1="20" y1="100" x2="340" y2="100" stroke="rgba(180,150,90,0.22)" stroke-width="1"/>
-<line x1="20" y1="60"  x2="340" y2="60"  stroke="rgba(180,150,90,0.15)" stroke-width="0.8"/>
-<line x1="20" y1="140" x2="340" y2="140" stroke="rgba(180,150,90,0.15)" stroke-width="0.8"/>
-</svg>
-</div>
 Greek, Frith, Dean, Wardour, Berwick, Poland.
 
 //Go For Dinner With Billy Piper.//
@@ -35896,7 +35986,9 @@ Opposite him is the only man who clocks you, who is thin like verdaccio and hard
 (unless: $haunts is an array)[(set: $haunts to (a:))]
 (set: $visitedInterval to true)\
 (set: $visitedCarthage to true)\
-A flight of stairs, the kind you find leaving a theatre; red carpet worn thin as your world in its dead middle.
+Salt on the lip. Cinder in the lashes. The pyre's heat lifts from your face the way a hand lifts from your face — and you wake.
+
+A flight of stairs, the kind you find leaving a theatre; red carpet worn thin as your world in its dead middle. Brass banister under your hand, still warm from other hands. Somewhere, a radio is just barely playing; what it plays, you cannot say.
 
 <div class="lily-window">
 A woman passes; she is going up. Two steps down you freeze, stopped clock, right twice: you'd know that perfume anywhere. It's Lily.
@@ -36540,6 +36632,7 @@ He takes it, smiles and gives it back to you.
 <div class="item-box">
 <div class="item-header">◈ OBJECT ACQUIRED</div>
 <div class="item-name">The Napkin Portrait</div>
+<div class="item-note">Stored in your notebook. Go there to work on it more.</div>
 </div>
 
 [[Step out.|After the painter]]
@@ -36597,12 +36690,21 @@ On the hill a queen burns upon a pyre.
 And past the beach, a little bar: The Green Sea.
 
 (unless: $visitedPyre is a boolean)[(set: $visitedPyre to false)]\
+(set: _carthageDone to ($alba contains $alba2) and ($hasMissingPage is true or $returnedPage is true))\
+(if: _carthageDone)[\
+You have what you came for. The dream loosens; the only way back is up.
+
+<span class="guided-link">[[Wake from this dream|The Interval]]</span>
+](else:)[\
 (if: $visitedPyre is false)[[[Approach the pyre|Dido]] (if: $hasMissingPage is true or $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]
 ](else:)[[[Back to the pyre|Dido]] (if: $hasMissingPage is true or $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]
 ]\
-(if: $haunts's length >= 3)[[[Go to The Green Sea|Green Sea Approach]] (if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]]](else:)[<span class="greyed-out">The Green Sea &#91;YOU MUST NOT, YET, GO ANY DEEPER INLAND&#93;</span> (if: $hauntExplained is true)[<span class="al">✧</span>]]
+(if: ($haunts's length >= 3) and not ($alba contains $alba2))[[[Go to The Green Sea|Green Sea Approach]] (if: $hauntExplained is true)[<span class="al">✧</span>]
+](else-if: not ($haunts's length >= 3))[<span class="greyed-out">The Green Sea &#91;YOU MUST NOT, YET, GO ANY DEEPER INLAND&#93;</span> (if: $hauntExplained is true)[<span class="al">✧</span>]
+]
 
 [[Wake from this dream|The Interval]]
+]
 
 :: Dream to Dean [outdoor] {"position":"300,1550","size":"100,100"}
 (set: $visitedCarthage to true)\
@@ -37291,7 +37393,7 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 (set: _lo5 to (cond: $lilyCount >= 5, 'nb-lily-gathered', 'nb-lily-empty'))\
 (set: _treeAllVisited to ($visitedCentrePoint is true and _tVisited and _qVisited and _pVisited and _rVisited and _cVisited and _hVisited and _lVisited and _fVisited and _eVisited))\
 (set: _queue to '')\
-(if: $lilyCount >= 5 and $sawPentangle is false)[(set: $sawPentangle to true)(set: _queue to 'lily,map')]\
+(if: $lilyCount >= 5 and $sawPentangle is false)[(set: _queue to 'lily,map')]\
 (if: _treeAllVisited and $treeFlashed is false)[(set: $treeFlashed to true)(set: $opusViaTree to true)(set: _queue to _queue + (cond: _queue is '', '', ',') + 'tree')]\
 (set: _nb to '<div class="nb-page">')\
 (if: _queue is not '')[(set: _nb to '<div class="nb-page" data-pentangle-queue="' + _queue + '">')]\
@@ -37313,8 +37415,8 @@ You don't understand and retreating, you strike, in the nifty, brisket air, a ve
 (if: $haunts contains $haunt12)[(set: _nb to _nb + '<div class="nb-item"><span class="hp hp-done">◆</span> ' + $haunt12 + ' <span class="haunt-stage">(Exaltatio)</span></div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="hp">◇</span> The Crown</div>')]\
 (set: _nb to _nb + '</div>')\
 (set: _nb to _nb + '<div class="nb-section"><strong class="nb-heading">PASSWORDS</strong>')\
-(if: $knowsCopperWord is true)[(if: $awaitingCopperPwd is true)[(set: _nb to _nb + '<div class="nb-item"><span class="pp pp-done">▲</span> "I said hello" — for Copper <button class="nb-deploy-btn" onclick="window.deployPwd(\'copper\')" style="background:#1a0a08;color:#d4a574;border:1px solid #8a4a3a;padding:2px 10px;font-family:Georgia,serif;font-size:0.8em;cursor:pointer;margin-left:8px;">Deploy</button></div>')](else:)[(set: _nb to _nb + '<div class="nb-item"><span class="pp pp-done">▲</span> "I said hello" — for Copper</div>')]](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="pp">△</span> A word for Copper</div>')]\
-(if: $knowsCopperSecret is true)[(if: $awaitingLacklandPwd is true)[(set: _nb to _nb + '<div class="nb-item"><span class="pp pp-done">▲</span> "Valletta" — Lackland&#39;s back room <button class="nb-deploy-btn" onclick="window.deployPwd(\'lackland\')" style="background:#1a0a08;color:#d4a574;border:1px solid #8a4a3a;padding:2px 10px;font-family:Georgia,serif;font-size:0.8em;cursor:pointer;margin-left:8px;">Deploy</button></div>')](else:)[(set: _nb to _nb + '<div class="nb-item"><span class="pp pp-done">▲</span> "Valletta" — Lackland&#39;s back room</div>')]](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="pp">△</span> A word for Lackland</div>')]\
+(if: $knowsCopperWord is true)[(if: $awaitingCopperPwd is true)[(set: _nb to _nb + '<div class="nb-item"><span class="pp pp-done">▲</span> "I said hello" — for Copper <button class="nb-deploy-btn" onclick="window.deployPwd(\'copper\')">Deploy</button></div>')](else:)[(set: _nb to _nb + '<div class="nb-item"><span class="pp pp-done">▲</span> "I said hello" — for Copper</div>')]](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="pp">△</span> A word for Copper</div>')]\
+(if: $knowsCopperSecret is true)[(if: $awaitingLacklandPwd is true)[(set: _nb to _nb + '<div class="nb-item"><span class="pp pp-done">▲</span> "Valletta" — Lackland&#39;s back room <button class="nb-deploy-btn" onclick="window.deployPwd(\'lackland\')">Deploy</button></div>')](else:)[(set: _nb to _nb + '<div class="nb-item"><span class="pp pp-done">▲</span> "Valletta" — Lackland&#39;s back room</div>')]](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="pp">△</span> A word for Lackland</div>')]\
 (set: _nb to _nb + '</div>')\
 (if: $knowsAboutPage is true)[(set: _nb to _nb + '<div class="nb-section"><strong class="nb-heading">QUESTS</strong>')\
 (if: $returnedPage is true)[(set: _nb to _nb + '<div class="nb-grey"><span class="qp qp-done">★</span> Page 93 returned to O&#39;Flatterly</div>')]\
@@ -39549,6 +39651,15 @@ text-align: center;
 letter-spacing: 0.04em;
 text-shadow: 0 0 12px rgba(130,170,220,0.25);
 }
+.item-note {
+font-family: 'Crimson Text', Georgia, serif;
+font-size: 0.78em;
+font-style: italic;
+color: rgba(160,190,215,0.55);
+text-align: center;
+margin-top: 0.55em;
+letter-spacing: 0.01em;
+}
 
 /* Small "saved to notebook" hint inside the first-time explainer lore-box */
 .notebook-hint {
@@ -40612,6 +40723,29 @@ transition: background 0.2s;
 }
 .nb-inv-btn:hover {
 background: rgba(196, 160, 96, 0.32);
+}
+/* Password deploy button — sits inline next to a notebook word entry.
+   Same warm-amber language as nb-inv-btn, tighter so it fits inline. */
+.nb-deploy-btn {
+display: inline-block;
+padding: 0.2em 0.95em;
+margin-left: 0.6em;
+font-family: 'Courier New', Courier, monospace;
+font-size: 0.78em;
+color: rgba(232,120,24,0.85);
+background: rgba(0,0,0,0.4);
+border: 1px solid rgba(232,120,24,0.35);
+border-radius: 3px;
+cursor: pointer;
+letter-spacing: 0.16em;
+text-transform: uppercase;
+vertical-align: baseline;
+transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+.nb-deploy-btn:hover {
+color: rgba(255,160,50,0.95);
+border-color: rgba(232,120,24,0.65);
+background: rgba(0,0,0,0.55);
 }
 /* Liver-eat button — the inner content is a Harlowe tw-link, so we
    neutralise the default link styling and let the wrapper carry the

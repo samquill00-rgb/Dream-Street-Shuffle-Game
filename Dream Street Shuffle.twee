@@ -77,6 +77,8 @@ Dream Street Shuffle
 (set: $shownChippyHint to false)\
 (set: $lilyCall1ReturnsAt to -999)\
 (set: $phoneCallReturnsAt to -999)\
+(set: $lilyCallReturn to "Dean Street")\
+(set: $bookTitle to "Untitled Manuscript")\
 (set: $tookLily1 to false)\
 (set: $tookLily2 to false)\
 (set: $tookLily3 to false)\
@@ -12455,6 +12457,69 @@ window.dssScene = (function() {
   };
 })();
 
+// ====== SHARED THREE.JS DISPOSAL HELPERS ======
+// Each approach scene appends a body-level wrap div, creates a WebGL
+// renderer + Three.js scene, and registers a window 'resize' listener.
+// Without explicit disposal, every revisit accumulates GPU textures,
+// geometries, materials, and stale resize handlers. These helpers give
+// each scene a one-line bind (registers the resize + tracks the trio)
+// and a one-line dispose (called from the setInterval !container branch).
+window._dssThreeRegistry = window._dssThreeRegistry || {};
+window._dssBindScene = function(wrapId, scene, renderer, camera) {
+  var resize = function() {
+    if (!camera || !renderer) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  };
+  window.addEventListener('resize', resize);
+  window._dssThreeRegistry[wrapId] = { scene: scene, renderer: renderer, resize: resize };
+};
+window._dssDisposeWrap = function(wrapId) {
+  var entry = window._dssThreeRegistry && window._dssThreeRegistry[wrapId];
+  if (entry) {
+    window._dssDisposeThreeScene(entry.scene, entry.renderer, entry.resize);
+    delete window._dssThreeRegistry[wrapId];
+  }
+  var wrap = document.getElementById(wrapId);
+  if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+};
+window._dssDisposeThreeScene = function(scene, renderer, resizeHandler) {
+  try {
+    if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+  } catch(e) {}
+  try {
+    if (scene && scene.traverse) {
+      scene.traverse(function(child) {
+        if (child.geometry && child.geometry.dispose) {
+          try { child.geometry.dispose(); } catch(e) {}
+        }
+        if (child.material) {
+          var mats = Array.isArray(child.material) ? child.material : [child.material];
+          for (var mi = 0; mi < mats.length; mi++) {
+            var m = mats[mi]; if (!m) continue;
+            // Dispose every texture-bearing slot. Three.js doesn't auto-free these.
+            ['map','normalMap','specularMap','emissiveMap','alphaMap','aoMap','bumpMap','displacementMap','envMap','lightMap','metalnessMap','roughnessMap']
+              .forEach(function(key){ if (m[key] && m[key].dispose) { try { m[key].dispose(); } catch(e) {} } });
+            if (m.dispose) { try { m.dispose(); } catch(e) {} }
+          }
+        }
+      });
+    }
+  } catch(e) {}
+  try {
+    if (renderer) {
+      if (renderer.renderLists && renderer.renderLists.dispose) renderer.renderLists.dispose();
+      if (renderer.dispose) renderer.dispose();
+      // Force context loss so the GPU buffer is released immediately
+      // rather than waiting for GC of the WebGL canvas.
+      if (renderer.forceContextLoss) {
+        try { renderer.forceContextLoss(); } catch(e) {}
+      }
+    }
+  } catch(e) {}
+};
+
 // ====== GINGER LIGHT SCENE — INLINE ======
 (function() {
 var glActive = false;
@@ -12510,12 +12575,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.6;
 glWrap.appendChild(renderer.domElement);
-
-window.addEventListener('resize', function() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('gl-wrap', scene, renderer, camera);
 
 // Store base camera position for subtle breathing sway
 var cameraBase = { x: 6.5, y: 2.2, z: 8 };
@@ -13975,8 +14035,7 @@ initGingerLight();
 } else if (!container) {
 glActive = false;
 if (glAnimId) { cancelAnimationFrame(glAnimId); glAnimId = null; }
-var wrap = document.getElementById('gl-wrap');
-if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+window._dssDisposeWrap('gl-wrap');
 }
 }, 300);
 })();
@@ -14061,12 +14120,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.55;
-
-window.addEventListener('resize', function() {
-camera.aspect = window.innerWidth / window.innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('fh-wrap', scene, renderer, camera);
 
 // ============================================================
 // MATERIALS
@@ -15709,13 +15763,17 @@ storyEl.removeChild(injected);
 });
 }
 
-// Watch for fh-container
+// Watch for fh-container. Cleanup mirrors Pillars/Lackland: when the
+// container disappears (passage change), cancel the animate loop and
+// remove the body-appended wrap so the canvas + listeners don't leak.
 setInterval(function() {
 var container = document.getElementById('fh-container');
 if (container && !fhActive) {
 initFrenchHouse();
 } else if (!container) {
 fhActive = false;
+if (fhAnimId) { cancelAnimationFrame(fhAnimId); fhAnimId = null; }
+window._dssDisposeWrap('fh-wrap');
 }
 }, 300);
 })();
@@ -15806,12 +15864,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.55;
 chWrap.appendChild(renderer.domElement);
-
-window.addEventListener('resize', function() {
-camera.aspect = window.innerWidth / window.innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('ch-wrap', scene, renderer, camera);
 
 // ============================================================
 // MATERIALS
@@ -16821,13 +16874,17 @@ storyEl.removeChild(injected);
 });
 }
 
-// Watch for ch-container
+// Watch for ch-container. Cleanup mirrors Pillars/Lackland: when the
+// container disappears (passage change), cancel the animate loop and
+// remove the body-appended wrap so the canvas + listeners don't leak.
 setInterval(function() {
 var container = document.getElementById('ch-container');
 if (container && !chActive) {
 initCoachHorses();
 } else if (!container) {
 chActive = false;
+if (chAnimId) { cancelAnimationFrame(chAnimId); chAnimId = null; }
+window._dssDisposeWrap('ch-wrap');
 }
 }, 300);
 })();
@@ -16886,12 +16943,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.55;
 phWrap.appendChild(renderer.domElement);
-
-window.addEventListener('resize', function() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('ph-wrap', scene, renderer, camera);
 
 // ============================================================
 // MATERIALS
@@ -18529,8 +18581,7 @@ initPillars();
 } else if (!container) {
 phActive = false;
 if (phAnimId) { cancelAnimationFrame(phAnimId); phAnimId = null; }
-var wrap = document.getElementById('ph-wrap');
-if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+window._dssDisposeWrap('ph-wrap');
 }
 }, 300);
 })();
@@ -18588,12 +18639,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.54;
 loWrap.appendChild(renderer.domElement);
-
-window.addEventListener('resize', function() {
-camera.aspect = window.innerWidth / window.innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('lo-wrap', scene, renderer, camera);
 
 // ============================================================
 // MATERIALS
@@ -19886,8 +19932,7 @@ initLackland();
 } else if (!container) {
 loActive = false;
 if (loAnimId) { cancelAnimationFrame(loAnimId); loAnimId = null; }
-var wrap = document.getElementById('lo-wrap');
-if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+window._dssDisposeWrap('lo-wrap');
 }
 }, 300);
 })();
@@ -20007,12 +20052,7 @@ function buildCaScene() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.85;
   caWrap.appendChild(renderer.domElement);
-
-  window.addEventListener('resize', function() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  window._dssBindScene('ca-wrap', scene, renderer, camera);
 
   // ============================================================
   // MATERIALS — rich canvas textures like Cecil Court
@@ -23877,8 +23917,7 @@ setInterval(function() {
   else if (!container) {
     caActive = false;
     if (caAnimId) { cancelAnimationFrame(caAnimId); caAnimId = null; }
-    var wrap = document.getElementById('ca-wrap');
-    if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    window._dssDisposeWrap('ca-wrap');
   }
 }, 300);
 })();
@@ -24022,12 +24061,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.75;
 crWrap.appendChild(renderer.domElement);
-
-window.addEventListener('resize', function() {
-camera.aspect = window.innerWidth / window.innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('cr-wrap', scene, renderer, camera);
 
 // ============================================================
 // MATERIALS
@@ -25503,8 +25537,7 @@ initColonyRoom();
 } else if (!container) {
 crActive = false;
 if (crAnimId) { cancelAnimationFrame(crAnimId); crAnimId = null; }
-var wrap = document.getElementById('cr-wrap');
-if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+window._dssDisposeWrap('cr-wrap');
 }
 }, 300);
 })();
@@ -25589,12 +25622,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.48;
 rsWrap.appendChild(renderer.domElement);
-
-window.addEventListener('resize', function() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('rs-wrap', scene, renderer, camera);
 
 // ============================================================
 // MATERIALS
@@ -27140,7 +27168,7 @@ setInterval(function() {
   } else if (!cont) {
     if (rsAnimId !== null) { cancelAnimationFrame(rsAnimId); rsAnimId = null; }
     rsActive = false;
-    if (rsWrap && rsWrap.parentNode) { rsWrap.remove(); }
+    window._dssDisposeWrap('rs-wrap');
   }
 }, 300);
 
@@ -27188,12 +27216,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.45;
 clWrap.appendChild(renderer.domElement);
-
-window.addEventListener('resize', function() {
-camera.aspect = window.innerWidth / window.innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('cl-wrap', scene, renderer, camera);
 
 // ============================================================
 // MATERIALS
@@ -27874,8 +27897,7 @@ initCoppersLair();
 } else if (!container) {
 clActive = false;
 if (clAnimId) { cancelAnimationFrame(clAnimId); clAnimId = null; }
-var wrap = document.getElementById('cl-wrap');
-if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+window._dssDisposeWrap('cl-wrap');
 }
 }, 300);
 })();
@@ -27918,12 +27940,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.68;
 tsWrap.appendChild(renderer.domElement);
-
-window.addEventListener('resize', function() {
-camera.aspect = window.innerWidth / window.innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('ts-wrap', scene, renderer, camera);
 
 function placeMesh(geo, mat, x, y, z) {
 var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); scene.add(m); return m;
@@ -28166,8 +28183,7 @@ initTrishas();
 } else if (!container) {
 tsActive=false;
 if (tsAnimId) { cancelAnimationFrame(tsAnimId); tsAnimId=null; }
-var wrap=document.getElementById('ts-wrap');
-if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+window._dssDisposeWrap('ts-wrap');
 }
 },300);
 })();
@@ -28233,12 +28249,7 @@ cpRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
 cpRenderer.toneMapping = THREE.ACESFilmicToneMapping;
 cpRenderer.toneMappingExposure = 0.55;
 cpWrap.appendChild(cpRenderer.domElement);
-
-window.addEventListener('resize', function() {
-cpCamera.aspect = window.innerWidth / window.innerHeight;
-cpCamera.updateProjectionMatrix();
-cpRenderer.setSize(window.innerWidth, window.innerHeight);
-});
+window._dssBindScene('cp-wrap', cpScene, cpRenderer, cpCamera);
 
 // ============================================================
 // MATERIALS
@@ -28899,8 +28910,7 @@ initCentrePoint();
 } else if (!container) {
 cpActive = false;
 if (cpAnimId) { cancelAnimationFrame(cpAnimId); cpAnimId = null; }
-var wrap = document.getElementById('cp-wrap');
-if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+window._dssDisposeWrap('cp-wrap');
 }
 }, 300);
 })();
@@ -28948,12 +28958,7 @@ function buildFcScene() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
   renderer.toneMappingExposure = 0.65;
   fcWrap.appendChild(renderer.domElement);
-
-  window.addEventListener('resize', function() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  window._dssBindScene('fc-wrap', scene, renderer, camera);
 
   // ============================================================
   // MATERIALS
@@ -31269,8 +31274,7 @@ setInterval(function() {
   else if (!container) {
     fcActive = false;
     if (fcAnimId) { cancelAnimationFrame(fcAnimId); fcAnimId = null; }
-    var wrap = document.getElementById('fc-wrap');
-    if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    window._dssDisposeWrap('fc-wrap');
   }
 }, 300);
 })();
@@ -34312,8 +34316,6 @@ To return to Soho from Cecil Court is to cross the Styx; in some or other direct
 :: Ride Jeffrey Bernard's cow [cow] {"position":"900,1200","size":"100,100"}
 You cry, 'Soho! Soho!' and mount the beast.
 
-<span id="cow-data-won" style="display:none;">(print: $cowRideWon)</span>
-<span id="cow-data-done" style="display:none;">(print: $cowRideDone)</span>
 <div id="cow-game-wrap" style="margin:1em 0;">
 <canvas id="cow-canvas" width="380" height="520" style="display:block;max-width:100%;border:1px solid rgba(80,60,10,0.25);cursor:pointer;"></canvas>
 <div id="cow-instructions" style="text-align:center;color:#7a5a18;font-size:0.75em;letter-spacing:0.12em;margin-top:0.4em;">&#8592;&#8594; arrow keys &nbsp;&#183;&nbsp; or click LEFT / MID / RIGHT lane</div>
@@ -34322,15 +34324,17 @@ You cry, 'Soho! Soho!' and mount the beast.
 <span id="cow-go-lose" style="display:none;">[[Thrown|Cow ride fail]]</span>
 <script>
 (function(){
-/* ── Skip if already played (won or failed) ── */
-var wonSpan = document.getElementById('cow-data-won');
-var doneSpan = document.getElementById('cow-data-done');
-var cowWon  = wonSpan ? wonSpan.textContent.trim() : '';
-var cowDone = doneSpan ? doneSpan.textContent.trim() : '';
-if (cowDone === 'true') {
+/* ── Skip if already played (won or failed). Read the Harlowe state
+   variables directly so the gate doesn't depend on hidden DOM spans
+   round-tripping booleans through (print:). ── */
+var _s = null;
+try { _s = Harlowe.API_ACCESS.STATE.variables; } catch(e) {}
+var cowDone = !!(_s && _s.cowRideDone === true);
+var cowWon  = !!(_s && _s.cowRideWon  === true);
+if (cowDone) {
 var wrap = document.getElementById('cow-game-wrap');
 if (wrap) wrap.style.display = 'none';
-var spId = (cowWon === 'true') ? 'cow-go-win' : 'cow-go-lose';
+var spId = cowWon ? 'cow-go-win' : 'cow-go-lose';
 setTimeout(function(){
 var sp = document.getElementById(spId);
 if (sp) { var lk = sp.querySelector('tw-link'); if (lk) lk.click(); }
@@ -34345,7 +34349,7 @@ var _cowMuteWatcher = null;
 function _cowMuted() { return !!(window.dssAudio && window.dssAudio.isMuted && window.dssAudio.isMuted()); }
 function startCowMusic() {
 if (_cowMusicEl) return;
-if (window.dssAudio && dssAudio.stopBed) dssAudio.stopBed('minigame-retro');
+if (window.dssAudio && window.dssAudio.stopBed) window.dssAudio.stopBed('minigame-retro');
 var el = new Audio(window._cowGameDataUri || '');
 el.volume = 0.28;
 el.loop = false;
@@ -35821,6 +35825,8 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $shownChippyHint to false)\
 (set: $lilyCall1ReturnsAt to -999)\
 (set: $phoneCallReturnsAt to -999)\
+(set: $lilyCallReturn to "Dean Street")\
+(set: $bookTitle to "Untitled Manuscript")\
 (set: $tookLily1 to false)\
 (set: $tookLily2 to false)\
 (set: $tookLily3 to false)\
@@ -37613,23 +37619,23 @@ tw-passage:has(.book-naming-tw) > tw-consecutive-br { display: none !important; 
 /* Haunts — amber ◇/◆ */
 .hp { color: rgba(200,168,106,0.55); }
 .hp.hp-done { color: rgba(200,168,106,0.95); text-shadow: 0 0 6px rgba(200,168,106,0.55); }
-.hp.hp-pending { color: rgba(200,168,106,0.22); }
+.hp.hp-pending { color: rgba(200,168,106,0.38); }
 /* Objects — copper-red ○/● */
 .op { color: rgba(175,100,65,0.55); }
 .op.op-done { color: rgba(175,100,65,0.95); text-shadow: 0 0 6px rgba(175,100,65,0.55); }
-.op.op-pending { color: rgba(175,100,65,0.22); }
+.op.op-pending { color: rgba(175,100,65,0.38); }
 /* Passwords — slate-blue △/▲ */
 .pp { color: rgba(140,155,175,0.55); }
 .pp.pp-done { color: rgba(140,155,175,0.95); text-shadow: 0 0 6px rgba(140,155,175,0.55); }
-.pp.pp-pending { color: rgba(140,155,175,0.22); }
+.pp.pp-pending { color: rgba(140,155,175,0.38); }
 /* Alba lines — gold ✧/✦ */
 .al { color: rgba(220,180,90,0.55); }
 .al.al-done { color: rgba(240,200,110,0.95); text-shadow: 0 0 6px rgba(240,200,110,0.55); }
-.al.al-pending { color: rgba(220,180,90,0.22); }
+.al.al-pending { color: rgba(220,180,90,0.38); }
 /* Quests — sage green ☆/★ */
 .qp { color: rgba(140,165,108,0.55); font-size: 0.9em; }
 .qp.qp-done { color: rgba(160,185,125,0.95); text-shadow: 0 0 6px rgba(140,165,108,0.55); }
-.qp.qp-pending { color: rgba(140,165,108,0.22); }
+.qp.qp-pending { color: rgba(140,165,108,0.38); }
 
 /* ===== IMPORT FONTS ===== */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Cinzel:wght@400;600&family=Kalam:wght@300;400;700&family=Caveat:wght@400;500;600;700&family=Special+Elite&family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&display=swap');
@@ -37817,6 +37823,16 @@ text-shadow:
 0 0 10px rgba(255, 214, 153, 0.6),
 0 0 20px rgba(212, 165, 116, 0.4),
 0 0 30px rgba(212, 165, 116, 0.2);
+}
+
+/* Keyboard focus — mirrors the hover state so Tab navigation has a clear
+   visible target. focus-visible (not :focus) so the ring only shows for
+   keyboard users, not after a normal mouse click. */
+tw-link:focus-visible, .enchantment-link:focus-visible {
+color: #ffd699;
+outline: 1px dashed rgba(232,213,183,0.7);
+outline-offset: 3px;
+border-bottom-color: #d4a574;
 }
 
 tw-link:visited, .enchantment-link:visited, a:visited,
@@ -43621,6 +43637,19 @@ box-shadow:
   0 8px 36px rgba(0,0,0,0.5),
   inset 0 0 30px rgba(60,30,15,0.35);
 animation: phoneRingingAppear 0.45s ease-out both, phoneRingingTremor 0.7s ease-in-out 0.45s infinite;
+}
+/* Click-blocking backdrop. The box-shadow above paints a dark veil but
+   pure paint can't intercept pointer events, so clicks anywhere outside
+   the popup used to fall through to the passage beneath. This invisible
+   fixed layer captures those clicks, scoped via :has() so it only exists
+   while a .phone-ringing popup is mounted. */
+tw-story:has(.phone-ringing)::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 98999;
+  pointer-events: auto;
 }
 @keyframes phoneRingingAppear {
 from { opacity: 0; transform: translate(-50%, -42%); }

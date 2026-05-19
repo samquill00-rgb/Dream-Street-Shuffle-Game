@@ -1,6 +1,15 @@
-# HANDOFF — 2026-05-19
+# HANDOFF — 2026-05-19 (late)
 
-Very long multi-day session. Two major chunks of work: (1) a complete visual overhaul of the **Carthage approach 3D scene** with lighting/shadow system, and (2) a 16-note playthrough fix pass after Dr Quill's playtest. Plus a smaller follow-up batch on the tarot, pyre SVG, and pentagram-at-dawn.
+Very long multi-day session. Three major chunks of work: (1) a complete visual overhaul of the **Carthage approach 3D scene** with lighting/shadow system, and (2) a 16-note playthrough fix pass after Dr Quill's playtest, and (3) a small late batch on tarot / pyre SVG / pentagram-at-dawn / Carthage routing / memory placement.
+
+---
+
+## Latest pass (final tonight)
+
+After Dr Quill's second-round playtest, two more issues surfaced:
+
+- **Green Sea didn't route through the Interval.** Even though Carthage shore now forces wake-through-Interval when alba2+page are collected, the **direct Green Sea path** still ended with `[[Return to Dean Street]]` at LINE 2 Oxford. Changed that to `[[Wake from this dream|The Interval]]` — so EVERY Carthage path (pyre, shore, Green Sea) now lands the player in the Interval before returning to Soho.
+- **Two memory polaroids fired back-to-back** when going Green Sea → Interval (memory 2 at LINE 2 Oxford, then memory 1 at the Interval). Felt like a double flash. **Memory 1 moved from The Interval to the "After the call" passage** — the quiet outdoor moment after the first Lily phone call. Thematically the "twenty-one again… before so very much went so far wrong" text lands much more naturally in the post-call melancholy than as an interruption in the staircase scene. The Interval is now just the staircase + lily encounter (no polaroid). Memories are spaced across the night now: memory 1 = first Lily call, memory 2 = Green Sea (LINE 2 Oxford), memory 3 = Centre Point (LINE 3).
 
 ---
 
@@ -91,7 +100,7 @@ Also tweaked Dawn timings (separate request earlier in session): ALBA reveals sh
 
 ## State of the live code
 
-All today's changes synced to `Dream Street Shuffle.html`. `sync_html.py` unchanged. No new MP3/M4A swaps. The Carthage approach scene now has dramatic ridged hill, jagged sandstone cliffs, sandy headland beach, animated pyre with body + smoke + embers, palms with proper amber-touched sage canopies, real shadow casting, and a settling sun. The brick-arch ruin sits in the foreground; XCIII is chiselled into the right colonnade's lintel.
+All today's changes synced to `Dream Street Shuffle.html`. `sync_html.py` unchanged. No new MP3/M4A swaps. The Carthage approach scene now has dramatic ridged hill, jagged sandstone cliffs, sandy headland beach, animated pyre with body + smoke + embers, palms with proper amber-touched sage canopies, real shadow casting, and a settling sun. The brick-arch ruin sits in the foreground; XCIII is chiselled into the right colonnade's lintel. **Every Carthage path (pyre, shore, Green Sea) now lands the player in the Interval** before returning to Soho — this is the canonical "what did you bring back" passage.
 
 ---
 
@@ -103,8 +112,9 @@ No new memory files written this session.
 
 ## Open threads for the next session
 
-- **Memory 2 / Memory 3 polaroids** — not touched today.
+- **Memory 2 / Memory 3 polaroids** — unchanged today. Memory 1 was moved (see "Latest pass" at top).
 - **Notebook FINDS / EFFECTS / TREE / POEM tabs** — only LILIES and MAP have first-class animations (pentangle reveal). Other tabs reviewed earlier in week — no specific issues today.
+- **Approach scenes for Pillars / Ronnies / Lackland / Trisha** — shadow system applied to French / Coach / Colony only. Other approach scenes still on old lighting; could be brought in line if needed.
 - **Three Pillars (Mercy/Severity/Mildness)** — still banked.
 - **Astral-map screenshots** banked 2026-05-13 — still uncommitted to a use, superseded by live astral reveal at Centre Point.
 - **`Dream to Dean` and `Failure: Trisha's`** — both still orphan passages in the astral-skip list; could be deleted.

@@ -1019,6 +1019,13 @@ window.dssAudio = (function() {
       prev.g.gain.linearRampToValueAtTime(0, ac.currentTime + 0.5);
       prev.src.stop(ac.currentTime + 0.6);
     } catch(e) {}
+    // Stop any LFO oscillators attached to the bed so they don't keep
+    // running in the background after the audio is silent.
+    ['lfo','lfo2','ampLfo'].forEach(function(k){
+      if (prev[k] && prev[k].stop) {
+        try { prev[k].stop(ac.currentTime + 0.6); } catch(e) {}
+      }
+    });
   }
   // Pub murmur — pink noise filtered through two bandpass filters tuned to
   // the human voice formants (F1 ~600Hz, F2 ~1500Hz), with rhythmic amplitude
@@ -1158,8 +1165,10 @@ window.dssAudio = (function() {
     });
   }
   // Wind — three parallel filters (low howl, mid whistle, high sibilance)
-  // driven by white noise, with a slow LFO on the mid-band cutoff to gust.
-  // Modelled after Farnell's wind chapter.
+  // driven by white noise, with two LFOs on the mid-band cutoff to gust.
+  // Modelled after Farnell's wind chapter. Tuned howling for the Carthage
+  // shore: louder low body, more dramatic gust sweep, a second slow LFO
+  // layered over the first to break up the periodic feel.
   function windFarnell() {
     _play(function(ac) {
     if (_ambient && _ambient.kind === 'wind') return;
@@ -1169,37 +1178,51 @@ window.dssAudio = (function() {
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
     var d = buf.getChannelData(0);
-    for (var i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * 0.6;
+    for (var i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * 0.7;
     var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
-    // Three bands
+    // Three bands — low howl is heavier, mid whistle slightly brighter
     var f1 = ac.createBiquadFilter(); f1.type='bandpass';
-    f1.frequency.value = 240; f1.Q.value = 2.5;          // low howl
+    f1.frequency.value = 220; f1.Q.value = 2.2;          // low howl
     var f2 = ac.createBiquadFilter(); f2.type='bandpass';
-    f2.frequency.value = 720; f2.Q.value = 3.0;          // mid whistle
+    f2.frequency.value = 760; f2.Q.value = 2.8;          // mid whistle
     var f3 = ac.createBiquadFilter(); f3.type='lowpass';
     f3.frequency.value = 3200; f3.Q.value = 0.7;         // high sibilance
-    var g1 = ac.createGain(); g1.gain.value = 0.55;
-    var g2 = ac.createGain(); g2.gain.value = 0.65;
-    var g3 = ac.createGain(); g3.gain.value = 0.30;
+    var g1 = ac.createGain(); g1.gain.value = 0.85;
+    var g2 = ac.createGain(); g2.gain.value = 0.78;
+    var g3 = ac.createGain(); g3.gain.value = 0.34;
     var g = ac.createGain();
     g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.20, now + 2.0);
-    // Gust LFO — slow sweep on the whistle band's cutoff
+    g.gain.linearRampToValueAtTime(0.32, now + 2.5);
+    // Primary gust LFO — slow sweep on the whistle band's cutoff
     var lfo = ac.createOscillator(); lfo.type='sine';
-    lfo.frequency.value = 0.13;
-    var lfoG = ac.createGain(); lfoG.gain.value = 280;
+    lfo.frequency.value = 0.10;
+    var lfoG = ac.createGain(); lfoG.gain.value = 520;
     lfo.connect(lfoG); lfoG.connect(f2.frequency);
     lfo.start(now);
+    // Secondary, slower gust LFO on the low howl band — bigger, less periodic
+    var lfo2 = ac.createOscillator(); lfo2.type='sine';
+    lfo2.frequency.value = 0.043;
+    var lfo2G = ac.createGain(); lfo2G.gain.value = 90;
+    lfo2.connect(lfo2G); lfo2G.connect(f1.frequency);
+    lfo2.start(now);
+    // Overall amplitude breathing — gusts swell the whole bed up and down
+    var ampLfo = ac.createOscillator(); ampLfo.type='sine';
+    ampLfo.frequency.value = 0.078;
+    var ampLfoG = ac.createGain(); ampLfoG.gain.value = 0.08;
+    ampLfo.connect(ampLfoG); ampLfoG.connect(g.gain);
+    ampLfo.start(now);
     src.connect(f1); f1.connect(g1); g1.connect(g);
     src.connect(f2); f2.connect(g2); g2.connect(g);
     src.connect(f3); f3.connect(g3); g3.connect(g);
     g.connect(ac.destination);
     src.start(now);
-    _ambient = { src: src, g: g, kind: 'wind', lfo: lfo };
+    _ambient = { src: src, g: g, kind: 'wind', lfo: lfo, lfo2: lfo2, ampLfo: ampLfo };
     });
   }
   // Fire — pink noise with slow flicker, plus sparse crackle events baked in.
-  // Modelled after Farnell's fire chapter.
+  // Modelled after Farnell's fire chapter. Tuned for the Dido pyre: louder
+  // body, denser crackle, two filter bands (low rumbling heat + brighter
+  // mids) so the fire reads as substantial, not a campfire.
   function fireFarnell() {
     _play(function(ac) {
     if (_ambient && _ambient.kind === 'fire') return;
@@ -1215,26 +1238,35 @@ window.dssAudio = (function() {
       b0 = 0.99*b0 + 0.07*w;
       b1 = 0.96*b1 + 0.10*w;
       b2 = 0.85*b2 + 0.12*w;
-      // Slow flicker baked into the loop
+      // Slow flicker baked into the loop — slightly more violent envelope
       var ti = i / ac.sampleRate;
-      var flicker = 0.7 + 0.3 * Math.sin(ti * 2.3) * Math.sin(ti * 0.71);
-      d[i] = (b0 + b1 + b2) * 0.3 * flicker;
-      // Sparse crackle events ~5/sec
-      if (Math.random() < 0.0001) {
-        var clen = Math.floor(ac.sampleRate * 0.025);
+      var flicker = 0.65 + 0.42 * Math.sin(ti * 2.3) * Math.sin(ti * 0.71);
+      d[i] = (b0 + b1 + b2) * 0.34 * flicker;
+      // Dense crackle events ~12/sec — pops and snaps from collapsing logs
+      if (Math.random() < 0.00028) {
+        var clen = Math.floor(ac.sampleRate * (0.018 + Math.random() * 0.022));
+        var cAmp = 0.55 + Math.random() * 0.45;
         for (var k = 0; k < clen && i + k < bufLen; k++) {
           var env = Math.exp(-k / (ac.sampleRate * 0.005));
-          d[i+k] += (Math.random()*2-1) * env * 0.6;
+          d[i+k] += (Math.random()*2-1) * env * cAmp;
         }
       }
     }
     var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
-    var f = ac.createBiquadFilter(); f.type='bandpass';
-    f.frequency.value = 600; f.Q.value = 0.5;
+    // Two parallel filter bands so the fire has both a low rumble (the
+    // burning body of the pyre) and brighter crackle/hiss on top.
+    var fLow = ac.createBiquadFilter(); fLow.type='lowpass';
+    fLow.frequency.value = 220; fLow.Q.value = 0.8;
+    var fMid = ac.createBiquadFilter(); fMid.type='bandpass';
+    fMid.frequency.value = 900; fMid.Q.value = 0.6;
+    var gLow = ac.createGain(); gLow.gain.value = 0.85;
+    var gMid = ac.createGain(); gMid.gain.value = 0.95;
     var g = ac.createGain();
     g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.12, now + 2.0);
-    src.connect(f); f.connect(g); g.connect(ac.destination);
+    g.gain.linearRampToValueAtTime(0.24, now + 2.0);
+    src.connect(fLow); fLow.connect(gLow); gLow.connect(g);
+    src.connect(fMid); fMid.connect(gMid); gMid.connect(g);
+    g.connect(ac.destination);
     src.start(now);
     _ambient = { src: src, g: g, kind: 'fire' };
     });
@@ -35856,7 +35888,7 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $matchesLeft to 5)\\
 (go-to: "The Night Ahead")
 
-:: Stay in Carthage [carthage-cicadas] {"position":"100,1950","size":"100,100"}
+:: Stay in Carthage [carthage-cicadas pyre] {"position":"100,1950","size":"100,100"}
 <svg class="carthage-pyre" viewBox="0 0 500 95" width="100%" height="95" preserveAspectRatio="none"><defs><radialGradient id="cpGlow" cx="50%" cy="88%" r="72%"><stop offset="0%" stop-color="#ffa040" stop-opacity="0.55"/><stop offset="18%" stop-color="#d4600a" stop-opacity="0.32"/><stop offset="55%" stop-color="#401808" stop-opacity="0.12"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="0"/></radialGradient><radialGradient id="cpFlameCore" cx="50%" cy="80%" r="60%"><stop offset="0%" stop-color="#fff0d0" stop-opacity="0.85"/><stop offset="35%" stop-color="#ffc868" stop-opacity="0.55"/><stop offset="70%" stop-color="#e88020" stop-opacity="0.30"/><stop offset="100%" stop-color="#c84808" stop-opacity="0"/></radialGradient><linearGradient id="cpTopFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0a12" stop-opacity="1"/><stop offset="35%" stop-color="#0a0a12" stop-opacity="0.6"/><stop offset="60%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="0"/></linearGradient><linearGradient id="cpFade" x1="0" x2="1"><stop offset="0%" stop-color="#0a0a12" stop-opacity="1"/><stop offset="8%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="92%" stop-color="#0a0a12" stop-opacity="0"/><stop offset="100%" stop-color="#0a0a12" stop-opacity="1"/></linearGradient><linearGradient id="cpGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3a2010" stop-opacity="0.5"/><stop offset="100%" stop-color="#1a0a08" stop-opacity="0.3"/></linearGradient><linearGradient id="cpLogDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3a1a08"/><stop offset="100%" stop-color="#140804"/></linearGradient><linearGradient id="cpLogGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#502410"/><stop offset="55%" stop-color="#c84808" stop-opacity="0.85"/><stop offset="100%" stop-color="#3a1808"/></linearGradient><linearGradient id="cpShroud" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a1208"/><stop offset="100%" stop-color="#0a0402"/></linearGradient><linearGradient id="cpColumn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7a5a3a"/><stop offset="100%" stop-color="#3a2818"/></linearGradient></defs><!-- Warm glow over the scene --><rect x="0" y="0" width="500" height="95" fill="url(#cpGlow)"/><!-- Ground --><rect x="0" y="80" width="500" height="15" fill="url(#cpGround)"/><!-- Distant ruin shapes on the horizon --><path d="M140,80 L142,55 L145,58 L148,52 L152,60 L156,55 L159,80 Z" fill="#2a1810" opacity="0.55"/><path d="M338,80 L341,48 L347,53 L351,46 L355,56 L359,50 L362,80 Z" fill="#2a1810" opacity="0.5"/><path d="M168,80 L171,68 L177,72 L180,80 Z" fill="#2a1810" opacity="0.42"/><path d="M324,80 L327,71 L332,75 L336,80 Z" fill="#2a1810" opacity="0.42"/><!-- Far-left broken column with fluting --><g opacity="0.7"><rect x="78" y="32" width="6" height="48" fill="url(#cpColumn)"/><line x1="79.5" y1="34" x2="79.5" y2="78" stroke="#1a0e06" stroke-width="0.35" opacity="0.55"/><line x1="81" y1="34" x2="81" y2="78" stroke="#1a0e06" stroke-width="0.35" opacity="0.5"/><line x1="82.5" y1="34" x2="82.5" y2="78" stroke="#1a0e06" stroke-width="0.35" opacity="0.55"/><rect x="76" y="29" width="10" height="4" rx="0.5" fill="#806858"/><path d="M76,32 L86,29 L86,33 L76,36 Z" fill="#806858" opacity="0.6"/><!-- Fallen drum next to base --><ellipse cx="73" cy="80" rx="8" ry="2" fill="#3a2818" opacity="0.5"/><rect x="67" y="77" width="12" height="3.5" rx="0.5" fill="#806858" opacity="0.5"/><circle cx="69" cy="78.5" r="1.5" fill="#3a2010" opacity="0.65"/></g><!-- Far-right column — taller, slightly more eroded --><g opacity="0.65"><rect x="402" y="22" width="6" height="58" fill="url(#cpColumn)"/><line x1="403.5" y1="25" x2="403.5" y2="78" stroke="#1a0e06" stroke-width="0.35" opacity="0.55"/><line x1="405" y1="25" x2="405" y2="78" stroke="#1a0e06" stroke-width="0.35" opacity="0.5"/><line x1="406.5" y1="25" x2="406.5" y2="78" stroke="#1a0e06" stroke-width="0.35" opacity="0.55"/><rect x="400" y="19" width="10" height="4" rx="0.5" fill="#806858"/><!-- Crack running down --><path d="M404,38 Q406,46 404,54 Q406,62 404,70" fill="none" stroke="#0a0402" stroke-width="0.5" opacity="0.55"/><!-- Lichen patch --><ellipse cx="407" cy="50" rx="1.8" ry="3.5" fill="#3a4828" opacity="0.4"/><!-- Rubble at base --><ellipse cx="416" cy="80" rx="10" ry="2.5" fill="#3a2818" opacity="0.45"/><rect x="408" y="76" width="8" height="4" rx="0.5" fill="#806858" opacity="0.5"/><circle cx="420" cy="79" r="1.7" fill="#3a2010" opacity="0.6"/></g><!-- ============================================================ --><!--   THE PYRE — built up of charred logs, body shrouded on top      --><!-- ============================================================ --><!-- Shadow on ground --><ellipse cx="250" cy="82" rx="72" ry="3.5" fill="#0a0402" opacity="0.65"/><!-- Bottom log course (long, dark, charred) --><rect x="190" y="74" width="120" height="6" rx="1.5" fill="url(#cpLogDark)"/><rect x="190" y="74" width="120" height="2" fill="#5a2010" opacity="0.55"/><!-- Log end-grain on each end --><circle cx="192" cy="77" r="2.6" fill="#3a1408"/><circle cx="192" cy="77" r="1.6" fill="#0a0402"/><circle cx="308" cy="77" r="2.6" fill="#3a1408"/><circle cx="308" cy="77" r="1.6" fill="#0a0402"/><!-- Cross-grain split lines --><line x1="210" y1="74" x2="210" y2="80" stroke="#0a0402" stroke-width="0.4" opacity="0.6"/><line x1="232" y1="74" x2="232" y2="80" stroke="#0a0402" stroke-width="0.4" opacity="0.55"/><line x1="252" y1="74" x2="252" y2="80" stroke="#0a0402" stroke-width="0.4" opacity="0.6"/><line x1="270" y1="74" x2="270" y2="80" stroke="#0a0402" stroke-width="0.4" opacity="0.55"/><line x1="288" y1="74" x2="288" y2="80" stroke="#0a0402" stroke-width="0.4" opacity="0.6"/><!-- Second course (perpendicular, inset) --><rect x="202" y="68" width="96" height="6" rx="1" fill="url(#cpLogDark)"/><rect x="202" y="68" width="96" height="2" fill="#5a2010" opacity="0.55"/><line x1="220" y1="68" x2="220" y2="74" stroke="#0a0402" stroke-width="0.4" opacity="0.55"/><line x1="245" y1="68" x2="245" y2="74" stroke="#0a0402" stroke-width="0.4" opacity="0.55"/><line x1="275" y1="68" x2="275" y2="74" stroke="#0a0402" stroke-width="0.4" opacity="0.55"/><!-- Third course (top course, glowing — body rests on this) --><rect x="212" y="62" width="76" height="6" rx="1" fill="url(#cpLogGlow)"/><rect x="212" y="62" width="76" height="1.5" fill="#3a1408" opacity="0.5"/><line x1="232" y1="62" x2="232" y2="68" stroke="#1a0a04" stroke-width="0.4" opacity="0.65"/><line x1="252" y1="62" x2="252" y2="68" stroke="#1a0a04" stroke-width="0.4" opacity="0.65"/><line x1="270" y1="62" x2="270" y2="68" stroke="#1a0a04" stroke-width="0.4" opacity="0.65"/><!-- Glowing embers visible between top logs --><ellipse cx="240" cy="68.5" rx="3" ry="0.8" fill="#ff8030" opacity="0.85"/><ellipse cx="262" cy="68.5" rx="2.4" ry="0.7" fill="#ffa040" opacity="0.8"/><ellipse cx="252" cy="68.5" rx="1.5" ry="0.6" fill="#fff0c0" opacity="0.7"/><!-- ────────────  BODY — shrouded, lying on the top course ──────────── --><!-- Main shroud body (lying horizontal across the logs) --><path d="M210,62 Q210,56 215,55 L285,55 Q290,56 290,62 Z" fill="url(#cpShroud)"/><!-- Body subtle shadow folds --><path d="M222,57 Q226,59 234,56 Q244,59 254,56 Q264,59 274,56 Q280,59 285,57" fill="none" stroke="#3a1810" stroke-width="0.7" opacity="0.55"/><!-- Head (left end, slightly raised) --><ellipse cx="212" cy="55" rx="6" ry="4.5" fill="#1a0a04"/><ellipse cx="211" cy="54" rx="2" ry="1.5" fill="#3a1810" opacity="0.6"/><!-- Foot end --><ellipse cx="288" cy="56" rx="4" ry="3.2" fill="#1a0a04"/><!-- Funeral cloth at the top edge — darker line --><line x1="208" y1="55" x2="290" y2="55" stroke="#0a0402" stroke-width="0.6" opacity="0.85"/><!-- ────────────  FLAMES — layered, rising around body ──────────── --><!-- Outer flame envelope (broad soft glow) --><ellipse cx="250" cy="46" rx="44" ry="38" fill="url(#cpFlameCore)" opacity="0.85"/><!-- Layer 1 — deep red outer --><path d="M208,62 Q198,40 218,16 Q224,28 230,4 Q236,22 242,2 Q248,22 252,1 Q256,22 262,3 Q268,22 274,8 Q280,28 286,16 Q300,38 292,62Z" fill="#8a2800" opacity="0.62"/><!-- Layer 2 — bright orange mid --><path d="M216,62 Q208,42 224,20 Q232,32 240,10 Q245,26 250,5 Q256,26 261,10 Q267,32 274,18 Q284,36 280,62Z" fill="#c04808" opacity="0.72"/><!-- Layer 3 — orange brighter --><path d="M224,62 Q220,44 232,26 Q238,36 244,14 Q248,28 252,10 Q257,28 262,14 Q268,32 275,28 Q282,46 272,62Z" fill="#d4600a" opacity="0.78"/><!-- Layer 4 — yellow inner --><path d="M232,62 Q228,46 238,30 Q242,40 246,20 Q250,30 254,18 Q258,30 262,22 Q268,38 266,62Z" fill="#e88020" opacity="0.75"/><!-- Layer 5 — bright yellow tongue --><path d="M238,62 Q237,48 242,34 Q246,40 250,28 Q254,40 257,28 Q260,42 261,62Z" fill="#ffa040" opacity="0.68"/><!-- Layer 6 — white-hot core --><path d="M244,62 Q243,50 248,38 Q250,46 252,38 Q254,46 256,62Z" fill="#ffc868" opacity="0.62"/><!-- White-hot tip --><ellipse cx="251" cy="42" rx="2.5" ry="5.5" fill="#fff0d0" opacity="0.55"/><!-- Side wisps (left and right) --><path d="M204,62 Q198,52 205,38 Q208,48 213,52 Q210,58 214,62Z" fill="#8a2800" opacity="0.45"/><path d="M296,62 Q302,52 295,38 Q292,48 287,52 Q290,58 286,62Z" fill="#8a2800" opacity="0.45"/><!-- Small lick on far left --><path d="M212,62 Q207,55 211,46 Q214,52 215,62Z" fill="#c04808" opacity="0.5"/><path d="M288,62 Q293,55 289,46 Q286,52 285,62Z" fill="#c04808" opacity="0.5"/><!-- ────────────  RISING EMBERS — many, varied glowing sparks ──────────── --><circle cx="245" cy="6" r="1.2" fill="#ffc868" opacity="0.9"/><circle cx="245" cy="6" r="0.5" fill="#fff0d0" opacity="0.95"/><circle cx="260" cy="9" r="0.9" fill="#ff8030" opacity="0.85"/><circle cx="238" cy="11" r="1" fill="#ffa040" opacity="0.85"/><circle cx="268" cy="3" r="0.65" fill="#ffc868" opacity="0.85"/><circle cx="252" cy="2" r="0.75" fill="#fff0d0" opacity="0.9"/><circle cx="229" cy="7" r="0.7" fill="#ff8030" opacity="0.8"/><circle cx="273" cy="13" r="1.1" fill="#ffa040" opacity="0.85"/><circle cx="242" cy="18" r="0.6" fill="#ffc868" opacity="0.8"/><circle cx="257" cy="16" r="0.55" fill="#ff6020" opacity="0.8"/><circle cx="223" cy="14" r="0.45" fill="#ff8030" opacity="0.7"/><circle cx="278" cy="20" r="0.75" fill="#ffc868" opacity="0.8"/><circle cx="217" cy="22" r="0.55" fill="#ffa040" opacity="0.7"/><circle cx="285" cy="27" r="0.5" fill="#ff8030" opacity="0.65"/><circle cx="248" cy="22" r="0.45" fill="#fff0d0" opacity="0.8"/><circle cx="234" cy="29" r="0.55" fill="#ff8030" opacity="0.6"/><circle cx="266" cy="29" r="0.45" fill="#ffc868" opacity="0.6"/><circle cx="226" cy="35" r="0.35" fill="#d4600a" opacity="0.55"/><circle cx="276" cy="35" r="0.4" fill="#ff8030" opacity="0.55"/><!-- ────────────  SMOKE WISPS — drift up off the highest flames ──────────── --><path d="M248,2 Q252,-3 246,-9" fill="none" stroke="#3a2a22" stroke-width="2.2" opacity="0.4" stroke-linecap="round"/><path d="M253,4 Q258,-2 251,-12" fill="none" stroke="#3a2a22" stroke-width="1.7" opacity="0.35" stroke-linecap="round"/><path d="M255,8 Q263,2 260,-7" fill="none" stroke="#3a2a22" stroke-width="1.4" opacity="0.3" stroke-linecap="round"/><!-- ────────────  GROUND EMBERS — small glowing dots on the ground around the pyre ──────────── --><circle cx="180" cy="83" r="0.8" fill="#d4600a" opacity="0.45"/><circle cx="320" cy="81" r="0.6" fill="#c84a08" opacity="0.4"/><circle cx="200" cy="84" r="0.4" fill="#ff8030" opacity="0.35"/><circle cx="305" cy="83" r="0.7" fill="#d4600a" opacity="0.45"/><circle cx="225" cy="85" r="0.35" fill="#ff8020" opacity="0.3"/><circle cx="275" cy="84" r="0.45" fill="#ff8030" opacity="0.35"/><circle cx="160" cy="84" r="0.5" fill="#ff8020" opacity="0.25"/><circle cx="340" cy="83" r="0.7" fill="#d4600a" opacity="0.3"/><circle cx="195" cy="82" r="0.3" fill="#ffa040" opacity="0.4"/><circle cx="313" cy="84" r="0.4" fill="#ff8030" opacity="0.35"/><!-- Edge fades to blend with surrounding prose --><rect x="0" y="0" width="500" height="95" fill="url(#cpTopFade)"/><rect x="0" y="0" width="500" height="95" fill="url(#cpFade)"/></svg>
 <div class="dream-sequence">
 You stay for an hour or forever.
@@ -36728,10 +36760,10 @@ You know him as an old friend, from whom you are estranged over some personal bu
 
 (display: "French Rule SVG h24")</svg>
 
-:: The coast of Carthage [carthage-cicadas] {"position":"100,1550","size":"100,100"}
+:: The coast of Carthage [carthage-cicadas dream] {"position":"100,1550","size":"100,100"}
 <div id="carthage-approach"></div>[[·|Carthage shore]]
 
-:: Carthage shore [carthage-cicadas] {"position":"100,1650","size":"100,100"}
+:: Carthage shore [carthage-cicadas dream] {"position":"100,1650","size":"100,100"}
 (set: $visitedCarthage to true)\
 You've left London. You are many miles and centuries far off. You've found safe harbour in Carthage, which is not like you remember it at all. These days it is swamped with Romans.
 

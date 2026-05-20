@@ -32442,6 +32442,7 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     /* ±220ms hit window */
     if (bestIdx >= 0 && bestDelta <= 220) {
       notes[bestIdx].hit = true;
+      notes[bestIdx].hitDelta = bestDelta;
       var now = performance.now();
       hitFlash[laneIdx] = now;
       ripples.push({ x: LANES[laneIdx].x, y: TARGET_Y, t0: now });
@@ -32780,6 +32781,45 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
       drawSparks();
       if (elapsedMs() >= TOTAL_MS) {
         ended = true;
+        /* Performance scoring — average how close each hit was to perfect,
+           weight by zone, then nudge morale & sobriety asymptotically.
+             Perfect ≤60ms  : 1.00 credit
+             Good   ≤150ms  : 0.75 credit
+             Late   ≤220ms  : 0.50 credit
+             Miss / no hit  : 0    credit
+           Score 0..1. At 0.5 (neutral) no stat change; above lifts both,
+           below penalises both. Mirrors the asymptotic $statGain/$statLoss
+           formula so it composes with the rest of the game's stat curve. */
+        try {
+          var total = 0, weighted = 0;
+          for (var ni = 0; ni < notes.length; ni++) {
+            var nn = notes[ni];
+            total++;
+            if (nn.hit) {
+              var hd = (typeof nn.hitDelta === 'number') ? nn.hitDelta : 0;
+              weighted += (hd <= 60) ? 1.0 : (hd <= 150) ? 0.75 : 0.5;
+            }
+          }
+          var score = total > 0 ? weighted / total : 0;
+          /* Linear map: score 1 → morale +20 / sob +8;
+                          score 0.5 → 0 / 0;
+                          score 0 → morale −15 / sob −10. */
+          var moraleN = (score - 0.5) * 40;   /* −20..+20 */
+          var sobN    = (score - 0.5) * 20;   /* −10..+10 */
+          var applyGain = function(v, n) { return Math.round(Math.min(100, v + (100 - v) * (n / 50))); };
+          var applyLoss = function(v, n) { return Math.round(Math.max(0,   v - v        * (n / 50))); };
+          var st = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
+          if (st) {
+            if (typeof st.confidence === 'number') {
+              if (moraleN > 0.5) st.confidence = applyGain(st.confidence, moraleN);
+              else if (moraleN < -0.5) st.confidence = applyLoss(st.confidence, -moraleN);
+            }
+            if (typeof st.sobriety === 'number') {
+              if (sobN > 0.5) st.sobriety = applyGain(st.sobriety, sobN);
+              else if (sobN < -0.5) st.sobriety = applyLoss(st.sobriety, -sobN);
+            }
+          }
+        } catch (e) {}
         /* Waltz lands → auto-advance to O'Flatterly's shop. No manual link.
            Tries Engine.goToPassage first (the Harlowe API); falls back to
            dispatching a click on the hidden link if the engine isn't
@@ -33811,7 +33851,7 @@ He's gone and you know that you owe something now, to him and to here.
 :: LINE 1 {"position":"700,200","size":"100,100"}
 (set: $alba to $alba + (a: $alba1))
 (set: $albaRevealed to true)
-'Forget the book,' says Red, 'it's no way to live. Try this.'
+'Forget the book,' says Red, 'It's no way to live. Try this.'
 
 As he turns from his ginger light he kisses you and, as he does, you close your eyes. Inside their shuttered lids you read:
 

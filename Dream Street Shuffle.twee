@@ -639,23 +639,42 @@ window.dssAudio = (function() {
     }
       });
   }
-  // Paper rustle — high-passed noise burst
+  // Paper rustle — slow, spacious page turn.
+  // Soft attack (gentle lift), long decay (settles into silence), papery
+  // mid-range rather than hissy highs. A subtle low whump under it gives
+  // the page some physical weight as it's grasped and folded over.
   function pageRustle() {
     _play(function(ac) {
-    var dur = 0.45, now = ac.currentTime;
+    var now = ac.currentTime;
+    // Main rustle — slow envelope, band-passed into a papery range
+    var dur = 1.1;
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
     var d = buf.getChannelData(0);
     for (var i = 0; i < bufLen; i++) {
-      var env = Math.exp(-i / (ac.sampleRate * 0.16));
-      d[i] = (Math.random()*2-1) * env * 0.5;
+      var t = i / ac.sampleRate;
+      var attack = Math.min(1, t / 0.10);            // ~100ms gentle rise
+      var decay = Math.exp(-t / 0.45);                // long, settling tail
+      d[i] = (Math.random()*2-1) * attack * decay * 0.42;
     }
     var src = ac.createBufferSource(); src.buffer = buf;
-    var f = ac.createBiquadFilter(); f.type='highpass';
-    f.frequency.value = 1600; f.Q.value = 1.5;
-    var g = ac.createGain(); g.gain.value = 0.45;
-    src.connect(f); f.connect(g); g.connect(ac.destination);
+    var hp = ac.createBiquadFilter(); hp.type='highpass';
+    hp.frequency.value = 700; hp.Q.value = 0.7;
+    var lp = ac.createBiquadFilter(); lp.type='lowpass';
+    lp.frequency.value = 5200; lp.Q.value = 0.5;
+    var g = ac.createGain(); g.gain.value = 0.32;
+    src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(ac.destination);
     src.start(now);
+    // Low whump under the rustle — page being lifted from the spine.
+    var o = ac.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(105, now);
+    o.frequency.exponentialRampToValueAtTime(55, now + 0.32);
+    var og = ac.createGain();
+    og.gain.setValueAtTime(0, now);
+    og.gain.linearRampToValueAtTime(0.09, now + 0.05);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+    o.connect(og); og.connect(ac.destination);
+    o.start(now); o.stop(now + 0.45);
       });
   }
   // Page shuffle — 4-5 layered rustles at slightly different pitches and
@@ -10340,7 +10359,32 @@ endEl.innerHTML = '<span style="color:#aaffaa;text-shadow:0 0 15px rgba(170,255,
 this.showNarrative("'It's alright,' says Copper, 'Alright. Tell whoever sent you that I know that they sent you.'");
 } else {
 endEl.innerHTML = '<span style="color:#ffaaaa;text-shadow:0 0 10px rgba(255,170,170,0.4);">🤜 DOWN 🤜</span>';
-this.showNarrative("'You're lucky that Quiet Frankie hasn't killed you. He would have if I wanted him to. Now, fuck off.'");
+}
+
+// On loss, auto-advance after a one-second beat — no narrative, no button.
+if (!won) {
+setTimeout(function() {
+var targetPassage = 'Fight Defeat';
+var wrap = document.getElementById('go-fight-defeat');
+var link = wrap && wrap.querySelector('tw-link');
+if (link) {
+  try { link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window })); return; }
+  catch(e) { try { link.click(); return; } catch(e2) {} }
+}
+var anyLink = document.querySelector('tw-link[passage-name="' + targetPassage + '"]');
+if (anyLink) {
+  try { anyLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window })); return; }
+  catch(e) {}
+}
+var storyEl = document.querySelector('tw-story') || document.body;
+var injected = document.createElement('tw-link');
+injected.setAttribute('passage-name', targetPassage);
+injected.style.display = 'none';
+storyEl.appendChild(injected);
+injected.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+setTimeout(function(){ if (injected.parentNode) injected.parentNode.removeChild(injected); }, 50);
+}, 1000);
+return;
 }
 
 setTimeout(function() {
@@ -33237,7 +33281,7 @@ Better not tomorrow.
 (if: $midnightJustPassed is true)[<span class="scene-date scene-date-flip">(if: $afterMidnight)[24.11.73](else:)[23.11.73]</span>(set: $midnightJustPassed to false)]
 <span class="scene-location">Dean Street, Soho, London.</span>
 
-(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)<div id="coin-overlay"><div class="coin-overlay-box"><div class="coin-overlay-stage"><div class="coin-overlay-disc" id="coin-overlay-disc"><div class="cp-face cp-heads"></div><div class="cp-face cp-tails"></div></div></div><p class="coin-overlay-text">You found a coin on the pavement; a rare one, called a &#39;Donkey&#39;. There&#39;s only one. Toss it an pocket it. You&#39;ll want it later.</p><span class="inventory-note">&#9734; COIN ACQUIRED</span><button class="coin-overlay-btn" id="coin-toss-btn">Toss it</button><span class="coin-overlay-result" id="coin-overlay-result"></span><button class="coin-overlay-btn coin-overlay-dismiss" id="coin-keep-btn" style="visibility:hidden">Pocket it</button></div></div><script>(function(){var tossCount=0,maxToss=2,stage=document.querySelector(".coin-overlay-stage");var sequence=[false,true];var pocketed=false;function sparks(){for(var i=0;12>i;i++){var s=document.createElement("div");s.className="cp-spark";var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty("--sx",(Math.cos(a*Math.PI/180)*dist)+"px");s.style.setProperty("--sy",(Math.sin(a*Math.PI/180)*dist)+"px");s.style.animationDelay=(Math.random()*0.3)+"s";s.style.animationDuration=(0.5+Math.random()*0.5)+"s";stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById("coin-toss-btn").addEventListener("click",function(){var d=document.getElementById("coin-overlay-disc"),r=document.getElementById("coin-overlay-result"),b=this,o=document.getElementById("coin-overlay");if(pocketed)return;if(d.classList.contains("cp-flipping"))return;if(window.dssAudio)window.dssAudio.coinFlip();var heads=sequence[tossCount];tossCount++;var endDeg=heads?"1440deg":"1620deg";var restDeg=heads?"0deg":"180deg";d.style.setProperty("--cp-end",endDeg);d.classList.remove("cp-flipping");void d.offsetWidth;d.classList.add("cp-flipping");sparks();r.textContent="";b.classList.add("coin-btn-hidden");setTimeout(function(){if(pocketed)return;r.textContent=heads?"Heads.":"Tails.";d.style.transform="rotateX("+restDeg+")";d.classList.remove("cp-flipping");if(tossCount>=maxToss){setTimeout(function(){if(pocketed)return;o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1800);}else{setTimeout(function(){if(pocketed)return;r.textContent="";b.classList.remove("coin-btn-hidden");b.textContent="Toss again";var kb=document.getElementById("coin-keep-btn");if(kb)kb.style.visibility="visible";},2200);}},2000);});var keepBtn=document.getElementById("coin-keep-btn");if(keepBtn){keepBtn.addEventListener("click",function(){if(pocketed)return;pocketed=true;var o=document.getElementById("coin-overlay");var box=o&&o.querySelector(".coin-overlay-box");if(!o||!box)return;var tb=document.getElementById("coin-toss-btn");if(tb){tb.classList.add("coin-btn-hidden");tb.style.pointerEvents="none";}for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}this.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById("coin-overlay");if(ov){ov.addEventListener("click",function(e){if(e.target===ov&&tossCount>0){ov.classList.add("coin-overlay-fade");setTimeout(function(){ov.remove();},800);}});}})();</script>]\
+(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)<div id="coin-overlay"><div class="coin-overlay-box"><div class="coin-overlay-stage"><div class="coin-overlay-disc" id="coin-overlay-disc"><div class="cp-face cp-heads"></div><div class="cp-face cp-tails"></div></div></div><p class="coin-overlay-text">You found a coin on the pavement; a rare one, called a &#39;Donkey&#39;. There&#39;s only one. Toss it and pocket it. You&#39;ll want it later.</p><span class="inventory-note">&#9734; COIN ACQUIRED</span><button class="coin-overlay-btn" id="coin-toss-btn">Toss it</button><span class="coin-overlay-result" id="coin-overlay-result"></span><button class="coin-overlay-btn coin-overlay-dismiss" id="coin-keep-btn" style="visibility:hidden">Pocket it</button></div></div><script>(function(){var tossCount=0,maxToss=2,stage=document.querySelector(".coin-overlay-stage");var sequence=[false,true];var pocketed=false;function sparks(){for(var i=0;12>i;i++){var s=document.createElement("div");s.className="cp-spark";var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty("--sx",(Math.cos(a*Math.PI/180)*dist)+"px");s.style.setProperty("--sy",(Math.sin(a*Math.PI/180)*dist)+"px");s.style.animationDelay=(Math.random()*0.3)+"s";s.style.animationDuration=(0.5+Math.random()*0.5)+"s";stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById("coin-toss-btn").addEventListener("click",function(){var d=document.getElementById("coin-overlay-disc"),r=document.getElementById("coin-overlay-result"),b=this,o=document.getElementById("coin-overlay");if(pocketed)return;if(d.classList.contains("cp-flipping"))return;if(window.dssAudio)window.dssAudio.coinFlip();var heads=sequence[tossCount];tossCount++;var endDeg=heads?"1440deg":"1620deg";var restDeg=heads?"0deg":"180deg";d.style.setProperty("--cp-end",endDeg);d.classList.remove("cp-flipping");void d.offsetWidth;d.classList.add("cp-flipping");sparks();r.textContent="";b.classList.add("coin-btn-hidden");setTimeout(function(){if(pocketed)return;r.textContent=heads?"Heads.":"Tails.";d.style.transform="rotateX("+restDeg+")";d.classList.remove("cp-flipping");if(tossCount>=maxToss){setTimeout(function(){if(pocketed)return;o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1800);}else{setTimeout(function(){if(pocketed)return;r.textContent="";b.classList.remove("coin-btn-hidden");b.textContent="Toss again";var kb=document.getElementById("coin-keep-btn");if(kb)kb.style.visibility="visible";},2200);}},2000);});var keepBtn=document.getElementById("coin-keep-btn");if(keepBtn){keepBtn.addEventListener("click",function(){if(pocketed)return;pocketed=true;var o=document.getElementById("coin-overlay");var box=o&&o.querySelector(".coin-overlay-box");if(!o||!box)return;var tb=document.getElementById("coin-toss-btn");if(tb){tb.classList.add("coin-btn-hidden");tb.style.pointerEvents="none";}for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}this.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById("coin-overlay");if(ov){ov.addEventListener("click",function(e){if(e.target===ov&&tossCount>0){ov.classList.add("coin-overlay-fade");setTimeout(function(){ov.remove();},800);}});}})();</script>]\
 |deanIntro>[A heavy afternoon lingers in rainfall on the pavements though the sky has cleared now and the newborn night is cut with moonshine.
 
 There is an atmosphere of the silver screen: as if Brando might emerge in a tight and sodden T-shirt, from any door or alleyway, anytime.]
@@ -36928,7 +36972,6 @@ Before you can answer, he says, 'I don't know.'
 <div class="phone-type phone-you" style="--d:4.0s;--t:0.45s">'Later tonight.'</div>\
 <div class="phone-type phone-her" style="--d:4.8s;--t:0.35s">'Much later?'</div>\
 <div class="phone-type phone-you" style="--d:5.5s;--t:0.7s">'Yes. Goodnight. I love you.'</div>\
-<div class="phone-type" style="--d:6.8s;--t:1.3s">Through the fumes, vapours and drink, you recognise a man.</div>
 
 <svg class="phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="phBl2"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="phCd2" x1="0" x2="1"><stop offset="0%" stop-color="#5a2818" stop-opacity="0"/><stop offset="20%" stop-color="#7a3828" stop-opacity="0.48"/><stop offset="50%" stop-color="#8a4030" stop-opacity="0.62"/><stop offset="80%" stop-color="#7a3828" stop-opacity="0.48"/><stop offset="100%" stop-color="#5a2818" stop-opacity="0"/></linearGradient><linearGradient id="phHd2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1812"/><stop offset="40%" stop-color="#7a2e20"/><stop offset="100%" stop-color="#5a2018"/></linearGradient><radialGradient id="phGw2" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#c08040" stop-opacity="0.12"/><stop offset="100%" stop-color="#c08040" stop-opacity="0"/></radialGradient></defs><!-- smoke wisps --><ellipse cx="165" cy="28" rx="52" ry="16" fill="#a08060" opacity="0.06" filter="url(#phBl2)"/><ellipse cx="110" cy="24" rx="40" ry="13" fill="#907050" opacity="0.05" filter="url(#phBl2)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#phGw2)"/><!-- cord shadow --><path d="M14 29 Q20 44 26 29 Q32 14 38 29 Q44 44 50 29 Q56 14 62 29 Q68 42 74 29 Q79 18 84 29 Q89 36 94 29 Q98 24 102 29 Q105 32 108 29" fill="none" stroke="rgba(40,18,12,0.12)" stroke-width="3" stroke-linecap="round"/><path d="M192 29 Q195 32 198 29 Q202 24 206 29 Q211 36 216 29 Q221 18 226 29 Q232 42 238 29 Q244 14 250 29 Q256 44 262 29 Q268 14 274 29 Q280 44 286 29" fill="none" stroke="rgba(40,18,12,0.12)" stroke-width="3" stroke-linecap="round"/><!-- coiled cord left --><path d="M14 27 Q20 42 26 27 Q32 12 38 27 Q44 42 50 27 Q56 12 62 27 Q68 40 74 27 Q79 16 84 27 Q89 34 94 27 Q98 22 102 27 Q105 30 108 27" fill="none" stroke="url(#phCd2)" stroke-width="2" stroke-linecap="round"/><!-- coiled cord right --><path d="M192 27 Q195 30 198 27 Q202 22 206 27 Q211 34 216 27 Q221 16 226 27 Q232 40 238 27 Q244 12 250 27 Q256 42 262 27 Q268 12 274 27 Q280 42 286 27" fill="none" stroke="url(#phCd2)" stroke-width="2" stroke-linecap="round"/><!-- cord connectors --><circle cx="110" cy="27" r="2" fill="#6a2820" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#6a2820" opacity="0.4"/><!-- handset --><g transform="translate(150,27) rotate(8)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#phHd2)" opacity="0.62"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="-16" cy="0" r="1" fill="#1a0808" opacity="0.22"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0808" opacity="0.3"/><circle cx="16" cy="0" r="1" fill="#1a0808" opacity="0.22"/></g></svg>
 </div>
@@ -38921,7 +38964,7 @@ display: grid;
 grid-template-columns: 68px 176px 1.8em;
 column-gap: 8px;
 align-items: center;
-margin-top: -2px;
+margin-top: -6px;
 }
 
 .alba-strip .stat-label {
@@ -39918,10 +39961,15 @@ border-left-color: rgba(122, 88, 136, 0.35);
 .verse {
 font-family: 'Crimson Text', Georgia, serif;
 font-style: italic;
-color: #d4c4b0;
-padding: 0.4em 0 0.4em 1.5em;
-margin: 0.6em 0;
-line-height: 1.6;
+color: #c8a874;
+padding: 0.9em 1.4em 0.9em 1.8em;
+margin: 1.2em auto;
+line-height: 1.78;
+letter-spacing: 0.015em;
+font-size: 0.97em;
+max-width: 30em;
+border-left: 1px solid rgba(180, 140, 90, 0.32);
+text-shadow: 0 0 14px rgba(180, 140, 90, 0.10);
 }
 
 /* ===== LORE BOX ===== */

@@ -1,131 +1,215 @@
-# HANDOFF — 2026-05-19 (late)
+# HANDOFF — 2026-05-20
 
-Very long multi-day session. Three major chunks of work: (1) a complete visual overhaul of the **Carthage approach 3D scene** with lighting/shadow system, and (2) a 16-note playthrough fix pass after Dr Quill's playtest, and (3) a small late batch on tarot / pyre SVG / pentagram-at-dawn / Carthage routing / memory placement.
-
----
-
-## Latest pass (final tonight)
-
-After Dr Quill's second-round playtest, two more issues surfaced:
-
-- **Green Sea didn't route through the Interval.** Even though Carthage shore now forces wake-through-Interval when alba2+page are collected, the **direct Green Sea path** still ended with `[[Return to Dean Street]]` at LINE 2 Oxford. Changed that to `[[Wake from this dream|The Interval]]` — so EVERY Carthage path (pyre, shore, Green Sea) now lands the player in the Interval before returning to Soho.
-- **Two memory polaroids fired back-to-back** when going Green Sea → Interval (memory 2 at LINE 2 Oxford, then memory 1 at the Interval). Felt like a double flash. **Memory 1 moved from The Interval to the "After the call" passage** — the quiet outdoor moment after the first Lily phone call. Thematically the "twenty-one again… before so very much went so far wrong" text lands much more naturally in the post-call melancholy than as an interruption in the staircase scene. The Interval is now just the staircase + lily encounter (no polaroid). Memories are spaced across the night now: memory 1 = first Lily call, memory 2 = Green Sea (LINE 2 Oxford), memory 3 = Centre Point (LINE 3).
+Long polish session after the previous Carthage / 16-note pass. Broke into roughly four chunks: (1) a fresh playtest-note batch from Dr Quill, (2) a deep audit (5 parallel research agents) of the whole .twee, (3) systematic fixes from that audit, (4) Dean Street hub cleanup + lily-pip system + Name-Your-Book rebuild.
 
 ---
 
-## Major: Carthage 3D scene overhaul
+## Playtest-note batch (4 items)
 
-The Carthage approach 3D scene (`Coast of Carthage` → 3D render) was visibly behind the other scenes in quality. We rebuilt it iteratively over many passes, screenshot-driven. Final state:
+1. **Sway animation — Maritime Interlude only.** The drunk-vision `dssDrunkMid` enchant in the `:: header` passage fired on every passage when sobriety dropped below 35. Originally restricted to Green Sea passages, then corrected (Dr Quill) to **`Maritime interlude` only**. Coach + cow ride + everywhere else are now still.
 
-- **Pyre** — upgraded from a single ember pile to a proper stacked-log funeral pyre (three courses of charred logs criss-crossed, glowing top course with embers visible between), a shrouded body silhouette (cylinder + head/foot bumps), bright six-layer flames, rising ember sparks (now properly **animated** — they climb, sway, fade and recycle), tall dark-base smoke column that drifts off-vertical as it climbs. Pyre stays on the **left headland** (Dr Quill's note: scene is looking out to sea, not at a central hill).
-- **Palm trees** — completely rebuilt. Old flat-`PlaneGeometry` fronds were reading as antennas-with-ferns at offset camera angles. Replaced with **billboarded sprite fronds** using a custom palm-frond canvas texture (curved spine + many radiating leaflets). Each palm has both upright fronds and drooping outer fronds, plus an occasional fruit cluster. Two close-camera palms also moved back to stop them dominating the right edge.
-- **Foliage palette** — shifted from English green to **dusty North-African Mediterranean**: dark sage / mid sage / pale silver-olive / autumn russet. Pale tier is properly **golden** (catching the setting sun), not silver-mint. Per-leaf highlights pushed warm (R+60, G+40, B+10) so sun catches read amber. Olive trees use a dedicated silver-olive cluster; palm fronds use sage-with-amber rShift skew so many leaflets glint gold. Dr Quill iterated this multiple times to land at the right balance.
-- **Hill silhouette** — half-sphere with sine-noise displacement turned into proper ridged-shoulder terrain. New `displaceHill` function: multi-octave smooth noise + asymmetric ridge spine (`cos(angle*3)`) + gully cuts (`-|sin|`) + peak boost biased to where the pyre sits. Hill is no longer a smooth dome.
-- **Cliffs** — replaced `BoxGeometry` (which read as concrete bricks) with a new **`makeRockCliff`** function: `BoxGeometry(w,h,d,6,10,6)` with vertices displaced via multi-octave noise (bias always positive so the rock only grows lumps, never shrinks), plus dramatic top-jaggedness for crags and sedimentary strata grooves. Cliff material recoloured to warm sandstone so they catch the golden hour. Cliffs pulled forward (z=-7 to -12) so they jut out from the hill silhouette rather than being subsumed.
-- **Shoreline rocks** — three new scatters added so the hill-water junction actually reads: 24 medium shoreline rocks with 60% above water, 4 big marker crags right at the hill foot, 8 stray sea boulders offshore, and 7 right-shore rocks. All use `makeRockCliff` with the same displaced-rock look.
-- **Hill-foot beach** — bright pale-sand crescent (#e8d098) running along the hill base, raised above the surf so it pops as a clear shore band. Damp-sand strip just lakeward, smaller back-curving section as the hill recedes, and a few sunlit sand highlights.
-- **Grass tufts** — rebuilt as **clumps** instead of single sprites. Each `placeGrassClump` adds 3-5 staggered blades with varied sizes / opacities / per-blade lift from ground. Texture has a long soft fade across the bottom 38% (with a 0.5/0.35 mid-stop for gentle dissolve) so blades don't terminate in a hard horizontal line. After several iterations: blade roots staggered in the bottom 28% of the texture, sprites raised so their bottom sits 0.05-0.18 above ground — the fade is now fully visible above the ground plane.
-- **Beach / sea naturals** — added wet pebbles (~90 small dodecahedra/icosahedra in three dark tones), driftwood pieces (cylinders with optional forked branches), seaweed/kelp wash patches (low translucent planes), and damp-sand variation patches. Breaks the flat beach/sea edge.
-- **Cobble footsteps** between venues — old default was a single bandpass-1300Hz noise burst (sounded like a typewriter click). Rebuilt with a layered impact: bass thud (lowpass 130Hz, body weight), mid stone slap (bandpass 850Hz, less harsh), per-step feedback-delay reverb (75ms / 0.42 feedback) for street echo. Two staggered heel-to-heel steps at 340ms.
-- **Cecil Court bell removed from outdoor passages** — the doorShopBell used to fire on entering anything tagged `venue-cecilcourt` (Cecil Court itself, Watkins, the waltz — all outdoor). Now it fires ONLY on entering O'Flatterly's shop (detected by `.shop-bell-marker` injected into that passage).
+2. **Toilet pipes overlay shrunk.** `.coach-plumbing-intro` now uses `display: flex; align-items: center; justify-content: center;` with the SVG capped at `min(58vh, 88vw)`. No longer fills the whole portrait viewport.
 
-### Shadow system (Carthage + applied to French / Coach / Colony)
+3. **Centre Point click sounds + softer footsteps.**
+   - Typewriter-tick suppressed for any tw-link inside `.ending-pane` (Alba Complete / Alba Incomplete) via `if (link.closest('.ending-pane')) return;` in the global click handler.
+   - Cobble footstep reverb softened: delay `0.075 → 0.055`, feedback `0.42 → 0.22`, output `0.55 → 0.32`. Same impact, much less echo tail.
 
-- Sun light is now a proper warm directional (`0xff9a48`, intensity 1.5) with a **2048x2048 shadow map**, frustum sized to cover the whole scene (-40/+40 horizontal, -8/+25 vertical, near 0.5 far 130), bias -0.0008, normalBias 0.04. The sun has a `target` object positioned where the foliage is, so shadows are cast in the right direction.
-- Ambient dropped from 0.3 → 0.15. Hemisphere light: sky cool indigo (`0x2c3878`), ground warm ochre (`0x8a5a28`), intensity 0.3. Fill light reduced to 0.12. So shadow side stays clearly in shadow.
-- Bounce lights (sea, ground, horizon glow, etc.) kept very subtle so they don't flatten shadows.
-- **`enableSceneShadows(scene)`** traversal runs via `setTimeout(...,0)` after all geometry is built. Iterates every Mesh: receiveShadow on everything, castShadow on anything `position.y > 0.2` (skips ground/water planes). Skips heavily transparent materials. Same pattern (`enableFhSceneShadows`, `enableChSceneShadows`, `enableCrSceneShadows`) applied to **French House**, **Coach & Horses** and **Colony Room** approach scenes — moonlight there also boosted (~0.35) so shadows actually read.
-- Grass sprites were initially reading as chalky-bright once shadows landed (sprites don't respect directional lighting). Darkened the grass colour (`rgba(65,58,32)`) and lowered opacity to 0.55-0.77 so they match the shadowed environment.
-- Foam sprites (cliffFoam, foamPatches, cliffMist) were rendering THROUGH the hill due to `depthWrite:false`. Switched to `depthWrite:true` + `alphaTest`, and moved to z=-8 to -6.5 (clearly in front of the hill body).
-
-### Other Carthage scene fixes
-
-- More birds (12 instead of 6) gliding through the sky.
-- Lintel material rebuilt with a dedicated carved-stone texture (cream base, top/bottom moulding bands, vertical rain stains, lichen patches, hairline cracks, edge chips).
-- **XCIII inscription** carved into the right end of the right colonnade lintel (Roman numerals for 93 — connects to Inis O'Flatterly's missing page). Drawn onto a small canvas with chiseled darker recess + faint upper-left highlight + re-eroded chips for weathering. Applied as a small decal plane proud of the lintel face.
-- Central arch ruin (the brick wall with broken voussoirs) **pulled forward** from z=-4.2 to z=-1.3 so it stands clearly in front of the colonnade as a foreground feature, not intersecting the columns at z=-3.
-- ENTER CARTHAGE button restyled to match all the other approach buttons (Ginger Light, French, Coach, etc.) — dark transparent background, amber 13px Courier New text, no pill shape. The Cecil Court and Green Sea buttons were also normalised to the same style.
+4. **Alba reveal at Dawn + Marvell verse alignment.**
+   - `.alba-final` `text-align: center → right`.
+   - Reveal timings 6/8/10s → **2/3.5/5s**.
+   - New `.alba-credit` block at 6.5s: italic, left-aligned, 0.78em, "'Alba' by Ezra Pound".
+   - Marvell quote in lily memory 2 (LINE 2 Oxford): added `text-align:right;` to the inline style on the `.quest-box`.
 
 ---
 
-## Major: 16-note playthrough fix pass
+## Big audit (5 parallel research agents)
 
-After Dr Quill's full playthrough, he sent 16 numbered notes. Worked through methodically:
+Ran a deep, broad audit covering narrative+state, JS layer, CSS, minigames, 3D+audio. Findings consolidated into a triaged list. Most actionable items fixed (below); a handful intentionally left.
 
-1. **Painter sketch** — added "Stored in your notebook. Go there to work on it more." note in the OBJECT ACQUIRED box at "Give him the painting". New `.item-note` CSS class added.
-2. **Notebook "Work on it" popup** — the napkin popup overlay was rendering at z-index 20000, BEHIND the notebook close button (z-index 100000) and probably the dialog itself. Bumped to **999999** + added `stopPropagation` on click/mousedown/touchstart so the notebook's outside-click-to-close handler can't fire when drawing inside the popup.
-3. **Cecil Court button** restyled to match the others.
-4. **Salvu's lair** — "BENEATH GREEK STREET, SOHO" → "BENEATH DEAN ST., SOHO".
-5. **Password deploy buttons** — new dedicated `.nb-deploy-btn` CSS class (amber-on-dark, uppercase, tight letter-spacing). Removed inline styles from both Copper and Lackland deploy buttons.
-6. **Green Sea button** restyled to match the others.
-7. **Forced-through-Interval mechanic after Carthage** — Carthage shore and Dido (pyre) now check a `_carthageDone` local: `($alba contains $alba2) and ($hasMissingPage or $returnedPage)`. When done:
-   - Carthage shore: only "Wake from this dream" link shows (forces Interval). Atmospheric line above: "You have what you came for. The dream loosens; the only way back is up."
-   - Dido: same forced "Wake from this dream", plus the "Lie down beside her" suicide-ending stays available.
-8. **Green Sea link gated on `not ($alba contains $alba2)`** at both Carthage shore and Dido (was previously open even after collected).
-9. **The Interval enriched** — added a Carthage-arrival prelude paragraph: "Salt on the lip. Cinder in the lashes. The pyre's heat lifts from your face the way a hand lifts from your face — and you wake." Plus brass-banister and barely-playing-radio detail in the existing stairs paragraph. All paths to Interval are from Carthage so this always applies.
-10. "From jazz you can learn more about prose than you can about poetry." → **"Jazz tells you more about prose than it does about poetry."**
-11. **lighthead** → **lightheaded** jazz pharaoh.
-13. **Pipes-to-toilet animation** — was using `preserveAspectRatio="none"` so it stretched tall on portrait viewports. Changed to **`xMidYMid meet`** — square aspect ratio, centred, with black bars on landscape monitors instead of distortion.
-14. **Cow-ride success SVG** — the streets-lighting-up `<div class="cow-soho-map">` block (with animated street reveals for Greek/Frith/Dean/Wardour/Berwick/Poland) was making the page feel like it was moving. Whole block deleted; passage now just shows the mnemonic text "Greek, Frith, Dean, Wardour, Berwick, Poland. // Go For Dinner With Billy Piper. //". Also added a **1.5s "victory ride" beat** to the cow game itself (was previously a freeze-frame): when wonGame triggers, road keeps scrolling and obstacles clear for 1.5s, drawEnd overlay delayed by 1.2s so the cow appears to gallop to the finish before "YOU RODE IT." fades in.
-15a. **CLIMB IT** button on Centre Point approach — brightened from rgba(200,170,100,0.85) to **rgba(248,212,128,0.98)**, border opacity bumped from 0.3 to 0.55, added warm `text-shadow: 0 0 18px rgba(248,212,128,0.45)` for a soft glow.
-15b. **Pentagram reveal on map after 5 lilies** — was gating `$sawPentangle = true` at notebook-open time. Meant if the auto-open didn't successfully reach the map tab on the first try, the queue was consumed but the animation didn't fire, and subsequent notebook opens wouldn't re-queue it. Fixed: `$sawPentangle` now gets set inside `nbSwitchTab` only when the map animation actually fires (via `Harlowe.API_ACCESS.STATE.variables.sawPentangle = true`). Queue persists across notebook opens until the player actually sees the reveal.
-16. **Play Again button at the Dawn** — old code tried to filter localStorage by hardcoded IFID `2CA3EC26-...` but the matching was unreliable. New code: `localStorage.clear()` + `sessionStorage.clear()` + `window.location.href = window.location.pathname` (clean URL, no hash/query). Guarantees a fully unsaved start at the title screen.
+### State / narrative
+- **`$lilyCallReturn`** now initialised to `"Dean Street"` in `:: StoryInit` and `:: Start` — was set only when a phone ring fired, could leave a savegame in a state where `(go-to: $lilyCallReturn)` hit `undefined`.
+- **`$bookTitle`** initialised to `"Untitled Manuscript"` in same two places — was set only in `Name Your Book`, referenced widely.
 
-Also tweaked Dawn timings (separate request earlier in session): ALBA reveals shifted from 11/12.8/14.6s to **6/8/10s**, summary at 13s, Play Again button at 20s (was 30s). Cow ride wonAt timestamp now tracked properly + reset on restart.
+### Minigame
+- **Cow ride skip detection** refactored. Was round-tripping `$cowRideDone`/`$cowRideWon` booleans through hidden DOM spans rendered by `(print:)`. Now reads `Harlowe.API_ACCESS.STATE.variables.cowRideDone/cowRideWon` directly; orphan `cow-data-won` / `cow-data-done` spans removed.
+- **Bare `dssAudio.stopBed`** inside the cow game → `window.dssAudio.stopBed` (consistency, no functional change).
 
----
+### 3D scene memory hygiene — biggest piece
+Added three shared helpers at top of the JS section, just before the first scene IIFE:
+- `window._dssBindScene(wrapId, scene, renderer, camera)` — registers the resize listener + tracks the trio in `window._dssThreeRegistry`.
+- `window._dssDisposeWrap(wrapId)` — full teardown: removes resize listener, traverses the scene calling `.dispose()` on every geometry / material / textured map (map/normalMap/specularMap/emissiveMap/alphaMap/aoMap/bumpMap/displacementMap/envMap/lightMap/metalnessMap/roughnessMap), disposes the renderer (incl. `renderLists.dispose()` + `forceContextLoss()` so GPU buffers release immediately), removes the wrap div.
+- `window._dssDisposeThreeScene(scene, renderer, resize)` — underlying helper.
 
-## Follow-up batch (Dawn pentagram + pyre SVG + tarot)
+Every one of the **12 Three.js approach scenes** (Ginger Light, French, Coach, Pillars, Lackland, Carthage, Colony, Ronnie's, Copper's Lair, Trisha's, Centre Point, Chinese Fish & Chips) refactored:
+- Their inline anonymous `addEventListener('resize', …)` block → single `window._dssBindScene('xx-wrap', scene, renderer, camera);` call.
+- Their cleanup-branch `wrap.parentNode.removeChild(wrap)` → `window._dssDisposeWrap('xx-wrap');`.
+- French + Coach also had **missing** cleanup branches in their `setInterval` watchers — fixed in this session before the disposal layer landed.
+- Verified: `grep -c "window.addEventListener('resize', function"` returns 0; `grep -c "_dssBindScene"` returns 13 (1 helper + 12 scenes).
 
-- **Pentagram at the Dawn** — Dr Quill reported it didn't show. Diagnosed: `.centre-pent-overlay` had no z-index, so it was painted IN DOM ORDER beneath the dawn-fade-to-white overlay (which is the last child of `.dawn-approach`). Once the fade started at ~7s, it covered the pentagram. Added **`z-index: 5`** so the gold star sits ON TOP of the fade — it now persists as the screen brightens/darkens. Also tightened the fade-in to 0.4s delay + 1.6s duration (was 0.9s + 2.4s).
-- **Dido pyre SVG** completely rebuilt (used in both "Approach the Pyre" and "Stay in Carthage"). Old version was simple flame paths + small dark blobs. New version:
-  - Clear shrouded body silhouette lying across the top log course (head bump left, foot end right, dark cloak across)
-  - Three actual log courses (long bottom, perpendicular middle, glowing top with embers between)
-  - End-grain circles + split-line texture on logs
-  - Six flame layers (deep red → orange → yellow → white-hot core) with rim wisps both sides
-  - More numerous rising sparks with varied warmth
-  - Smoke wisps rising above flame tips
-  - Better fluted columns either side (capitals, cracks, lichen, fallen drums)
-  - Distant ruin silhouettes along the horizon
-- **Tarot card title overflow** — "Temperance" (10 chars, single word) was overflowing the 72px-wide card. Tightened `.card-title`: font-size 0.56em → **0.50em**, letter-spacing 0.05em → 0.02em, padding 0 3px → 0 2px, plus added `width:100%; box-sizing:border-box; overflow-wrap:anywhere; word-break:break-word; hyphens:auto` as belt-and-braces. All 22 card titles now fit.
+### Visual / accessibility
+- **`.phone-ringing` click-blocking backdrop** via `tw-story:has(.phone-ringing)::before` — transparent fixed layer at z-index 98999 that intercepts clicks. The visual darkening from the 9999px box-shadow stays; clicks no longer fall through.
+- **`tw-link:focus-visible`** outline (1px dashed amber, 3px offset) for keyboard navigation.
+- **Pending pip opacities** `.hp-pending` / `.op-pending` / `.pp-pending` / `.al-pending` / `.qp-pending` bumped `0.22 → 0.38` (now legible without losing the "you haven't been here yet" feel).
+
+### Removed dev cheats
+- `window.dssCollectAllLilies` and `window.dssTestPentangle` globals deleted. The lily-cheat logic inlined into the debug menu's "reveal pentangle" tool button so that path still works.
+
+### Intentionally skipped
+- **Start / StoryInit duplicate-init consolidation** — both contain the same long `(set:)` chain. Agent rated medium-risk to touch with low payoff; defensive `(unless:)` guards everywhere make duplication safe.
+- **Cow ride music tempo cap** — by design per Dr Quill (escalating playback rate is intended).
+- **`[NEED A WORD]` / `[FIND PAGE 93 — //CARTHAGE//]`** bracket hints kept (actionable info pips don't cover).
 
 ---
 
-## Audio / housekeeping
+## Carthage audio intensification
 
-- **Stray noise** — Dr Quill asked me to kill it. Was a stale `python3 -m http.server 8765` process (PID 4742) that had been running since the prior Thursday. Killed.
-- **Embers animation** — the pyre's rising ember sparks were created but never wired into the animation loop. Now properly animated: rise upward via `currentY += riseSpeed * 0.016`, sway horizontally via `sin(t * swaySpeed + phase) * 0.18`, fade with `(1 - lifeFrac^2)`, recycle when they reach maxY or fade to ~0.
+Dr Quill wanted howling wind on the shore + crackling fire at the pyre. Two-part change.
+
+**Passage tags rerouted:**
+- `:: The coast of Carthage` and `:: Carthage shore` now carry `[carthage-cicadas dream]`. The `[dream]` tag triggers `windFarnell()` in the audio handler at line ~8255. Cicadas bed continues underneath, wind layered on top.
+- `:: Stay in Carthage` now carries `[carthage-cicadas pyre]`. The `[pyre]` tag (checked first) triggers `fireFarnell()`.
+- `:: Dido` already had `[dream pyre]` — fire wins, no change.
+
+**`windFarnell` made more howling:**
+- Master gain `0.20 → 0.32`. Low-howl gain `0.55 → 0.85`, mid-whistle `0.65 → 0.78`, high sibilance `0.30 → 0.34`.
+- Primary gust LFO: slower (`0.13Hz → 0.10Hz`), bigger sweep (`±280 → ±520Hz`).
+- New secondary slow LFO (`0.043Hz`, `±90Hz`) on the low-howl band — non-periodic feel.
+- New amplitude-breathing LFO (`0.078Hz`, `±0.08` gain) — whole bed swells and recedes.
+
+**`fireFarnell` made more intense:**
+- Master gain `0.12 → 0.24`.
+- Flicker envelope sharper (`0.7+0.3 → 0.65+0.42`).
+- Crackle event probability `0.0001 → 0.00028` (~3× as many pops), randomised duration (18-40ms) and amplitude (0.55-1.0) so each crackle reads distinct.
+- Replaced single 600Hz bandpass with **two parallel filter bands**: low rumble at 220Hz (burning-body weight) + bandpass at 900Hz (bright crackle).
+
+**Cleanup hardening:** `_stopAmbient()` now explicitly `.stop()`s any `lfo` / `lfo2` / `ampLfo` oscillators on the previous bed.
+
+---
+
+## Critic page-turn rebuild
+
+- Flip duration `1.2s → 0.6s`. Narration delay `1600ms → 750ms`. Aftermath gate `900ms → 500ms`. Mote delay `1500ms → 1100ms`. Left-page fade-swap `400ms → 220ms`. Total click-to-verdict-ready halved.
+- **Direction now alternates**: `directions = ['forward', 'back', 'forward', 'back']`. Clicks 1 & 3 flip forward (right page lifts to the left), clicks 2 & 4 flip backward (left page lifts to the right, `transform-origin: right center`, `rotateY(178deg)`). Each spawned page renders the correct side's text (left- vs right-anchored) and the box-shadow direction flips too.
+
+---
+
+## Waltz minigame
+
+Count-in changed from **3-2-1 → 1-2-3** at `drawCountIn` ([.twee:32634](Dream Street Shuffle.twee:32634)) — the way a musician counts in. Beat timing and audio unchanged; only the displayed numeral sequence inverts.
+
+---
+
+## Dido / Carthage pyre — gating + prose
+
+- **"Lie down beside her" suppressed** when the page is visible but uncollected. Wrapped the relevant link in `(unless: $knowsAboutPage is true and $hasMissingPage is false)[…]`. Player gets only the "Reach into the flames" / "Wake from this dream" options until they grab the page.
+- **Removed** the redundant `//You must not, yet, go any deeper inland.//` text from the Dido passage's no-haunts branch.
+
+---
+
+## Lore-box persistence
+
+New section at [.twee:31409](Dream Street Shuffle.twee:31409). Mechanics:
+- On click of any `⟡ ... ⟡` tw-link, the link's text is saved to `localStorage['dss-lores-opened']`.
+- On every passage render, a MutationObserver finds any matching link, hides it (`visibility: hidden`), and synthetically clicks it so Harlowe's `(link:)` expands it in place. Player sees the lore box already open.
+- `dataset.loreExpanded` flag prevents double-firing.
+- Cleared along with the rest of `localStorage` by the Dawn Play Again button.
+
+---
+
+## Approach back buttons
+
+Audit found 3 missing. All `[3D approach]` passages now have `<div class="approach-back">(link-undo: "← BACK")</div>` except the two intentional exceptions (Carthage shore, Approach Centre Point):
+- Added: **Approach The Coach**, **Approach Coppers Lair**, **Green Sea Approach**.
+
+---
+
+## Name Your Book — rebuilt to the typewriter-page pattern
+
+After two failed attempts at fixing the "appears low then jumps up" FOUC (`[tags~="book-naming"]` and then `:has(.book-naming-tw)` selectors), Dr Quill asked for a complete rebuild matching every other typewriter-page passage in the file.
+
+- Passage now uses `<div class="typewriter-page typewriter-static nb-page">` — same cream-paper container as Night Ahead, After the call, Cow ride success, etc. `typewriter-static` opts out of the type-on reveal so the input is interactive immediately.
+- Dropped the `[book-naming]` tag, the `:has(.book-naming-tw)` global rules, and all the custom `.book-naming-tw` CSS.
+- The SVG wine/burn decoration is preserved inside the typewriter-page wrapper.
+- New `.nb-page .nb-input` / `.nb-page .nb-subtitle` / `.nb-page .nb-link-row` rules at [.twee:37659](Dream Street Shuffle.twee:37659) handle the input textarea styling, the subtitle line, and the greyed-out "Back to Dean Street" link until the player types.
+- Trade-off: cream paper now sits ~92px from the viewport top (standard tw-passage padding for the stat-bar area, which is hidden on this passage). **No jump.**
+
+---
+
+## Dean Street hub — lily pip system + verbose-hint strip
+
+**Verbose hint text removed** from 6 navigation links:
+- `[[Back to The French — there was something you missed|…]]` → `[[Back to The French|…]]`
+- `[[The Pillars — there was someone you wanted to talk to|…]]` → `[[To The Pillars|…]]`
+- `[[Back to The Pillars — there was a flower you missed|…]]` → `[[Back to The Pillars|…]]`
+- `[[Back to The Colony Room — there was something you missed|…]]` → `[[Back to The Colony Room|…]]`
+- `[[Back to Ronnie Scott's — there was something you missed|…]]` → `[[Back to Ronnie Scott's|…]]`
+- `[[Back to the chippy — there was something you missed|…]]` → `[[Back to the chippy|…]]`
+
+These weren't a recent regression — they predated the current session per `git log -S`. Possibly removed in an earlier uncommitted session, possibly remembered-but-not-executed.
+
+**New `.lp` (lily pip) class** at [.twee:37597](Dream Street Shuffle.twee:37597). Pale-lilac (`rgba(196,168,212,…)`) so it's visually distinct from the existing amber haunts, copper objects, slate-blue passwords, gold alba, sage quests. Icons: `❀` filled (collected), `❁` outlined (pending). Visibility gates on `$lilyHintShown is true` — pips only appear after the player has encountered their first lily (matches the discovery-then-track rhythm of `$hauntExplained`).
+
+**Mapping**:
+- `$tookLily1` → chippy
+- `$tookLily2` → The Pillars
+- `$tookLily3` → Ronnie Scott's
+- `$tookLily4` → The Colony Room
+- `$tookLily5` → The French
+
+Lily pips inserted on **all** navigation branches for these five venues (first-visit, Back-to, NOT NOW / CLOSED).
+
+**Bracketed venue-state hints stripped** from the four lily-tracked venues (per Dr Quill's "icons alone" request):
+- `The French [CLOSED]` → `The French`
+- `The Pillars [NOT NOW, LOOK ELSEWHERE]` → `The Pillars`
+- `The Colony Room [NOT NOW]` → `The Colony Room`
+- `Ronnie Scott's [NOT NOW]` → `Ronnie Scott's`
+
+The greyed-out venue name + filled `❀` pip now conveys "you've done this, nothing left here." Lacklands' `[NEED A WORD]`, Cecil Court's `[FIND PAGE 93 …]`, Trisha's `[CLOSED]` left alone since they convey info pips can't.
+
+---
+
+## Phone-ringing popup shape
+
+- First pass: `border-radius: 6px → 50% / 42%` (elliptical, oval bubble feel).
+- Final pass (Dr Quill request): `→ 36px` — chunky rounded square, "more like beermats." Padding/sizing unchanged.
+
+---
+
+## Other small fixes / prose / tags
+
+- Prose: "You're here to find one hidden in the night" → "**You need** to find one hidden in the night" (Night Ahead Part Two).
+- Lily memory 2 (LINE 2 Oxford) Marvell quote now `text-align: right;` inline.
 
 ---
 
 ## State of the live code
 
-All today's changes synced to `Dream Street Shuffle.html`. `sync_html.py` unchanged. No new MP3/M4A swaps. The Carthage approach scene now has dramatic ridged hill, jagged sandstone cliffs, sandy headland beach, animated pyre with body + smoke + embers, palms with proper amber-touched sage canopies, real shadow casting, and a settling sun. The brick-arch ruin sits in the foreground; XCIII is chiselled into the right colonnade's lintel. **Every Carthage path (pyre, shore, Green Sea) now lands the player in the Interval** before returning to Soho — this is the canonical "what did you bring back" passage.
+All today's changes synced to `Dream Street Shuffle.html`. `sync_html.py` unchanged. No new MP3/M4A swaps.
+
+Memory leak path through the 12 3D approach scenes is now fully closed (renderer disposal, scene-graph teardown, resize-listener removal, force-context-loss). Phone-call popup intercepts clicks correctly. Carthage shore + pyre have their own howling-wind and crackling-fire procedural beds layered with the cicadas. Lily collection is iconified on the Dean Street hub. Name Your Book uses the same typewriter-page pattern as every other monospace passage and no longer jumps.
 
 ---
 
 ## Memories added/updated today
 
-No new memory files written this session.
+No new memory files written this session. Existing memories about voice-draft style, prose discipline, esoteric layer, and 3D atmosphere toolkit remain valid.
 
 ---
 
 ## Open threads for the next session
 
-- **Memory 2 / Memory 3 polaroids** — unchanged today. Memory 1 was moved (see "Latest pass" at top).
-- **Notebook FINDS / EFFECTS / TREE / POEM tabs** — only LILIES and MAP have first-class animations (pentangle reveal). Other tabs reviewed earlier in week — no specific issues today.
-- **Approach scenes for Pillars / Ronnies / Lackland / Trisha** — shadow system applied to French / Coach / Colony only. Other approach scenes still on old lighting; could be brought in line if needed.
-- **Three Pillars (Mercy/Severity/Mildness)** — still banked.
-- **Astral-map screenshots** banked 2026-05-13 — still uncommitted to a use, superseded by live astral reveal at Centre Point.
-- **`Dream to Dean` and `Failure: Trisha's`** — both still orphan passages in the astral-skip list; could be deleted.
-- **Title screen BEGIN link** — still bare text per prior handoff.
-- **`Eat Shelleys Liver`** passage still orphaned (inline-button replaces it).
+- **`Dream to Dean` and `Failure: Trisha's`** still flagged as suspected orphan passages by the narrative audit, but verified by the agent as actually reachable. Could still be deleted if Dr Quill chooses.
+- **`Eat Shelleys Liver`** orphan passage still in the file.
+- **Title screen BEGIN link** still bare text.
+- **Cecil Court CLOSED / Trisha's CLOSED / Lackland's NEED A WORD / FIND PAGE 93** bracketed hints still present — Dr Quill could ask for any of these stripped later.
+- **Audit punch list — partial follow-through.** The five-agent audit raised 60+ items; the actioned set was ~10 items covering the high-impact ones. Remaining lower-priority items (z-index arms race, dead CSS class candidates, minor minigame edge cases) sit on the punch list if Dr Quill wants another sweep.
+- **Three Pillars (Mercy/Severity/Mildness)** still banked, no commits this session.
 
 ---
 
 ## Things considered and intentionally NOT done
 
-- **Pentagram in two moments** — clarified with Dr Quill that pentagram should appear (1) when 5 lilies collected → notebook map animation, (2) at Centre Point endgame → overlay over Dawn Approach. Both implemented; the Dawn one had a z-index bug now fixed. No third trigger planned.
-- **Cow ride success street-map SVG** — Dr Quill said the page felt like it was moving; the staggered street-reveal animation was the culprit. Removed entirely rather than rebuilt. The mnemonic text alone now carries the moment.
-- **Approach scenes for Pillars / Ronnies / Lackland / Trisha** — shadow system applied to French / Coach / Colony only (those were the ones Dr Quill specifically asked for). Pillars / Ronnies / Lackland / Trisha approach scenes still use their original lighting; could be brought in line if needed.
-- **Pyre SVG colours** — kept the same warm-orange flame palette as the original. Only the structure and layering were upgraded, not the hue.
+- **Lily pip on every conditional warning grub link** (low-confidence / low-sobriety / low-both branches). The pips appear on the main navigation lines; conditional warning prompts stayed clean.
+- **Stripping `[NEED A WORD]` / `[FIND PAGE 93]`** from Lackland's / Cecil Court — they convey actionable info no pip currently covers.
+- **Cow ride music tempo cap** — by design.
+- **Start / StoryInit init duplication** — defensive guards make it safe; refactor risk > payoff.

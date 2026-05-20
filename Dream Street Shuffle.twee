@@ -106,6 +106,7 @@ Dream Street Shuffle
 (set: $ppScore to 0)
 (set: $cigsTonight to 0)
 (set: $matchesLeft to 5)\
+(set: $seenLore to (a:))\
 <!-- ═══════════════════════════════════════════════════════════════════
      ASYMPTOTIC STAT MACROS — replaces fixed ± deltas with proportional
      changes so low stats can recover meaningfully and high stats fall
@@ -8284,14 +8285,22 @@ window._passageGen = 0;
                     setTimeout(function(){ window.dssAudio[fn](); }, 120);
                   }
                 }
-                // Cecil Court shop bell — fires only when stepping inside
-                // O'Flatterly's shop (the only Cecil Court passage that's
-                // actually indoors). Detected via .shop-bell-marker in the
-                // passage HTML so we don't depend on the passage name.
-                if (passageNode.querySelector('.shop-bell-marker') && !window._heardOflatterlyBell) {
-                  window._heardOflatterlyBell = true;
-                  if (window.dssAudio && window.dssAudio.doorShopBell) {
-                    setTimeout(function(){ window.dssAudio.doorShopBell(); }, 120);
+                // Cecil Court shop bell — fires when stepping inside
+                // O'Flatterly's shop (detected via .shop-bell-marker). Rings
+                // once per "phase" of the page-return arc: once on first
+                // entry (pre-return) and again on first entry AFTER the
+                // player has handed back the missing page — so the player
+                // hears the brass clapper again on their reappearance with
+                // the returned page in hand.
+                if (passageNode.querySelector('.shop-bell-marker')) {
+                  var _st = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
+                  var phase = (_st && _st.returnedPage) ? 'post' : 'pre';
+                  if (!window._heardOflatterlyBellPhases) window._heardOflatterlyBellPhases = {};
+                  if (!window._heardOflatterlyBellPhases[phase]) {
+                    window._heardOflatterlyBellPhases[phase] = true;
+                    if (window.dssAudio && window.dssAudio.doorShopBell) {
+                      setTimeout(function(){ window.dssAudio.doorShopBell(); }, 120);
+                    }
                   }
                 }
                 window._currentVenue = newVenue;
@@ -8368,6 +8377,17 @@ window._passageGen = 0;
                 if (!box || box.getAttribute('data-motes-fired') === '1') return;
                 box.setAttribute('data-motes-fired', '1');
                 count = count || 18;
+                /* If the box is off-screen, scroll it into view first and
+                   defer the spawn so origin coordinates land in the viewport.
+                   Otherwise motes appear to stream up from below (or down
+                   from above) the visible page. */
+                var preRect = box.getBoundingClientRect();
+                if (preRect.top < 0 || preRect.bottom > window.innerHeight) {
+                  try { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                  box.removeAttribute('data-motes-fired');
+                  setTimeout(function(){ window.dssSpawnMotes(box, cls, count); }, 550);
+                  return;
+                }
                 var rect = box.getBoundingClientRect();
                 /* Anchor motes at the box's centre so the gesture reads as
                    "the collected thing is sending up wisps". The old
@@ -8407,77 +8427,107 @@ window._passageGen = 0;
                   setTimeout(function(){ if (nbLink) nbLink.classList.remove('notebook-pulse'); }, 7500);
                 }
               };
-              // Compute the NOTEBOOK link's viewport-centre once per reveal so
-              // every spawned mote can target it. Motes that miss the notebook
-              // ruin the "filed away" gesture, so we redirect each mote toward
-              // the real header link instead of using a fixed translate.
-              var notebookEl = document.querySelector('.notebook-link');
-              var nb = notebookEl ? notebookEl.getBoundingClientRect() : null;
-              var nbX = nb ? (nb.left + nb.width * 0.5) : null;
-              var nbY = nb ? (nb.top  + nb.height * 0.5) : null;
-              var anyBoxSpawned = false;
-              TYPES.forEach(function(t) {
-                var boxes = document.querySelectorAll(t.sel + ':not([data-motes])');
-                for (var i = 0; i < boxes.length; i++) {
-                  boxes[i].setAttribute('data-motes', '1');
-                  anyBoxSpawned = true;
-                  // Capture the box's viewport position NOW. Motes are fixed
-                  // children of <body>, so they pin to the viewport even if
-                  // the user scrolls during the animation — the start point
-                  // is locked at the moment of collection.
-                  var rect = boxes[i].getBoundingClientRect();
-                  /* Centre-of-box origin — see dssSpawnMotes comment above. */
-                  var startTop = rect.top + rect.height * 0.5;
-                  var startLeft = rect.left + rect.width * 0.5;
-                  for (var k = 1; k <= t.n; k++) {
-                    var m = document.createElement('span');
-                    m.className = t.cls + ' ' + t.cls + '-' + k;
-                    m.style.position = 'fixed';
-                    m.style.top = startTop + 'px';
-                    m.style.left = startLeft + 'px';
-                    m.style.right = 'auto';
-                    m.style.zIndex = '99999';
-                    // Per-mote target offset: aim each mote at the notebook
-                    // centre, with a tiny random scatter so the wisp reads as
-                    // organic rather than a laser-line. Fall back to a
-                    // sensible up-and-right if the notebook isn't in the DOM.
-                    if (nbX !== null) {
-                      var jitterX = (Math.random() - 0.5) * 28;
-                      var jitterY = (Math.random() - 0.5) * 18;
-                      var dx = (nbX - startLeft) + jitterX;
-                      var dy = (nbY - startTop)  + jitterY;
-                      m.style.setProperty('--mote-tx', dx + 'px');
-                      m.style.setProperty('--mote-ty', dy + 'px');
-                    } else {
-                      m.style.setProperty('--mote-tx', '210px');
-                      m.style.setProperty('--mote-ty', '-540px');
-                    }
-                    document.body.appendChild(m);
+              // Before spawning anything, make sure the collection box is
+              // actually visible. If it lays out below (or above) the fold —
+              // common with long Pillars / Lackland's passages where the
+              // haunt-box comes after lots of prose — motes would spawn from
+              // off-screen coordinates and the player sees them streaming up
+              // from "below the page". Scroll the first eligible box into
+              // view, wait for the smooth scroll to settle, THEN spawn so the
+              // start positions sit inside the viewport.
+              var firstOffscreenBox = null;
+              for (var ti = 0; ti < TYPES.length && !firstOffscreenBox; ti++) {
+                var bs = document.querySelectorAll(TYPES[ti].sel + ':not([data-motes])');
+                for (var bi = 0; bi < bs.length; bi++) {
+                  var bRect = bs[bi].getBoundingClientRect();
+                  if (bRect.top < 0 || bRect.bottom > window.innerHeight) {
+                    firstOffscreenBox = bs[bi];
+                    break;
                   }
                 }
-              });
-              // Now fade the boxes back in
-              for (var rr = 0; rr < toHide.length; rr++) {
-                toHide[rr].style.opacity = '1';
               }
-              // Pulse the NOTEBOOK link for ANY collection-box type — haunt,
-              // item, page-found, revelation. Previously only haunts triggered
-              // the pulse; that left items and pages feeling un-filed.
-              if (anyBoxSpawned) {
-                var nbLink = document.querySelector('.notebook-link');
-                if (nbLink) {
-                  nbLink.classList.remove('notebook-pulse');
-                  void nbLink.offsetWidth; // restart animation if already mid-pulse
-                  nbLink.classList.add('notebook-pulse');
-                  setTimeout(function() {
-                    if (nbLink) nbLink.classList.remove('notebook-pulse');
-                  }, 7500);
+              var performSpawn = function() {
+                // Compute the NOTEBOOK link's viewport-centre once per reveal so
+                // every spawned mote can target it. Motes that miss the notebook
+                // ruin the "filed away" gesture, so we redirect each mote toward
+                // the real header link instead of using a fixed translate.
+                var notebookEl = document.querySelector('.notebook-link');
+                var nb = notebookEl ? notebookEl.getBoundingClientRect() : null;
+                var nbX = nb ? (nb.left + nb.width * 0.5) : null;
+                var nbY = nb ? (nb.top  + nb.height * 0.5) : null;
+                var anyBoxSpawned = false;
+                TYPES.forEach(function(t) {
+                  var boxes = document.querySelectorAll(t.sel + ':not([data-motes])');
+                  for (var i = 0; i < boxes.length; i++) {
+                    boxes[i].setAttribute('data-motes', '1');
+                    anyBoxSpawned = true;
+                    // Capture the box's viewport position NOW. Motes are fixed
+                    // children of <body>, so they pin to the viewport even if
+                    // the user scrolls during the animation — the start point
+                    // is locked at the moment of collection.
+                    var rect = boxes[i].getBoundingClientRect();
+                    /* Centre-of-box origin — see dssSpawnMotes comment above. */
+                    var startTop = rect.top + rect.height * 0.5;
+                    var startLeft = rect.left + rect.width * 0.5;
+                    for (var k = 1; k <= t.n; k++) {
+                      var m = document.createElement('span');
+                      m.className = t.cls + ' ' + t.cls + '-' + k;
+                      m.style.position = 'fixed';
+                      m.style.top = startTop + 'px';
+                      m.style.left = startLeft + 'px';
+                      m.style.right = 'auto';
+                      m.style.zIndex = '99999';
+                      // Per-mote target offset: aim each mote at the notebook
+                      // centre, with a tiny random scatter so the wisp reads as
+                      // organic rather than a laser-line. Fall back to a
+                      // sensible up-and-right if the notebook isn't in the DOM.
+                      if (nbX !== null) {
+                        var jitterX = (Math.random() - 0.5) * 28;
+                        var jitterY = (Math.random() - 0.5) * 18;
+                        var dx = (nbX - startLeft) + jitterX;
+                        var dy = (nbY - startTop)  + jitterY;
+                        m.style.setProperty('--mote-tx', dx + 'px');
+                        m.style.setProperty('--mote-ty', dy + 'px');
+                      } else {
+                        m.style.setProperty('--mote-tx', '210px');
+                        m.style.setProperty('--mote-ty', '-540px');
+                      }
+                      document.body.appendChild(m);
+                    }
+                  }
+                });
+                // Now fade the boxes back in
+                for (var rr = 0; rr < toHide.length; rr++) {
+                  toHide[rr].style.opacity = '1';
                 }
+                // Pulse the NOTEBOOK link for ANY collection-box type — haunt,
+                // item, page-found, revelation. Previously only haunts triggered
+                // the pulse; that left items and pages feeling un-filed.
+                if (anyBoxSpawned) {
+                  var nbLink = document.querySelector('.notebook-link');
+                  if (nbLink) {
+                    nbLink.classList.remove('notebook-pulse');
+                    void nbLink.offsetWidth; // restart animation if already mid-pulse
+                    nbLink.classList.add('notebook-pulse');
+                    setTimeout(function() {
+                      if (nbLink) nbLink.classList.remove('notebook-pulse');
+                    }, 7500);
+                  }
+                }
+                if (window.hauntBackgroundGlow) window.hauntBackgroundGlow();
+                // Wheel reveal moved to the Dawn passage — fires there when the
+                // alba is complete, over the dawn view, rather than mid-game on
+                // the 12th haunt collection.
+              };
+              if (firstOffscreenBox) {
+                try { firstOffscreenBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                /* 550ms covers smooth-scroll completion on most distances at
+                   typical browser scroll speeds. After that the box is inside
+                   the viewport and getBoundingClientRect() reads correctly. */
+                setTimeout(performSpawn, 550);
+              } else {
+                performSpawn();
               }
-              if (window.hauntBackgroundGlow) window.hauntBackgroundGlow();
-              // Wheel reveal moved to the Dawn passage — fires there when the
-              // alba is complete, over the dawn view, rather than mid-game on
-              // the 12th haunt collection.
             };
             setTimeout(function() {
               if (window._drinkPopupOpen) {
@@ -11582,6 +11632,7 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     if (txt === '·' || txt === '·' || txt === '') return;
     if (/^←\s*BACK$/.test(txt)) return; // ← BACK has its own implication
     if (txt === 'BEGIN') return; // start-of-game BEGIN is silent
+    if (link.getAttribute('data-auto-expand') === '1') return; // auto-expand on revisit is silent
     if (link.closest('.ending-pane')) return;
     var now = Date.now();
     if (now - _lastTick < 80) return;
@@ -11595,9 +11646,22 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     if (!link) return;
     var txt = (link.textContent || '').toUpperCase();
     if (txt.indexOf('LORE') === -1) return;
+    // Suppress unravel sound for auto-expansions on revisit — those are
+    // restorations, not fresh discoveries.
+    if (link.getAttribute('data-auto-expand') === '1') return;
     if (window.dssAudio && window.dssAudio.loreUnravel) {
       window.dssAudio.loreUnravel();
     }
+    /* Record the lore title in Harlowe state so future passage visits can
+       auto-expand this box instead of showing the link again. */
+    try {
+      var st = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
+      if (st) {
+        if (!Array.isArray(st.seenLore)) st.seenLore = [];
+        var title = (link.textContent || '').trim();
+        if (title && st.seenLore.indexOf(title) === -1) st.seenLore.push(title);
+      }
+    } catch(e) {}
   }, true);
   // Tap on an already-taken lily — play a soft hollow chime so the player
   // gets feedback (the flower's gone, there's nothing to pick). Quieter
@@ -11643,7 +11707,50 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     }
     if (passageSwapped) {
       // Slight delay so all the inline lore-boxes have rendered before tagging.
-      setTimeout(tagExisting, 50);
+      setTimeout(function(){
+        tagExisting();
+        /* Auto-expand any LORE link that the player has opened before in
+           a previous passage visit. The expanded box gets a `.lore-seen`
+           class so CSS can grey it out slightly — reads as "you've already
+           uncovered this" without hiding it. The auto-expand attribute on
+           the link suppresses the unravel sound and the click-tick. */
+        try {
+          var st = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
+          var seenList = (st && Array.isArray(st.seenLore)) ? st.seenLore : null;
+          if (!seenList || !seenList.length) return;
+          var links = document.querySelectorAll('tw-link');
+          var preBoxes = new Set();
+          var allBoxes = document.querySelectorAll('.lore-box');
+          for (var pb = 0; pb < allBoxes.length; pb++) preBoxes.add(allBoxes[pb]);
+          var clickedAny = false;
+          for (var i = 0; i < links.length; i++) {
+            var ln = links[i];
+            var lnTxt = (ln.textContent || '').trim();
+            if (!lnTxt || lnTxt.toUpperCase().indexOf('LORE') === -1) continue;
+            if (seenList.indexOf(lnTxt) === -1) continue;
+            ln.setAttribute('data-auto-expand', '1');
+            try { ln.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); }
+            catch(e) { try { ln.click(); } catch(e2) {} }
+            clickedAny = true;
+          }
+          if (clickedAny) {
+            // After Harlowe replaces the links, tag the freshly-revealed
+            // boxes (the ones that weren't in the pre-snapshot) so CSS can
+            // distinguish "opened on revisit" from "opened just now".
+            setTimeout(function() {
+              var post = document.querySelectorAll('.lore-box');
+              for (var pp = 0; pp < post.length; pp++) {
+                if (!preBoxes.has(post[pp])) {
+                  post[pp].classList.add('lore-seen');
+                  // Also tag for the existing 'seen' WeakSet so the sound
+                  // observer doesn't fire the unravel rustle for it.
+                  seen.add(post[pp]);
+                }
+              }
+            }, 40);
+          }
+        } catch(e) {}
+      }, 50);
     } else {
       // No passage swap — any lore-box added now is from a click expansion.
       var boxes = document.querySelectorAll('.lore-box');
@@ -33814,6 +33921,7 @@ John St. John (for that is his name) is another poet. He hates Red. His rancour 
 
 :: The Empty Glass [venue-french] {"position":"300,950","size":"100,100"}
 <span class="empty-glass-marker" style="display:none"></span>
+(set: $sobriety to ($statLoss: $sobriety, 8))\
 (display: "French Rule SVG h24")</svg>
 <script>setTimeout(function(){ window.showDrinkPopup('whisky'); }, 400);</script>\
 After these thoughts you drink and as you drink you notice that John's glass is drunk.
@@ -33890,7 +33998,7 @@ He speaks. The family roars on around, as his old sister winds a trick, him but 
 :: LINE 2 Oxford {"position":"1000,200","size":"100,100"}
 (set: $sawMemory2 to true)\
 <div class="memory-photo memory-photo-2"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl2" cx="78%" cy="22%" r="78%"><stop offset="0%" stop-color="#f8d088" stop-opacity="0.95"/><stop offset="26%" stop-color="#d89048" stop-opacity="0.5"/><stop offset="58%" stop-color="#2a2860" stop-opacity="0.3"/><stop offset="100%" stop-color="#0a0820" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl2)"/></svg><div class="mp-prose">Late May night and the sexy airs of summer, the trees' munificence. Her staircase and then her, footsteps away. And in the night-blown roses of your ears, repeating what you've learned for your exams:</div></div></div>
-<div class="quest-box" style="color:#7ab078;text-shadow:0 0 14px rgba(122,176,120,0.32);text-align:right;"><em>Annihilating all that's made<br>To a <span style="color:#9ed68a;">green</span> thought in a <span style="color:#9ed68a;">green</span> shade.</em></div>
+<div class="verse">Annihilating all that's made<br>To a <span style="color:#9ed68a;">green</span> thought in a <span style="color:#9ed68a;">green</span> shade.</div>
 
 [[Wake from this dream|The Interval]]
 
@@ -35857,6 +35965,7 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $metRed to false)\
 (set: $knowsLackland to false)
 (set: $haunts to (a:))
+(set: $seenLore to (a:))
 (set: $knowsCopperSecret to false)\
 (set: $metDavy to false)\
 (set: $completedSetlist to false)\
@@ -36129,6 +36238,7 @@ Opposite him is the only man who clocks you, who is thin like verdaccio and hard
 (display: "French Rule SVG h24")</svg>
 
 :: The Interval [interval-radio] {"position":"900,250","size":"100,100"}
+(if: $visitedInterval is true)[(go-to: "Dean Street")]\
 <span class="staircase-marker" style="display:none"></span>
 (unless: $alba is an array)[(set: $alba to (a:))]
 (unless: $haunts is an array)[(set: $haunts to (a:))]
@@ -37046,14 +37156,9 @@ Before you can answer, he says, 'I don't know.'
 <svg class="phone-rule lily-phone-rule" viewBox="0 0 300 55" width="100%" height="55" preserveAspectRatio="none"><defs><filter id="lpBl2"><feGaussianBlur stdDeviation="5"/></filter><linearGradient id="lpCd2" x1="0" x2="1"><stop offset="0%" stop-color="#4a3858" stop-opacity="0"/><stop offset="20%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="50%" stop-color="#7a5888" stop-opacity="0.55"/><stop offset="80%" stop-color="#6a4878" stop-opacity="0.42"/><stop offset="100%" stop-color="#4a3858" stop-opacity="0"/></linearGradient><linearGradient id="lpHd2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a2048"/><stop offset="40%" stop-color="#5a3868"/><stop offset="100%" stop-color="#4a2858"/></linearGradient><radialGradient id="lpGw2" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#b090c0" stop-opacity="0.10"/><stop offset="100%" stop-color="#b090c0" stop-opacity="0"/></radialGradient></defs><ellipse cx="170" cy="28" rx="50" ry="15" fill="#907098" opacity="0.05" filter="url(#lpBl2)"/><ellipse cx="110" cy="24" rx="38" ry="12" fill="#806088" opacity="0.04" filter="url(#lpBl2)"/><ellipse cx="150" cy="27" rx="95" ry="24" fill="url(#lpGw2)"/><path d="M14 27 Q20 42 26 27 Q32 12 38 27 Q44 42 50 27 Q56 12 62 27 Q68 40 74 27 Q79 16 84 27 Q89 34 94 27 Q98 22 102 27 Q105 30 108 27" fill="none" stroke="url(#lpCd2)" stroke-width="2" stroke-linecap="round"/><path d="M192 27 Q195 30 198 27 Q202 22 206 27 Q211 34 216 27 Q221 16 226 27 Q232 40 238 27 Q244 12 250 27 Q256 42 262 27 Q268 12 274 27 Q280 42 286 27" fill="none" stroke="url(#lpCd2)" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="27" r="2" fill="#5a3868" opacity="0.4"/><circle cx="190" cy="27" r="2" fill="#5a3868" opacity="0.4"/><g transform="translate(150,27) rotate(10)"><path d="M-22 0 C-22,-8 -14,-9 -12,-5 C-10,-2 -6,-2 0,-2 C6,-2 10,-2 12,-5 C14,-9 22,-8 22,0 C22,8 14,9 12,5 C10,2 6,2 0,2 C-6,2 -10,2 -12,5 C-14,9 -22,8 -22,0 Z" fill="url(#lpHd2)" opacity="0.55"/><circle cx="-16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="-16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="-1.5" r="1.2" fill="#1a0818" opacity="0.3"/><circle cx="16" cy="1.5" r="1.2" fill="#1a0818" opacity="0.3"/></g></svg>
 </div>
 
-<span class="lily-glimpse lily-fade lily-fade-late">Your tongue is cauterised on 66, its heat, which you dare not speak:
-
-//Tir’d with all these, from these would I be gone,
-Save that, to die, I leave my love alone.//
-
-You both hang up, each leaving the other alone.</span>\
-(after: 10s)[<div class="phone-exit">(link-goto: "Hang up.", $lilyCallReturn)</div>]\
-(after: 16s)[(go-to: $lilyCallReturn)]
+<div class="lily-glimpse lily-fade lily-fade-late">Your tongue is cauterised on 66, its heat, which you dare not speak:<br><br><em>Tir’d with all these, from these would I be gone,<br>Save that, to die, I leave my love alone.</em><br><br>You both hang up, each leaving the other alone.</div>\
+(after: 13s)[<div class="phone-exit">(link-goto: "Hang up.", $lilyCallReturn)</div>]\
+(after: 22s)[(go-to: $lilyCallReturn)]
 
 
 
@@ -40011,7 +40116,7 @@ font-family: 'Crimson Text', Georgia, serif;
 font-style: italic;
 color: #c8a874;
 padding: 0.9em 1.4em 0.9em 1.8em;
-margin: 1.2em auto;
+margin: 1.2em 0;
 line-height: 1.78;
 letter-spacing: 0.015em;
 font-size: 0.97em;
@@ -40063,6 +40168,14 @@ margin: 0.6em 0;
 }
 .lore-box p:first-child { margin-top: 0; }
 .lore-box p:last-child { margin-bottom: 0; }
+
+/* Lore boxes auto-expanded on revisit get a faint greyed cast — visible
+   but clearly already-read. Manual click during the current passage skips
+   this class; only the auto-expand path adds it. */
+.lore-box.lore-seen {
+  opacity: 0.62;
+  filter: saturate(0.7);
+}
 
 /* ===== DIDO'S DYING WORDS - ember/pyre framing ===== */
 @keyframes didoEmberPulse {
@@ -41805,6 +41918,7 @@ margin: 0.5em 0;
 background: linear-gradient(180deg, #1a1208 0%, #0a0604 100%);
 border: 1px solid #3a2814;
 border-radius: 3px;
+text-align: center;
 box-shadow:
   inset 0 0 24px rgba(0,0,0,0.55),
   0 1px 0 rgba(184,154,80,0.18),

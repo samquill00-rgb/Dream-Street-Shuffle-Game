@@ -11654,6 +11654,11 @@ soloDebounce = setTimeout(checkSoloLink, 350);
       window.dssAudio.typewriterTick(0.10);
     }
   }, true);
+  // Window-level Set tracks which lore titles the player has opened this
+  // session. Lives in memory only (resets on page reload, which we treat as
+  // "starting fresh"). Harlowe's $seenLore array proved unreliable for
+  // mutate-from-JS-then-read-on-next-passage; this avoids the round-trip.
+  if (!window.dssSeenLore) window.dssSeenLore = new Set();
   document.addEventListener('click', function(e) {
     var link = e.target && e.target.closest && e.target.closest('tw-link');
     if (!link) return;
@@ -11665,16 +11670,8 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     if (window.dssAudio && window.dssAudio.loreUnravel) {
       window.dssAudio.loreUnravel();
     }
-    /* Record the lore title in Harlowe state so future passage visits can
-       auto-expand this box instead of showing the link again. */
-    try {
-      var st = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
-      if (st) {
-        if (!Array.isArray(st.seenLore)) st.seenLore = [];
-        var title = (link.textContent || '').trim();
-        if (title && st.seenLore.indexOf(title) === -1) st.seenLore.push(title);
-      }
-    } catch(e) {}
+    var title = (link.textContent || '').trim();
+    if (title) window.dssSeenLore.add(title);
   }, true);
   // Tap on an already-taken lily — play a soft hollow chime so the player
   // gets feedback (the flower's gone, there's nothing to pick). Quieter
@@ -11719,37 +11716,34 @@ soloDebounce = setTimeout(checkSoloLink, 350);
       }
     }
     if (passageSwapped) {
-      // Slight delay so all the inline lore-boxes have rendered before tagging.
+      /* Auto-expand any LORE link that the player has opened before. Tag
+         the link with data-auto-expand BEFORE clicking so the click-tick
+         and unravel sound both skip it. Pre-snapshot the existing
+         lore-boxes so we can tag the newly-revealed ones with .lore-seen
+         (greyed) once Harlowe replaces the links with their hook bodies.
+         Delay 250ms is enough for Harlowe to wire up tw-link click
+         handlers on the freshly-rendered passage. */
       setTimeout(function(){
         tagExisting();
-        /* Auto-expand any LORE link that the player has opened before in
-           a previous passage visit. The expanded box gets a `.lore-seen`
-           class so CSS can grey it out slightly — reads as "you've already
-           uncovered this" without hiding it. The auto-expand attribute on
-           the link suppresses the unravel sound and the click-tick. */
         try {
-          var st = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
-          var seenList = (st && Array.isArray(st.seenLore)) ? st.seenLore : null;
-          if (!seenList || !seenList.length) return;
-          var links = document.querySelectorAll('tw-link');
+          var seenSet = window.dssSeenLore;
+          if (!seenSet || !seenSet.size) return;
           var preBoxes = new Set();
-          var allBoxes = document.querySelectorAll('.lore-box');
-          for (var pb = 0; pb < allBoxes.length; pb++) preBoxes.add(allBoxes[pb]);
+          var preDoc = document.querySelectorAll('.lore-box');
+          for (var pb = 0; pb < preDoc.length; pb++) preBoxes.add(preDoc[pb]);
+          var links = document.querySelectorAll('tw-link');
           var clickedAny = false;
           for (var i = 0; i < links.length; i++) {
             var ln = links[i];
             var lnTxt = (ln.textContent || '').trim();
             if (!lnTxt || lnTxt.toUpperCase().indexOf('LORE') === -1) continue;
-            if (seenList.indexOf(lnTxt) === -1) continue;
+            if (!seenSet.has(lnTxt)) continue;
             ln.setAttribute('data-auto-expand', '1');
             try { ln.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); }
             catch(e) { try { ln.click(); } catch(e2) {} }
             clickedAny = true;
           }
           if (clickedAny) {
-            // After Harlowe replaces the links, tag the freshly-revealed
-            // boxes (the ones that weren't in the pre-snapshot) so CSS can
-            // distinguish "opened on revisit" from "opened just now".
             setTimeout(function() {
               var post = document.querySelectorAll('.lore-box');
               for (var pp = 0; pp < post.length; pp++) {
@@ -11760,10 +11754,10 @@ soloDebounce = setTimeout(checkSoloLink, 350);
                   seen.add(post[pp]);
                 }
               }
-            }, 40);
+            }, 60);
           }
         } catch(e) {}
-      }, 50);
+      }, 250);
     } else {
       // No passage swap — any lore-box added now is from a click expansion.
       var boxes = document.querySelectorAll('.lore-box');
@@ -36279,7 +36273,7 @@ You'll try, you suppose, the haunts you used to haunt and the people you knew. T
 <div class="typewriter-page" style="font-family: 'Courier New', Courier, monospace; background: #e5d9b8; color: #1a1612; width: 560px; min-height: 380px; max-width: 90vw; padding: 3.5em 4em 3em; margin: 1.5em auto; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.18), 0 12px 40px rgba(0,0,0,0.3), inset 0 0 95px rgba(26,10,0,0.30), inset 0 0 38px rgba(26,10,0,0.18); border-radius: 1px 3px 3px 1px; text-shadow: none; line-height: 1.85; letter-spacing: 0.02em; font-size: 0.95em; position: relative;"><svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="napt2B1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#120802" stop-opacity="0.97"/><stop offset="20%" stop-color="#120802" stop-opacity="0.97"/><stop offset="45%" stop-color="#3f1c08" stop-opacity="0.78"/><stop offset="70%" stop-color="#7a3c0c" stop-opacity="0.45"/><stop offset="88%" stop-color="#a86014" stop-opacity="0.18"/><stop offset="100%" stop-color="#a86014" stop-opacity="0"/></radialGradient><radialGradient id="napt2B2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#150902" stop-opacity="0.95"/><stop offset="20%" stop-color="#150902" stop-opacity="0.95"/><stop offset="45%" stop-color="#44200a" stop-opacity="0.74"/><stop offset="70%" stop-color="#80400e" stop-opacity="0.40"/><stop offset="88%" stop-color="#ae6416" stop-opacity="0.16"/><stop offset="100%" stop-color="#ae6416" stop-opacity="0"/></radialGradient><radialGradient id="napt2WI" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#701020" stop-opacity="0.05"/><stop offset="70%" stop-color="#701020" stop-opacity="0.03"/><stop offset="100%" stop-color="#701020" stop-opacity="0"/></radialGradient></defs><circle cx="78" cy="640" r="68" fill="url(#napt2WI)"/><circle cx="78" cy="640" r="68" fill="none" stroke="rgba(112,20,30,0.42)" stroke-width="9"/><circle cx="78" cy="640" r="68" fill="none" stroke="rgba(80,10,18,0.20)" stroke-width="4"/><ellipse cx="74" cy="715" rx="2" ry="8" fill="rgba(100,18,28,0.28)"/><circle cx="540" cy="220" r="13" fill="url(#napt2B1)"/><circle cx="535" cy="252" r="10" fill="url(#napt2B2)"/><circle cx="22" cy="380" r="11" fill="url(#napt2B2)"/><circle cx="538" cy="510" r="9" fill="url(#napt2B1)"/><circle cx="30" cy="240" r="9" fill="url(#napt2B2)"/><circle cx="20" cy="560" r="12" fill="url(#napt2B1)"/><ellipse cx="18" cy="450" rx="3" ry="13" transform="rotate(8,18,450)" fill="rgba(68,32,7,0.36)"/><circle cx="530" cy="155" r="3" fill="rgba(135,80,28,0.22)"/><circle cx="42" cy="195" r="2.5" fill="rgba(140,85,30,0.20)"/><circle cx="510" cy="320" r="3.5" fill="rgba(125,72,24,0.22)"/><circle cx="55" cy="345" r="2" fill="rgba(145,90,35,0.18)"/><circle cx="525" cy="450" r="2.5" fill="rgba(130,78,26,0.20)"/><circle cx="62" cy="510" r="3" fill="rgba(132,80,28,0.20)"/><circle cx="14" cy="690" r="2.5" fill="rgba(138,82,30,0.19)"/><circle cx="540" cy="700" r="3" fill="rgba(128,76,24,0.21)"/><line x1="0" y1="380" x2="1000" y2="380" stroke="rgba(155,125,70,0.12)" stroke-width="2"/><line x1="0" y1="378" x2="1000" y2="378" stroke="rgba(75,50,20,0.07)" stroke-width="1"/><line x1="280" y1="0" x2="285" y2="900" stroke="rgba(110,80,35,0.06)" stroke-width="0.6"/></svg>
 You've been thinking about the form of the aubade, the morning poem, the song of wake-me-not-so-I-might-have-my-dream. You've been thinking about the first love of your life; Lily, from the rarest valley in Wales.
 
-'She's why you're here again, all told; you'd say that to yourself if you could stomach it.
+She's why you're here again, all told; you'd say that to yourself if you could stomach it.
 
 Sure, try to sell the book, it's your cover story.
 
@@ -36287,7 +36281,7 @@ But there's no  deal in the world that could fix what was broken. No, you've com
 
 You've been in Soho's churning night too long; the only true way out is through a morning song.
 
-You need to find one hidden in the night. To make the dawn, for Aoife and your daughter.'
+You need to find one hidden in the night. To make the dawn, for Aoife and your daughter.
 
 [[Name your book|Name Your Book]]
 </div>
@@ -36781,10 +36775,10 @@ You know him as an old friend, from whom you are estranged over some personal bu
 
 (display: "French Rule SVG h24")</svg>
 
-:: The coast of Carthage [carthage-cicadas dream] {"position":"100,1550","size":"100,100"}
+:: The coast of Carthage [carthage-cicadas] {"position":"100,1550","size":"100,100"}
 <div id="carthage-approach"></div>[[·|Carthage shore]]
 
-:: Carthage shore [carthage-cicadas dream] {"position":"100,1650","size":"100,100"}
+:: Carthage shore [carthage-cicadas] {"position":"100,1650","size":"100,100"}
 (set: $visitedCarthage to true)\
 You've left London. You are many miles and centuries far off. You've found safe harbour in Carthage, which is not like you remember it at all. These days it is swamped with Romans.
 

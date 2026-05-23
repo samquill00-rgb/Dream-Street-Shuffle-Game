@@ -106,6 +106,7 @@ Dream Street Shuffle
 (set: $ppScore to 0)
 (set: $cigsTonight to 0)
 (set: $matchesLeft to 5)\
+(set: $cigReturnTo to "Dean Street")\
 (set: $seenLore to (a:))\
 <!-- ═══════════════════════════════════════════════════════════════════
      ASYMPTOTIC STAT MACROS — replaces fixed ± deltas with proportional
@@ -3521,11 +3522,8 @@ window.showCigarettePopup = function(onLit) {
     if (rafId) cancelAnimationFrame(rafId);
     if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     document.removeEventListener('keydown', onKey);
-    if (lit && typeof onLit === 'function') {
-      try { onLit(); } catch(e) {}
-    } else if (typeof onLit === 'function') {
-      // Even on bail-out, callback runs (player gets out of the popup)
-      try { onLit(); } catch(e) {}
+    if (typeof onLit === 'function') {
+      try { onLit(lit); } catch(e) {}
     }
   }
 
@@ -3579,6 +3577,118 @@ window.showCigarettePopup = function(onLit) {
   overlay.addEventListener('click', function(e){
     if (e.target === overlay) dismiss();
   });
+};
+
+// ====== SIDE-OF-SCREEN BURNING CIGARETTE ======
+// Spawns a small vertical cigarette in the lower-right of the viewport.
+// Ember pulses, smoke wisps drift up, the paper slowly shortens to the
+// filter as it burns. Lives on document.body so it persists across passage
+// transitions — game continues to play while you smoke. Lighting another
+// while one is burning replaces the previous one.
+window.startBurningCigarette = function(opts) {
+  opts = opts || {};
+  var BURN_MS = opts.durationMs || 90000;
+  var existing = document.getElementById('side-cig');
+  if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  var sc = document.createElement('div');
+  sc.id = 'side-cig';
+  sc.innerHTML =
+    '<div class="side-cig-stick" id="side-cig-stick">' +
+      '<div class="side-cig-paper">' +
+        '<div class="side-cig-ash"></div>' +
+        '<svg class="side-cig-ember" viewBox="0 0 28 14" preserveAspectRatio="none" aria-hidden="true">' +
+          '<defs>' +
+            '<radialGradient id="scEmberCore" cx="50%" cy="55%" r="55%">' +
+              '<stop offset="0%" stop-color="#fff5b8"/>' +
+              '<stop offset="32%" stop-color="#ffba48"/>' +
+              '<stop offset="72%" stop-color="#ff5818"/>' +
+              '<stop offset="100%" stop-color="#a02808"/>' +
+            '</radialGradient>' +
+          '</defs>' +
+          '<ellipse cx="14" cy="8" rx="13" ry="5.6" fill="#1a0a04"/>' +
+          '<ellipse cx="14" cy="7.2" rx="11.8" ry="4.6" fill="url(#scEmberCore)"/>' +
+          '<ellipse cx="11.5" cy="6.6" rx="2.6" ry="1.3" fill="#fff5b8" opacity="0.7"/>' +
+          '<ellipse cx="16.5" cy="7.3" rx="1.8" ry="1" fill="#fff5b8" opacity="0.5"/>' +
+        '</svg>' +
+      '</div>' +
+      '<div class="side-cig-filter"></div>' +
+      '<div class="side-cig-puffs" id="side-cig-puffs"></div>' +
+    '</div>';
+  document.body.appendChild(sc);
+  var START_H = 130, END_H = 38;
+  var startTime = Date.now();
+  var stick = document.getElementById('side-cig-stick');
+  stick.style.height = START_H + 'px';
+  var ember = sc.querySelector('.side-cig-ember');
+  // Schedule irregular inhale/exhale puffs. Each "drag" brightens the ember
+  // (oxygen flooding the cherry) for a beat, then a cluster of smoke wisps
+  // rises from the filter end as the player exhales.
+  var puffTimer = null;
+  function spawnPuff() {
+    var puffsHost = document.getElementById('side-cig-puffs');
+    if (!puffsHost) return;
+    var count = 3 + Math.floor(Math.random() * 2); // 3 or 4 wisps per puff
+    for (var i = 0; i < count; i++) {
+      (function(idx){
+        setTimeout(function(){
+          var w = document.createElement('div');
+          w.className = 'cig-puff-wisp';
+          var dx = (Math.random() * 56 - 32);          // sideways drift
+          var sz = 34 + Math.random() * 22;            // start size
+          var endScale = 4 + Math.random() * 2;        // dispersion
+          w.style.width = sz + 'px';
+          w.style.height = sz + 'px';
+          w.style.left = (idx * 6 - 8 + Math.random() * 12) + 'px';
+          w.style.setProperty('--drift-x', dx + 'px');
+          w.style.setProperty('--scale-end', endScale);
+          puffsHost.appendChild(w);
+          setTimeout(function(){ if (w.parentNode) w.parentNode.removeChild(w); }, 8200);
+        }, idx * 160 + Math.random() * 90);
+      })(i);
+    }
+  }
+  function scheduleNextPuff() {
+    var delay = 8000 + Math.random() * 8000; // 8–16s between drags
+    puffTimer = setTimeout(function(){
+      if (!document.body.contains(sc)) return;
+      // The inhale — ember brightens (the "draw") for a beat before the
+      // exhaled smoke appears, so the cherry visibly glows brighter as the
+      // cigarette burns down a little.
+      if (ember) ember.classList.add('side-cig-ember-drag');
+      setTimeout(function(){
+        if (ember) ember.classList.remove('side-cig-ember-drag');
+      }, 1800);
+      setTimeout(spawnPuff, 1500);
+      scheduleNextPuff();
+    }, delay);
+  }
+  // First drag comes fairly soon after lighting.
+  setTimeout(function(){
+    if (!document.body.contains(sc)) return;
+    if (ember) ember.classList.add('side-cig-ember-drag');
+    setTimeout(function(){ if (ember) ember.classList.remove('side-cig-ember-drag'); }, 1200);
+    setTimeout(spawnPuff, 1050);
+    scheduleNextPuff();
+  }, 2000 + Math.random() * 1500);
+  function tick() {
+    if (!document.body.contains(sc)) {
+      if (puffTimer) clearTimeout(puffTimer);
+      return;
+    }
+    var elapsed = Date.now() - startTime;
+    var t = Math.min(1, elapsed / BURN_MS);
+    stick.style.height = (START_H + (END_H - START_H) * t) + 'px';
+    if (t >= 1) {
+      if (puffTimer) clearTimeout(puffTimer);
+      // Dropped. The stub tips forward and falls off the bottom of the
+      // viewport — the player has flicked away the spent cigarette.
+      sc.classList.add('side-cig-dropping');
+      setTimeout(function(){ if (sc.parentNode) sc.parentNode.removeChild(sc); }, 1800);
+      return;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 };
 
 // ====== NAPKIN PORTRAIT — KEEP WORKING ON IT ======
@@ -36072,7 +36182,8 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $oppScore to 0)\
 (set: $ppScore to 0)
 (set: $cigsTonight to 0)
-(set: $matchesLeft to 5)\\
+(set: $matchesLeft to 5)\
+(set: $cigReturnTo to "Dean Street")\\
 (go-to: "The Night Ahead")
 
 :: Stay in Carthage [carthage-cicadas pyre] {"position":"100,1950","size":"100,100"}
@@ -37453,6 +37564,34 @@ Jack Curtis wins it. Smash to the corner.
 (link: "Breton Cidre")[(set: $lastDrink to "cider")(set: $drankAtFrench to true)(set: $justDranked to true)(set: $sobriety to ($statLoss: $sobriety, 8))(go-to: "The French")]
 </div>
 
+:: Light a cigarette {"position":"1600,750","size":"100,100"}
+<span id="cig-go-smoking" style="display:none">[[·|Smoking]]</span>
+<span id="cig-go-back" style="display:none">(link-goto: "·", $cigReturnTo)</span>
+<script>
+(function(){
+  if (!window.showCigarettePopup) return;
+  window.showCigarettePopup(function(lit){
+    var wrap = document.getElementById(lit ? 'cig-go-smoking' : 'cig-go-back');
+    var lk = wrap && wrap.querySelector('tw-link');
+    if (lk) lk.click();
+  });
+})();
+</script>
+
+:: Smoking {"position":"1750,750","size":"100,100"}
+(set: $matchesLeft to $matchesLeft - 1)\
+(set: $cigsTonight to $cigsTonight + 1)\
+(set: $confidence to ($statGain: $confidence, 6))\
+<span id="smoke-return" style="display:none">(link-goto: "·", $cigReturnTo)</span>
+<script>
+if (window.startBurningCigarette) window.startBurningCigarette();
+setTimeout(function(){
+  var wrap = document.getElementById('smoke-return');
+  var lk = wrap && wrap.querySelector('tw-link');
+  if (lk) lk.click();
+}, 60);
+</script>
+
 :: You speak to the poet [outdoor] {"position":"1400,450","size":"100,100"}
 (set: $metRed to true)\
 <!-- Ginger light -->
@@ -37659,7 +37798,12 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 (set: _nb to _nb + '<div class="nb-inv-divider"></div>')\
 (if: $hasDrawing is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ A Napkin Portrait</div><div class="nb-napkin-display"><img class="nb-napkin-img" alt="The painter, sketched on a napkin"/></div><div class="nb-napkin-caption">Sketched at The French.</div><div class="nb-inv-btn" onclick="if(window.showNapkinPopup)window.showNapkinPopup();">Work on it</div></div>')](else:)[(set: _nb to _nb + '<div class="nb-inv-item nb-inv-locked"><div class="nb-grey">○ A napkin portrait</div></div>')]\
 (set: _nb to _nb + '<div class="nb-inv-divider"></div>')\
-(if: $hasTrishaMatchbook is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ Trisha&#39;s Matchbook</div><div class="nb-inv-graphic-wrap"><svg class="nb-inv-matchbook" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mbCover" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7a1818"/><stop offset="55%" stop-color="#9a2828"/><stop offset="100%" stop-color="#5a1010"/></linearGradient><linearGradient id="mbEdge" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="rgba(0,0,0,0.20)"/><stop offset="10%" stop-color="rgba(0,0,0,0)"/></linearGradient></defs><ellipse cx="40" cy="92" rx="26" ry="2.5" fill="rgba(0,0,0,0.22)"/><g transform="rotate(-3 40 50)"><rect x="20" y="14" width="40" height="72" rx="2.5" fill="url(#mbCover)" stroke="rgba(40,8,8,0.55)" stroke-width="0.5"/><rect x="20" y="14" width="40" height="72" rx="2.5" fill="url(#mbEdge)"/><line x1="20" y1="22" x2="60" y2="22" stroke="rgba(20,4,4,0.45)" stroke-width="0.4"/><circle cx="28" cy="18" r="0.6" fill="rgba(20,4,4,0.7)"/><circle cx="52" cy="18" r="0.6" fill="rgba(20,4,4,0.7)"/><text x="40" y="45" text-anchor="middle" fill="#e8c478" font-family="Playfair Display, Georgia, serif" font-size="6.5" font-style="italic" letter-spacing="0.6">TRISHA&#39;S</text><line x1="28" y1="50" x2="52" y2="50" stroke="rgba(232,196,120,0.5)" stroke-width="0.3"/><text x="40" y="58" text-anchor="middle" fill="rgba(232,196,120,0.6)" font-size="5">✦</text><line x1="28" y1="62" x2="52" y2="62" stroke="rgba(232,196,120,0.5)" stroke-width="0.3"/><text x="40" y="73" text-anchor="middle" fill="rgba(232,196,120,0.5)" font-family="Crimson Text, serif" font-size="3.4" letter-spacing="0.8">SOHO</text><rect x="24" y="82" width="32" height="2.4" fill="rgba(60,32,16,0.85)"/><line x1="27" y1="82" x2="27" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="32" y1="82" x2="32" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="37" y1="82" x2="37" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="42" y1="82" x2="42" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="47" y1="82" x2="47" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="52" y1="82" x2="52" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/></g></svg></div><div class="nb-match-row" aria-hidden="true">(if: $matchesLeft is a number and $matchesLeft >= 1)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 2)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 3)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 4)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 5)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>]</div><div class="nb-napkin-caption">An invitation. (if: $matchesLeft is a number and $matchesLeft > 0)[(print: $matchesLeft) match(if: $matchesLeft > 1)[es] left.](else:)[//The matches are all gone.//]</div>(if: $matchesLeft is a number and $matchesLeft > 0)[<div class="nb-inv-btn" onclick="if(window.showCigarettePopup)window.showCigarettePopup(function(){try{var s=(window.Harlowe&&Harlowe.API_ACCESS&&Harlowe.API_ACCESS.STATE&&Harlowe.API_ACCESS.STATE.variables)||null;if(s){s.matchesLeft=(typeof s.matchesLeft===\'number\'?s.matchesLeft:0)-1;if(s.matchesLeft<0)s.matchesLeft=0;if(window.dssStatGain){s.confidence=window.dssStatGain(typeof s.confidence===\'number\'?s.confidence:70,6);}s.cigsTonight=(typeof s.cigsTonight===\'number\'?s.cigsTonight:0)+1;}}catch(e){}});">Light a cigarette</div>]</div>')](else:)[(set: _nb to _nb + '<div class="nb-inv-item nb-inv-locked"><div class="nb-grey">○ A matchbook</div></div>')]\
+(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ Cigarettes</div><div class="nb-inv-graphic-wrap"><svg class="nb-inv-cigs" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="cpRed" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c81818"/><stop offset="55%" stop-color="#9a1212"/><stop offset="100%" stop-color="#6a0808"/></linearGradient><linearGradient id="cpWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#eee9dc"/><stop offset="100%" stop-color="#cec7b3"/></linearGradient><linearGradient id="cpFoil" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c8c5b8"/><stop offset="45%" stop-color="#efece0"/><stop offset="100%" stop-color="#8e8b82"/></linearGradient><linearGradient id="cpInside" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3a0606"/><stop offset="100%" stop-color="#1a0202"/></linearGradient><linearGradient id="cpFilter" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e0b878"/><stop offset="50%" stop-color="#cfa050"/><stop offset="100%" stop-color="#a87a30"/></linearGradient></defs><ellipse cx="40" cy="93" rx="22" ry="2.4" fill="rgba(0,0,0,0.28)"/><rect x="20" y="32" width="40" height="60" rx="1.5" fill="url(#cpRed)" stroke="rgba(60,4,4,0.7)" stroke-width="0.5"/><rect x="24" y="36" width="32" height="56" fill="url(#cpWhite)" stroke="rgba(110,80,40,0.32)" stroke-width="0.35"/><path d="M 25 36 L 40 49 L 55 36 L 55 41 L 40 53 L 25 41 Z" fill="#9a1212" opacity="0.55"/><text x="40" y="68" text-anchor="middle" fill="rgba(110,40,20,0.45)" font-family="Georgia, serif" font-size="3.2" letter-spacing="0.8" font-style="italic">SOHO</text><line x1="28" y1="74" x2="52" y2="74" stroke="rgba(110,40,20,0.32)" stroke-width="0.35"/><path d="M 20 32 L 60 32 L 58 25 L 22 25 Z" fill="url(#cpInside)"/><path d="M 22 25 L 58 25 L 60 11 L 26 10 Z" fill="url(#cpRed)" stroke="rgba(60,4,4,0.7)" stroke-width="0.45"/><path d="M 24.5 24 L 55.5 24 L 53 17 L 28 17 Z" fill="url(#cpFoil)" stroke="rgba(110,108,98,0.55)" stroke-width="0.35"/><path d="M 24.5 24 L 28 22 L 33 23.2 L 39 21 L 45 23.4 L 51 22 L 55.5 24" fill="none" stroke="rgba(80,78,70,0.65)" stroke-width="0.4" stroke-linejoin="round"/><g><g><rect x="26.5" y="14" width="3.6" height="11.5" fill="#fbf3df"/><rect x="26.5" y="20.5" width="3.6" height="5" fill="url(#cpFilter)"/><line x1="26.5" y1="20.5" x2="30.1" y2="20.5" stroke="rgba(60,40,20,0.55)" stroke-width="0.3"/></g><g><rect x="31" y="10" width="3.6" height="15.5" fill="#fbf3df"/><rect x="31" y="20.5" width="3.6" height="5" fill="url(#cpFilter)"/><line x1="31" y1="20.5" x2="34.6" y2="20.5" stroke="rgba(60,40,20,0.55)" stroke-width="0.3"/></g><g><rect x="35.5" y="13" width="3.6" height="12.5" fill="#fbf3df"/><rect x="35.5" y="20.5" width="3.6" height="5" fill="url(#cpFilter)"/><line x1="35.5" y1="20.5" x2="39.1" y2="20.5" stroke="rgba(60,40,20,0.55)" stroke-width="0.3"/></g><g><rect x="40" y="16" width="3.6" height="9.5" fill="#fbf3df"/><rect x="40" y="20.5" width="3.6" height="5" fill="url(#cpFilter)"/><line x1="40" y1="20.5" x2="43.6" y2="20.5" stroke="rgba(60,40,20,0.55)" stroke-width="0.3"/></g><g><rect x="44.5" y="11" width="3.6" height="14.5" fill="#fbf3df"/><rect x="44.5" y="20.5" width="3.6" height="5" fill="url(#cpFilter)"/><line x1="44.5" y1="20.5" x2="48.1" y2="20.5" stroke="rgba(60,40,20,0.55)" stroke-width="0.3"/></g><g><rect x="49" y="14" width="3.6" height="11.5" fill="#fbf3df"/><rect x="49" y="20.5" width="3.6" height="5" fill="url(#cpFilter)"/><line x1="49" y1="20.5" x2="52.6" y2="20.5" stroke="rgba(60,40,20,0.55)" stroke-width="0.3"/></g><g><rect x="53.5" y="17" width="3.6" height="8.5" fill="#fbf3df"/><rect x="53.5" y="20.5" width="3.6" height="5" fill="url(#cpFilter)"/><line x1="53.5" y1="20.5" x2="57.1" y2="20.5" stroke="rgba(60,40,20,0.55)" stroke-width="0.3"/></g></g></svg></div>')\
+(if: $hasTrishaMatchbook is false)[(set: _nb to _nb + '<div class="nb-cig-status">You need to find matches.</div></div>')]\
+(else-if: $matchesLeft is a number and $matchesLeft <= 0)[(set: _nb to _nb + '<div class="nb-cig-status">You&#39;re out.</div></div>')]\
+(else:)[(set: _nb to _nb + '<div class="nb-inv-btn nb-inv-cig-btn">(link: "Smoke one")[(set: $cigReturnTo to (passage:)\'s name)(go-to: "Light a cigarette")]</div></div>')]\
+(set: _nb to _nb + '<div class="nb-inv-divider"></div>')\
+(if: $hasTrishaMatchbook is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ Trisha&#39;s Matchbook</div><div class="nb-inv-graphic-wrap"><svg class="nb-inv-matchbook" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mbCover" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7a1818"/><stop offset="55%" stop-color="#9a2828"/><stop offset="100%" stop-color="#5a1010"/></linearGradient><linearGradient id="mbEdge" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="rgba(0,0,0,0.20)"/><stop offset="10%" stop-color="rgba(0,0,0,0)"/></linearGradient></defs><ellipse cx="40" cy="92" rx="26" ry="2.5" fill="rgba(0,0,0,0.22)"/><g transform="rotate(-3 40 50)"><rect x="20" y="14" width="40" height="72" rx="2.5" fill="url(#mbCover)" stroke="rgba(40,8,8,0.55)" stroke-width="0.5"/><rect x="20" y="14" width="40" height="72" rx="2.5" fill="url(#mbEdge)"/><line x1="20" y1="22" x2="60" y2="22" stroke="rgba(20,4,4,0.45)" stroke-width="0.4"/><circle cx="28" cy="18" r="0.6" fill="rgba(20,4,4,0.7)"/><circle cx="52" cy="18" r="0.6" fill="rgba(20,4,4,0.7)"/><text x="40" y="45" text-anchor="middle" fill="#e8c478" font-family="Playfair Display, Georgia, serif" font-size="6.5" font-style="italic" letter-spacing="0.6">TRISHA&#39;S</text><line x1="28" y1="50" x2="52" y2="50" stroke="rgba(232,196,120,0.5)" stroke-width="0.3"/><text x="40" y="58" text-anchor="middle" fill="rgba(232,196,120,0.6)" font-size="5">✦</text><line x1="28" y1="62" x2="52" y2="62" stroke="rgba(232,196,120,0.5)" stroke-width="0.3"/><text x="40" y="73" text-anchor="middle" fill="rgba(232,196,120,0.5)" font-family="Crimson Text, serif" font-size="3.4" letter-spacing="0.8">SOHO</text><rect x="24" y="82" width="32" height="2.4" fill="rgba(60,32,16,0.85)"/><line x1="27" y1="82" x2="27" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="32" y1="82" x2="32" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="37" y1="82" x2="37" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="42" y1="82" x2="42" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="47" y1="82" x2="47" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/><line x1="52" y1="82" x2="52" y2="84.4" stroke="rgba(180,140,80,0.55)" stroke-width="0.3"/></g></svg></div><div class="nb-match-row" aria-hidden="true">(if: $matchesLeft is a number and $matchesLeft >= 1)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 2)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 3)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 4)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>](if: $matchesLeft is a number and $matchesLeft >= 5)[<span class="nb-matchstick"></span>](else:)[<span class="nb-matchstick nb-matchstick-spent"></span>]</div><div class="nb-napkin-caption">An invitation. (if: $matchesLeft is a number and $matchesLeft > 0)[(print: $matchesLeft) match(if: $matchesLeft > 1)[es] left.](else:)[//The matches are all gone.//]</div></div>')](else:)[(set: _nb to _nb + '<div class="nb-inv-item nb-inv-locked"><div class="nb-grey">○ A matchbook</div></div>')]\
 (set: _nb to _nb + '<div class="nb-inv-divider"></div>')\
 (if: $returnedPage is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ Page 93</div><div class="nb-inv-graphic-wrap"><svg class="nb-inv-page nb-inv-page-returned" viewBox="0 0 80 110" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pgPaperR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f4e9ce"/><stop offset="100%" stop-color="#d8c89c"/></linearGradient></defs><ellipse cx="40" cy="103" rx="26" ry="2" fill="rgba(0,0,0,0.18)"/><g transform="rotate(2 40 55)"><path d="M 14 8 L 17 12 L 13 18 L 16 24 L 14 30 L 17 36 L 15 44 L 16 52 L 14 60 L 17 68 L 14 76 L 16 84 L 14 92 L 17 98 L 68 98 L 68 8 Z" fill="url(#pgPaperR)" stroke="rgba(130,95,55,0.5)" stroke-width="0.6"/><line x1="22" y1="20" x2="62" y2="20" stroke="rgba(60,38,12,0.42)" stroke-width="0.45"/><line x1="22" y1="26" x2="60" y2="26" stroke="rgba(60,38,12,0.38)" stroke-width="0.45"/><line x1="22" y1="32" x2="62" y2="32" stroke="rgba(60,38,12,0.42)" stroke-width="0.45"/><line x1="22" y1="38" x2="56" y2="38" stroke="rgba(60,38,12,0.38)" stroke-width="0.45"/><line x1="22" y1="44" x2="61" y2="44" stroke="rgba(60,38,12,0.42)" stroke-width="0.45"/><line x1="22" y1="50" x2="58" y2="50" stroke="rgba(60,38,12,0.36)" stroke-width="0.45"/><line x1="22" y1="56" x2="62" y2="56" stroke="rgba(60,38,12,0.42)" stroke-width="0.45"/><line x1="22" y1="62" x2="55" y2="62" stroke="rgba(60,38,12,0.36)" stroke-width="0.45"/><line x1="22" y1="68" x2="60" y2="68" stroke="rgba(60,38,12,0.42)" stroke-width="0.45"/><line x1="22" y1="74" x2="48" y2="74" stroke="rgba(60,38,12,0.32)" stroke-width="0.45"/><text x="40" y="91" text-anchor="middle" fill="rgba(50,28,8,0.85)" font-family="Playfair Display, Georgia, serif" font-size="9" font-style="italic" font-weight="600">93</text><ellipse cx="56" cy="78" rx="3" ry="2" fill="rgba(140,90,40,0.16)"/><circle cx="60" cy="82" r="1.4" fill="rgba(140,90,40,0.12)"/><circle cx="24" cy="86" r="1.8" fill="rgba(140,90,40,0.12)"/></g></svg></div><div class="nb-napkin-caption">Returned to O&#39;Flatterly.</div></div>')](else-if: $hasMissingPage is true)[(set: _nb to _nb + '<div class="nb-inv-item"><div class="nb-inv-name nb-item">◈ Page 93</div><div class="nb-inv-graphic-wrap"><svg class="nb-inv-page" viewBox="0 0 80 110" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pgPaper" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f4e9ce"/><stop offset="100%" stop-color="#e0d3b0"/></linearGradient></defs><ellipse cx="40" cy="103" rx="26" ry="2" fill="rgba(0,0,0,0.22)"/><g transform="rotate(2 40 55)"><path d="M 14 8 L 17 12 L 13 18 L 16 24 L 14 30 L 17 36 L 15 44 L 16 52 L 14 60 L 17 68 L 14 76 L 16 84 L 14 92 L 17 98 L 68 98 L 68 8 Z" fill="url(#pgPaper)" stroke="rgba(130,95,55,0.55)" stroke-width="0.6"/><line x1="22" y1="20" x2="62" y2="20" stroke="rgba(60,38,12,0.6)" stroke-width="0.5"/><line x1="22" y1="26" x2="60" y2="26" stroke="rgba(60,38,12,0.5)" stroke-width="0.5"/><line x1="22" y1="32" x2="62" y2="32" stroke="rgba(60,38,12,0.55)" stroke-width="0.5"/><line x1="22" y1="38" x2="56" y2="38" stroke="rgba(60,38,12,0.5)" stroke-width="0.5"/><line x1="22" y1="44" x2="61" y2="44" stroke="rgba(60,38,12,0.55)" stroke-width="0.5"/><line x1="22" y1="50" x2="58" y2="50" stroke="rgba(60,38,12,0.45)" stroke-width="0.5"/><line x1="22" y1="56" x2="62" y2="56" stroke="rgba(60,38,12,0.55)" stroke-width="0.5"/><line x1="22" y1="62" x2="55" y2="62" stroke="rgba(60,38,12,0.45)" stroke-width="0.5"/><line x1="22" y1="68" x2="60" y2="68" stroke="rgba(60,38,12,0.55)" stroke-width="0.5"/><line x1="22" y1="74" x2="48" y2="74" stroke="rgba(60,38,12,0.42)" stroke-width="0.5"/><text x="40" y="91" text-anchor="middle" fill="rgba(50,28,8,0.95)" font-family="Playfair Display, Georgia, serif" font-size="9" font-style="italic" font-weight="600">93</text><ellipse cx="56" cy="78" rx="3" ry="2" fill="rgba(140,90,40,0.18)"/><circle cx="60" cy="82" r="1.4" fill="rgba(140,90,40,0.14)"/><circle cx="24" cy="86" r="1.8" fill="rgba(140,90,40,0.14)"/></g></svg></div><div class="nb-napkin-caption">For O&#39;Flatterly.</div></div>')](else:)[(set: _nb to _nb + '<div class="nb-inv-item nb-inv-locked"><div class="nb-grey">○ A missing page</div></div>')]\
 (set: _nb to _nb + '</div>')\
@@ -41037,6 +41181,22 @@ width: 70px;
 height: auto;
 filter: drop-shadow(0 4px 10px rgba(0,0,0,0.32));
 }
+.nb-inv-cigs {
+display: block;
+width: 110px;
+height: auto;
+filter: drop-shadow(0 4px 10px rgba(0,0,0,0.32));
+}
+.nb-cig-status {
+text-align: center;
+font-family: 'Crimson Text', Georgia, serif;
+font-style: italic;
+font-size: 1.02em;
+color: #3a1f10;
+letter-spacing: 0.04em;
+margin-top: 0.5em;
+opacity: 0.88;
+}
 /* Physical row of remaining matches under the matchbook image. One small
    matchstick per remaining match — fresh red sulphur head on brown wood.
    Spent slots render as a charred wisp so the depletion is visible. */
@@ -42888,6 +43048,186 @@ border-right: 1px solid rgba(107,32,32,0.25);
   color: rgba(200,168,106,0.7);
   font-size: 0.92em;
   letter-spacing: 0.06em;
+}
+
+/* ── SIDE-OF-SCREEN BURNING CIGARETTE ─────────────────────────────────── */
+#side-cig {
+  position: fixed;
+  right: 22px;
+  bottom: 68px;
+  width: 50px;
+  pointer-events: none;
+  z-index: 5000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.55));
+  transform-origin: 50% 100%;
+}
+#side-cig.side-cig-dropping {
+  transition: transform 1.4s cubic-bezier(0.5, 0, 0.85, 0.6), opacity 1.6s ease-out 0.2s;
+  transform: translateY(180px) rotate(38deg);
+  opacity: 0;
+}
+.side-cig-stick {
+  position: relative;
+  width: 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition: height 0.4s linear;
+}
+/* Paper: warm cream base + vertical grain + faint horizontal fibre marks +
+   subtle side shading so the tube reads as cylindrical, not flat. */
+.side-cig-paper {
+  width: 100%;
+  flex: 1 1 auto;
+  background:
+    repeating-linear-gradient(90deg,
+      transparent 0, transparent 2.6px,
+      rgba(80,60,30,0.07) 2.6px, rgba(80,60,30,0.07) 3px,
+      transparent 3px, transparent 5.6px),
+    repeating-linear-gradient(0deg,
+      transparent 0, transparent 9px,
+      rgba(80,60,30,0.045) 9px, rgba(80,60,30,0.045) 9.5px,
+      transparent 9.5px, transparent 18px),
+    linear-gradient(90deg,
+      rgba(50,35,18,0.18) 0%,
+      rgba(50,35,18,0) 22%,
+      rgba(50,35,18,0) 78%,
+      rgba(50,35,18,0.18) 100%),
+    linear-gradient(180deg, #f5e8c8 0%, #ead8b0 100%);
+  border-top: none;
+  border-left: 0.5px solid rgba(80,60,30,0.32);
+  border-right: 0.5px solid rgba(80,60,30,0.32);
+  position: relative;
+  overflow: visible;
+}
+/* Ash zone: just below the ember the paper is grey-black before it crumbles
+   away. A short translucent band at the very top of the paper sells the
+   moment between live ember and unburnt tobacco. */
+.side-cig-ash {
+  position: absolute;
+  top: 0; left: -0.5px; right: -0.5px;
+  height: 7px;
+  background:
+    radial-gradient(circle at 25% 100%, rgba(30,25,20,0.55) 0%, transparent 60%),
+    radial-gradient(circle at 70% 100%, rgba(45,40,35,0.4) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(60,55,50,0.6) 0%, rgba(80,72,62,0.3) 55%, rgba(120,100,72,0) 100%);
+  pointer-events: none;
+}
+/* Layered SVG ember (charred ring → orange → bright core). Sits half-above
+   the paper so the burn line lives at the join of paper + ember. */
+.side-cig-ember {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 11px;
+  filter:
+    drop-shadow(0 -2px 10px rgba(255,144,32,0.55))
+    drop-shadow(0 -2px 22px rgba(255,80,20,0.32));
+  animation: sideCigEmber 2.2s ease-in-out infinite;
+}
+@keyframes sideCigEmber {
+  0%,100% { opacity: 0.82; transform: translateX(-50%) scale(0.98, 0.95); }
+  50%     { opacity: 1;    transform: translateX(-50%) scale(1.04, 1.06); }
+}
+.side-cig-ember-drag {
+  animation: sideCigDrag 1.8s ease-in-out forwards;
+  filter:
+    drop-shadow(0 -3px 22px rgba(255,210,90,1))
+    drop-shadow(0 -3px 46px rgba(255,140,40,0.85))
+    drop-shadow(0 0 10px rgba(255,230,140,0.9))
+    brightness(1.75);
+}
+@keyframes sideCigDrag {
+  0%   { transform: translateX(-50%) scale(1, 1);     }
+  45%  { transform: translateX(-50%) scale(1.3, 1.3); }
+  70%  { transform: translateX(-50%) scale(1.22, 1.22); }
+  100% { transform: translateX(-50%) scale(1.05, 1.08); }
+}
+.side-cig-filter {
+  width: 100%;
+  height: 50px;
+  background:
+    /* Cork speckles — irregular tiny dark dots, like real filter paper */
+    radial-gradient(circle 0.7px at 22% 10%, rgba(40,22,8,0.7), transparent 100%),
+    radial-gradient(circle 0.6px at 68% 16%, rgba(40,22,8,0.6), transparent 100%),
+    radial-gradient(circle 0.9px at 38% 24%, rgba(40,22,8,0.7), transparent 100%),
+    radial-gradient(circle 0.5px at 80% 32%, rgba(40,22,8,0.55), transparent 100%),
+    radial-gradient(circle 0.8px at 14% 38%, rgba(40,22,8,0.65), transparent 100%),
+    radial-gradient(circle 0.7px at 56% 44%, rgba(40,22,8,0.65), transparent 100%),
+    radial-gradient(circle 0.6px at 28% 54%, rgba(40,22,8,0.55), transparent 100%),
+    radial-gradient(circle 0.8px at 75% 60%, rgba(40,22,8,0.7), transparent 100%),
+    radial-gradient(circle 0.5px at 44% 68%, rgba(40,22,8,0.55), transparent 100%),
+    radial-gradient(circle 0.7px at 18% 76%, rgba(40,22,8,0.6), transparent 100%),
+    radial-gradient(circle 0.6px at 62% 82%, rgba(40,22,8,0.6), transparent 100%),
+    radial-gradient(circle 0.8px at 36% 90%, rgba(40,22,8,0.65), transparent 100%),
+    /* Cork stripes — narrow vertical fibre marks */
+    repeating-linear-gradient(90deg,
+      rgba(80,52,18,0.22) 0px, transparent 1px,
+      transparent 2.4px, rgba(80,52,18,0.16) 3.2px,
+      transparent 4px, transparent 5px),
+    /* Subtle base shading + cork colour */
+    radial-gradient(ellipse at 50% 100%, rgba(60,40,18,0.28) 0%, transparent 70%),
+    linear-gradient(180deg, #d9a85a 0%, #c19140 40%, #a87a30 75%, #8a601e 100%);
+  border-radius: 0 0 50% 50% / 0 0 22% 22%;
+  border: 0.5px solid rgba(60,40,20,0.5);
+  flex: 0 0 50px;
+  box-shadow:
+    inset 0 -2px 3px rgba(50,28,5,0.45),
+    inset 1px 0 2px rgba(255,220,160,0.18),
+    inset -1px 0 2px rgba(30,18,4,0.3);
+  position: relative;
+}
+/* Endcap — the curved bottom edge of the filter cylinder. A darker
+   elliptical sliver bulging out from the base sells the same 3D shape as
+   the ember does at the top, so the cigarette reads as a cylinder rather
+   than a flat-bottomed bar. */
+.side-cig-filter::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: -0.5px;
+  right: -0.5px;
+  height: 7px;
+  background:
+    radial-gradient(ellipse 100% 100% at 50% 0%,
+      #5a3812 0%, #3a2008 55%, #2a1604 100%);
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+  border: 0.5px solid rgba(40,24,8,0.65);
+  border-top: none;
+  box-shadow: inset 0 -1px 2px rgba(20,10,4,0.6);
+}
+/* Mouth-end exhale puffs: spawned by JS at the bottom of the cigarette
+   (filter end), drift up + sideways and dissipate. Irregular timing — each
+   puff is a small cluster of 2–3 wisps. Idle cigarette has no smoke. */
+.side-cig-puffs {
+  position: absolute;
+  bottom: -8px;
+  left: -46px;
+  width: 110px;
+  height: 36px;
+  pointer-events: none;
+}
+.cig-puff-wisp {
+  position: absolute;
+  bottom: 0;
+  background: radial-gradient(circle, rgba(210,206,200,0.38) 0%, rgba(180,176,170,0.18) 55%, rgba(160,156,150,0.05) 82%, rgba(150,146,140,0) 100%);
+  border-radius: 50%;
+  filter: blur(3.4px);
+  opacity: 0;
+  animation: cigExhalePuff 8s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+  --drift-x: -16px;
+  --scale-end: 4.5;
+}
+@keyframes cigExhalePuff {
+  0%   { opacity: 0;    transform: translate(0, 0) scale(0.55); }
+  14%  { opacity: 0.55; transform: translate(calc(var(--drift-x) * 0.18), -26px) scale(1.2); }
+  45%  { opacity: 0.32; transform: translate(calc(var(--drift-x) * 0.55), -82px) scale(2.3); }
+  100% { opacity: 0;    transform: translate(var(--drift-x), -160px) scale(var(--scale-end)); }
 }
 
 /* ── CECIL COURT RULE — give it space above the prose so the SVG

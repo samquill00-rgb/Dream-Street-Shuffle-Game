@@ -1,190 +1,159 @@
-# HANDOFF — 2026-05-21
+# HANDOFF — 2026-05-23
 
-A long polish session, mostly Dr Quill playing through and sending fine edits, plus one significant architectural change: a **new asymptotic stat system** that replaces fixed `± N` deltas with proportional changes. Supersedes the 2026-05-20 handoff.
+A long playtest-driven session. The big throughline: **stat changes weren't visible to the player**, even when they were firing correctly under the hood. Root cause was almost always the same shape — `(set:)` macros were running in passage *bodies*, which means Harlowe's `header header` had already rendered the stat bar with the old value before the body could update it. The drop or boost only appeared on the *next* passage transition, by which time the popup had been dismissed and the connection was lost.
+
+The fix pattern: apply `(set: $stat to ($statLoss/Gain: $stat, N))` at the link *click* that brings the player to the passage, rather than in the passage body. Then the destination passage's header runs with the new value vs the old `$prev`, and the bar flashes a delta in plain sight.
+
+Also: the `window.Harlowe.API_ACCESS.STATE.variables` pattern used by several notebook buttons has been silently broken since the asymptotic-stat refactor — confirmed in the browser that this Harlowe build doesn't expose `window.Harlowe` at all. Same with `window.Engine`. So any JS-side `s.confidence = ...` writes were no-ops.
 
 ---
 
-## The big architectural change: asymptotic stats
+## Drink visibility (the "drinks not lowering sobriety" report)
 
-The 64 sites where `$confidence` / `$sobriety` adjusted by fixed `± N` are gone. They've been replaced with two custom Harlowe macros in StoryInit:
+Every player-initiated drink moment now applies `$statLoss` at the link click:
 
+- **French drinks** (Beaujolais / Claret / Cidre): converted from `[[..|French drink]]` intermediate to direct `(link:)[(set: ...)(go-to: "The French")]`. The "French drink" passage is now dead transit code; The French body fires the drink popup via `$justDranked`.
+- **Colony drinks** (Vodka / Champagne / Beer): statLoss moved to the link click; removed from Colony drink passage body. Popup script in Colony drink body still works (passage bodies execute scripts reliably).
+- **Empty Glass** (whisky with John St John): `[[Drink with him|The Empty Glass]]` → `(link: "Drink with him")[(set: $sobriety to ($statLoss: $sobriety, 8))(go-to: "The Empty Glass")]`. Removed statLoss from Empty Glass body.
+- **Davy Merkin** (×3 entry points: "Sit with him", "Get a drink with the man at the bar", "Drink with Davy Merkin"): all three converted to `(link:)` form with `$sobriety -9` at click. Removed statLoss from Davy Merkin body.
+
+Asymptotic values unchanged (8 for ordinary drinks, 9 for the heavier whisky moments). The fix was purely about where in the navigation the stat lands.
+
+---
+
+## Chippy "Eat" — popup-firing routed through Dean Street body
+
+The chippy Eat link had `<script>setTimeout(...)</script>` *inside* the `(link:)` hook. Verified in the browser that `<script>` tags inserted via `innerHTML` (which is how Harlowe inserts hook content) do **not** execute. The stats *did* change (Harlowe macros are native), but the popup never fired, so the player perceived "no boost".
+
+Fix:
+- `(link: "Eat.")` now sets `$justAteChippy to true` in addition to the stats.
+- Dean Street body has a new `(if: $justAteChippy is true)[(set: $justAteChippy to false)<script>setTimeout(function(){window.showEatPopup('chips');},250);</script>]` block.
+- `$justAteChippy` initialised in StoryInit and Start.
+
+Same pattern applied to French drinks — popup now fires from The French body via the existing `$justDranked` flag rather than from inside the `(link:)` hook.
+
+---
+
+## Liver "Eat it" notebook button
+
+Was completely broken. The HTML button's onclick relied on `window.Harlowe.API_ACCESS.STATE.variables`, which doesn't exist in this Harlowe 3.3.9 build (confirmed via `preview_eval` — both `Harlowe` and `Engine` are undefined on `window`). So the click animated the eagle popup, but the actual stat changes (`+22 / +40`) silently no-opped.
+
+Fix: replaced the HTML button with a Harlowe `(link:)` embedded directly in the notebook `_nb` string:
 ```harlowe
-(set: $statGain to (macro: num-type _v, num-type _n, [
-  (output-data: (round: (min: 100, _v + (100 - _v) * (_n / 50))))
-]))
-(set: $statLoss to (macro: num-type _v, num-type _n, [
-  (output-data: (round: (max: 0, _v - _v * (_n / 50))))
-]))
+<div class="nb-inv-btn nb-inv-eat">(link: "Eat it")[(go-to: "Eat Shelleys Liver")]</div>
 ```
 
-**How it behaves:**
-- **Gains** scale with HEADROOM (`100 - current`). Chips +10 at 80 conf only nudges to ~84, but at 30 conf lifts to ~44.
-- **Losses** scale with CURRENT. A drink at 80 sob bites hard; at 25 it barely shifts.
-- **At the midpoint (50/50)**, the new system produces the same delta as the old fixed values — that's the balance point.
-- **Divisor `/50`** controls intensity. Dr Quill liked the *"go harder"* tuning that's currently in play; if everything feels too mild/wild later, change the divisor in those two macro lines and the whole game retunes in one place.
+The `Eat Shelleys Liver` passage already had the correct setup: `(set: $hasLiver to false)`, `($statGain: $confidence, 22)`, `($statGain: $sobriety, 40)`, popup, then auto-navigate to Dean Street where the delta lands.
 
-All 64 passage-level sites converted via a Python regex pass — pattern `(set: $stat to $stat + N)` → `(set: $stat to ($statGain: $stat, N))`. Backup `.twee` saved as `Dream Street Shuffle.twee.bak-flat-stats` at the project root.
-
-**JS-side gates also routed through the same curve.** Two helpers added at the top of UserScript:
-```js
-window.dssStatGain = function(v, n) { ... };
-window.dssStatLoss = function(v, n) { ... };
-```
-Notebook liver-eat (`+22 / +40`) and notebook cigarette-light (`+6`) now go through these. Waltz scoring uses the same formula inline.
-
-**Confidence cap raised from 90 to 100.** The 90 cap was a fixed-delta-era guardrail; the asymptotic curve does the natural ceiling work now.
+**Still broken in the same way (not fixed this session):** the cigarette-light notebook button (`window.Harlowe.API_ACCESS.STATE.variables.matchesLeft = ...`). Same root cause. Will need the same fix — replace with a Harlowe-driven mechanism that navigates to a "Light a cigarette" passage with proper `(set:)` macros.
 
 ---
 
-## Stat-touching mechanic changes
+## Phone-call morale bump bug
 
-- **Chippy** ([.twee:32983](Dream Street Shuffle.twee:32983)): boost moved from passage entry to the **"Eat" click**, so the bar-flash lands on Dean Street return rather than silently on chippy entry.
-- **French drinks, Colony champagne, Pillars champagne, Cellar drinks** all already applied sobriety loss. **The Empty Glass (whisky with John Curtis)** was the only drink site missing — added `(set: $sobriety to ($statLoss: $sobriety, 8))`.
-- **Cecil Court Waltz scoring** ([.twee:32904](Dream Street Shuffle.twee:32904)): each note's hit accuracy now contributes to a 0-1 score (Perfect ≤60ms = 1.0, Good ≤150ms = 0.75, Late ≤220ms = 0.5, Miss = 0). Score maps to morale ±20 and sobriety ±10 deltas (linear around 0.5 neutral). Bypasses the +0.5/-0.5 dead zone so a "competent but fumbled" waltz costs nothing.
-- **Punching-game loss** ([.twee:10362](Dream Street Shuffle.twee:10362)): on defeat, the "Now, fuck off" narrative is suppressed and the player auto-advances to Fight Defeat after 1s. Win path unchanged.
+Player reported: "morale increases when the Aoife first phone call comes in — it should drop."
 
----
+Traced to: Pillars first-visit applies `+12 confidence` in its body. Player clicks "Accept the call" → "The phone call" header runs with `$conf=77` (post-Pillars boost) vs `$prev=70` (pre-Pillars). Bar flashes **+7**. The phone-call's own `-9` statLoss fires *after* the header, so it only registers on the next navigation (back to Pillars).
 
-## Lore-seen system (re-introduced, different mechanism)
+Fix: moved the call-entry statLoss to the "Accept the call" click for all three phone-call destinations:
+- **Aoife** (`The phone call`): −9 confidence
+- **Lily phone call 1**: −6 confidence (×5 entry points across Pillars / French / Colony / Ronnies / Coach)
+- **The dual ring**: −7 confidence (×5 entry points)
 
-The previous session **removed** the localStorage-based lore persistence per Dr Quill's call. **This session re-introduced it** because he asked for lore boxes that stay open on revisits — but with a key design tweak: they appear *slightly greyed* on auto-expand, so the player sees they're "already uncovered".
-
-**Implementation:**
-- `window.dssSeenLore` — a JS `Set` populated by the click handler when the player opens a LORE link. **Session-only**: page reload resets, by design.
-- On every passage swap, a 250ms delayed callback finds tw-links containing "LORE" whose title is in the Set, programmatically dispatches a click via `MouseEvent`, then tags the newly-revealed `.lore-box` with `.lore-seen` (`opacity: 0.62; filter: saturate(0.7);`).
-- Auto-expand suppresses the unravel sound and the click-tick via a `data-auto-expand="1"` attribute the click handlers check.
-
-**Why window-level not Harlowe state**: the previous attempt used a Harlowe `$seenLore` array, but pushing to it from JS didn't propagate reliably across passage navigations (Harlowe's state-snapshot model). A `Set` is simpler and avoids the round-trip. The `$seenLore` Harlowe init lines are left in StoryInit/Start as harmless no-ops in case we ever switch back.
+Removed the duplicate statLoss from each passage body.
 
 ---
 
-## Carthage audio fix
+## Routing fixes
 
-The previous handoff noted that `[dream]` was supposed to be removed from Carthage passages, but it actually wasn't — `:: The coast of Carthage` and `:: Carthage shore` still carried both `[carthage-cicadas dream]`, which made the procedural windFarnell bed fire underneath the cicadas. Dr Quill noticed the howling wind was still there in Carthage.
-
-Fixed by removing `[dream]` from both. The carthage-cicadas bed plays independently via its tag-registered lifecycle. `Stay in Carthage` keeps `[pyre]` for the fire bed.
-
----
-
-## The Interval — one-shot guard
-
-The Interval scene could be entered twice — once via Carthage (Page 93 path) and again via Green Sea (alba2 path). Both passages have "Wake from this dream" → `The Interval`. Dr Quill said this should only play once.
-
-Added `(if: $visitedInterval is true)[(go-to: "Dean Street")]\` at the top of `:: The Interval`. Second-visit links land directly at Dean Street, the Interval lily-window scene only plays once.
+- **LINE 2 Oxford → Dean Street directly**: was going through `The Interval`, which had a one-shot guard added in the previous session. After Carthage played the Interval, the Green Sea wake routed to Dean Street via the guard but skipped the lily-window scene. Dr Quill confirmed: keep the Interval one-shot (Carthage only); Green Sea wakes straight to Dean Street.
+- **Carthage shore link list collapses post-pyre**: was offering "Back to the pyre" + "Go to The Green Sea" + "Wake from this dream" once `$visitedPyre`. Now once the pyre is visited, only "Go to The Green Sea" (guided) + "Wake from this dream" remain; "Approach the pyre" only shows on the first visit. Per Dr Quill: Green Sea is reached *via* Carthage shore, only after the pyre.
+- **Dean Street boxed "Back to The Pillars" gone**: for the `$metCritic && !$tookLily2` case, the choice-box `[[Back to The Pillars|Approach The Pillars]]` was reappearing — Dr Quill had it removed in a prior session. Restored that: just the icons (▲, ❁, etc.) show now, no link.
 
 ---
 
-## Beermat fully cut from the game
+## Great Ham reading animation — 2× speed
 
-The "Clegg beermat" item — previously won from Percy Ritson at Pong, used to gate O'Flatterly's shop dialogue — is gone. Dr Quill's reasoning: single-play audience, the Great Ham telling the player to visit Cecil Court is enough.
+All seven timing knobs in the critic's `doTurn` IIFE halved:
 
-Removed from:
-- `$hasCleggBeermat` variable init (StoryInit + Start)
-- PP Victory / PP Defeat (no more Percy-specific beermat handout)
-- Critic's judgement (Cecil Court knowledge stays, no beermat handed over)
-- O'Flatterly's shop entry (was gated on `$hasCleggBeermat`, now unconditional → just `[[The Great Ham sent me|O'Flatterly introduction]]`)
-- O'Flatterly's quest description (Carthage hint stripped)
-- Dean Street Cecil Court conditional (`FIND PAGE 93 — //CARTHAGE//` flourish dropped)
-- Pillars exit (Carthage door) — now gated on `$metCritic` alone
-- Notebook inventory (beermat row removed)
-- Dead `.nb-inv-beermat` CSS class removed
+| Knob | Was | Now |
+|---|---|---|
+| Page flip CSS transition | 0.6s | 0.3s |
+| Left-page text fade delay | 220ms | 110ms |
+| Narration appear | 750ms | 375ms |
+| Aftermath reveal delay | 700ms | 350ms |
+| Motes spawn delay | 1100ms | 550ms |
+| Next-turn delay | 2400ms | 1200ms |
+| Initial settle | 1700ms | 850ms |
 
-**Knock-on**: PP Victory and PP Defeat both now hand out the **Trisha's matchbook** from *either* opponent (`(if: $opponent is "Jack Curtis")[...](else:)[...]`), each with a voice-appropriate line. Single-play means both Pong paths must yield the prize.
-
----
-
-## Prose / dialogue edits
-
-- **Red speaking to player** ([.twee:37212](Dream Street Shuffle.twee:37212)): "Like a tiger in the Taiga, moving strong and low through heavy blizzard…" → "Like a tiger that moves in the Taiga…" Dialogue restructured: "'I need to sell a book.' / 'What's the trouble, cock?' / 'I need to sell a book.' / 'Don't look so merly. Things turn up.'" Plus "smiling and then retreating", "wore the very same".
-- **Red on his perfume sentence** ([.twee:37220](Dream Street Shuffle.twee:37220)): rewrite with "the very same" replacing "wore it".
-- **Red's tip on the work** ([.twee:33802](Dream Street Shuffle.twee:33802)): "Forget the work" → "Forget the book", and "it's no way to live" → "It's no way to live" (capitalised).
-- **"He is a skeleton"** (French novelist branch) → "He is skeletal".
-- **"their office"** (John St. John line) → "their makeshift office".
-- **Dean Street manuscript line** ([.twee:33258](Dream Street Shuffle.twee:33258)): "It will help you find the things you really need" → "Let it help you find the things you need".
-- **Aoife/ghost passage** in Night Ahead Part Two ([.twee:36282](Dream Street Shuffle.twee:36282)): rewrote to "She's why you're here again, all told; you'd say that to yourself if you could stomach it." Stray opening AND closing speech marks removed (it's interior thought, not dialogue).
-- **Donkey coin popup** ([.twee:33347](Dream Street Shuffle.twee:33347)): "Pocket it" → "Toss it and pocket it".
-- **Phone-call duplicate line** ([.twee:36931 area](Dream Street Shuffle.twee:36931)): "Through the fumes, vapours and drink, you recognise a man." removed from the Aoife phone-call popup. It still appears in the next passage (line 33382) where it belongs.
-- **Marvell verse** ([.twee:34000](Dream Street Shuffle.twee:34000)): swapped from `.quest-box` (with right-align inline) to `.verse` class. Green-colored "green" spans preserved for wordplay.
+The whole scene runs at roughly half the previous pace. No structural changes to the auto-advance flow (still no clickable "He turns the page" button — that was already removed).
 
 ---
 
-## Visual / styling
+## Venue flower-only state — new
 
-- **Verse styling restyled** ([.twee:40047](Dream Street Shuffle.twee:40047)): dusty gold (`#c8a874`), hairline left border, slight letter-spacing, italic Crimson Text, 30em max-width, **left-aligned** (initially centered; Dr Quill clarified later that the original intent was left). Affects all three verse blocks (Spenser/Yeats fragment at the Spanish artist, Marvell at LINE 2 Oxford, Aemilianus/Virgil at Carthage shore).
-- **Alba next-link delay** ([.twee:39329](Dream Street Shuffle.twee:39329)): new `.alba-link-fade` CSS class with `opacity: 0; animation: albaLinkFadeIn 1.4s ease-out 4.6s forwards;`. Wraps four next-links across LINE 1 / LINE 2 / LINE 3 so the link doesn't appear until after the "THE FIRST/SECOND/THIRD LINE OF THREE" counter has finished its fade-in.
-- **Notebook stat spacing** ([.twee:39078](Dream Street Shuffle.twee:39078)): `.alba-strip { margin-top: 2px }` to make MORALE→SOBRIETY and SOBRIETY→ALBA visually even (the SOBRIETY ember pseudo-element extends below the bar, throwing off the apparent gap).
-- **VICTORY box centered** ([.twee:42048](Dream Street Shuffle.twee:42048)): `text-align: center` on `.pp-score`.
-- **Mote spawn scroll-into-view** ([.twee:8418-8485](Dream Street Shuffle.twee:8418)): both the main collection-box reveal logic and the `dssSpawnMotes` helper now check if the box is outside the viewport; if so, `scrollIntoView({behavior: 'smooth', block: 'center'})` and wait 550ms before spawning. Fixes the "motes from below the page" issue Dr Quill spotted on THE DEBT haunt.
+Player request: "if you've been there and got everything except the flower, the text is greyed out except the flower" — applied to all five venues.
 
----
+Mechanism:
+- Each venue passage emits `<span class="dss-flower-only-marker"></span>` inside its scene wrapper when the player has completed everything at that venue except picking the lily.
+- CSS rule on `.chippy-scene:has(.dss-flower-only-marker)` etc. dims the whole scene via `filter: brightness(0.42) grayscale(0.45)`.
+- A compensating `filter: brightness(2.4) saturate(1.3) drop-shadow(...)` on `.lily-prompt` and `.lily-taken` brings the lily back to ~full visibility with a soft amber halo so it reads as the obvious thing to click.
+- Markers are placed *inside* the `(else:)` branch of each venue's `_lilyRing`/`_dualRing` conditional so they don't fire during phone-call interruptions.
 
-## Audio fixes (other than the Carthage wind)
+The French passage was missing a scene wrapper — added `<div class="french-scene">...</div>` for consistency with the others.
 
-- **BEGIN click silent** ([.twee:11625](Dream Street Shuffle.twee:11625)): `if (txt === 'BEGIN') return;` added to the typewriter-tick skip list.
-- **Page-turn sound rewritten** ([.twee:643](Dream Street Shuffle.twee:643)): the critic's `pageRustle()` was a sharp 1600Hz highpass burst that sounded like glass breaking. Now: 1.1s envelope with 100ms gentle attack and long decay, band-passed 700-5200Hz (papery not hissy), with a soft low whump underneath (105Hz→55Hz sine) for physical weight.
-- **O'Flatterly shop bell — once per phase** ([.twee:8292-8307](Dream Street Shuffle.twee:8292)): was gated by `window._heardOflatterlyBell` so it played only once ever. Now tracks `window._heardOflatterlyBellPhases.pre` and `.post`, where "post" = `$returnedPage is true`. The brass clapper rings again the first time the player steps in with the returned page in hand.
-
----
-
-## Lily phone call 1 — Sonnet 66 reliability fix
-
-The Sonnet 66 fragment ("Your tongue is cauterised on 66, its heat, which you dare not speak: //Tir'd with all these, from these would I be gone, Save that, to die, I leave my love alone.// You both hang up, each leaving the other alone.") wasn't reliably appearing. Dr Quill said he waited and missed it, or it didn't trigger.
-
-Root cause: the original `<span>` had blank lines inside, which Harlowe was parsing into paragraph breaks, breaking the span. The CSS `lily-fade-late` animation-delay also had a tight 10s timing.
-
-**Fix** ([.twee:37138-37140](Dream Street Shuffle.twee:37138)):
-- Converted `<span>` to `<div>` with `<br>` tags and `<em>` for italics — keeps the markup intact.
-- Wrapped the entire div in Harlowe's `(after: 11s)[...]` macro so the element only enters the DOM at 11s; the `lily-fade` animation then runs from element-birth (no timing race).
-- Hang-up link pushed from `(after: 10s)` to `(after: 15s)`.
-- Auto-redirect pushed from `(after: 16s)` to `(after: 28s)` — ~14.5s reading window.
+Conditions per venue:
+- **Chippy** (lily1): `$hadChippy is true and $tookLily1 is false`
+- **Pillars** (lily2): `$hadPhoneCall is true and $metCritic is true and $tookLily2 is false`
+- **Ronnies** (lily3): `$completedSetlist is true and $tookLily3 is false`
+- **Colony** (lily4): `$knowsRonnies is true and $knowsCopperSecret is true and $tookLily4 is false`
+- **French** (lily5): `($haunts contains $haunt1) and ($haunts contains $haunt2) and $tookLily5 is false`
 
 ---
 
 ## State of the live code
 
-All today's changes synced to `Dream Street Shuffle.html` (132 passages). `sync_html.py` unchanged. Backup `.twee` from before the asymptotic stat refactor saved as `Dream Street Shuffle.twee.bak-flat-stats`.
+All today's changes synced to `Dream Street Shuffle.html` (132 passages). `sync_html.py` unchanged.
 
-**Major structural shifts in this session:**
-1. **Stats are now asymptotic, end-to-end.** Both Harlowe macros and JS helpers use the same `/50` curve. Single knob to retune intensity.
-2. **Lore boxes stay open on revisit, greyed.** Window-level Set, no persistence beyond session.
-3. **Trisha's matchbook universally available** from any Pong opponent.
-4. **Beermat cut entirely** from the game state and visible UI.
-5. **The Interval is one-shot.**
-6. **Carthage no longer has the procedural wind layer** — cicadas (and fire on Stay) only.
-
----
-
-## Memories — no changes this session
-
-No new memory files written. The earlier "Drafting in DSS character voice" / "Don't add or suggest DSS prose unless structurally necessary" / "Always reason from the source" instructions still govern.
+**Major structural shifts this session:**
+1. Stat-change visibility is now consistent — every player-initiated drink/eat/call applies its `$statLoss`/`$statGain` at the click, not in the destination body.
+2. Liver button uses Harlowe navigation instead of broken `Harlowe.API_ACCESS` JS pokes.
+3. Venues collapse to flower-only visual mode when all that's left is the lily.
+4. Carthage shore + Maritime-after-critic flow is tightened — no more dangling redundant links once the pyre/critic chapters are done.
 
 ---
 
 ## Open threads for the next session
 
-Carried forward from previous handoffs:
-- `Dream to Dean` and `Failure: Trisha's` — still reachable, could still be deleted.
-- `Eat Shelleys Liver` — orphan passage still in the file.
-- Title screen `BEGIN` link styling — still bare text.
-- Five-agent audit punch list — ~50 lower-priority items remain (z-index, dead CSS, edge cases).
-- Three Pillars (Mercy/Severity/Mildness) still banked.
-- Astral-map screenshots banked 2026-05-13 — still uncommitted to a use.
-- `[NEED A WORD]` / Cecil Court `[CLOSED]` / Trisha's `[CLOSED]` hub brackets left intact.
+Carried forward from previous handoffs and discovered this session:
 
-New from this session:
-- **Verse alignment** is now left across the board. If a specific verse later wants centered or right-aligned, it'll need an explicit inline override or a sub-class.
-- **Asymptotic curve tuning** — the `/50` divisor in `$statGain` / `$statLoss` is the single retuning knob. Currently feels harder/more reactive than the fixed-delta era. If certain events end up too weak or too brutal at certain stat ranges, that's where to look.
-- **Lily phone call 1 timing** — Dr Quill should verify the 28s auto-redirect window is generous enough on his next playthrough. Hang-up link at 15s gives him an out.
-- **Lore-seen `Set` is session-only** — a page reload starts the player with no lore opened. Acceptable per the single-play design.
-- **Page 93 SVG** — still flagged in the previous handoff as possibly needing more naturalistic edge irregularity if it reads stylised in play.
+- **Cigarette-light notebook button** — same broken-`Harlowe.API_ACCESS` pattern as the liver was. The "Light a cigarette" onclick silently no-ops on stats. Needs the same fix: navigate to a dedicated passage with `(set:)` macros.
+- **Dead "French drink" passage** — still in the file but unreferenced now that drinks bypass it. Safe to remove.
+- **Verse alignment** — left-aligned across the board; per-verse overrides still possible.
+- **Asymptotic curve tuning** — `/50` divisor in `$statGain` / `$statLoss` is the single retuning knob.
+- **Lore-seen `Set` is session-only** — page reload starts fresh.
+- **Three Pillars (Mercy/Severity/Mildness)** — still banked.
+- **Astral-map screenshots banked 2026-05-13** — still uncommitted to a use.
+- **`Dream to Dean` and `Failure: Trisha's`** — orphan, deletable.
+- **`Eat Shelleys Liver`** — now actually reachable via the fix, but the passage itself is fine.
+- **Title screen `BEGIN` styling** — still bare text.
+- **Page 93 SVG** — flagged for possible naturalistic edge irregularity.
 
 ---
 
 ## Things considered and intentionally NOT done
 
-- **Touching `Start` / StoryInit init duplication** — still defensive guards make it safe, refactor risk > payoff.
-- **Lore-box persistence in localStorage** — this session uses an in-memory `Set` instead. The previous session removed localStorage entirely; we did not re-add it (page reload resetting is fine for single-play).
-- **Naming the Great Ham "Ian Hamilton" in the O'Flatterly entry** — Dr Quill flagged that players who skip the optional lore wouldn't know that name. Changed to "The Great Ham sent me" since every player has at least seen the lore link's title.
-- **PP Defeat handing out the matchbook** — confirmed intentional; single-play philosophy says don't gate content on a skill check.
-- **Confidence cap above 100** — kept at 100. The asymptotic curve handles the soft ceiling; 100 is the hard belt-and-braces.
-- **Backfill compatibility for old saves** — Dr Quill confirmed none exist.
+- **Cigarette button fix** — flagged but not implemented this session; the user only flagged liver explicitly.
+- **Deleting `French drink` passage** — left as dead code; safer than risk if anything still links to it.
+- **Restructuring venue passages further** — the flower-only marker pattern works without restructuring; only The French needed a wrapper added.
+- **Touching the asymptotic divisor** — values feel balanced now per Dr Quill's earlier feedback.
+
+---
+
+## Memories — no changes this session
+
+No new memory files written. Patterns to keep in mind:
+
+- **Harlowe doesn't evaluate macros inside class attributes** — already in memory. Confirmed again when designing the flower-only marker pattern; used `:has()` selectors instead of conditional class injection.
+- **`window.Harlowe` and `window.Engine` are not exposed** in this Harlowe build (3.3.9). Any code using these silently no-ops. Worth adding to memory if it keeps coming up — see the cigarette button still waiting.
+- **`<script>` tags inside `(link:)` hooks are unreliable** — Harlowe inserts hook content via innerHTML, which doesn't execute script tags. Apply state changes via Harlowe `(set:)` and route popup-firing through the destination passage body via a flag (`$justDranked`, `$justAteChippy` pattern).

@@ -1,159 +1,154 @@
-# HANDOFF — 2026-05-23
+# HANDOFF — 2026-05-25
 
-A long playtest-driven session. The big throughline: **stat changes weren't visible to the player**, even when they were firing correctly under the hood. Root cause was almost always the same shape — `(set:)` macros were running in passage *bodies*, which means Harlowe's `header header` had already rendered the stat bar with the old value before the body could update it. The drop or boost only appeared on the *next* passage transition, by which time the popup had been dismissed and the connection was lost.
-
-The fix pattern: apply `(set: $stat to ($statLoss/Gain: $stat, N))` at the link *click* that brings the player to the passage, rather than in the passage body. Then the destination passage's header runs with the new value vs the old `$prev`, and the bar flashes a delta in plain sight.
-
-Also: the `window.Harlowe.API_ACCESS.STATE.variables` pattern used by several notebook buttons has been silently broken since the asymptotic-stat refactor — confirmed in the browser that this Harlowe build doesn't expose `window.Harlowe` at all. Same with `window.Engine`. So any JS-side `s.confidence = ...` writes were no-ops.
+Long session. Lots of small playtest fixes, plus a complete new mechanic (Cigarettes), plus the Carthage 3D-shore melody layer. Most things landed cleanly; a couple of bugs surfaced from refactor side-effects and got chased and fixed in-session.
 
 ---
 
-## Drink visibility (the "drinks not lowering sobriety" report)
+## Major new things
 
-Every player-initiated drink moment now applies `$statLoss` at the link click:
+### Cigarettes mechanic (Effects → notebook → side-of-screen burning visual)
 
-- **French drinks** (Beaujolais / Claret / Cidre): converted from `[[..|French drink]]` intermediate to direct `(link:)[(set: ...)(go-to: "The French")]`. The "French drink" passage is now dead transit code; The French body fires the drink popup via `$justDranked`.
-- **Colony drinks** (Vodka / Champagne / Beer): statLoss moved to the link click; removed from Colony drink passage body. Popup script in Colony drink body still works (passage bodies execute scripts reliably).
-- **Empty Glass** (whisky with John St John): `[[Drink with him|The Empty Glass]]` → `(link: "Drink with him")[(set: $sobriety to ($statLoss: $sobriety, 8))(go-to: "The Empty Glass")]`. Removed statLoss from Empty Glass body.
-- **Davy Merkin** (×3 entry points: "Sit with him", "Get a drink with the man at the bar", "Drink with Davy Merkin"): all three converted to `(link:)` form with `$sobriety -9` at click. Removed statLoss from Davy Merkin body.
+A whole new in-game mechanic, replacing the broken `window.Harlowe.API_ACCESS`-pattern from the old matchbook button.
 
-Asymptotic values unchanged (8 for ordinary drinks, 9 for the heavier whisky moments). The fix was purely about where in the navigation the stat lands.
+**Notebook entry** (Effects tab):
+- Top-level "Cigarettes" entry, always visible
+- SVG of an open red packet with cigarettes peeking out at varied heights and silver foil torn back (~110px wide)
+- Caption changes by state:
+  - No matchbook → "You need to find matches." (italic Crimson Text, `#3a1f10`, via `.nb-cig-status`)
+  - Matchbook + matches → "Smoke one" link
+  - Out of matches → "You're out."
+
+**Flow:**
+1. Click "Smoke one" in notebook (Harlowe `(link:)` — sets `$cigReturnTo = (passage:)'s name`, `(go-to: "Smoking")`)
+2. **Smoking** passage: decrements `$matchesLeft`, increments `$cigsTonight`, applies `$statGain: $confidence, 6`, then `(go-to: $cigReturnTo)` — clean transit, no JS-clicked hidden link
+3. Destination passage's header checks `$cigsTonight > $prevCigsTonight` and fires `window.startBurningCigarette()` via inline `<script>` (works because scripts in passage bodies execute; the trigger needed to be in the header to survive the redirect)
+
+**Side burning cigarette visual** (`#side-cig`, lives on `document.body`):
+- Fixed bottom-right, ~50px wide × 130px stick at start
+- Layered SVG ember (charred ring → orange → bright core with off-centre hot spots)
+- Paper has vertical grain + horizontal fibre marks + cylindrical side-shading + ash zone at top
+- Longer cork filter (50px) with speckles (12 tiny dark radial-gradients scattered) + rounded endcap (darker elliptical bulge bottom)
+- Bottom-rounded `border-radius: 0 0 50% 50% / 0 0 22% 22%` so it reads cylindrical
+- **Burn:** 90 seconds to drop. Stick shrinks from 130 → 38px linearly.
+- **Drop:** at the end, `.side-cig-dropping` class adds `translateY(180px) rotate(38deg) + opacity 0` over 1.4s — the player flicks the spent stub away.
+- **Persistence:** on `document.body`, JS uses closure-stored `startTime`. Passage transitions don't touch it; the cigarette keeps burning at its true elapsed time across navigation.
+
+**Smoke (mouth-end puffs):**
+- No constant chimney smoke. No ember-side smoke.
+- Irregular drags every 8–16s: ember brightens dramatically for 1.8s (`.side-cig-ember-drag` with `brightness(1.75)` + heavy drop-shadow halo), then ~3–4 wisps spawn at the FILTER end (player's mouth) at 1.5s in
+- Wisp size 34–56px, drift sideways ±32px, scale to 4–6× over 8s, opacity peaks 0.55 (translucent grey, not white)
+
+**Debug:** `🚬 Give matchbook (test Cigarettes menu)` button in debug Tools (backtick menu) — jumps to `DBG Matchbook` passage which sets `$hasTrishaMatchbook to true` and tops up `$matchesLeft to 5` if empty.
 
 ---
 
-## Chippy "Eat" — popup-firing routed through Dean Street body
+### Carthage 3D-shore melody layer
 
-The chippy Eat link had `<script>setTimeout(...)</script>` *inside* the `(link:)` hook. Verified in the browser that `<script>` tags inserted via `innerHTML` (which is how Harlowe inserts hook content) do **not** execute. The stats *did* change (Harlowe macros are native), but the popup never fired, so the player perceived "no boost".
+`carthage-melody.mp3` (2.5MB, embedded as `__DSS_CARTHAGE_MELODY_DATA_URI__` via `sync_html.py`). Plays via the existing `_ambientBeds` system:
 
-Fix:
-- `(link: "Eat.")` now sets `$justAteChippy to true` in addition to the stats.
-- Dean Street body has a new `(if: $justAteChippy is true)[(set: $justAteChippy to false)<script>setTimeout(function(){window.showEatPopup('chips');},250);</script>]` block.
-- `$justAteChippy` initialised in StoryInit and Start.
-
-Same pattern applied to French drinks — popup now fires from The French body via the existing `$justDranked` flag rather than from inside the `(link:)` hook.
-
----
-
-## Liver "Eat it" notebook button
-
-Was completely broken. The HTML button's onclick relied on `window.Harlowe.API_ACCESS.STATE.variables`, which doesn't exist in this Harlowe 3.3.9 build (confirmed via `preview_eval` — both `Harlowe` and `Engine` are undefined on `window`). So the click animated the eagle popup, but the actual stat changes (`+22 / +40`) silently no-opped.
-
-Fix: replaced the HTML button with a Harlowe `(link:)` embedded directly in the notebook `_nb` string:
-```harlowe
-<div class="nb-inv-btn nb-inv-eat">(link: "Eat it")[(go-to: "Eat Shelleys Liver")]</div>
+```js
+registerAmbientBed({
+  label: 'carthage-melody',
+  dataUri: '__DSS_CARTHAGE_MELODY_DATA_URI__',
+  tags: { 'carthage-shore': 1 },
+  volume: 0.32,
+  duckVolume: 0.10
+});
 ```
 
-The `Eat Shelleys Liver` passage already had the correct setup: `(set: $hasLiver to false)`, `($statGain: $confidence, 22)`, `($statGain: $sobriety, 40)`, popup, then auto-navigate to Dean Street where the delta lands.
+Tagged on **The coast of Carthage** and **Carthage shore** only (a new `carthage-shore` tag — not on Stay in Carthage, which is the inline pyre scene and shouldn't fire the melody). Layers with the existing `carthage-cicadas` bed.
 
-**Still broken in the same way (not fixed this session):** the cigarette-light notebook button (`window.Harlowe.API_ACCESS.STATE.variables.matchesLeft = ...`). Same root cause. Will need the same fix — replace with a Harlowe-driven mechanism that navigates to a "Light a cigarette" passage with proper `(set:)` macros.
-
----
-
-## Phone-call morale bump bug
-
-Player reported: "morale increases when the Aoife first phone call comes in — it should drop."
-
-Traced to: Pillars first-visit applies `+12 confidence` in its body. Player clicks "Accept the call" → "The phone call" header runs with `$conf=77` (post-Pillars boost) vs `$prev=70` (pre-Pillars). Bar flashes **+7**. The phone-call's own `-9` statLoss fires *after* the header, so it only registers on the next navigation (back to Pillars).
-
-Fix: moved the call-entry statLoss to the "Accept the call" click for all three phone-call destinations:
-- **Aoife** (`The phone call`): −9 confidence
-- **Lily phone call 1**: −6 confidence (×5 entry points across Pillars / French / Colony / Ronnies / Coach)
-- **The dual ring**: −7 confidence (×5 entry points)
-
-Removed the duplicate statLoss from each passage body.
+The 3D scene itself (`carthage-coast-3d-static.html`) is a separate standalone HTML file that `dssAudio` can't reach — so audio is handled inside the `.twee` Carthage passages. When the player crosses into the 3D iframe the .twee audio pauses; when they return, it resumes.
 
 ---
 
-## Routing fixes
+### Cigarette ambience trim + whoosh suppression
 
-- **LINE 2 Oxford → Dean Street directly**: was going through `The Interval`, which had a one-shot guard added in the previous session. After Carthage played the Interval, the Green Sea wake routed to Dean Street via the guard but skipped the lily-window scene. Dr Quill confirmed: keep the Interval one-shot (Carthage only); Green Sea wakes straight to Dean Street.
-- **Carthage shore link list collapses post-pyre**: was offering "Back to the pyre" + "Go to The Green Sea" + "Wake from this dream" once `$visitedPyre`. Now once the pyre is visited, only "Go to The Green Sea" (guided) + "Wake from this dream" remain; "Approach the pyre" only shows on the first visit. Per Dr Quill: Green Sea is reached *via* Carthage shore, only after the pyre.
-- **Dean Street boxed "Back to The Pillars" gone**: for the `$metCritic && !$tookLily2` case, the choice-box `[[Back to The Pillars|Approach The Pillars]]` was reappearing — Dr Quill had it removed in a prior session. Restored that: just the icons (▲, ❁, etc.) show now, no link.
-
----
-
-## Great Ham reading animation — 2× speed
-
-All seven timing knobs in the critic's `doTurn` IIFE halved:
-
-| Knob | Was | Now |
-|---|---|---|
-| Page flip CSS transition | 0.6s | 0.3s |
-| Left-page text fade delay | 220ms | 110ms |
-| Narration appear | 750ms | 375ms |
-| Aftermath reveal delay | 700ms | 350ms |
-| Motes spawn delay | 1100ms | 550ms |
-| Next-turn delay | 2400ms | 1200ms |
-| Initial settle | 1700ms | 850ms |
-
-The whole scene runs at roughly half the previous pace. No structural changes to the auto-advance flow (still no clickable "He turns the page" button — that was already removed).
+- **Whoosh on Coast arrival** — added `dssAudio.ambientCut()` (immediate stop, 0 fade) alongside `ambientOff()`. The Coast of Carthage passage now calls it on entry via `<script>` so the lingering windFarnell from Maritime interlude's `[dream]` tag gets cut, not faded.
+- **Cicadas trim** — first 15 seconds removed (had weird talking in the opening). Duration now 45s (down from 60s). Done via `afconvert` → manual WAV header rewrite (afconvert produces WAVE_EXTENSIBLE format that Python's `wave` module can't read) → `afconvert` re-encode at 128 kbps AAC. Original backed up as `the-carthage-cicadas-ambience-backup.m4a`.
 
 ---
 
-## Venue flower-only state — new
+## Bug fixes (in roughly the order they surfaced)
 
-Player request: "if you've been there and got everything except the flower, the text is greyed out except the flower" — applied to all five venues.
+### Empty passage after closing notebook
+**Root cause:** my first Cigarette implementation had `Smoking` use a JS-clicked hidden `(link-goto:)` — flaky in Harlowe 3.3.9.
+**Fix:** Smoking now just does `(set:)` then `(go-to: $cigReturnTo)`. Side-cigarette spawn moved to header (`$cigsTonight > $prevCigsTonight` check). Removed the deleted-then-recreated "Light a cigarette" passage entirely.
 
-Mechanism:
-- Each venue passage emits `<span class="dss-flower-only-marker"></span>` inside its scene wrapper when the player has completed everything at that venue except picking the lily.
-- CSS rule on `.chippy-scene:has(.dss-flower-only-marker)` etc. dims the whole scene via `filter: brightness(0.42) grayscale(0.45)`.
-- A compensating `filter: brightness(2.4) saturate(1.3) drop-shadow(...)` on `.lily-prompt` and `.lily-taken` brings the lily back to ~full visibility with a soft amber halo so it reads as the obvious thing to click.
-- Markers are placed *inside* the `(else:)` branch of each venue's `_lilyRing`/`_dualRing` conditional so they don't fire during phone-call interruptions.
+### Claret link showed whisky popup
+**Root cause:** my "delete French drink, inline the popup script in The French body" refactor used `var t = "(print: $lastDrink)".trim() || 'wine'` — but Harlowe doesn't process `(print:)` inside `<script>` tags. The JS got the literal string `"(print: $lastDrink)"`, which wasn't a known drink key, so `DrinkPopup`'s constructor fell back to its `'whisky'` default.
+**Fix:** reverted to the span-then-read pattern (write `$lastDrink` into a hidden span, read `textContent` from JS). Same approach the old French drink passage used.
 
-The French passage was missing a scene wrapper — added `<div class="french-scene">...</div>` for consistency with the others.
+### Pillars link stuck "open" after everything was done
+**Root cause:** the line-33658 gating condition was `($visitedCarthage is false or not ($alba contains $alba2) or not ($alba contains $alba3))`. But alba3 isn't collected at the Pillars — it comes from the Cow Ride at Coach and Horses. So the game kept suggesting Pillars while waiting for an alba line you can't get there.
+**Fix:** removed `or not ($alba contains $alba3)` from that condition. Pillars now greys out once Carthage is visited AND alba2 is collected (both reached via Pillars → Maritime → Carthage).
 
-Conditions per venue:
-- **Chippy** (lily1): `$hadChippy is true and $tookLily1 is false`
-- **Pillars** (lily2): `$hadPhoneCall is true and $metCritic is true and $tookLily2 is false`
-- **Ronnies** (lily3): `$completedSetlist is true and $tookLily3 is false`
-- **Colony** (lily4): `$knowsRonnies is true and $knowsCopperSecret is true and $tookLily4 is false`
-- **French** (lily5): `($haunts contains $haunt1) and ($haunts contains $haunt2) and $tookLily5 is false`
+### Trisha's gated too late
+**Fix:** removed `$hasLiver is true` from the gating. Trisha's now opens as soon as you have the matchbook (the invitation).
+
+### Off-centre text on the END (and other cinematic) passages
+**Root cause:** `Alba Complete`, `Alba Incomplete`, `Approach Centre Point`, `The Fetch` weren't in `_hideStats`. The header (stat bars, ALBA hint, NOTEBOOK) was rendering on top of the cinematic ending panes.
+**Fix:** added all four to `_hideStats`. (`Alba Complete/Incomplete` were already in `_backHide` but not `_hideStats` — only the back link was hidden.)
+
+### Colony "gated later than normal"
+Player perception, not a bug. Colony requires `$haunts contains $haunt1` (The Sketch from Benito). Pillars only requires `$visited's French is true`. Decided to leave as is (Colony stays one tier deeper than Pillars, thematic: the art crowd unlocks the art venue).
+
+### Other small ones
+- **IFID mismatch** — `.twee` `StoryData` had `2CA3EC26-…` but compiled HTML uses `E3F7C9E2-…`. Aligned both (the StoryData ifid AND the Continue-link guard script's `ifid` constant). The Continue-where-I-left-off link on the title page now correctly appears only when a real save exists for THIS story.
+- **Wipe autosave** debug-menu button added (`⌫`, confirms before wiping; strips URL hash + reloads).
+- **`Dream to Dean`** orphan passage deleted (debug menu entry also pruned).
+- **Page 93 SVG edges** softened — added subtle waves on top/left/right via `<use href="#p47Shape">` so all three layers (shadow, paper, grain) share one wavy path; bottom keeps its char.
+
+---
+
+## Prose & UX tweaks
+
+- **The Night Ahead** — "the book took much longer to make than the little girl, **and** after an immediate, impromptu effort, you can't take much credit for her, **either**." (was "but … anyway.")
+- **The Night Ahead** — "with **your** book in your bag" (was "with a book in your bag")
+- **Red typewriter line** — "**Soho's churning night's been in you too long; yours even while you weren't here. The only true way out is through a morning song.**" (was "You've been in Soho's churning night too long; the only true way out is through a morning song.")
+- **Dean Street first-/return-visit line** — "**It will help you find the things you need.**" (was "Let it help you find the things you  need.")
+- **Fish-and-chips word-to-the-wise** — "Are you hungry? Get some grub at the chippy." (was "Your confidence is slipping. Get some grub at the chippy.")
+- **Tarot card names** — now render *below* the card (no more mid-word truncation inside the 72-px card). Selection rebuilt as weighted pools so the spread varies across replays at the same stats.
+- **Greyed-out ALBA hint removed** — used to show "Centre Point [ONE MORE LINE OF THE ALBA]" at `_albaCount is 2`; gone.
+- **Punching game** — pre-fight redundancy gone. Fight auto-starts ~2.4s after Brace yourself (the "Take your stance" button is removed). Score threshold lowered from 6 → 5 to match Copper's stated rules.
+- **Great Ham** — book closes at end of reading (the existing right-page element flips left then is hidden, base shrinks + recolours to leather block; ~0.4s flip + 0.35s collapse).
+- **Green Sea** — gated behind `$returnedPage is true` (was just `$visitedPyre`). First Carthage trip exits via The Interval.
+- **CLIMB IT button** — slow-fade slowed from 2s → 5.5s, delay bumped from 2.5s → 3.5s.
+- **PLUS. ULTRA. link** — wrapped in `.plus-ultra-fade` span with 6s opacity ease-in.
+- **Transition footstep sounds** — deleted (cobble-on-outdoor-arrival, carpet-on-Interval-stair).
 
 ---
 
 ## State of the live code
 
-All today's changes synced to `Dream Street Shuffle.html` (132 passages). `sync_html.py` unchanged.
+132 passages. Cigarettes mechanic + Carthage melody layer + all polish/bug fixes in. Cigarettes is the biggest new system this session — pattern: side-effect-on-document-body visual driven by a stat-delta check in the header.
 
-**Major structural shifts this session:**
-1. Stat-change visibility is now consistent — every player-initiated drink/eat/call applies its `$statLoss`/`$statGain` at the click, not in the destination body.
-2. Liver button uses Harlowe navigation instead of broken `Harlowe.API_ACCESS` JS pokes.
-3. Venues collapse to flower-only visual mode when all that's left is the lily.
-4. Carthage shore + Maritime-after-critic flow is tightened — no more dangling redundant links once the pyre/critic chapters are done.
+### Stuff that came up in playtest and got fixed live
+The session was iterative — Dr Quill kept playing, surfacing bugs, I'd chase them down to root cause and fix. Mid-session there were 3 broken things at once (notebook → empty passage, claret → whisky popup, Pillars link stuck) — all resolved.
 
 ---
 
-## Open threads for the next session
+## Open threads
 
-Carried forward from previous handoffs and discovered this session:
+### Still flagged
+- **Flower retakeable at The French** — Dr Quill reported it but I couldn't find anything in the lily logic that would reset `$tookLily5`. He was going to try on a fresh save (post the IFID + autosave wipe) to confirm whether it was a stale-save artifact or a real bug. **No confirmation yet.**
 
-- **Cigarette-light notebook button** — same broken-`Harlowe.API_ACCESS` pattern as the liver was. The "Light a cigarette" onclick silently no-ops on stats. Needs the same fix: navigate to a dedicated passage with `(set:)` macros.
-- **Dead "French drink" passage** — still in the file but unreferenced now that drinks bypass it. Safe to remove.
-- **Verse alignment** — left-aligned across the board; per-verse overrides still possible.
-- **Asymptotic curve tuning** — `/50` divisor in `$statGain` / `$statLoss` is the single retuning knob.
-- **Lore-seen `Set` is session-only** — page reload starts fresh.
-- **Three Pillars (Mercy/Severity/Mildness)** — still banked.
-- **Astral-map screenshots banked 2026-05-13** — still uncommitted to a use.
-- **`Dream to Dean` and `Failure: Trisha's`** — orphan, deletable.
-- **`Eat Shelleys Liver`** — now actually reachable via the fix, but the passage itself is fine.
-- **Title screen `BEGIN` styling** — still bare text.
-- **Page 93 SVG** — flagged for possible naturalistic edge irregularity.
+### Carried over, parked
+- **Title-screen BEGIN** — kept as is per his call
+- **Three Pillars (Mercy/Severity/Mildness)** — banked
+- **Astral-map screenshots** — banked (uncommitted to a use)
+- **Asymptotic curve `/50`** — verified, no change wanted
+- **Verse alignment** — always left, no overrides
+- **Cigarette popup function** — `window.showCigarettePopup` (hold-to-light overlay) is now dead code; only used by debug paths. Pruneable, kept for safety.
+- **`Failure: Trisha's`** — NOT actually orphan (referenced by JS); should stay (HANDOFF previous-session note was wrong)
 
----
+### Memories — no changes this session
+The patterns already in memory all held:
+- **Harlowe doesn't evaluate macros inside `<script>` tags** — confirmed again with the claret bug (revealed by my own refactor)
+- **`window.Harlowe` not exposed** — confirmed (the matchbook button was broken because of this; cigarettes mechanic now uses the navigate-and-redirect pattern instead)
+- **`<script>` tags inside `(link:)` hooks don't execute** — already in memory; routed the burning cigarette spawn through the header
 
-## Things considered and intentionally NOT done
-
-- **Cigarette button fix** — flagged but not implemented this session; the user only flagged liver explicitly.
-- **Deleting `French drink` passage** — left as dead code; safer than risk if anything still links to it.
-- **Restructuring venue passages further** — the flower-only marker pattern works without restructuring; only The French needed a wrapper added.
-- **Touching the asymptotic divisor** — values feel balanced now per Dr Quill's earlier feedback.
-
----
-
-## Memories — no changes this session
-
-No new memory files written. Patterns to keep in mind:
-
-- **Harlowe doesn't evaluate macros inside class attributes** — already in memory. Confirmed again when designing the flower-only marker pattern; used `:has()` selectors instead of conditional class injection.
-- **`window.Harlowe` and `window.Engine` are not exposed** in this Harlowe build (3.3.9). Any code using these silently no-ops. Worth adding to memory if it keeps coming up — see the cigarette button still waiting.
-- **`<script>` tags inside `(link:)` hooks are unreliable** — Harlowe inserts hook content via innerHTML, which doesn't execute script tags. Apply state changes via Harlowe `(set:)` and route popup-firing through the destination passage body via a flag (`$justDranked`, `$justAteChippy` pattern).
+Worth flagging:
+- **Side-of-screen visuals on `document.body`** persist across passage navigation in Harlowe (since Harlowe replaces `<tw-passage>` content but not body children). The cigarette is the first thing in DSS using this pattern; could be reused for other ambient effects.
+- **Stat-delta detection in the header** is now a clean way to trigger JS visuals from a passage that just did `(set:)` + `(go-to:)`. Cigarette uses `$cigsTonight > $prevCigsTonight`; same shape could fire other one-shot visuals on other stat changes.
+- **Trim m4a files with the Python WAV roundtrip pattern** — `afconvert` → parse RIFF chunks manually (Python's `wave` module rejects `WAVE_EXTENSIBLE` format 65534) → write standard PCM WAV → `afconvert` back. No ffmpeg required.

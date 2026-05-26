@@ -1,86 +1,79 @@
-# HANDOFF — 2026-05-25 (playtest-feedback session)
+# HANDOFF — 2026-05-27 (end-game polish: lightning, glow, failure path, preload)
 
-Long session working through Dr Quill's playthrough notes after a real playtest. ~25 items landed across notebook polish, end-game spectacle, audio cues, popups, drink mechanics, and Art Nouveau styling on the Dawn page. Draft is in shippable shape; one verification gap noted below (final centre-pent fix).
+Multi-day session focused entirely on the endgame sequence (Dean Street → The Fetch → Approach Centre Point → Alba Complete/Incomplete → Dawn Approach → White/Black page → Dawn). Tightened the visual choreography, fixed several flicker/render bugs, opened a failure path to Alba Incomplete, and built debug tooling for the ending. Latest state is shippable for everything *except* one environmental issue noted at the bottom.
 
 ---
 
 ## Items completed this session
 
-### Notebook + lily page
+### Debug tooling
 
-1. **Removed "MEMORIES" section from the lily page of the notebook.** Was showing a section "Memories ◆ A certain memory" that he called "trash." Block at .twee:37875 deleted.
-2. **`.verse` restyled to bronze and thin** so verses (in passages) no longer look like links. Was Crimson Text 600 / `#e6c894` with warm-glow text-shadow; now weight 300 / `#a67839` / no glow / wider letter-spacing. [.twee:40449]
-3. **"Linger" + back-door split for Lackland's office.** Was one combined passage; now Linger appears when `$knowsCopperSecret` is true and routes to new **Martin Lackland's Back Door** passage which holds the door prose + password prompt. `$awaitingLacklandPwd` set on the back-door passage so the notebook deploy button still works. [.twee:34471, 34480]
+1. **New "Complete All" debug button.** Sets every haunt + lily + alba line + inventory item + station-visited flag in one click, then drops you at Dean Street with "The dawn is coming" link live. [.twee:3189–3193 button, .twee:37807 `:: DBG Complete` passage]. Note: because `$hadPhoneCall + $metCritic` are now true, Dean Street auto-redirects once to **After Aoife** (the typewriter cubicle scene) — click "On." to land on Dean Street proper. Not a bug, just the gated phone-call hook firing.
 
-### Audio
+### End-game spectacle
 
-4. **Bright chord SFX while moving the bird in the liver-eating popup.** New `dssAudio.brightChord()` plucks one note from a Cmaj9 cluster (1046–2637 Hz) with octave shimmer + triangle tine. LiverPopup's `handleMove` throttles by 170 ms + 10 px movement so successive picks accumulate into an evolving chord. [.twee:2718, 2904, ~10110]
-5. **Green Sea music continuous across the dream-Carthage bar arc.** `green-sea` ambient bed was registered but no passage carried the tag, so it never fired. Tagged **Green Sea Approach**, **LINE 2**, **LINE 2 Oxford** with `green-sea` — Nabeul cafe field-recording now plays across approach + bar + memory cut-away. [.twee:34248, 34252, 34272]
-6. **Cecil Court ding-dong bell on return with the page.** The auto-handler at .twee:8635 depends on `window.Harlowe.API_ACCESS` resolving correctly; in some builds it fails silently and skips the `has-page` phase ring. Added an explicit `<script>` inside the `(if: $hasMissingPage is true)` block on **O'Flatterly introduction**, gated by the same `_heardOflatterlyBellPhases['has-page']` key so it can't double-ring. [.twee:34629]
+2. **Pentagram + tree-of-life lightning recoloured electric blue-white** (`#a8c8f8`). Was warm white-gold (`#fff5d0`) and read as a "second pentagram" stacked on the gold one. The blue layer is clearly subordinate now, and the eye reads pent → lightning as a sequence. [.twee:32664 + 32683 inline SVG, .twee:45907 CSS, plus new `tree-spark-pulse-blue` keyframe and `tree-path-draw-bright` keyframe].
+3. **Lightning delayed** so the pentagram fully settles first. Start moved from 2.4s → 4.5s after iframe-ready. Pent fade-in (0.4–2.0s) is clearly done before any bolt strikes. Trail-residue opacity bumped from 0.10 → 0.55 — bolts leave a much clearer trace through the star. [.twee:45914–45937].
+4. **Green sage halo on the lily-of-the-valley clusters at each point of the pent**, echoing the Gawain caption. Three stacked drop-shadows: `10px @ 0.85` + `22px @ 0.55` + `40px @ 0.30` in `rgba(170,230,170,...)`. New `class="pent-lilies"` on the outer `<g>` wrapping the 5 lily groups. [.twee:32664/32683 + .twee:45876 CSS].
+5. **Gawain caption** (*"And the English call it everywhere…"*) recoloured to pale spring-green (`#c8e8c0`) with a matching layered green text-shadow so it shares the same chromatic event as the flowers. Black underlay shadow keeps it legible. [.twee:45888].
+6. **Auto-go-to to White/Black page bumped 12s → 16s** to fit the new lightning sequence (last bolt lands ~iframe-ready + 5.5s, with 3+ seconds of "settled" view before the white fade starts). `dawnFadeWhite/Black` duration extended 12s → 14s. `treeFlashed` Harlowe-state timer pushed from 6.5s → 9.5s to fire after the lightning settles. [.twee:32668 + 32687, .twee:45844 CSS, .twee:32665 + 32684 script].
 
-### Popups + modals
+### Failure path opened
 
-7. **Word to the Wise antiquarian modal** — new `window.showWordToTheWise({title, body})` function. Gold filigree border, italic uppercase title, dismiss via ✕ / Esc / Enter / click-outside. Fires 1.4 s after the matchbook is acquired in **PP Defeat** and **PP Victory**, body: *You've found matches. Remember there are cigarettes if you need to smoke (Notebook ↑)*. Arrow naturally points up at the NOTEBOOK button. [.twee:3573, 43212]
-8. **Liver popup returns to where the player opened the notebook.** Was hardcoded to Dean Street. New `$liverReturnTo` state var, initialised to "Dean Street" at both init points; the notebook "Eat it" link now captures `(passage:)'s name` before navigating; `Eat Shelleys Liver` uses `(link-goto: "·", $liverReturnTo)` for the JS-clicked return link. Mirrors the existing `$cigReturnTo` pattern. [.twee:110, 36430, 38019, 32461]
+7. **"Give up. Sleep here." link** added to the **Coach and Horses lock** passage, gated by `$coachUrgent` (sobriety = 0 with 10+ haunts caught, no alba yet). Routes directly to **Alba Incomplete** → Dawn Approach Black → Dawn. Before this, Alba Incomplete was completely unreachable in normal play — the Dean Street gate ("The dawn is coming") only opened with all 3 alba lines, and from there Approach Centre Point always routed to Alba Complete. Now the player who blacks out at the Coach with most haunts but no alba can collapse straight into the failure ending. [.twee:33509, alongside the Retch link]. Soft `alba-link-fade` styling so it matches the existing voice.
 
-### Drink mechanic
+### Astral-overlay flicker fix
 
-9. **Drink popups now grant a small morale gain** alongside the sobriety hit. All seven modal-popup drink links (Colony 3, French 3, Empty Glass 1) gained `(set: $confidence to ($statGain: $confidence, 5))`. Net per drink: −8 sobriety, +5 confidence — Dutch courage. [.twee:33617–33619, 37795–37797, 34311]
+8. **Tyburn-text "appears twice" bug fixed.** The `dssAstralReveal` constellation modal is appended to `document.body` (not the tw-passage), so Harlowe's passage transition left it persisting over Alba Complete — the player saw the Tyburn prose with dots/lines floating across it, then a clean second render once the astral faded out 11.5s later. Added a `MutationObserver` watching `tw-story` for `tw-passage` replacement; when detected, the astral modal is torn down immediately and its setTimeouts cleared. [.twee:9335–9362].
 
-### Copper's lair + The French
+### 3D iframe loading — Approach Centre Point fallback
 
-10. **Copper's lair knock prompt simplified** — was "You stand at the door. Three knocks should do it." Now just "Knock three times." [.twee:34334]
-11. **Removed quotes around** *"You can leave now, perhaps it's wise to get out…"* — was wrapped in single-quote speech marks; now bare prose. [.twee:33567]
-12. **Removed duplicate "He's a novelist now" line** from **Approach the novelist** — was rendering twice (once in The French hub, once on Approach). Now only in the hub. [.twee:32426]
+9. **WebGL-failure fallback for the Centre Point 3D ladder.** Wrapped the `new THREE.WebGLRenderer(...)` call in `initCentrePoint` / `buildCPScene` in try/catch. If WebGL can't be created (GPU process unhealthy, context limit hit, hardware accel off), the function still appends `cp-wrap` to the body with the "Every man and every woman is a star." caption and a clickable **CLIMB IT** button that triggers the hidden `[[·|Alba Complete]]` tw-link. Players can now progress through the ending even if their browser's WebGL is broken. [.twee:28808–28840]. The same pattern *should* be applied to the other 3D scenes (Dawn Approach iframe, Trisha's, Colony, etc.) for full robustness — left for next session if needed.
 
-### Interval passage
+### 3D iframe loading — preload approach (rolled back)
 
-13. **Only "Turn and follow her" link at the bottom** of The Interval. The previous `[[Dean Street]]` link at the bottom is gone; navigation now happens via a subtle "Down again." link **inside** the (link: "Turn and follow her") reveal — appears after the player clicks, styled with the existing `alba-link-fade` class. Mirrors "She goes upstairs. You go down." from earlier in the passage. [.twee:36646]
+10. **Experimented with body-level iframe preload to make the Dawn Approach 3D load instantly when clicking "Go!".** Two iterations:
+    - **Hidden iframe with `visibility:hidden`** during Alba Complete — Chrome throttles script execution in hidden iframes, so Three.js loaded but the inline scene-build script never ran. Landed at Dawn Approach with an empty white canvas.
+    - **Hidden iframe with `opacity:0`** instead — same result. Chrome's throttling triggers on opacity:0 too.
+    - **Final approach: HTTP-prefetch only.** On Alba Complete / Alba Incomplete, a small script does `fetch('oxford-street-from-centre-point-3d-static.html', {cache: 'force-cache'})` + a `<link rel="preload">` for the Three.js CDN. The iframe itself is created fresh, on-screen and visible, on Dawn Approach using the original inline-iframe markup. HTTP cache makes the load fast; visibility from the start avoids the throttling trap. [.twee:33686 + 33717 prefetch script, .twee:32686 + 32705 inline iframe in Dawn Approach].
 
-### LINE 2 Oxford (Marvell)
+---
 
-14. **First "green" pale pink, second "green" baby blue** in the Marvell couplet on the LINE 2 Oxford memory passage. Was both `#9ed68a` (same green). Now `#f4b8c4` then `#a8cde0`. [.twee:34391]
-15. **"Tir'd with all these" verse left-aligned.** Was centred (lily-glimpse default). New `.lily-glimpse-verse` class on the inner `<em>`: `display:block; text-align:left; max-width:24em; margin:0.4em auto` so the block centres but verse text is left-aligned (verse convention). [.twee:37566, 42637]
+## ⚠ Outstanding: WebGL context creation failing on Dr Quill's Chrome
 
-### Night Ahead micro-edits
+Toward end of session, Chrome on the dev machine could no longer create *any* WebGL context. `chrome://gpu/` not checked yet. Errors in console:
 
-16. **Removed comma after "tonight"** — *"And so tonight, you've gone back to Soho…"* → *"And so tonight you've gone back to Soho…"*. [.twee:36667]
+```
+THREE.WebGLRenderer: Error creating WebGL context.
+Uncaught Error: Error creating WebGL context.
+```
 
-### Dawn page — Art Nouveau pass
+All 3D scenes (Centre Point ladder, Oxford Street city, the various venue scenes) show only their HTML overlays (date/caption/links) — no canvas, no geometry. The constellation `dssAstralReveal` still works because it's SVG, not WebGL.
 
-17. **Colophon: "Three Blue Posts" → "By Three Blue Posts"**, plus a max-width-fit-content + nowrap so it doesn't wrap to two lines. [.twee:33675, 45193]
-18. **Mucha-style flanking fleurons on the colophon** — whiplash curl + tiny lily-of-the-valley bell, mirrored on each side via `::before/::after` with SVG data URIs. [.twee:45204]
-19. **Music credit line beneath the colophon** — *Closing music by Sam Quill and Patrick Davidson Roberts, arr. and piano by Eoin Roe.* New `.dawn-credits` class, quieter Playfair italic at 0.74em, fades in 8.6 s after page load (0.6 s after colophon). [.twee:33676, 45209]
-20. **Four Art Nouveau corner ornaments on the ending-pane** — whiplash curve + hanging lily-of-the-valley sprig (3 bells) + tendril spiral + leaf accent at each corner. One inline SVG mirrored via CSS transforms for the other three. Fades in 0.8 s after page load over 3.4 s. [.twee:33653, 45093]
-21. **Enhanced "Dawn Rule SVG bottom"** — was a thin twin-line + 5 bells; now a 70-tall filigree band with paired whiplash curves trailing left/right, tendril spirals at the terminals, 7-bell lily cluster with stems, leaves at the inflection points, bead terminals. [.twee:45605]
+**Likely causes, in order:**
+1. **Chrome's GPU process unhealthy** from accumulated WebGL contexts during the day's testing — full Cmd+Q on Chrome usually resets this. Tried partially; not verified to fix.
+2. **Hardware acceleration disabled** in `chrome://settings/system` (toggle "Use graphics acceleration when available").
+3. **GPU/driver issue at the OS level** — full Mac restart fixes.
 
-### End-game spectacle — Tree-of-Life lightning
+**The CLIMB IT fallback (item 9 above) was added specifically so Dr Quill can still play through the ending and test the OTHER fixes while WebGL is broken.** Pentagram, lightning, gawain text, green glow, fade-to-white all rendered correctly in his session — only the 3D city behind the pent was missing.
 
-22. **Tree-of-life lightning auto-fires through the pentagram at Centre Point (Dawn Approach White/Black).** Was previously notebook-only (TREE tab → "Reveal on the map" button), which the player has no reason to open at endgame. The lightning paths (9 sefirotic connecting bolts + 10 station sparks) now render into the same SVG as the pentagram on Dawn Approach when `_treeAllVisited` is true. Starts ~2.4 s after the pentagram fades in; ~3 s descent; bolts settle at 10 % opacity as a residue on the star. Uses warm electric white (`#fff5d0`) to match the gold pentagram. Sets `$treeFlashed = true` via the Harlowe API after the animation completes, so subsequent reveals don't re-queue. [.twee:32607, 32614, 45554, 45605]
-23. **Pulsing TREE-tab cue in the notebook** when `_treeAllVisited` is true and `$treeFlashed` is false. Slow gold breathe (2.6 s cycle), same family as `.back-to-night-glow` on the Fetch link. Acts as fallback for the notebook-based reveal mechanic, since the primary reveal now fires at Dawn Approach. Build Notebook no longer pre-flips `$treeFlashed` — the queue persists across notebook opens until the lightning actually fires. [.twee:37925, 40998, 4216]
-
-### Centre Point pentagram bug — recurring
-
-24. **Pentagram + endless-knot caption escaping into the corner** (the "weird thing to the side"). Two-part fix:
-    - **First fix (worked initially):** added `.dawn-approach > tw-hook { display: block; position: static; }` so the inline tw-hook from `(if: $lilyCount >= 5)` doesn't become a 0×0 containing block for the absolute-positioned overlay. [.twee:45528]
-    - **Bug returned after I added the tree-lightning code.** Diagnosis: Harlowe's HTML parser pushes block-level `<div>`s out of inline tw-hooks — and it does this not just to `.centre-pent-overlay` but to `.centre-pent-gawain` nested inside it. The gawain ends up as a *sibling* of the overlay, not a child, so the overlay's flexbox can't position it.
-    - **Defensive fix:** `.centre-pent-overlay` is now `position: fixed; inset: 0; z-index: 9999` (so it positions to viewport directly, ignoring wrapper). `.centre-pent-gawain` is now self-positioning — `position: fixed; bottom: 8vh; left: 50%; transform: translateX(-50%); z-index: 9999` with its own fade-in animation matching the pentagram's. **⚠ Not verified in the actual game flow** — I tried but couldn't get the chrome-MCP navigation to land on Dawn Approach Black with state set. If the gawain still floats, this fix is wrong and worth deeper investigation. [.twee:45528, 45576]
+**Next session should:**
+- Confirm WebGL has come back on his Chrome (he was going to check `chrome://gpu/`).
+- Verify the natural-flow ending sequence end-to-end with 3D restored.
+- Consider whether to apply the same try/catch WebGL fallback to the other venues' 3D scenes (Trisha's, Colony, etc. — same pattern at lines 13134, 14680, 16423, 17502, 19198, 20611, 24620, 26181, 27775, 28499 — about 10 sites).
 
 ---
 
 ## Patterns to remember (from this session)
 
-- **Harlowe's HTML parser fragments nested block-level `<div>`s.** When `(if:)` wraps a string that includes nested `<div class="A"><div class="B">…</div></div>`, the parser pushes BOTH the outer and the inner div out of the inline tw-hook as siblings, not nested. Any layout that depends on the inner div being a flex/grid child of the outer one will break. Defensive options: make both elements self-positioning via `position: fixed` / `position: absolute` against the viewport, OR put nested content inside an `<svg>` (atomic — not fragmented). The memory note `[project_harlowe_class_attr.md]` and `[project_harlowe_tw_hook_positioning.md]` both touch this; this session adds **nested-div fragmentation** as a third manifestation.
-- **`window.Harlowe` is undefined for injected scripts** (e.g. `document.createElement('script')` or chrome-MCP `javascript_tool`). It's accessible from the original Twine user-script's closure scope (which is how the debug menu buttons work). For runtime tweaks that need Harlowe state, the path is either: trigger via existing debug-menu button click handlers, or use the existing `(set: X to (passage:)'s name)` capture-and-go pattern inside Harlowe code itself.
-- **Modal popups returning to "where the player was"** — `$cigReturnTo` (existing) and now `$liverReturnTo` (added this session). Pattern: init the var to a safe fallback (Dean Street), capture `(passage:)'s name` in the trigger link, use `(go-to: $var)` or `(link-goto: "·", $var)` in the return path.
-- **Notebook tab "ready" cues** — gold pulse via `.nb-tab-ready` class set conditionally in Build Notebook. Lives at .twee:40998. Add to a tab whenever the player has unlocked something inside it but hasn't seen it yet.
-- **`window.showWordToTheWise({title, body})`** — small antiquarian modal for one-line nudges when a new mechanic comes online. Body accepts HTML; arrow span `<span class="word-wise-arrow-icon">↑</span>` is the bobbing gold pointer.
+- **Don't preload an iframe at `visibility:hidden` or `opacity:0` if its inner scripts need to run before promote.** Chrome throttles script execution in hidden iframes. HTTP-prefetch (`fetch` + `link rel=preload`) is safe; full iframe preload is not. The visible-iframe-with-HTTP-cache approach is the working pattern.
+- **Body-level overlays from `dssAstralReveal` (and any similar body-attached modals) persist across passage transitions.** Always wire a `MutationObserver` on `tw-story` to tear them down on `tw-passage` change. Same pattern would apply if any future body-level overlay is added.
+- **Wrap every `new THREE.WebGLRenderer(...)` in try/catch.** Build a minimal HTML fallback in the catch (caption + link button) so the scene degrades gracefully when WebGL fails. The 3D file `oxford-street-from-centre-point-3d-static.html` itself does NOT have this fallback — its scene-build script aborts on the WebGLRenderer line and the page shows only its absolute-positioned date/caption divs.
+- **Harlowe temp vars `_treeAllVisited` etc. set at passage top-level are visible inside `(if: $lilyCount >= 5)[...]` and similar hooks.** The "There isn't a temp variable named _treeAllVisited in this place" magenta error from earlier was actually transient / state-dependent — once state was set via Complete All it didn't recur, so it's not a real scoping bug. If it returns, defensive fix would be to redeclare `_treeAllVisited` inside the inner hook.
 
 ## State of the live code
 
-133 passages. .twee → .html sync clean. The Dawn page has noticeably more Art Nouveau presence (corners + colophon fleurons + richer bottom rule). The end-game tree-of-life reveal is no longer hidden behind a notebook button.
-
-**⚠ One verification gap:** the centre-pent + gawain corner-collapse fix (item 24) is based on a confident diagnosis but I never confirmed it visually in the actual game flow. If Dr Quill plays through and the text is still floating in the corner, the fix is wrong and the gawain needs a different escape route — probably embedding it inside the SVG as `<foreignObject>` so the HTML parser doesn't fragment it.
+134 passages. `.twee → .html` sync clean. End-game sequence is choreographed and works in all visual respects given working WebGL. Failure path is now wired and accessible. Debug tooling (Complete All) is in place for fast iteration.
 
 ---
 
@@ -88,9 +81,7 @@ Long session working through Dr Quill's playthrough notes after a real playtest.
 
 - **`tw-link` vs `tw-expression`** — Harlowe renders bracket links as `<tw-link>`, `(link:)` macros as `<tw-expression>`. Any JS/CSS that touches one should consider the other.
 - **`dssSpawnMotes`** accepts `{noScroll:true}` opts to skip `scrollIntoView`.
-- **Astral re-centring pass** at .twee:9144 forces the bounding-box midpoint to (500,500).
 - **Cigarettes mechanic** — body-level visual driven by stat-delta check in header.
-- **Carthage 3D-shore melody layer** — `carthage-shore` ambient bed, working.
 - **`Failure: Trisha's`** is NOT orphan — referenced by JS. Don't prune.
 
 ## Open / parked
@@ -99,8 +90,5 @@ Long session working through Dr Quill's playthrough notes after a real playtest.
 - **Astral-map screenshots** — banked.
 - **Cigarette popup function** (`window.showCigarettePopup`) — dead code, debug paths only.
 - **Title-screen BEGIN** — kept as is.
-- **Centre-pent gawain corner-floating** — needs in-game verification next session.
-
----
-
-**Next session:** verify the centre-pent fix in the actual game flow (jump to Dawn Approach Black with all conditions met); take playtester feedback as it comes in.
+- **WebGL fallback for other venues' 3D scenes** — only Centre Point has it now; ~10 other sites could use the same try/catch pattern if WebGL flakiness is a recurring problem.
+- **Local HTTP server `python3 -m http.server 8765`** — was running during testing for chrome-MCP access; may still be running in the background.

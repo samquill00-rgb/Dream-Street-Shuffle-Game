@@ -1898,20 +1898,30 @@ window.dssAudio = (function() {
       if (!bed._forced && !_bedShouldPlay(bed)) return;
       var ac2 = getCtx(); if (!ac2) return;
       if (bed.source) { try { bed.source.stop(); } catch(e) {} bed.source = null; }
-      var startGain = _muted ? 0 : bed.volume;
+      var targetGain = _muted ? 0 : bed.volume;
+      // Fade-in ramp avoids the "bang" you'd otherwise hear when an MP3
+      // bed starts: WebAudio's MP3 decoder can leave priming-frame garbage
+      // at sample 0, and a 0→full-volume gain jump amplifies any DC offset
+      // / initial waveform transient into an audible click. Starting at 0
+      // and ramping over FADE_IN_S masks both.
+      var FADE_IN_S = 0.6;
       if (!bed.gain) {
         bed.gain = ac2.createGain();
-        bed.gain.gain.value = startGain;
+        bed.gain.gain.value = 0;
         bed.gain.connect(ac2.destination);
       } else {
         bed.gain.gain.cancelScheduledValues(ac2.currentTime);
-        bed.gain.gain.setValueAtTime(startGain, ac2.currentTime);
+        bed.gain.gain.setValueAtTime(0, ac2.currentTime);
       }
+      bed.gain.gain.linearRampToValueAtTime(targetGain, ac2.currentTime + FADE_IN_S);
       bed.source = ac2.createBufferSource();
       bed.source.buffer = buf;
       bed.source.loop = true;
       bed.source.connect(bed.gain);
-      bed.source.start(0);
+      // Skip the first 50ms of the buffer when starting fresh. MP3 priming
+      // frames live in the first ~25ms; jumping past them sidesteps any
+      // decoder garbage entirely, on top of the gain fade-in.
+      bed.source.start(0, 0.05);
       bed.started = true;
     });
   }
@@ -2174,6 +2184,55 @@ window.dssAudio = (function() {
         try { _stopBed(bed); } catch(e) {}
       };
     } catch(e) {}
+  }
+  // Jump a playing bed to a specific offset (seconds into the buffer), with
+  // a short crossfade between the current source and a new one started at
+  // the offset. Used by the endgame to align the piano's chorus to the
+  // moment the White / Black page is revealed — the existing piano fades
+  // under as the chorus-positioned piano fades in, so the chorus lands on
+  // the visual cue without a hard cut. If the bed isn't currently playing,
+  // this falls through to a normal _startBed (manual-start, ignoring tag
+  // gating) at the requested offset.
+  function jumpBedByLabel(label, offsetSeconds, fadeMs) {
+    var bed = findBedByLabel(label);
+    if (!bed) return;
+    var ac = getCtx(); if (!ac) return;
+    var fadeS = (typeof fadeMs === 'number' && fadeMs > 0 ? fadeMs : 800) / 1000;
+    _decodeBed(bed, function(buf) {
+      var ac2 = getCtx(); if (!ac2) return;
+      var targetGain = _muted ? 0 : bed.volume;
+      // Clamp offset into the buffer's valid range.
+      var off = Math.max(0, Math.min(offsetSeconds || 0, buf.duration - 0.05));
+      // Create a NEW source + gain for the chorus-positioned playback, so
+      // we can crossfade against the old source rather than stop-then-start.
+      var newGain = ac2.createGain();
+      newGain.gain.value = 0;
+      newGain.gain.linearRampToValueAtTime(targetGain, ac2.currentTime + fadeS);
+      newGain.connect(ac2.destination);
+      var newSrc = ac2.createBufferSource();
+      newSrc.buffer = buf;
+      newSrc.loop = true;
+      newSrc.connect(newGain);
+      newSrc.start(0, off);
+      // Fade the old source out and stop it after the crossfade.
+      if (bed.started && bed.source && bed.gain) {
+        var oldSrc = bed.source, oldGain = bed.gain;
+        try {
+          oldGain.gain.cancelScheduledValues(ac2.currentTime);
+          oldGain.gain.setValueAtTime(oldGain.gain.value, ac2.currentTime);
+          oldGain.gain.linearRampToValueAtTime(0.0001, ac2.currentTime + fadeS);
+        } catch(e) {}
+        setTimeout(function() {
+          try { oldSrc.stop(); } catch(e) {}
+          try { oldSrc.disconnect(); } catch(e) {}
+          try { oldGain.disconnect(); } catch(e) {}
+        }, fadeMs + 50);
+      }
+      bed.source = newSrc;
+      bed.gain = newGain;
+      bed.started = true;
+      bed._forced = true; // keep playing even if current passage's tags don't match
+    });
   }
   // Flute-like single tone — sine fundamental with a breathy noise attack
   // (air across the embouchure) and a subtle vibrato. Still one pitch.
@@ -2962,7 +3021,7 @@ window.dssAudio = (function() {
     // Venue ambient beds
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
-    startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel
+    startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel, jumpBed: jumpBedByLabel
   };
 })();
 
@@ -32207,6 +32266,7 @@ document.addEventListener('keydown', function(e) {
 
 
 :: Approach Centre Point [piano-bed] {"position":"1650,50","size":"100,100"}
+<script>(function(){/* Continue the prefetch chain started on The Fetch — by now Three.js is already loaded by the CP scene init below, so this is mainly for the iframe HTML, which is the dominant network cost on Dawn Approach. Idempotent: HTTP cache dedups and the link element is id-guarded. */try{fetch('oxford-street-from-centre-point-3d-static.html',{cache:'force-cache'});}catch(e){}if(!document.getElementById('dss-three-prefetch')){var l=document.createElement('link');l.id='dss-three-prefetch';l.rel='preload';l.as='script';l.href='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';document.head.appendChild(l);}})();</script>\
 (set: $visitedCentrePoint to true)\
 (if: $sawAstralReveal is false)[(set: $sawAstralReveal to true)<script>
 /* First arrival at Centre Point — the city you walked tonight dissolves
@@ -32686,18 +32746,21 @@ You surface to Dean Street.
 </div>
 
 :: White page [white-page piano-bed] {"position":"1700,150","size":"100,100"}
+<script>/* Jump the piano-eoin bed to the melodic chorus the moment the White page is revealed. Crossfades from wherever the piano currently is over 0.9s, so the chorus lands on the visual cue without a hard cut. CHORUS_OFFSET_S is tunable — set it to whatever timestamp in piano-eoin-roe.mp3 the chorus actually starts. Current value (26s) is a guess from the file's RMS energy peak; Dr Quill should set it to the real value once he's listened. */setTimeout(function(){var CHORUS_OFFSET_S=26;if(window.dssAudio&&window.dssAudio.jumpBed){try{window.dssAudio.jumpBed('piano-eoin',CHORUS_OFFSET_S,900);}catch(e){}}},0);</script>\
 (display: "Ending Vines SVG")
 (after: 6.2s)[EXPLICIT. LIBER. EST.]
 
 (after: 14s)[<span class="plus-ultra-fade">(link-goto: "PLUS. ULTRA.", "Dawn")</span>]
 
 :: Black page [black-page piano-bed] {"position":"1700,200","size":"100,100"}
+<script>/* See note on White page. Same chorus jump, mirror passage. */setTimeout(function(){var CHORUS_OFFSET_S=26;if(window.dssAudio&&window.dssAudio.jumpBed){try{window.dssAudio.jumpBed('piano-eoin',CHORUS_OFFSET_S,900);}catch(e){}}},0);</script>\
 (display: "Ending Vines SVG")
 (after: 6.2s)[EXPLICIT. LIBER. EST.]
 
 (after: 14s)[<span class="plus-ultra-fade">(link-goto: "PLUS. ULTRA.", "Dawn")</span>]
 
 :: Dawn Approach White [dawn-approach dawn-approach-white piano-bed] {"position":"1850,150","size":"100,100"}
+<script>/* Fallback for the iframe-ready class. The iframe's own onload sets it after 400ms — but if the iframe is very slow or fails to load entirely, lightning would never fire (it's CSS-gated on .iframe-ready). 4s fallback ensures the bolts play even in degraded-network / WebGL-down scenarios. In the common case (HTTP-prefetched iframe loads in <1s) the onload handler wins and the fallback no-ops. */setTimeout(function(){var d=document.querySelector('.dawn-approach');if(d&&!d.classList.contains('iframe-ready'))d.classList.add('iframe-ready');},4000);</script>\
 (set: _tV to ($visited contains "Trishas" and $visited's Trishas is true))\
 (set: _qV to $hadChippy is true)\
 (set: _pV to ($visited contains "Pillars" and $visited's Pillars is true))\
@@ -32717,6 +32780,7 @@ You surface to Dean Street.
 (after: 16s)[(go-to: "White page")]
 
 :: Dawn Approach Black [dawn-approach dawn-approach-black piano-bed] {"position":"1850,200","size":"100,100"}
+<script>/* See note on Dawn Approach White. Same iframe-ready fallback. */setTimeout(function(){var d=document.querySelector('.dawn-approach');if(d&&!d.classList.contains('iframe-ready'))d.classList.add('iframe-ready');},4000);</script>\
 (set: _tV to ($visited contains "Trishas" and $visited's Trishas is true))\
 (set: _qV to $hadChippy is true)\
 (set: _pV to ($visited contains "Pillars" and $visited's Pillars is true))\
@@ -33720,6 +33784,7 @@ Traveller, wake!
 
 :: The Fetch {"position":"1600,50","size":"100,100"}
 <script>setTimeout(function(){ if (window.dssAudio) window.dssAudio.uncannyBreath(); }, 400);</script>\
+<script>(function(){/* Earliest practical prefetch of the Oxford-Street iframe HTML + the Three.js CDN script. Fires here (The Fetch → Approach Centre Point → Alba Complete/Incomplete → Dawn Approach), so HTTP cache has the assets long before the iframe mounts. The later prefetch passages keep the same calls for safety; all are idempotent (HTTP cache dedup + id check on the link element). Hidden-iframe preload was ruled out previously because Chrome throttles scripts in non-visible frames. */try{fetch('oxford-street-from-centre-point-3d-static.html',{cache:'force-cache'});}catch(e){}if(!document.getElementById('dss-three-prefetch')){var l=document.createElement('link');l.id='dss-three-prefetch';l.rel='preload';l.as='script';l.href='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';document.head.appendChild(l);}})();</script>\
 <div class="glass-pane">You see yourself walking to meet you, who looks at you, with a pitying grin, then turns and heads, quickly, towards Centre Point.
 
 (if: $haunts's length >= 11 and not ($haunts contains $haunt12))[
@@ -45858,7 +45923,7 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #0a1428;   /* sky zenith — hides flash while iframe loads */
+  background: #000;      /* plain black holding colour — pent floats on it while the iframe loads, then fades to transparent on iframe-ready so the 3D city is revealed beneath */
   overflow: hidden;
   transition: background-color 1.4s ease-out;
 }
@@ -45895,10 +45960,17 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
   /* Fade-to-colour holds off until the iframe is loaded + 3D has faded in. */
   opacity: 1;
 }
-.dawn-approach.iframe-ready .dawn-approach-overlay-white {
+/* Fade-to-white/black now starts on passage entry, NOT iframe-ready. The
+   14s anim holds transparent for the first 60% (8.4s) — giving the iframe
+   plenty of time to load and fade in — then washes to colour over the
+   remaining 5.6s. Completes at 14s, the (after: 16s) go-to fires at 16s,
+   so there's a 2s flat-colour hold before the page swap. Works whether
+   the iframe loads fast (you see the city under the fade) or slow (the
+   pent is still on a navy backdrop — visually quiet, not broken). */
+.dawn-approach .dawn-approach-overlay-white {
   animation: dawnFadeWhite 14s ease-in-out forwards;
 }
-.dawn-approach.iframe-ready .dawn-approach-overlay-black {
+.dawn-approach .dawn-approach-overlay-black {
   animation: dawnFadeBlack 14s ease-in-out forwards;
 }
 /* Harlowe wraps the (if: $lilyCount >= 5)[...] block in a <tw-hook>, which
@@ -45930,12 +46002,10 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
   /* z-index 9999 (matching .dawn-approach) keeps the overlay above the dawn
      fade-to-white/black AND above other fixed UI like the stats strip. */
   z-index: 9999;
-  /* Animation gated on .dawn-approach.iframe-ready (added once the 3D iframe
-     has finished its own opacity fade-in). Until then, the pentagram stays
-     invisible so it doesn't appear on the navy loading background and then
-     get "re-revealed" once the 3D city fades in underneath. */
-}
-.dawn-approach.iframe-ready .centre-pent-overlay {
+  /* Pent fade-in now starts on passage entry, NOT iframe-ready — that way
+     the player sees the focal symbol immediately on landing and the 3D city
+     can materialise behind it whenever the iframe is good and ready. The
+     navy bg of .dawn-approach acts as a holding-page until the city loads. */
   animation: centre-pent-fade-in 1.6s ease-in-out 0.4s forwards;
 }
 /* Sage-green halo on the lily-of-the-valley clusters at each point of the
@@ -45993,13 +46063,14 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
 /* Tree-of-life lightning overlay on the Centre Point pentagram — fires
    automatically when the player has walked all 10 sefirot. Strikes the same
    SVG as the pentagram so the bolts pass through the existing star and out
-   to the other 5 sefirot. Animations gated on .dawn-approach.iframe-ready
-   (added once the 3D iframe has faded in), and delays are measured from
-   that moment — so the order is always 3D → pentagram → lightning regardless
-   of how long the iframe takes to load. Lightning recoloured electric
-   blue-white (#a8c8f8) so it reads as a distinct second layer, not a
-   duplicate of the gold pentagram, and the residue stays brighter so the
-   bolts leave a clear trail through the star. */
+   to the other 5 sefirot. Animations are now anchored to passage entry (the
+   pent fades in at 0.4s + 1.6s; lightning starts at 2.65s, just as the
+   fade-in completes), so the choreography is independent of the iframe's
+   load time and the player gets the pent + bolts immediately on landing.
+   The 3D city fades in behind whenever it's ready. Lightning recoloured
+   electric blue-white (#a8c8f8) so it reads as a distinct second layer,
+   not a duplicate of the gold pentagram, and the residue stays brighter
+   so the bolts leave a clear trail through the star. */
 .centre-pent-overlay .tree-lightning-overlay .tree-path {
   stroke-dasharray: 1000;
   stroke-dashoffset: 1000;

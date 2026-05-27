@@ -1916,18 +1916,39 @@ window.dssAudio = (function() {
         bed.gain.gain.setValueAtTime(0, ac2.currentTime);
       }
       bed.gain.gain.linearRampToValueAtTime(targetGain, ac2.currentTime + FADE_IN_S);
-      bed.source = ac2.createBufferSource();
-      bed.source.buffer = buf;
-      bed.source.loop = true;
-      bed.source.connect(bed.gain);
-      // Skip the first 200ms of the buffer — past MP3 priming garbage AND
-      // past the first loud transient cluster in the piano recording.
-      bed.source.start(0, 0.2);
       bed.started = true;
+      // bed.gapMs lets you insert a silent pause between loop iterations
+      // — used by piano-eoin so the looping feels like the piece is
+      // returning rather than seamlessly continuing. Implemented by
+      // disabling native loop and rescheduling a fresh BufferSource via
+      // onended + setTimeout. Without gapMs, native loop is used.
+      var playIteration = function(skipIntro) {
+        if (!bed.started || bed._finishing) return;
+        var ac3 = getCtx(); if (!ac3) return;
+        bed.source = ac3.createBufferSource();
+        bed.source.buffer = buf;
+        bed.source.loop = !bed.gapMs;
+        bed.source.connect(bed.gain);
+        // Skip the first 200ms only on the very first iteration — past
+        // the MP3 priming garbage and the loud opening transient. Later
+        // restarts after the silent gap can use the clean buffer head.
+        bed.source.start(0, skipIntro ? 0.2 : 0);
+        if (bed.gapMs) {
+          bed.source.onended = function() {
+            if (!bed.started || bed._finishing) return;
+            bed.gapTimer = setTimeout(function() { playIteration(false); }, bed.gapMs);
+          };
+        }
+      };
+      playIteration(true);
     });
   }
   function _stopBed(bed) {
     bed._forced = false; // clear manual-start flag on any stop
+    bed._finishing = false;
+    // Clear pending gap-restart so a stop while waiting in the silent
+    // gap doesn't relaunch a new iteration after the pause.
+    if (bed.gapTimer) { clearTimeout(bed.gapTimer); bed.gapTimer = null; }
     if (!bed.started) return;
     if (bed.source) {
       try { bed.source.stop(); } catch(e) {}
@@ -2005,7 +2026,11 @@ window.dssAudio = (function() {
     dataUri: '__DSS_PIANO_DATA_URI__',
     tags: { 'piano-bed': 1 },
     volume: 0.30,
-    duckVolume: 0.10
+    duckVolume: 0.10,
+    // 5s silent pause between loop iterations — the piano "returns" rather
+    // than seamlessly continuing, so it feels intentional even if the
+    // player lingers long enough to hear it round again.
+    gapMs: 5000
   });
   // The Interval — a separate piece, heard over a radio in the
   // dream-staircase scene. Used to share the piano-bed; replaced so
@@ -2180,11 +2205,16 @@ window.dssAudio = (function() {
     var bed = findBedByLabel(label);
     if (!bed || !bed.started || !bed.source) return;
     try {
+      // _finishing flag prevents the gapMs path from rescheduling another
+      // iteration after this one ends — without it, the gap restart logic
+      // would relaunch the bed even after we asked it to stop.
+      bed._finishing = true;
       bed.source.loop = false;
       bed.source.onended = function(){
         try { _stopBed(bed); } catch(e) {}
       };
     } catch(e) {}
+    if (bed.gapTimer) { clearTimeout(bed.gapTimer); bed.gapTimer = null; }
   }
   // Flute-like single tone — sine fundamental with a breathy noise attack
   // (air across the embouchure) and a subtle vibrato. Still one pitch.
@@ -28858,7 +28888,7 @@ try {
   cpWrap.appendChild(fbCaption);
   var fbBtn = document.createElement('div');
   fbBtn.textContent = 'CLIMB IT';
-  fbBtn.style.cssText = 'position:fixed;bottom:40px;left:50%;transform:translateX(-50%);padding:14px 36px;font:bold 17px "Courier New",monospace;color:rgba(255,253,240,1);border:1.5px solid rgba(255,248,212,1);letter-spacing:4px;cursor:pointer;z-index:9004;background:rgba(255,232,160,0.10);text-shadow:0 0 14px rgba(255,248,212,1),0 0 28px rgba(255,232,160,0.85),0 0 48px rgba(255,220,140,0.5),0 0 2px rgba(8,6,4,0.85);';
+  fbBtn.style.cssText = 'position:fixed;bottom:40px;left:50%;transform:translateX(-50%);padding:16px 42px;font:bold 20px "Courier New",monospace;color:rgba(255,255,250,1);border:2px solid rgba(255,252,232,1);letter-spacing:5px;cursor:pointer;z-index:9004;background:rgba(255,236,176,0.22);box-shadow:0 0 18px rgba(255,240,180,0.55),0 0 42px rgba(255,228,148,0.35),inset 0 0 14px rgba(255,248,212,0.25);text-shadow:0 0 8px rgba(255,255,255,1),0 0 18px rgba(255,252,220,1),0 0 36px rgba(255,236,168,0.85),0 0 58px rgba(255,220,140,0.55),0 0 2px rgba(8,6,4,0.85);';
   fbBtn.addEventListener('click', function() {
     var links = document.querySelectorAll('tw-link, .enchantment-link');
     for (var i = 0; i < links.length; i++) {
@@ -29495,7 +29525,7 @@ setTimeout(function() { cpLoc.style.opacity = '1'; }, 2600);
 // city scene rather than a muted text-link.
 var cpBtn = document.createElement('div');
 cpBtn.textContent = 'CLIMB IT';
-cpBtn.style.cssText = 'position:fixed;bottom:40px;left:50%;transform:translateX(-50%);padding:14px 36px;font:bold 17px "Courier New",monospace;color:rgba(255,253,240,1);border:1.5px solid rgba(255,248,212,1);letter-spacing:4px;cursor:pointer;z-index:9004;background:rgba(255,232,160,0.10);opacity:0;transition:opacity 5.5s ease;text-shadow:0 0 14px rgba(255,248,212,1),0 0 28px rgba(255,232,160,0.85),0 0 48px rgba(255,220,140,0.5),0 0 2px rgba(8,6,4,0.85);';
+cpBtn.style.cssText = 'position:fixed;bottom:40px;left:50%;transform:translateX(-50%);padding:16px 42px;font:bold 20px "Courier New",monospace;color:rgba(255,255,250,1);border:2px solid rgba(255,252,232,1);letter-spacing:5px;cursor:pointer;z-index:9004;background:rgba(255,236,176,0.22);box-shadow:0 0 18px rgba(255,240,180,0.55),0 0 42px rgba(255,228,148,0.35),inset 0 0 14px rgba(255,248,212,0.25);opacity:0;transition:opacity 5.5s ease;text-shadow:0 0 8px rgba(255,255,255,1),0 0 18px rgba(255,252,220,1),0 0 36px rgba(255,236,168,0.85),0 0 58px rgba(255,220,140,0.55),0 0 2px rgba(8,6,4,0.85);';
 setTimeout(function() { cpBtn.style.opacity = '1'; }, 3500);
 cpBtn.addEventListener('mouseenter', function() {
 cpBtn.style.color = 'rgba(255,252,232,1)';
@@ -32220,17 +32250,28 @@ document.addEventListener('keydown', function(e) {
     var trigger = document.getElementById('dawn-petal-trigger');
     if (!trigger) return;
     var fired = false;
+    var fallbackTimer = null;
+    var fireOnce = function(delayMs) {
+      if (fired) return;
+      fired = true;
+      setTimeout(startPetalStorm, delayMs);
+      if (petalObserver) { petalObserver.disconnect(); petalObserver = null; }
+      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+    };
     petalObserver = new IntersectionObserver(function(entries) {
-      if (entries[0].isIntersecting && !fired) {
-        fired = true;
-        // Hold a beat so the player has time to read the alba poem and the
-        // petal-trigger line before the storm starts rising.
-        setTimeout(startPetalStorm, 5000);
-        petalObserver.disconnect();
-        petalObserver = null;
-      }
+      // Scrolled-in path: hold 5s so the player can read the alba poem
+      // and the petal-trigger line before the storm starts rising.
+      if (entries[0].isIntersecting) fireOnce(5000);
     }, { threshold: 0.3 });
     petalObserver.observe(trigger);
+    // Fallback: if the player never scrolls to the trigger (slow read of
+    // the dawn text, paused mid-page, etc.), fire petals automatically
+    // 45s after the Dawn passage loads. This guarantees the petal-storm
+    // begins — and with it, letBedFinish on the piano — before the
+    // looping piano-eoin bed has played past its natural coda too many
+    // times. The ending always plays out, no matter how slow the
+    // click-through to Dawn was.
+    fallbackTimer = setTimeout(function() { fireOnce(0); }, 45000);
   }
 
   var dawnMO = new MutationObserver(function() {
@@ -46064,7 +46105,7 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
           drop-shadow(0 0 34px rgba(200,224,252,0.25));
 }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-lightning-overlay .tree-path {
-  animation: tree-path-draw-bright 0.72s cubic-bezier(0.25, 0.1, 0.3, 1) forwards;
+  animation: tree-path-draw-bright 0.95s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-lightning-overlay .tree-path-1 { animation-delay: 3.65s; }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-lightning-overlay .tree-path-2 { animation-delay: 3.90s; }
@@ -46083,7 +46124,7 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
           drop-shadow(0 0 24px rgba(200,224,252,0.4));
 }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-lightning-overlay .tree-spark {
-  animation: tree-spark-pulse-blue 0.85s cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+  animation: tree-spark-pulse-blue 1.0s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-lightning-overlay .tree-spark-1  { animation-delay: 3.50s; }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-lightning-overlay .tree-spark-2  { animation-delay: 3.75s; }
@@ -46096,19 +46137,24 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-lightning-overlay .tree-spark-9  { animation-delay: 5.50s; }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-lightning-overlay .tree-spark-10 { animation-delay: 5.75s; }
 @keyframes tree-spark-pulse-blue {
-  0%   { opacity: 0; r: 2;  fill: rgba(168,200,248,0); }
-  20%  { opacity: 1; r: 12; fill: rgba(255,255,255,1); }
-  45%  { opacity: 0.85; r: 16; fill: rgba(200,224,252,0.95); }
-  100% { opacity: 0; r: 7;  fill: rgba(168,200,248,0); }
+  /* Opacity-driven pulse with very gentle r progression — the size barely
+     moves so the eye reads it as a glowing point rather than an inflating
+     ball. Per-keyframe ease-in-out timing smooths transitions between
+     stops, so the pulse swells and falls without any visual hitch. */
+  0%   { opacity: 0;    r: 4;  fill: rgba(168,200,248,0);    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  22%  { opacity: 1;    r: 10; fill: rgba(255,255,255,1);    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+  55%  { opacity: 0.85; r: 13; fill: rgba(200,224,252,0.9);  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  100% { opacity: 0;    r: 10; fill: rgba(168,200,248,0); }
 }
 @keyframes tree-path-draw-bright {
-  /* Smoother draw with a bright leading edge that settles into a fainter
-     residue trail — gives the descending bolts a sense of decay, like the
-     arc-after-flash of real lightning. */
-  0%   { stroke-dashoffset: 1000; opacity: 0; }
-  18%  { opacity: 1; }
-  60%  { opacity: 1; stroke-dashoffset: 0; }
-  100% { opacity: 0.4; stroke-dashoffset: 0; }
+  /* Smoothest possible draw: per-keyframe easing handles the rise, the
+     long lit hold, and the slow decay to residue. The bolt arcs in
+     gently, holds bright while the stroke completes, then settles to a
+     fainter trail — feels like a real after-flash. */
+  0%   { stroke-dashoffset: 1000; opacity: 0;   animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1); }
+  18%  { opacity: 1;              stroke-dashoffset: 720; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+  58%  { opacity: 1;              stroke-dashoffset: 0;   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  100% { opacity: 0.4;            stroke-dashoffset: 0; }
 }
 /* MALKUTH / KETHER sefirot labels — bookends of the tree-of-life
    choreography. MALKUTH appears BEFORE the lightning fires, naming the
@@ -46164,7 +46210,7 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
           drop-shadow(0 0 36px rgba(200,224,252,0.4));
 }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-return-orb {
-  animation: tree-orb-return 2.0s linear 6.55s forwards;
+  animation: tree-orb-return 2.0s cubic-bezier(0.4, 0, 0.2, 1) 6.55s forwards;
 }
 @keyframes tree-orb-return {
   /* Travels straight up the centre line, then on arrival expands into a
@@ -46193,7 +46239,7 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
           drop-shadow(0 0 36px rgba(200,224,252,0.28));
 }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-return-trail {
-  animation: tree-trail-draw 2.0s linear 6.55s forwards;
+  animation: tree-trail-draw 2.0s cubic-bezier(0.4, 0, 0.2, 1) 6.55s forwards;
 }
 @keyframes tree-trail-draw {
   0%   { stroke-dashoffset: 600; opacity: 0; }
@@ -46214,7 +46260,7 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
           drop-shadow(0 0 36px rgba(200,224,252,0.35));
 }
 .dawn-approach.iframe-ready .centre-pent-overlay .tree-return-spark {
-  animation: tree-return-spark-flash 0.32s ease-out forwards;
+  animation: tree-return-spark-flash 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 .dawn-approach.iframe-ready .centre-pent-overlay .spark-y-590 { animation-delay: 6.89s; }
 .dawn-approach.iframe-ready .centre-pent-overlay .spark-y-470 { animation-delay: 7.29s; }

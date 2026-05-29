@@ -1,10 +1,40 @@
-# HANDOFF — 2026-05-27 (end-game polish: lightning, glow, failure path, preload)
+# HANDOFF — 2026-05-27 (end-game polish + aesthetic pass)
 
-Multi-day session focused entirely on the endgame sequence (Dean Street → The Fetch → Approach Centre Point → Alba Complete/Incomplete → Dawn Approach → White/Black page → Dawn). Tightened the visual choreography, fixed several flicker/render bugs, opened a failure path to Alba Incomplete, and built debug tooling for the ending. Latest state is shippable for everything *except* one environmental issue noted at the bottom.
+Two sessions on this date. Most of the day was end-game polish (lightning, glow, failure path, iframe preload) — that's documented in **Phase 1** below. A short add-on session at the end worked through `aesthetic-suggestions.md` (audit doc generated overnight). That's in **Phase 2**.
+
+Live code: D5 cecil-rule extraction shipped; everything else from Phase 2 was either reverted or verified-no-change.
 
 ---
 
-## Items completed this session
+## Phase 2 — aesthetic-suggestions pass (add-on, end of day)
+
+The audit doc `aesthetic-suggestions.md` lists ordered visual/code suggestions A1–G. Dr Quill picked A1 + D5 first. Outcome:
+
+- **A1 (soften header lily) — IMPLEMENTED, THEN REVERTED.** Recoloured strokes `#0a0a0a → #3a2818`, halved stroke-widths, dropped CSS opacity `0.92 → 0.55`, extended fade-mask leftward. Dr Quill preferred the lily as it was. Reverted both the SVG line and the CSS. Saved memory `feedback_header_lily_leave_alone.md` so future sessions don't re-propose softening.
+- **D5 (extract duplicated `.cecil-rule` SVG) — SHIPPED.** New hidden passage `:: Cecil Rule SVG` at .twee:45855. Two inline copies (Cecil Court venue at .twee:32741, O'Flatterly introduction at .twee:34680) replaced with `(display: "Cecil Rule SVG")`. Pattern mirrors `French Rule SVG h24/h60`. **One gotcha:** initial `replace_all` for the SVG body also overwrote the SVG inside the new passage (self-reference, would have caused infinite recursion). Restored the SVG body inside `Cecil Rule SVG` immediately. If anyone repeats this extraction pattern (D5b for the four Dawn corner SVGs), DO NOT use replace_all on the SVG body — use targeted edits per call site, OR add the reusable passage AFTER the replacement sweep.
+- **A2 (OPUS stat-bar polish) — VERIFIED, NO CHANGES NEEDED.** Loaded the game in Chrome MCP, faked opus state via JS (`.bar-fill` → `.bar-fill bar-opus`, swap labels to OPUS/STATE, pct to `pct-opus`). All three concerns in the doc were stale: rows have 8px row-gap already (don't touch); decorations are cleanly hidden by the existing `:has(.bar-opus)` overrides; the amber "100%" sits against the dark/brown header backdrop (NOT against the gold bar — bar ends well before the pct column), so the contrast is fine. The aesthetic doc's "gold-on-gold" worry was a layout misread.
+
+Compiled HTML synced after each change. 135 passages (was 134 before D5).
+
+### Memories added this phase
+- `feedback_header_lily_leave_alone.md` — don't re-suggest softening the header lily
+- `reference_tester_link.md` — tester URL is `https://samquill00-rgb.github.io/Dream-Street-Shuffle-Game/Dream%20Street%20Shuffle.html` (NOT samquill.com — that's his password-gated personal site). Always tell testers to Cmd/Ctrl+Shift+R on first load.
+
+### Remaining from aesthetic-suggestions.md (in author's recommended order)
+- **A4** — CLIMB IT caption letter-spacing 0.18em → 0.14em or 0.12em (~2 min)
+- **C1b** — Alba lines font: Georgia → Playfair Display or Crimson Text small-caps (decision rather than work)
+- **B1** — Consistent passage opening rhythm (venue ornament vs walking centre-align)
+- **C2** — Define ~6 CSS custom properties for the gold/cream palette and progressively replace direct hex values (~30 min find-and-replace, biggest visual-identity payoff)
+- Plus B2–B5, C3–C5, D1–D7, E1–E3, F — see `aesthetic-suggestions.md` for full notes
+- **DEAD**: A1 (header lily) — Dr Quill keeps it as-is
+
+---
+
+## Phase 1 — end-game polish (lightning, glow, failure path, preload)
+
+Multi-day session focused entirely on the endgame sequence (Dean Street → The Fetch → Approach Centre Point → Alba Complete/Incomplete → Dawn Approach → White/Black page → Dawn). Tightened the visual choreography, fixed several flicker/render bugs, opened a failure path to Alba Incomplete, and built debug tooling for the ending. Latest state is shippable for everything *except* one environmental issue noted further down.
+
+### Items completed this phase
 
 ### Debug tooling
 
@@ -73,7 +103,7 @@ All 3D scenes (Centre Point ladder, Oxford Street city, the various venue scenes
 
 ## State of the live code
 
-134 passages. `.twee → .html` sync clean. End-game sequence is choreographed and works in all visual respects given working WebGL. Failure path is now wired and accessible. Debug tooling (Complete All) is in place for fast iteration.
+135 passages (was 134 before Phase 2's D5 extraction added `Cecil Rule SVG`). `.twee → .html` sync clean. End-game sequence is choreographed and works in all visual respects given working WebGL. Failure path is now wired and accessible. Debug tooling (Complete All) is in place for fast iteration.
 
 ---
 
@@ -92,3 +122,5 @@ All 3D scenes (Centre Point ladder, Oxford Street city, the various venue scenes
 - **Title-screen BEGIN** — kept as is.
 - **WebGL fallback for other venues' 3D scenes** — only Centre Point has it now; ~10 other sites could use the same try/catch pattern if WebGL flakiness is a recurring problem.
 - **Local HTTP server `python3 -m http.server 8765`** — was running during testing for chrome-MCP access; may still be running in the background.
+- **`aesthetic-suggestions.md` backlog** — A4, C1b, B1, C2, plus B/C/D/E/F items still on the list (see Phase 2 above). Untracked file in the repo root; safe to delete once you've walked through it.
+- **`aesthetic-suggestions.html`** — same untracked. Decide whether to keep both formats or just the .md.

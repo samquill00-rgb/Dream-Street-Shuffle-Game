@@ -1,3 +1,25 @@
+> **▶ NEXT SESSION — START HERE.** Tonight's work (playtest **#17** + **#31-Davy**, plus mobile **notebook** + **audio-unlock** fixes) is applied, synced, verified, and pushed. The phone audio "bug" was the **iOS Silent switch**, not code — see Mobile section.
+>
+> **Quickest pickups** = the playtest *one-line-answer trio*: **#12** (calcinatio), **#18** ("close to the end"), **#24** (grenadine/incarnadine) — each just needs Dr Quill's intent; exact `.twee` locations + the precise question for each are in **`HANDOFF-playtest-prep.md` §B**.
+> **Bigger jobs:** a proper **mobile audit** (touch-parity, hover-only rules, 3D on mobile GPUs, stacked notebook legends — see Mobile section), or **#25/26** tarot · **#21** pong bug · **#10** stats explainer.
+> **Full 37-item backlog + statuses:** the 2026-05-30 section further down. **Workflow + verification tricks** (debug-jump, temp-`(set:)` flag test, preview can't test iOS audio): same section.
+
+# HANDOFF — 2026-05-31 (continuation: #17, #31-Davy, mobile fixes)
+
+Continued the playtest pass and did a first round of **mobile (iPhone Safari) fixes**. All items below are applied, synced, verified, and (per Dr Quill) pushed.
+
+### Playtest items completed this session
+- **#31 follow-on — Davy Merkin's "Go to see Lackland" gated (Option 2).** Same pattern as Bernard. Davy's opener is now `(if: $knowsLackland is false)[Go to see Lackland, he's surely expecting you. But d](else:)[D]on't hang about…` — so on the already-known branch it reads *"Don't hang about in his office…"*, the redirect dropped. Verified both branches live (temp-flag test); the "d/D" split renders cleanly. [.twee ~33790]
+- **#17 — "← BACK" moved top-left under the header.** Was top-*right* next to NOTEBOOK (small, easy to miss). Now `.back-one-link` is `position:fixed`, top-left, italic/dashed 3D style matching `.approach-back`. **Responsive top** (clears the header, which is 136px desktop / 121px mobile): `top:143px` default + `top:128px` in the `@media (max-width:600px)` block — consistent ~7px gap, clear of the title on phones. **Guard:** `tw-story:has(.approach-back) .back-one-link { display:none }` hides it on the 3D approach scenes (which keep their own back) so they don't double up. NB the guard must be scoped to `tw-story`, not `tw-passage` — the header `.stat-bars` is a *sibling* of `tw-passage` under `tw-story`, not a child. [CSS ~41150 + the 600px media block]
+
+### Mobile fixes (iPhone Safari)
+- **Notebook now fits the phone.** Two problems: (a) the 5 tabs (FINDS/EFFECTS/LILIES/POEM/MAP) are `flex:1` but with default `min-width:auto` they refused to shrink below their text → overflowed off-screen, and the panel clipped horizontally so MAP was unreachable; (b) `.nb-page` is hardcoded `width:60vw !important`, fine on desktop but a ~225px column on a 375px phone, clipping the two-column legends. **Fix (all in the `@media (max-width:600px)` block):** `.nb-tab { min-width:0; flex-shrink:1; font-size:0.72em; letter-spacing:0.05em; padding:… }` so all five fit one row, and `.nb-page { width:94vw !important }` so content stops clipping. Verified at 375px (no overflow, all tabs reachable). Desktop notebook untouched. NB the JS sets the `.nb-tabs` *container* style inline (`.style.cssText`), so target the `.nb-tab` items (CSS-class, not inline) — that's why the fix works.
+- **Audio: first-tap unlock added (hygiene), but the actual "no sound" bug was the iPhone hardware Silent switch — NOT code.** ⚠ **Remember this.** "No sound on iPhone Safari" with the in-game speaker showing *on* = check the **physical Ring/Silent side switch first** — iOS mutes *web* audio (Web Audio API included) when it's on Silent, and a website cannot override it. Flipping it to ring fixed everything. The code I added is still good mobile hygiene: a one-time first-gesture unlock in `window.dssAudio` (creates+resumes the WebAudio ctx + silent buffer, plus a muted HTML5 play) so audio starts reliably on *other* mobile setups (Android Chrome etc. block audio without a tap even with no silent switch). Verified additive/harmless on desktop (boots clean, SFX still fire). [.twee ~268, `_unlockAudio`]
+- **Tooling note:** the preview MCP emulates screen *width* well (used it to verify the notebook + back button at 375px) but runs in desktop Chrome, so it **cannot reproduce iOS audio policy** — mobile audio is a "test on the actual phone" job.
+- **Still open on mobile:** a fuller notebook pass (the two-column legends would read better *stacked* on a phone), and a broader element-by-element mobile audit (touch-parity gaps, ~57 hover-only rules, 3D/WebGL on mobile GPUs). Viewport meta tag IS present and correct; that foundation is fine.
+
+---
+
 # HANDOFF — 2026-05-30 (Sarah's playtest notes — triage + fixes)
 
 This session worked through **Sarah's handwritten playtest notes** (playtest dated 27/05/26), photographed and sent in. They were transcribed into a numbered 37-item list, and we worked it item-by-item: I present each, Dr Quill either okays my transcription or sends a retranscription, then I action it. **Branch: v2-expansion.**

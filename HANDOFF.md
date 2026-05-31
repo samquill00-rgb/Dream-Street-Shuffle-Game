@@ -1,8 +1,37 @@
-> **▶ NEXT SESSION — START HERE.** Tonight's work (playtest **#17** + **#31-Davy**, plus mobile **notebook** + **audio-unlock** fixes) is applied, synced, verified, and pushed. The phone audio "bug" was the **iOS Silent switch**, not code — see Mobile section.
+> **▶ NEXT SESSION — START HERE.** This session landed **#10** (Morale & Sobriety primer modal), **#12** (haunt-card prominence), **#18** (Shelley's-liver reword), the **French haunts explainer → modal**, two **mobile fixes** (ALBA header alignment, mute-button visibility), and **#32 / #33** text tidies. All applied, synced, verified; Dr Quill commits via GitHub Desktop.
 >
-> **Quickest pickups** = the playtest *one-line-answer trio*: **#12** (calcinatio), **#18** ("close to the end"), **#24** (grenadine/incarnadine) — each just needs Dr Quill's intent; exact `.twee` locations + the precise question for each are in **`HANDOFF-playtest-prep.md` §B**.
-> **Bigger jobs:** a proper **mobile audit** (touch-parity, hover-only rules, 3D on mobile GPUs, stacked notebook legends — see Mobile section), or **#25/26** tarot · **#21** pong bug · **#10** stats explainer.
-> **Full 37-item backlog + statuses:** the 2026-05-30 section further down. **Workflow + verification tricks** (debug-jump, temp-`(set:)` flag test, preview can't test iOS audio): same section.
+> **Quickest pickup = #24** (grenadine / incarnadine) — last of the one-line trio. The two words sit two lines apart in one dream passage (`.twee:37920` "light incarnadine" / `.twee:37922` "a kind of grenadine light"); just needs Dr Quill's call (keep, or which to change). See `HANDOFF-playtest-prep.md` §B.
+> **Bigger jobs:** a proper **mobile audit** (touch-parity, ~57 hover-only rules, 3D on mobile GPUs, stacked notebook legends) · **#21** pong bug · **#25/26** tarot.
+> **Reusable now:** two body-level info modals — `dssShowHauntsModal()` / `dssShowStatsModal()`, gold-on-dark, dismiss via click-anywhere or ✕. **Stats-system reference + full 37-item backlog:** sections below.
+
+# HANDOFF — 2026-05-31 (evening — modals, mobile, playtest text)
+
+Continued the playtest backlog with Dr Quill in the loop. Branch **v2-expansion**. Loop: edit `.twee` → `python3 sync_html.py` → verify via preview MCP (port 8923, config `dss`). Never git; he commits via GitHub Desktop.
+
+### Completed this session
+- **ALBA header — mobile alignment.** `.alba-strip` is a sibling grid to `.stat-group`; the `@media (max-width:600px)` block shrank `.stat-group` to `54px 124px 2.4em` but never `.alba-strip`, so ALBA (still on desktop's `68px 176px`) jutted ~63px left of the bars. Fix: gave `.alba-strip` the same mobile columns.
+- **Mute button — mobile visibility.** `#dss-mute-btn` was `opacity:0.55` brightening only on `:hover` (never fires on touch) and pinned `bottom:14px` (under iOS chrome). Now `bottom: calc(14px + env(safe-area-inset-bottom))` + `@media (hover:none){ opacity:0.92 }`. Desktop untouched. [.twee ~44960]
+- **#12 — HAUNT COLLECTED eyebrow.** `.haunt-header` was 0.6em / gold @ 0.55 alpha — barely visible. Now 0.68em / 0.92 alpha + subtle text-shadow. All 12 cards. [.twee ~40343]
+- **#18 — Shelley's liver reworded** (no death-implication; confirmed no death state exists). Spoken line at *O'Flatterly's Gift* (`.twee:35065`): "…who mistook the liver for the heart. It would not burn, you understand. Swallow it when you feel yourself going out, and it will keep you up a while yet." Vial popup (`.twee:3692`): "A little ambergris and faintly luminous. Inis O'Flatterly said to swallow it if you're flagging." NB **"Inis O'Flatterly"** is the antiquarian's established full name. Liver restores +22 morale / +40 sobriety.
+- **Haunts explainer → modal.** The inline `⟡ HAUNTS ⟡` lore-box (gated `$haunts's length is 1`, duplicated in **all 12** collection passages) is now a trigger calling `window.dssShowHauntsModal()` — auto-pops 1.6s after the HAUNT COLLECTED card. `$hauntExplained` flag unchanged (map-unlock/dots intact).
+- **#10 — Morale & Sobriety primer modal.** `window.dssShowStatsModal()` (sibling of the haunts modal) fires **once on first arrival at Dean Street**, gated on new one-shot `$statsExplained` (init in both StoryInit blocks + healed in Dean Street; trigger after the `$returns++`, 800ms delay). Copy approved by Dr Quill, lives in the helper.
+- **#32 — "dutchy pearls".** `.twee:36863` actually read "clutching pearls" (not "dutch" as Sarah's note said); changed "clutching" → "dutchy" per Dr Quill. ⚠ flagged — if "clutching" was deliberate, revert.
+- **#33 — admixture dedupe.** Kept poetic "born of their live **admixture**" (Lily-4 glimpse, `.twee:36866`); maritime "an admixture of plastics" → "**a leaching of** plastics" (`.twee:37510`). One occurrence game-wide now. "leaching" swappable (adulteration / sediment / residue) if Dr Quill prefers.
+
+### Key design finding — what the stats actually do (banked for #25/26 + future stat work)
+Morale (`$confidence`) & sobriety (`$sobriety`) are a **mood/consequence** system, **not** a health bar:
+- **No death**; `$statGain/$statLoss` are asymptotic (gain scales with headroom, loss with current), clamp 0..100.
+- **Endings do NOT read them** — White/Black = Alba lines + the final wake/sleep choice; Complete/Incomplete = whether all three Alba lines were caught.
+- They DO shape: the **Tarot draw** (low sobriety adds The Devil, low confidence The Tower — `.twee:34448`), **NPC reactions** (e.g. the agent at confidence ≥ 60 — `.twee:34840`), **recovery nudges** (both < 30 → "you're in a bad way", chippy/doorway — `.twee:34128`), the **give-up exit** (confidence ≤ 5 → "No more" — `.twee:34170`), and **visual tone** (lily wilts with low sobriety, bg darkens, header danger colours). Drinks trade sobriety for confidence; food/rest restore. The #10 modal frames them as "the temperature of your night."
+
+### New reusable infra
+- Two body-level info modals: `dssShowHauntsModal()`, `dssShowStatsModal()` (just after `dssShowMinigameRules`, ~.twee:3270+). Both reuse the `.dss-rules-*` shell + new `.dss-modal-x` (corner ✕), `.dss-haunts-card` (shared shell, has `max-height` scroll-safety), `.dss-haunts-text` / `.dss-stats-text`. Dismiss = click-anywhere (armed after 250ms) or ✕; a MutationObserver tears the modal down if the launch passage leaves the DOM. They're near-identical sibling IIFEs — if a 3rd is ever needed, generalise to `dssShowInfoModal(opts)`.
+
+### Open / flagged
+- **#24** still open (quickest pickup — see top callout).
+- **#32** — confirm "clutching" → "dutchy" was intended (it replaced a meaningful word).
+- **#33** — "leaching" synonym swappable on request.
+- Modal timings are single numbers in the triggers, easily tuned: haunts **1.6s**, stats **800ms**.
 
 # HANDOFF — 2026-05-31 (continuation: #17, #31-Davy, mobile fixes)
 
@@ -42,15 +71,15 @@ Numbers are stable references we've been using. ✅ done · ⏳ pending · ❓ t
 7. ✅ Password signpost — see below. Plus a follow-on fix (conditional prose).
 8. ⏳ "Stats came back w/ more chips" — **needs Dr Quill's read** (cryptic). Next up.
 9. ⏳ Rules pop-up before you start, board visible behind (related to #13).
-10. ⏳ Explain how morale vs sobriety integrate.
+10. ✅ Morale & Sobriety primer modal on first Dean Street arrival (`dssShowStatsModal`). Framed as "the temperature of your night", not a health bar. [2026-05-31 evening]
 11. ❓ "Sebastian Aaron-[zinns?] Hill — Ben reminded me" / "mi amigo" — unclear (maybe Radio Mi Amigo, tying to interval-radio?).
-12. ⏳ Name/clarify a haunt "calcinatio".
+12. ✅ Surfaced the haunt-collected eyebrow — `.haunt-header` ("⟡ HAUNT COLLECTED ⟡") was tiny/faint, now prominent on all 12 cards. (Sarah's "calcinatio" note = wanting the HAUNT labelling clearer.) [2026-05-31 evening]
 13. ✅ Minigame rules modal — see below.
 14. ⏳ Use Purcell's "Dido's Lament" for Dido (music cue).
 15. ⏳ "Skunk Hour" (Lowell) for the interval radio.
 16. ❓ "Interval — more 'memory card up'" — unclear.
 17. ⏳ Make the "back" navigation more obvious.
-18. ⏳ "What does 'close to the end' mean — (lives?)".
+18. ✅ Shelley's-liver hint reworded — no death-implication, fits "you can't die". [2026-05-31 evening]
 
 **Page 2**
 19. ⏳ Pub music w/ Lackland.
@@ -68,8 +97,8 @@ Numbers are stable references we've been using. ✅ done · ⏳ pending · ❓ t
 
 **Page 3**
 31. ✅ Bernard/Lackland gating — see below.
-32. ❓ "eyes like dutch pearls" — marked ✗ (fixed? or cut? — ask Dr Quill).
-33. ❓ "admixture" twice — marked ✗ (note: "admixture" appears in the Lily-4 glimpse at the Pillars *and* in Davy/somewhere — worth a dedupe check).
+32. ✅ Line actually read "clutching pearls" (not "dutch"); changed "clutching" → "dutchy" per Dr Quill (`.twee:36863`). ⚠ flagged — revert if "clutching" was deliberate. [2026-05-31 evening]
+33. ✅ Deduped — kept poetic "live admixture" (Lily-4 glimpse); maritime instance → "a leaching of plastics" (`.twee:37510`). One occurrence game-wide now. [2026-05-31 evening]
 34. ⏳ Program it so you're guaranteed ≥1 pentacle.
 35. ⏳ Background music — Stravinsky + Parker, R. Scott.
 36. ⏳ Cecil Court at end.

@@ -1,4 +1,65 @@
-> **▶ NEXT SESSION — START HERE.** This session landed **#10** (Morale & Sobriety primer modal), **#12** (haunt-card prominence), **#18** (Shelley's-liver reword), the **French haunts explainer → modal**, two **mobile fixes** (ALBA header alignment, mute-button visibility), and **#32 / #33** text tidies. All applied, synced, verified; Dr Quill commits via GitHub Desktop.
+> **▶ NEXT SESSION — START HERE.** Huge playtest-backlog + tarot session. Branch **v2-expansion**. Loop unchanged: edit `.twee` → `python3 sync_html.py` → verify via preview MCP (config `dss`, port 8923) → never git (Dr Quill commits via GitHub Desktop). The 37-item playtest list is now nearly cleared.
+>
+> **First thing: ask Dr Quill for real-play confirmations** (three things the debug-jump harness could NOT verify — see "⚠ Harness limitation" below):
+> 1. **Pong** — is the **last point winnable** now? (Removed the difficulty ramp that spiked the AI at match point; it's flat now, ball still speeds up.)
+> 2. **Liver tip (#30)** — does the "You're seriously flagging…" word-to-the-wise pop when you're carrying Shelley's liver and morale **or** sobriety < 30?
+> 3. **Matchbox** — visit the French, return to Dean St: does the coin-style **matchbox popup** appear, does **"Pocket them"** dismiss it (with motes), and can you then **smoke** from the notebook?
+> **Also pending:** the audio items still need his files/picks (#4, #5, #14, #19, #29, #35).
+
+# HANDOFF — 2026-05-31 (late — playtest backlog, tarot rework, mobile audit, matchbox)
+
+Worked Sarah's 37-item playtest list almost to completion, did a mobile audit, fully reworked the tarot, and built a new matchbox mechanic. All applied, synced, verified where possible; Dr Quill commits.
+
+### Playtest items closed this session
+- **#3** "labial pink" → **"balanic pink"** (the stout man's collar at Trisha's, `.twee` ~36968). *balanic* = of the glans; his pick over scrotal/preputial.
+- **#6 (Hobson)** — the couplet *"Hobson has supt, and 's newly gon to bed."* now follows **directly** from "…comes out in the wash:" so the **Hobson's-choice** pun lands (it had been split off by the lily/phone block). No attribution (house style leaves Marvell/Milton/Virgil uncredited). Also reworded the Pillars closing: "The room hums on without you." → **"You've no more business here."**
+- **#8** — kept the chippy second-helping stat bump (harmless: asymptotic gains, endings ignore stats); added a wink **"You must be starving!"** on return visits (`$hadChippy`-gated).
+- **#16** — interval memory polaroid moved **above** the "Down again" link (rendered inline now, not via the bottom `?lilyPolaroid` hook).
+- **#20** = "speed up pong" → covered by #21.
+- **#21 (pong)** — was secretly **first-to-3** while the rules said first-to-5; now genuinely **first to 5** (win cond + "match point"/"decider" announcements fixed). Brisker start (`ball.base 5.0`), serve-speed ramp `min(rallyCount,9)*0.30`, in-rally cap `7→8.5`. **Difficulty is now FLAT** — removed both the score-catchup *and* the progress-ramp that made the last point a wall (`aiBias` clamped to [-1.0,0]; speedMul/accMul/noiseMul carry no `prog` term). "Move mouse" → "Move mouse or drag".
+- **#22** — kept the notebook **CALLS** section (his call; no change).
+- **#23** — Trisha's matchbook is now an active **"Give him the matchbook"** choice (was auto-used), matching the password-gate logic. Also fixed: the doorman line was hardcoded "Jack Curtis" — now branches on `$opponent` (Jack **or** Percy).
+- **#24** — "grenadine light" → **"pastis light"** (Trisha's; kept "incarnadine").
+- **#25/26/34 (tarot)** — see "Tarot rework" below.
+- **#28** — "like an injured thing" → **"like a nursemaid's thing"** (Shana's Verdict).
+- **#30** — **Shelley's-liver reminder**: one-shot word-to-the-wise on Dean St, first time you're carrying the liver and flagging (morale or sobriety < 30). First branch of the existing nudge chain (preempts the "bad way" nudge). New flag `$shownLiverTip`. ⚠ auto-fire unverified in harness (see below).
+- **#32** — confirmed "dutchy pearls" intentional; kept.
+
+### Tarot rework (#25/26, folds in #34)
+- **Position labels** PAST / PRESENT / FUTURE above each card; a **reading panel** below the spread fills on hover (desktop) / tap (mobile) of a flipped card — fuller phrasing header + card name + a one-line meaning. Reveal-gated. Styled as a **ghostly translucent pink box** (Trisha's palette).
+- **Click-through cleaned:** *"'You do not find the Hanged Man.'"* is now the clickable link → Shana's Verdict; dropped the "'What's wrong with it?'" / "What?" lines.
+- **All 20 card SVGs redrawn** in the locked aesthetic — **Art Nouveau, mystical/weird/delicate**: hairline gold on dark jewel grounds, translucent washes, faint glows, NO faces/cartoon, and **each card's image drawn from its meaning** (Tower = anarchic tides, Sun = warmth on a sprout, Moon = workings beneath the flesh, etc.). Thin parchment border on each (`.tarot-art` border). See memory `feedback_card_art_aesthetic`.
+- The 22 one-line meanings are **Dr Quill's redrafted** text (no longer draft-pink), in the `MEANING` object of the **Shana Reads** passage.
+- **`Tarot Gallery.html`** generated at project root — self-contained shareable page of all 20 cards (regenerate via `/tmp/make_tarot_gallery.py`, which reads the `.twee`).
+
+### Mobile audit
+- **Fixed 4 canvas-overflow bugs** (drawing buffers weren't scaled to display): **pong** (540px — opponent's half was off-screen, unplayable), **Cecil Court Waltz** (360px), **Sketch napkin ×2** (400px). Fix = `max-width:100%;height:auto` (input mapping already rect-scales). Desktop unchanged. (Bar/Fight/Cow were already responsive.)
+- **No touch-parity blockers**: all 58 `:hover` rules are decorative — zero hidden-until-hover reveals. Notebook (5 tabs fit, MAP reachable), hub, modals, 3D Pillars scene all fit at 375px. Games have touch handlers (no keyboard-only).
+- **Real-device-only** (can't test in preview): WebGL 3D on iPhone GPU, iOS audio (Silent switch).
+
+### New: matchbox mechanic (smoke earlier)
+- Matches are now separate from the Trisha's passkey. You **swipe a matchbox on first exit from the French** → coin-style popup on Dean St (new `$hasMatches` flag, "☆ MATCHES ACQUIRED", motes to notebook). **Smoking gate moved** from `$hasTrishaMatchbook` to `$hasMatches`, so you can smoke early. The Trisha's matchbook is unchanged (still the passkey; also sets `$hasMatches` as a safety net). **"A Box of Matches"** added to notebook EFFECTS. Matchbox popup reuses `#coin-overlay` CSS (extended selectors to `#match-overlay`).
+- Distinction: plain **matchbox** (smoking) vs branded club **matchbook** (Trisha's door) — no rename needed, no confusion.
+
+### Other text/UX edits
+- **Word-to-the-wise windows no longer autofade** — all three `venue-hint-box` popups (`wordToTheWisePopup`, `venueHintPopup`, dead `moraleWarningPopup`) wait for click/Esc (removed `setTimeout(dismiss,…)`). The cigarette-lighting popup's timer is unrelated, untouched.
+- **#15** (was mis-filed as music) — the interval radio now reads *"…a radio is playing spare: Love, O careless Love…"* (`.twee` ~36994). A public-domain trad-song fragment Dr Quill supplied (Skunk Hour reference); the Lowell poem itself is parked (in copyright).
+- **Dean St title** "DREAM STREET SHUFFLE" now equally spaced (dropped a 0.15em spacer that only widened STREET→SHUFFLE).
+- Dean St prose: "as if Brando might emerge" → **"Brando might emerge"**; "It will help you find the things you need." → **"It might open doors."**
+- Interval polaroid prose: "black and laced" → **"filigree and black"**; "to see God's face like that again." → **"to see God's face again."**
+
+### ⚠ Harness limitation (important — explains "unverified" items)
+The preview **debug-jump does NOT reliably run inline passage `<script>` setTimeout/overlay scripts** (hit repeatedly: the #30 liver tip, the matchbox dismiss/motes). Top-level scripts like the stats modal fire; deeply-nested-in-`(if:)` ones often don't on a debug jump. In every case the **popup function + branch condition were verified**; the auto-fire uses the **same mechanism as shipped, working features** (the "bad way" nudge, the Donkey-coin pickup), so it works in real play. **Takeaway: don't trust debug-jump for verifying setTimeout/overlay auto-fires — confirm those in a real playthrough.**
+
+### Parked / still open
+- **#11** (Sebastian…/"mi amigo") — refers to an **in-copyright poem**; parked.
+- **#36** "Cecil Court at end" — no clear intent; Cecil Court is currently a mid-game venue. Design idea, not a bug; parked.
+- **Audio (need Dr Quill's files/picks):** #4 hold the chord into the verse · #5 hear Aoife · #14 Dido's Lament · #19 pub music w/ Lackland · #29 one voice for the calls · #35 Stravinsky/Parker/Ronnie Scott's.
+- New flags added this session: **`$shownLiverTip`, `$hasMatches`** — both init in the two StoryInit blocks + healed in Dean Street (`(unless: … is a boolean)`).
+
+---
+
+> **▶ (SUPERSEDED) Previous start-here.** This session landed **#10** (Morale & Sobriety primer modal), **#12** (haunt-card prominence), **#18** (Shelley's-liver reword), the **French haunts explainer → modal**, two **mobile fixes** (ALBA header alignment, mute-button visibility), and **#32 / #33** text tidies. All applied, synced, verified; Dr Quill commits via GitHub Desktop.
 >
 > **Quickest pickup = #24** (grenadine / incarnadine) — last of the one-line trio. The two words sit two lines apart in one dream passage (`.twee:37920` "light incarnadine" / `.twee:37922` "a kind of grenadine light"); just needs Dr Quill's call (keep, or which to change). See `HANDOFF-playtest-prep.md` §B.
 > **Bigger jobs:** a proper **mobile audit** (touch-parity, ~57 hover-only rules, 3D on mobile GPUs, stacked notebook legends) · **#21** pong bug · **#25/26** tarot.

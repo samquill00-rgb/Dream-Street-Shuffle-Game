@@ -32587,6 +32587,7 @@ function _pongMuted() { return !!(window.dssAudio && window.dssAudio.isMuted && 
 if (window._pongMiniDataUri) {
   _pongEl = new Audio(window._pongMiniDataUri);
   _pongEl.volume = 0.28; _pongEl.loop = true;
+  _pongEl.playbackRate = 1.12; /* nudge the loop a touch faster than its native tempo (pitch preserved by default) */
   _pongEl.muted = _pongMuted();
   _pongEl.play().catch(function(){});
   _pongMuteWatcher = setInterval(function() {
@@ -32600,7 +32601,7 @@ var canvas = document.getElementById('pong-canvas');
 var ctx = canvas.getContext('2d');
 var playerScore = 0, oppScore = 0, rallyCount = 0; // rallyCount escalates ball speed each serve
 var gameOver = false, paused = false, serving = true, serveTime = Date.now();
-var ball = {x:W/2,y:H/2,dx:0,dy:0,r:5,base:4.4};
+var ball = {x:W/2,y:H/2,dx:0,dy:0,r:5,base:5.0};
 var pPad = {x:12,y:H/2-35,w:8,h:70};
 var oPad = {x:W-20,y:H/2-35,w:8,h:70};
 var mouseY = H/2, actualY = pPad.y;
@@ -32627,21 +32628,20 @@ document.addEventListener('mousemove',function(e){var r=canvas.getBoundingClient
 }
 function serve(){
 ball.x=W/2;ball.y=H/2;
-/* Cap rally-driven serve-speed escalation so longer matches don't outrun the player. */
-var sp=ball.base+Math.min(rallyCount,6)*0.25;var a=(Math.random()-0.5)*0.8;var d=(rallyCount%2===0)?-1:1;
+/* Serve speed climbs with each point played so the match opens brisk and quickens
+   toward the finish; capped at the 9th point so a long decider stays returnable. */
+var sp=ball.base+Math.min(rallyCount,9)*0.30;var a=(Math.random()-0.5)*0.8;var d=(rallyCount%2===0)?-1:1;
 ball.dx=d*sp*Math.cos(a);ball.dy=sp*Math.sin(a);
 serving=true;serveTime=Date.now();rallyCount++;
 }
 function callScore(){
-/* Table-tennis announcement: love for 0, deuce at 2-all+, advantage/match point as appropriate. */
+/* First to 5, flat (no win-by-2): love for 0, "match point" once a player reaches 4,
+   "decider" at 4-4. No deuce/advantage \u2014 there's no win-by-2, so that table-tennis
+   wording was misleading. */
 if(playerScore===0&&oppScore===0)return'love-all';
-if(playerScore>=2&&oppScore>=2){
-  if(playerScore===oppScore)return'deuce';
-  if(playerScore>oppScore)return'advantage you \u2014 match point';
-  return'advantage '+opponent+' \u2014 match point';
-}
-if(playerScore>=2&&playerScore>oppScore)return'match point \u2014 you';
-if(oppScore>=2&&oppScore>playerScore)return'match point \u2014 '+opponent;
+if(playerScore===4&&oppScore===4)return'match point \u2014 decider';
+if(playerScore>=4&&playerScore>oppScore)return'match point \u2014 you';
+if(oppScore>=4&&oppScore>playerScore)return'match point \u2014 '+opponent;
 var n=function(x){return x===0?'love':String(x);};
 return n(playerScore)+'\u2013'+n(oppScore);
 }
@@ -32682,32 +32682,31 @@ else if(sobriety<50){ty+=(Math.random()-0.5)*15;actualY+=(ty-actualY)*0.12;}
 else{actualY+=(ty-actualY)*0.25;}
 pPad.y=Math.max(0,Math.min(H-pPad.h,actualY));
 }
-/* Rubber-band: positive when AI is BEHIND (plays better), negative when
-   AHEAD (plays worse). The negative side stays uncapped at -1.5 so a 2-0
-   AI lead really feels easy; the positive (comeback) side is held to +0.8
-   so the AI can press, but isn't surgical when you're on match point —
-   the "final point feels unbeatable" complaint was the AI catching up at
-   the full +1.5 catchup multiplier. Once both players hit 2 (deuce), bias
-   goes to zero and sudden-death is honest. */
+/* Score-based difficulty is now one-directional: the AI only ever EASES OFF
+   when it's ahead (bias <= 0), so falling behind gives you a genuine break. It
+   NEVER plays better than its baseline when trailing — that score-catchup was
+   the "match point feels unbeatable" bug, because you're almost always ahead at
+   match point, so the AI was at full catchup right when you tried to close it
+   out. The honest climb in difficulty now comes from the match-progress ramp in
+   updateAI (ball + AI speed up together), not from the score. */
 function aiBias(){
-/* Tightened range so the AI's swings between "easy" and "hard" feel
-   like the same opponent throughout: -1.0 when AI is leading, +0.6 when
-   trailing. Stops the match from feeling like two different games stitched
-   together. Bias zeroes at 2-2 for honest sudden-death (now matches always
-   resolve within 5 points, see pointEnd). */
-if (playerScore >= 2 && oppScore >= 2) return 0;
+if (playerScore >= 4 && oppScore >= 4) return 0;
 var lead = oppScore - playerScore;
-var raw = -lead * 0.8;
-return Math.max(-1.0, Math.min(0.6, raw));
+var raw = -lead * 0.8;            // >0 would sharpen the AI when behind — clamped away below
+return Math.max(-1.0, Math.min(0.0, raw));
 }
 function updateAI(){
 var now=Date.now();
 var bias=aiBias();
-/* speedMul rides between ~0.55 (AI ahead) and ~1.45 (AI behind).
-   accMul shrinks reaction time and prediction noise when AI is behind. */
-var speedMul = 1 + bias * 0.45;
-var accMul   = Math.max(0.4, 1 - bias * 0.5);     // <1 = sharper when AI behind
-var noiseMul = Math.max(0.35, 1 - bias * 0.55);   // less noise when AI behind
+/* Score bias only ever EASES the AI (bias <= 0). The climb in difficulty comes
+   from prog — a score-independent match-progress ramp (0 at the start, ~1 by the
+   business end) so the AI and the ball quicken together into a fast but fair
+   finish, instead of the old score-catchup that spiked to a wall on match point.
+   noiseMul is floored so the AI is never pixel-perfect, even in the decider. */
+var prog = Math.min((playerScore + oppScore) / 8, 1);
+var speedMul = (1 + bias * 0.45) * (1 + prog * 0.35);
+var accMul   = Math.max(0.4,  (1 - bias * 0.5)  * (1 - prog * 0.25));  // <1 = faster reaction
+var noiseMul = Math.max(0.40, (1 - bias * 0.55) * (1 - prog * 0.2));   // floored so never perfect
 if(opponent==='Jack Curtis'){
 /* Jack — patient veteran. Reacts ~75ms, predicts cleanly with light noise. */
 var rt = 75 * accMul;
@@ -32738,13 +32737,13 @@ if(ball.y-ball.r<0){ball.y=ball.r;ball.dy=Math.abs(ball.dy);}
 if(ball.y+ball.r>H){ball.y=H-ball.r;ball.dy=-Math.abs(ball.dy);}
 if(ball.dx<0&&ball.x-ball.r<=pPad.x+pPad.w&&ball.x+ball.r>=pPad.x&&ball.y>=pPad.y&&ball.y<=pPad.y+pPad.h){
 var hp=(ball.y-pPad.y)/pPad.h;var a=(hp-0.5)*Math.PI*0.6;
-var sp=Math.min(Math.sqrt(ball.dx*ball.dx+ball.dy*ball.dy)*1.05,7);
+var sp=Math.min(Math.sqrt(ball.dx*ball.dx+ball.dy*ball.dy)*1.05,8.5);
 ball.dx=sp*Math.cos(a);ball.dy=sp*Math.sin(a);ball.x=pPad.x+pPad.w+ball.r;
 }
 if(ball.dx>0&&ball.x+ball.r>=oPad.x&&ball.x-ball.r<=oPad.x+oPad.w&&ball.y>=oPad.y&&ball.y<=oPad.y+oPad.h){
 var hp=(ball.y-oPad.y)/oPad.h;var am=opponent==='Percy Ritson'?0.8:0.6;
 var a=Math.PI-(hp-0.5)*Math.PI*am;
-var sp=Math.min(Math.sqrt(ball.dx*ball.dx+ball.dy*ball.dy)*1.05,7);
+var sp=Math.min(Math.sqrt(ball.dx*ball.dx+ball.dy*ball.dy)*1.05,8.5);
 ball.dx=sp*Math.cos(a);ball.dy=sp*Math.sin(a);ball.x=oPad.x-ball.r;
 }
 if(ball.x<-20){oppScore++;pointEnd(false);}
@@ -32752,12 +32751,10 @@ else if(ball.x>W+20){playerScore++;pointEnd(true);}
 }
 function pointEnd(pw){
 updateScore();paused=true;
-/* First to 3 wins — flat, no deuce. Previously a "win by 1" rule could
-   loop 2-2 → 3-3 → 4-3… on the rubber-band, which made the match feel
-   too long or inconsistently hard. Now every match ends in 3–5 points,
-   always decisive. The AI bias still rubber-bands within a tight range
-   so the difficulty curve is consistent across opponents. */
-if(playerScore>=3||oppScore>=3){endGame(playerScore>=3);return;}
+/* First to 5, flat (no win-by-2): a match always resolves in 5–9 points and is
+   always decisive. Difficulty climbs via the match-progress ramp in updateAI
+   (ball + AI speed up together), not via score-catchup — see aiBias. */
+if(playerScore>=5||oppScore>=5){endGame(playerScore>=5);return;}
 setTimeout(function(){paused=false;serve();},800);
 }
 function endGame(pw){

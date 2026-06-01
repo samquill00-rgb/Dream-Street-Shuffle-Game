@@ -3321,6 +3321,9 @@ window.dssAudio = (function() {
     var done = false, obs = null, armed = false;
     function teardown() {
       if (done) return; done = true;
+      // Announce the close so the glass-smash SFX at The Empty Glass can land
+      // ~2s after the player dismisses this explainer (see .empty-glass-marker).
+      window.dispatchEvent(new CustomEvent('hauntsmodal:closed'));
       if (obs) { try { obs.disconnect(); } catch (e) {} obs = null; }
       overlay.classList.remove('dss-rules-in');
       overlay.classList.add('dss-rules-out');
@@ -8808,15 +8811,37 @@ window._passageGen = 0;
                   // Non-call passage: cut the phone-line ambient.
                   if (window.dssAudio.stopPhoneLine) window.dssAudio.stopPhoneLine();
                 }
-                // Glass smash — fires ~1.5s after the drink popup fully closes
+                // Glass smash — "He drops it; it smashes." On the FIRST haunt,
+                // the haunts explainer modal appears here (deferred behind the
+                // drink popup); the smash should land ~2s AFTER the player
+                // closes that explainer, not while it's still up. If THE DEBT
+                // isn't the first haunt (no explainer), fall back to ~1.5s after
+                // the drink popup closes.
                 if (passageNode.querySelector('.empty-glass-marker')) {
                   var smashGen = window._passageGen;
-                  var smashOnce = function() {
-                    window.removeEventListener('drinkpopup:closed', smashOnce);
-                    if (window._passageGen !== smashGen) return;
-                    setTimeout(function(){ if (window._passageGen === smashGen) window.dssAudio.glassSmash(); }, 1500);
+                  var smashed = false;
+                  var doSmash = function(delay) {
+                    if (smashed) return; smashed = true;
+                    setTimeout(function(){ if (window._passageGen === smashGen) window.dssAudio.glassSmash(); }, delay);
                   };
-                  window.addEventListener('drinkpopup:closed', smashOnce);
+                  // Preferred path: 2s after the explainer is dismissed.
+                  var onHaunts = function() {
+                    window.removeEventListener('hauntsmodal:closed', onHaunts);
+                    if (window._passageGen !== smashGen) return;
+                    doSmash(2000);
+                  };
+                  window.addEventListener('hauntsmodal:closed', onHaunts);
+                  // Fallback path: only if no explainer is/will be on screen.
+                  var onDrink = function() {
+                    window.removeEventListener('drinkpopup:closed', onDrink);
+                    if (window._passageGen !== smashGen) return;
+                    setTimeout(function(){
+                      if (smashed || window._passageGen !== smashGen) return;
+                      if (document.getElementById('dss-haunts-overlay')) return; // explainer up — let onHaunts own it
+                      doSmash(1500);
+                    }, 1800);
+                  };
+                  window.addEventListener('drinkpopup:closed', onDrink);
                 }
                 // Venue door creak + first-entry whoosh, by venue tag.
                 // Track `_currentVenue` so we don't creak on every sub-passage
@@ -12190,6 +12215,24 @@ spawnFlash(rb.classList.contains('revelation-lily') ? 'alba-flash-lily' : 'alba-
 // The "big noise" of an alba being caught — distant bell, four-and-a-
 // half-second decay, rings under the typewriter's lead-in pause.
 if (window.dssAudio && window.dssAudio.distantBell) window.dssAudio.distantBell();
+// Kindle the matching header jewel in sync with the gong. The [header]
+// passage (which fills the jewels from $alba) renders BEFORE the line is
+// caught — on LINE 1 the (set:) runs in the passage body; on LINE 2/3 it
+// runs on a (link:) click — so the jewel can't reflect the new line until
+// the next navigation. Light it here so it swells the moment the line lands
+// (the .alba-jewel 0.7s transition rides the bell); the next header render
+// makes it permanent. Deferred ~200ms so the stat-bars lift has settled.
+var albaIdx = rb.getAttribute('data-alba');
+if (albaIdx) {
+var jewelGen = (window._passageGen || 0);
+setTimeout(function() {
+if ((window._passageGen || 0) !== jewelGen) return;
+var jewels = document.querySelectorAll('#stat-bars-lifted .alba-jewel');
+if (!jewels.length) jewels = document.querySelectorAll('.alba-jewel');
+var j = jewels[albaIdx - 1];
+if (j) j.classList.add('alba-jewel-filled');
+}, 200);
+}
 var em = rb.querySelector('em');
 if (em && !em.dataset.albaTyped) {
 em.dataset.albaTyped = '1';
@@ -34132,12 +34175,12 @@ There is an atmosphere of the silver screen. Brando might emerge in a tight and 
 
 (if: $returns >= 2 and $visited's French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)<script>setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);</script>]
 (if: $hasLiver is true and ($confidence < 30 or $sobriety < 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You're seriously flagging. Shelley's liver is still in your notebook. It might be time to eat it.");},300);</script>](else-if: $returns >= 3 and $confidence < 30 and $sobriety < 30 and ($hadChippy is false or $hadBreather is false))[(if: $shownLowBoth is false)[(set: $shownLowBoth to true)<span id="wtw-msg-low-both" style="display:none">(if: $hadChippy is false and $hadBreather is false)[You're in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You're in a bad way. Get some grub at the chippy.](else:)[You're in a bad way. Step into a doorway. Catch your breath.]</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-both');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},300);</script>]
-(if: $hadChippy is false)[[[Get some grub|Approach Chinese Fish and Chips]]
+(if: $hadChippy is false)[[[The Chippy|Approach Chinese Fish and Chips]]
 ](if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]]
 ](else-if: $returns >= 3 and $confidence < 40 and $hadChippy is false)[(if: $shownLowConf is false)[(set: $shownLowConf to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You seem hungry. Get some grub at the chippy.");},300);</script>]
-[[Get some grub|Approach Chinese Fish and Chips]]
+[[The Chippy|Approach Chinese Fish and Chips]]
 ](else-if: $returns >= 3 and $sobriety < 40 and ($hadBreather is false or $hadChippy is false))[(if: $shownLowSobr is false)[(set: $shownLowSobr to true)<span id="wtw-msg-low-sob" style="display:none">(if: $hadBreather is false)[You should have gone to the gents earlier.](else:)[You should have gone to the gents earlier. Get some grub at the chippy.]</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-sob');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},300);</script>]
-(if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]](else-if: $hadChippy is false)[[[Get some grub|Approach Chinese Fish and Chips]]]
+(if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]](else-if: $hadChippy is false)[[[The Chippy|Approach Chinese Fish and Chips]]]
 ]]
 (if: $coachUrgent is false and not (($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2)))[[[To The French|Approach The French]] (if: $haunts contains $haunt4)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt1)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt2)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] (if: $tookLily5 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
 ](if: $coachUrgent is false and ($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2))[(if: $tookLily5 is false)[<div class="choice-box">[[Back to The French|Approach The French]]</div> <span class="lp">❁</span>](else-if: not _towerReady)[[[Back to The French|Approach The French]] <span class="lp lp-done">❀</span>](else:)[<span class="greyed-out">The French</span> <span class="lp lp-done">❀</span>]
@@ -34171,7 +34214,7 @@ There is an atmosphere of the silver screen. Brando might emerge in a tight and 
 <!-- The Voice link removed — was firing at 2/3 alba and reading as
      premature. The Fetch is now reached only via "The dawn is coming"
      (which itself only appears when alba is complete). -->\
-(if: $coachUrgent is false and $hadChippy is true and $tookLily1 is false)[<div class="choice-box">[[Back to the chippy|Approach Chinese Fish and Chips]]</div> <span class="lp">❁</span>](else-if: $coachUrgent is false and $hadChippy is true)[<span class="greyed-out">Get some grub</span> <span class="lp lp-done">❀</span>
+(if: $coachUrgent is false and $hadChippy is true and $tookLily1 is false)[<div class="choice-box">[[Back to the chippy|Approach Chinese Fish and Chips]]</div> <span class="lp">❁</span>](else-if: $coachUrgent is false and $hadChippy is true)[<span class="greyed-out">The Chippy</span> <span class="lp lp-done">❀</span>
 ]\
 (if: $coachUrgent is false and $confidence <= 5)[[[Give up on the night|No more]]
 ]\
@@ -34678,7 +34721,7 @@ He's gone and you know that you owe something now, to him and to here.
 
 As he turns from his ginger light he kisses you and, as he does, you close your eyes. Inside their shuttered lids you read:
 
-<div class="revelation-box alba-fade-first">
+<div class="revelation-box alba-fade-first" data-alba="1">
 <em>'$alba1'</em>
 </div>
 
@@ -34702,7 +34745,7 @@ Among them, with his back to you, is your old friend. The eldest of the children
 (link: "Listen")[(set: $alba to $alba + (a: $alba2))
 He speaks. The family roars on around, as his old sister winds a trick, him but you hear only this:
 
-<div class="revelation-box">
+<div class="revelation-box" data-alba="2">
 <em>'$alba2'</em>
 </div>
 
@@ -34726,7 +34769,7 @@ You see it, the sky tearing patches from itself and bleeding red, orange, green 
 (link: "Closer")[(set: $alba to $alba + (a: $alba3))
 The last line comes out of your own throat, as you cry, 'I wish that I was never…' then:
 
-<div class="revelation-box">
+<div class="revelation-box" data-alba="3">
 <em>'$alba3'</em>
 </div>
 

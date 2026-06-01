@@ -1,227 +1,71 @@
-> **▶ NEXT SESSION — START HERE.** Huge playtest-backlog + tarot session. Branch **v2-expansion**. Loop unchanged: edit `.twee` → `python3 sync_html.py` → verify via preview MCP (config `dss`, port 8923) → never git (Dr Quill commits via GitHub Desktop). The 37-item playtest list is now nearly cleared.
+> **▶ NEXT SESSION — START HERE.** Big polish/UX session (2026-06-01). Loop unchanged: edit `.twee` → `python3 sync_html.py` → verify via preview MCP (config `dss`, port 8923) → **never git** (Dr Quill commits via GitHub Desktop). **Never read the `.html`** (3MB compiled artifact) — grep it instead.
 >
-> **First thing: ask Dr Quill for real-play confirmations** (three things the debug-jump harness could NOT verify — see "⚠ Harness limitation" below):
-> 1. **Pong** — is the **last point winnable** now? (Removed the difficulty ramp that spiked the AI at match point; it's flat now, ball still speeds up.)
-> 2. **Liver tip (#30)** — does the "You're seriously flagging…" word-to-the-wise pop when you're carrying Shelley's liver and morale **or** sobriety < 30?
-> 3. **Matchbox** — visit the French, return to Dean St: does the coin-style **matchbox popup** appear, does **"Pocket them"** dismiss it (with motes), and can you then **smoke** from the notebook?
-> **Also pending:** the audio items still need his files/picks (#4, #5, #14, #19, #29, #35).
-
-# HANDOFF — 2026-05-31 (late — playtest backlog, tarot rework, mobile audit, matchbox)
-
-Worked Sarah's 37-item playtest list almost to completion, did a mobile audit, fully reworked the tarot, and built a new matchbox mechanic. All applied, synced, verified where possible; Dr Quill commits.
-
-### Playtest items closed this session
-- **#3** "labial pink" → **"balanic pink"** (the stout man's collar at Trisha's, `.twee` ~36968). *balanic* = of the glans; his pick over scrotal/preputial.
-- **#6 (Hobson)** — the couplet *"Hobson has supt, and 's newly gon to bed."* now follows **directly** from "…comes out in the wash:" so the **Hobson's-choice** pun lands (it had been split off by the lily/phone block). No attribution (house style leaves Marvell/Milton/Virgil uncredited). Also reworded the Pillars closing: "The room hums on without you." → **"You've no more business here."**
-- **#8** — kept the chippy second-helping stat bump (harmless: asymptotic gains, endings ignore stats); added a wink **"You must be starving!"** on return visits (`$hadChippy`-gated).
-- **#16** — interval memory polaroid moved **above** the "Down again" link (rendered inline now, not via the bottom `?lilyPolaroid` hook).
-- **#20** = "speed up pong" → covered by #21.
-- **#21 (pong)** — was secretly **first-to-3** while the rules said first-to-5; now genuinely **first to 5** (win cond + "match point"/"decider" announcements fixed). Brisker start (`ball.base 5.0`), serve-speed ramp `min(rallyCount,9)*0.30`, in-rally cap `7→8.5`. **Difficulty is now FLAT** — removed both the score-catchup *and* the progress-ramp that made the last point a wall (`aiBias` clamped to [-1.0,0]; speedMul/accMul/noiseMul carry no `prog` term). "Move mouse" → "Move mouse or drag".
-- **#22** — kept the notebook **CALLS** section (his call; no change).
-- **#23** — Trisha's matchbook is now an active **"Give him the matchbook"** choice (was auto-used), matching the password-gate logic. Also fixed: the doorman line was hardcoded "Jack Curtis" — now branches on `$opponent` (Jack **or** Percy).
-- **#24** — "grenadine light" → **"pastis light"** (Trisha's; kept "incarnadine").
-- **#25/26/34 (tarot)** — see "Tarot rework" below.
-- **#28** — "like an injured thing" → **"like a nursemaid's thing"** (Shana's Verdict).
-- **#30** — **Shelley's-liver reminder**: one-shot word-to-the-wise on Dean St, first time you're carrying the liver and flagging (morale or sobriety < 30). First branch of the existing nudge chain (preempts the "bad way" nudge). New flag `$shownLiverTip`. ⚠ auto-fire unverified in harness (see below).
-- **#32** — confirmed "dutchy pearls" intentional; kept.
-
-### Tarot rework (#25/26, folds in #34)
-- **Position labels** PAST / PRESENT / FUTURE above each card; a **reading panel** below the spread fills on hover (desktop) / tap (mobile) of a flipped card — fuller phrasing header + card name + a one-line meaning. Reveal-gated. Styled as a **ghostly translucent pink box** (Trisha's palette).
-- **Click-through cleaned:** *"'You do not find the Hanged Man.'"* is now the clickable link → Shana's Verdict; dropped the "'What's wrong with it?'" / "What?" lines.
-- **All 20 card SVGs redrawn** in the locked aesthetic — **Art Nouveau, mystical/weird/delicate**: hairline gold on dark jewel grounds, translucent washes, faint glows, NO faces/cartoon, and **each card's image drawn from its meaning** (Tower = anarchic tides, Sun = warmth on a sprout, Moon = workings beneath the flesh, etc.). Thin parchment border on each (`.tarot-art` border). See memory `feedback_card_art_aesthetic`.
-- The 22 one-line meanings are **Dr Quill's redrafted** text (no longer draft-pink), in the `MEANING` object of the **Shana Reads** passage.
-- **`Tarot Gallery.html`** generated at project root — self-contained shareable page of all 20 cards (regenerate via `/tmp/make_tarot_gallery.py`, which reads the `.twee`).
-
-### Mobile audit
-- **Fixed 4 canvas-overflow bugs** (drawing buffers weren't scaled to display): **pong** (540px — opponent's half was off-screen, unplayable), **Cecil Court Waltz** (360px), **Sketch napkin ×2** (400px). Fix = `max-width:100%;height:auto` (input mapping already rect-scales). Desktop unchanged. (Bar/Fight/Cow were already responsive.)
-- **No touch-parity blockers**: all 58 `:hover` rules are decorative — zero hidden-until-hover reveals. Notebook (5 tabs fit, MAP reachable), hub, modals, 3D Pillars scene all fit at 375px. Games have touch handlers (no keyboard-only).
-- **Real-device-only** (can't test in preview): WebGL 3D on iPhone GPU, iOS audio (Silent switch).
-
-### New: matchbox mechanic (smoke earlier)
-- Matches are now separate from the Trisha's passkey. You **swipe a matchbox on first exit from the French** → coin-style popup on Dean St (new `$hasMatches` flag, "☆ MATCHES ACQUIRED", motes to notebook). **Smoking gate moved** from `$hasTrishaMatchbook` to `$hasMatches`, so you can smoke early. The Trisha's matchbook is unchanged (still the passkey; also sets `$hasMatches` as a safety net). **"A Box of Matches"** added to notebook EFFECTS. Matchbox popup reuses `#coin-overlay` CSS (extended selectors to `#match-overlay`).
-- Distinction: plain **matchbox** (smoking) vs branded club **matchbook** (Trisha's door) — no rename needed, no confusion.
-
-### Other text/UX edits
-- **Word-to-the-wise windows no longer autofade** — all three `venue-hint-box` popups (`wordToTheWisePopup`, `venueHintPopup`, dead `moraleWarningPopup`) wait for click/Esc (removed `setTimeout(dismiss,…)`). The cigarette-lighting popup's timer is unrelated, untouched.
-- **#15** (was mis-filed as music) — the interval radio now reads *"…a radio is playing spare: Love, O careless Love…"* (`.twee` ~36994). A public-domain trad-song fragment Dr Quill supplied (Skunk Hour reference); the Lowell poem itself is parked (in copyright).
-- **Dean St title** "DREAM STREET SHUFFLE" now equally spaced (dropped a 0.15em spacer that only widened STREET→SHUFFLE).
-- Dean St prose: "as if Brando might emerge" → **"Brando might emerge"**; "It will help you find the things you need." → **"It might open doors."**
-- Interval polaroid prose: "black and laced" → **"filigree and black"**; "to see God's face like that again." → **"to see God's face again."**
-
-### ⚠ Harness limitation (important — explains "unverified" items)
-The preview **debug-jump does NOT reliably run inline passage `<script>` setTimeout/overlay scripts** (hit repeatedly: the #30 liver tip, the matchbox dismiss/motes). Top-level scripts like the stats modal fire; deeply-nested-in-`(if:)` ones often don't on a debug jump. In every case the **popup function + branch condition were verified**; the auto-fire uses the **same mechanism as shipped, working features** (the "bad way" nudge, the Donkey-coin pickup), so it works in real play. **Takeaway: don't trust debug-jump for verifying setTimeout/overlay auto-fires — confirm those in a real playthrough.**
-
-### Parked / still open
-- **#11** (Sebastian…/"mi amigo") — refers to an **in-copyright poem**; parked.
-- **#36** "Cecil Court at end" — no clear intent; Cecil Court is currently a mid-game venue. Design idea, not a bug; parked.
-- **Audio (need Dr Quill's files/picks):** #4 hold the chord into the verse · #5 hear Aoife · #14 Dido's Lament · #19 pub music w/ Lackland · #29 one voice for the calls · #35 Stravinsky/Parker/Ronnie Scott's.
-- New flags added this session: **`$shownLiverTip`, `$hasMatches`** — both init in the two StoryInit blocks + healed in Dean Street (`(unless: … is a boolean)`).
-
----
-
-> **▶ (SUPERSEDED) Previous start-here.** This session landed **#10** (Morale & Sobriety primer modal), **#12** (haunt-card prominence), **#18** (Shelley's-liver reword), the **French haunts explainer → modal**, two **mobile fixes** (ALBA header alignment, mute-button visibility), and **#32 / #33** text tidies. All applied, synced, verified; Dr Quill commits via GitHub Desktop.
+> **Where we were when the session paused:** mid-triage of the `aesthetic-suggestions.md` backlog with Dr Quill (the agreed "next ~1.5h" plan, see below). He wants to **finish as much as possible while in the loop**, then leave the pure-solo work (regression audit, dead-code sweep) for last. **v2-expansion is deliberately held for a dedicated session.**
 >
-> **Quickest pickup = #24** (grenadine / incarnadine) — last of the one-line trio. The two words sit two lines apart in one dream passage (`.twee:37920` "light incarnadine" / `.twee:37922` "a kind of grenadine light"); just needs Dr Quill's call (keep, or which to change). See `HANDOFF-playtest-prep.md` §B.
-> **Bigger jobs:** a proper **mobile audit** (touch-parity, ~57 hover-only rules, 3D on mobile GPUs, stacked notebook legends) · **#21** pong bug · **#25/26** tarot.
-> **Reusable now:** two body-level info modals — `dssShowHauntsModal()` / `dssShowStatsModal()`, gold-on-dark, dismiss via click-anywhere or ✕. **Stats-system reference + full 37-item backlog:** sections below.
+> **Pending HIS real-play confirmation** (debug-jump can't verify these — see "⚠ Debug-jump" below):
+> 1. **Rising-number deferral** (NEW this session) — does the floating "+N" stat delta now wait politely behind popups/modals instead of getting lost? (e.g. the +12 on entering The French, behind the primer.)
+> 2. **Stats primer** now fires on **first entering The French** (not first Dean Street) — flows OK?
+> 3. **Title** is 2.2em — reads "large" enough across his window widths? (Bigger needs a structural fix — see notes.)
+> 4. Carried trio: **Pong** last point winnable · **liver-tip** auto-fire (#30) · **matchbox** popup.
 
-# HANDOFF — 2026-05-31 (evening — modals, mobile, playtest text)
+# HANDOFF — 2026-06-01 (polish/UX: title, date, primer relocation, rising-number deferral, OPUS colour)
 
-Continued the playtest backlog with Dr Quill in the loop. Branch **v2-expansion**. Loop: edit `.twee` → `python3 sync_html.py` → verify via preview MCP (port 8923, config `dss`). Never git; he commits via GitHub Desktop.
+A long in-the-loop session with Dr Quill. All items applied, synced, verified where possible; he commits.
 
 ### Completed this session
-- **ALBA header — mobile alignment.** `.alba-strip` is a sibling grid to `.stat-group`; the `@media (max-width:600px)` block shrank `.stat-group` to `54px 124px 2.4em` but never `.alba-strip`, so ALBA (still on desktop's `68px 176px`) jutted ~63px left of the bars. Fix: gave `.alba-strip` the same mobile columns.
-- **Mute button — mobile visibility.** `#dss-mute-btn` was `opacity:0.55` brightening only on `:hover` (never fires on touch) and pinned `bottom:14px` (under iOS chrome). Now `bottom: calc(14px + env(safe-area-inset-bottom))` + `@media (hover:none){ opacity:0.92 }`. Desktop untouched. [.twee ~44960]
-- **#12 — HAUNT COLLECTED eyebrow.** `.haunt-header` was 0.6em / gold @ 0.55 alpha — barely visible. Now 0.68em / 0.92 alpha + subtle text-shadow. All 12 cards. [.twee ~40343]
-- **#18 — Shelley's liver reworded** (no death-implication; confirmed no death state exists). Spoken line at *O'Flatterly's Gift* (`.twee:35065`): "…who mistook the liver for the heart. It would not burn, you understand. Swallow it when you feel yourself going out, and it will keep you up a while yet." Vial popup (`.twee:3692`): "A little ambergris and faintly luminous. Inis O'Flatterly said to swallow it if you're flagging." NB **"Inis O'Flatterly"** is the antiquarian's established full name. Liver restores +22 morale / +40 sobriety.
-- **Haunts explainer → modal.** The inline `⟡ HAUNTS ⟡` lore-box (gated `$haunts's length is 1`, duplicated in **all 12** collection passages) is now a trigger calling `window.dssShowHauntsModal()` — auto-pops 1.6s after the HAUNT COLLECTED card. `$hauntExplained` flag unchanged (map-unlock/dots intact).
-- **#10 — Morale & Sobriety primer modal.** `window.dssShowStatsModal()` (sibling of the haunts modal) fires **once on first arrival at Dean Street**, gated on new one-shot `$statsExplained` (init in both StoryInit blocks + healed in Dean Street; trigger after the `$returns++`, 800ms delay). Copy approved by Dr Quill, lives in the helper.
-- **#32 — "dutchy pearls".** `.twee:36863` actually read "clutching pearls" (not "dutch" as Sarah's note said); changed "clutching" → "dutchy" per Dr Quill. ⚠ flagged — if "clutching" was deliberate, revert.
-- **#33 — admixture dedupe.** Kept poetic "born of their live **admixture**" (Lily-4 glimpse, `.twee:36866`); maritime "an admixture of plastics" → "**a leaching of** plastics" (`.twee:37510`). One occurrence game-wide now. "leaching" swappable (adulteration / sediment / residue) if Dr Quill prefers.
+- **Matchbox SVG cut-off** — `MATCHES` was overflowing its label panel (the **M** poked off the left edge, the **S** ran under the red striker). Shrank it: `font-size` 11→10, `letter-spacing` 2→1, recentre `x` 44→45. Fixed in **both** copies (the Dean St pop-up `match-svg` ~34187 and the notebook-inventory `nb-inv-matchbox` ~38416). Verified in a standalone before/after render.
+- **`me amigo` → `mi amigo`** — the El Rocío pilgrimage line in the painter passage (`.twee:37123`). (NB: separate from the murky playtest **#11** "mi amigo" note, which is still parked.)
+- **"looking for a light"** — the liver-tip "typo" was **already correct** in source; the prior handoff had mis-filed it. No change.
+- **Date restored under the subtitle** — the diegetic date had been deliberately stripped out of the hub header in an earlier pass (it only flashed during the midnight flip). Now `23.11.73` (Dr Quill confirmed **dots**, year **73**) renders **persistently UNDER** the `<span class="scene-location">Dean Street, Soho, London.</span>` line (~34184), flipping to `24.11.73` after midnight and carrying the `scene-date-flip` gold-flare animation on the midnight visit. CSS: `.scene-location` margin-bottom 1.2em→0.12em, `.scene-date` margin-bottom 0.25em→1.2em (both hub-only).
+- **Title size** — `<h1 class="game-title">DREAM STREET SHUFFLE</h1>` (`.twee:34130`). Went 1.7em → 2.8em (Dr Quill wanted it "large") → **2.2em (final)**. 2.8em **broke the layout**: the gas-lamp SVG floats right and `sizeLamp()` (~12513) auto-sizes it to the **full page height**; at 2.8em "SHUFFLE" (longest word) was wider than the ~246px column left of the lamp, so it couldn't fit beside the full-height float and **cleared to the bottom of the page** (the "lamp splits the title" bug Dr Quill hit). 2.2em fits beside the lamp on narrow windows too. **Bigger than 2.2em needs a structural fix** (trim the lamp's float width, or shrink the title responsively).
+- **Stats primer relocated** — the **Morale & Sobriety** modal (`dssShowStatsModal`) used to fire on **first Dean Street arrival**; Dr Quill said it broke the opening. Coin overlay squats on visit 2, the haunt modal squats on The Empty Glass — so it now fires on **first entering The French** (`.twee:36959`, gated `$visited's French is false and $statsExplained is false`, 600ms), where confidence jumps **+12** and the bars visibly move, making "you can see where you stand" land. Old hub trigger removed.
+- **Primer text (Dr Quill's rewrite)** — paragraph 2 now foregrounds the bar names: *"One measure's your **MORALE**… The other's your **SOBRIETY**; how straight you can remain."* (`.twee` ~3380). (Caps are his; apostrophe tidied "The other 's"→"The other's".)
+- **Rising-number deferral (NEW system)** — Dr Quill: when a stat change coincides with a popup/modal, the rising "+N" gets lost behind it. Fix: a small controller appended to the **header** (~38288) **pauses every `.stat-delta` at render** and only plays it once all overlays clear. `up()` watches `.dss-rules-overlay, #coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, .venue-hint-box` + `window._drinkPopupOpen`. Timing: no overlay → plays ~750ms; an overlay appears → ~1.2s after the **last** one closes (handles the French +12+primer AND the Empty Glass drink-popup→haunt-modal triple). Added `#eat-overlay` id to `EatPopup._build` (~10028) for detection. Graceful: `try/catch`, 25s safety timeout, `.stat-delta` starts at opacity 0 so worst case is a missing number, never broken UI. Mechanism verified (pause holds at currentTime 0 / opacity 0; resume plays full 5.2s rise); **end-to-end timing is a real-play check**.
+- **Orphaned `@keyframes` cleanup** (aesthetic backlog C5) — removed **13 unused** keyframes (`blueGlow, borderGlow, dssDrunkLow, dualRingPulse, guidedPulse, powder-flicker, powder-glint, questGlow, softGlow, starPulse, vhMist1/2/3`). 175→162, −2.6KB. Each verified to appear ONLY in its own definition (no JS/dynamic refs). Zero visual change.
+- **A2 OPUS stat-bar polish** — the OPUS-state "100%" → bright cream **`#f4edd8`** (Dr Quill picked "cream, no separator" from a 4-up mockup). Needed a **specificity bump** to `.stat-pct.pct-opus` (~39385) because the plain `.pct-opus` was being silently overridden by the later `.stat-pct` base rule (which is also why the real "100%" was already a soft tan `#e8d5b7`, not the gold the audit assumed). A2's other two points (bar-height/centreline mismatch; "rows touch") were **already fixed** in source.
 
-### Key design finding — what the stats actually do (banked for #25/26 + future stat work)
-Morale (`$confidence`) & sobriety (`$sobriety`) are a **mood/consequence** system, **not** a health bar:
-- **No death**; `$statGain/$statLoss` are asymptotic (gain scales with headroom, loss with current), clamp 0..100.
-- **Endings do NOT read them** — White/Black = Alba lines + the final wake/sleep choice; Complete/Incomplete = whether all three Alba lines were caught.
-- They DO shape: the **Tarot draw** (low sobriety adds The Devil, low confidence The Tower — `.twee:34448`), **NPC reactions** (e.g. the agent at confidence ≥ 60 — `.twee:34840`), **recovery nudges** (both < 30 → "you're in a bad way", chippy/doorway — `.twee:34128`), the **give-up exit** (confidence ≤ 5 → "No more" — `.twee:34170`), and **visual tone** (lily wilts with low sobriety, bg darkens, header danger colours). Drinks trade sobriety for confidence; food/rest restore. The #10 modal frames them as "the temperature of your night."
+### THE PLAN for the next ~1.5h (agreed with Dr Quill — in-the-loop first, solo last)
+1. **Sweep the rest of `aesthetic-suggestions.md`** — fast "you call it, I implement + verify" items. Was mid-triage. Triage notes so far: **A1 lily = LEAVE ALONE** (his standing instruction); **A2 done**; **A3/A4/A5** mostly no-change; **C5 keyframes done**; **D5 (cecil-rule dedupe) already done** in a prior session. Still to walk through with him: **B1** (passage opening rhythm), **B2** (notebook tab glyphs), **B3** (drink-popup choreography), **B4** (Ginger Light breathing), **B5** (Centre Point ladder type-on + vignette), **C1** (text-shadow density), **C1b** (Alba lines font — Georgia vs Playfair, weight), **C2** (palette CSS vars — NB most hexes are in SVG `fill=`/`stroke=` **attributes** where `var()` doesn't apply, so payoff is limited), **C3** (font-quoting consistency), **C4** (haunt bg gradients near-identical), **D1** (pent breathing), **D5b** (dawn corners ×4 dedupe — low payoff, endgame), **D6** (map SMIL→CSS), **D7** (map pulse `12;32`→`12;22`), **F** (Dawn corners). Most are small "consider" picks.
+2. **Title size revisit** — if he wants >2.2em, do the structural fix.
+3. **Parked notes #11 / #36** — quick decisions to close (see below).
+4. **He steps away → SOLO:** regression/bug-hunt audit + dead-code sweep (orphaned CSS classes/unused helpers, same risk-free treatment as the keyframes), leave a ranked list.
 
-### New reusable infra
-- Two body-level info modals: `dssShowHauntsModal()`, `dssShowStatsModal()` (just after `dssShowMinigameRules`, ~.twee:3270+). Both reuse the `.dss-rules-*` shell + new `.dss-modal-x` (corner ✕), `.dss-haunts-card` (shared shell, has `max-height` scroll-safety), `.dss-haunts-text` / `.dss-stats-text`. Dismiss = click-anywhere (armed after 250ms) or ✕; a MutationObserver tears the modal down if the launch passage leaves the DOM. They're near-identical sibling IIFEs — if a 3rd is ever needed, generalise to `dssShowInfoModal(opts)`.
+### Still open / parked
+- **Audio (6, needs his music files):** #4 hold chord into verse · #5 hear Aoife · #14 Dido's Lament · #19 pub music w/ Lackland · #29 one voice for the calls · #35 Stravinsky/Parker/Ronnie Scott's. (He's not writing music right now.)
+- **#11** — references an **in-copyright poem** ("Sebastian… / mi amigo", murky Sarah-note); parked on intent.
+- **#36** — "Cecil Court at the end" — no clear intent (it's a mid-game venue); parked.
+- **v2-expansion** — held for a dedicated session: Chariots-of-the-Gods dream worlds, Three Pillars portal hub at the Pillars of Hercules, Himalayas first (see memory `project_v2_expansion_direction`).
 
-### Open / flagged
-- **#24** still open (quickest pickup — see top callout).
-- **#32** — confirm "clutching" → "dutchy" was intended (it replaced a meaningful word).
-- **#33** — "leaching" synonym swappable on request.
-- Modal timings are single numbers in the triggers, easily tuned: haunts **1.6s**, stats **800ms**.
+### Key technical notes (NEW this session)
+- **Rising-number deferral controller** lives in the **header passage** (runs every passage). If a new overlay/popup type is ever added, add its root selector to the controller's `up()` check or its "+N" deltas will play behind it.
+- **OPUS "100%" colour** must be set on `.stat-pct.pct-opus` (specificity) — plain `.pct-opus` is overridden by the later `.stat-pct { color:#e8d5b7 }` base.
+- **Gas-lamp `sizeLamp()`** (~12513) stretches the lamp to full page content height; the title flows in the **narrow column left of it**. Any widening of the title risks the longest word clearing below the lamp on narrow viewports. **2.2em is the safe ceiling** without a structural change.
+- **Stats primer** is now the ONLY `dssShowStatsModal` call site (`.twee:36959`); the hub trigger is gone. Gate uses `$statsExplained` (still init in StoryInit + healed in Dean Street).
 
-# HANDOFF — 2026-05-31 (continuation: #17, #31-Davy, mobile fixes)
-
-Continued the playtest pass and did a first round of **mobile (iPhone Safari) fixes**. All items below are applied, synced, verified, and (per Dr Quill) pushed.
-
-### Playtest items completed this session
-- **#31 follow-on — Davy Merkin's "Go to see Lackland" gated (Option 2).** Same pattern as Bernard. Davy's opener is now `(if: $knowsLackland is false)[Go to see Lackland, he's surely expecting you. But d](else:)[D]on't hang about…` — so on the already-known branch it reads *"Don't hang about in his office…"*, the redirect dropped. Verified both branches live (temp-flag test); the "d/D" split renders cleanly. [.twee ~33790]
-- **#17 — "← BACK" moved top-left under the header.** Was top-*right* next to NOTEBOOK (small, easy to miss). Now `.back-one-link` is `position:fixed`, top-left, italic/dashed 3D style matching `.approach-back`. **Responsive top** (clears the header, which is 136px desktop / 121px mobile): `top:143px` default + `top:128px` in the `@media (max-width:600px)` block — consistent ~7px gap, clear of the title on phones. **Guard:** `tw-story:has(.approach-back) .back-one-link { display:none }` hides it on the 3D approach scenes (which keep their own back) so they don't double up. NB the guard must be scoped to `tw-story`, not `tw-passage` — the header `.stat-bars` is a *sibling* of `tw-passage` under `tw-story`, not a child. [CSS ~41150 + the 600px media block]
-
-### Mobile fixes (iPhone Safari)
-- **Notebook now fits the phone.** Two problems: (a) the 5 tabs (FINDS/EFFECTS/LILIES/POEM/MAP) are `flex:1` but with default `min-width:auto` they refused to shrink below their text → overflowed off-screen, and the panel clipped horizontally so MAP was unreachable; (b) `.nb-page` is hardcoded `width:60vw !important`, fine on desktop but a ~225px column on a 375px phone, clipping the two-column legends. **Fix (all in the `@media (max-width:600px)` block):** `.nb-tab { min-width:0; flex-shrink:1; font-size:0.72em; letter-spacing:0.05em; padding:… }` so all five fit one row, and `.nb-page { width:94vw !important }` so content stops clipping. Verified at 375px (no overflow, all tabs reachable). Desktop notebook untouched. NB the JS sets the `.nb-tabs` *container* style inline (`.style.cssText`), so target the `.nb-tab` items (CSS-class, not inline) — that's why the fix works.
-- **Audio: first-tap unlock added (hygiene), but the actual "no sound" bug was the iPhone hardware Silent switch — NOT code.** ⚠ **Remember this.** "No sound on iPhone Safari" with the in-game speaker showing *on* = check the **physical Ring/Silent side switch first** — iOS mutes *web* audio (Web Audio API included) when it's on Silent, and a website cannot override it. Flipping it to ring fixed everything. The code I added is still good mobile hygiene: a one-time first-gesture unlock in `window.dssAudio` (creates+resumes the WebAudio ctx + silent buffer, plus a muted HTML5 play) so audio starts reliably on *other* mobile setups (Android Chrome etc. block audio without a tap even with no silent switch). Verified additive/harmless on desktop (boots clean, SFX still fire). [.twee ~268, `_unlockAudio`]
-- **Tooling note:** the preview MCP emulates screen *width* well (used it to verify the notebook + back button at 375px) but runs in desktop Chrome, so it **cannot reproduce iOS audio policy** — mobile audio is a "test on the actual phone" job.
-- **Still open on mobile:** a fuller notebook pass (the two-column legends would read better *stacked* on a phone), and a broader element-by-element mobile audit (touch-parity gaps, ~57 hover-only rules, 3D/WebGL on mobile GPUs). Viewport meta tag IS present and correct; that foundation is fine.
+### ⚠ Debug-jump is unreliable for verification (confirmed again)
+`#dss-debug-jump=PassageName` + reload leaves the game **half-initialised**: MORALE shows 75% not 70%, venue links are missing, and `$prevConfidence` is unset so **stat-delta "+N" never renders**. Top-level scripts fire but nested-in-`(if:)` ones are flaky. **Confirm overlay timing / stat changes / venue flow in a REAL playthrough** (Title → BEGIN → … → Dean Street → To The French …). This matches the standing rule from prior handoffs.
 
 ---
 
-# HANDOFF — 2026-05-30 (Sarah's playtest notes — triage + fixes)
+## Carried over (still relevant)
 
-This session worked through **Sarah's handwritten playtest notes** (playtest dated 27/05/26), photographed and sent in. They were transcribed into a numbered 37-item list, and we worked it item-by-item: I present each, Dr Quill either okays my transcription or sends a retranscription, then I action it. **Branch: v2-expansion.**
+### Verification workflow that works
+- Preview MCP `preview_start` config `dss` (port **8923**), serving the compiled `.html`.
+- Jump: `window.location.hash = '#dss-debug-jump=' + encodeURIComponent('Passage Name'); window.location.reload();` — must be a real reload. (But see ⚠ above — half-init state.)
+- Read state: `document.querySelector('tw-passage').textContent`. `window.Harlowe`/`window.Engine` are **not** exposed — can't set Harlowe vars from JS; use a temp `(set: $flag to true)<!-- TEMP-TEST-REMOVE -->` + sync to test gated branches.
+- Grep the compiled `.html` to confirm edits survive the build; passage scripts are HTML-entity-encoded (`'`→`&#x27;`, `"`→`&quot;`, `<`→`&lt;`) — grep encoded forms or unquoted substrings.
 
-Working loop: edit `.twee` → `python3 sync_html.py` → verify in browser via the preview MCP (local server on port **8923**, `.claude/launch.json` config name `dss`). Never `git`. Never read the `.html`.
-
----
-
-## Playtest backlog — status of all 37 items
-
-Numbers are stable references we've been using. ✅ done · ⏳ pending · ❓ transcription unclear (needs Dr Quill) · 🅿️ parked · 👁️ observation only.
-
-**Page 1**
-1. ✅ Coin "toss it" → "pocket it": after the first toss, **Pocket it** is now the big/bright link and **Toss again** the small/faded one. [coin overlay .twee ~34004; CSS `.coin-overlay-primary`]
-2. ✅ Lily double-pick bug: clicking an already-gathered lily no longer spawns a petal/notebook entry — now a low "block" thunk + a brief fade. New SFX `lilyBlock`, listener guard, `.lily-spent-blip` CSS. [.twee ~2758 SFX, ~3090 listener, ~12051 taken-handler]
-3. ❓ "Label pink — key" — least-confident read; parked pending Dr Quill.
-4. ⏳ Keep the chord/music into the verse longer (audio).
-5. ⏳ "Have Aoife's voice" (wants to actually hear Aoife — audio?).
-6. ⏳ "Hobson confused me".
-7. ✅ Password signpost — see below. Plus a follow-on fix (conditional prose).
-8. ⏳ "Stats came back w/ more chips" — **needs Dr Quill's read** (cryptic). Next up.
-9. ⏳ Rules pop-up before you start, board visible behind (related to #13).
-10. ✅ Morale & Sobriety primer modal on first Dean Street arrival (`dssShowStatsModal`). Framed as "the temperature of your night", not a health bar. [2026-05-31 evening]
-11. ❓ "Sebastian Aaron-[zinns?] Hill — Ben reminded me" / "mi amigo" — unclear (maybe Radio Mi Amigo, tying to interval-radio?).
-12. ✅ Surfaced the haunt-collected eyebrow — `.haunt-header` ("⟡ HAUNT COLLECTED ⟡") was tiny/faint, now prominent on all 12 cards. (Sarah's "calcinatio" note = wanting the HAUNT labelling clearer.) [2026-05-31 evening]
-13. ✅ Minigame rules modal — see below.
-14. ⏳ Use Purcell's "Dido's Lament" for Dido (music cue).
-15. ⏳ "Skunk Hour" (Lowell) for the interval radio.
-16. ❓ "Interval — more 'memory card up'" — unclear.
-17. ⏳ Make the "back" navigation more obvious.
-18. ✅ Shelley's-liver hint reworded — no death-implication, fits "you can't die". [2026-05-31 evening]
-
-**Page 2**
-19. ⏳ Pub music w/ Lackland.
-20. ❓ "Speak up pony, was after someone was a [few/Jew?]" — unclear.
-21. ⚠️⏳ "PONG GAME FUCKED" — a real bug Sarah hit. **Not yet diagnosed.** NB: this session wrapped the pong boot for the rules modal (whole-body defer) — that's verified working, but the *original* pong bug she flagged still needs investigation.
-22. ❓ "Calls — we had, what's going on?" — unclear (phone-call confusion).
-23. ❓ "Make it so you select the [answer?] with the notebook" — unclear.
-24. ⏳ "grenadine / incarnadine" (word-pairing note).
-25. ⏳ More beautiful tarot.
-26. ⏳ Make more of the Tarot.
-27. ⏳ "Wicked deck of cards".
-28. ❓ "'insured thing' — any noun" — unclear.
-29. ⏳ "Make calls the same voice".
-30. ❓ "…PP for Shelley's liver [?]" — unclear (badly creased).
-
-**Page 3**
-31. ✅ Bernard/Lackland gating — see below.
-32. ✅ Line actually read "clutching pearls" (not "dutch"); changed "clutching" → "dutchy" per Dr Quill (`.twee:36863`). ⚠ flagged — revert if "clutching" was deliberate. [2026-05-31 evening]
-33. ✅ Deduped — kept poetic "live admixture" (Lily-4 glimpse); maritime instance → "a leaching of plastics" (`.twee:37510`). One occurrence game-wide now. [2026-05-31 evening]
-34. ⏳ Program it so you're guaranteed ≥1 pentacle.
-35. ⏳ Background music — Stravinsky + Parker, R. Scott.
-36. ⏳ Cecil Court at end.
-37. 👁️ "2-hour playthrough" — runtime observation, no action.
-
----
-
-## Items completed this session (detail)
-
-### #1 — Coin: Pocket it is the prominent link after first toss
-After the first toss reveals "Pocket it", the JS now swaps emphasis: `coin-keep-btn` gets `.coin-overlay-primary` (1.3em, bright), the toss button gets `.coin-overlay-dismiss` (small, faded). First view (pre-toss) unchanged. [.twee inline coin overlay ~34004; CSS `.coin-overlay-primary` near `.coin-overlay-dismiss`]
-
-### #2 — Lily can't be "gathered twice"
-The delegated lily-click listener fired a petal on *every* click of a `tw-hook[name=lily\d]`, but `(click-replace:)` is one-shot, so a 2nd click made a petal with no notebook entry. Fix:
-- New `lilyBlock()` SFX (low, damped thunk) added next to `lilyChime`, exposed on `window.dssAudio`.
-- Listener now tracks `_petalled[name]`; a repeat click → `lilyBlock()` + `lilyBlip()` fade, no petal.
-- The reload-already-taken `.lily-taken` handler now uses `lilyBlock` + fade too (was reusing the bright chime).
-- `.lily-spent-blip` keyframe (dips to ~6% opacity and back).
-
-### #7 — Password is in your notebook (+ conditional prose follow-on)
-- Added a signpost line **inside** each `⚿ PASSWORD LEARNED` card, beneath the word: *"It's saved in your notebook ↑"* (new `.item-note` / `.item-note-arrow` CSS, cool palette, arrow points up to the header NOTEBOOK link). Applied to all 3 acquisition cards: St. John's Word ("Valletta"), Davy Merkin's tip ("Valletta"), O'Flatterly hint ("I said hello").
-- **Follow-on (Dr Quill's call):** the *word itself* should only be spoken once. Both Valletta speakers' prose is now `(if: $knowsCopperSecret is false)[…reveals "Valletta"…](else:)[…"You know the word already."…]`. Card is already gated on the same flag, so on the 2nd encounter: no reveal, no card. Verified both branches live (temp-flag test). Davy's em dash removed per Dr Quill.
-- Note: the two Valletta cards share `$knowsCopperSecret`; "I said hello" is a separate password on `$knowsCopperWord`. The notebook entry (.twee ~38215) is the intended persistent record.
-
-### #13 — Rules modal before each minigame (with a Play button)
-New reusable `window.dssShowMinigameRules({key, title, subtitle?, lines[], onPlay})` — gold-on-dark modal, diamond bullets, big ▶ PLAY button; appended to `<body>` @ z-index 99990. **Teardown via MutationObserver that only fires when the launch `tw-passage` actually leaves the DOM** (an earlier "tear down on any tw-story child-add" version wrongly killed the modal on the cow's heavy boot — fixed). [JS just above the DEBUG menu IIFE; CSS `.dss-rules-*` after `.lily-spent-blip`]
-
-Wired into **4 games**, each verified end-to-end (modal → Play → game boots, no Harlowe error):
-- **Pong** (whole-body defer), **Cecil Court Waltz** (whole-body defer), **Cellar Fight** (replaced its 2.4s auto-start timer), **Bernard's Cow** (gated the auto-trigger so the modal only shows when the game actually runs — respects its `cowRideDone` skip-gate).
-- **Sketch the Painter** — Dr Quill said **NO** modal; reverted to booting normally.
-- **The Bar (Ronnie's)** — left as-is (already has its own engraved pre-bar rules panel + "Go to the Bar" button).
-
-Integration pattern for the deferred games: wrap the inline IIFE body in `var __boot=function(){ … };` and call `(window.dssShowMinigameRules||fallback)({…, onPlay:__boot})` at the close. Gate the *kick*, not the whole body, when a game has a skip-gate or pre-rendered title screen (cow).
-
-### #31 — Bernard shouldn't re-send you to Lackland
-Jeffrey Bernard (in the **Coach and Horses lock** passage, ~.twee:33709) said *"Speak to Lackland, he'll be about."* unconditionally. Now gated `(if: $knowsLackland is false)[Speak to Lackland, he'll be about. ]` — drops out cleanly if you already know. No "visited Lackland" flag exists; `$knowsLackland` ("you know to see him") is the right signal. Verified both branches live.
-- **Open question for next session:** Davy Merkin also opens with *"Go to see Lackland, he's surely expecting you…"* unconditionally — same redundancy if you met Bernard first. Left ungated (Davy is the password-giver). Dr Quill to decide whether to gate Davy's opener on `$knowsLackland` too.
-
----
-
-## Verification workflow that works for this project
-
-- Local server: preview MCP `preview_start` with config `dss` (port 8923), serving the compiled `.html`.
-- **Jump to any passage:** `window.location.hash = '#dss-debug-jump=' + encodeURIComponent('Passage Name'); window.location.reload();` — must be a **real reload** (setting `location.href` with only a changed hash does NOT reload). Each jump starts a **fresh game** (state does not persist across jumps).
-- **Test a flag-gated branch:** temporarily inject `(set: $flag to true)<!-- TEMP-TEST-REMOVE -->` above the conditional, sync, jump, verify, then revert + re-sync. (Used for Valletta and Bernard else-branches.)
-- Read state from the page with `document.querySelector('tw-passage').textContent`. NB: `window.Harlowe` / `window.Engine` are **not** exposed in this build, so you can't set Harlowe vars from the console — use the temp-`(set:)` trick.
-- Grep the compiled `.html` to confirm edits survive the build; passage scripts are HTML-entity-encoded (`'`→`&#x27;`, `"`→`&quot;`, `<`→`&lt;`), so grep for the encoded forms or for unquoted substrings.
-
----
-
-## Carried over from prior HANDOFFs (still relevant)
-
-- **`tw-link` vs `tw-expression`** — Harlowe renders bracket links as `<tw-link>`, `(link:)` macros as `<tw-expression>`.
-- **`dssSpawnMotes`** accepts `{noScroll:true}`.
+### Harlowe / DOM gotchas
+- **`tw-link` vs `tw-expression`** — bracket links render `<tw-link>`, `(link:)` macros render `<tw-expression>`.
+- Macros **don't evaluate inside `class="…"`** — wrap the whole element in `(if:)`, don't embed in the class string.
+- **`(click-replace:)` is one-shot but its named `tw-hook` lingers** in the DOM — guard JS that reacts to those hooks (root cause of the old lily double-pick bug).
+- **Body-level overlays persist across passage transitions** — tear down via a MutationObserver keyed on the launch passage leaving the DOM.
 - **`Failure: Trisha's`** is NOT orphan — referenced by JS, don't prune.
-- **`(click-replace:)` is one-shot but its named `tw-hook` lingers in the DOM** — the root cause of #2; guard JS that reacts to those hooks.
-- **Body-level overlays persist across passage transitions** — wire a MutationObserver on `tw-story` to tear them down (the rules-modal teardown uses this; key the teardown on the launch passage leaving the DOM, not on any mutation).
-- **⚠ WebGL on Dr Quill's Chrome** was failing at the end of the 2026-05-27 session (all 3D scenes showed HTML overlays only). The CLIMB IT fallback at Centre Point lets the ending be played through regardless. If 3D is still broken, check `chrome://gpu/` / hardware accel / restart. The 2D-canvas minigames (this session's work) are unaffected.
+- **`dssSpawnMotes`** accepts `{noScroll:true}`.
+- Reusable body-level info modals: `dssShowHauntsModal()`, `dssShowStatsModal()` (gold-on-dark, dismiss via click-anywhere/✕).
 
-## Open / parked
-- Murky transcriptions to resolve with Dr Quill: #3, #11, #16, #20, #22, #23, #28, #30; X-meaning of #32/#33.
-- #21 "PONG GAME FUCKED" — original pong bug still undiagnosed (separate from the modal work).
-- #33 hint: "admixture" appears twice (Lily-4 Pillars glimpse + elsewhere) — possible dedupe.
-- Whether to gate Davy Merkin's "Go to see Lackland" like Bernard's (#31 follow-on).
-- `aesthetic-suggestions.md` backlog (A4, C1b, B1, C2, …) — still parked from the 2026-05-27 session.
+### Stats system (banked reference)
+Morale (`$confidence`) & sobriety (`$sobriety`) are a **mood/consequence** system, not a health bar: **no death**; asymptotic gains/losses clamp 0..100; **endings don't read them** (White/Black = Alba lines + final wake/sleep; Complete/Incomplete = whether all 3 Alba lines were caught). They DO shape the Tarot draw (low sob→Devil, low conf→Tower, ~34448), NPC reactions, recovery nudges (both <30 → "bad way"), the give-up exit (conf ≤5), and visual tone. The primer frames them as "the temperature of your night."
+
+### ⚠ WebGL caveat
+If 3D scenes show HTML overlays only, check `chrome://gpu/` / hardware accel / restart. The CLIMB IT fallback at Centre Point lets the ending play through regardless.

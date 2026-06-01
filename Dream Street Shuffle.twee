@@ -3185,6 +3185,37 @@ window.dssAudio = (function() {
   }, true);
 })();
 
+// ====== SHARED MODAL ACCESSIBILITY HELPER ======
+// One place to make the gold-on-dark dialogs screen-reader- and keyboard-
+// friendly (audit S1/S2/S3): tags the card as role="dialog" aria-modal with an
+// aria-labelledby pointing at its title, moves focus into the dialog on open,
+// optionally binds Escape-to-close, and returns a cleanup() the caller invokes
+// from its teardown to unbind Escape and restore focus to the trigger.
+//   opts.focusEl     — element to focus instead of the card (e.g. a Play button)
+//   opts.escape      — false to NOT bind Escape (caller already handles it, or
+//                      closing would be a soft-lock e.g. the rules modal)
+//   opts.returnFocus — false to NOT restore focus on close (e.g. when the next
+//                      thing — a game canvas — should keep focus)
+window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
+  opts = opts || {};
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-modal', 'true');
+  if (labelEl) {
+    if (!labelEl.id) labelEl.id = 'dss-modal-label-' + (window._dssModalLabelN = (window._dssModalLabelN || 0) + 1);
+    card.setAttribute('aria-labelledby', labelEl.id);
+  }
+  var prevFocus = document.activeElement;
+  var focusEl = opts.focusEl || card;
+  if (focusEl === card && !card.hasAttribute('tabindex')) card.setAttribute('tabindex', '-1');
+  try { focusEl.focus(); } catch (e) {}
+  function onKey(e) { if (e.key === 'Escape') closeFn(); }
+  if (opts.escape !== false) document.addEventListener('keydown', onKey);
+  return function cleanup() {
+    document.removeEventListener('keydown', onKey);
+    if (opts.returnFocus !== false && prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch (e) {} }
+  };
+};
+
 // ====== MINIGAME RULES MODAL ======
 // A simple popup shown before a minigame begins: the game's title, a few
 // plain-language rules, and a single PLAY button that closes the modal and
@@ -3237,7 +3268,9 @@ window.dssAudio = (function() {
 
     var done = false;
     var obs = null;
+    var a11yCleanup = null;
     function teardown() {
+      if (a11yCleanup) a11yCleanup();
       if (obs) { try { obs.disconnect(); } catch (e) {} obs = null; }
       overlay.classList.remove('dss-rules-in');
       overlay.classList.add('dss-rules-out');
@@ -3245,6 +3278,10 @@ window.dssAudio = (function() {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }, 280);
     }
+    // Dialog semantics + focus the Play button (audit S1/S2). No Escape-to-close
+    // and no focus-return: the only intended exit is Play (which starts the game
+    // and manages canvas focus itself) — closing on Escape would strand the player.
+    a11yCleanup = window.dssModalA11y(overlay, card, h, function(){}, {focusEl: btn, escape: false, returnFocus: false});
     btn.addEventListener('click', function() {
       if (done) return; done = true;
       teardown();
@@ -3318,9 +3355,10 @@ window.dssAudio = (function() {
     document.body.appendChild(overlay);
     requestAnimationFrame(function() { overlay.classList.add('dss-rules-in'); });
 
-    var done = false, obs = null, armed = false;
+    var done = false, obs = null, armed = false, a11yCleanup = null;
     function teardown() {
       if (done) return; done = true;
+      if (a11yCleanup) a11yCleanup();
       // Announce the close so the glass-smash SFX at The Empty Glass can land
       // ~2s after the player dismisses this explainer (see .empty-glass-marker).
       window.dispatchEvent(new CustomEvent('hauntsmodal:closed'));
@@ -3332,6 +3370,8 @@ window.dssAudio = (function() {
     // Arm click-to-close after a beat so the tap that revealed the haunt can't
     // instantly dismiss it.
     setTimeout(function() { armed = true; }, 250);
+    // Dialog semantics + focus in/return + Escape-to-close (audit S1/S2/S3).
+    a11yCleanup = window.dssModalA11y(overlay, card, h, teardown);
     overlay.addEventListener('click', function() { if (armed) teardown(); });
     x.addEventListener('click', function(e) { e.stopPropagation(); teardown(); });
 
@@ -3395,15 +3435,18 @@ window.dssAudio = (function() {
     document.body.appendChild(overlay);
     requestAnimationFrame(function() { overlay.classList.add('dss-rules-in'); });
 
-    var done = false, obs = null, armed = false;
+    var done = false, obs = null, armed = false, a11yCleanup = null;
     function teardown() {
       if (done) return; done = true;
+      if (a11yCleanup) a11yCleanup();
       if (obs) { try { obs.disconnect(); } catch (e) {} obs = null; }
       overlay.classList.remove('dss-rules-in');
       overlay.classList.add('dss-rules-out');
       setTimeout(function() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 280);
     }
     setTimeout(function() { armed = true; }, 250);
+    // Dialog semantics + focus in/return + Escape-to-close (audit S1/S2/S3).
+    a11yCleanup = window.dssModalA11y(overlay, card, h, teardown);
     overlay.addEventListener('click', function() { if (armed) teardown(); });
     x.addEventListener('click', function(e) { e.stopPropagation(); teardown(); });
 
@@ -3856,8 +3899,10 @@ window.showWordToTheWise = function(opts) {
     '<div class="word-wise-body">' + body + '</div>' +
     '</div>';
   document.body.appendChild(overlay);
+  var a11yCleanup = null;
   function dismiss() {
     if (!overlay.parentNode) return;
+    if (a11yCleanup) a11yCleanup();
     overlay.classList.add('word-wise-leaving');
     setTimeout(function() {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -3866,6 +3911,9 @@ window.showWordToTheWise = function(opts) {
   }
   function onKey(e) { if (e.key === 'Escape' || e.key === 'Enter') dismiss(); }
   document.addEventListener('keydown', onKey);
+  // Dialog semantics + focus in/return (audit S1/S2). Escape/Enter are already
+  // handled above, so the shared helper runs with escape:false.
+  a11yCleanup = window.dssModalA11y(overlay, overlay.querySelector('.word-wise-box'), overlay.querySelector('.word-wise-title'), dismiss, {escape: false});
   overlay.querySelector('.word-wise-close').addEventListener('click', dismiss);
   overlay.addEventListener('click', function(e) {
     if (e.target === overlay) dismiss();
@@ -42841,10 +42889,12 @@ animation: none;
   position: absolute;
   top: 0.35em;
   right: 0.5em;
-  width: 1.7em;
-  height: 1.7em;
+  min-width: 44px;            /* >=44px touch target (audit M1) */
+  min-height: 44px;
   padding: 0;
-  line-height: 1.7em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   font-size: 1.05em;
   font-family: Georgia, serif;
@@ -42855,6 +42905,7 @@ animation: none;
   transition: color 0.2s;
 }
 .dss-modal-x:hover { color: #e8cc88; }
+.dss-modal-x:focus-visible { outline: 1px dashed rgba(232,213,183,0.7); outline-offset: 2px; color: #e8cc88; }
 .dss-haunts-text {
   margin: 1.15em 0 1.25em;
   font-size: 1.04em;
@@ -43565,10 +43616,16 @@ border-right: 1px solid rgba(107,32,32,0.25);
   color: rgba(200, 168, 110, 0.55);
   font-size: 18px;
   cursor: pointer;
+  min-width: 44px;            /* >=44px touch target (audit M1) */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 4px 8px;
   transition: color 0.2s;
 }
 .word-wise-close:hover { color: var(--gold-bright); }
+.word-wise-close:focus-visible { outline: 1px dashed rgba(232,213,183,0.7); outline-offset: 2px; color: var(--gold-bright); }
 .word-wise-title {
   font-family: 'Playfair Display', Georgia, serif;
   font-style: italic;

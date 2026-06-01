@@ -1,5 +1,13 @@
 # Audit pass — 2026-06-01 (while Dr Quill was out)
 
+> ## Decisions log (updated 2026-06-02)
+> Worked through the findings with Dr Quill. Status of everything actioned or decided:
+> - **DONE & committed:** Dean Street coach-funnel fallback (N5/S7); Lackland Back Door visible "Step back" link (N1); modal a11y batch — shared `dssModalA11y` helper giving `role="dialog"`/`aria-modal`/`aria-labelledby` + focus in/return + Escape, plus 44px touch targets & `:focus-visible` rings on the close glyphs (S1/S2/S3/F3/M1).
+> - **PARKED until first-draft stage — nothing in code:** ALL of reduced motion (R1). The CSS kill-switch was added then **removed at Dr Quill's request** to keep the source clean and followable while the game is still in flux; the JS gating for the 3D scenes + typewriter was never started (he has separate plans for the typewriter). Revisit the whole topic — CSS switch *and* JS gating together — when everything's at first-draft standard. There is currently **no** `prefers-reduced-motion` handling anywhere.
+> - **CLOSED — deliberate (won't fix):** faint 3D scene captions (C1). Kept dreamy/faint on purpose — an aesthetic choice like the header lily, not a defect. Do not re-flag.
+> - **LEFT IN PLACE — may matter later:** all four dead-state vars (`$ppScore`/`$oppScore`, `$cowRideWon`, `$albaRevealed`, `$drankAtFrench`). Dr Quill is keeping them in case a Pong/cow-ride win (or the others) ends up mattering — treat as possible future hooks, not cruft. Not to be auto-removed.
+> - **STILL OPEN (not yet decided):** the remaining lower-priority items in the reports (e.g. dead content `Watch them play` N3, memory-photo-2 gate S5, contrast spot-checks C2/C3, canvas `aria-live` S5-a11y, etc.).
+
 Three **read-only static audits** of `Dream Street Shuffle.twee`. No game files were edited, no `sync_html.py`, no git. Each finding cites a passage/line and a confidence level (Confirmed in source / Suspected — needs a real-play or on-device check). These are *suspected* issues for you to confirm — runtime verification stays yours (debug-jump is unreliable).
 
 ## The three reports

@@ -327,18 +327,18 @@ window.dssAudio = (function() {
           musicGain.gain.setValueAtTime(_muted ? 0 : MUSIC_VOLUME_BASE, ac.currentTime);
         } catch(e) {}
       }
-      // Ambient bed (wind, traffic, fire) — already-playing loops.
+      // Ambient bed (wind, traffic, fire) — already-playing loops. Several of
+      // these (traffic especially) drive the OUTPUT gain with an LFO ("vehicles
+      // passing"), so zeroing that gain's base value can't silence them — the
+      // LFO keeps swinging it back up, which is the "repeating wave" you'd still
+      // hear while muted. So instead of fighting the modulation, disconnect the
+      // bed's output node on mute and reconnect it on unmute. The LFO feeds the
+      // gain PARAM, not the node's output, so cutting the output silences the
+      // bed completely regardless of any modulation on it.
       if (typeof _ambient !== 'undefined' && _ambient && _ambient.g) {
         try {
-          _ambient.g.gain.cancelScheduledValues(ac.currentTime);
-          // Read current value before mute so we can restore (best effort).
-          if (_muted) {
-            _ambient._preMute = _ambient.g.gain.value;
-            _ambient.g.gain.setValueAtTime(0, ac.currentTime);
-          } else {
-            var restore = (typeof _ambient._preMute === 'number') ? _ambient._preMute : 0.06;
-            _ambient.g.gain.setValueAtTime(restore, ac.currentTime);
-          }
+          _ambient.g.disconnect();            // always drop the existing wire (no-op if none)
+          if (!_muted) _ambient.g.connect(ac.destination);
         } catch(e) {}
       }
       // Venue ambient beds (pub, club, etc.) — already-playing field recordings.
@@ -3486,6 +3486,112 @@ window.dssDeferIfBusy = function(retry) {
   setTimeout(function() { if (window._passageGen === gen) retry(); }, 200);
   return true;
 };
+
+// ====== CHARACTER SIGILS ======
+// A gently-pulsing mark in the bottom-left while a character is "present" — i.e.
+// the current passage carries a `char-<id>` tag. Marks fade in on entering a
+// character's scene and fade out when you leave; more than one can show at once
+// (e.g. the two ping-pong opponents). Compact mark = monogram + emblem, no name.
+// Driven once per passage from the navigation handler via dssSigils.update(tags).
+(function() {
+  // ── Sigil art, built from per-character data so all 13 marks share one
+  // cartouche frame. Each = the gold-on-dark cartouche + an emblem (the
+  // character's "sign") + a hand-drawn monogram, in that character's colour.
+  // No name (illegible in the corner). Multi-letter monograms (JC/SC/JB/ML/JSJ)
+  // are placed side-by-side for now — to be hand-drawn/interlaced to final later.
+  var _L = {
+    R:'<path d="M12 4 C8 4 7 8 10 10 C9 30 9 54 9 72 C8 77 11 81 16 80 C21 81 23 77 22 72 C22 54 22 30 21 10 C24 8 23 4 19 4 C16 3 14 3 12 4 Z"/><path d="M16 4 C40 1 56 7 58 22 C59 35 47 45 26 45 C24 45 23 43 24 41 C41 39 47 30 46 21 C45 14 36 12 21 13 C17 13 15 7 16 4 Z"/><path d="M21 37 C34 43 45 56 57 74 C56 76 54 76 51 74 C40 62 30 52 18 48 C14 46 14 40 19 37 C20 36 21 37 21 37 Z"/>',
+    P:'<path d="M12 4 C8 4 7 8 10 10 C9 30 9 54 9 72 C8 77 11 81 16 80 C21 81 23 77 22 72 C22 54 22 30 21 10 C24 8 23 4 19 4 C16 3 14 3 12 4 Z"/><path d="M16 4 C40 1 56 7 58 22 C59 35 47 45 26 45 C24 45 23 43 24 41 C41 39 47 30 46 21 C45 14 36 12 21 13 C17 13 15 7 16 4 Z"/>',
+    A:'<path d="M33 6 C30 6 28 10 27 14 C20 36 13 58 6 79 C5 82 10 83 13 80 C20 58 27 38 35 16 C36 11 36 6 33 6 Z"/><path d="M33 6 C37 6 39 11 41 17 C48 39 55 59 62 80 C64 83 69 82 61 79 C53 58 45 38 38 15 C37 10 35 6 33 6 Z"/><path d="M19 55 C27 53 41 53 49 55 C51 56 51 60 49 61 C41 63 27 63 19 61 C17 60 17 56 19 55 Z"/>',
+    L:'<path d="M10 5 C8 5 8 9 11 10 C10 32 10 54 10 70 C10 75 11 80 15 80 C27 81 41 81 53 79 C56 78 56 70 53 69 C43 70 31 70 22 70 C22 50 22 28 21 9 C23 6 20 4 16 5 C13 4 11 4 10 5 Z"/>',
+    S:'<path d="M52 22 C47 11 31 6 21 13 C9 21 13 35 28 39 C39 42 47 47 46 55 C45 64 33 70 23 66 C16 63 13 57 14 52 C9 54 9 62 14 68 C24 76 44 74 51 62 C57 51 49 41 35 36 C26 33 21 27 24 21 C28 14 40 13 46 20 C49 24 54 26 52 22 Z"/>',
+    H:'<path d="M8 5 C6 5 6 9 9 10 C8 30 8 54 9 74 C8 79 12 81 16 79 C18 60 18 30 17 10 C19 7 18 4 14 5 C11 4 9 4 8 5 Z"/><path d="M44 5 C42 5 42 9 45 10 C44 30 44 54 45 74 C44 79 48 81 52 79 C54 60 54 30 53 10 C55 7 54 4 50 5 C47 4 45 4 44 5 Z"/><path d="M15 40 C28 38 38 38 49 40 C51 41 51 46 49 47 C38 49 28 49 16 47 C14 46 14 41 15 40 Z"/>',
+    I:'<path d="M25 5 C22 4 20 6 23 9 C22 30 22 54 23 74 C20 78 24 81 30 80 C36 81 40 78 37 74 C38 54 38 30 37 9 C40 6 38 4 35 5 C32 4 28 4 25 5 Z"/>',
+    J:'<path d="M18 6 C15 6 14 10 17 11 C24 10 30 10 33 11 C34 30 34 50 33 60 C32 70 24 75 15 71 C7 67 6 57 11 53 C13 60 20 63 26 60 C30 57 29 48 29 40 C29 30 29 18 30 11 C36 10 42 11 45 10 C48 9 47 5 44 6 C36 5 26 5 18 6 Z"/>',
+    C:'<path d="M50 24 C43 11 26 8 17 18 C9 27 9 49 17 60 C26 71 44 69 51 57 C49 55 45 54 43 56 C38 63 28 63 22 55 C16 46 16 30 22 21 C28 13 39 13 46 21 C49 25 52 27 50 24 Z"/>',
+    B:'<path fill-rule="evenodd" d="M11 5 C8 4 7 9 10 10 C9 30 9 54 10 74 C10 79 9 81 15 80 C34 81 49 75 49 62 C49 54 43 49 35 47 C42 45 47 39 47 30 C47 17 34 5 16 5 C14 5 12 5 11 5 Z M21 15 C34 14 38 22 38 30 C38 38 33 43 23 43 C22 33 22 23 21 15 Z M22 52 C33 52 39 56 39 62 C39 68 32 71 23 70 C22 64 22 58 22 52 Z"/>',
+    D:'<path fill-rule="evenodd" d="M11 5 C8 4 7 9 10 10 C9 30 9 54 10 74 C10 79 9 81 15 80 C40 80 58 66 58 43 C58 19 40 5 16 5 C14 5 12 5 11 5 Z M21 16 C40 15 47 26 47 43 C47 60 39 69 22 70 C21 52 21 33 21 16 Z"/>',
+    M:'<path d="M8 80 C7 58 7 30 8 9 C9 5 15 4 18 9 C24 30 29 50 33 62 C37 50 42 30 48 9 C51 4 57 5 58 9 C59 30 59 58 58 80 C57 82 52 82 51 79 C51 58 51 38 51 22 C47 38 42 56 37 70 C35 73 31 73 29 70 C24 56 19 38 15 22 C15 38 15 58 15 79 C14 82 9 82 8 80 Z"/>'
+  };
+  function _mono(m){
+    if (typeof m === 'string') return _L[m];
+    if (m.length === 2) return '<g transform="translate(0,5) scale(0.76)">'+_L[m[0]]+'</g><g transform="translate(27,5) scale(0.76)">'+_L[m[1]]+'</g>';
+    return '<g transform="translate(-6,13) scale(0.55)">'+_L[m[0]]+'</g><g transform="translate(15,13) scale(0.55)">'+_L[m[1]]+'</g><g transform="translate(36,13) scale(0.55)">'+_L[m[2]]+'</g>';
+  }
+  function _grad(id,s){ return '<linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+s[0]+'"/><stop offset="38%" stop-color="'+s[1]+'"/><stop offset="74%" stop-color="'+s[2]+'"/><stop offset="100%" stop-color="'+s[3]+'"/></linearGradient>'; }
+  function _frame(id){ return '<g fill="none" stroke="url(#'+id+')" stroke-linecap="round"><path d="M100 18 C 152 54, 170 124, 100 232 C 30 124, 48 54, 100 18 Z" stroke-width="2.1"/><path d="M100 32 C 142 62, 156 124, 100 214 C 44 124, 58 62, 100 32 Z" stroke-width="0.8" opacity="0.5"/><path d="M32 124 C 10 112, 8 138, 26 144 C 16 130, 30 128, 40 138" stroke-width="1.2" opacity="0.75"/><path d="M168 124 C 190 112, 192 138, 174 144 C 184 130, 170 128, 160 138" stroke-width="1.2" opacity="0.75"/><path d="M60 204 C 84 195, 116 195, 140 204" stroke-width="1.2" opacity="0.8"/></g>'; }
+  function _emb(id,k){ var s='url(#'+id+')';
+    if(k==='flame') return '<path d="M100 36 C 90 50, 95 60, 100 68 C 105 60, 110 50, 100 36 Z" fill="none" stroke="'+s+'" stroke-width="1.4"/><path d="M84 50 l -8 -6 M116 50 l 8 -6 M100 28 l 0 -9" fill="none" stroke="'+s+'" stroke-width="0.8" opacity="0.55"/>';
+    if(k==='moon') return '<path d="M106 40 C97 41 92 50 95 60 C88 53 90 42 100 38 C102.7 37.3 104 38 106 40 Z" fill="'+s+'"/>';
+    if(k==='lily') return '<path d="M100 37 C100 46 100 56 100 64" fill="none" stroke="'+s+'" stroke-width="1.2"/><ellipse cx="95" cy="49" rx="3.2" ry="3.8" fill="'+s+'"/><ellipse cx="104" cy="57" rx="2.7" ry="3.3" fill="'+s+'"/>';
+    if(k==='star') return '<path d="M100 37 L103.5 47 L114 47 L105.5 53.5 L109 64 L100 57.5 L91 64 L94.5 53.5 L86 47 L96.5 47 Z" fill="'+s+'"/>';
+    if(k==='nib') return '<path d="M100 37 L107 58 L100 67 L93 58 Z" fill="'+s+'"/>';
+    if(k==='book') return '<path d="M100 41 C92 37 84 39 84 43 L84 61 C84 57 92 55 100 59 C108 55 116 57 116 61 L116 43 C116 39 108 37 100 41 Z" fill="none" stroke="'+s+'" stroke-width="1.2"/><line x1="100" y1="41" x2="100" y2="59" stroke="'+s+'" stroke-width="1"/>';
+    if(k==='paddle') return '<ellipse cx="100" cy="47" rx="9" ry="11" fill="none" stroke="'+s+'" stroke-width="1.5"/><rect x="98.4" y="57" width="3.2" height="10" rx="1.6" fill="'+s+'"/>';
+    if(k==='ball') return '<circle cx="100" cy="49" r="5" fill="'+s+'"/><path d="M88 60 C94 54 106 54 112 60" fill="none" stroke="'+s+'" stroke-width="1.1" opacity="0.7"/>';
+    if(k==='glass') return '<path d="M91 38 L109 38 L104 53 C104 59 100 60 100 60 C100 60 96 59 96 53 Z" fill="none" stroke="'+s+'" stroke-width="1.3"/><line x1="100" y1="60" x2="100" y2="66" stroke="'+s+'" stroke-width="1.1"/><line x1="93" y1="66" x2="107" y2="66" stroke="'+s+'" stroke-width="1.1"/>';
+    if(k==='club') return '<circle cx="100" cy="42" r="3.4" fill="'+s+'"/><circle cx="94" cy="50" r="3.4" fill="'+s+'"/><circle cx="106" cy="50" r="3.4" fill="'+s+'"/><path d="M99 52 L100 64 L101 52 Z" fill="'+s+'"/>';
+    if(k==='door') return '<rect x="91" y="37" width="18" height="28" rx="2" fill="none" stroke="'+s+'" stroke-width="1.3"/><circle cx="104" cy="51" r="1.3" fill="'+s+'"/>';
+    if(k==='shoe') return '<path d="M89 39 C89 56 95 65 100 65 C105 65 111 56 111 39" fill="none" stroke="'+s+'" stroke-width="2"/><circle cx="90" cy="40" r="1.1" fill="'+s+'"/><circle cx="110" cy="40" r="1.1" fill="'+s+'"/>';
+    if(k==='key') return '<circle cx="98" cy="43" r="5.2" fill="none" stroke="'+s+'" stroke-width="1.4"/><line x1="98" y1="48" x2="98" y2="65" stroke="'+s+'" stroke-width="1.4"/><line x1="98" y1="60" x2="103" y2="60" stroke="'+s+'" stroke-width="1.2"/><line x1="98" y1="64" x2="104" y2="64" stroke="'+s+'" stroke-width="1.2"/>';
+    return ''; }
+  var CHARS = {
+    red:   { stops:['#f6cc9a','#d07c46','#b24a2c','#8a2c1e'], emb:'flame',  mono:'R' },
+    aoife: { stops:['#f2cfc6','#dd9b92','#b96b62','#7e3c38'], emb:'moon',   mono:'A' },
+    lily:  { stops:['#e6f0d6','#bcd8a6','#86b886','#4a7a55'], emb:'lily',   mono:'L' },
+    shana: { stops:['#e2caf0','#bb93da','#8a5ab2','#4a2a72'], emb:'star',   mono:'S' },
+    ham:   { stops:['#d6dde8','#9aa6ba','#69788e','#39435a'], emb:'nib',    mono:'H' },
+    inis:  { stops:['#f0dcae','#caa860','#9a7838','#5a4018'], emb:'book',   mono:'I' },
+    jack:  { stops:['#cfe2ee','#8fb8d4','#5a90b8','#2e5a80'], emb:'paddle', mono:['J','C'] },
+    percy: { stops:['#f6d49a','#e0a050','#c87030','#8a4418'], emb:'ball',   mono:'P' },
+    john:  { stops:['#bfe0dc','#7fc0bc','#3f8f8c','#1f5a58'], emb:'glass',  mono:['J','S','J'] },
+    davy:  { stops:['#cfeccb','#8fce95','#4f9e60','#256b3e'], emb:'club',   mono:'D' },
+    salvu: { stops:['#f0c8a0','#d89058','#b05a2c','#763418'], emb:'door',   mono:['S','C'] },
+    jeff:  { stops:['#e6c89a','#c89858','#9a6a30','#5e3e18'], emb:'shoe',   mono:['J','B'] },
+    lack:  { stops:['#cfc8b0','#9a9078','#6a6450','#3a3830'], emb:'key',    mono:['M','L'] }
+  };
+  var registry = {};
+  Object.keys(CHARS).forEach(function(id){
+    var c = CHARS[id], gid = 'sig_'+id;
+    registry[id] = '<svg viewBox="0 0 200 244" xmlns="http://www.w3.org/2000/svg"><defs>'+_grad(gid,c.stops)+'</defs>'+_frame(gid)+_emb(gid,c.emb)+'<g transform="translate(69,88)" fill="url(#'+gid+')">'+_mono(c.mono)+'</g></svg>';
+  });
+  var corner = null;
+  var shown = {};
+  function ensureCorner() {
+    if (corner && document.body.contains(corner)) return corner;
+    corner = document.createElement('div');
+    corner.id = 'dss-sigil-corner';
+    document.body.appendChild(corner);
+    return corner;
+  }
+  function update(tags) {
+    var present = {};
+    (tags || []).forEach(function(t) {
+      if (t.indexOf('char-') === 0) { var id = t.slice(5); if (registry[id]) present[id] = true; }
+    });
+    ensureCorner();
+    // Fade out any marks for characters no longer present.
+    Object.keys(shown).forEach(function(id) {
+      if (!present[id]) {
+        var el = shown[id]; delete shown[id];
+        if (el) { el.classList.remove('dss-sigil-in'); setTimeout(function() { if (el && el.parentNode) el.parentNode.removeChild(el); }, 950); }
+      }
+    });
+    // Fade in marks for newly-present characters.
+    Object.keys(present).forEach(function(id) {
+      if (!shown[id]) {
+        var el = document.createElement('div');
+        el.className = 'dss-sigil';
+        el.setAttribute('data-char', id);
+        el.innerHTML = registry[id];
+        corner.appendChild(el);
+        shown[id] = el;
+        requestAnimationFrame(function() { requestAnimationFrame(function() { if (shown[id] === el) el.classList.add('dss-sigil-in'); }); });
+      }
+    });
+  }
+  window.dssSigils = { update: update, registry: registry };
+})();
 
 // ====== DEBUG / PLAYTESTING MENU (backtick ` key) ======
 // Strategy: store target passage in URL hash, reload page.
@@ -8794,6 +8900,8 @@ window._passageGen = 0;
               // detection works off the `tags` attribute and DOM content.
               var passageTags = passageNode.getAttribute('tags') || '';
               var tags = passageTags.split(/\s+/).filter(Boolean);
+              // Character sigil (bottom-left) — present while a char-<id> tag is on the passage.
+              if (window.dssSigils) window.dssSigils.update(tags);
               if (window.dssAudio) {
                 // Dean Street theme — starts on Dean Street, stops elsewhere.
                 // Detection is by tag (Dean Street is uniquely tagged 'hub').
@@ -32604,7 +32712,7 @@ document.addEventListener('keydown', function(e) {
 </script>]
 (if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[<div id="cp-container"></div>[[·|Alba Complete]]](else:)[<div id="cp-container"></div>[[·|Alba Incomplete]]]
 
-:: PP Pong [pong] {"position":"1300,1550","size":"100,100"}
+:: PP Pong [pong char-jack char-percy] {"position":"1300,1550","size":"100,100"}
 <span id="pp-data-opponent" style="display:none;">(print: $opponent)</span>
 <span id="pp-data-sobriety" style="display:none;">(print: $sobriety)</span>
 <div class="pp-arena">
@@ -32992,7 +33100,7 @@ What have you got to lose?
 <div class="approach-back">(link-undo: "← BACK")</div>
 <div id="ts-container"></div>[[·|Failure: Trisha's]]
 
-:: At the Corner of Dean Street and Greek Street [outdoor] {"position":"1200,400","size":"100,100"}
+:: At the Corner of Dean Street and Greek Street [outdoor char-red] {"position":"1200,400","size":"100,100"}
 <!-- Ginger light -->
 <div class="ginger-lamp-wrap">
 <svg width="60" height="110" viewBox="0 0 60 110"><ellipse cx="30" cy="33" rx="40" ry="30" fill="rgba(200,100,5,0.10)"/><ellipse cx="30" cy="31" rx="24" ry="18" fill="rgba(220,130,10,0.18)"/><ellipse cx="30" cy="29" rx="13" ry="10" fill="rgba(255,190,60,0.22)"/><polygon points="27,2 30,0 33,2 32,7 28,7" fill="rgba(60,38,4,0.96)"/><path d="M13,7 Q30,4 47,7 L44,13 L16,13 Z" fill="rgba(60,38,4,0.96)"/><path d="M16,13 L44,13 L40,44 L20,44 Z" fill="rgba(130,75,8,0.45)" stroke="rgba(90,52,4,0.65)" stroke-width="1"/><path d="M19,15 L41,15 L37,42 L23,42 Z" fill="rgba(255,165,35,0.42)"/><ellipse cx="30" cy="29" rx="7" ry="10" fill="rgba(255,232,130,0.55)"/><ellipse cx="30" cy="27" rx="3" ry="4" fill="rgba(255,250,210,0.68)"/><rect x="22" y="44" width="16" height="6" rx="2.5" fill="rgba(60,38,4,0.96)"/><rect x="27" y="50" width="6" height="60" rx="2" fill="rgba(45,28,3,0.90)"/></svg>
@@ -33010,7 +33118,7 @@ You stand nearby for a while; he is somewhere elsewhere, vast.
 [[Speak to him|You speak to the poet]]
 </div>
 
-:: Beaten [venue-cellar] {"position":"2200,1250","size":"100,100"}
+:: Beaten [venue-cellar char-john char-salvu] {"position":"2200,1250","size":"100,100"}
 <!-- Swinging bulb -->
 <div class="cellar-bulb-wrap">
 <svg width="48" height="90" viewBox="0 0 48 90"><!-- Wire from ceiling --><line x1="24" y1="0" x2="24" y2="30" stroke="#888878" stroke-width="1.4" opacity="0.75"/><!-- Socket cap --><rect x="17" y="28" width="14" height="10" rx="2.5"fill="rgba(80,78,65,0.9)" stroke="rgba(160,155,120,0.7)" stroke-width="1"/><!-- Socket ring detail --><rect x="19" y="36" width="10" height="3" rx="1"fill="none" stroke="rgba(150,145,110,0.55)" stroke-width="0.8"/><!-- Outer glow halo --><ellipse cx="24" cy="60" rx="20" ry="22"fill="rgba(255,245,160,0.12)"/><!-- Bulb body — pear shape, bright and solid --><path d="M24,38 C16,38 10,45 10,55 C10,67 16,78 24,78 C32,78 38,67 38,55 C38,45 32,38 24,38 Z"fill="rgba(255,252,210,0.95)" stroke="rgba(220,210,160,0.6)" stroke-width="0.8"/><!-- Inner warm core --><ellipse cx="24" cy="57" rx="9" ry="11"fill="rgba(255,240,120,0.55)"/><!-- Filament — W-shape --><path d="M18,60 L20,53 L24,58 L28,53 L30,60"fill="none" stroke="rgba(255,200,40,0.95)" stroke-width="1.4" stroke-linejoin="round"/><!-- Neck base ring --><rect x="20" y="75" width="8" height="3" rx="1"fill="rgba(200,195,155,0.65)" stroke="none"/></svg>
@@ -33034,7 +33142,7 @@ St. John's face is legible only to you, who once knew him so well. He's both amu
 (else:)[[[He has something to tell you|St. John's Word]]]
 </div>
 
-:: St. John's Word [venue-cellar] {"position":"2200,1350","size":"100,100"}
+:: St. John's Word [venue-cellar char-john] {"position":"2200,1350","size":"100,100"}
 <!-- Swinging bulb -->
 <div class="cellar-bulb-wrap">
 <svg width="48" height="90" viewBox="0 0 48 90"><!-- Wire from ceiling --><line x1="24" y1="0" x2="24" y2="30" stroke="#888878" stroke-width="1.4" opacity="0.75"/><!-- Socket cap --><rect x="17" y="28" width="14" height="10" rx="2.5"fill="rgba(80,78,65,0.9)" stroke="rgba(160,155,120,0.7)" stroke-width="1"/><!-- Socket ring detail --><rect x="19" y="36" width="10" height="3" rx="1"fill="none" stroke="rgba(150,145,110,0.55)" stroke-width="0.8"/><!-- Outer glow halo --><ellipse cx="24" cy="60" rx="20" ry="22"fill="rgba(255,245,160,0.12)"/><!-- Bulb body — pear shape, bright and solid --><path d="M24,38 C16,38 10,45 10,55 C10,67 16,78 24,78 C32,78 38,67 38,55 C38,45 32,38 24,38 Z"fill="rgba(255,252,210,0.95)" stroke="rgba(220,210,160,0.6)" stroke-width="0.8"/><!-- Inner warm core --><ellipse cx="24" cy="57" rx="9" ry="11"fill="rgba(255,240,120,0.55)"/><!-- Filament — W-shape --><path d="M18,60 L20,53 L24,58 L28,53 L30,60"fill="none" stroke="rgba(255,200,40,0.95)" stroke-width="1.4" stroke-linejoin="round"/><!-- Neck base ring --><rect x="20" y="75" width="8" height="3" rx="1"fill="rgba(200,195,155,0.65)" stroke="none"/></svg>
@@ -33964,7 +34072,7 @@ What will you do with his cow?
 <svg class="colony-fan-bottom" viewBox="0 0 300 52" width="100%" height="52" preserveAspectRatio="none"><defs><clipPath id="cf2"><rect x="0" y="0" width="300" height="50"/></clipPath><linearGradient id="cfL2" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="30%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="50%" stop-color="#c8b860" stop-opacity="0.8"/><stop offset="70%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient><radialGradient id="cfG2" cx="50%" cy="100%" r="55%"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0.08"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="300" height="52" fill="url(#cfG2)"/><g clip-path="url(#cf2)" opacity="0.3"><line x1="150" y1="54" x2="0"   y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="20"  y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="43"  y2="0" stroke="#8a9a50" stroke-width="0.7"/><line x1="150" y1="54" x2="67"  y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="86"  y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="108" y2="0" stroke="#9a8a30" stroke-width="0.7"/><line x1="150" y1="54" x2="130" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="150" y2="0" stroke="#c8b860" stroke-width="1.0"/><line x1="150" y1="54" x2="170" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="192" y2="0" stroke="#9a8a30" stroke-width="0.7"/><line x1="150" y1="54" x2="214" y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="233" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="257" y2="0" stroke="#8a9a50" stroke-width="0.7"/><line x1="150" y1="54" x2="280" y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="300" y2="0" stroke="#7aaa60" stroke-width="0.7"/></g><path d="M60,20 Q105,12 150,10 Q195,12 240,20" fill="none" stroke="#7aaa60" stroke-width="0.4" opacity="0.18"/><path d="M30,30 Q90,22 150,20 Q210,22 270,30" fill="none" stroke="#8a9a50" stroke-width="0.4" opacity="0.15"/><line x1="0" y1="43" x2="300" y2="43" stroke="url(#cfL2)" stroke-width="0.5"/><line x1="0" y1="47" x2="300" y2="47" stroke="url(#cfL2)" stroke-width="1.8"/><line x1="0" y1="50" x2="300" y2="50" stroke="url(#cfL2)" stroke-width="0.4" opacity="0.3"/><polygon points="150,40 155.5,45 150,50 144.5,45" fill="#c8b860" opacity="0.6"/><polygon points="150,42 153,45 150,48 147,45" fill="#e0d080" opacity="0.2"/><polygon points="120,44 123,47 120,50 117,47" fill="none" stroke="#7aaa60" stroke-width="0.7" opacity="0.4"/><polygon points="180,44 183,47 180,50 177,47" fill="none" stroke="#7aaa60" stroke-width="0.7" opacity="0.4"/><circle cx="95" cy="47" r="0.8" fill="#8a9a50" opacity="0.35"/><circle cx="205" cy="47" r="0.8" fill="#8a9a50" opacity="0.35"/></svg>
 </div>
 
-:: Davy Merkin [venue-colony] {"position":"1400,950","size":"100,100"}
+:: Davy Merkin [venue-colony char-davy] {"position":"1400,950","size":"100,100"}
 (unless: $metDavy is a boolean)[(set: $metDavy to false)]\
 (set: $metDavy to true)\
 <div class="colony-scene">
@@ -34042,7 +34150,7 @@ He's closer. Quiet Frankie won't look up but Ashton Granger has; she stops doodl
 [[Brace yourself|Fight starts]]
 </div>
 
-:: Copper confronts [venue-cellar] {"position":"1800,700","size":"100,100"}
+:: Copper confronts [venue-cellar char-salvu] {"position":"1800,700","size":"100,100"}
 (set: $awaitingCopperPwd to false)\
 <!-- Swinging bulb -->
 <div class="cellar-bulb-wrap">
@@ -34537,7 +34645,7 @@ Quiet Frankie's smiling.
 <div class="fight-nav-hidden" id="go-fight-victory-perfect">[[·|Fight Victory Perfect]]</div>
 <div class="fight-nav-hidden" id="go-fight-defeat">[[·|Fight Defeat]]</div>
 
-:: Shana Reads [venue-trishas] {"position":"900,1700","size":"100,100"}
+:: Shana Reads [venue-trishas char-shana] {"position":"900,1700","size":"100,100"}
 {
 (set: _albaCount to 0)(if: $alba contains $alba1)[(set: _albaCount to _albaCount + 1)](if: $alba contains $alba2)[(set: _albaCount to _albaCount + 1)](if: $alba contains $alba3)[(set: _albaCount to _albaCount + 1)]
 
@@ -34756,7 +34864,7 @@ John St. John (for that is his name) is another poet. He hates Red. His rancour 
 (display: "French Rule SVG h24")</svg>
 (link: "Drink with him")[(set: $sobriety to ($statLoss: $sobriety, 8))(set: $confidence to ($statGain: $confidence, 5))(go-to: "The Empty Glass")]
 
-:: The Empty Glass [venue-french] {"position":"300,950","size":"100,100"}
+:: The Empty Glass [venue-french char-john] {"position":"300,950","size":"100,100"}
 <span class="empty-glass-marker" style="display:none"></span>
 (display: "French Rule SVG h24")</svg>
 <script>setTimeout(function(){ window.showDrinkPopup('whisky'); }, 400);</script>\
@@ -34786,7 +34894,7 @@ He's gone and you know that you owe something now, to him and to here.
 (display: "French Rule SVG h24")</svg>
 [[Back to Dean Street|Dean Street]]
 
-:: LINE 1 {"position":"700,200","size":"100,100"}
+:: LINE 1 [char-red] {"position":"700,200","size":"100,100"}
 (set: $alba to $alba + (a: $alba1))
 (set: $albaRevealed to true)
 'Forget the book,' says Red, 'It's no way to live. Try this.'
@@ -34972,7 +35080,7 @@ Do you keep going?
 [[Seek the shore|The coast of Carthage]]](else-if: $tookLily2 is true and $metCritic is true)[//Your business at the Pillars is finished.//]
 </div>
 
-:: Martin Lackland's Office {"position":"1200,1000","size":"100,100"}
+:: Martin Lackland's Office [char-lack] {"position":"1200,1000","size":"100,100"}
 You find the building on Frith Street, on the door: M. Lackland.
 
 You knock and he buzzes you in. You climb two doglegs to his rooms.
@@ -35018,7 +35126,7 @@ This is as close as you've come to anything.
 
 (if: $knowsCopperSecret is true)[[[Linger|Martin Lackland's Back Door]]]
 
-:: Martin Lackland's Back Door {"position":"1300,1000","size":"100,100"}
+:: Martin Lackland's Back Door [char-lack] {"position":"1300,1000","size":"100,100"}
 (set: $awaitingLacklandPwd to true)\
 You notice a door at the back of the office you hadn't seen before. Or perhaps you had, but now it means something.
 
@@ -35057,7 +35165,7 @@ Standing here you can see London, Carthage, Liverpool and everything else.
 <span class="guided-link">(link-goto: "Put //" + (text: $bookTitle) + "// on the table", "The critic's judgement")</span>
 </div>
 
-:: O'Flatterly introduction [venue-cecilcourt] {"position":"300,1700","size":"100,100"}
+:: O'Flatterly introduction [venue-cecilcourt char-inis] {"position":"300,1700","size":"100,100"}
 <span class="shop-bell-marker" style="display:none"></span>(display: "Cecil Rule SVG")
 Inis O'Flatterly clocks you, first with his eyes still downcast, then eventually as he looks up. 'You're a novelist and that wasn't a question,' he steams; with the gentle steaming of the kettle, not that of the railway.
 
@@ -35066,7 +35174,7 @@ Inis O'Flatterly clocks you, first with his eyes still downcast, then eventually
 [[Show him the page|Return the page]]]\
 (else:)[[[Speak to him|O'Flatterly's quest]]]
 
-:: O'Flatterly's quest [venue-cecilcourt] {"position":"300,1850","size":"100,100"}
+:: O'Flatterly's quest [venue-cecilcourt char-inis] {"position":"300,1850","size":"100,100"}
 'Dear boy,' he burrs, 'I don't know who you are, and don't care who you are, and I don't know that I don't like what you've written; but do me a kindness, kid, and let's just assume I won't need it. Besides, there is something that you must do for me, that we must do together.'
 
 O'Flatterly coughs, disturbing the dust on the cover before him, agitating its thousand motes into flight, which hang over his desk like the clouds over Willesden Junction.
@@ -35277,7 +35385,7 @@ To return to Soho from Cecil Court is to cross the Styx; in some or other direct
 [[On.|Dean Street]]
 </div>
 
-:: Ride Jeffrey Bernard's cow [cow] {"position":"900,1200","size":"100,100"}
+:: Ride Jeffrey Bernard's cow [cow char-jeff] {"position":"900,1200","size":"100,100"}
 You cry, 'Soho! Soho!' and mount the beast.
 
 <div id="cow-game-wrap" style="margin:1em 0;">
@@ -36724,7 +36832,7 @@ Says one: 'Lost boy, get us a drink.' You acquiesce.
 (display: "Ronnies Rule SVG h14")
 </div>
 
-:: Stand your ground [venue-cellar] {"position":"1800,850","size":"100,100"}
+:: Stand your ground [venue-cellar char-salvu] {"position":"1800,850","size":"100,100"}
 <!-- Swinging bulb -->
 <div class="cellar-bulb-wrap">
 <svg width="48" height="90" viewBox="0 0 48 90"><!-- Wire from ceiling --><line x1="24" y1="0" x2="24" y2="30" stroke="#888878" stroke-width="1.4" opacity="0.75"/><!-- Socket cap --><rect x="17" y="28" width="14" height="10" rx="2.5"fill="rgba(80,78,65,0.9)" stroke="rgba(160,155,120,0.7)" stroke-width="1"/><!-- Socket ring detail --><rect x="19" y="36" width="10" height="3" rx="1"fill="none" stroke="rgba(150,145,110,0.55)" stroke-width="0.8"/><!-- Outer glow halo --><ellipse cx="24" cy="60" rx="20" ry="22"fill="rgba(255,245,160,0.12)"/><!-- Bulb body — pear shape, bright and solid --><path d="M24,38 C16,38 10,45 10,55 C10,67 16,78 24,78 C32,78 38,67 38,55 C38,45 32,38 24,38 Z"fill="rgba(255,252,210,0.95)" stroke="rgba(220,210,160,0.6)" stroke-width="0.8"/><!-- Inner warm core --><ellipse cx="24" cy="57" rx="9" ry="11"fill="rgba(255,240,120,0.55)"/><!-- Filament — W-shape --><path d="M18,60 L20,53 L24,58 L28,53 L30,60"fill="none" stroke="rgba(255,200,40,0.95)" stroke-width="1.4" stroke-linejoin="round"/><!-- Neck base ring --><rect x="20" y="75" width="8" height="3" rx="1"fill="rgba(200,195,155,0.65)" stroke="none"/></svg>
@@ -36868,7 +36976,7 @@ You think of this, from Spenser and from Yeats, as you say hello.
 [[Sit with him|The Spanish Artist]]
 (display: "French Rule SVG h24")</svg>
 
-:: Talk to the critic [venue-pillars] {"position":"500,1100","size":"100,100"}
+:: Talk to the critic [venue-pillars char-ham] {"position":"500,1100","size":"100,100"}
 (set: $metCritic to true)\
 <style>
 .script-line { margin: 0.6em 0; padding-left: 3em; text-indent: -3em; }
@@ -37626,7 +37734,7 @@ You have what you came for. The dream loosens; the only way back is up.
 [[Wake from this dream|The Interval]]
 ]
 
-:: The critic's judgement [venue-pillars] {"position":"300,1400","size":"100,100"}
+:: The critic's judgement [venue-pillars char-ham] {"position":"300,1400","size":"100,100"}
 <div class="pillars-scene">
 <div class="pillars-light"></div>
 <div class="pillars-smoke"></div>
@@ -37937,7 +38045,7 @@ Before you can answer, he says, 'I don't know.'
 
 <div class="phone-type" style="--d:8.5s;--t:1.0s">[[Hang up|Entering The Pillars of Hercules]]</div>
 
-:: Lily phone call 1 {"position":"100,1200","size":"100,100"}
+:: Lily phone call 1 [char-lily] {"position":"100,1200","size":"100,100"}
 (set: $hadLilyCall1 to true)\
 (set: $lilyCallCount to $lilyCallCount + 1)\
 (set: $pendingLilyBreath to true)\
@@ -37971,7 +38079,7 @@ You remember that Lily rang. You'd not heard her voice sustained so long in so m
 [[On.|Dean Street]]
 </div>
 
-:: After Aoife [outdoor] {"position":"100,1350","size":"100,100"}
+:: After Aoife [outdoor char-aoife] {"position":"100,1350","size":"100,100"}
 <div class="typewriter-page">
 You remember that Aoife rang; her voice cold from the cold flat. The baby small in her little arms, crying. You'd promise her the world, if only you could.
 
@@ -45101,6 +45209,32 @@ text-decoration: none !important;
    at rest so it's findable on phones (especially over the dark hub). */
 @media (hover: none) {
   #dss-mute-btn { opacity: 0.92; }
+}
+
+/* ===== CHARACTER SIGIL — gently-pulsing mark, bottom-left, while a character is present ===== */
+#dss-sigil-corner {
+  position: fixed;
+  left: calc(14px + env(safe-area-inset-left, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;       /* stack multiple marks vertically, not in a row */
+  gap: 10px;
+  align-items: flex-start;
+  pointer-events: none;
+}
+.dss-sigil {
+  width: 92px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.9s ease, transform 0.9s ease;
+  filter: drop-shadow(0 2px 7px rgba(0,0,0,0.65));
+}
+.dss-sigil.dss-sigil-in { opacity: 1; transform: translateY(0); }
+.dss-sigil svg { display: block; width: 100%; height: auto; animation: dssSigilBreathe 4.2s ease-in-out infinite; }
+@keyframes dssSigilBreathe {
+  0%, 100% { transform: scale(1);     opacity: 0.80; }
+  50%      { transform: scale(1.045); opacity: 1; }
 }
 
 .cellar-scene { position: relative; }

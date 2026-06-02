@@ -1,9 +1,9 @@
 > **▶ NEXT SESSION — START HERE.** Loop unchanged: edit `.twee` → `python3 sync_html.py` → verify via preview MCP (config `dss`, port 8923) → **never git** (Dr Quill commits via GitHub Desktop). **Never read the `.html`** (~3MB compiled artifact) — grep it instead.
 >
-> **State at handoff:** a big night. Two major new systems shipped — the **typewriter rework** and the **character-sigil system** — plus a **mute fix**, the **Dawn petal-flood** (and a runaway-storm fix it exposed), and the remaining **audit follow-ups**. Everything is synced; Dr Quill is committing + pushing.
+> **State at handoff:** a big night. Two major new systems shipped — the **typewriter rework** and the **character-sigil system** — plus a **mute fix**, the **Dawn petal-flood** (and a runaway-storm fix it exposed), and the remaining **audit follow-ups**. Everything is synced, **committed, and pushed**. (Re-confirmed at the start of the following session: the petal-storm **runaway fix is verified present in source** — the one-time `stormStarted` guard + observer-disconnect — so that bug is settled.)
 >
 > **Pending Dr Quill's real-play confirmation** (debug-jump half-inits and can't fire these cleanly):
-> 1. **Petal flood look** at the *real* Dawn ending — the flood is implemented + the runaway fixed, but the density/feel wasn't visually confirmed. `FLOOD_MAX` (1600) is a one-number tune.
+> 1. **Petal flood look** at the *real* Dawn ending — the **runaway is confirmed fixed (verified in source)**; the only unconfirmed thing is the *visual density/feel* of the flood (debug-jump can't fire it). Optional eyeball, not a blocker; `FLOOD_MAX` (1600) is a one-number tune.
 > 2. **Pong sigil** — should show *only* the opponent you're facing (Jack's blue *or* Percy's amber), not both. Needs a live match (sets `$opponent`).
 
 # HANDOFF — 2026-06-02 (typewriter rework + character sigils + mute / petal fixes)

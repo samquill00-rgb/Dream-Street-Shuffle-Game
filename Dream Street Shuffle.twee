@@ -32550,8 +32550,18 @@ document.addEventListener('keydown', function(e) {
 // ===== DAWN PETALS =====
 (function() {
   var petalObserver = null;
+  var stormStarted = false;   // the storm must run EXACTLY once — the dawn
+                              // trigger + MutationObserver can otherwise re-fire
+                              // it on every petal-add, cascading into a runaway
+                              // (tens of thousands of petals, browser-choking).
 
   function startPetalStorm() {
+    if (stormStarted) return;
+    stormStarted = true;
+    // Stop anything that could launch a second storm (the mutation + intersection
+    // observers fire constantly once petals start churning the DOM).
+    if (petalObserver) { try { petalObserver.disconnect(); } catch (e) {} petalObserver = null; }
+    if (typeof dawnMO !== 'undefined' && dawnMO) { try { dawnMO.disconnect(); } catch (e) {} }
     // Let the piano theme play out to its real coda — disable looping
     // on the source so the current pass finishes naturally and then
     // stops, instead of being cut by a fade in the middle of a phrase.
@@ -32582,6 +32592,8 @@ document.addEventListener('keydown', function(e) {
     var spawnRate  = 220;  // ms between batches — already brisk at the start, decreases further
     var active     = 0;
     var maxPetals  = 650;  // dense storm — petals near-fill the viewport
+    var FLOOD_AT   = 10;   // seconds: once THE END has had time to be read...
+    var FLOOD_MAX  = 1600; // ...flood the screen with many more (white) petals
 
     function spawnOne() {
       if (active >= maxPetals) return;
@@ -32592,7 +32604,7 @@ document.addEventListener('keydown', function(e) {
       var settles   = Math.random() < settlePct;
 
       var p = document.createElement('div');
-      p.className = settles ? 'dawn-petal settles' : 'dawn-petal';
+      p.className = 'dawn-petal' + (settles ? ' settles' : '') + (elapsed >= FLOOD_AT ? ' flood' : '');
 
       var w   = settles ? (9 + Math.random() * 13) : (7 + Math.random() * 9);
       var h   = w * (1.4 + Math.random() * 0.5);
@@ -32648,14 +32660,20 @@ document.addEventListener('keydown', function(e) {
 
     function spawnBatch() {
       elapsed += spawnRate / 1000;
-      // Batch size starts at ~5 and grows quickly to 18 — dense from the off.
-      var batch = Math.min(18, Math.ceil(5 + elapsed / 3));
+      // Two phases: a dense storm while THE END blooms and is read, then — once
+      // FLOOD_AT seconds pass — a true flood: the cap and batch sizes jump and
+      // the spawn-rate floor drops, so the screen fills with white petals.
+      var flooding = elapsed >= FLOOD_AT;
+      if (flooding) maxPetals = FLOOD_MAX;
+      var batch = flooding
+        ? Math.min(55, Math.ceil(22 + (elapsed - FLOOD_AT) * 6))   // ramps into a flood
+        : Math.min(18, Math.ceil(5 + elapsed / 3));                // dense from the off
       for (var i = 0; i < batch; i++) {
         (function(ii) {
           setTimeout(spawnOne, ii * (spawnRate / batch) + Math.random() * 60);
         })(i);
       }
-      spawnRate = Math.max(60, spawnRate - 12); // accelerates fast
+      spawnRate = Math.max(flooding ? 22 : 60, spawnRate - 12); // accelerates fast, faster in the flood
       setTimeout(spawnBatch, spawnRate);
     }
 
@@ -46077,6 +46095,11 @@ tw-story[tags~="dawn-end"] .alba-final .alba-line {
   background: rgba(255, 248, 235, 0.82);
   box-shadow: 0 0 8px rgba(255, 220, 160, 0.5), 0 0 2px rgba(255, 255, 255, 0.7);
   animation: dawnPetalRise var(--dur, 4s) ease-in-out forwards;
+}
+/* The post-"THE END" flood: pure white, no warm glow — a wash of white petals. */
+.dawn-petal.flood {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.6), 0 0 3px rgba(255, 255, 255, 0.9);
 }
 @keyframes dawnPetalRise {
   0%   { transform: translateY(0)                               translateX(0)          rotate(var(--r0)); opacity: 0; }

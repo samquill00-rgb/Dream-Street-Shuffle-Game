@@ -1,70 +1,70 @@
 > **▶ NEXT SESSION — START HERE.** Loop unchanged: edit `.twee` → `python3 sync_html.py` → verify via preview MCP (config `dss`, port 8923) → **never git** (Dr Quill commits via GitHub Desktop). **Never read the `.html`** (~3MB compiled artifact) — grep it instead.
 >
-> **State at handoff:** the **entire `aesthetic-suggestions.md` backlog is now done** (every A/B/C/D/F item applied or deliberately left), the **popup/modal race bug is fixed**, and the **dead-code audit has been actioned** (−245 lines). The last batch (audit cleanup) may be **uncommitted** — confirm it's committed+pushed before relying on the GitHub state.
+> **State at handoff:** a big night. Two major new systems shipped — the **typewriter rework** and the **character-sigil system** — plus a **mute fix**, the **Dawn petal-flood** (and a runaway-storm fix it exposed), and the remaining **audit follow-ups**. Everything is synced; Dr Quill is committing + pushing.
 >
-> **Pending Dr Quill's real-play confirmation** (preview/debug-jump can't fully verify timing/endgame — see ⚠ below):
-> 1. **Popup serialization** (NEW) — on first French: drink → *then* stats primer (no overlap); back to Dean St: matches → *then* "word to the wise" (no flicker). Mechanism verified; the full in-game sequence is his to confirm.
-> 2. **Endgame motion** (D-items) — pent breathing, "THE END" bloom, Ripley's-Wheel Sol pulse + Ouroboros breath, Dawn-corner settle, centre-out ending wash. All bound & rendered; motion is a real-play check.
-> 3. Carried trio still open: **Pong** last point winnable · **liver-tip** auto-fire (#30) · **matchbox** popup.
+> **Pending Dr Quill's real-play confirmation** (debug-jump half-inits and can't fire these cleanly):
+> 1. **Petal flood look** at the *real* Dawn ending — the flood is implemented + the runaway fixed, but the density/feel wasn't visually confirmed. `FLOOD_MAX` (1600) is a one-number tune.
+> 2. **Pong sigil** — should show *only* the opponent you're facing (Jack's blue *or* Percy's amber), not both. Needs a live match (sets `$opponent`).
 
-# HANDOFF — 2026-06-01 (backlog clearance + popup-race fix + dead-code audit)
+# HANDOFF — 2026-06-02 (typewriter rework + character sigils + mute / petal fixes)
 
-A long session: finished the whole aesthetic backlog with Dr Quill in the loop, fixed a popup-ordering bug he hit in playtest, then (overnight, via a scheduled remote audit + this morning's cleanup) removed confirmed dead code.
+A long, productive session, almost entirely on two new systems plus polish. Dr Quill drove the design throughout; drafted art/code iterated live in the preview.
 
-### Completed this session
+---
 
-**B — medium polish**
-- **B2** notebook active-tab **parchment edge-curl** (`.nb-tab-active::after`) — glyphs idea declined.
-- **B3** drink-popup **gold bottle-glow sweep** during the pour (`.drink-pour-glow`, one-shot CSS on the card) — ripple idea declined.
-- **B4** Ginger Light **halo breathing** (`.ginger-light` slow scale, 3.6s, offset from the lamp's 5s flicker). **NO RAIN** — Dr Quill vetoed it (see memory `feedback_no_rain_ginger`).
-- **B5** Centre Point caption **types itself out** ("EVERY MAN AND EVERY WOMAN IS A STAR"); the vignette was already in source. Caption also raised to `bottom:150px` for clear space above CLIMB IT.
-- **B1** (passage opening rhythm) — **PARKED**. Source check showed transitions already use `.typewriter-page`, so payoff is low.
+## Completed this session
 
-**C — stylistic**
-- **C1** trimmed the rising `+N` delta glow from 4→3 shadow layers (dropped the widest 46px bloom; bright core kept).
-- **C1b** Alba lines → **Crimson Text small-caps**, weight 600 (was Georgia bold all-caps).
-- **C2** palette **`:root` CSS vars** (`--gold-bright/warm/deep`, `--cream-light/text`, `--ink-shadow`) + converted in-stylesheet hexes to `var()`. Caveat held: most palette hexes live in SVG `fill=`/`stroke=` attrs or JS/canvas strings where `var()` can't apply, so it's a partial conversion. (`--gold-deep`/`--ink-shadow` later removed as unused — see audit.)
-- **C3** font-quoting sweep (single-word unquoted; multi-word single-quoted in CSS, double-quoted in JS strings). ⚠ This bit me — see memory `project_font_quoting_js_strings`.
-- **C4** the 4 near-identical **haunt bg gradients** made progressively distinct (warm brown → violet → indigo → rich-blue OPUS). Macros at the stat-bar setup (`(else-if: $haunts's length >= N)`).
-- **C5** was already done a prior session (keyframe cull).
+### Typewriter rework — global, all `.typewriter-page` passages
+Replaced the old character-by-character type-out (which forced reading at the machine's pace) with a **paragraph-at-a-time** reveal:
+- Each paragraph types out over **~2–2.5s**, with the per-character speed *derived* from paragraph length and **clamped 34–110ms/char** so individual keystroke clicks stay audible (Lea's note — you can hear the keys).
+- A **slight beat (~200ms) between sentences** (after `.`/`!`/`?`, mid-paragraph only).
+- **Varied pauses between paragraphs** (base 1500ms ± jitter) so the rhythm isn't metronomic. Cursor restored; blinks through the pause.
+- Two **authoring markers** (in use in The Night Ahead): `<span class="tw-fast">…</span>` = an unusually quick snap (e.g. "Soho, London."); `<span class="tw-pause" data-ms="600"></span>` = a custom beat at a point (e.g. before the warehouse line). Both reusable anywhere.
+- Reverted an earlier hard paragraph-break on the warehouse line — it's one paragraph again, with a `tw-pause` for the beat.
 
-**D / F — endgame & code-shape**
-- **D1** pent overlay **breathes** (`.centre-pent-overlay svg`, scale 1→1.02 over 8s).
-- **D2** ending **wash spreads centre-out** (radial core grows via `background-size` in `dawnFadeWhite/Black`) instead of flat fade.
-- **D3** "THE END" **blooms** (scale 0.7→1 with the fade) + thin gold rules above/below (`.ending-finis::before/::after`).
-- **D4** Ripley's Wheel: **Sol pulses once** on reveal, **Ouroboros breathes** faintly forever (`.dwm-sol` / `.dwm-serpent`, `transform-box:fill-box`).
-- **D5b** the 4 Dawn-corner SVGs deduped into one `<defs><g id="dawnCornerArt">` + `<use>` ×4 (−3KB). Works with the F mirror via `--dc-flip`.
-- **D6** map "you are here" pulse migrated **SVG SMIL → CSS** (`.map-here-pulse` / `@keyframes mapHerePulse`).
-- **D7** map pulse softened `r=12;32;12` → `12;22;12`.
-- **F** Dawn corners **settle** (scale 0.88→1) alongside the fade; mirror preserved via a per-corner `--dc-flip` var so the scale composes with `scaleX(-1)` etc.
+### Character sigils — NEW system (`window.dssSigils`)
+A gently-pulsing Art-Nouveau **sigil in the bottom-left** while you're "with" a character; fades in/out per scene; **stacks vertically** when more than one is present.
+- **13 characters**, each = bronze-on-dark **cartouche frame + emblem (their "sign") + monogram + per-character colour**, no name (illegible at corner size).
+- **Hand-drawn brush letterforms** (Red's "R" iterated to final). Multi-letter monograms are **side-by-side, NOT entwined** (Dr Quill vetoed interlacing).
+- Presence is **per-passage**: a passage tagged `[char-<id>]` shows that mark. Doubles by tagging two: **Beaten** (John + Salvu), **The dual ring** (Aoife + Lily). **PP Pong** is *dynamic* — shows only `$opponent` via an inline `<span data-sigil="…">` marker.
+- Colours spread so scene-sharing characters read apart (e.g. **John = teal vs Salvu = copper** in the cellar).
 
-**Popup/modal race fix (bug Dr Quill hit in playtest)**
-- Symptoms: drink popup + stats primer overlapping on first French; "word to the wise" flickering against the matchbox pickup on returning to Dean Street.
-- Root cause: no serialization — "soft" info modals fired on fixed timers and landed on "hard" tactile overlays / each other.
-- Fix: `window.dssOverlayBusy()` + `window.dssDeferIfBusy(retry)` (in UserScript, just after the stats-modal IIFE). Every soft modal (haunts/stats primers, venue hint, word-to-the-wise, morale warning) calls `dssDeferIfBusy(self)` right after its dedup guard → re-queues ~200ms later (cancels on `_passageGen` change). See memory `project_popup_serialization`.
+### Mute fix
+The outdoor **traffic** ambient kept washing in after muting: its output gain is **LFO-modulated**, so zeroing the gain's *base* value couldn't silence it (the LFO swung it back — the "repeating wave"). Now `setMuted` **disconnects the ambient's output node** on mute and reconnects on unmute. Mute is truly silent everywhere now.
 
-**Dead-code audit cleanup (−245 lines total)** — from a scheduled remote read-only audit (fired 04:11 BST) + this-morning triage, every removal grep-verified against live code:
-- Dead JS: `window.liverPopup`, `window.eatLiver`, `window.moraleWarningPopup`.
-- Dead CSS: `--gold-deep`, `--ink-shadow`, `@keyframes shimmer`, `.alba-objective` ×2, `.alba-counter-lily`, the 5 `.liver-popup-*` classes, `.lore-mote` (base + `-1..8` + group-rule entry), `.fetch-glimpse`.
-- Dead vars/clutter: `$seenLore`, `$shownChippyHint`, `'Things turn up'` phone-name, 12+3 non-existent `Fight *` array names, the orphaned **Deco Divider** passage (135→134 passages).
-- Pruned the deliberately-disabled `(if: false)` **fetch-glimpse** block (Dr Quill confirmed it was an intentional deletion). **Kept** `$wasBeaten` (Tarot "Death" draw) and `$visitedInterval` (interval routing) — both live elsewhere.
-- **Serializer re-point:** the dead `liverPopup` was the only creator of `#liver-popup-overlay`, which the serializer watched (a ghost). Gave the **live** `LiverPopup` `id="liver-eat-overlay"` and pointed the serializer there; dropped the dead `#morale-warn-overlay`. Now the serializer actually guards the live liver popup.
+### Dawn petal flood + runaway fix
+- After "THE END" has had time to be read (**~10s**, `FLOOD_AT`), the storm escalates to a **flood of WHITE petals** (new `.dawn-petal.flood` class; `FLOOD_MAX` 1600; bigger batches, faster spawn).
+- **Runaway bug fixed (pre-existing, amplified by the flood):** the dawn trigger's MutationObserver re-fired `startPetalStorm` on every petal-add → cascading storms (saw 14,596 petals in testing). Added a `stormStarted` one-time guard + disconnect the observers when the storm starts. Normal single-storm behaviour is unchanged; this just prevents multiplication.
 
-### Still open / parked
-- **Audit structural note #16** — `.napkin-*` styles intentionally split (inline-canvas vs popup). Not a removal; just keep in mind if restyling the napkin.
-- **Title >2.2em** — only if he wants it bigger; needs the structural fix (gas-lamp float width vs longest word "SHUFFLE"). 2.2em is the safe ceiling otherwise.
-- **Audio (needs his music files):** #4 hold chord · #5 hear Aoife · #14 Dido's Lament · #19 pub music w/ Lackland · #29 one voice for the calls · #35 Stravinsky/Parker/Ronnie Scott's.
-- **#11** (in-copyright poem, murky) · **#36** (Cecil Court at the end, no clear intent) — both parked.
-- **v2-expansion** — held for a dedicated session (Chariots-of-the-Gods dream worlds, Three Pillars portal hub; see memory `project_v2_expansion_direction`).
+### Audit follow-ups (from the AUDIT-*.md reports)
+- **Dean Street coach-funnel fallback** (N5/S7) — additive escape link for the theoretical `$coachUrgent && !$metRed` dead-end.
+- **Lackland's Back Door** — visible "Step back" link (N1) so it's never a hidden-only exit.
+- **Modal a11y batch** (S1/S2/S3/F3/M1) — shared `window.dssModalA11y` helper: `role="dialog"`/`aria-modal`/`aria-labelledby`, focus in/return, Escape, plus 44px touch targets + `:focus-visible` rings on close glyphs.
+- **Reduced motion** — the CSS kill-switch was added then **removed at Dr Quill's request**; the *whole* topic is **parked for first-draft stage** (he has separate plans). There is currently **no** `prefers-reduced-motion` handling. Decisions logged in `AUDIT-INDEX.md`.
 
-### Key technical notes (this session)
-- **Popup serializer** (`dssOverlayBusy`/`dssDeferIfBusy`): if you add ANY new overlay/popup type, add its root selector to BOTH `dssOverlayBusy`'s querySelector list AND the rising-number deferral controller's `up()` check (stat-bar setup `<script>`), or modals/`+N` deltas will fire on top of it.
-- **Font quoting**: never normalise double→single quotes for multi-word families inside single-quoted JS inline-style strings — it terminates the JS string (`SyntaxError`). CSS stylesheet = single quotes; JS inline styles = double quotes; Harlowe `(css: "…")` = single quotes inside.
-- **`--dc-flip`**: per-corner CSS var holding each Dawn corner's mirror, so the F settle-scale composes instead of clobbering it.
-- **C2 var() reach is limited**: SVG `fill=`/`stroke=` attributes and canvas/JS colour strings can't use `var()` — only true CSS-property positions were converted.
+### Smaller fixes (earlier in the session)
+- **Alba header jewel** now lights the moment you catch a line, **synced with the gong** (revelation boxes carry `data-alba="1/2/3"`; the flash-observer lights the matching `#stat-bars-lifted .alba-jewel`).
+- **Glass smash** at The Empty Glass now lands **~2s after you close the haunts explainer** (new `hauntsmodal:closed` event), not while it's still up.
+- **Dean Street link relabelled "The Chippy"** (the action "get some grub" stays in the word-to-the-wise popup). Confirmed there was never a "grab" typo.
+- **Matchbox popup** now routes through `dssDeferIfBusy` (defers behind hard overlays).
+- **Pong** stale comments corrected (the difficulty climb is the serve-speed ramp, not a phantom updateAI ramp).
 
-### ⚠ Debug-jump is unreliable for verification
-`#dss-debug-jump=PassageName` + reload leaves the game **half-initialised** (MORALE 75% not 70%, missing venue links, `$prevConfidence` unset so stat-delta "+N" never renders). Top-level passage scripts fire; nested-in-`(if:)` ones are flaky. Confirm overlay timing / stat changes / venue flow / endgame motion in a **real playthrough**.
+---
+
+## New systems — technical notes (read before touching)
+
+- **`window.dssSigils`** (sigils): data-driven. `CHARS` object holds per-character `{stops, emb, mono}`; the registry is *built* from it via shared helpers `_grad`/`_frame`/`_emb`/`_L` (letter paths)/`_mono`. Driven once per passage from the nav handler (~line 8904) via `dssSigils.update(tags)`, which also merges inline `[data-sigil]` markers. `#dss-sigil-corner` is `flex-direction:column` (vertical stack), width 92px, fades via `.dss-sigil-in`. **To add/edit a character:** edit `CHARS` + add a letter to `_L` if needed + tag the scenes `[char-<id>]`. Multi-letter monograms = side-by-side in `_mono` (duo/trio); **don't entwine**.
+- **Typewriter** (`typewriterEffect`, ~line 11993): tunables at the top of the reveal block — `TARGET_MS` 2300, `MIN/MAX_CHAR_MS` 34/110, `SENTENCE_PAUSE` 200, `PARA_PAUSE` 1500, `PARA_JITTER` 1300, `FAST_CHAR_MS` 6. Markers: `tw-fast` (class), `tw-pause` (class + `data-ms`).
+- **`window.dssModalA11y(overlay, card, labelEl, closeFn, opts)`** — shared modal a11y; `opts.escape:false` / `opts.returnFocus:false` for special cases (the minigame-rules modal uses both).
+- **Petals** (`startPetalStorm`, ~line 32554): `stormStarted` guard (must stay — prevents the cascade); `FLOOD_AT`/`FLOOD_MAX` control the flood; `.dawn-petal.flood` = the white variant.
+
+## Still open / parked / real-play checks
+- **Petal-flood look** + **Pong single-opponent** — the two real-play checks in the banner above.
+- **Sigils:** only each character's *primary* scene(s) are tagged; secondary scenes (Davy's tip, more O'Flatterly/cellar beats) can be added. Player gets no sigil (deliberate).
+- **Typewriter:** long passages (The Night Ahead) still roll up through the fixed paper sheet — acceptable; flagged only if a specific page feels cramped.
+- **Reduced motion:** whole topic parked for first-draft stage (see above).
+- **Dead-state vars** (`$ppScore`/`$oppScore`, `$cowRideWon`, `$albaRevealed`, `$drankAtFrench`) left in place — possible future hooks, Dr Quill's call.
+- **Carried from prior handoff:** Pong last-point-winnable (real-play feel) · liver-tip auto-fire (#30) — not touched this session. (Matchbox popup: done.)
 
 ---
 
@@ -72,21 +72,20 @@ A long session: finished the whole aesthetic backlog with Dr Quill in the loop, 
 
 ### Verification workflow that works
 - Preview MCP `preview_start` config `dss` (port **8923**), serving the compiled `.html`. (It stops when idle — just `preview_start` again.)
-- Jump: `window.location.hash = '#dss-debug-jump=' + encodeURIComponent('Passage Name'); window.location.reload();` — must be a real reload. (See ⚠ above — half-init.)
-- Read state: `document.querySelector('tw-passage').textContent`. `window.Harlowe`/`window.Engine` are **not** exposed — can't set Harlowe vars from JS; use a temp `(set: $flag to true)<!-- TEMP-TEST-REMOVE -->` + sync to test gated branches, OR inject a test DOM node via `preview_eval` to verify endgame-only CSS/elements.
-- Grep the compiled `.html` to confirm edits survive the build; passage markup is HTML-entity-encoded in `<tw-passagedata>` (`"`→`&quot;`, `'`→`&#x27;`, `<`→`&lt;`) — grep encoded forms or unquoted substrings.
+- Jump: `window.location.hash = '#dss-debug-jump=' + encodeURIComponent('Passage Name'); window.location.reload();` — must be a real reload. **⚠ Half-inits the game** (missing venue links, `$prevConfidence` unset, endgame triggers like the Dawn petal storm don't fire). Confirm timing / endgame / stat flow in a **real playthrough**.
+- Read state: `document.querySelector('tw-passage').textContent`. `window.Harlowe`/`window.Engine` are **not** exposed — can't set Harlowe vars from JS; use a temp `(set: $flag to true)<!-- TEMP-TEST-REMOVE -->` + sync, OR inject a test DOM node via `preview_eval`.
+- Grep the compiled `.html` to confirm edits survive the build; passage markup is HTML-entity-encoded in `<tw-passagedata>` (`"`→`&quot;` etc.) — but the UserScript/UserStylesheet body is plain. Grep accordingly.
 
 ### Harlowe / DOM gotchas
 - **`tw-link` vs `tw-expression`** — bracket links render `<tw-link>`, `(link:)` macros render `<tw-expression>`.
 - Macros **don't evaluate inside `class="…"`** — wrap the whole element in `(if:)`.
-- **`(click-replace:)` is one-shot but its named `tw-hook` lingers** in the DOM — guard JS reacting to those hooks.
-- **Body-level overlays persist across passage transitions** — tear down via a MutationObserver keyed on the launch passage leaving the DOM.
+- **Body-level overlays persist across passage transitions** — tear down via a MutationObserver keyed on the launch passage leaving the DOM. (The sigil corner is intentionally persistent and reconciled per-passage instead.)
 - **`Failure: Trisha's`** is NOT orphan — referenced by JS, don't prune.
-- **`dssSpawnMotes`** accepts `{noScroll:true}`.
-- Reusable body-level info modals: `dssShowHauntsModal()`, `dssShowStatsModal()` (gold-on-dark, dismiss via click-anywhere/✕). Both now route through the popup serializer.
+- Reusable body-level info modals: `dssShowHauntsModal()`, `dssShowStatsModal()` — route through the popup serializer AND now `dssModalA11y`.
+- **Font-quoting:** CSS stylesheet = single quotes; JS inline-style strings = double quotes; never normalise double→single inside single-quoted JS strings (SyntaxError).
 
 ### Stats system (banked reference)
-Morale (`$confidence`) & sobriety (`$sobriety`) are a **mood/consequence** system, not a health bar: **no death**; asymptotic gains/losses clamp 0..100; **endings don't read them** (White/Black = Alba lines + final wake/sleep; Complete/Incomplete = whether all 3 Alba lines were caught). They DO shape the Tarot draw (low sob→Devil, low conf→Tower; `$wasBeaten`→Death), NPC reactions, recovery nudges (both <30 → "bad way"), the give-up exit (conf ≤5), and visual tone (incl. the OPUS state at 12 haunts). Primer frames them as "the temperature of your night."
+Morale (`$confidence`) & sobriety (`$sobriety`) are a **mood/consequence** system, not a health bar: **no death**; clamp 0..100; **endings don't read them**. They DO shape the Tarot draw (low sob→Devil, low conf→Tower; `$wasBeaten`→Death), NPC reactions, recovery nudges, the give-up exit (conf ≤5), and visual tone (OPUS at 12 haunts).
 
 ### ⚠ WebGL caveat
 If 3D scenes show HTML overlays only, check `chrome://gpu/` / hardware accel / restart. The CLIMB IT fallback at Centre Point lets the ending play through regardless.

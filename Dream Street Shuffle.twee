@@ -86,6 +86,7 @@ Dream Street Shuffle
 (set: $tookLily4 to false)\
 (set: $tookLily5 to false)\
 (set: $sawPentangle to false)\
+<script>window._dssSawPentangle=false;</script>\
 (set: $visitedCentrePoint to false)\
 (set: $sawAstralReveal to false)\
 (set: $lilyHintShown to false)\
@@ -3758,12 +3759,10 @@ function createPanel() {
   // Tool buttons
   var toolReveal = document.getElementById('dss-dbg-tool-reveal-pent');
   if (toolReveal) toolReveal.addEventListener('click', function() {
-    try {
-      var s = Harlowe.API_ACCESS.STATE.variables;
-      s.tookLily1 = true; s.tookLily2 = true; s.tookLily3 = true;
-      s.tookLily4 = true; s.tookLily5 = true; s.lilyCount = 5;
-      s.sawPentangle = false;
-    } catch(e) {}
+    // Force-replay the pentangle reveal. JS can't set Harlowe lily flags
+    // (window.Harlowe isn't exposed), but dssRevealPentangleOnMap() forces the
+    // map reveal regardless; clearing the session "seen" flag lets it fire again.
+    window._dssSawPentangle = false;
     panel.remove(); debugPanel = null;
     setTimeout(function() {
       if (window.dssRevealPentangleOnMap) window.dssRevealPentangleOnMap();
@@ -4589,6 +4588,10 @@ if (targetPanel) targetPanel.classList.add('nb-panel-active');
 // Pentangle reveal: when player navigates to LILLIES or MAP for the first time
 // after collecting all 5 lilies, fire the corresponding animation.
 var queue = page.dataset.pentangleQueue || '';
+// Suppress re-fire once the pentangle has been seen this session. JS can't write
+// $sawPentangle (window.Harlowe isn't exposed), so track "seen" in a window flag;
+// Start/StoryInit reset it for a new game.
+if (window._dssSawPentangle) queue = '';
 function consumeAndFire(tabKey, selector, triggerClass) {
   if (queue.indexOf(tabKey) < 0) return;
   var svg = page.querySelector(selector);
@@ -4605,11 +4608,10 @@ if (target === 'map')  {
   // Inline-snoop the queue first so we know if the map animation will fire
   if (queue.indexOf('map') >= 0 && page.querySelector('.soho-map svg')) fired = true;
   consumeAndFire('map',  '.soho-map svg', 'nb-map-pentangle');
-  // After the animation actually fires, set $sawPentangle so subsequent
-  // notebook opens don't keep re-queueing the reveal.
-  if (fired && window.Harlowe && window.Harlowe.API_ACCESS) {
-    try { window.Harlowe.API_ACCESS.STATE.variables.sawPentangle = true; } catch(e) {}
-  }
+  // After the map reveal fires, mark the pentangle seen so later notebook opens
+  // don't re-queue it. JS can't set $sawPentangle (window.Harlowe isn't exposed),
+  // so this session flag stands in; Start/StoryInit reset it for a new game.
+  if (fired) window._dssSawPentangle = true;
 }
 };
 
@@ -9049,11 +9051,11 @@ window._passageGen = 0;
                 // once per "phase" of the page-return arc: pre-quest,
                 // returning-with-page, and post-return — so the brass
                 // clapper rings again each time the situation has changed.
-                if (passageNode.querySelector('.shop-bell-marker')) {
-                  var _st = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
-                  var phase = 'pre';
-                  if (_st && _st.returnedPage) phase = 'post';
-                  else if (_st && _st.hasMissingPage) phase = 'has-page';
+                var _sbm = passageNode.querySelector('.shop-bell-marker');
+                if (_sbm) {
+                  // Phase is printed into the marker's text by Harlowe (window.Harlowe
+                  // isn't exposed for JS reads here). Falls back to 'pre'.
+                  var phase = (_sbm.textContent || '').trim() || 'pre';
                   if (!window._heardOflatterlyBellPhases) window._heardOflatterlyBellPhases = {};
                   if (!window._heardOflatterlyBellPhases[phase]) {
                     window._heardOflatterlyBellPhases[phase] = true;
@@ -9365,9 +9367,16 @@ window.dssOpusReveal = function() {
   // without writing) rather than silently showing everything.
   var collectedHaunts = {};
   try {
-    var dwmSt = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
-    var dwmH = (dwmSt && dwmSt.haunts) || [];
-    for (var dwmHi = 0; dwmHi < dwmH.length; dwmHi++) collectedHaunts[dwmH[dwmHi]] = true;
+    // window.Harlowe is NOT exposed for direct JS reads in this build, so the old
+    // API_ACCESS path always returned empty (wheel frame with no names). Read the
+    // caught haunts from the hidden #dss-haunt-data element the Dawn passage prints
+    // from Harlowe state instead. Pipe-delimited; trim + drop empties.
+    var dwmEl = document.getElementById('dss-haunt-data');
+    var dwmH = dwmEl ? dwmEl.textContent.split('|') : [];
+    for (var dwmHi = 0; dwmHi < dwmH.length; dwmHi++) {
+      var dwmName = dwmH[dwmHi].trim();
+      if (dwmName) collectedHaunts[dwmName] = true;
+    }
   } catch(e) {}
 
   // Canonical Ripley sequence (Compound of Alchymy, 1471), clockwise from 12 o'clock.
@@ -29922,11 +29931,12 @@ cpWrap.appendChild(cpVig);
 // Caption — Crowley's Thelemic line, sitting ABOVE the CLIMB IT button.
 // Styled to match the "There is no part of me that is not of the Gods"
 // quote that appears after the liver-eating: Playfair Display caps, gold,
-// no italic. Caption raised to bottom:150px to open clear breathing space
-// above the CLIMB IT button (button top ≈88px).
+// no italic. Caption at bottom:115px — lowered from 150px so it sits clear
+// below the astral constellation that rises over the scene, while keeping
+// breathing space above the CLIMB IT button (button top ≈88px).
 var cpLoc = document.createElement('div');
 var cpLocText = 'Every man and every woman is a star.';
-cpLoc.style.cssText = 'position:fixed;bottom:150px;left:0;right:0;text-align:center;font-family:"Playfair Display",Georgia,serif;font-size:14px;color:#f5d070;letter-spacing:0.18em;text-transform:uppercase;pointer-events:none;z-index:9003;white-space:nowrap;text-shadow:0 0 8px rgba(245,208,112,0.55),0 0 16px rgba(245,208,112,0.25),0 0 2px rgba(8,6,4,0.95);opacity:0;transition:opacity 1.2s ease;';
+cpLoc.style.cssText = 'position:fixed;bottom:115px;left:0;right:0;text-align:center;font-family:"Playfair Display",Georgia,serif;font-size:14px;color:#f5d070;letter-spacing:0.18em;text-transform:uppercase;pointer-events:none;z-index:9003;white-space:nowrap;text-shadow:0 0 8px rgba(245,208,112,0.55),0 0 16px rgba(245,208,112,0.25),0 0 2px rgba(8,6,4,0.95);opacity:0;transition:opacity 1.2s ease;';
 cpWrap.appendChild(cpLoc);
 // Type the line out one character at a time — an inscription being chiselled,
 // echoing the typewriter opening of the game — rather than a flat fade-in.
@@ -33260,6 +33270,8 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
 <canvas id="waltz-canvas" aria-label="Waltz rhythm minigame" width="360" height="540" style="display:block;margin:0.6em auto;max-width:100%;height:auto;"></canvas>
 <div class="waltz-keys">&larr; &nbsp; &darr; &nbsp; &rarr; <span class="waltz-keys-aux">&nbsp;&nbsp;or A &nbsp; S &nbsp; D</span></div>
 <div id="waltz-onward" style="display:none;text-align:center;margin-top:1em;">[[Onward, then.|O'Flatterly's shop]]</div>
+<span id="waltz-up" style="display:none;">[[Onward, then.|Waltz Result Up]]</span>
+<span id="waltz-down" style="display:none;">[[Onward, then.|Waltz Result Down]]</span>
 </div>
 <script>
 (function(){var __boot=function(){
@@ -33831,34 +33843,22 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
                           score 0 → morale −15 / sob −10. */
           var moraleN = (score - 0.5) * 40;   /* −20..+20 */
           var sobN    = (score - 0.5) * 20;   /* −10..+10 */
-          var applyGain = function(v, n) { return Math.round(Math.min(100, v + (100 - v) * (n / 50))); };
-          var applyLoss = function(v, n) { return Math.round(Math.max(0,   v - v        * (n / 50))); };
-          var st = window.Harlowe && window.Harlowe.API_ACCESS && window.Harlowe.API_ACCESS.STATE && window.Harlowe.API_ACCESS.STATE.variables;
-          if (st) {
-            if (typeof st.confidence === 'number') {
-              if (moraleN > 0.5) st.confidence = applyGain(st.confidence, moraleN);
-              else if (moraleN < -0.5) st.confidence = applyLoss(st.confidence, -moraleN);
-            }
-            if (typeof st.sobriety === 'number') {
-              if (sobN > 0.5) st.sobriety = applyGain(st.sobriety, sobN);
-              else if (sobN < -0.5) st.sobriety = applyLoss(st.sobriety, -sobN);
-            }
-          }
+          // window.Harlowe isn't exposed for JS writes, so the stat change can't
+          // be applied here. Pick a performance bucket from moraleN; the nav block
+          // below routes to a Harlowe result passage that applies the (set:).
+          // Thresholds tunable here; magnitudes live in Waltz Result Up/Down.
+          window._waltzOutcome = (moraleN > 6) ? 'up' : (moraleN < -6) ? 'down' : 'neutral';
         } catch (e) {}
-        /* Waltz lands → auto-advance to O'Flatterly's shop. No manual link.
-           Tries Engine.goToPassage first (the Harlowe API); falls back to
-           dispatching a click on the hidden link if the engine isn't
-           reachable. The link stays display:none so the player never sees
-           it — the flow is just waltz → next passage. */
+        /* Waltz lands → apply the performance result in Harlowe, then land at
+           O'Flatterly's shop. Route by bucket (window._waltzOutcome): the Up/Down
+           result passages apply the (set:) and forward; neutral goes straight on.
+           window.Engine isn't exposed, so navigate by clicking the matching hidden
+           link (display:none, so the player never sees it). */
         setTimeout(function(){
-          try {
-            if (window.Engine && window.Engine.goToPassage) {
-              window.Engine.goToPassage("O'Flatterly's shop");
-              return;
-            }
-          } catch (e) {}
-          var onward = document.getElementById('waltz-onward');
-          var link = onward && onward.querySelector('tw-link');
+          var outcome = window._waltzOutcome || 'neutral';
+          var id = (outcome === 'up') ? 'waltz-up' : (outcome === 'down') ? 'waltz-down' : 'waltz-onward';
+          var holder = document.getElementById(id);
+          var link = holder && holder.querySelector('tw-link');
           if (link) ['mousedown','mouseup','click'].forEach(function(t){
             link.dispatchEvent(new MouseEvent(t, { bubbles: true }));
           });
@@ -33871,8 +33871,14 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
 };(window.dssShowMinigameRules||function(o){o.onPlay()})({key:'waltz',title:'CECIL COURT WALTZ',lines:["Notes drift down three lanes.","Press &larr; &darr; &rarr; (or A&nbsp;S&nbsp;D) as each note reaches the line.","Just keep the rhythm &mdash; let the waltz carry you."],onPlay:__boot});})();
 </script>
 
+:: Waltz Result Up {"position":"300,1660","size":"100,100"}
+(set: $confidence to ($statGain: $confidence, 14))(set: $sobriety to ($statGain: $sobriety, 6))(go-to: "O'Flatterly's shop")
+
+:: Waltz Result Down {"position":"450,1660","size":"100,100"}
+(set: $confidence to ($statLoss: $confidence, 14))(set: $sobriety to ($statLoss: $sobriety, 8))(go-to: "O'Flatterly's shop")
+
 :: O'Flatterly's shop [venue-cecilcourt] {"position":"300,1700","size":"100,100"}
-<span class="shop-bell-marker" style="display:none"></span>The sign reads: I. O'FLATTERLY, dealer in books.
+<span class="shop-bell-marker" style="display:none">(if: $returnedPage is true)[post](else-if: $hasMissingPage is true)[has-page](else:)[pre]</span>The sign reads: I. O'FLATTERLY, dealer in books.
 
 You go in.
 
@@ -34237,6 +34243,8 @@ You did not find the poem. Sometimes the night is its own work, and the dawn wil
 
 :: Dawn [dawn-end piano-bed] {"position":"1700,100","size":"100,100"}
 (set: _albaComplete to ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))\
+<!-- Expose the caught haunts to dssOpusReveal via the DOM: window.Harlowe is NOT exposed in this build, so the wheel reads the names from this hidden element instead of Harlowe's (unavailable) JS API. Pipe-delimited; names contain no pipe. -->\
+(set: _hauntData to "")(if: $haunts is an array and $haunts's length > 0)[(for: each _h, ...$haunts)[(set: _hauntData to _hauntData + _h + "|")]]<span id="dss-haunt-data" style="display:none">(print: _hauntData)</span>\
 <script>
 /* Ripley's Wheel always reveals on Dawn now — the wheel itself reads the
    collected $haunts from Harlowe state and only renders the alchemical /
@@ -35196,7 +35204,7 @@ Standing here you can see London, Carthage, Liverpool and everything else.
 </div>
 
 :: O'Flatterly introduction [venue-cecilcourt char-inis] {"position":"300,1700","size":"100,100"}
-<span class="shop-bell-marker" style="display:none"></span>(display: "Cecil Rule SVG")
+<span class="shop-bell-marker" style="display:none">(if: $returnedPage is true)[post](else-if: $hasMissingPage is true)[has-page](else:)[pre]</span>(display: "Cecil Rule SVG")
 Inis O'Flatterly clocks you, first with his eyes still downcast, then eventually as he looks up. 'You're a novelist and that wasn't a question,' he steams; with the gentle steaming of the kettle, not that of the railway.
 
 (if: $hasMissingPage is true)[<script>setTimeout(function(){if(!window._heardOflatterlyBellPhases)window._heardOflatterlyBellPhases={};if(!window._heardOflatterlyBellPhases['has-page']){window._heardOflatterlyBellPhases['has-page']=true;if(window.dssAudio&&window.dssAudio.doorShopBell)window.dssAudio.doorShopBell();}},100);</script>You hand him the page.
@@ -35424,15 +35432,16 @@ You cry, 'Soho! Soho!' and mount the beast.
 </div>
 <span id="cow-go-win" style="display:none;">[[Onward|Cow ride success]]</span>
 <span id="cow-go-lose" style="display:none;">[[Thrown|Cow ride fail]]</span>
+<span id="cow-state-data" style="display:none">(if: $cowRideDone is true)[done](if: $cowRideWon is true)[ won]</span>
 <script>
 (function(){
-/* ── Skip if already played (won or failed). Read the Harlowe state
-   variables directly so the gate doesn't depend on hidden DOM spans
-   round-tripping booleans through (print:). ── */
-var _s = null;
-try { _s = Harlowe.API_ACCESS.STATE.variables; } catch(e) {}
-var cowDone = !!(_s && _s.cowRideDone === true);
-var cowWon  = !!(_s && _s.cowRideWon  === true);
+/* ── Skip if already played (won or failed). window.Harlowe isn't exposed for
+   direct JS reads in this build, so read $cowRideDone/$cowRideWon from the
+   hidden #cow-state-data element that Harlowe prints above. ── */
+var _cs = document.getElementById('cow-state-data');
+var _ct = _cs ? _cs.textContent : '';
+var cowDone = _ct.indexOf('done') !== -1;
+var cowWon  = _ct.indexOf('won')  !== -1;
 if (cowDone) {
 var wrap = document.getElementById('cow-game-wrap');
 if (wrap) wrap.style.display = 'none';
@@ -36947,6 +36956,7 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $tookLily4 to false)\
 (set: $tookLily5 to false)\
 (set: $sawPentangle to false)\
+<script>window._dssSawPentangle=false;</script>\
 (set: $visitedCentrePoint to false)\
 (set: $sawAstralReveal to false)\
 (set: $lilyHintShown to false)\

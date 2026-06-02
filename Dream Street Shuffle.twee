@@ -12003,7 +12003,9 @@ el.style.transition = 'none';
 el.style.pointerEvents = 'none';
 });
 
-function collectTextNodes(el) {
+// `fast` propagates down from any ancestor carrying class "tw-fast" — a marker
+// the author can wrap a paragraph in to make it type unusually quickly.
+function collectTextNodes(el, fast) {
 var children = el.childNodes;
 for (var i = 0; i < children.length; i++) {
 var child = children[i];
@@ -12013,33 +12015,34 @@ if (child.nodeType === 1 && child.tagName === 'TW-EXPRESSION') continue;
 if (child.nodeType === 1 && child.tagName === 'TW-LINK') continue;
 // Skip flash-reveal elements — triggered separately after typing completes
 if (child.nodeType === 1 && child.classList && child.classList.contains('flash-reveal')) continue;
+if (child.nodeType === 1 && child.tagName === 'BR') { textEntries.push({ br: true }); continue; }
+// <span class="tw-pause" data-ms="600"></span> — an author-placed beat mid-paragraph.
+if (child.nodeType === 1 && child.classList && child.classList.contains('tw-pause')) { var pms = parseInt(child.getAttribute('data-ms'), 10); textEntries.push({ pause: (pms > 0 ? pms : 600) }); continue; }
 if (child.nodeType === 3) {
 var text = child.textContent;
 if (text.length > 0) {
-textEntries.push({ node: child, fullText: text });
+textEntries.push({ node: child, fullText: text, fast: fast });
 child.textContent = '';
 }
 } else if (child.nodeType === 1) {
-collectTextNodes(child);
+collectTextNodes(child, fast || (child.classList && child.classList.contains('tw-fast')));
 }
 }
 }
 
-collectTextNodes(container);
+collectTextNodes(container, false);
 
-// Build flat character queue
-var queue = [];
-for (var t = 0; t < textEntries.length; t++) {
-for (var c = 0; c < textEntries[t].fullText.length; c++) {
-queue.push({ entryIdx: t, char: textEntries[t].fullText[c] });
+// Group the collected tokens into paragraphs: runs of text separated by one
+// or more <br> breaks. Each paragraph is revealed as a single block, with a
+// short burst of typewriter clicks - keeping the sound, dropping the slow
+// per-character pacing that made longer passages hard to read (Lea's note).
+var paragraphs = [];
+var paraCur = [];
+for (var pi = 0; pi < textEntries.length; pi++) {
+if (textEntries[pi].br) { if (paraCur.length) { paragraphs.push(paraCur); paraCur = []; } }
+else paraCur.push(textEntries[pi]);
 }
-}
-
-// Create block cursor
-var cursor = document.createElement('span');
-cursor.className = 'tw-cursor';
-cursor.textContent = '\u2588';
-container.appendChild(cursor);
+if (paraCur.length) paragraphs.push(paraCur);
 
 // === PAPER ROLL WRAPPER ===
 // Wrap the text content of .typewriter-page in an inner div that we can
@@ -12065,97 +12068,111 @@ for (var ki = 0; ki < kids.length; ki++) {
 container.appendChild(rollWrapper);
 var currentRoll = 0;
 
-var qIdx = 0;
-// Realistic typewriter pace — the original 28ms ran too fast at speed,
-// the 14ms revision was a sprint, 20ms still felt machine-quick. 55ms
-// landed honest but a touch too leisurely; 42ms keeps the typist-cadence
-// feel while reading at a comfortable forward clip.
-var baseSpeed = 42;
-
-// Anchor to the global passage generation so any in-flight tick chain
-// stops as soon as the player navigates away — even to a passage that
-// has no typewriter of its own.
+// ── Tunables — all the typing feel lives here, easy to dial after a playtest.
+// Each paragraph TYPES OUT over roughly TARGET_MS (about 2-2.5s), but the
+// per-key speed is clamped: the floor keeps the clicks far enough apart that
+// you hear individual keys (the click sound is ~20ms), and the ceiling stops
+// very short paragraphs from plodding. So a long paragraph naturally takes a
+// little longer — "adjusted for its length".
+var TARGET_MS   = 2300;  // desired type-out time per paragraph (~2-2.5s)
+var MIN_CHAR_MS = 34;    // fastest per key — floor that keeps the clicks distinct
+var MAX_CHAR_MS = 110;   // slowest per key — so short paragraphs aren't draggy
+var FAST_CHAR_MS = 6;    // override for paragraphs wrapped in <span class="tw-fast"> — an unusually quick snap
+var PARA_PAUSE  = 1500;  // base breath AFTER a paragraph finishes (the slower typing
+                         // already gives reading time, so this is a short rest)
+var PARA_JITTER = 1300;  // +/- variation on PARA_PAUSE so the between-paragraph rhythm isn't metronomic
+var SENTENCE_PAUSE = 200; // slight extra beat after . ! ? mid-paragraph (between sentences)
+var START_DELAY = 320;   // settle beat before the first character
+var silent = container.classList.contains('typewriter-silent');
 var myGen = (window._passageGen || 0);
+var curCharMs = MIN_CHAR_MS; // recomputed per paragraph from its length
+var curFast = false;         // is the current paragraph a tw-fast one? (skips sentence pauses)
 
-function typeNext() {
-if (myGen !== (window._passageGen || 0)) return; // passage swapped — abort
-if (!container.isConnected) return; // container removed from DOM
-if (qIdx >= queue.length) {
-// Typing complete — fade cursor, reveal link
+// Block cursor that follows the typing position and rests (blinking, via the
+// .tw-cursor CSS) during the between-paragraph pause; fades out at the end.
+var cursor = document.createElement('span');
+cursor.className = 'tw-cursor';
+cursor.textContent = '█';
+
+// Paper-roll carriage: keep the cursor around ~72% of the fixed-height sheet,
+// feeding the roll upward as typing descends so the newest line — and finally
+// the link — stays in view. Short passages that fit never roll.
+function rollToCursor() {
+if (!cursor.getBoundingClientRect) return;
+var carriageY = container.clientHeight * 0.72;
+var pageRect = container.getBoundingClientRect();
+var overshoot = (cursor.getBoundingClientRect().bottom - pageRect.top) - carriageY;
+if (overshoot > 0) {
+  currentRoll += overshoot;
+  rollWrapper.style.transform = 'translateY(-' + currentRoll + 'px)';
+}
+}
+
+// Reveal the links (and any flash-reveal elements) once typing is fully done —
+// same completion behaviour as before, so nothing that waited on "done" is
+// stranded.
+function finish() {
+if (myGen !== (window._passageGen || 0)) return;
 cursor.classList.add('tw-cursor-fade');
-setTimeout(function() {
-cursor.style.display = 'none';
+setTimeout(function() { cursor.style.display = 'none'; }, 800);
 linkEls.forEach(function(el) {
 el.style.transition = 'opacity 1.2s ease-in';
 el.style.opacity = '1';
 el.style.pointerEvents = 'auto';
 });
-// Trigger flash-reveal elements after typing completes
+if (linkEls.length) rollToCursor();
 var flashEls = container.querySelectorAll('.flash-reveal');
-flashEls.forEach(function(el) {
-el.classList.add('flash-reveal-active');
-});
-}, 800);
+flashEls.forEach(function(el) { el.classList.add('flash-reveal-active'); });
+}
+
+// Type the page out fast, character by character, but pause for a couple of
+// seconds at each paragraph break so the reader can catch up before the next
+// paragraph begins (the playtest note: keep the typewriter, much faster, with
+// a breath between paragraphs). Indices walk paragraph -> node -> character.
+var pIdx = 0, nIdx = 0, cIdx = 0;
+function typeStep() {
+if (myGen !== (window._passageGen || 0)) return; // passage swapped — abort
+if (!container.isConnected) return; // container removed from DOM
+if (pIdx >= paragraphs.length) { finish(); return; }
+var para = paragraphs[pIdx];
+// At the start of a paragraph, derive its per-key speed from its length so the
+// whole paragraph types out in ~TARGET_MS (clamped to keep keys audible).
+if (nIdx === 0 && cIdx === 0) {
+var cc = 0, fast = false;
+for (var k = 0; k < para.length; k++) { if (para[k].fullText) cc += para[k].fullText.replace(/\s/g, '').length; if (para[k].fast) fast = true; }
+curCharMs = fast ? FAST_CHAR_MS : Math.max(MIN_CHAR_MS, Math.min(MAX_CHAR_MS, Math.round(TARGET_MS / Math.max(1, cc))));
+curFast = fast;
+}
+if (nIdx >= para.length) {
+// Paragraph finished — rest a beat (cursor blinking), then the next one.
+// The pause is jittered around PARA_PAUSE so the rhythm feels human.
+pIdx++; nIdx = 0; cIdx = 0;
+setTimeout(typeStep, Math.max(300, PARA_PAUSE + Math.floor(Math.random() * PARA_JITTER) - Math.floor(PARA_JITTER / 2)));
 return;
 }
-
-var item = queue[qIdx];
-var textNode = textEntries[item.entryIdx].node;
-textNode.textContent += item.char;
-qIdx++;
-
-// Typewriter tick — skip pure whitespace so it doesn't sound like
-// rapid-fire. ALSO skip entirely if the page is marked silent — these
-// are atmosphere passages where the prose is being read, not typed.
-if (window.dssAudio && item.char !== ' ' && item.char !== '\n' && item.char !== '\t' && !container.classList.contains('typewriter-silent')) {
-  window.dssAudio.typewriterTick();
+var entry = para[nIdx];
+if (entry.pause) { nIdx++; cIdx = 0; setTimeout(typeStep, entry.pause); return; } // author-placed beat
+if (cIdx >= entry.fullText.length) { nIdx++; cIdx = 0; setTimeout(typeStep, curCharMs); return; }
+var ch = entry.fullText.charAt(cIdx++);
+entry.node.textContent = entry.fullText.slice(0, cIdx);
+if (entry.node.parentNode && entry.node.nextSibling !== cursor) {
+entry.node.parentNode.insertBefore(cursor, entry.node.nextSibling);
+}
+if (!silent && window.dssAudio && window.dssAudio.typewriterTick && ch !== ' ' && ch !== '\n' && ch !== '\t') {
+try { window.dssAudio.typewriterTick(); } catch (e) {}
+}
+rollToCursor();
+// A slight pause after a sentence ends (mid-paragraph), so sentences breathe.
+var extra = (!curFast && (ch === '.' || ch === '!' || ch === '?')) ? SENTENCE_PAUSE : 0;
+setTimeout(typeStep, curCharMs + extra + Math.floor(Math.random() * 6) - 2);
 }
 
-// Move cursor to follow the typing position
-var parent = textNode.parentNode;
-if (parent && textNode.nextSibling !== cursor) {
-parent.insertBefore(cursor, textNode.nextSibling);
-}
-
-// "Carriage" effect — the page is a fixed-height window. Translate the
-// inner roll-wrapper upward as the cursor moves down past ~65% of the
-// visible window, keeping the cursor at a fixed carriage line. From the
-// player's perspective, the paper rolls up through the typewriter while
-// the cursor stays put — opposite direction to the revealing text.
-var carriageY = container.clientHeight * 0.65;
-var pageRect = container.getBoundingClientRect();
-var cursorRect = cursor.getBoundingClientRect();
-var cursorYInPage = cursorRect.top - pageRect.top;
-var overshoot = cursorYInPage - carriageY;
-if (overshoot > 0) {
-  currentRoll += overshoot;
-  rollWrapper.style.transform = 'translateY(-' + currentRoll + 'px)';
-}
-
-// Variable speed — natural reading pace. Punctuation pauses scaled up
-// to match the slower base pace; a real typist breathes at periods.
-var ch = item.char;
-var delay = baseSpeed;
-if (ch === '.' || ch === '?' || ch === '!') delay = 220;
-else if (ch === ',' || ch === ';' || ch === ':') delay = 110;
-else if (ch === '\n') delay = 170;
-else delay = baseSpeed + Math.floor(Math.random() * 12) - 5;
-
-setTimeout(typeNext, delay);
-}
-
-// Pre-warm the audio engine. The first tick fires synchronously with
-// the first character, but if the AudioContext is still in 'suspended'
-// limbo from the navigation click, the earliest scheduled buffers get
-// silently dropped — so the first few letters appear without sound.
-// A silent (vol 0) tick now wakes the context so the real first click
-// lands cleanly with its character.
+// Pre-warm the audio context (a silent tick) so the first click isn't dropped
+// while the context is still waking from the navigation click.
 if (window.dssAudio && window.dssAudio.typewriterTick) {
   try { window.dssAudio.typewriterTick(0); } catch(e) {}
 }
-// Brief pause before typing starts — short enough that the first click
-// lands while the page is still settling, not after a noticeable wait.
-setTimeout(typeNext, 350);
+setTimeout(typeStep, START_DELAY);
 }
 
 // Watch for .typewriter-page appearing in the DOM
@@ -37041,7 +37058,7 @@ She goes upstairs. You go down.
 <div class="typewriter-page" style="font-family: 'Courier New', Courier, monospace; background: #e5d9b8; color: #1a1612; width: 560px; min-height: 480px; max-width: 90vw; padding: 3.5em 4em 3em; margin: 1.5em auto; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.18), 0 12px 40px rgba(0,0,0,0.3), inset 0 0 95px rgba(26,10,0,0.30), inset 0 0 38px rgba(26,10,0,0.18); border-radius: 1px 3px 3px 1px; text-shadow: none; line-height: 1.85; letter-spacing: 0.02em; font-size: 0.95em; position: relative;"><svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="tnaB1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#120802" stop-opacity="0.97"/><stop offset="20%" stop-color="#120802" stop-opacity="0.97"/><stop offset="45%" stop-color="#3f1c08" stop-opacity="0.78"/><stop offset="70%" stop-color="#7a3c0c" stop-opacity="0.45"/><stop offset="88%" stop-color="#a86014" stop-opacity="0.18"/><stop offset="100%" stop-color="#a86014" stop-opacity="0"/></radialGradient><radialGradient id="tnaB2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#150902" stop-opacity="0.95"/><stop offset="20%" stop-color="#150902" stop-opacity="0.95"/><stop offset="45%" stop-color="#44200a" stop-opacity="0.74"/><stop offset="70%" stop-color="#80400e" stop-opacity="0.40"/><stop offset="88%" stop-color="#ae6416" stop-opacity="0.16"/><stop offset="100%" stop-color="#ae6416" stop-opacity="0"/></radialGradient><radialGradient id="tnaWI" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#701020" stop-opacity="0.05"/><stop offset="70%" stop-color="#701020" stop-opacity="0.03"/><stop offset="100%" stop-color="#701020" stop-opacity="0"/></radialGradient></defs><circle cx="500" cy="90" r="82" fill="url(#tnaWI)"/><circle cx="500" cy="90" r="82" fill="none" stroke="rgba(112,20,30,0.46)" stroke-width="11"/><circle cx="500" cy="90" r="82" fill="none" stroke="rgba(80,10,18,0.22)" stroke-width="5"/><ellipse cx="504" cy="170" rx="2.5" ry="9" fill="rgba(100,18,28,0.30)"/><circle cx="28" cy="248" r="14" fill="url(#tnaB1)"/><circle cx="21" cy="276" r="11" fill="url(#tnaB2)"/><circle cx="32" cy="447" r="10" fill="url(#tnaB2)"/><circle cx="16" cy="590" r="13" fill="url(#tnaB1)"/><circle cx="538" cy="512" r="8" fill="url(#tnaB2)"/><ellipse cx="543" cy="650" rx="5" ry="17" transform="rotate(-10,543,650)" fill="rgba(68,32,7,0.42)"/><circle cx="48" cy="168" r="3.5" fill="rgba(140,85,30,0.22)"/><circle cx="520" cy="235" r="2.5" fill="rgba(130,75,25,0.20)"/><circle cx="35" cy="405" r="4" fill="rgba(135,80,28,0.24)"/><circle cx="512" cy="372" r="3" fill="rgba(120,70,22,0.22)"/><circle cx="55" cy="342" r="2" fill="rgba(145,90,35,0.18)"/><circle cx="498" cy="132" r="3.5" fill="rgba(125,72,24,0.20)"/><circle cx="42" cy="122" r="2.5" fill="rgba(138,82,30,0.22)"/><circle cx="532" cy="468" r="4.5" fill="rgba(130,78,26,0.24)"/><circle cx="18" cy="492" r="3" fill="rgba(140,85,32,0.20)"/><circle cx="542" cy="312" r="2" fill="rgba(125,75,28,0.18)"/><circle cx="62" cy="458" r="2" fill="rgba(132,80,28,0.20)"/><circle cx="14" cy="380" r="2.5" fill="rgba(138,82,30,0.19)"/><circle cx="525" cy="520" r="3" fill="rgba(128,76,24,0.21)"/><circle cx="30" cy="558" r="2.5" fill="rgba(142,88,32,0.19)"/><circle cx="548" cy="592" r="4" fill="rgba(122,70,20,0.23)"/><circle cx="60" cy="638" r="2" fill="rgba(136,84,30,0.18)"/><circle cx="508" cy="675" r="3.5" fill="rgba(130,78,26,0.20)"/><circle cx="23" cy="718" r="2" fill="rgba(138,82,28,0.17)"/><circle cx="535" cy="748" r="2.5" fill="rgba(124,74,22,0.19)"/><circle cx="72" cy="700" r="3" fill="rgba(132,80,28,0.20)"/><line x1="0" y1="350" x2="1000" y2="350" stroke="rgba(155,125,70,0.14)" stroke-width="2"/><line x1="0" y1="348" x2="1000" y2="348" stroke="rgba(75,50,20,0.08)" stroke-width="1"/><circle cx="22" cy="780" r="12" fill="url(#tnaB2)"/><circle cx="540" cy="820" r="9" fill="url(#tnaB1)"/><circle cx="35" cy="950" r="11" fill="url(#tnaB2)"/><circle cx="530" cy="1020" r="8" fill="url(#tnaB1)"/><circle cx="18" cy="1120" r="13" fill="url(#tnaB2)"/><circle cx="545" cy="1180" r="10" fill="url(#tnaB1)"/><circle cx="28" cy="1300" r="11" fill="url(#tnaB2)"/><ellipse cx="542" cy="880" rx="4" ry="15" transform="rotate(-8,542,880)" fill="rgba(68,32,7,0.38)"/><ellipse cx="20" cy="1060" rx="3" ry="12" transform="rotate(6,20,1060)" fill="rgba(68,32,7,0.35)"/><circle cx="58" cy="768" r="3" fill="rgba(132,80,28,0.21)"/><circle cx="518" cy="800" r="2.5" fill="rgba(124,74,22,0.19)"/><circle cx="44" cy="842" r="2" fill="rgba(138,84,30,0.18)"/><circle cx="534" cy="912" r="3.5" fill="rgba(128,76,24,0.22)"/><circle cx="26" cy="888" r="2" fill="rgba(142,88,32,0.17)"/><circle cx="548" cy="968" r="2" fill="rgba(122,70,20,0.20)"/><circle cx="66" cy="1000" r="3" fill="rgba(136,82,28,0.19)"/><circle cx="16" cy="1042" r="2.5" fill="rgba(130,78,26,0.18)"/><circle cx="524" cy="1080" r="4" fill="rgba(138,82,30,0.21)"/><circle cx="42" cy="1148" r="2" fill="rgba(124,74,22,0.17)"/><circle cx="538" cy="1220" r="3" fill="rgba(132,80,28,0.20)"/><circle cx="30" cy="1268" r="2.5" fill="rgba(140,86,30,0.19)"/><circle cx="520" cy="1340" r="3.5" fill="rgba(126,76,24,0.21)"/><circle cx="54" cy="1380" r="2" fill="rgba(134,82,28,0.17)"/><line x1="0" y1="900" x2="1000" y2="900" stroke="rgba(155,125,70,0.09)" stroke-width="1.5"/><line x1="0" y1="898" x2="1000" y2="898" stroke="rgba(75,50,20,0.05)" stroke-width="0.8"/><circle cx="22" cy="1450" r="11" fill="url(#tnaB1)"/><circle cx="540" cy="1520" r="9" fill="url(#tnaB2)"/><circle cx="35" cy="1620" r="10" fill="url(#tnaB2)"/><circle cx="530" cy="1700" r="12" fill="url(#tnaB1)"/><circle cx="18" cy="1800" r="11" fill="url(#tnaB2)"/><circle cx="545" cy="1880" r="9" fill="url(#tnaB1)"/><circle cx="28" cy="1980" r="12" fill="url(#tnaB2)"/><circle cx="538" cy="2060" r="10" fill="url(#tnaB1)"/><circle cx="48" cy="1480" r="3" fill="rgba(132,80,28,0.20)"/><circle cx="520" cy="1540" r="2.5" fill="rgba(124,74,22,0.19)"/><circle cx="62" cy="1600" r="2" fill="rgba(138,84,30,0.18)"/><circle cx="534" cy="1660" r="3.5" fill="rgba(128,76,24,0.22)"/><circle cx="16" cy="1740" r="2.5" fill="rgba(142,88,32,0.17)"/><circle cx="548" cy="1820" r="2" fill="rgba(122,70,20,0.20)"/><circle cx="42" cy="1900" r="3" fill="rgba(136,82,28,0.19)"/><circle cx="524" cy="1960" r="2.5" fill="rgba(130,78,26,0.18)"/><circle cx="30" cy="2040" r="3" fill="rgba(138,82,30,0.21)"/><circle cx="520" cy="2120" r="2.5" fill="rgba(132,80,28,0.19)"/><ellipse cx="20" cy="1750" rx="3" ry="12" transform="rotate(6,20,1750)" fill="rgba(68,32,7,0.32)"/><ellipse cx="542" cy="1580" rx="4" ry="14" transform="rotate(-8,542,1580)" fill="rgba(68,32,7,0.35)"/><line x1="0" y1="1500" x2="1000" y2="1500" stroke="rgba(155,125,70,0.07)" stroke-width="1"/></svg>
 Autumn, 1973.
 
-Soho, London.
+<span class="tw-fast">Soho, London.</span>
 
 You've written a book and you've a baby at home; tonight, somehow, you'll make them both make sense.
 
@@ -37049,7 +37066,7 @@ The book took much longer to make than the little girl, and after an immediate, 
 
 She is born now and her mother, Aoife, sits at home, with the babe in her arms.
 
-Home's cold, at home there is not enough food. If she's told you once, she's told you again that there's not enough money coming in. You're a good man so you've taken a job in a warehouse by the flat. But you'll not make enough, not all year.
+Home's cold, at home there is not enough food. If she's told you once, she's told you again that there's not enough money coming in. <span class="tw-pause" data-ms="600"></span>You're a good man so you've taken a job in a warehouse by the flat. But you'll not make enough, not all year.
 
 And so tonight you've gone back to Soho, with your book in your bag and a sense of the place as it was, ten years ago, when //no wife, no house or land still seemed quite natural.//
 

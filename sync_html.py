@@ -38,6 +38,7 @@ AUDIO_EMBEDS = [
     ("__DSS_GREEN_SEA_DATA_URI__",   "the-green-sea-cafe-ambience.m4a",                "audio/mp4"),
     ("__DSS_CARTHAGE_DATA_URI__",    "the-carthage-cicadas-ambience.m4a",              "audio/mp4"),
     ("__DSS_CARTHAGE_MELODY_DATA_URI__", "carthage-melody.mp3",                            "audio/mpeg"),
+    ("__DSS_DIDOS_LAMENT_DATA_URI__", "didos-lament.mp3",                               "audio/mpeg"),
     ("__DSS_CELLAR_DATA_URI__",      "the-cellar-pump-ambience.m4a",                   "audio/mp4"),
     ("__DSS_QUIET_CAFE_DATA_URI__",  "the-quiet-cafe-ambience.m4a",                    "audio/mp4"),
     ("__DSS_RONNIES_DATA_URI__",     "the-ronnies-jazz-ambience.m4a",                  "audio/mp4"),

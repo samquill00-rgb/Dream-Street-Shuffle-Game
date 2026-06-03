@@ -48,6 +48,7 @@ AUDIO_EMBEDS = [
     ("__DSS_COWGAME_DATA_URI__",     "the-cowgame-loop.m4a",                           "audio/mp4"),
     ("__DSS_WALTZ_DATA_URI__",       "the-cecil-court-waltz.m4a",                      "audio/mp4"),
     ("__DSS_INTERVAL_RADIO_DATA_URI__", "the-interval-radio.m4a",                       "audio/mp4"),
+    ("__DSS_LACKLAND_DATA_URI__",    "lacklands-office-music.mp3",                     "audio/mpeg"),
 ]
 
 # ============================================================

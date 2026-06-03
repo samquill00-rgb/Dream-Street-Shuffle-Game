@@ -1965,7 +1965,20 @@ window.dssAudio = (function() {
         // Skip the first 200ms only on the very first iteration — past
         // the MP3 priming garbage and the loud opening transient. Later
         // restarts after the silent gap can use the clean buffer head.
-        bed.source.start(0, skipIntro ? 0.2 : 0);
+        var startAt = skipIntro ? 0.2 : 0;
+        // resumePosition beds (e.g. lackland-office) pick up where they left
+        // off when re-entered, so the music feels continuous across the pong
+        // game instead of rewinding. _resumeOffset is captured in _stopBed and
+        // applies only to the first iteration of a fresh _startBed.
+        if (bed.resumePosition && skipIntro && typeof bed._resumeOffset === 'number' && buf.duration > 0) {
+          startAt = bed._resumeOffset % buf.duration;
+          bed._resumeOffset = null;
+        }
+        bed.source.start(0, startAt);
+        if (bed.resumePosition) {
+          bed._playStartedAt = ac3.currentTime;
+          bed._playStartOffset = startAt;
+        }
         if (bed.gapMs) {
           bed.source.onended = function() {
             if (!bed.started || bed._finishing) return;
@@ -1983,6 +1996,15 @@ window.dssAudio = (function() {
     // gap doesn't relaunch a new iteration after the pause.
     if (bed.gapTimer) { clearTimeout(bed.gapTimer); bed.gapTimer = null; }
     if (!bed.started) return;
+    // For resumePosition beds, remember how far into the track we were so the
+    // next _startBed resumes from there instead of restarting at 0.
+    if (bed.resumePosition && bed.buffer && typeof bed._playStartedAt === 'number') {
+      var acR = getCtx();
+      if (acR && bed.buffer.duration > 0) {
+        var elapsedR = (acR.currentTime - bed._playStartedAt) + (bed._playStartOffset || 0);
+        bed._resumeOffset = elapsedR % bed.buffer.duration;
+      }
+    }
     if (bed.source) {
       try { bed.source.stop(); } catch(e) {}
       try { bed.source.disconnect(); } catch(e) {}
@@ -2134,9 +2156,26 @@ window.dssAudio = (function() {
   registerAmbientBed({
     label: 'cellar-pump',
     dataUri: '__DSS_CELLAR_DATA_URI__',
-    tags: { 'venue-cellar': 1, 'venue-lackland-back': 1 },
+    tags: { 'venue-cellar': 1 },
     volume: 0.18,
     duckVolume: 0.06
+  });
+  // Lackland's office music — Dr Quill's original looping piece for the whole
+  // Lackland den: the office + back door (tagged 'venue-lackland') AND the
+  // table-tennis basement (the back room + PP results, tagged 'venue-lackland-back',
+  // which used to share the cellar-pump hum — now removed from that bed so this
+  // plays there instead). During an actual PP match the minigame audio takes over.
+  // Foreground music level, not room tone. MP3 loops via native sample-level
+  // loop (no gapMs) — listen for a seam at the wrap; re-bounce as PCM if it ticks.
+  registerAmbientBed({
+    label: 'lackland-office',
+    dataUri: '__DSS_LACKLAND_DATA_URI__',
+    tags: { 'venue-lackland': 1, 'venue-lackland-back': 1 },
+    volume: 0.30,
+    duckVolume: 0.10,
+    // Resume from where it left off when re-entered (e.g. after the pong
+    // game) rather than restarting — keeps the den's music continuous.
+    resumePosition: true
   });
   // Carthage cicadas — distant Tunisian-night cicadas, for the dream-Carthage
   // shore/coast passages (Stay in Carthage now plays the Dido's Lament bed alone).
@@ -35141,7 +35180,7 @@ Do you keep going?
 [[Seek the shore|The coast of Carthage]]]
 </div>
 
-:: Martin Lackland's Office [char-lack] {"position":"1200,1000","size":"100,100"}
+:: Martin Lackland's Office [char-lack venue-lackland] {"position":"1200,1000","size":"100,100"}
 You find the building on Frith Street, on the door: M. Lackland.
 
 You knock and he buzzes you in. You climb two doglegs to his rooms.
@@ -35187,7 +35226,7 @@ This is as close as you've come to anything.
 
 (if: $knowsCopperSecret is true)[[[Linger|Martin Lackland's Back Door]]]
 
-:: Martin Lackland's Back Door [char-lack] {"position":"1300,1000","size":"100,100"}
+:: Martin Lackland's Back Door [char-lack venue-lackland] {"position":"1300,1000","size":"100,100"}
 (set: $awaitingLacklandPwd to true)\
 You notice a door at the back of the office you hadn't seen before. Or perhaps you had, but now it means something.
 
@@ -35198,6 +35237,16 @@ You notice a door at the back of the office you hadn't seen before. Or perhaps y
 </div>
 <div style="text-align:center;margin-top:1em;font-size:0.85em;opacity:0.7;">[[Step back|Martin Lackland's Office]]</div>
 <span id="go-lackland-yes" style="display:none">[[·|Lackland's Back Room]]</span>
+
+:: ZZ TEST Lackland Music {"position":"100,100","size":"100,100"}
+(set: $knowsCopperSecret to true)\
+//Debug test passage — remove before final commit.//
+
+State set: the office's "Linger" route is now unlocked. The back-door password is **Valletta**.
+
+Walk it to hear the music transition: office bed → back door → back room → (start the table-tennis match, where the minigame audio takes over).
+
+[[Enter Lackland's Office|Martin Lackland's Office]]
 
 :: No more {"position":"1700,300","size":"100,100"}
 Centre Point is still behind you. It's been there all night long.

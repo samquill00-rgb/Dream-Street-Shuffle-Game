@@ -9,6 +9,20 @@
 > 2. **Waltz → stat change feel** — verified structurally + via the proven result-passage pattern; a real waltz playthrough confirms the morale/sob move feels right.
 > 3. **Pong single-opponent sigil** (carried from prior handoff, still not done) — should show only `$opponent`, needs a live match.
 
+# HANDOFF — 2026-06-03 (PM) — playthrough-notes pass (7 items)
+
+Worked through Dr Quill's latest playthrough notes. All synced + verified booting clean (preview `dss`, no console errors); **not yet committed** (he commits via GitHub Desktop).
+
+1. **Matchbox double-popup leaving the French** — the overlay lives in **Dean Street** (`$visited's French` + `$hasMatches is false`). Made the reveal idempotent with a session flag `window._dssMatchPopupDone` (reset in both StoryInit blocks alongside `_dssSawPentangle`); a second emission/script-run can no longer show a second popup.
+2. **Sigil on Red passages** — Red was present in **You speak to the poet** (`[outdoor]`) but it wasn't tagged `char-red`, so the corner sigil dropped out mid-conversation (At the Corner → poet → LINE 1 = on-off-on). Added `char-red` there. **NB:** the "old friend / eldest of the children" in the Green Sea (LINE 2) is a *different* character, NOT Red — do not tag LINE 2 `char-red`. Also **muted sigil colour**: `.dss-sigil` now `filter: saturate(0.8) …`.
+3. **Carthage "wake from the dream"** — removed the early-exit wake from the pre-page Carthage shore branches (first-visit + visited-pyre-no-page), funnelling to **Approach the pyre** (= get Page 93). Wake now only appears once you HAVE the page (to return it in London). Also closed a latent soft-lock (leaving the pyre empty-handed + returning previously left only "wake").
+4. **Typewriter sentence pauses on ALL passages** — the engine already applied `SENTENCE_PAUSE` after `.!?` to every typewriter page, but at **200ms** it was imperceptible. Raised to **500ms** so the reflective passages (After the call, After Aoife, The dark pass, Cow ride…, etc.) breathe like the opening. (tw-fast paragraphs still skip it.)
+5. **Copper punch counter** — a failed counter scored **0**, which capped your best-case remainder at 4 < the 5 needed to win, so one failed counter = guaranteed loss and there was never a reason to risk one. Changed failed counter to **+1** (a graze, like a block): a single failed counter is now recoverable (1+2+2 = 5), so it's a real gamble for the perfect/margin. Win ≥5 / perfect ≥9 unchanged.
+6. **Text fix** — LINE 2 "He speaks…" line corrected to Dr Quill's version ("roars on round, as his sister winds a trick, but you hear this:").
+7. **Dido music in the Green Sea** — added `'green-sea'` to the `didos-lament` bed's tags so the lament plays across **LINE 2** (the bar) and **LINE 2 Oxford** (the memory cut-away), layering over the quiet green-sea field recording (same pattern as lament-over-cicadas at Stay in Carthage). Level still **0.40** — a candidate for an ears check.
+
+---
+
 # HANDOFF — 2026-06-03 (Dido's Lament + window.Harlowe footgun + Green Sea fix + audit follow-ups)
 
 A long session: a new music feature, a systemic JS-state bug, a flow-logic repair, and the last of the audit. Everything is committed, pushed, and live.

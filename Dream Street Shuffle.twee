@@ -11017,10 +11017,17 @@ this.H = this.canvas.height;
 this.sobriety = sobriety;
 
 this.round = 0;
-// Per-REAL-round outcomes, one of 'won' | 'counter' | 'survived' | 'lost'.
-// Three entries by the end (one per real round). Drives the three round-dots
-// and the stand/perfect verdict. Practice rounds are not recorded.
-this.rounds = [];
+// Composure model: you and Copper each carry a bar (0–100). Every REAL
+// exchange deals/takes damage by magnitude rather than a flat win/lose. You
+// win by emptying his bar (a knockout — the new "perfect") or by being ahead
+// when the bell rings after REAL_EXCHANGES exchanges; you go down if your own
+// bar empties or you trail at the bell. Practice exchanges are not scored.
+this.REAL_EXCHANGES = 6;
+this.playerHP = 100;
+this.copperHP = 100;
+this.playerHPShown = 100;   // eased display values, for a smooth bar drain
+this.copperHPShown = 100;
+this.rounds = [];           // legacy; no longer scored
 this.gameOver = false;
 this.phase = 'idle';
 this.phaseTimer = 0;
@@ -11045,7 +11052,7 @@ this.hoveredZone = '';
 this.baseTelegraphDuration = 1550;
 this.telegraphDuration = this.baseTelegraphDuration;
 
-this.roundPunches = ['right_cross', 'left_hook', 'uppercut', 'right_cross', 'left_hook', 'uppercut'];
+this.roundPunches = ['right_cross', 'left_hook', 'uppercut', 'right_cross', 'left_hook', 'uppercut', 'left_hook', 'right_cross', 'uppercut'];
 
 this.practiceIntros = [
 "Watch his RIGHT glove glow. The punch will swing ACROSS and land on your left. Dodge to the SAME side as the glowing glove (right).",
@@ -11154,16 +11161,15 @@ if (this.isPractice()) {
 // Practice rounds stay slow — they're the teaching moments.
 this.telegraphDuration = 3200;
 } else {
-// Real rounds: get FASTER as the fight goes on. Round 1 lands near
-// baseTelegraphDuration, round 3 lands ~25% tighter. Sobriety drops
-// it further — drunk player has fewer milliseconds to react.
-var roundSpeed = 1 - (this.realRoundIndex() * 0.12);
+// Real exchanges quicken as the fight wears on (a gentle curve now there are
+// six of them), and sobriety still shaves milliseconds off your reaction.
+var roundSpeed = 1 - (this.realRoundIndex() * 0.07);
 var sobPenalty = (100 - this.sobriety) * 4;
 this.telegraphDuration = Math.max(820, Math.round(this.baseTelegraphDuration * roundSpeed - sobPenalty));
 }
 
 this.updateRoundDisplay();
-var introDelay = this.isPractice() ? 3200 : 2500;
+var introDelay = this.isPractice() ? 3200 : (this.realRoundIndex() === 0 ? 2200 : 1300);
 
 setTimeout(() => {
 if (this.gameOver) return;
@@ -11186,61 +11192,65 @@ handleAction(zone) {
 this.acted = true;
 this.clickable = false;
 var practice = this.isPractice();
-var ni = practice ? this.round : this.realRoundIndex();
 
-// impactSound fires at the end of the punching animation (when the result
-// lands). outcome records how this REAL round resolved, for the round-dots
-// and the verdict: 'won' (clean dodge), 'counter' (landed counter — the
-// emphatic win), 'survived' (block — a safe draw), 'lost' (caught).
+// impactSound fires at the end of the punching animation, when the result
+// lands. Composure damage is applied immediately below via applyDamage().
 var impactSound = null;
-var outcome = null;
+// Composure damage for this exchange: dmgYou is what you take, dmgHim what
+// Copper takes. `t` is how far the telegraph had run when you committed (0–1)
+// — timing decides clean vs. graze, and whether a counter lands or trades.
+var dmgYou = 0, dmgHim = 0;
+var t = this.telegraphT;
+
 if (zone === 'counter') {
-// Counter chance is lower in real rounds; sobriety helps but caps lower.
-var chance = practice ? 0.8 : 0.18 + (this.sobriety / 380);
-if (Math.random() < chance) {
+// Counter is a timing commit now, not a coin-flip: swing as he commits
+// (mid-to-late telegraph) and you land it clean for the big damage that can
+// drop him; mistime it and you both land, but he gets the better of it.
+var inWindow = (t >= 0.50 && t <= 0.82);
+if (inWindow) {
 this.resultText = '★ COUNTER ★';
 this.resultClass = 'win';
 this.copperHit = true;
-this.narrativeText = practice ? this.practiceCounterNarr[ni].success : this.realCounterNarr[ni].success;
 impactSound = 'counter_win';
-outcome = 'counter';
+dmgHim = 26;
 } else {
-// Failed counter — you committed and ate it: the round is LOST. Counter is
-// the high-risk line (win it outright or lose it), but one lost round isn't
-// fatal — you still stand by winning 2 of the 3 — so the gamble is real.
-this.resultText = 'CAUGHT';
+this.resultText = 'TRADE';
 this.resultClass = 'lose';
-this.narrativeText = practice ? this.practiceCounterNarr[ni].fail : this.realCounterNarr[ni].fail;
 impactSound = 'punchImpact';
-outcome = 'lost';
+dmgHim = 10;
+dmgYou = 16;
 }
 } else if (zone === 'block') {
+// Safe: soaks a small chip and lands nothing back.
 this.resultText = 'ABSORBED';
 this.resultClass = 'neutral';
-this.narrativeText = practice ? this.practiceNarr[ni].block : this.realDodgeNarr[ni].block;
 impactSound = 'muffledThud';
-// Block is the safe option: it never loses the round, but it never wins it
-// either — a drawn round, counting toward neither standing nor perfect.
-outcome = 'survived';
+dmgYou = 5;
 } else {
 var correct = this.getCorrectDodge();
 var isCorrect = (zone === correct) || (correct === 'either');
-if (isCorrect) {
+if (isCorrect && t <= 0.80) {
+// Clean slip — and you tag him on the way out.
 this.resultText = 'CLEAN';
 this.resultClass = 'win';
-this.narrativeText = practice ? this.practiceNarr[ni].clean : this.realDodgeNarr[ni].clean;
-impactSound = 'dodgeWhoosh';
-outcome = 'won';
+this.copperHit = true;
+impactSound = 'counter_win';
+dmgHim = 14;
+} else if (isCorrect) {
+// Right read but late — you slip most of it and still get clipped.
+this.resultText = 'GRAZE';
+this.resultClass = 'neutral';
+impactSound = 'muffledThud';
+dmgYou = 7;
 } else {
-// Wrong side — you read the glove wrong and took it full on. Round lost.
+// Wrong side — full in the face.
 this.resultText = 'CAUGHT';
 this.resultClass = 'lose';
-this.narrativeText = practice ? this.practiceNarr[ni].caught : this.realDodgeNarr[ni].caught;
 impactSound = 'punchImpact';
-outcome = 'lost';
+dmgYou = 20;
 }
 }
-if (!practice && outcome) this.rounds.push(outcome);
+if (!practice) this.applyDamage(dmgYou, dmgHim);
 this._impactSound = impactSound;
 
 this.phase = 'punching';
@@ -11266,13 +11276,13 @@ setTimeout(() => {
 if (practice && this.round === 2) {
 this.showNarrative("Practice over. This time it's real.");
 setTimeout(() => { this.round = 3; this.startRound(); }, 3500);
-} else if (!practice && this.round >= 5) {
+} else if (!practice && (this.playerHP <= 0 || this.copperHP <= 0 || this.round >= 2 + this.REAL_EXCHANGES)) {
 this.endGame();
 } else {
 this.round++;
 this.startRound();
 }
-}, 2500);
+}, 1700);
 }, 500);
 }
 
@@ -11280,13 +11290,11 @@ timeOut() {
 this.acted = true;
 this.clickable = false;
 var practice = this.isPractice();
-var ni = practice ? this.round : this.realRoundIndex();
 
 this.resultText = 'CAUGHT';
 this.resultClass = 'lose';
-this.narrativeText = practice ? this.practiceNarr[ni].caught : this.realDodgeNarr[ni].caught;
-// Froze on a real round — you ate it flat-footed. Round lost.
-if (!practice) this.rounds.push('lost');
+// Froze — you ate it flat-footed.
+if (!practice) this.applyDamage(18, 0);
 
 this.phase = 'punching';
 this.phaseTimer = Date.now();
@@ -11296,7 +11304,6 @@ this.phase = 'result';
 this.phaseTimer = Date.now();
 this.resultFlash = 1;
 this.showResult(this.resultText, this.resultClass);
-// in-round narrative stripped
 // Timeout = caught flat-footed — punch lands
 if (window.dssAudio) window.dssAudio.punchImpact();
 
@@ -11304,30 +11311,33 @@ setTimeout(() => {
 if (practice && this.round === 2) {
 this.showNarrative("Practice over. This time it's real.");
 setTimeout(() => { this.round = 3; this.startRound(); }, 3500);
-} else if (!practice && this.round >= 5) {
+} else if (!practice && (this.playerHP <= 0 || this.copperHP <= 0 || this.round >= 2 + this.REAL_EXCHANGES)) {
 this.endGame();
 } else {
 this.round++;
 this.startRound();
 }
-}, 2500);
+}, 1700);
 }, 500);
 }
 
 endGame() {
 if (this.gameOver) return; // guard against double-call (round + timeOut paths)
 this.gameOver = true;
-// Best of three: win 2 of the 3 real rounds to stay standing, all 3 = perfect.
-var wins = this._winCount();
-var won = wins >= 2;
-var perfect = wins >= 3;
-window._lastFightScore = wins;
+// Verdict from the composure bars: a knockout (his bar emptied) is the
+// emphatic win; otherwise you're standing only if you finished ahead. Your
+// own bar at zero, or trailing at the bell, and you go down.
+var ko = this.copperHP <= 0;
+var youDown = this.playerHP <= 0;
+var won = ko || (!youDown && this.copperHP < this.playerHP);
+var perfect = ko;
+window._lastFightScore = perfect ? 2 : (won ? 1 : 0);
 var endEl = document.getElementById('fight-end');
 var inst = document.getElementById('fight-instructions');
 if (inst) inst.style.display = 'none';
 
 if (won) {
-var label = perfect ? '🤜 CLEAN SWEEP 🤜' : '🤜 STANDING 🤜';
+var label = perfect ? '🤜 KNOCKOUT 🤜' : '🤜 STANDING 🤜';
 endEl.innerHTML = '<span style="color:#aaffaa;text-shadow:0 0 15px rgba(170,255,170,0.6);">' + label + '</span>';
 this.showNarrative("'It's alright,' says Copper, 'Alright. Tell whoever sent you that I know that they sent you.'");
 } else {
@@ -11436,9 +11446,8 @@ if (this.isPractice()) {
 label = 'PRACTICE &middot; ROUND ' + (this.round + 1) + ' OF 3';
 key = 'PRACTICE &mdash; NOT SCORED';
 } else {
-label = 'ROUND ' + Math.min(this.realRoundIndex() + 1, 3) + ' OF 3';
-key = this.gameOver ? ('WON ' + this._winCount() + ' OF 3')
-                    : 'STAND: WIN 2 &middot; PERFECT: WIN 3';
+label = 'EXCHANGE ' + Math.min(this.realRoundIndex() + 1, this.REAL_EXCHANGES) + ' OF ' + this.REAL_EXCHANGES;
+key = this.gameOver ? '' : 'PUT HIM DOWN &middot; OR LEAD AT THE BELL';
 }
 var col = callClass === 'win' ? '#aaffaa' : callClass === 'lose' ? '#ffaaaa' : '#eeddaa';
 var callHTML = callText ? '<div class="fight-board-call" style="color:' + col + ';">' + callText + '</div>' : '';
@@ -11446,7 +11455,6 @@ el.innerHTML =
   '<div class="fight-board">' +
     '<div class="fight-board-label">' + label + '</div>' +
     callHTML +
-    '<div class="fight-board-pips">' + this._roundDotsHTML() + '</div>' +
     '<div class="fight-board-key">' + key + '</div>' +
   '</div>';
 }
@@ -11487,6 +11495,7 @@ ctx.fillStyle = lg;
 ctx.fillRect(0, 0, W, H);
 
 this.drawCopper(ctx);
+this.drawBars(ctx);
 
 if (this.phase === 'telegraph' && this.clickable) {
 // Punch-path arrow removed — was counterintuitive (eye followed it as a
@@ -12186,6 +12195,44 @@ ctx.quadraticCurveTo(x, y + h, x, y + h - r);
 ctx.lineTo(x, y + r);
 ctx.quadraticCurveTo(x, y, x + r, y);
 ctx.closePath();
+}
+
+applyDamage(toYou, toHim) {
+this.playerHP = Math.max(0, this.playerHP - toYou);
+this.copperHP = Math.max(0, this.copperHP - toHim);
+}
+
+// Two composure bars across the top — YOU (left) and COPPER (right). Drawn on
+// canvas so they drain smoothly; only shown once the real fight starts.
+drawBars(ctx) {
+if (this.isPractice()) return;
+this.playerHPShown += (this.playerHP - this.playerHPShown) * 0.16;
+this.copperHPShown += (this.copperHP - this.copperHPShown) * 0.16;
+this._drawBar(ctx, 14, 'YOU', this.playerHPShown, false);
+this._drawBar(ctx, this.W - 214, 'COPPER', this.copperHPShown, true);
+}
+
+_drawBar(ctx, x, label, hp, rightAlign) {
+var w = 200, h = 12, y = 16;
+var frac = Math.max(0, Math.min(1, hp / 100));
+ctx.fillStyle = 'rgba(0,0,0,0.55)';
+this.roundRect(ctx, x, y, w, h, 3); ctx.fill();
+ctx.strokeStyle = 'rgba(220,200,150,0.35)'; ctx.lineWidth = 1;
+this.roundRect(ctx, x, y, w, h, 3); ctx.stroke();
+var col = frac > 0.55 ? 'rgba(150,230,140,0.92)'
+        : frac > 0.28 ? 'rgba(235,200,110,0.94)'
+        : 'rgba(235,110,90,0.96)';
+var fw = (w - 2) * frac;
+if (fw > 0.5) {
+ctx.fillStyle = col;
+var fx = rightAlign ? (x + w - 1 - fw) : (x + 1);
+this.roundRect(ctx, fx, y + 1, fw, h - 2, 2); ctx.fill();
+}
+ctx.font = 'bold 11px "Courier New", monospace';
+ctx.textAlign = rightAlign ? 'right' : 'left';
+ctx.fillStyle = 'rgba(232,212,172,0.9)';
+ctx.fillText(label, rightAlign ? (x + w) : x, y - 4);
+ctx.textAlign = 'left';
 }
 
 loop() {
@@ -34753,17 +34800,17 @@ Quiet Frankie's smiling.
 <div class="pp-score">🥊 THE CELLAR 🥊</div>
 </div>
 
-'Three rounds,' says Copper. 'Three for practice, then three for real. Win two of the three and you're standing.'
+'Three rounds to find your feet,' says Copper. 'Then it's a real fight. Drop me or outlast me. But go down yourself, and it's finished.'
 </div>
-<script>(window.dssShowMinigameRules||function(o){o.onPlay()})({key:'fight',title:'THE CELLAR',subtitle:'Three practice rounds first.',lines:["<b>COUNTER</b> &mdash; click Copper as he swings. Wins the round, but risky.","<b>DODGE</b> &mdash; click to the side of the glove. Wins the round.","<b>BLOCK</b> &mdash; click below the glove. A safe draw &mdash; no win.","Win two of the three real rounds to stay standing."],onPlay:function(){ if (window.startFightGame) window.startFightGame(); }});</script>
+<script>(window.dssShowMinigameRules||function(o){o.onPlay()})({key:'fight',title:'THE CELLAR',subtitle:'Three practice rounds first.',lines:["<b>DODGE</b> &mdash; click the glove's side, and be quick. Slip clean and you tag him back.","<b>COUNTER</b> &mdash; click Copper as he commits. Big damage if the timing's right; you trade blows if it's off.","<b>BLOCK</b> &mdash; click below. Safe &mdash; soaks a little, lands nothing.","Empty his bar for a knockout &mdash; or just be ahead when the bell rings."],onPlay:function(){ if (window.startFightGame) window.startFightGame(); }});</script>
 <div id="fight-arena" style="display:none;">
 <div class="pp-arena">
 <div class="pp-score" id="round-display">🤜 PRACTICE · ROUND 1 OF 3 🤜</div>
 <div id="fight-instructions" style="text-align:center;color:#a07a4a;font-size:0.95em;margin:0.4em 0 0.7em;line-height:1.5;font-family:'Courier New',monospace;">
 <table style="margin:0 auto;border-collapse:collapse;">
-<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#ff9870;font-weight:bold;letter-spacing:0.08em;">COUNTER</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click Copper</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">wins it &middot; risky</td></tr>
-<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#aaffaa;font-weight:bold;letter-spacing:0.08em;">DODGE</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click the glove's side</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">wins it</td></tr>
-<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#e6c878;font-weight:bold;letter-spacing:0.08em;">BLOCK</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click below</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">safe draw</td></tr>
+<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#aaffaa;font-weight:bold;letter-spacing:0.08em;">DODGE</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click the glove's side</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">clean &middot; or graze</td></tr>
+<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#ff9870;font-weight:bold;letter-spacing:0.08em;">COUNTER</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click Copper</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">big hit &middot; or trade</td></tr>
+<tr><td style="padding:0.22em 1.2em 0.22em 0;text-align:left;color:#e6c878;font-weight:bold;letter-spacing:0.08em;">BLOCK</td><td style="padding:0.22em 1.2em;text-align:left;opacity:0.85;">click below</td><td style="padding:0.22em 0 0.22em 1.2em;text-align:right;opacity:0.55;">safe chip</td></tr>
 </table>
 </div>
 <canvas id="fight-canvas" aria-label="Bare-knuckle fight minigame" width="560" height="400" style="display:block;width:100%;height:100%;cursor:crosshair;"></canvas>

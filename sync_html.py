@@ -42,6 +42,7 @@ AUDIO_EMBEDS = [
     ("__DSS_CELLAR_DATA_URI__",      "the-cellar-pump-ambience.m4a",                   "audio/mp4"),
     ("__DSS_QUIET_CAFE_DATA_URI__",  "the-quiet-cafe-ambience.m4a",                    "audio/mp4"),
     ("__DSS_RONNIES_DATA_URI__",     "the-ronnies-jazz-ambience.m4a",                  "audio/mp4"),
+    ("__DSS_RONNIES_MUSIC_DATA_URI__", "ronnies-firebird-jazz.mp3",                    "audio/mpeg"),
     ("__DSS_MINIGAME_DATA_URI__",    "the-minigame-retro.m4a",                         "audio/mp4"),
     ("__DSS_PONGMINI_DATA_URI__",    "the-pongmini-loop.m4a",                          "audio/mp4"),
     ("__DSS_JAZZMINI_DATA_URI__",    "the-jazzmini-loop.m4a",                          "audio/mp4"),

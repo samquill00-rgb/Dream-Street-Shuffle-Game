@@ -9932,6 +9932,21 @@ _build() {
   this.overlay = document.createElement('div');
   this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
   document.body.appendChild(this.overlay);
+  // Cancel-on-navigate: this overlay lives on document.body, not inside the
+  // tw-passage, so Harlowe's undo (the browser Back button) would otherwise
+  // strand it on top of whatever passage the player rewinds to. Watch for
+  // tw-passage replacement and tear the overlay down at once. (Same guard the
+  // eat popup and astral modal use.)
+  this._navObs = null;
+  var _soStory = document.querySelector('tw-story');
+  if (_soStory) {
+    var _soPassage = _soStory.querySelector('tw-passage');
+    var _soSelf = this;
+    this._navObs = new MutationObserver(function() {
+      if (_soStory.querySelector('tw-passage') !== _soPassage) _soSelf._teardownNow();
+    });
+    this._navObs.observe(_soStory, { childList: true, subtree: true });
+  }
   this.card = document.createElement('div');
   this.card.style.cssText = [
     'display:flex;flex-direction:column;align-items:center;',
@@ -10017,6 +10032,7 @@ _build() {
   this.canvas.addEventListener('touchcancel', stopRetch);
 }
 _fadeOut() {
+  if (this._navObs) { this._navObs.disconnect(); this._navObs = null; }
   this.overlay.style.background = 'rgba(0,0,0,0)';
   this.card.style.opacity = '0';
   this.card.style.transform = 'translateY(-12px)';
@@ -10035,6 +10051,16 @@ _fadeOut() {
     self.done = true;
     if (self.overlay.parentNode) self.overlay.parentNode.removeChild(self.overlay);
   }, 480);
+}
+// Immediate teardown when the player navigates away (e.g. browser Back) while
+// the overlay is open — no fade, just stop the loop, drop the observer, and
+// remove the overlay so it can't sit stranded over the rewound-to passage.
+_teardownNow() {
+  if (this.done) return;
+  this.done = true;
+  this.closing = true;
+  if (this._navObs) { this._navObs.disconnect(); this._navObs = null; }
+  if (this.overlay && this.overlay.parentNode) this.overlay.parentNode.removeChild(this.overlay);
 }
 _startLoop() {
   var self = this;
@@ -10197,6 +10223,19 @@ _draw() {
 }
 };
 window.showSpewPopup = function(mode) { new window.SpewPopup(mode); };
+// Safe variant: defers the gen snapshot by one task (see showDrinkPopupSafe for
+// the race rationale) and cancels if the player navigates away — e.g. hits the
+// browser Back button — before the delay fires, so the overlay can never spawn
+// on top of a passage the player has already rewound to.
+window.showSpewPopupSafe = function(mode, delay) {
+  setTimeout(function() {
+    var gen = window._passageGen; // snapshot after MO has fired for this passage
+    setTimeout(function() {
+      if (window._passageGen !== gen) return; // navigated away — cancel
+      if (window.showSpewPopup) window.showSpewPopup(mode);
+    }, delay !== undefined ? delay : 50);
+  }, 0);
+};
 
 // ====== EAT POPUP (hold-to-eat animation for the Chinese Fish and Chips) ======
 window.EatPopup = class EatPopup {
@@ -10694,6 +10733,21 @@ _build() {
   // as a popup-within-popup. Matches the napkin popup pattern.
   this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
   document.body.appendChild(this.overlay);
+  // Cancel-on-navigate: this overlay lives on document.body, not inside the
+  // tw-passage, so Harlowe's undo (the browser Back button) would otherwise
+  // strand it on top of whatever passage the player rewinds to. Watch for
+  // tw-passage replacement and tear the overlay down at once. (Same guard the
+  // eat popup and astral modal use.)
+  this._navObs = null;
+  var _loStory = document.querySelector('tw-story');
+  if (_loStory) {
+    var _loPassage = _loStory.querySelector('tw-passage');
+    var _loSelf = this;
+    this._navObs = new MutationObserver(function() {
+      if (_loStory.querySelector('tw-passage') !== _loPassage) _loSelf._teardownNow();
+    });
+    this._navObs.observe(_loStory, { childList: true, subtree: true });
+  }
   this.card = document.createElement('div');
   this.card.style.cssText = [
     'position:relative;',
@@ -10808,6 +10862,7 @@ _build() {
   this.canvas.addEventListener('touchmove', function(e) { e.preventDefault(); handleMove(e); });
 }
 _fadeOut() {
+  if (this._navObs) { this._navObs.disconnect(); this._navObs = null; }
   this.overlay.style.background = 'rgba(0,0,0,0)';
   this.card.style.opacity = '0';
   this.card.style.transform = 'translateY(-12px)';
@@ -10817,6 +10872,18 @@ _fadeOut() {
     if (self.overlay.parentNode) self.overlay.parentNode.removeChild(self.overlay);
     window.dispatchEvent(new CustomEvent('liverpopup:closed'));
   }, 480);
+}
+// Immediate teardown when the player navigates away (e.g. browser Back) while
+// the overlay is open — no fade, just stop the loop, drop the observer, and
+// remove the overlay so it can't sit stranded over the rewound-to passage.
+// Deliberately does NOT dispatch 'liverpopup:closed': backing out is not the
+// same as finishing the liver, so it must not trigger the completion go-to.
+_teardownNow() {
+  if (this.done) return;
+  this.done = true;
+  this.closing = true;
+  if (this._navObs) { this._navObs.disconnect(); this._navObs = null; }
+  if (this.overlay && this.overlay.parentNode) this.overlay.parentNode.removeChild(this.overlay);
 }
 _startLoop() {
   var self = this;
@@ -33257,7 +33324,7 @@ if(window.dssAudio) { setTimeout(function(){ window.dssAudio.uncork(); }, 250); 
 (set: $hadBreather to true)\
 (set: $confidence to ($statGain: $confidence, 12))\
 (if: $hadChippy is true)[(set: $sobriety to ($statGain: $sobriety, 8))](else:)[(set: $sobriety to ($statGain: $sobriety, 18))]\
-<script>setTimeout(function(){ if (window.showSpewPopup) window.showSpewPopup('doorway'); }, 300);</script>\
+<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('doorway',300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('doorway');},300);}</script>\
 <!-- A4 — DEEP-CUT Aoife memory: only the worn-down player who steps in to
      rest ever finds it. Dormant until $aoifeRework is on; with it off the
      doorway behaves exactly as before (apply stats, bounce back to Dean St). -->
@@ -34248,12 +34315,12 @@ You're eating at the counter when somebody passes the window: that's Lily.
 (else-if: _dualRing)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">The phone behind the bar rings.
 
 (link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 7))(go-to: "The dual ring")]</div>]
-(else:)[(if: $resumingFromCall is true)[(set: $resumingFromCall to false)(if: $sobriety <= 15)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]]](else:)[You've come-to in a cubicle, in what you think is the gents in the Coach and Horses.
+(else:)[(if: $resumingFromCall is true)[(set: $resumingFromCall to false)(if: $sobriety <= 15)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]]](else:)[You've come-to in a cubicle, in what you think is the gents in the Coach and Horses.
 
 (if: $coachUrgent is true)[<span class="alba-link-fade">[[Give up. Sleep here.|Alba Incomplete]]</span>
 
 ]\
-(if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 18))(set: $crashedAfterDualRing to false)<script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]](else:)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>setTimeout(function(){ window.showSpewPopup(); }, 200);</script>]]
+(if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 18))(set: $crashedAfterDualRing to false)<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]](else:)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]]
 
 You gather your limbs to the bar.
 

@@ -10230,6 +10230,21 @@ _build() {
   this.overlay.id = 'eat-overlay';
   this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
   document.body.appendChild(this.overlay);
+  // Cancel-on-navigate: this overlay lives on document.body, not inside the
+  // tw-passage, so Harlowe's undo (the browser Back button) would otherwise
+  // strand it on top of whatever passage the player rewinds to — the
+  // "stuck in the chippy" trap. Watch for tw-passage replacement and tear the
+  // overlay down at once. (Same guard the astral modal uses.)
+  this._navObs = null;
+  var _eoStory = document.querySelector('tw-story');
+  if (_eoStory) {
+    var _eoPassage = _eoStory.querySelector('tw-passage');
+    var _eoSelf = this;
+    this._navObs = new MutationObserver(function() {
+      if (_eoStory.querySelector('tw-passage') !== _eoPassage) _eoSelf._teardownNow();
+    });
+    this._navObs.observe(_eoStory, { childList: true, subtree: true });
+  }
   this.card = document.createElement('div');
   this.card.style.cssText = [
     'display:flex;flex-direction:column;align-items:center;',
@@ -10297,6 +10312,7 @@ _build() {
   this.canvas.addEventListener('touchcancel', stopEat);
 }
 _fadeOut() {
+  if (this._navObs) { this._navObs.disconnect(); this._navObs = null; }
   this.overlay.style.background = 'rgba(0,0,0,0)';
   this.card.style.opacity = '0';
   this.card.style.transform = 'translateY(-12px)';
@@ -10305,6 +10321,16 @@ _fadeOut() {
     self.done = true;
     if (self.overlay.parentNode) self.overlay.parentNode.removeChild(self.overlay);
   }, 480);
+}
+// Immediate teardown when the player navigates away (e.g. browser Back) while
+// the overlay is open — no fade, just stop the loop, drop the observer, and
+// remove the overlay so it can't sit stranded over the rewound-to passage.
+_teardownNow() {
+  if (this.done) return;
+  this.done = true;
+  this.closing = true;
+  if (this._navObs) { this._navObs.disconnect(); this._navObs = null; }
+  if (this.overlay && this.overlay.parentNode) this.overlay.parentNode.removeChild(this.overlay);
 }
 _startLoop() {
   var self = this;
@@ -10609,6 +10635,19 @@ _draw() {
 }
 };
 window.showEatPopup = function(foodType) { new window.EatPopup(foodType || 'chips'); };
+// Safe variant: defers the gen snapshot by one task (see showDrinkPopupSafe for
+// the race rationale) and cancels if the player navigates away — e.g. hits the
+// browser Back button — before the delay fires, so the overlay can never spawn
+// on top of a passage the player has already rewound to.
+window.showEatPopupSafe = function(foodType, delay) {
+  setTimeout(function() {
+    var gen = window._passageGen; // snapshot after MO has fired for this passage
+    setTimeout(function() {
+      if (window._passageGen !== gen) return; // navigated away — cancel
+      if (window.showEatPopup) window.showEatPopup(foodType || 'chips');
+    }, delay !== undefined ? delay : 50);
+  }, 0);
+};
 
 // ====== LIVER POPUP (guide the eagle to Prometheus's liver) ======
 // The player steers an eagle from the top-left toward Shelley's liver on a
@@ -34531,7 +34570,7 @@ Better not tomorrow.
      Reads 23.11.73, turning over to 24.11.73 after midnight. On the visit
      where midnight passes, the flip span carries the gold-flare animation
      (paired with the distant Big Ben chime); otherwise it renders plain. -->
-(if: $justAteChippy is true)[(set: $justAteChippy to false)<script>setTimeout(function(){if(window.showEatPopup)window.showEatPopup('chips');},250);</script>]
+(if: $justAteChippy is true)[(set: $justAteChippy to false)<script>if(window.showEatPopupSafe){window.showEatPopupSafe('chips',250);}else{setTimeout(function(){if(window.showEatPopup)window.showEatPopup('chips');},250);}</script>]
 <span class="scene-location">Dean Street, Soho, London.</span>
 (if: $midnightJustPassed is true)[<span class="scene-date scene-date-flip">(if: $afterMidnight)[24.11.73](else:)[23.11.73]</span>(set: $midnightJustPassed to false)](else:)[<span class="scene-date">(if: $afterMidnight)[24.11.73](else:)[23.11.73]</span>]
 

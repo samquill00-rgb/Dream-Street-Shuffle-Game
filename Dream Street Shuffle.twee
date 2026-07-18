@@ -320,11 +320,19 @@ window.dssAudio = (function() {
   // Every new session starts UNMUTED — sound is the default. The mute toggle
   // is per-session; we don't persist it (and we proactively clear any legacy
   // localStorage entry from earlier builds that did persist it).
-  var _muted = false;
+  // ── TEMPORARY HARD MUTE (Dr Quill, 2026-07-18) ── all sound off for now:
+  // the per-session mute wasn't sticking across reloads and kept coming back.
+  // Every audio path already honours _muted (SFX via _play, music via its
+  // startGain, beds at _startBed and in setMuted, the cow/pong HTML-audio
+  // elements via their isMuted watchers), so forcing it here silences the
+  // whole game. Flip this ONE flag to restore audio; while it is true,
+  // setMuted refuses to unmute.
+  var DSS_SOUND_OFF = true;
+  var _muted = DSS_SOUND_OFF;
   try { localStorage.removeItem('dssMuted'); } catch(e) {}
   function isMuted() { return _muted; }
   function setMuted(b) {
-    _muted = !!b;
+    _muted = DSS_SOUND_OFF ? true : !!b;
     var ac = ctx; // Use existing context only — don't force-create one to mute.
     if (ac) {
       // Music bed
@@ -3922,8 +3930,13 @@ function createPanel() {
   panel.addEventListener('mouseout', function(e) { if (e.target.classList.contains('dss-dbg-jump')) e.target.style.background = 'rgba(255,255,255,0.03)'; });
 }
 
+/* ── DEV FLAG ── the debug panel (backtick) is dev-only. Set false for the
+   commercial release. The hash-jump boot hook (in sync_html.py's injected
+   script) is left ungated — it needs a hand-typed URL and doubles as the
+   session test harness. */
+window.DSS_DEV = true;
 document.addEventListener('keydown', function(e) {
-  if (e.key === '`') { e.preventDefault(); createPanel(); }
+  if (window.DSS_DEV && e.key === '`') { e.preventDefault(); createPanel(); }
 });
 })();
 
@@ -36134,6 +36147,11 @@ lane = widePairs[Math.floor(Math.random()*widePairs.length)];
 var freeLanes=[];
 for(var fl=0;fl<LANE_COUNT;fl++) if(!blocked[fl]) freeLanes.push(fl);
 lane = freeLanes[Math.floor(Math.random()*freeLanes.length)];
+/* Honesty bias: a quarter of narrow spawns seek the rider's lane when it's
+   free, so sitting still is never a winning strategy. The fairness engine
+   above still guarantees an escape route (a blocked-out player lane simply
+   isn't in freeLanes, and the last free lane is never taken). */
+if(Math.random()<0.25){ for(var pf=0;pf<freeLanes.length;pf++){ if(freeLanes[pf]===playerLane){ lane=playerLane; break; } } }
 }
 var x = t.wide ? (LANE_X[lane]+LANE_X[lane+1])/2 : LANE_X[lane];
 
@@ -36291,6 +36309,7 @@ vx:(Math.random()-0.5)*2.6, vy:-1.5-Math.random()*3.2, life:1 });
 
 /* ── Reset for a second ride (skips practice; fresh state) ── */
 function restart(){
+winSparks.length = 0; /* no victory sparks carried into a fresh ride */
 lives = 3;
 dodged = 0;
 hitFlashAt = 0;
@@ -37304,6 +37323,7 @@ cowExitObs.observe(document.body, { childList: true, subtree: true });
 
 /* ── Game loop ── */
 function loop(){
+if(!canvas.isConnected) return; /* passage left — stop rescheduling the rAF */
 update();
 
 /* screen shake on hit */

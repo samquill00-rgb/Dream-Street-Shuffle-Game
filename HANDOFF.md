@@ -4,6 +4,11 @@
 >
 > **State at handoff (2026-07-18, ~03:00):** Enormous mechanics session — the game now has real jeopardy. **NOT yet committed** (the whole night = `Dream Street Shuffle.twee` + `Dream Street Shuffle.html`, commit via GitHub Desktop). Full detail below.
 
+## ⚠ ADDENDUM (2026-07-18, later) — sound is HARD-MUTED + three autonomous fixes
+1. **ALL SOUND IS OFF** at Dr Quill's request (his mute kept un-muting across reloads — mute was per-session by design). One flag: `DSS_SOUND_OFF = true` next to `var _muted` in dssAudio (~line 325). While true, `setMuted` refuses to unmute; every path honours it (SFX `_play`, music startGain, beds at `_startBed`/`setMuted`, cow+pong HTML-audio watchers). **Flip that one flag to restore audio** — and when restoring, consider making mute persist (localStorage) so his complaint doesn't return.
+2. **Cow honesty bias**: 25% of narrow spawns seek the rider's free lane (idle no longer wins by luck); fairness engine untouched. Plus hygiene: the cow rAF loop stops when the canvas leaves the DOM; `winSparks` cleared on RIDE AGAIN.
+3. **Dev gate**: `window.DSS_DEV = true` beside the backtick keydown (~debug panel code). Set false for release to kill the debug menu. The hash-jump boot hook (injected by sync_html.py) is deliberately ungated — hand-typed URLs only, and it's the session test harness.
+
 # HANDOFF — 2026-07-18 — The Dawn Clock session (jeopardy, Dawn screen, minigame sharpening)
 
 Started with a full mechanics-and-story assessment (three parallel audits; no regressions found; the Jeopardy doc's diagnoses all CONFIRMED in source — minigame outcomes were cosmetic, stats couldn't bottom out, night was infinite). Then built, with Dr Quill approving each step:

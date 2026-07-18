@@ -346,6 +346,40 @@ else:
 new_passages_str = _embed_images("\n".join(passage_elements))
 html_content = html_content.replace("</tw-storydata>", new_passages_str + "\n</tw-storydata>")
 
+# ── Boot veil ──────────────────────────────────────────────────────────────
+# The build is ~50MB (embedded audio); on a first or hard-refreshed load the
+# browser shows a long white blank while it parses. This veil sits directly
+# after <body> so it paints immediately, and dissolves once Harlowe has
+# rendered the first passage (45s failsafe). Marker-wrapped so each sync
+# replaces the previous copy.
+BOOT_VEIL = (
+    "<!--DSS-BOOT-VEIL-START-->"
+    '<div id="dss-boot-veil"><div class="bv-inner">'
+    '<div class="bv-title">DREAM<br>STREET<br>SHUFFLE</div>'
+    '<div class="bv-lamp"></div>'
+    "</div></div><style>"
+    "#dss-boot-veil{position:fixed;top:0;left:0;right:0;bottom:0;background:#0d0b09;"
+    "z-index:2147483647;display:flex;align-items:center;justify-content:center;"
+    "opacity:1;transition:opacity 1.1s ease;}"
+    "#dss-boot-veil .bv-inner{text-align:center;}"
+    "#dss-boot-veil .bv-title{font-family:Georgia,serif;font-weight:bold;font-size:2.1em;"
+    "line-height:1.04;letter-spacing:0.14em;color:#c8a86a;"
+    "text-shadow:0 0 18px rgba(200,168,106,0.25);}"
+    "#dss-boot-veil .bv-lamp{width:7px;height:7px;border-radius:50%;background:#e8c060;"
+    "margin:26px auto 0;animation:bvPulse 2.2s ease-in-out infinite;}"
+    "@keyframes bvPulse{0%,100%{opacity:0.35;box-shadow:0 0 10px 2px rgba(232,192,96,0.3);}"
+    "50%{opacity:1;box-shadow:0 0 22px 7px rgba(232,192,96,0.6);}}"
+    "</style><script>(function(){var t0=Date.now();var iv=setInterval(function(){"
+    "var ready=document.querySelector('tw-passage');"
+    "if(ready||Date.now()-t0>45000){clearInterval(iv);"
+    "var v=document.getElementById('dss-boot-veil');"
+    "if(v){v.style.opacity='0';setTimeout(function(){if(v.parentNode)v.parentNode.removeChild(v);},1200);}}"
+    "},150);})();</script>"
+    "<!--DSS-BOOT-VEIL-END-->"
+)
+html_content = re.sub(r"<!--DSS-BOOT-VEIL-START-->.*?<!--DSS-BOOT-VEIL-END-->", "", html_content, flags=re.S)
+html_content = html_content.replace("<body>", "<body>" + BOOT_VEIL, 1)
+
 # Write the updated HTML
 with open(html_path, "w", encoding="utf-8") as f:
     f.write(html_content)

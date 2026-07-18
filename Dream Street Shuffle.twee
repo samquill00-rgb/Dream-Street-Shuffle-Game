@@ -3617,7 +3617,8 @@ window.dssOverlayBusy = function() {
   return !!document.querySelector(
     '#coin-overlay,#match-overlay,#cig-overlay,#eat-overlay,' +
     '#venue-hint-overlay,#word-wise-overlay,#wtw-overlay,' +
-    '#liver-eat-overlay,#napkin-popup-overlay,.dss-rules-overlay'
+    '#liver-eat-overlay,#napkin-popup-overlay,.dss-rules-overlay,' +
+    '#drink-popup-overlay,#spew-popup-overlay'
   );
 };
 window.dssDeferIfBusy = function(retry) {
@@ -4620,7 +4621,15 @@ window.showNapkinPopup = function() {
 // per playthrough — the modal grabs attention, then dismisses on click or
 // Escape, leaving the underlying action links available on the page.
 window.wordToTheWisePopup = function(message) {
-  if (document.getElementById('wtw-overlay')) return;
+  // Another wise-word already up: QUEUE rather than drop — the callers'
+  // once-only $shown flags are consumed at render, so a dropped popup
+  // means a lesson lost for the whole night. Retries while the player
+  // stays on this passage; wtw popups dismiss on click, so the queue drains.
+  if (document.getElementById('wtw-overlay')) {
+    var genQ = window._passageGen;
+    setTimeout(function() { if (window._passageGen === genQ) window.wordToTheWisePopup(message); }, 700);
+    return;
+  }
   if (window.dssDeferIfBusy(function() { window.wordToTheWisePopup(message); })) return;
   var overlay = document.createElement('div');
   overlay.id = 'wtw-overlay';
@@ -7989,6 +7998,7 @@ constructor(drinkType) {
 _build() {
   // Overlay
   this.overlay = document.createElement('div');
+  this.overlay.id = 'drink-popup-overlay'; // detectable by the nav sweep + busy list
   this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
   document.body.appendChild(this.overlay);
 
@@ -9022,6 +9032,17 @@ window._passageGen = 0;
         m.addedNodes.forEach(function(n) {
           if (n.nodeType === 1 && n.tagName === 'TW-PASSAGE') {
             window._passageGen++;
+            // Sweep stranded soft overlays from the departed passage. These
+            // have no nav teardown of their own, and a hidden survivor keeps
+            // dssOverlayBusy() true for the rest of the night (the match-
+            // overlay deadlock's siblings). No popup legitimately survives a
+            // passage transition, so removal here is always safe — and the
+            // drink lock is cleared with its overlay.
+            ['drink-popup-overlay','venue-hint-overlay','word-wise-overlay','wtw-overlay','cig-overlay','napkin-popup-overlay'].forEach(function(swId){
+              var swEl = document.getElementById(swId);
+              if (swEl && swEl.parentNode) swEl.parentNode.removeChild(swEl);
+            });
+            window._drinkPopupOpen = false;
             // Audio cues triggered by passage content / name.
             // Defer attribute read by a tick — Harlowe populates data-name
             // asynchronously after creating the tw-passage element, so reading
@@ -10034,6 +10055,7 @@ constructor(mode) {
 }
 _build() {
   this.overlay = document.createElement('div');
+  this.overlay.id = 'spew-popup-overlay'; // in the busy list so soft popups defer around the hold
   this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 0.5s;';
   document.body.appendChild(this.overlay);
   // Cancel-on-navigate: this overlay lives on document.body, not inside the
@@ -34450,6 +34472,10 @@ You're eating at the counter when somebody passes the window: that's Lily.
 </div>
 
 :: Coach and Horses lock [venue-gents venue-coach] {"position":"100,1400","size":"100,100"}
+<!-- Capture the crisis state BEFORE clearing it — the "Give up. Sleep here."
+     link below reads it, and reading $coachUrgent directly after this reset
+     made that link permanently dead (found in the 2026-07-18 audit). -->
+(set: _wasCoachUrgent to $coachUrgent is true)\
 (set: $coachUrgent to false)\
 (set: _lilyRing to ($lilyCount >= 1 and $hadLilyCall1 is false and $hadPhoneCall is true and ($returns - $phoneCallReturnsAt) >= 1))\
 (set: _dualRing to ($lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and ($returns - $lilyCall1ReturnsAt) >= 2))\
@@ -34593,7 +34619,7 @@ You're eating at the counter when somebody passes the window: that's Lily.
 (link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 7))(go-to: "The dual ring")]</div>]
 (else:)[(if: $resumingFromCall is true)[(set: $resumingFromCall to false)(if: $sobriety <= 15)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]]](else:)[You've come-to in a cubicle, in what you think is the gents in the Coach and Horses.
 
-(if: $coachUrgent is true)[<span class="alba-link-fade">[[Give up. Sleep here.|Alba Incomplete]]</span>
+(if: _wasCoachUrgent)[<span class="alba-link-fade">[[Give up. Sleep here.|Alba Incomplete]]</span>
 
 ]\
 (if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 18))(set: $crashedAfterDualRing to false)<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]](else:)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]]
@@ -34755,6 +34781,10 @@ You found the poem, the path to dawn's bleak Albion.
 [[Traveller, wake!|Dawn Approach White]]</div>
 
 :: The Fetch {"position":"1600,50","size":"100,100"}
+<!-- Heal $nightLength here as well as at Dean Street: the cow → LINE 3 →
+     Fetch path can arrive from an old save without passing the hub heal
+     (2026-07-18 audit), and the "Not yet" gate below reads it. -->
+(unless: $nightLength is a number)[(set: $nightLength to 16)]\
 <script>if (window.dssAudio && window.dssAudio.prewarmBed) window.dssAudio.prewarmBed('piano-eoin');setTimeout(function(){ if (window.dssAudio) window.dssAudio.uncannyBreath(); }, 400);</script>\
 <script>(function(){/* Earliest practical prefetch of the Oxford-Street iframe HTML + the Three.js CDN script. Fires here (The Fetch → Approach Centre Point → Alba Complete/Incomplete → Dawn Approach), so HTTP cache has the assets long before the iframe mounts. The later prefetch passages keep the same calls for safety; all are idempotent (HTTP cache dedup + id check on the link element). Hidden-iframe preload was ruled out previously because Chrome throttles scripts in non-visible frames. */try{fetch('oxford-street-from-centre-point-3d-static.html',{cache:'force-cache'});}catch(e){}if(!document.getElementById('dss-three-prefetch')){var l=document.createElement('link');l.id='dss-three-prefetch';l.rel='preload';l.as='script';l.href='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';document.head.appendChild(l);}})();</script>\
 <div class="glass-pane">You see yourself walking to meet you, who looks at you, with a pitying grin, then turns and heads, quickly, towards Centre Point.
@@ -34771,7 +34801,7 @@ You found the poem, the path to dawn's bleak Albion.
 
 ]\
 [[Follow him|Approach Centre Point]]
-(if: ($lilyCount < 5 or $haunts's length < 12) and $returns < $nightLength)[
+(if: ($lilyCount < 5 or $haunts's length < 12) and ($nightLength is a number and $returns < $nightLength))[
 You can leave now, perhaps it's wise to get out. But there are still flowers to gather in the night, and work yet to be done.
 
 <span class="back-to-night-glow">[[Not yet. Back to the night.|Dean Street]]</span>]</div>
@@ -39143,7 +39173,7 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 (unless: $knowsCecilCourt is a boolean)[(set: $knowsCecilCourt to false)]
 (if: $metCritic is true and $knowsCecilCourt is false)[(set: $knowsCecilCourt to true)]
 <!-- INVARIANT: every passage in _hideStats has its WHOLE header suppressed (stats + ← BACK + NOTEBOOK), so its body MUST contain its own exit — a body link or (go-to:) — or be a true terminal ending (e.g. Dawn). There is no sidebar Undo, so a _hideStats passage with no body exit is an unrecoverable hard-trap. Confirm a body exit before adding any passage to this list. -->\
-(set: _hideStats to (a: "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "A Doorway on Dean Street", "Dawn", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "Approach Centre Point", "The Fetch", "PP Pong", "Fight starts", "Fight Victory", "Fight Defeat"))
+(set: _hideStats to (a: "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "A Doorway on Dean Street", "Dawn", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "Approach Centre Point", "The Fetch", "PP Pong", "Fight starts", "Fight Victory", "Fight Defeat", "Fight Victory Perfect", "Cecil Court Waltz", "Ride Jeffrey Bernard's cow", "Cow ride success", "Cow ride fail"))
 (if: $returns is a number and $returns >= 1 and not (_hideStats contains (passage:)'s name))[(set: _saved to (savegame: "auto", "Auto save"))(unless: _saved)[(text-colour:#e0a85a)[//Heads up: this browser isn't saving your progress — most likely private/incognito mode. If you leave now, you'll lose your place.//]]](if: (passage:)'s name is "Dean Street")[<div id="dss-save-toast" style="position:fixed;bottom:14px;right:16px;z-index:99999;font-family:'Crimson Text',Georgia,serif;font-size:0.8em;letter-spacing:0.06em;color:#c8b89c;background:rgba(10,12,18,0.78);border:1px solid rgba(160,128,96,0.28);border-radius:4px;padding:5px 11px;opacity:0;pointer-events:none;box-shadow:0 2px 12px rgba(0,0,0,0.45);transition:opacity 0.6s ease;">✓ Progress saved</div>]<script>(function(){var el=document.getElementById("dss-save-toast");if(!el)return;var ifid='E3F7C9E2-3617-469A-AE5C-210AFB87B930',found=false;try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i)||'';if(k.indexOf('Saved Game')===-1)continue;if(k.toLowerCase().indexOf('auto')===-1)continue;if(ifid&&k.indexOf(ifid)===-1)continue;var v=localStorage.getItem(k);if(v&&v.length>50){found=true;break;}}}catch(e){}if(!found){if(el.parentNode)el.parentNode.removeChild(el);return;}requestAnimationFrame(function(){el.style.opacity='0.85';});setTimeout(function(){if(el)el.style.opacity='0';},2200);setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el);},3000);})();</script>\
 (unless: _hideStats contains (passage:)'s name)[\
 (if: $confidence is a number and $confidence < 0)[(set: $confidence to 0)](if: $confidence is a number and $confidence > 100)[(set: $confidence to 100)](if: $sobriety is a number and $sobriety < 0)[(set: $sobriety to 0)](if: $sobriety is a number and $sobriety > 100)[(set: $sobriety to 100)]\

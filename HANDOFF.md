@@ -4,6 +4,12 @@
 >
 > **State at handoff (2026-07-18, ~03:00):** Enormous mechanics session — the game now has real jeopardy. **NOT yet committed** (the whole night = `Dream Street Shuffle.twee` + `Dream Street Shuffle.html`, commit via GitHub Desktop). Full detail below.
 
+## ⚠ ADDENDUM 2 (2026-07-18, latest) — beauty & fun round (autonomous, per Dr Quill's brief)
+1. **Rules popups are Art-Nouveau plates**: the shared `showRules` builder now adds four mirrored corner vine-and-bracket engravings (hairline gold, 0.42 opacity) + a per-game emblem above the title — fight bell, paddle-and-ball, horned cow head, falling diamond-notes (`DSS_RULES_EMBLEMS`, keyed by opts.key). CSS block "RULES-PLATE ORNAMENT". Modelled on the pre-bar plate.
+2. **The Ripley's Wheel is explorable in hold mode**: each caught gate carries an invisible touch-disc (`.dwm-gate-hit`, r=52); tapping it flares that haunt's name + alchemical work centre-stage over Sol (`.dwm-flare`, 0.25s in / 1.7s hold / 0.9s out — drama-then-fade). Clicking anywhere else still dismisses. Verified live with 8 haunts.
+3. **Pong carry-spin**: the paddle's frame velocity (`pPadVel`) skews returns (`ball.dy += pPadVel*0.35`, dy clamped ±7) — hitting on the slide curves the ball; craft over reflexes.
+4. **Cow near-miss sparks**: an obstacle crossing the player's row within 26px of contact (no hit) throws a brief gold spark streak beside the cow (+ a whoosh, silent under the hard mute). Checked once per obstacle (`nearChecked`).
+
 ## ⚠ ADDENDUM (2026-07-18, later) — sound is HARD-MUTED + three autonomous fixes
 1. **ALL SOUND IS OFF** at Dr Quill's request (his mute kept un-muting across reloads — mute was per-session by design). One flag: `DSS_SOUND_OFF = true` next to `var _muted` in dssAudio (~line 325). While true, `setMuted` refuses to unmute; every path honours it (SFX `_play`, music startGain, beds at `_startBed`/`setMuted`, cow+pong HTML-audio watchers). **Flip that one flag to restore audio** — and when restoring, consider making mute persist (localStorage) so his complaint doesn't return.
 2. **Cow honesty bias**: 25% of narrow spawns seek the rider's free lane (idle no longer wins by luck); fairness engine untouched. Plus hygiene: the cow rAF loop stops when the canvas leaves the DOM; `winSparks` cleared on RIDE AGAIN.

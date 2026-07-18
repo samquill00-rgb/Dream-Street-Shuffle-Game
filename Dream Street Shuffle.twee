@@ -36018,6 +36018,7 @@ var countdownAt   = 0;
 var gameOver  = false;
 var wonGame   = false;
 var wonAt     = 0;   // timestamp of victory — used for the brief "ride to the finish" beat
+var winSparks = [];  // gold sparks streaming off the cow during the victory gallop
 var gameEnded = false;
 
 var lives       = 3;
@@ -36151,6 +36152,8 @@ if(tier>=5 && !t.wide){
 drift=(Math.random()-0.5) * 0.15;
 }
 obstacles.push({ type:t, x:x, y:-60, lane:lane, wobble:Math.random()*6.28, drift:drift });
+/* Wide vehicles announce themselves — a horn as the cab/Uber enters. */
+if(t.wide && window.dssAudio && window.dssAudio.carHorn) window.dssAudio.carHorn();
 }
 
 var lastSpeedTier = -1;
@@ -36161,9 +36164,11 @@ if(phase==='practice') elapsed=Date.now()-phaseStart;
 else if(phase==='real') elapsed=Date.now()-phaseStart;
 else elapsed=0;
 if(phase==='practice') return 1.2;  /* gentle practice speed */
-/* 8 tiers across 40s (5s each): very gradual start, frantic finish */
+/* 8 tiers across 40s (5s each). Opening tiers raised (was 1.4/1.9/2.5 —
+   after the 6s practice that made ~21s of low-threat runway); the ride now
+   opens at canter pace and the climax has teeth sooner. Peak unchanged. */
 var tier = Math.min(7, Math.floor(elapsed / 5000));
-var speeds = [1.4, 1.9, 2.5, 3.3, 4.4, 5.8, 7.4, 9.4];
+var speeds = [2.0, 2.6, 3.3, 4.1, 5.1, 6.3, 7.8, 9.4];
 var tElapsed = elapsed - tier * 5000;
 var cur = speeds[tier];
 var nxt = tier < 7 ? speeds[tier + 1] : cur + 2.0;
@@ -36197,7 +36202,7 @@ var WIN_RIDE_TIME = 1500;
 if(Date.now() - wonAt > WIN_RIDE_TIME) return;
 var spd = getSpeed();
 roadScroll += spd * 1.5;
-playerX += (targetX - playerX) * 0.18;
+playerX += (targetX - playerX) * 0.24;
 for(var i=obstacles.length-1;i>=0;i--){
 obstacles[i].y += spd * obstacles[i].type.spd;
 if(obstacles[i].y > H+80) obstacles.splice(i,1);
@@ -36209,7 +36214,7 @@ var spd=getSpeed();
 roadScroll+=spd*1.5;
 
 /* smooth player movement */
-playerX += (targetX - playerX) * 0.18;
+playerX += (targetX - playerX) * 0.24;
 
 /* practice → countdown → real transition */
 if(phase==='practice' && Date.now()-phaseStart >= PRACTICE_TIME){
@@ -36281,6 +36286,11 @@ gameOver=true; wonGame=true; wonAt=now;
    the loop under the end overlay. */
 if(window.dssAudio)window.dssAudio.brightChord();
 setTimeout(stopCowMusic,2500);
+/* Seed the victory sparks — gold burst off the cow for the gallop-out. */
+for(var ws=0; ws<36; ws++){
+winSparks.push({ x:playerX+(Math.random()-0.5)*44, y:PLAYER_Y+(Math.random()-0.5)*34,
+vx:(Math.random()-0.5)*2.6, vy:-1.5-Math.random()*3.2, life:1 });
+}
 }
 }
 }
@@ -37128,13 +37138,36 @@ ctx.fillText('\u2190\u2192 or click lane',W-8,H-4);
 var END_BTN = { y: 0, h: 24, w: 110, leftX: 0, rightX: 0 };
 
 function drawEnd(){
+// Victory sparks — stream off the cow through the gallop-out and briefly
+// over the overlay reveal. Updated here so they animate whenever the end
+// state is drawn.
+if(wonGame && winSparks.length){
+for(var wsi=winSparks.length-1; wsi>=0; wsi--){
+var s=winSparks[wsi];
+s.x+=s.vx; s.y+=s.vy; s.vy+=0.05; s.life-=0.012;
+if(s.life<=0){ winSparks.splice(wsi,1); continue; }
+ctx.fillStyle='rgba(232,192,96,'+(s.life*0.9)+')';
+ctx.beginPath(); ctx.arc(s.x, s.y, 1.2+s.life*1.8, 0, 6.283); ctx.fill();
+}
+/* keep a light trail coming while the cow gallops out */
+if((Date.now()-wonAt)<1200 && Math.random()<0.5){
+winSparks.push({ x:playerX+(Math.random()-0.5)*40, y:PLAYER_Y+(Math.random()-0.5)*30,
+vx:(Math.random()-0.5)*2.2, vy:-1.2-Math.random()*2.6, life:1 });
+}
+}
 // Brief grace period after winning — the cow keeps galloping, no overlay yet
 if(wonGame && (Date.now() - wonAt) < 1200) return;
 ctx.fillStyle='rgba(4,4,12,0.85)'; ctx.fillRect(0,0,W,H);
 ctx.textAlign='center';
 if(wonGame){
+/* Overlay reveal flash — warm gold, fading over ~450ms */
+var ovAge = Date.now() - wonAt - 1200;
+if(ovAge < 450){ ctx.fillStyle='rgba(232,192,96,'+(0.32*(1-ovAge/450))+')'; ctx.fillRect(0,0,W,H); }
+ctx.shadowColor='rgba(232,192,96,0.85)';
+ctx.shadowBlur=14+8*Math.sin(Date.now()/280);
 ctx.fillStyle='#e8c060'; ctx.font='bold 26px serif';
 ctx.fillText('YOU RODE IT.',W/2,H/2-50);
+ctx.shadowBlur=0;
 ctx.fillStyle='#d4a560'; ctx.font='italic 14px serif';
 ctx.fillText('You reach the end of Soho',W/2,H/2-22);
 ctx.fillText('at Charing Cross Road.',W/2,H/2-4);
@@ -37176,7 +37209,7 @@ function onKey(e){
 if(phase==='title'){ startCowMusic(); phase='practice'; phaseStart=Date.now(); return; }
 if(gameOver) return;
 if(phase==='countdown') return;
-var now=Date.now(); if(now-lastKeyAt<120) return;
+var now=Date.now(); if(now-lastKeyAt<90) return; /* was 120 — keyboard swerves keep up with the top tiers */
 /* Lane flash + whoosh on keyboard swerves too, so all three input routes
    (keys, click, touch) feel identical. */
 if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A'){

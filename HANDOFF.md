@@ -4,6 +4,14 @@
 >
 > **State at handoff (2026-07-18, ~03:00):** Enormous mechanics session — the game now has real jeopardy. **NOT yet committed** (the whole night = `Dream Street Shuffle.twee` + `Dream Street Shuffle.html`, commit via GitHub Desktop). Full detail below.
 
+## ⚠ ADDENDUM 3 (2026-07-18, last) — the "admin" round
+1. **DAWN SPECTRUM IS BUILT**: the Dawn passage now shades the ending by the night's shape — six mutually exclusive branches after the alba block (complete+rich+unbeaten / complete+scraped-at-the-bell / complete+beaten / complete plain / incomplete+beaten / incomplete+empty(≤3 haunts) / incomplete plain). **Every line is a pink `.claude-draft` placeholder for Dr Quill's rewrite**; the branch structure is permanent. Verified live (beaten+incomplete branch renders in pink).
+2. **A2 Aoife memory VERIFIED FIRING** live for the first time (lap-6 hub return with the right flags redirects to "Aoife memory 2"). Long-open audit item closed.
+3. **Mute now persists** (localStorage `dssMuted2`) — dormant under the hard-off flag; flipping `DSS_SOUND_OFF` later yields a sticky toggle, killing the "keeps turning back on" complaint for good.
+4. **Dead code removed**: FightGame `_winCount`/`_roundDotsHTML` + stale comments, the orphaned `.dawn-summary*` CSS, and `$sawAoifeMemory4` everywhere. Build verified: 0 references remain.
+5. **Mobile spot-pass**: rules plate, header row, hub verified clean at 375px.
+6. **Still open (honest)**: a full human-paced proving playthrough of the 16-turn night has NOT been walked end-to-end; the climax math from source constants says the dual-ring chain completes by ~lap 8–10 and a completionist run needs ~10–12, leaving 4–6 slack — but nothing beats a real run. First thing worth doing next session.
+
 ## ⚠ ADDENDUM 2 (2026-07-18, latest) — beauty & fun round (autonomous, per Dr Quill's brief)
 1. **Rules popups are Art-Nouveau plates**: the shared `showRules` builder now adds four mirrored corner vine-and-bracket engravings (hairline gold, 0.42 opacity) + a per-game emblem above the title — fight bell, paddle-and-ball, horned cow head, falling diamond-notes (`DSS_RULES_EMBLEMS`, keyed by opts.key). CSS block "RULES-PLATE ORNAMENT". Modelled on the pre-bar plate.
 2. **The Ripley's Wheel is explorable in hold mode**: each caught gate carries an invisible touch-disc (`.dwm-gate-hit`, r=52); tapping it flares that haunt's name + alchemical work centre-stage over Sol (`.dwm-flare`, 0.25s in / 1.7s hold / 0.9s out — drama-then-fade). Clicking anywhere else still dismisses. Verified live with 8 haunts.

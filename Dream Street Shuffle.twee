@@ -19312,17 +19312,49 @@ var phFloodDamp = new THREE.Mesh(phBlobGeo(1.7),
   new THREE.MeshBasicMaterial({ color: 0x0c1014, transparent: true, opacity: 0.3, depthWrite: false }));
 phFloodDamp.rotation.x = -Math.PI / 2;
 phFloodDamp.position.set(2.2, 0.016, 6.4);
-phFloodDamp.scale.set(0.01, 0.01, 1);
 scene.add(phFloodDamp);
 // The water itself — dark, reflective, catching the lamps
 var phFlood = new THREE.Mesh(phBlobGeo(0.4),
   new THREE.MeshStandardMaterial({ color: 0x1c2436, roughness: 0.05, metalness: 0.75, transparent: true, opacity: 0.72 }));
 phFlood.rotation.x = -Math.PI / 2;
 phFlood.position.set(2.2, 0.02, 6.4);
-phFlood.scale.set(0.01, 0.01, 1);
 scene.add(phFlood);
 // (Ripple ring removed — from this low camera it read as straight bright
 // lines sweeping the road instead of ripples)
+// Vertex-driven spread instead of uniform scaling. Uniform scale made the
+// foreshortened far edge translate as one long straight segment ("a line
+// sweeping the road"). Here every rim vertex advances radially on its own
+// surge rhythm, and the kerb-ward half soft-clamps (tanh) like water
+// meeting the kerbstone — the far edge settles while the rest keeps going.
+// Local +y maps to world -z (toward kerb and pub) under the -PI/2 tilt.
+phFlood.userData.orig = phFlood.geometry.attributes.position.array.slice(0);
+phFloodDamp.userData.orig = phFloodDamp.geometry.attributes.position.array.slice(0);
+function phSpreadVerts(mesh, G, t, phase, kerbClamp) {
+var sPos = mesh.geometry.attributes.position;
+var sOrig = mesh.userData.orig;
+// Per-vertex ratchet: water issuing from a drain only ever advances.
+// Each rim point remembers its furthest reach; the surge can only push
+// lobes FORWARD past it (in pulses), never drag the edge back.
+if (!mesh.userData.reach) mesh.userData.reach = new Float32Array(sPos.count*2);
+var sReach = mesh.userData.reach;
+for (var svi = 0; svi < sPos.count; svi++) {
+var sox = sOrig[svi*3], soy = sOrig[svi*3+1];
+var sva = Math.atan2(soy, sox);
+var sSurge = 1 + 0.065*Math.sin(t*0.5 + sva*3 + phase) + 0.035*Math.sin(t*0.23 + sva*5 + phase);
+var sMask = 1 - 0.4*Math.max(0, Math.sin(sva));
+var snx = sox*G*sMask, sny = soy*G*sMask;
+// Boundaries saturate asymptotically (kerb ahead, road edge behind, street
+// ends sideways); surge applies after the clamps
+if (sny > 0) sny = kerbClamp*Math.tanh(sny/kerbClamp);
+else sny = -9.9*Math.tanh(-sny/9.9);
+snx = (snx >= 0 ? 1 : -1) * 16 * Math.tanh(Math.abs(snx)/16);
+snx *= sSurge; sny *= sSurge;
+if (Math.abs(snx) < Math.abs(sReach[svi*2])) snx = sReach[svi*2]; else sReach[svi*2] = snx;
+if (Math.abs(sny) < Math.abs(sReach[svi*2+1])) sny = sReach[svi*2+1]; else sReach[svi*2+1] = sny;
+sPos.array[svi*3] = snx; sPos.array[svi*3+1] = sny;
+}
+sPos.needsUpdate = true;
+}
 
 // Water spilling from the alley passage — it wells up INSIDE the dark
 // passage first, runs along the alley floor to the mouth, then a tongue
@@ -19346,6 +19378,14 @@ phAlleyPool.rotation.x = -Math.PI / 2;
 phAlleyPool.position.set(-2.2, 0.022, 4.3);
 phAlleyPool.scale.set(0.01, 0.01, 1);
 scene.add(phAlleyPool);
+// The pavement sheet — once the road pool has pressed the kerb a while,
+// water starts claiming the raised pavement itself (top y 0.15): a fan
+// spreading from the kerb line toward the pub door, never quite stopping.
+var phPaveFlood = new THREE.Mesh(phFanGeo(1.3), phWaterMat.clone());
+phPaveFlood.rotation.x = -Math.PI / 2;
+phPaveFlood.position.set(1.8, 0.157, 3.45);
+phPaveFlood.scale.set(0.01, 0.01, 1);
+scene.add(phPaveFlood);
 
 // Wet road surface — just stopped raining, everything glistening
 var wetMat = new THREE.MeshStandardMaterial({
@@ -19999,12 +20039,27 @@ var alleyBollard2 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.6, 6
 alleyBollard2.position.set(alleyX + 0.7, 0.3, 0.9);
 pub.add(alleyBollard2);
 
-// ---- CHALKBOARD outside (Real Ales) ----
-var cbBoard = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.6, 0.04),
-  new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9 }));
-cbBoard.position.set(0.3, 0.35, 0.9);
-cbBoard.rotation.y = 0.1;
-pub.add(cbBoard);
+// ---- SANDWICH BOARD outside (Real Ales) ----
+// A proper A-frame: two leaning panels meeting at a hinge bar, feet
+// splayed, chalk face parented to the street-side panel so it leans with
+// it. (The old build was a flat panel plus a SEPARATE face plane whose
+// bottom sat 7.5cm inside the raised pavement — the "half buried" look.)
+var cbPanelMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9 });
+var cbGroup = new THREE.Group();
+cbGroup.position.set(0.3, 0.16, 0.9);
+cbGroup.rotation.y = 0.1;
+pub.add(cbGroup);
+var cbPanelF = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.63, 0.025), cbPanelMat);
+cbPanelF.position.set(0, 0.305, 0.078);
+cbPanelF.rotation.x = -0.25;
+cbGroup.add(cbPanelF);
+var cbPanelB = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.63, 0.025), cbPanelMat);
+cbPanelB.position.set(0, 0.305, -0.078);
+cbPanelB.rotation.x = 0.25;
+cbGroup.add(cbPanelB);
+var cbHinge = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.035, 0.06), cbPanelMat);
+cbHinge.position.set(0, 0.615, 0);
+cbGroup.add(cbHinge);
 var cbC = document.createElement('canvas');
 cbC.width = 96; cbC.height = 128;
 var cbctx = cbC.getContext('2d');
@@ -20019,9 +20074,8 @@ cbctx.fillText('ALES', 48, 110);
 var cbTex = new THREE.CanvasTexture(cbC);
 var cbFace = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.55),
   new THREE.MeshBasicMaterial({ map: cbTex }));
-cbFace.position.set(0.3, 0.35, 0.93);
-cbFace.rotation.y = 0.1;
-pub.add(cbFace);
+cbFace.position.set(0, 0, 0.016);
+cbPanelF.add(cbFace);
 
 // ---- CHIMNEYS ----
 var chimMat = new THREE.MeshStandardMaterial({ color: 0xa09080, roughness: 0.85 });
@@ -20045,15 +20099,26 @@ var signTex = makeCanvasTexture(128, 128, function(cx, w, h) {
   cx.fillText('FREE HOUSE', w/2, 105);
 });
 var signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.5, side: THREE.DoubleSide });
-var hangSign = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), signMat);
-hangSign.position.set(3.6, 3.8, 1.8);
-pub.add(hangSign);
-// Bracket arm
+// The sign hangs from a pivot at the end of a bracket that projects OUT
+// from the facade (the old arm ran parallel to the wall at the wrong
+// depth, leaving the sign floating flat like a billboard). Base angle is
+// ~60 degrees, not 90 — a true perpendicular sign is edge-on to this
+// camera — and the animate loop gives it a pendulum swing plus a slow
+// wind-twist so the cheat reads as motion.
 var bracketMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-placeMesh(pub, new THREE.BoxGeometry(1.4, 0.04, 0.04), bracketMat, 3.2, 4.25, 1.0);
-placeMesh(pub, new THREE.BoxGeometry(0.04, 0.5, 0.04), bracketMat, 3.6, 4.05, 1.8);
-// Decorative scrollwork on bracket (simple curved suggestion)
-placeMesh(pub, new THREE.BoxGeometry(0.5, 0.03, 0.03), bracketMat, 2.8, 4.1, 1.0);
+placeMesh(pub, new THREE.BoxGeometry(0.04, 0.04, 1.7), bracketMat, 3.6, 4.25, 0.95);
+var signStay = placeMesh(pub, new THREE.BoxGeometry(0.03, 0.03, 0.95), bracketMat, 3.6, 3.95, 0.6);
+signStay.rotation.x = -0.72;
+var signPivot = new THREE.Group();
+signPivot.position.set(3.6, 4.25, 1.8);
+signPivot.rotation.y = 1.05;
+pub.add(signPivot);
+var hangSign = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), signMat);
+hangSign.position.set(0, -0.45, 0);
+signPivot.add(hangSign);
+var signRod = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), bracketMat);
+signRod.position.set(0, -0.2, 0);
+signPivot.add(signRod);
 
 // ---- DRAINPIPE on right edge of building ----
 placeMesh(pub, new THREE.CylinderGeometry(0.04, 0.04, 12, 6), pipeMat, 4.0, 6, 0.3);
@@ -20856,11 +20921,14 @@ function phAnimate() {
   // passage. The storm is coming; Carthage is close behind it.
   var flP = Math.min(1, t / 20);
   flP = flP * flP * (3 - 2 * flP);
-  var flR = 0.15 + flP * 3.7;
-  var flWob = 1 + Math.sin(t * 1.7) * 0.015;
-  phFlood.scale.set(flR * 1.05 * flWob, flR * 1.15, 1);
+  // Main spread over 20s as before, then a permanent slow creep (log) —
+  // the flood never finishes, it just stops hurrying
+  // Growth is LINEAR and endless — the boundaries in phSpreadVerts are
+  // what slow it down, so it presses harder forever rather than stopping
+  var flG = 0.15 + flP * 3.55 + 0.05 * Math.max(0, t - 18);
+  phSpreadVerts(phFlood, flG, t, 0, 2.75);
+  phSpreadVerts(phFloodDamp, flG * 1.18, t, 2.1, 2.9);
   phFlood.material.opacity = 0.55 + flP * 0.22 + Math.sin(t * 2.6) * 0.04;
-  phFloodDamp.scale.set(flR * 1.25, flR * 1.35, 1);
 
   // Water from the passage: advances INSIDE the alley from the dark,
   // reaches the mouth, then fans out across the pavement with a rounded
@@ -20875,17 +20943,24 @@ function phAnimate() {
   }
   var alP = Math.max(0, Math.min(1, (t - 5) / 14));
   alP = alP * alP * (3 - 2 * alP);
-  var alLen = alP * 2.9;
+  var alLen = alP * 2.9 + 0.9 * Math.tanh(Math.max(0, t - 19) / 70);
   if (alLen > 0.02) {
     phAlleyStream.scale.set(0.7 + alP * 1.0 + Math.sin(t * 1.9) * 0.03, alLen, 1);
     phAlleyStream.material.opacity = 0.5 + alP * 0.2 + Math.sin(t * 2.9) * 0.04;
   }
   var agP = Math.max(0, Math.min(1, (t - 9) / 18));
   agP = agP * agP * (3 - 2 * agP);
-  var agR = agP * 2.1;
+  var agR = agP * 2.1 + 2.6 * Math.tanh(Math.max(0, t - 27) / 110);
   if (agR > 0.02) {
     phAlleyPool.scale.set(agR * 1.1, agR, 1);
     phAlleyPool.material.opacity = 0.5 + agP * 0.2 + Math.sin(t * 2.3 + 1) * 0.04;
+  }
+  // Over the kerb: the pavement sheet, fed from the road pool
+  var pvT = Math.max(0, t - 75);
+  if (pvT > 0) {
+    var pvLen = 2.95 * Math.tanh(pvT / 130);
+    phPaveFlood.scale.set(1.6 + pvLen * 1.9 + Math.sin(t * 1.7) * 0.03, pvLen, 1);
+    phPaveFlood.material.opacity = 0.45 + Math.min(0.25, pvT * 0.01) + Math.sin(t * 2.4) * 0.04;
   }
 
   // Silhouette sway
@@ -20893,6 +20968,10 @@ function phAnimate() {
     var s = silhouettes[i];
     s.mesh.position.x = s.baseX + Math.sin(t * s.swaySpeed + s.swayPhase) * s.swayAmt;
   }
+
+  // Hanging sign: pendulum swing + slow wind-twist about its bracket
+  signPivot.rotation.z = Math.sin(t * 0.9) * 0.045;
+  signPivot.rotation.y = 1.05 + Math.sin(t * 0.31) * 0.16 + Math.sin(t * 0.73) * 0.05;
 
   // Alley light flicker (subtle, eerie)
   alleyLight.intensity = 0.25 + Math.sin(t * 1.8) * 0.05 + Math.sin(t * 4.1) * 0.03;

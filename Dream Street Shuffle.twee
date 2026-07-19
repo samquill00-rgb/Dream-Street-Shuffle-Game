@@ -19184,14 +19184,8 @@ var roadFaceTexPh = makeCanvasTexture(512, 512, function(cx, w, h) {
     cx.fillStyle = 'rgba(' + pg + ',' + pg + ',' + pg + ',0.42)';
     cx.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5);
   }
-  for (var rp = 0; rp < 6; rp++) {
-    var rx = Math.random() * w, ry = Math.random() * h;
-    var rwd = 50 + Math.random() * 100, rht = 35 + Math.random() * 70;
-    cx.fillStyle = 'rgba(74, 74, 74, ' + (0.16 + Math.random() * 0.22).toFixed(3) + ')';
-    cx.fillRect(rx, ry, rwd, rht);
-    cx.strokeStyle = 'rgba(100, 100, 100, 0.18)'; cx.lineWidth = 0.6;
-    cx.strokeRect(rx, ry, rwd, rht);
-  }
+  // (Repair patches removed — their straight edges read as geometry lines
+  // on the road and haunted the flood as a phantom "kerb line")
   cx.strokeStyle = 'rgba(8, 8, 8, 0.8)'; cx.lineWidth = 1.2;
   for (var c = 0; c < 10; c++) {
     cx.beginPath();
@@ -19289,10 +19283,15 @@ for (var phb = 0; phb < 6; phb++) {
 // Irregular blob outline — water spreads with a wandering rounded edge,
 // never as a clean ellipse (whose ends sweep like straight lines on screen)
 function phBlobGeo(seed) {
+  // 96 rim points, not 26 — at full flood size a 26-gon's segments span
+  // over a metre and read as straight lines crawling along the road.
+  // Harmonics use INTEGER angular frequencies so the outline wraps
+  // seamlessly (the old bi-based phases left a radius jump at angle 0).
   var pts = [];
-  for (var bi2 = 0; bi2 < 26; bi2++) {
-    var ba = bi2 / 26 * Math.PI * 2;
-    var br = 1 + 0.2 * Math.sin(bi2 * 2.7 + seed) + 0.13 * Math.sin(bi2 * 5.3 + seed * 2.1);
+  for (var bi2 = 0; bi2 < 96; bi2++) {
+    var ba = bi2 / 96 * Math.PI * 2;
+    var br = 1 + 0.2 * Math.sin(ba * 4 + seed) + 0.13 * Math.sin(ba * 9 + seed * 2.1)
+           + 0.07 * Math.sin(ba * 17 + seed * 3.3) + 0.04 * Math.sin(ba * 29 + seed * 1.7);
     pts.push(new THREE.Vector2(Math.cos(ba) * br, Math.sin(ba) * br));
   }
   return new THREE.ShapeGeometry(new THREE.Shape(pts));
@@ -19300,9 +19299,10 @@ function phBlobGeo(seed) {
 // Half-blob fan — a rounded advancing front with a flat edge at its source
 function phFanGeo(seed) {
   var pts = [];
-  for (var fi2 = 0; fi2 <= 16; fi2++) {
-    var fa = fi2 / 16 * Math.PI;
-    var fr = 1 + 0.16 * Math.sin(fi2 * 2.3 + seed) + 0.1 * Math.sin(fi2 * 4.7 + seed);
+  for (var fi2 = 0; fi2 <= 48; fi2++) {
+    var fa = fi2 / 48 * Math.PI;
+    var fr = 1 + 0.16 * Math.sin(fa * 5 + seed) + 0.1 * Math.sin(fa * 11 + seed)
+           + 0.05 * Math.sin(fa * 19 + seed * 2.3);
     pts.push(new THREE.Vector2(Math.cos(fa) * fr, Math.sin(fa) * fr));
   }
   return new THREE.ShapeGeometry(new THREE.Shape(pts));
@@ -19341,20 +19341,68 @@ for (var svi = 0; svi < sPos.count; svi++) {
 var sox = sOrig[svi*3], soy = sOrig[svi*3+1];
 var sva = Math.atan2(soy, sox);
 var sSurge = 1 + 0.065*Math.sin(t*0.5 + sva*3 + phase) + 0.035*Math.sin(t*0.23 + sva*5 + phase);
-var sMask = 1 - 0.4*Math.max(0, Math.sin(sva));
-var snx = sox*G*sMask, sny = soy*G*sMask;
-// Boundaries saturate asymptotically (kerb ahead, road edge behind, street
-// ends sideways); surge applies after the clamps
-if (sny > 0) sny = kerbClamp*Math.tanh(sny/kerbClamp);
-else sny = -9.9*Math.tanh(-sny/9.9);
-snx = (snx >= 0 ? 1 : -1) * 16 * Math.tanh(Math.abs(snx)/16);
-snx *= sSurge; sny *= sSurge;
-if (Math.abs(snx) < Math.abs(sReach[svi*2])) snx = sReach[svi*2]; else sReach[svi*2] = snx;
-if (Math.abs(sny) < Math.abs(sReach[svi*2+1])) sny = sReach[svi*2+1]; else sReach[svi*2+1] = sny;
+// RADIAL clamp against a directional boundary (kerb ahead, road edge
+// behind, street ends sideways). Four hard-won rules live here:
+// (1) never clamp x/y separately (the pool becomes a rounded rectangle);
+// (2) the kerb-side and road-side limits must BLEND smoothly around the
+// flanks (an abrupt switch reads as bevelled corners);
+// (3) the boundary itself must be ragged at several scales, else water
+// piling against it forms a clean arc that foreshortens into a slab edge;
+// (4) kerb-ward the water must ARRIVE (hard min) and merge with the kerb
+// foot — a soft asymptote leaves a permanent floating waterline mid-road,
+// and any wide flat edge parallel to the screen foreshortens into a rule.
+var sRl = Math.sqrt(sox*sox + soy*soy);
+var sca = sox/sRl, ssa = soy/sRl;
+// Kerb-ward the advancing front gets extra per-vertex depth fingers —
+// foreshortening compresses depth 4:1, so raggedness must be exaggerated
+// in exactly that direction to survive projection
+// Gutter-true spread: fastest ALONG the road, moderate to the kerb,
+// slowest toward the camera. The sideways term must stay SMALL: at 0.52
+// it exactly cancelled the sine falloff and the pool's upper edge became
+// a constant-height band — a straight line under foreshortening. The
+// kerbward lobes are LOW-frequency and deep (bays, not ripples), because
+// high-frequency fingers flatten to nothing when depth is compressed 4:1.
+var sMask = (0.58 + 0.35*sca*sca + 0.1*Math.max(0, ssa))
+* (1 + Math.max(0, ssa)*(0.24*Math.sin(sva*7 + phase*5) + 0.15*Math.sin(sva*19 + phase*3)));
+var kf = Math.max(0, Math.min(1, (ssa + 0.15)/0.75));
+kf = kf*kf*(3 - 2*kf);
+var sLy = 9.9 + (kerbClamp - 9.9)*kf;
+var sLn = 1 + 0.18*Math.sin(sva*23 + phase*7) + 0.12*Math.sin(sva*41 + phase*3) + 0.08*Math.sin(sva*13 + phase);
+var sL = sRl * sLn / Math.sqrt((sca*sca)/256 + (ssa*ssa)/(sLy*sLy));
+// Scalloped kerb bays: stretches of the front permanently hold back short
+// of the kerb, so the junction alternates water-at-kerb / dry-kerb — a
+// uniform flush line reads CG-fake even though real water CAN do it
+var sHold = Math.max(0, Math.sin(sva*31 + phase*2));
+sL *= (1 - 0.38*sHold*kf);
+var sCr = sRl * G * sMask;
+var sSoft = sL * Math.tanh(sCr / sL);
+var sHard = Math.min(sCr, sL);
+var sRr = (kf*sHard + (1 - kf)*sSoft) * sSurge;
+var snx = sca * sRr, sny = ssa * sRr;
+// Leaky ratchet: reach decays ~3%/s, so the settled edge can EBB with the
+// surge (visible lapping) while gross backflow stays impossible. A strict
+// ratchet froze every edge at its historical peak — a dead waterline.
+var sRx = sReach[svi*2]*0.9995, sRy = sReach[svi*2+1]*0.9995;
+if (Math.abs(snx) < Math.abs(sRx)) snx = sRx;
+if (Math.abs(sny) < Math.abs(sRy)) sny = sRy;
+sReach[svi*2] = snx; sReach[svi*2+1] = sny;
 sPos.array[svi*3] = snx; sPos.array[svi*3+1] = sny;
 }
 sPos.needsUpdate = true;
 }
+
+// The source made visible: a deep-water core spreading around the grate
+// and a welling crown heaving OVER it — the eye must pin the drain as the
+// origin within the first seconds.
+var phDeepPool = new THREE.Mesh(phBlobGeo(3.7), new THREE.MeshStandardMaterial({ color: 0x0e1522, roughness: 0.04, metalness: 0.8, transparent: true, opacity: 0.85 }));
+phDeepPool.rotation.x = -Math.PI/2;
+phDeepPool.position.set(2.2, 0.024, 6.4);
+phDeepPool.scale.set(0.01, 0.01, 1);
+scene.add(phDeepPool);
+var phCrown = new THREE.Mesh(phBlobGeo(5.2), new THREE.MeshStandardMaterial({ color: 0x2a3a52, roughness: 0.02, metalness: 0.7, transparent: true, opacity: 0 }));
+phCrown.rotation.x = -Math.PI/2;
+phCrown.position.set(2.2, 0.028, 6.4);
+scene.add(phCrown);
 
 // Water spilling from the alley passage — it wells up INSIDE the dark
 // passage first, runs along the alley floor to the mouth, then a tongue
@@ -19400,7 +19448,11 @@ scene.add(wetRoad);
 var wetPaveMat = new THREE.MeshStandardMaterial({
   color: 0x222228, roughness: 0.12, metalness: 0.55, transparent: true, opacity: 0.25
 });
-var wetPave = new THREE.Mesh(new THREE.PlaneGeometry(30, 4), wetPaveMat);
+// Depth 3, NOT 4 — at 4 this sheen overhung the kerb by half a unit,
+// hovering over the road at y 0.08: its straight far edge was the
+// infamous "line above the drain", and the flood (y 0.02) slid beneath
+// the overhang and appeared to stop dead at it. Buried-plane family.
+var wetPave = new THREE.Mesh(new THREE.PlaneGeometry(30, 3), wetPaveMat);
 wetPave.rotation.x = -Math.PI / 2;
 wetPave.position.set(0, 0.08, 2);
 scene.add(wetPave);
@@ -19681,9 +19733,14 @@ for (var lx = -1.0; lx <= 3.5; lx += 4.5) {
     new THREE.MeshBasicMaterial({ color: 0xffe8aa, transparent: true, opacity: 0.8 }));
   lampGlobe.position.set(lx, 3.95, 0.7);
   pub.add(lampGlobe);
-  var lampL = new THREE.PointLight(0xffd080, 0.5, 5);
+  // decay 2 + long range on every road-facing light: their old hard range
+  // cutoffs (several at ~5-7 units) landed as flattened arcs across the
+  // road just above the drain and stitched into a full-width "line" that
+  // the darkening flood made stark — chased for a whole session as a
+  // water-edge bug before being caught as a LIGHTING terminator
+  var lampL = new THREE.PointLight(0xffd080, 0.5, 10, 2);
   lampL.position.set(lx, 3.95, 0.8);
-  lampL.userData.baseIntensity = 0.5;
+  lampL.userData.baseIntensity = 0.7; // offsets decay-2 mid-field dimming
   pub.add(lampL);
   lampLightsOnPub.push(lampL);
 }
@@ -20126,27 +20183,27 @@ placeMesh(pub, new THREE.BoxGeometry(0.12, 0.05, 0.12), pipeMat, 4.0, 3.5, 0.3);
 placeMesh(pub, new THREE.BoxGeometry(0.12, 0.05, 0.12), pipeMat, 4.0, 8.0, 0.3);
 
 // Warm interior glow spilling from pub windows
-var pubGlow = new THREE.PointLight(0xffd080, 1.2, 10);
+var pubGlow = new THREE.PointLight(0xffd080, 1.7, 18, 2);
 pubGlow.position.set(2.0, 1.5, 2);
 pub.add(pubGlow);
 
 // Second interior glow (fills out the ground floor)
-var pubGlow2 = new THREE.PointLight(0xffd060, 0.6, 8);
+var pubGlow2 = new THREE.PointLight(0xffd060, 0.85, 14, 2);
 pubGlow2.position.set(3.0, 1.5, 1.5);
 pub.add(pubGlow2);
 
 // Third interior glow (deeper warmth)
-var pubGlow3 = new THREE.PointLight(0xffc850, 0.35, 6);
+var pubGlow3 = new THREE.PointLight(0xffc850, 0.5, 11, 2);
 pubGlow3.position.set(1.0, 1.8, 0.5);
 pub.add(pubGlow3);
 
 // Door light (warm glow spilling onto pavement)
-var doorLight = new THREE.PointLight(0xc89030, 0.8, 7);
+var doorLight = new THREE.PointLight(0xc89030, 1.15, 13, 2);
 doorLight.position.set(0.8, 2, 1);
 pub.add(doorLight);
 
 // Pavement spill (warm puddle of light on the ground outside)
-var pavementSpill = new THREE.PointLight(0xffc060, 0.3, 5);
+var pavementSpill = new THREE.PointLight(0xffc060, 0.45, 10, 2);
 pavementSpill.position.set(2.0, 0.3, 2.5);
 pub.add(pavementSpill);
 
@@ -20642,11 +20699,12 @@ var streetLampLights = [];
 // surrounding scene dark — only the lantern itself glows.
 function createLamp(x, z) {
   var lamp = window.dssScene.createVictorianGasLamp(scene, x, z, {
-    intensity: 0.5, distance: 10,
+    intensity: 0.5, distance: 16,
     haloScale: 2.2, coreScale: 0.9
   });
   // Keep the Pillars flicker animation working
   lamp.userData.light.userData.baseIntensity = 0.5;
+  lamp.userData.light.decay = 2; // no hard range terminator on the road
   streetLampLights.push(lamp.userData.light);
 }
 
@@ -20925,10 +20983,23 @@ function phAnimate() {
   // the flood never finishes, it just stops hurrying
   // Growth is LINEAR and endless — the boundaries in phSpreadVerts are
   // what slow it down, so it presses harder forever rather than stopping
-  var flG = 0.15 + flP * 3.55 + 0.05 * Math.max(0, t - 18);
-  phSpreadVerts(phFlood, flG, t, 0, 2.75);
-  phSpreadVerts(phFloodDamp, flG * 1.18, t, 2.1, 2.9);
+  var flG = 0.15 + flP * 3.55 + 0.035 * Math.max(0, t - 18);
+  phSpreadVerts(phFlood, flG, t, 0, 3.15);
+  phSpreadVerts(phFloodDamp, flG * 1.18, t, 2.1, 3.35);
   phFlood.material.opacity = 0.55 + flP * 0.22 + Math.sin(t * 2.6) * 0.04;
+  // The deep core: SMALL, ROUND, and capped. It is the source puddle, not
+  // a sheet — the moment it elongates or keeps growing, its smooth scaled
+  // edge becomes a dark straight line at the grate (that exact bug shipped
+  // and was caught by Dr Quill; the big vertex-driven pool alone does the
+  // spreading).
+  var dpP = Math.min(1, t / 8);
+  dpP = dpP * dpP * (3 - 2 * dpP);
+  var dpR = (0.2 + dpP * 0.72) * (1 + 0.045 * Math.sin(t * 1.3) + 0.03 * Math.sin(t * 2.9));
+  phDeepPool.scale.set(dpR * 1.12, dpR, 1);
+  phDeepPool.material.opacity = 0.42 + dpP * 0.28;
+  var crownPulse = 1 + 0.13 * Math.sin(t * 5.1) + 0.06 * Math.sin(t * 8.7);
+  phCrown.scale.set(0.35 * crownPulse, 0.5 * crownPulse, 1);
+  phCrown.material.opacity = 0.35 + 0.25 * Math.min(1, t / 4) + 0.12 * Math.sin(t * 5.1);
 
   // Water from the passage: advances INSIDE the alley from the dark,
   // reaches the mouth, then fans out across the pavement with a rounded
@@ -20943,7 +21014,7 @@ function phAnimate() {
   }
   var alP = Math.max(0, Math.min(1, (t - 5) / 14));
   alP = alP * alP * (3 - 2 * alP);
-  var alLen = alP * 2.9 + 0.9 * Math.tanh(Math.max(0, t - 19) / 70);
+  var alLen = alP * 2.9 + 0.5 * Math.tanh(Math.max(0, t - 19) / 70);
   if (alLen > 0.02) {
     phAlleyStream.scale.set(0.7 + alP * 1.0 + Math.sin(t * 1.9) * 0.03, alLen, 1);
     phAlleyStream.material.opacity = 0.5 + alP * 0.2 + Math.sin(t * 2.9) * 0.04;
@@ -20955,12 +21026,14 @@ function phAnimate() {
     phAlleyPool.scale.set(agR * 1.1, agR, 1);
     phAlleyPool.material.opacity = 0.5 + agP * 0.2 + Math.sin(t * 2.3 + 1) * 0.04;
   }
-  // Over the kerb: the pavement sheet, fed from the road pool
-  var pvT = Math.max(0, t - 75);
+  // Over the kerb: the pavement sheet, fed from the road pool. Waits for
+  // the road to actually look full (the pool needs ~2.5 min to press the
+  // kerb along its length) — the pavement must never flood first.
+  var pvT = Math.max(0, t - 150);
   if (pvT > 0) {
-    var pvLen = 2.95 * Math.tanh(pvT / 130);
-    phPaveFlood.scale.set(1.6 + pvLen * 1.9 + Math.sin(t * 1.7) * 0.03, pvLen, 1);
-    phPaveFlood.material.opacity = 0.45 + Math.min(0.25, pvT * 0.01) + Math.sin(t * 2.4) * 0.04;
+    var pvLen = 2.95 * Math.tanh(pvT / 160);
+    phPaveFlood.scale.set(1.2 + pvLen * 0.9 + Math.sin(t * 1.7) * 0.03, pvLen, 1);
+    phPaveFlood.material.opacity = 0.45 + Math.min(0.25, pvT * 0.006) + Math.sin(t * 2.4) * 0.04;
   }
 
   // Silhouette sway

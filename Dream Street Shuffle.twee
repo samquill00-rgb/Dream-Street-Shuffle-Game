@@ -22415,7 +22415,7 @@ function buildCaScene() {
   camera.position.set(12, 5.5, 5);
   camera.lookAt(0, 1.2, -12);
 
-  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  var renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
@@ -22849,7 +22849,9 @@ function buildCaScene() {
   rubbleTex.wrapS = rubbleTex.wrapT = THREE.RepeatWrapping;
   var rubbleMat = new THREE.MeshStandardMaterial({ map: rubbleTex, roughness: 0.95 });
   var darkRubble = new THREE.MeshStandardMaterial({ map: rubbleTex, color: 0x9a8058, roughness: 0.95 });
-  var wetSandMat = new THREE.MeshStandardMaterial({ color: 0xb8a060, roughness: 0.35, metalness: 0.2 });
+  // Roughness up, metalness right down — the old values let the low sun
+  // blow a near-white specular hotspot on the beach
+  var wetSandMat = new THREE.MeshStandardMaterial({ color: 0xb8a060, roughness: 0.68, metalness: 0.04 });
   var mossyMat = new THREE.MeshStandardMaterial({ color: 0x584c20, roughness: 0.9 });
   var terracotta = new THREE.MeshStandardMaterial({ map: rubbleTex, color: 0xc88860, roughness: 0.85 });
   // Sun-bleached desert palette — no English greens
@@ -23017,17 +23019,122 @@ function buildCaScene() {
   wetStrip.position.set(0, -0.01, -7);
   scene.add(wetStrip);
 
-  // Dark damp patches on the sand
-  for (var dp = 0; dp < 10; dp++) {
-    var dpMat = new THREE.MeshStandardMaterial({
-      color: 0xa08848, roughness: 0.7, transparent: true, opacity: 0.3
-    });
-    var patch = new THREE.Mesh(new THREE.PlaneGeometry(1.5 + Math.random() * 3, 1 + Math.random() * 2), dpMat);
-    patch.rotation.x = -Math.PI / 2;
-    patch.position.set(-10 + Math.random() * 20, 0.01, -2 + Math.random() * 10);
-    patch.rotation.z = Math.random() * Math.PI;
-    scene.add(patch);
-  }
+  // ---- SAND-INTO-SEA DISSOLVE ----
+  // The land's seaward edge was a ruler-straight line. This band straddles
+  // the waterline: solid wet sand on the landward side, breaking up into a
+  // wavy, speckled fade so the sand crumbles into the shallows
+  var sandFadeTex = makeCanvasTexture(512, 128, function(cx, w, h) {
+    cx.clearRect(0, 0, w, h);
+    // Solid wet sand across the landward (top) portion
+    cx.fillStyle = '#b89868';
+    cx.fillRect(0, 0, w, h * 0.55);
+    // Wavy dissolving boundary pushing seaward
+    cx.beginPath();
+    cx.moveTo(0, h * 0.55);
+    for (var sx2 = 0; sx2 <= w; sx2 += 8) {
+      var edgeY = h * (0.62 + Math.sin(sx2 * 0.07) * 0.09 + Math.sin(sx2 * 0.19 + 2) * 0.06 + (Math.random() - 0.5) * 0.05);
+      cx.lineTo(sx2, edgeY);
+    }
+    cx.lineTo(w, h * 0.55);
+    cx.closePath();
+    cx.fill();
+    // Scattered sand islets dissolving beyond the edge
+    for (var si2 = 0; si2 < 60; si2++) {
+      cx.fillStyle = 'rgba(184, 152, 104, ' + (0.25 + Math.random() * 0.5) + ')';
+      cx.beginPath();
+      cx.ellipse(Math.random() * w, h * 0.6 + Math.random() * h * 0.35,
+        3 + Math.random() * 10, 1.5 + Math.random() * 4, Math.random() * 0.4, 0, Math.PI * 2);
+      cx.fill();
+    }
+    // Ripple detail within the solid sand
+    for (var rr2 = 0; rr2 < 6; rr2++) {
+      var ry3 = h * 0.08 + rr2 * h * 0.08;
+      cx.strokeStyle = 'rgba(140, 112, 70, 0.35)';
+      cx.lineWidth = 1.4;
+      cx.beginPath();
+      cx.moveTo(0, ry3);
+      for (var rx2 = 0; rx2 <= w; rx2 += 16) {
+        cx.lineTo(rx2, ry3 + Math.sin(rx2 * 0.1 + rr2 * 2) * 2.5);
+      }
+      cx.stroke();
+    }
+    // Soft alpha ramp so even the solid side melts gently at its far edge
+    var sfade = cx.createLinearGradient(0, h * 0.5, 0, h);
+    sfade.addColorStop(0, 'rgba(0,0,0,0)');
+    sfade.addColorStop(1, 'rgba(0,0,0,0.55)');
+    cx.globalCompositeOperation = 'destination-out';
+    cx.fillStyle = sfade;
+    cx.fillRect(0, h * 0.5, w, h * 0.5);
+    cx.globalCompositeOperation = 'source-over';
+  });
+  sandFadeTex.wrapS = sandFadeTex.wrapT = THREE.RepeatWrapping;
+  sandFadeTex.repeat.set(6, 1);
+  // Dry-sand variant of the dissolve for the upper junction, where the dry
+  // beach plane used to end in a straight line against the wet sand
+  var drySandFadeTex = makeCanvasTexture(512, 128, function(cx, w, h) {
+    cx.clearRect(0, 0, w, h);
+    cx.fillStyle = '#e8d098';
+    cx.fillRect(0, 0, w, h * 0.5);
+    cx.beginPath();
+    cx.moveTo(0, h * 0.5);
+    for (var dx2 = 0; dx2 <= w; dx2 += 8) {
+      var dEdge = h * (0.58 + Math.sin(dx2 * 0.06) * 0.1 + Math.sin(dx2 * 0.17 + 1) * 0.06 + (Math.random() - 0.5) * 0.05);
+      cx.lineTo(dx2, dEdge);
+    }
+    cx.lineTo(w, h * 0.5);
+    cx.closePath();
+    cx.fill();
+    for (var di2 = 0; di2 < 70; di2++) {
+      cx.fillStyle = 'rgba(232, 208, 152, ' + (0.3 + Math.random() * 0.5) + ')';
+      cx.beginPath();
+      cx.ellipse(Math.random() * w, h * 0.55 + Math.random() * h * 0.4,
+        3 + Math.random() * 9, 1.5 + Math.random() * 4, Math.random() * 0.4, 0, Math.PI * 2);
+      cx.fill();
+    }
+    var dfade = cx.createLinearGradient(0, h * 0.45, 0, h);
+    dfade.addColorStop(0, 'rgba(0,0,0,0)');
+    dfade.addColorStop(1, 'rgba(0,0,0,0.6)');
+    cx.globalCompositeOperation = 'destination-out';
+    cx.fillStyle = dfade;
+    cx.fillRect(0, h * 0.45, w, h * 0.55);
+    cx.globalCompositeOperation = 'source-over';
+  });
+  drySandFadeTex.wrapS = drySandFadeTex.wrapT = THREE.RepeatWrapping;
+  drySandFadeTex.repeat.set(6, 1);
+  var drySandFade = new THREE.Mesh(new THREE.PlaneGeometry(120, 2.6),
+    new THREE.MeshStandardMaterial({
+      map: drySandFadeTex, transparent: true, roughness: 0.9, depthWrite: false
+    }));
+  drySandFade.rotation.x = -Math.PI / 2;
+  drySandFade.position.set(0, 0.04, -5.4);
+  drySandFade.renderOrder = 1;
+  scene.add(drySandFade);
+  var sandFadeMat = new THREE.MeshStandardMaterial({
+    map: sandFadeTex, transparent: true, roughness: 0.72, metalness: 0.03, depthWrite: false
+  });
+  var sandFade = new THREE.Mesh(new THREE.PlaneGeometry(120, 3.2), sandFadeMat);
+  sandFade.rotation.x = -Math.PI / 2;
+  sandFade.position.set(0, 0.045, -8.9);
+  sandFade.renderOrder = 1;
+  scene.add(sandFade);
+  // Angled companion for the left shore where the coast curves back
+  var sandFadeL = new THREE.Mesh(new THREE.PlaneGeometry(28, 2.6), sandFadeMat);
+  sandFadeL.rotation.x = -Math.PI / 2;
+  sandFadeL.rotation.z = 0.22;
+  sandFadeL.position.set(-11, 0.047, -10.9);
+  sandFadeL.renderOrder = 1;
+  scene.add(sandFadeL);
+  // Third dissolve band for the far-left back-curve, matching the steeper
+  // beach strip there — its square seaward corner needed melting too
+  var sandFadeL2 = new THREE.Mesh(new THREE.PlaneGeometry(15, 2.4), sandFadeMat);
+  sandFadeL2.rotation.x = -Math.PI / 2;
+  sandFadeL2.rotation.z = 0.55;
+  sandFadeL2.position.set(-19.5, 0.049, -12.4);
+  sandFadeL2.renderOrder = 1;
+  scene.add(sandFadeL2);
+
+  // (Dark damp-patch rectangles REMOVED — hard-edged planes lying on the
+  // textured sand read as blocks; the sand texture carries its own variation)
 
   // ============================================================
   // SEA — clear layered progression from shore to horizon
@@ -23042,20 +23149,79 @@ function buildCaScene() {
     emissive: 0x0a2040, emissiveIntensity: 0.06
   });
 
-  // Surf zone — very shallow turquoise water at the beach edge (z=-9 to z=-12)
-  var surfZoneMat = new THREE.MeshStandardMaterial({
-    color: 0x48b8c8, roughness: 0.5, metalness: 0.05,
-    emissive: 0x306870, emissiveIntensity: 0.08
+  // ---- THE REAL SHORE JUNCTION ----
+  // A sandy seabed runs on beneath the near water, and the surf-zone water
+  // is TRANSPARENT at its landward edge, deepening seaward — so the sea
+  // fades in over the sand instead of starting at a hard plane boundary.
+  var seabed = new THREE.Mesh(new THREE.PlaneGeometry(120, 15),
+    new THREE.MeshStandardMaterial({ color: 0x9a8656, roughness: 0.9 }));
+  seabed.rotation.x = -Math.PI / 2;
+  // Safely below every water plane at every tide phase, running far out
+  // so sand shows beneath the whole long dissolve
+  seabed.position.set(0, -0.24, -13.5);
+  scene.add(seabed);
+
+  // Surf zone — shallow turquoise, alpha ramping from nothing at the
+  // waterline to full a few metres out, with a wavy, broken edge
+  var surfZoneTex = makeCanvasTexture(512, 128, function(cx, w, h) {
+    cx.fillStyle = '#48b8c8';
+    cx.fillRect(0, 0, w, h);
+    // Long gentle alpha ramp: fully clear at the waterline, only reaching
+    // full water in the final quarter of the band
+    var szg = cx.createLinearGradient(0, h, 0, 0);
+    szg.addColorStop(0, 'rgba(0,0,0,1)');
+    szg.addColorStop(0.45, 'rgba(0,0,0,0.75)');
+    szg.addColorStop(0.75, 'rgba(0,0,0,0.35)');
+    szg.addColorStop(1, 'rgba(0,0,0,0)');
+    cx.globalCompositeOperation = 'destination-out';
+    cx.fillStyle = szg;
+    cx.fillRect(0, 0, w, h);
+    // Wavy broken waterline — bites of clear water eaten out along the edge
+    for (var wb = 0; wb < 70; wb++) {
+      cx.fillStyle = 'rgba(0,0,0,' + (0.25 + Math.random() * 0.5) + ')';
+      cx.beginPath();
+      cx.ellipse(Math.random() * w, h * 0.4 + Math.random() * h * 0.58,
+        10 + Math.random() * 30, 3 + Math.random() * 8, Math.random() * 0.3, 0, Math.PI * 2);
+      cx.fill();
+    }
+    cx.globalCompositeOperation = 'source-over';
   });
-  var surfZone = new THREE.Mesh(new THREE.PlaneGeometry(120, 4), surfZoneMat);
+  surfZoneTex.wrapS = surfZoneTex.wrapT = THREE.RepeatWrapping;
+  surfZoneTex.repeat.set(5, 1);
+  var surfZoneMat = new THREE.MeshStandardMaterial({
+    map: surfZoneTex, transparent: true, roughness: 0.5, metalness: 0.05,
+    emissive: 0x306870, emissiveIntensity: 0.08, depthWrite: false
+  });
+  var surfZone = new THREE.Mesh(new THREE.PlaneGeometry(120, 9), surfZoneMat);
   surfZone.rotation.x = -Math.PI / 2;
-  surfZone.position.set(0, -0.08, -11);
+  surfZone.position.set(0, -0.08, -12);
+  surfZone.renderOrder = 1;
   scene.add(surfZone);
 
-  // Shallow sea (z=-12 to z=-20)
-  var shallowSea = new THREE.Mesh(new THREE.PlaneGeometry(120, 10), shallowSeaMat);
+  // Shallow sea — its landward edge also fades in, so the deepening is one
+  // continuous dissolve rather than a fresh opaque boundary
+  var shallowFadeTex = makeCanvasTexture(256, 128, function(cx, w, h) {
+    cx.fillStyle = '#2898b0';
+    cx.fillRect(0, 0, w, h);
+    var shg = cx.createLinearGradient(0, h, 0, h * 0.45);
+    shg.addColorStop(0, 'rgba(0,0,0,0.95)');
+    shg.addColorStop(0.6, 'rgba(0,0,0,0.4)');
+    shg.addColorStop(1, 'rgba(0,0,0,0)');
+    cx.globalCompositeOperation = 'destination-out';
+    cx.fillStyle = shg;
+    cx.fillRect(0, 0, w, h);
+    cx.globalCompositeOperation = 'source-over';
+  });
+  shallowFadeTex.wrapS = shallowFadeTex.wrapT = THREE.RepeatWrapping;
+  shallowFadeTex.repeat.set(4, 1);
+  var shallowSea = new THREE.Mesh(new THREE.PlaneGeometry(120, 10),
+    new THREE.MeshStandardMaterial({
+      map: shallowFadeTex, transparent: true, roughness: 0.55, metalness: 0.05,
+      emissive: 0x205060, emissiveIntensity: 0.08, depthWrite: false
+    }));
   shallowSea.rotation.x = -Math.PI / 2;
   shallowSea.position.set(0, -0.12, -18);
+  shallowSea.renderOrder = 1;
   scene.add(shallowSea);
 
   // Main sea with texture (z=-20 to z=-50)
@@ -23098,6 +23264,7 @@ function buildCaScene() {
   sunPath.rotation.set(-Math.PI / 2, 0, 0.48);
   sunPath.position.set(-4, -0.14, -33);
   sunPath.scale.set(6, 28, 1);
+  sunPath.renderOrder = 3;
   scene.add(sunPath);
 
   // ---- CREPUSCULAR RAYS ----
@@ -23116,19 +23283,9 @@ function buildCaScene() {
     cx.closePath();
     cx.fill();
   });
+  // (Crepuscular ray planes REMOVED — their breathing opacity read as
+  // flashing behind the arch from this camera)
   var caRays = [];
-  var rayAngles = [-0.55, -0.18, 0.2, 0.5];
-  for (var ry = 0; ry < rayAngles.length; ry++) {
-    var rayMat = new THREE.MeshBasicMaterial({
-      map: rayTex, transparent: true, opacity: 0.07 + (ry % 2) * 0.03,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false
-    });
-    var rayMesh = new THREE.Mesh(new THREE.PlaneGeometry(7, 22), rayMat);
-    rayMesh.position.set(-26, 9, -62);
-    rayMesh.rotation.set(0, 0.5, rayAngles[ry]);
-    scene.add(rayMesh);
-    caRays.push({ mesh: rayMesh, base: rayMat.opacity, spd: 0.13 + ry * 0.07, off: ry * 1.7 });
-  }
 
   // ---- SEA SPARKLES ----
   // Scattered glints twinkling on the swell around the sun path
@@ -23186,6 +23343,7 @@ function buildCaScene() {
     }));
   moonGlint.rotation.set(-Math.PI / 2, 0, 0.22);
   moonGlint.position.set(-2.5, -0.13, -36);
+  moonGlint.renderOrder = 3;
   scene.add(moonGlint);
 
   // ---- DREAM PLANET ----
@@ -23369,8 +23527,11 @@ function buildCaScene() {
   dampSandTex.wrapS = dampSandTex.wrapT = THREE.RepeatWrapping;
   dampSandTex.repeat.set(6, 1);
   var dampBeachMat = new THREE.MeshStandardMaterial({
-    map: dampSandTex, roughness: 0.45, metalness: 0.12
+    map: dampSandTex, roughness: 0.7, metalness: 0.04
   });
+  // The main wet strip was still a flat colour band — give it the ripples too
+  wetSandMat.map = dampSandTex;
+  wetSandMat.needsUpdate = true;
   // Main beach band — long, wide strip running along the hill foot, raised
   // above the surf plane and the ground plane so it's clearly visible.
   // Angled to follow the curve of the coastline receding to the left.
@@ -23400,8 +23561,16 @@ function buildCaScene() {
   scene.add(hillDampBeach2);
   // Subtle scattered sand highlights — a few brighter patches catching the
   // setting sun on top of the beach surface
-  var sunlitSandMat = new THREE.MeshStandardMaterial({
-    color: 0xfae2a8, roughness: 0.85, transparent: true, opacity: 0.55
+  // Soft radial patches — hard-edged planes read as pale rectangles on the shore
+  var sunlitTex = makeCanvasTexture(64, 64, function(cx, w, h) {
+    var sg5 = cx.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2);
+    sg5.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+    sg5.addColorStop(0.55, 'rgba(255, 255, 255, 0.35)');
+    sg5.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    cx.fillStyle = sg5; cx.fillRect(0, 0, w, h);
+  });
+  var sunlitSandMat = new THREE.MeshBasicMaterial({
+    map: sunlitTex, color: 0xf0d898, transparent: true, opacity: 0.4, depthWrite: false
   });
   for (var bsh = 0; bsh < 8; bsh++) {
     var bshSize = 1.4 + Math.random() * 2.5;
@@ -23448,7 +23617,7 @@ function buildCaScene() {
 
   // Driftwood — pale weathered branches washed up along the tide line
   var driftwoodMat = new THREE.MeshStandardMaterial({ color: 0x8a7252, roughness: 0.95 });
-  var driftDarkMat = new THREE.MeshStandardMaterial({ color: 0x4a3a28, roughness: 0.95 });
+  var driftDarkMat = new THREE.MeshStandardMaterial({ color: 0x625038, roughness: 0.95 });
   var driftData = [
     [-3, -8, 1.2, 0.07, 0.3],
     [4, -7.5, 0.9, 0.06, -0.5],
@@ -23462,12 +23631,13 @@ function buildCaScene() {
     var dw = driftData[dwi];
     var driftMat = dwi % 3 === 0 ? driftDarkMat : driftwoodMat;
     var drift = new THREE.Mesh(
-      new THREE.CylinderGeometry(dw[3], dw[3] * 1.15, dw[2], 5),
+      new THREE.CylinderGeometry(dw[3], dw[3] * 1.15, dw[2], 7),
       driftMat
     );
     drift.rotation.z = Math.PI / 2;
     drift.rotation.y = dw[4];
-    drift.position.set(dw[0], -0.04, dw[1]);
+    // Bedded into the sand, not lying proud as a dark bar
+    drift.position.set(dw[0], -0.07, dw[1]);
     scene.add(drift);
     // Small forked branches
     if (Math.random() > 0.5) {
@@ -23483,46 +23653,11 @@ function buildCaScene() {
   }
 
   // Seaweed / kelp — dark wet wash patches at the tide line (low planes)
-  var kelpMat = new THREE.MeshStandardMaterial({
-    color: 0x2a3018, roughness: 0.85, transparent: true, opacity: 0.55
-  });
-  var kelpMatDark = new THREE.MeshStandardMaterial({
-    color: 0x1a2010, roughness: 0.9, transparent: true, opacity: 0.45
-  });
-  for (var kli = 0; kli < 18; kli++) {
-    var kSize = 0.5 + Math.random() * 1.3;
-    var kelp = new THREE.Mesh(
-      new THREE.PlaneGeometry(kSize, kSize * (0.35 + Math.random() * 0.45)),
-      Math.random() > 0.5 ? kelpMat : kelpMatDark
-    );
-    kelp.rotation.x = -Math.PI / 2;
-    kelp.rotation.z = Math.random() * Math.PI;
-    var kX = -15 + Math.random() * 30;
-    // Strung along the wet sand / surf transition
-    var kZ = -7.5 - Math.random() * 4;
-    kelp.position.set(kX, 0.005, kZ);
-    scene.add(kelp);
-  }
+  // (Kelp/seaweed plane scatter REMOVED — hard-edged flat rectangles on
+  // the sand read as blocks)
 
-  // Wet-sand variation patches — darker damp areas that vary the colour
-  // of the beach so it isn't a single flat tone
-  var wetPatchMat = new THREE.MeshStandardMaterial({
-    color: 0x7a5a30, roughness: 0.7, metalness: 0.1,
-    transparent: true, opacity: 0.45
-  });
-  for (var wsp = 0; wsp < 14; wsp++) {
-    var wspSize = 1.2 + Math.random() * 2.8;
-    var wspPatch = new THREE.Mesh(
-      new THREE.PlaneGeometry(wspSize, wspSize * (0.4 + Math.random() * 0.45)),
-      wetPatchMat
-    );
-    wspPatch.rotation.x = -Math.PI / 2;
-    wspPatch.rotation.z = Math.random() * Math.PI;
-    var wspX = -15 + Math.random() * 30;
-    var wspZ = -6.5 - Math.random() * 3.5;
-    wspPatch.position.set(wspX, 0.007, wspZ);
-    scene.add(wspPatch);
-  }
+  // (Wet-sand variation plates REMOVED — the pale four-sided shapes on
+  // the shore; the sand texture varies the tone now)
 
   // ============================================================
   // WAVE SURFACE — vertex-displaced overlay for subtle swell
@@ -23684,7 +23819,7 @@ function buildCaScene() {
 
   // FOAM BAND TEXTURE — a ragged wavy surf edge with bubble holes, so the
   // wash lines read as living foam rather than straight painted strips
-  function makeFoamBandTex(density, edgeBias) {
+  function makeFoamBandTex(density, edgeBias, endFade) {
     var tex = makeCanvasTexture(256, 64, function(cx, w, h) {
       cx.clearRect(0, 0, w, h);
       // Body of the foam band — lower portion, ragged top edge
@@ -23723,6 +23858,20 @@ function buildCaScene() {
       cx.fillStyle = bfade;
       cx.fillRect(0, 0, w, h);
       cx.globalCompositeOperation = 'source-over';
+      // Optional fade at both ends so a non-repeating patch never shows a
+      // straight cut edge where its plane stops
+      if (endFade) {
+        cx.globalCompositeOperation = 'destination-out';
+        var lfade = cx.createLinearGradient(0, 0, w * 0.22, 0);
+        lfade.addColorStop(0, 'rgba(0,0,0,1)');
+        lfade.addColorStop(1, 'rgba(0,0,0,0)');
+        cx.fillStyle = lfade; cx.fillRect(0, 0, w * 0.22, h);
+        var rfade = cx.createLinearGradient(w, 0, w * 0.78, 0);
+        rfade.addColorStop(0, 'rgba(0,0,0,1)');
+        rfade.addColorStop(1, 'rgba(0,0,0,0)');
+        cx.fillStyle = rfade; cx.fillRect(w * 0.78, 0, w * 0.22, h);
+        cx.globalCompositeOperation = 'source-over';
+      }
     });
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     return tex;
@@ -23773,32 +23922,9 @@ function buildCaScene() {
   // where the rocky headland breaks the surf. Right side stays mostly open
   // water with just light lapping foam, so the bay reads as calm.
   var foamPatches = [];
-  for (var fp = 0; fp < 18; fp++) {
-    var fpMat = new THREE.SpriteMaterial({
-      map: foamSprayTex, transparent: true,
-      opacity: 0.18 + Math.random() * 0.18,
-      depthWrite: true,
-      alphaTest: 0.05
-    });
-    var fpSprite = new THREE.Sprite(fpMat);
-    var fpSize = 1.5 + Math.random() * 2.5;
-    fpSprite.scale.set(fpSize, fpSize * 0.22, 1);
-    // Bias forward — keep patches close to where the actual water lapping
-    // is happening, in front of the hill (not buried inside it)
-    var fpX = -10 + Math.random() * (fp < 14 ? 18 : 22);
-    var coastZ = -8 - Math.max(0, (-fpX - 2)) * 0.3;
-    var fpZ = coastZ - Math.random() * 2;
-    fpSprite.position.set(fpX, -0.06, fpZ);
-    scene.add(fpSprite);
-    foamPatches.push({
-      sprite: fpSprite,
-      baseX: fpX,
-      baseZ: fpZ,
-      phase: Math.random() * Math.PI * 2,
-      speed: 0.3 + Math.random() * 0.5,
-      baseOpacity: fpMat.opacity
-    });
-  }
+  // (18 flat foam-patch sprites REMOVED — wide lozenges with pulsing
+  // opacity that read as flashing pale rectangles on the water; the
+  // textured foam bands carry the bubbling now)
 
   // Lapping foam — centre-right segment
   var foamBandTexC = makeFoamBandTex(50, -0.08);
@@ -23846,30 +23972,18 @@ function buildCaScene() {
     rock.position.set(rx, wet ? -0.08 + rs * 0.25 : rs * 0.3, rz);
     rock.castShadow = true;
     scene.add(rock);
-    // Froth collar round the wet rocks
-    if (wet) {
-      var collarMat = new THREE.SpriteMaterial({
-        map: foamSprayTex, transparent: true,
-        opacity: 0.3 + Math.random() * 0.2, depthWrite: false
-      });
-      var collar = new THREE.Sprite(collarMat);
-      collar.scale.set(rs * 3.2, rs * 1.0, 1);
-      collar.position.set(rx, -0.02, rz + rs * 0.5);
-      scene.add(collar);
-      rockSprayPatches.push({
-        sprite: collar, base: collarMat.opacity,
-        spd: 0.5 + Math.random() * 0.7, off: Math.random() * Math.PI * 2
-      });
-    }
+    // (Froth collars removed — stretched pulsing lozenges read as blocks)
   }
   // ---- ROLLING WAVE CRESTS ----
   // Low white crests that gather offshore, roll in, and die at the wash —
   // each on its own cycle so the surf breathes irregularly
   var waveCrests = [];
+  // Crests kept to the OPEN water right of the headland — the old left
+  // crest swept straight through the hill and flashed on its slopes
   var crestSpecs = [
-    { x: 4, w: 26, spd: 0.14, off: 0 },
-    { x: -4, w: 16, spd: 0.11, off: 2.6, rz: 0.3 },
-    { x: 10, w: 18, spd: 0.17, off: 4.4 }
+    { x: 6, w: 20, spd: 0.14, off: 0 },
+    { x: 13, w: 14, spd: 0.11, off: 2.6 },
+    { x: 9, w: 16, spd: 0.17, off: 4.4 }
   ];
   for (var wc = 0; wc < crestSpecs.length; wc++) {
     var wcs = crestSpecs[wc];
@@ -23881,20 +23995,13 @@ function buildCaScene() {
     crest.rotation.x = -Math.PI / 2;
     if (wcs.rz) crest.rotation.z = wcs.rz;
     crest.position.set(wcs.x, -0.07, -15);
+    crest.renderOrder = 8;
     scene.add(crest);
     waveCrests.push({ mesh: crest, x: wcs.x, spd: wcs.spd, off: wcs.off });
   }
 
-  // ---- MIRROR-WET SAND ----
-  // The glistening band the water leaves behind as it retreats
-  var mirrorSandMat = new THREE.MeshStandardMaterial({
-    color: 0x9a8258, roughness: 0.08, metalness: 0.4,
-    transparent: true, opacity: 0.35, depthWrite: false
-  });
-  var mirrorSand = new THREE.Mesh(new THREE.PlaneGeometry(110, 2.4), mirrorSandMat);
-  mirrorSand.rotation.x = -Math.PI / 2;
-  mirrorSand.position.set(0, -0.045, -7.4);
-  scene.add(mirrorSand);
+  // (Mirror-wet sand band REMOVED — a hard-edged rectangle whose opacity
+  // pulsed with the swell; it read as a flashing block, not a glisten)
 
   // ---- STAGGERED FOAM ARCS ----
   // Short extra segments at odd angles so the wash line never reads as
@@ -23905,30 +24012,27 @@ function buildCaScene() {
     { x: 16, z: -8.8, w: 6, rz: 0.18 },
     { x: -9, z: -9.9, w: 6, rz: 0.55 }
   ];
+  var foamArcTex = makeFoamBandTex(70, 0, true);
+  foamArcTex.repeat.set(1, 1);
+  var foamArcs = [];
   for (var fa = 0; fa < foamArcSpecs.length; fa++) {
     var fas = foamArcSpecs[fa];
     var arcMat = foamMat.clone();
+    arcMat.map = foamArcTex;
     arcMat.opacity = 0.45 + Math.random() * 0.2;
     var arc = new THREE.Mesh(new THREE.PlaneGeometry(fas.w, 1.4), arcMat);
     arc.rotation.x = -Math.PI / 2;
     arc.rotation.z = fas.rz;
     arc.position.set(fas.x, -0.035, fas.z);
+    arc.renderOrder = 4;
     scene.add(arc);
+    foamArcs.push(arc);
   }
 
-  // Left headland foot — rocks following the coast as it curves back
-  placeShoreRock(-11, -10.6, 0.55, true);
-  placeShoreRock(-12.5, -11.4, 0.8, true);
-  placeShoreRock(-14.2, -11.2, 0.45, true);
-  placeShoreRock(-15.8, -12.6, 0.95, true);
-  placeShoreRock(-17.5, -12.9, 0.6, true);
-  placeShoreRock(-19, -14, 1.2, true);
-  placeShoreRock(-12, -9.8, 0.5, false);
-  placeShoreRock(-14.5, -10.2, 0.65, false);
-  placeShoreRock(-17, -11.3, 0.7, false);
-  placeShoreRock(-19.5, -12.2, 0.9, false);
-  placeShoreRock(-21, -13, 0.75, false);
-  // Right shore — a few outliers where the far bank meets the water
+  // Left-headland rocks REMOVED — they sat inside the hill's footprint
+  // (x -29..-3, z -25..-3) and their froth collars poked up through the
+  // hillside as inland mist. The older shoreline-rock systems already
+  // dress that headland. Only the right shore, in open water, keeps these:
   placeShoreRock(16, -9.5, 0.6, true);
   placeShoreRock(18, -10.2, 0.85, true);
   placeShoreRock(17, -8.6, 0.5, false);
@@ -24102,11 +24206,13 @@ function buildCaScene() {
   centreWallR.position.set(2.675, 1.75, CENTRE_Z);
   scene.add(centreWallR);
   // Broken top — individual blocks
+  // Sunk 3cm into the wall tops — sitting exactly flush left a coplanar
+  // seam that flashed on the brickwork
   var cTop1 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.6, 0.8), warmStone);
-  cTop1.position.set(-0.5, 3.8, CENTRE_Z);
+  cTop1.position.set(-0.5, 3.77, CENTRE_Z);
   scene.add(cTop1);
   var cTop2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.45, 0.8), darkStone);
-  cTop2.position.set(2.3, 3.72, CENTRE_Z);
+  cTop2.position.set(2.3, 3.69, CENTRE_Z);
   scene.add(cTop2);
 
   // Arch — pilasters + lintel
@@ -24141,7 +24247,9 @@ function buildCaScene() {
       new THREE.BoxGeometry(vWide, vThick * (isKey ? 1.15 : 1.0), vDepth),
       vMat
     );
-    voussoir.position.set(vx, vy, CENTRE_Z);
+    // Alternate voussoirs staggered a hair in depth — neighbouring blocks
+    // interpenetrate along the curve and their coplanar faces flash
+    voussoir.position.set(vx, vy, CENTRE_Z + (vi % 2 ? 0.01 : -0.01));
     voussoir.rotation.z = theta - Math.PI / 2;
     scene.add(voussoir);
   }
@@ -24153,7 +24261,8 @@ function buildCaScene() {
       new THREE.BoxGeometry(vWide, 0.08, vDepth + 0.05),
       darkStone
     );
-    mMould.position.set(archCX + Math.cos(mTheta) * mR, archCY + Math.sin(mTheta) * mR, CENTRE_Z);
+    // Same depth stagger as the voussoirs — the ring segments overlap too
+    mMould.position.set(archCX + Math.cos(mTheta) * mR, archCY + Math.sin(mTheta) * mR, CENTRE_Z + (mi % 2 ? 0.012 : -0.012));
     mMould.rotation.z = mTheta - Math.PI / 2;
     scene.add(mMould);
   }
@@ -25046,7 +25155,7 @@ function buildCaScene() {
     var clump = new THREE.Group();
     var bladeCount = 8 + Math.floor(Math.random() * 6);
     for (var bi = 0; bi < bladeCount; bi++) {
-      var bl = baseSize * (0.7 + Math.random() * 0.9);
+      var bl = baseSize * (0.55 + Math.random() * 0.55);
       var bw = 0.028 + Math.random() * 0.03;
       var bgeo = new THREE.PlaneGeometry(bw, bl, 1, 4);
       bgeo.translate(0, bl / 2, 0);
@@ -25060,9 +25169,11 @@ function buildCaScene() {
       bgeo.computeVertexNormals();
       var blade = new THREE.Mesh(bgeo, dryGrassMats[Math.floor(Math.random() * dryGrassMats.length)]);
       blade.rotation.y = Math.random() * Math.PI * 2;
+      // Rooted deep so blades emerge from the ground even where the
+      // surface is a raised strip, never floating above it
       blade.position.set(
         (Math.random() - 0.5) * baseSize * 0.35,
-        -0.02,
+        -0.07,
         (Math.random() - 0.5) * baseSize * 0.3
       );
       clump.add(blade);
@@ -25076,7 +25187,7 @@ function buildCaScene() {
   // CEDARS — the big dramatic trees
   makeCedar(-12, -2, 7.0, 0.02);
   makeCedar(13, 0, 6.0, -0.02);
-  makeCedar(-18, -5, 5.5, 0);
+  makeCedar(-18, -1, 5.5, 0);
 
   // OLIVE TREES — gnarled, spreading, silver-green
   makeOlive(-8, 3, 3.5, 2.0, 0.05);
@@ -25087,28 +25198,34 @@ function buildCaScene() {
 
   // PALMS — kept away from the camera so none looms in the right-foreground.
   // The big right-foreground palm used to read as an antenna right of frame.
-  makePalm(-10, -4, 6.0, 0.1);
-  makePalm(-14, -3, 5.5, -0.08);
-  makePalm(15, -6, 5.0, 0.06);   // pushed back from (12,-3,6.5)
-  makePalm(-17, -5, 4.5, 0.15);
+  makePalm(-10, -1, 6.0, 0.1);
+  makePalm(-14, 0, 5.5, -0.08);
+  makePalm(16, -1, 5.0, 0.06);   // replanted landward, clear of the wash
+  makePalm(-17, -1.5, 4.5, 0.15);
 
   // BUSHES — scattered scrub. Avoid placing them right at the camera edge
   // where their sprite edges read as cloud puffs; keep them midground+.
   makeBush(-4.5, 1.5, 1.0);
-  makeBush(-7, -5, 0.9);
-  makeBush(5, -5.5, 1.1);
+  makeBush(-7, -1, 0.9);
+  makeBush(5, -1.5, 1.1);
   makeBush(-11, -0.5, 1.2);
-  makeBush(3, -7, 0.7);
-  makeBush(-2, -7.5, 0.85);
-  makeBush(7, -6.5, 0.7);
-  makeBush(-8, -6.5, 0.8);
-  makeBush(11, -5, 0.6);
+  makeBush(3, -2, 0.7);
+  makeBush(-2, -2.5, 0.85);
+  makeBush(7, -2, 0.7);
+  makeBush(-8, -2, 0.8);
+  makeBush(11, -1.5, 0.6);
   makeBush(-3, -4, 0.75);
 
-  // Tall grass — placed as natural clumps rather than single sprites
-  for (var gi = 0; gi < 24; gi++) {
-    var gSize = 0.6 + Math.random() * 0.8;
-    placeGrassClump(-15 + Math.random() * 30, -7 + Math.random() * 6, gSize);
+  // Tall grass — pulled into the FOREGROUND, on the dry land around the
+  // ruins and platform where it frames the view instead of drowning
+  // behind the waves at the shoreline
+  for (var gi = 0; gi < 22; gi++) {
+    var gSize = 0.4 + Math.random() * 0.45;
+    placeGrassClump(-15 + Math.random() * 30, 0.5 + Math.random() * 6, gSize);
+  }
+  // A few closer accent clumps near the camera side, framing the platform
+  for (var ga = 0; ga < 7; ga++) {
+    placeGrassClump(6 + Math.random() * 8, 2.5 + Math.random() * 4.5, 0.5 + Math.random() * 0.35);
   }
 
   // Wildflowers
@@ -25266,8 +25383,8 @@ function buildCaScene() {
   makeBush(-15, -5, 1.1);
   // Tall grass clusters
   for (var gli = 0; gli < 10; gli++) {
-    var glSize = 0.5 + Math.random() * 0.7;
-    placeGrassClump(-12 - Math.random() * 6, -5 + Math.random() * 14, glSize);
+    var glSize = 0.4 + Math.random() * 0.45;
+    placeGrassClump(-12 - Math.random() * 6, -3 + Math.random() * 12, glSize);
   }
   // Rubble scatter — organic dodecahedra
   for (var rlb = 0; rlb < 10; rlb++) {
@@ -25334,8 +25451,8 @@ function buildCaScene() {
   makeBush(20, -6, 0.9);
   // Tall grass
   for (var gri = 0; gri < 10; gri++) {
-    var grSize = 0.5 + Math.random() * 0.7;
-    placeGrassClump(14 + Math.random() * 10, -5 + Math.random() * 14, grSize);
+    var grSize = 0.4 + Math.random() * 0.45;
+    placeGrassClump(14 + Math.random() * 10, -3 + Math.random() * 12, grSize);
   }
   // Rubble scatter — organic dodecahedra
   for (var rrb = 0; rrb < 10; rrb++) {
@@ -26247,24 +26364,40 @@ function buildCaScene() {
   var hemi = new THREE.HemisphereLight(0x2c3878, 0x8a5a28, 0.3);
   scene.add(hemi);
 
-  // SUN — dominant warm directional light. Lower position + bigger shadow map
-  // so columns, walls and lintels cast long, sharp shadows across the scene.
-  var sunLight = new THREE.DirectionalLight(0xff9a48, 1.5);
+  // SUN — split into two lights. The visual sun stays LOW so the raking
+  // dusk light and warm rim survive, but it casts NO shadows: a shadow
+  // camera aligned with a near-horizontal light smears every texel into
+  // long stripes, and their boundaries flashed as roaming light-cones no
+  // bias or frustum could cure.
+  var sunLight = new THREE.DirectionalLight(0xff9a48, 0.9);
   sunLight.position.set(-12, 4, -40);
   sunLight.target.position.set(2, 0, 0);
   scene.add(sunLight.target);
-  sunLight.castShadow = true;
-  sunLight.shadow.mapSize.width = 2048;
-  sunLight.shadow.mapSize.height = 2048;
-  sunLight.shadow.camera.near = 0.5;
-  sunLight.shadow.camera.far = 130;
-  sunLight.shadow.camera.left = -40;
-  sunLight.shadow.camera.right = 40;
-  sunLight.shadow.camera.top = 25;
-  sunLight.shadow.camera.bottom = -8;
-  sunLight.shadow.bias = -0.0008;
-  sunLight.shadow.normalBias = 0.04;
+  sunLight.castShadow = false;
   scene.add(sunLight);
+
+  // The SHADOW sun — same azimuth, hoisted high enough that its shadow
+  // texels stay compact and stable. Shadows still stretch long from the
+  // geometry, but the map itself is well-behaved.
+  var shadowSun = new THREE.DirectionalLight(0xff9a48, 0.6);
+  shadowSun.position.set(-16, 30, -48);
+  shadowSun.target.position.set(2, 0, 0);
+  scene.add(shadowSun.target);
+  shadowSun.castShadow = true;
+  shadowSun.shadow.mapSize.width = 4096;
+  shadowSun.shadow.mapSize.height = 4096;
+  shadowSun.shadow.camera.near = 0.5;
+  shadowSun.shadow.camera.far = 160;
+  shadowSun.shadow.camera.left = -55;
+  shadowSun.shadow.camera.right = 55;
+  shadowSun.shadow.camera.top = 40;
+  shadowSun.shadow.camera.bottom = -40;
+  shadowSun.shadow.bias = -0.0012;
+  shadowSun.shadow.normalBias = 0.12;
+  // Soften the shadow edges — hard texel boundaries crawl on the brickwork
+  // as the camera breathes; a wider PCF blur stills them
+  shadowSun.shadow.radius = 5;
+  scene.add(shadowSun);
 
   // Soft fill — kept low so the shadow side stays clearly in shadow
   var fillLight = new THREE.DirectionalLight(0xc08030, 0.12);
@@ -26297,7 +26430,10 @@ function buildCaScene() {
       // Skip planes that are decorative/foliage or are the sky/sea/fog —
       // these would either look wrong or kill performance
       var mat = obj.material;
-      if (mat && (mat.transparent === true && (mat.opacity || 1) < 0.7)) return;
+      // Threshold raised so the foam/wash layers (opacity 0.75-0.85) are
+      // excluded — semi-transparent tide-riding planes receiving shadows
+      // flicker as they bob through the shadow terminator
+      if (mat && (mat.transparent === true && (mat.opacity || 1) < 0.9)) return;
       if (mat === skyMat) return;
       if (mat === waveMat) return;
       // Receive everything; cast for solid stones, trees, ruins
@@ -26308,8 +26444,16 @@ function buildCaScene() {
       }
     });
   }
-  // Defer until after the rest of the scene is fully assembled
-  setTimeout(function() { enableSceneShadows(scene); }, 0);
+  // Defer until after the rest of the scene is fully assembled.
+  // Then render the shadow map ONCE and freeze it — with per-frame shadow
+  // re-rendering, moving casters made the shadow texels re-decide themselves
+  // constantly, and every marginal pixel flashed. The sun never moves;
+  // the shadows shouldn't either.
+  setTimeout(function() {
+    enableSceneShadows(scene);
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
+  }, 0);
 
   // ============================================================
   // FOG PLANES — Cecil Court style atmospheric layers
@@ -26338,6 +26482,10 @@ function buildCaScene() {
       amplitude: 0.4 + Math.random() * 0.6,
       phase: Math.random() * Math.PI * 2
     };
+    // Pin the haze to draw LAST, always — without this its sort position
+    // flips against the shore layers as it drifts, and the whole scene
+    // seems to jump between layers under a sandy veil
+    fogPlane.renderOrder = 50;
     fogPlanes.push(fogPlane);
     scene.add(fogPlane);
   }
@@ -26364,6 +26512,7 @@ function buildCaScene() {
       amplitude: 0.3 + Math.random() * 0.5,
       phase: Math.random() * Math.PI * 2
     };
+    seaHaze.renderOrder = 50;
     fogPlanes.push(seaHaze);
     scene.add(seaHaze);
   }
@@ -26390,6 +26539,7 @@ function buildCaScene() {
       amplitude: 0.2 + Math.random() * 0.4,
       phase: Math.random() * Math.PI * 2
     };
+    hFog.renderOrder = 50;
     fogPlanes.push(hFog);
     scene.add(hFog);
   }
@@ -26419,26 +26569,7 @@ function buildCaScene() {
     }
   });
   var seaMistSprites = [];
-  for (var smi = 0; smi < 6; smi++) {
-    var smMat = new THREE.SpriteMaterial({
-      map: seaMistTex, transparent: true,
-      opacity: 0.08 + Math.random() * 0.06,
-      depthWrite: false
-    });
-    var smSprite = new THREE.Sprite(smMat);
-    smSprite.scale.set(30 + Math.random() * 20, 2.5 + Math.random() * 1.5, 1);
-    var smX = -15 + Math.random() * 20;
-    var smZ = -14 - smi * 4 + Math.random() * 2;
-    smSprite.position.set(smX, 0.5 + Math.random() * 0.8, smZ);
-    scene.add(smSprite);
-    seaMistSprites.push({
-      sprite: smSprite,
-      baseX: smX,
-      driftSpeed: 0.008 + Math.random() * 0.015,
-      baseOpacity: smMat.opacity,
-      pulsePhase: Math.random() * Math.PI * 2
-    });
-  }
+  // (Sea-mist band sprites REMOVED — soft rectangles hovering over the water)
 
   // ============================================================
   // CLOUD SPRITES — bold, multi-coloured, visible
@@ -26737,9 +26868,10 @@ function buildCaScene() {
     var lookDrift = Math.sin(t * 0.05) * 0.04;
     camera.lookAt(lookBaseX + lookDrift, lookBaseY + Math.sin(t * 0.04) * 0.02, lookBaseZ);
 
-    // Sunset breathing
+    // Sunset breathing — split across the visual sun and the shadow sun
     var sunPulse = 1.0 + Math.sin(t * 0.12) * 0.05 + Math.sin(t * 0.31) * 0.025;
-    sunLight.intensity = 1.5 * sunPulse;
+    sunLight.intensity = 0.9 * sunPulse;
+    shadowSun.intensity = 0.6 * sunPulse;
     horizonGlow.intensity = 0.5 * sunPulse;
 
     // Sea shimmer — more visible colour shifting
@@ -26855,7 +26987,7 @@ function buildCaScene() {
     var lapWave = Math.sin(t * 0.5) * 0.6 + Math.sin(t * 0.9) * 0.25;
     lappingFoam.position.z = -8.5 + lapWave;
     lappingFoamL.position.z = -10 + lapWave * 0.8;
-    lappingFoamMat.opacity = 0.45 + Math.sin(t * 0.5) * 0.3;
+    lappingFoamMat.opacity = 0.62 + Math.sin(t * 0.5) * 0.3;
     lappingFoamL.material.opacity = lappingFoamMat.opacity;
     // The foam bands themselves churn — textures sliding slowly in
     // opposite directions so the bubbles seem to seethe along the wash
@@ -26863,6 +26995,11 @@ function buildCaScene() {
     foamBandTexB.offset.x = (-t * 0.012) % 1;
     foamBandTexC.offset.x = (t * 0.017) % 1;
     foamBandTexD.offset.x = (-t * 0.006) % 1;
+    // Stable draw order so transparent layers never re-sort mid-breath
+    foam3.renderOrder = foam3L.renderOrder = 2;
+    foam.renderOrder = foamL.renderOrder = 3;
+    lappingFoam.renderOrder = lappingFoamL.renderOrder = 4;
+    foam2.renderOrder = foam2L.renderOrder = 5;
     // Spray pulsing round the wet rocks as the swell knocks them
     for (var rsp = 0; rsp < rockSprayPatches.length; rsp++) {
       var rspd = rockSprayPatches[rsp];
@@ -26870,17 +27007,6 @@ function buildCaScene() {
       rspd.sprite.material.opacity = rspd.base * (0.35 + Math.max(0, rspW) * 0.9);
       rspd.sprite.position.y = -0.02 + Math.max(0, rspW) * 0.06;
     }
-    // Rolling crests — each gathers offshore, rolls in, and dies at the wash
-    for (var wci = 0; wci < waveCrests.length; wci++) {
-      var wcd = waveCrests[wci];
-      var wcP = ((t * wcd.spd + wcd.off) % 1.0);
-      wcd.mesh.position.z = -15.5 + wcP * 6.6;
-      // Fade in as it forms, brightest mid-run, gone as it reaches the wash
-      wcd.mesh.material.opacity = Math.sin(wcP * Math.PI) * 0.55;
-      wcd.mesh.position.y = -0.07 + tide;
-    }
-    // Mirror-wet sand glistens brightest just after the wave retreats
-    mirrorSandMat.opacity = 0.2 + Math.max(0, -lapWave) * 0.4;
     // Third foam line
     var f3Wave = Math.sin(t * 0.4 + 0.8) * 0.5;
     foam3.position.z = -12 + f3Wave;
@@ -26924,6 +27050,24 @@ function buildCaScene() {
     shallowSea.position.y = -0.12 + tide;
     deepSea.position.y = -0.22 + tide;
     waveSurface.position.y = -0.1 + tide;
+    // Every wash overlay rides the tide at a FIXED offset — lifted ABOVE
+    // the raised beach strips (y 0.05) so the froth is never swallowed by
+    // the sand where the angled shoreline crosses the wash lines. (Must
+    // come after `tide` is computed — placed earlier it fed NaN.)
+    foam3.position.y = foam3L.position.y = 0.06 + tide;
+    foam.position.y = foamL.position.y = 0.068 + tide;
+    foam2.position.y = foam2L.position.y = 0.082 + tide;
+    lappingFoam.position.y = lappingFoamL.position.y = 0.075 + tide;
+    for (var fai = 0; fai < foamArcs.length; fai++) foamArcs[fai].position.y = 0.072 + tide;
+    // Rolling crests — each gathers offshore, rolls in, and dies at the wash
+    // (must run after `tide` is computed)
+    for (var wci = 0; wci < waveCrests.length; wci++) {
+      var wcd = waveCrests[wci];
+      var wcP = ((t * wcd.spd + wcd.off) % 1.0);
+      wcd.mesh.position.z = -15.5 + wcP * 6.6;
+      wcd.mesh.material.opacity = Math.sin(wcP * Math.PI) * 0.75;
+      wcd.mesh.position.y = -0.07 + tide;
+    }
 
     // The sun's path rides the tide, its glints drifting slowly shoreward,
     // brightness breathing like the swell

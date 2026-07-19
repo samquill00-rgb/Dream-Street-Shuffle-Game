@@ -121,3 +121,14 @@ Sam reviewed each scene live in the preview pane (localhost:8732, `#dss-debug-ju
 7. Uncommitted: all of the above is in the .twee + .html — Sam to commit via GitHub Desktop.
 
 Muted: DSS_SOUND_OFF still true.
+
+### ADDENDUM 5b — the Carthage flashing saga: full diagnosis + recipe (2026-07-19)
+
+Sam chased intermittent sandy-brown flashing across the shore/arch band. It was FIVE stacked causes; all fixed in Ca. **Recipe for other outdoor scenes if flashing appears:**
+1. **Transparent sort-flipping**: drifting haze/fog planes + layered shore transparencies re-sort per frame → pin `renderOrder` on ALL big transparent layers (haze=50, shore stack 2..9). Symptom: whole bands "jump between layers".
+2. **Tide-crossing**: animated water planes rising through static overlays → make every overlay ride the tide at fixed offsets; never let an opaque plane cross a transparent one.
+3. **Coplanar geometry**: voussoir/moulding segments interpenetrating → stagger alternate segments ±0.01 in depth. (See memory `project_buried_plane_bug.md` for the whole family.)
+4. **Shadow churn**: shadow map re-rendered every frame with moving casters → `renderer.shadowMap.autoUpdate=false; needsUpdate=true` once after scene assembly (static sun ⇒ static shadows). Also raise frustum size so its edge-seams ("light cones" Sam spotted — his diagnosis cracked it) sit outside all visible geometry.
+5. **THE ROOT: near-horizontal shadow sun.** A directional light at height 4 (dir ~10:1 horizontal) smears every shadow texel into long stripes; their boundaries roam with any bias/frustum change. **Fix = two-sun rig**: visual sun stays low (castShadow=false, keeps the raking light/rim), plus `shadowSun` at the same azimuth hoisted high (y=30) that owns castShadow with a tight frustum (±55/40, far 160, 4096 map, bias -0.0012, normalBias 0.08). Both share the sunset-breathing pulse (0.9/0.6 split of the old 1.5).
+
+Also this morning: crescent moved right + brightened + earthshine; planet paled/pink, rings upright, 3 orbiting moons; ship reflection + moon glint on sea; sunlit-sand patches → soft radial; driftwood bedded; foam arcs end-faded; grass = geometry blades; rubble textured; pots tumbled; fracture caps instead of chunk-topped stubs; cattle skull on the (10,-3) stub; left-headland spray removed (was inside the hill volume); crests confined to open water; logarithmicDepthBuffer on the Ca renderer.

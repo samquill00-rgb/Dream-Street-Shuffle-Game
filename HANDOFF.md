@@ -93,3 +93,31 @@ All four minigame popups rewritten: **no em dashes** (colons after bold labels, 
 - **Stats:** mood system, no death; endings don't read them; asymptotic `$statGain/$statLoss` (StoryInit ~line 126).
 - **Ambient beds:** `registerAmbientBed` tag-driven, continuous; procedural `_ambient` slot separate.
 - **Tester link:** https://www.samquill.com/Dream-Street-Shuffle-Game/Dream%20Street%20Shuffle.html (hard-refresh on first load).
+
+---
+
+## ADDENDUM 5 — 3D scene review completed with Sam + Carthage majesty pass (2026-07-18/19)
+
+Sam reviewed each scene live in the preview pane (localhost:8732, `#dss-debug-jump=<passage>` + `?v=n` cache-bust). Server: `python3 -m http.server 8732` from the game folder (restart if the pane loses it).
+
+### Scenes blessed this round (in review order)
+- **Colony (CR)**: Mr Punch window = real newsagent (cig gantry, magazines, papers, taped cards; two-line fascia via `:` split in buildShopfront). Gawain's = greengrocer (crates/scale/jars) + **hanging Green Knight pub sign** (perpendicular, swinging, own lamp, blood-red neck stump). Minotaur deli = **taxidermy minotaur** in window (bull head, longhorns, halo). Dressed upper sashes; road textured+rotated 90°.
+- **Ronnie Scott's (RS)**: strong slab pavement (rsPaveTex + apron clone), grimy tarmac road + kerbs + drain + more/bigger puddles; brick facade (toolkit); shopfront developed (panelled boards, bills window, photo wall, panelled door + brass + porthole, two lit posters, entrance mat); single full-width steep awning (z-fight two-plane sandwich replaced by solid slab; narrowed so Cosmogramma side sign clears); side sign deliberate **electric flicker** (animate dims material color; the original z-fight flicker is fixed); satellites + shooting stars; **sky wheels** (skyGroup rot 0.015, planetGroup 0.008 — planets lag stars); windows dressed WITH flashing-from-within kept (litGlassMats now dims color not opacity).
+- **French House (FH)**: real flags (shaped sagging tricolores + dirt); door moved to x=-1.1 (was ON the -0.5 pilaster — "cut in half"); painted pub interiors + rescued buried drinker silhouettes; half-height glazing (top-half-of-drinkers, real-pub style); dressed upper windows everywhere incl. neighbours (their glass was buried in frames — moved to 0.085/0.035); bricks/stucco/slabs/tarmac all textured; PARIS/ESSEX shopfronts dressed (KEEP as-is per Sam); **Green Fairy** absinthe moth orbiting centre lamp (small, very fluttery — tuned twice).
+- **Pillars (PH)**: stucco/brick neighbours, strong slabs (phPaveTex + apron), road re-oriented (was 8-wide pointing at camera!) + grimy; everything dirtier (plaster soot/nicotine/damp boosted); red-light windows = dressed rooms tinted red; natural foliage swag (sprite clumps + strands); painted Victorian pub interiors (pumps, drinkers, etched frost band); **THE FLOOD** — two sources only (drain blob-pool + passage: wells up INSIDE alley → fan-tongue with rounded front across pavement → gutter pool), ~40s full, blob geometry (phBlobGeo/phFanGeo — NO ellipses/rings, they read as sweeping lines). Sam: flood is lead-in to the storm dream → Carthage. He plans to revisit ("I can do so much with them now").
+- **Carthage coast (Ca)** — full majesty pass: sun path on water (animated glints, rides tide), dusk cloud bands + burning horizon, crepuscular rays, sea sparkles, **departing ship** (4-min crossing, fades, returns "as dreams do"), pink ringed planet (rings upright Uranus-style, pale) **with 3 orbiting moons**, crescent moon boosted + moved right (+earthshine), fireflies, rim light; hill = scrubland (repeat tex + gullies/rocks); palms rebuilt as **geometry fronds** (makeFrondGeo/makeFrondMat, lit, + dead skirt); grass rebuilt as **geometry blades** (dryGrassMats, rooted); foliage dusk-dimmed (sprites are UNLIT — that was the plastic look); shoreline: 15 shore rocks + froth collars, foam-band textures (makeFoamBandTex) on all wash lines + churn animation, finer spray, rolling wave crests ×3, mirror-wet sand band, staggered foam arcs, sand/wet-sand textures; shore ruin walls textured (ruinStoneTex); rubble textured (rubbleTex — was pale confetti); pots tumbled onto sand (upright ones read as weird crescents); broken columns end in **sheared fracture caps** (chunks removed — "stones on top" weird); **cattle skull** on the (10,-3) stub (skullColumn.userData.topY; bone emissive to stay pale); **THREE BLUE POSTS** = left colonnade trio painted decayed blue (blueColumnMat, emissive 0.2) — HIS PUBLISHING NAME SIGNATURE. Never remove.
+
+### Toolkit additions (window.dssScene)
+- `makeDressedWindow(lit, style, colIdx)` → MeshBasicMaterial; style 0 drapes / 1 half blind / 2 nets; used across RS/CR/LO/PH/GL/FH(local twin makeUpperWindowTex).
+- Buried-plane bug fixed EVERYWHERE (see memory `project_buried_plane_bug.md`): 7 roads raised to y=0.004; apron pattern (pubPave/paveMat2) is the real pavement in RS/PH/FH.
+
+### Still to do / next session
+1. **Ginger Light (GL)**: textures applied + verified render, but NOT reviewed with Sam scene-by-scene. Same for **Lackland (LO)** and **Centre Point (CP)** (both smoke-tested healthy).
+2. **The Coach (CH)**: STILL PARKED for detailed rebuild (roads fixed only).
+3. Iframe scenes untouched: green-sea, cecil-court, oxford-street statics.
+4. Sam wants to revisit the Pillars flood ("not quite perfect") and generally push scenes further — he sees the new ceiling.
+5. Every reviewed scene now has a living element: Colony (swinging sign), Ronnie's (wheeling sky/satellites/flicker), French (Green Fairy), Pillars (flood), Carthage (ship/moons/surf/fireflies). Trisha's/Chippy/Copper predate this convention — candidates for one each.
+6. Full human-paced playthrough still pending (Sam will do it).
+7. Uncommitted: all of the above is in the .twee + .html — Sam to commit via GitHub Desktop.
+
+Muted: DSS_SOUND_OFF still true.

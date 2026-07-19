@@ -27677,8 +27677,11 @@ var brickBody = new THREE.Mesh(new THREE.BoxGeometry(6.5, 13, 7), medBrick);
 brickBody.position.set(-0.2, 6.5, -3.5);
 building.add(brickBody);
 
-// Facade panel with texture variation (darker red brick)
-var facadePanel = new THREE.Mesh(new THREE.BoxGeometry(6.52, 13, 0.08), darkRedBrick);
+// Facade panel — real brick coursing from the toolkit, London-stock red
+var facadeBrickMat = (window.dssScene && window.dssScene.makeGrimyBrick)
+  ? window.dssScene.makeGrimyBrick({ baseColor: 0x7a3a28, repeat: [1.9, 5], sootStreaks: 7, dampPatches: 4 })
+  : darkRedBrick;
+var facadePanel = new THREE.Mesh(new THREE.BoxGeometry(6.52, 13, 0.08), facadeBrickMat);
 facadePanel.position.set(-0.2, 6.5, 0.04);
 building.add(facadePanel);
 
@@ -27689,15 +27692,7 @@ sideWall.position.set(3.0, 6.5, -3.5);
 sideWall.rotation.y = -Math.PI / 2;
 building.add(sideWall);
 
-// Horizontal mortar lines on facade
-for (var bri = 0.6; bri < 13; bri += 0.35) {
-  if (Math.random() > 0.3) {
-    var mortarLine = new THREE.Mesh(new THREE.PlaneGeometry(6.51, 0.015),
-      new THREE.MeshStandardMaterial({ color: 0xb09888, roughness: 0.9, transparent: true, opacity: 0.2 }));
-    mortarLine.position.set(-0.2, bri, 0.06);
-    building.add(mortarLine);
-  }
-}
+// Mortar coursing now comes painted into the brick texture
 
 // ---- WHITE STRING COURSES (between floors) ----
 var stringHeights = [3.6, 6.8, 10.0];
@@ -27750,6 +27745,7 @@ placeMesh(building, new THREE.BoxGeometry(6.82, 0.06, 0.06),
   -0.2, 13.15, 0.12);
 
 // ---- SASH WINDOWS (upper floors) ----
+var litGlassMats = [];
 function addSashWindow(x, y, isLit, isBigger) {
   var ww = isBigger ? 1.0 : 0.85;
   var wh = isBigger ? 1.8 : 1.5;
@@ -27765,6 +27761,10 @@ function addSashWindow(x, y, isLit, isBigger) {
   var glassCol = isLit ? 0xffd699 : 0x334466;
   var glassMat = new THREE.MeshBasicMaterial({ color: glassCol, transparent: true, opacity: glassOp });
   placeMesh(building, new THREE.PlaneGeometry(ww, wh), glassMat, x, y, 0.14);
+  // Lit rooms flicker from within — registered for the animate loop
+  if (isLit) {
+    litGlassMats.push({ mat: glassMat, spd: 0.5 + Math.random() * 1.1, off: Math.random() * Math.PI * 2 });
+  }
 
   placeMesh(building, new THREE.BoxGeometry(ww + 0.1, 0.06, 0.06), windowFrame, x, y + 0.1, 0.14);
   placeMesh(building, new THREE.BoxGeometry(ww, 0.025, 0.03), windowFrame, x, y - 0.2, 0.15);
@@ -28426,10 +28426,10 @@ var rightFaciaSide = makeCanvasTexture(640, 80, function(cx, w, h) {
   cx.lineWidth = 3;
   cx.strokeRect(4, 4, w - 8, h - 8);
   cx.fillStyle = '#2a1c16';
-  cx.font = 'bold 46px Georgia, serif';
+  cx.font = 'bold 62px Georgia, serif';
   cx.textAlign = 'center';
   cx.textBaseline = 'middle';
-  cx.fillText('COSMOGRAMMA', w / 2, h / 2);
+  cx.fillText('COSMOGRAMMA', w * 0.44, h / 2);
 });
 var rightFaciaSideMesh = new THREE.Mesh(
   new THREE.PlaneGeometry(1.5, 0.6),
@@ -28589,6 +28589,36 @@ function createStreetLamp(x, z) {
 
 var lampLight1 = createStreetLamp(-3.5, 3.0);
 var lampLight2 = createStreetLamp(4.5, 3.0);
+
+// Soft shadow streaks from the lamp posts, thrown away from the club's lights
+var lampShadowTex = makeCanvasTexture(64, 256, function(cx, w, h) {
+  var sgrad = cx.createLinearGradient(0, 0, 0, h);
+  sgrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  sgrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.22)');
+  sgrad.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+  cx.fillStyle = sgrad;
+  // Tapering wedge — narrow at the base (bottom), spreading as it falls away
+  cx.beginPath();
+  cx.moveTo(w * 0.38, h);
+  cx.lineTo(w * 0.62, h);
+  cx.lineTo(w * 0.85, 0);
+  cx.lineTo(w * 0.15, 0);
+  cx.closePath();
+  cx.fill();
+});
+function addLampShadow(px, pz, len) {
+  // Direction away from the club doorway lights at roughly (0.8, 0.7)
+  var dx = px - 0.8, dz = pz - 0.7;
+  var dl = Math.sqrt(dx * dx + dz * dz);
+  dx /= dl; dz /= dl;
+  var shadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.5, len),
+    new THREE.MeshBasicMaterial({ map: lampShadowTex, transparent: true, depthWrite: false }));
+  shadowMesh.rotation.set(-Math.PI / 2, 0, Math.atan2(-dx, -dz));
+  shadowMesh.position.set(px + dx * len / 2, 0.165, pz + dz * len / 2);
+  scene.add(shadowMesh);
+}
+addLampShadow(-3.5, 3.0, 1.5);
+addLampShadow(4.5, 3.0, 1.9);
 
 // ---- NEON GREEN GLOW SPRITE — far lamppost lantern ----
 var greenGlowTex = makeCanvasTexture(128, 128, function(cx, w, h) {
@@ -29092,6 +29122,21 @@ for (var shi = 0; shi < 2; shi++) {
   shooters.push({ spr: shSpr, active: false, next: 5 + shi * 9 + Math.random() * 6, t0: 0, sy: 0, sz: 0, sx: 0, vy: 0, vz: 0 });
 }
 
+// The heavens on two rigs, both wheeled in the animate loop: the deep sky
+// (stars, Milky Way, nebulae) turns at full rate; the planets and moons ride
+// a slower rig, drifting against the star field like nearer bodies would
+var skyGroup = new THREE.Group();
+var skyBodies = [milkyPlane, galaxyMesh, nebula1, nebula2, nebula3, nebula4];
+for (var sbi = 0; sbi < skyBodies.length; sbi++) skyGroup.add(skyBodies[sbi]);
+for (var sci = 0; sci < celStars.length; sci++) skyGroup.add(celStars[sci].spr);
+for (var svg = 0; svg < satellites.length; svg++) skyGroup.add(satellites[svg].spr);
+for (var shg = 0; shg < shooters.length; shg++) skyGroup.add(shooters[shg].spr);
+scene.add(skyGroup);
+var planetGroup = new THREE.Group();
+var planetBodies = [planet1, planet2, planet3, moon1, moon2, moon3];
+for (var pbi = 0; pbi < planetBodies.length; pbi++) planetGroup.add(planetBodies[pbi]);
+scene.add(planetGroup);
+
 // ============================================================
 // LIGHTING
 // ============================================================
@@ -29237,9 +29282,19 @@ function animate() {
     }
   }
 
-  // Neon sign flicker (dual frequency sine waves for authentic neon buzz)
-  var neonFlicker = Math.sin(t * 3.5) * 0.1 + Math.sin(t * 7.2) * 0.05;
-  neonLight.intensity = 1.2 + neonFlicker;
+  // Neon light held near-steady so the brickwork above no longer strobes;
+  // the flashing now lives inside the windows instead
+  neonLight.intensity = 1.2 + Math.sin(t * 3.5) * 0.02;
+
+  // Lit rooms flicker from within — slow breathing plus sudden brighter flares
+  for (var lgi = 0; lgi < litGlassMats.length; lgi++) {
+    var lg = litGlassMats[lgi];
+    var lgLevel = 0.38 + Math.sin(t * lg.spd + lg.off) * 0.1;
+    if (Math.sin((t + lg.off) * 0.9) * Math.sin((t + lg.off) * 2.17) > 0.93) {
+      lgLevel = 0.72;
+    }
+    lg.mat.opacity = lgLevel;
+  }
 
   // Green neon flicker (slightly different frequency)
   neonLightGreen.intensity = 0.3 + Math.sin(t * 4.1) * 0.06 + Math.sin(t * 8.5) * 0.03;
@@ -29274,6 +29329,10 @@ function animate() {
   moon1.position.z = -2 + Math.cos(t * 0.11) * 2.5;
   moon2.position.y = 10 + Math.sin(t * 0.085 + 1.2) * 0.65;
   moon2.position.z = 5 + Math.cos(t * 0.085 + 1.2) * 1.8;
+
+  // The heavens wheel — stars at full rate, planets lagging behind them
+  skyGroup.rotation.x = t * 0.015;
+  planetGroup.rotation.x = t * 0.008;
 
   // Satellites — slow steady drift across the star field, wrapping round
   for (var svj = 0; svj < satellites.length; svj++) {

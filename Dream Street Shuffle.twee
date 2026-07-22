@@ -18943,10 +18943,21 @@ window._dssDisposeWrap('ch-wrap');
 (function() {
 var phActive = false;
 var phAnimId = null;
+// Flood escalation state — lives in this closure, so it survives scene
+// rebuilds within a session (page reload falls back to visit 1; accepted).
+var phVisit = 0;   // which visit this session
+var phCarryT = 0;  // flood-seconds carried across visits (never resets)
+var phThisT = 0;   // this visit's elapsed scene time
+var phLeftAt = 0;  // wall-clock at last leave — the flood rises while away
 
 function initPillars() {
 if (phActive) return;
 phActive = true;
+// ?phvisit=N in the URL overrides for testing (also seeds a grown flood)
+var phVisitOverride = window.DSS_DEV ? ((function(){ var m = location.search.match(/phvisit=(\d+)/); return m ? +m[1] : 0; })() || window.DSS_PH_VISIT_OVERRIDE || (+(localStorage.getItem('dssPhVisitOverride') || 0)) || 0) : 0;
+phVisit = phVisitOverride || phVisit + 1;
+if (phVisitOverride > 1 && phCarryT === 0) phCarryT = 40 + (phVisitOverride - 2) * 180;
+if (phLeftAt) phCarryT += Math.min((Date.now() - phLeftAt) / 1000 * 0.4, 80);
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
@@ -19346,7 +19357,8 @@ var sReach = mesh.userData.reach;
 for (var svi = 0; svi < sPos.count; svi++) {
 var sox = sOrig[svi*3], soy = sOrig[svi*3+1];
 var sva = Math.atan2(soy, sox);
-var sSurge = 1 + 0.065*Math.sin(t*0.5 + sva*3 + phase) + 0.035*Math.sin(t*0.23 + sva*5 + phase);
+var sAmp = 1 + 0.5*Math.min(Math.max(phVisit - 1, 0), 4);
+var sSurge = 1 + (0.065*Math.sin(t*0.5 + sva*3 + phase) + 0.035*Math.sin(t*0.23 + sva*5 + phase))*sAmp;
 // RADIAL clamp against a directional boundary (kerb ahead, road edge
 // behind, street ends sideways). Four hard-won rules live here:
 // (1) never clamp x/y separately (the pool becomes a rounded rectangle);
@@ -19405,7 +19417,7 @@ phDeepPool.rotation.x = -Math.PI/2;
 phDeepPool.position.set(2.2, 0.024, 6.4);
 phDeepPool.scale.set(0.01, 0.01, 1);
 scene.add(phDeepPool);
-var phCrown = new THREE.Mesh(phBlobGeo(5.2), new THREE.MeshStandardMaterial({ color: 0x2a3a52, roughness: 0.02, metalness: 0.7, transparent: true, opacity: 0 }));
+var phCrown = new THREE.Mesh(phBlobGeo(5.2), new THREE.MeshStandardMaterial({ color: 0x46608a, roughness: 0.02, metalness: 0.7, transparent: true, opacity: 0, emissive: 0x24344e, emissiveIntensity: 0 }));
 phCrown.rotation.x = -Math.PI/2;
 phCrown.position.set(2.2, 0.028, 6.4);
 scene.add(phCrown);
@@ -19440,6 +19452,39 @@ phPaveFlood.rotation.x = -Math.PI / 2;
 phPaveFlood.position.set(1.8, 0.157, 3.45);
 phPaveFlood.scale.set(0.01, 0.01, 1);
 scene.add(phPaveFlood);
+// Visit 2+: slow blob-ripples spreading off the drain. Blobs, NOT rings —
+// rings foreshorten into straight bright lines at this camera (the original
+// ripple ring was removed for exactly that).
+var phRip = [];
+for (var phri = 0; phri < 2; phri++) {
+  var phRipM = new THREE.Mesh(phBlobGeo(6.1 + phri * 1.3), new THREE.MeshBasicMaterial({ color: 0x3a4a66, transparent: true, opacity: 0, depthWrite: false }));
+  phRipM.rotation.x = -Math.PI / 2;
+  phRipM.position.set(2.2, 0.026, 6.4);
+  scene.add(phRipM);
+  phRip.push(phRipM);
+}
+// Visit 2+: surface CHOP — drifting glint-patches that churn the pool.
+// Count and violence scale with the visit, uncapped into visit 4+.
+var phChop = [];
+for (var pci = 0; pci < 12; pci++) {
+  var pcM = new THREE.Mesh(phBlobGeo(7.7 + pci * 0.9), new THREE.MeshStandardMaterial({ color: 0x4a6488, roughness: 0.05, metalness: 0.6, transparent: true, opacity: 0, emissive: 0x2c3e5c, emissiveIntensity: 0, depthWrite: false }));
+  pcM.rotation.x = -Math.PI / 2;
+  pcM.position.set(2.2, 0.023, 6.4);
+  pcM.userData = { ph: Math.random() * 6.28, sp: 0.9 + Math.random() * 1.4, ox: (Math.random() - 0.5), oz: (Math.random() - 0.5) };
+  scene.add(pcM);
+  phChop.push(pcM);
+}
+// Visit 3+: lightning. A cool ambient spike + fog/sky flash + every water
+// surface silvered via emissive for the duration of the strike.
+var phLightning = new THREE.AmbientLight(0xcfe0ff, 0);
+scene.add(phLightning);
+var phWaterMats = [phFlood.material, phDeepPool.material, phWaterMat, phAlleyPool.material, phAlleyInner.material, phPaveFlood.material];
+for (var phwi = 0; phwi < phWaterMats.length; phwi++) { if (phWaterMats[phwi].emissive) { phWaterMats[phwi].emissive.setHex(0x9fb4dc); phWaterMats[phwi].emissiveIntensity = 0; } }
+var phFogBase = scene.fog ? scene.fog.color.clone() : null;
+var phBgBase = (scene.background && scene.background.isColor) ? scene.background.clone() : null;
+var phFlashCol = new THREE.Color(0xb8cce4);
+var phBoltNext = 3 + Math.random() * 3;
+var phBoltT = -10;
 
 // Wet road surface — just stopped raining, everything glistening
 var wetMat = new THREE.MeshStandardMaterial({
@@ -20698,6 +20743,7 @@ for (var sti = 0; sti < stainPositions.length; sti++) {
 // STREETLAMPS
 // ============================================================
 var streetLampLights = [];
+var phDoomLamps = [];
 
 // Pillars streetlamps now use the shared dssScene Victorian gas-
 // lamp (4-sided emissive lantern panes so they read as ON at
@@ -20712,11 +20758,28 @@ function createLamp(x, z) {
   lamp.userData.light.userData.baseIntensity = 0.5;
   lamp.userData.light.decay = 2; // no hard range terminator on the road
   streetLampLights.push(lamp.userData.light);
+  phDoomLamps.push(lamp);
 }
 
 createLamp(-4, 3.5);
 createLamp(5, 3.5);
 createLamp(0, 10);
+
+// Each return kills a lamp: the street lamps first, then the pub's own
+// lanterns — the night eats the light as the flood rises.
+phDoomLamps = phDoomLamps.concat(lampLightsOnPub);
+function phKillLamp(root) {
+  root.traverse(function(o) {
+    if (o.isSprite && o.material) o.material.opacity = 0;
+    else if (o.isMesh && o.material) {
+      if (o.material.emissive) o.material.emissiveIntensity = 0;
+      if (o.material.isMeshBasicMaterial && o.material.color && (o.material.color.r + o.material.color.g + o.material.color.b) > 1.8) o.material.color.setHex(0x1a1e24);
+    }
+    if (o.isLight) { o.intensity = 0; o.userData.dead = true; }
+  });
+}
+var phDeadLampCount = Math.min(Math.max(phVisit - 1, 0), phDoomLamps.length);
+for (var pdl = 0; pdl < phDeadLampCount; pdl++) phKillLamp(phDoomLamps[pdl]);
 
 // ============================================================
 // SILHOUETTES OF PEOPLE IN PUB WINDOWS
@@ -20951,6 +21014,7 @@ var clock = new THREE.Clock();
 function phAnimate() {
   phAnimId = requestAnimationFrame(phAnimate);
   var t = clock.getElapsedTime();
+  phThisT = t; t = t + phCarryT;
 
   // Fog drift
   for (var i = 0; i < fogSprites.length; i++) {
@@ -20965,11 +21029,13 @@ function phAnimate() {
   // Flickering pub lights
   for (var i = 0; i < lampLightsOnPub.length; i++) {
     var ll = lampLightsOnPub[i];
+    if (ll.userData.dead) { ll.intensity = 0; continue; }
     ll.intensity = ll.userData.baseIntensity + Math.sin(t * 3 + i) * 0.08 + Math.sin(t * 7.3 + i * 2) * 0.04;
   }
 
   // Street lamp flicker (dual-frequency for naturalistic gas flicker)
   for (var i = 0; i < streetLampLights.length; i++) {
+    if (streetLampLights[i].userData.dead) { streetLampLights[i].intensity = 0; continue; }
     var base = streetLampLights[i].userData.baseIntensity || 3;
     streetLampLights[i].intensity = base + Math.sin(t * 2.5 + i * 1.5) * 0.15 + Math.sin(t * 5.7 + i * 3) * 0.08;
   }
@@ -21003,9 +21069,11 @@ function phAnimate() {
   var dpR = (0.2 + dpP * 0.72) * (1 + 0.045 * Math.sin(t * 1.3) + 0.03 * Math.sin(t * 2.9));
   phDeepPool.scale.set(dpR * 1.12, dpR, 1);
   phDeepPool.material.opacity = 0.42 + dpP * 0.28;
-  var crownPulse = 1 + 0.13 * Math.sin(t * 5.1) + 0.06 * Math.sin(t * 8.7);
-  phCrown.scale.set(0.35 * crownPulse, 0.5 * crownPulse, 1);
-  phCrown.material.opacity = 0.35 + 0.25 * Math.min(1, t / 4) + 0.12 * Math.sin(t * 5.1);
+  var crownAmp = 1 + 0.6 * Math.min(Math.max(phVisit - 1, 0), 5);
+  var crownPulse = 1 + 0.13 * crownAmp * Math.sin(t * 5.1) + 0.06 * crownAmp * Math.sin(t * 8.7);
+  phCrown.scale.set(0.46 * crownPulse, 0.64 * crownPulse, 1);
+  phCrown.material.opacity = 0.5 + 0.22 * Math.min(1, t / 4) + 0.12 * Math.sin(t * 5.1);
+  phCrown.material.emissiveIntensity = 0.22 + 0.2 * crownAmp * (0.5 + 0.5 * Math.sin(t * 5.1));
 
   // Water from the passage: advances INSIDE the alley from the dark,
   // reaches the mouth, then fans out across the pavement with a rounded
@@ -21040,6 +21108,55 @@ function phAnimate() {
     var pvLen = 2.95 * Math.tanh(pvT / 160);
     phPaveFlood.scale.set(1.2 + pvLen * 0.9 + Math.sin(t * 1.7) * 0.03, pvLen, 1);
     phPaveFlood.material.opacity = 0.45 + Math.min(0.25, pvT * 0.006) + Math.sin(t * 2.4) * 0.04;
+  }
+
+  // Visit 2+: ripples working off the drain
+  if (phVisit >= 2) {
+    for (var phri2 = 0; phri2 < phRip.length; phri2++) {
+      var rpP = ((t * (phVisit >= 3 ? 0.38 : 0.28) + phri2 * 0.5) % 1);
+      var rpS = (0.35 + rpP * 1.5) * dpR;
+      phRip[phri2].scale.set(rpS * 1.12, rpS, 1);
+      phRip[phri2].material.opacity = (phVisit >= 3 ? 0.32 : 0.22) * (1 - rpP);
+    }
+  }
+
+  // Visit 2+: the chop — churning surface patches, more and wilder each visit
+  if (phVisit >= 2) {
+    var chopN = Math.min(4 * (phVisit - 1), 12);
+    var chopAmp = 0.5 + 0.5 * Math.min(phVisit - 1, 5);
+    for (var pci2 = 0; pci2 < phChop.length; pci2++) {
+      var pc = phChop[pci2];
+      if (pci2 >= chopN) { pc.material.opacity = 0; continue; }
+      var pcT = t * pc.userData.sp + pc.userData.ph;
+      var pcR = 0.25 + 0.55 * ((pci2 * 0.618) % 1);
+      var pcA = pc.userData.ph + t * 0.15 * (pci2 % 2 ? 1 : -1);
+      var pcX = 2.2 + Math.cos(pcA) * pcR * flG * 0.5 + pc.userData.ox;
+      var pcZ = 6.4 - Math.sin(pcA) * pcR * Math.min(flG * 0.25, 2.0) - pc.userData.oz;
+      pc.position.set(pcX, 0.023, pcZ);
+      var pcS = (0.3 + 0.25 * Math.abs(Math.sin(pcT))) * (0.7 + 0.3 * chopAmp);
+      pc.scale.set(pcS * 1.4, pcS, 1);
+      pc.material.opacity = (0.1 + 0.14 * Math.abs(Math.sin(pcT * 1.3))) * chopAmp;
+      pc.material.emissiveIntensity = 0.15 * chopAmp * Math.abs(Math.sin(pcT));
+    }
+  }
+
+  // Visit 3+: the storm arrives — double-strike lightning, silvered water
+  if (phVisit >= 3) {
+    if (t > phBoltNext) {
+      phBoltT = t;
+      phBoltNext = t + Math.max(4.5, 8 - (phVisit - 3) * 1.5) + Math.random() * 9;
+      if (window.dssAudio && window.dssAudio.thunderClap) setTimeout(function(){ if (window.dssAudio) window.dssAudio.thunderClap(); }, 900 + Math.random() * 1200);
+    }
+    var phbAge = t - phBoltT;
+    var phbI = 0;
+    if (phbAge >= 0 && phbAge < 0.6) {
+      phbI = Math.max(0, Math.sin(Math.min(phbAge * 22, Math.PI))) * 0.9;
+      if (phbAge > 0.2 && phbAge < 0.46) phbI = Math.max(phbI, Math.sin((phbAge - 0.2) * 12) * 1.0);
+    }
+    phLightning.intensity = phbI * 2.2;
+    for (var phwi2 = 0; phwi2 < phWaterMats.length; phwi2++) { if (phWaterMats[phwi2].emissive) phWaterMats[phwi2].emissiveIntensity = phbI * 0.9; }
+    if (phFogBase) scene.fog.color.copy(phFogBase).lerp(phFlashCol, phbI * 0.9);
+    if (phBgBase) scene.background.copy(phBgBase).lerp(phFlashCol, phbI * 0.9);
   }
 
   // Silhouette sway
@@ -21107,6 +21224,7 @@ if (container && !phActive) {
 initPillars();
 } else if (!container) {
 phActive = false;
+phLeftAt = Date.now(); phCarryT += phThisT; phThisT = 0;
 if (phAnimId) { cancelAnimationFrame(phAnimId); phAnimId = null; }
 window._dssDisposeWrap('ph-wrap');
 }

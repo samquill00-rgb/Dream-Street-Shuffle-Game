@@ -10067,6 +10067,7 @@ constructor(mode) {
   this.t = 0;
   this.streamLevel = 0;
   this.particles = [];
+  this.ripples = [];
   this.wobbleDecay = 0;
   this._build();
   this._startLoop();
@@ -10126,10 +10127,11 @@ _build() {
   canvasWrap.style.cssText = 'position:relative;z-index:2;padding:18px 28px 0;';
   this.card.appendChild(canvasWrap);
   this.canvas = document.createElement('canvas');
-  this.canvas.width = 160;
-  this.canvas.height = 200;
-  this.canvas.style.cssText = 'cursor:pointer;display:block;';
+  this.canvas.width = 320;   // 2x backing store — the old 1x canvas looked soft
+  this.canvas.height = 400;
+  this.canvas.style.cssText = 'cursor:pointer;display:block;width:160px;height:200px;';
   this.ctx = this.canvas.getContext('2d');
+  this.ctx.setTransform(2, 0, 0, 2, 0, 0);
   canvasWrap.appendChild(this.canvas);
   this.prompt = document.createElement('div');
   this.prompt.style.cssText = 'position:relative;z-index:2;margin-top:12px;font-family:"Crimson Text",Georgia,serif;font-style:italic;font-size:0.95em;color:#c0c8b8;letter-spacing:0.02em;';
@@ -10218,15 +10220,30 @@ _startLoop() {
     if (self.retching) {
       self.streamLevel = Math.min(1, self.streamLevel + 0.95 * dt);
       if (Math.random() < 0.5) {
-        self.particles.push({
-          x: 80 + (Math.random() - 0.5) * 18,
-          y: 118,
-          vx: (Math.random() - 0.5) * 55,
-          vy: 15 + Math.random() * 35,
-          life: 1.0,
-          size: 1.5 + Math.random() * 2.5,
-          col: Math.random() < 0.6 ? '#c8a020' : '#d4b830'
-        });
+        if (self.mode === 'gents') {
+          self.particles.push({
+            x: 82 + (Math.random() - 0.5) * 14,
+            y: 128,
+            vx: (Math.random() - 0.5) * 48,
+            vy: -6 + Math.random() * 30,
+            life: 1.0,
+            size: 1.2 + Math.random() * 2.0,
+            col: Math.random() < 0.6 ? '#a8862c' : '#c4a43a'
+          });
+        } else {
+          self.particles.push({
+            x: 104 + (Math.random() - 0.5) * 8,
+            y: 162,
+            vx: -8 - Math.random() * 30,
+            vy: -22 - Math.random() * 26,
+            life: 0.9,
+            size: 1.0 + Math.random() * 1.6,
+            col: Math.random() < 0.6 ? '#a8862c' : '#c4a43a'
+          });
+        }
+      }
+      if (self.mode === 'gents' && Math.random() < 0.12) {
+        self.ripples.push({ r: 4, life: 1 });
       }
     }
     // Keep-holding-to-the-brim auto-finish: if the player just holds it down
@@ -10245,6 +10262,11 @@ _startLoop() {
       p.life -= dt * 1.8;
       return p.life > 0;
     });
+    self.ripples = self.ripples.filter(function(r) {
+      r.r += 26 * dt;
+      r.life -= 2.0 * dt;
+      return r.life > 0;
+    });
     if (self.wobbleDecay > 0.01) self.wobbleDecay *= (1 - 1.5 * dt);
     self._draw();
     requestAnimationFrame(loop);
@@ -10253,129 +10275,278 @@ _startLoop() {
 }
 _draw() {
   var c = this.ctx, W = 160, H = 200, t = this.t;
-  c.clearRect(0, 0, W, H);
-  var bx = W / 2, by = 155, bRx = 52, bRy = 34;
-  // Sickly ambient glow when retching
-  if (this.streamLevel > 0.05) {
-    var grd = c.createRadialGradient(bx, by, 0, bx, by, 62);
-    grd.addColorStop(0, 'rgba(195,165,20,' + (this.streamLevel * 0.22).toFixed(2) + ')');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = grd; c.fillRect(0, 0, W, H);
-  }
-  // Toilet outer rim
-  c.fillStyle = 'rgba(205,205,200,0.93)';
-  c.beginPath(); c.ellipse(bx, by, bRx, bRy, 0, 0, Math.PI * 2); c.fill();
-  c.strokeStyle = 'rgba(175,175,170,0.75)'; c.lineWidth = 1.5;
-  c.beginPath(); c.ellipse(bx, by, bRx, bRy, 0, 0, Math.PI * 2); c.stroke();
-  // Inner bowl
-  c.fillStyle = 'rgba(238,240,236,0.97)';
-  c.beginPath(); c.ellipse(bx, by + 2, bRx - 10, bRy - 9, 0, 0, Math.PI * 2); c.fill();
-  // Water / contents — colour shifts from clear to bilious as streamLevel rises
   var wl = this.streamLevel;
-  if (wl > 0.04) {
-    var rr = Math.round(205), gg = Math.round(182 - wl * 50), bb = Math.round(28 - wl * 20);
-    c.fillStyle = 'rgba(' + rr + ',' + gg + ',' + bb + ',0.72)';
+  c.clearRect(0, 0, W, H);
+  var sway = Math.sin(t * 1.2) * 1.5;
+  var i, p, g;
+  if (this.mode === 'gents') {
+    // ---- THE GENTS: glazed Victorian tiles, high cistern, kneeling figure ----
+    g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#12150f'); g.addColorStop(1, '#191c15');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    // Tiled wall to the dado line
+    var tw = 20, th = 13;
+    for (var row = 0; row < 10; row++) {
+      for (var col = -1; col < 9; col++) {
+        var tx = col * tw + (row % 2 ? tw / 2 : 0), ty = row * th;
+        var tone = 148 + ((row * 7 + col * 13) % 5) * 6;
+        c.fillStyle = 'rgba(' + (tone - 18) + ',' + tone + ',' + (tone - 26) + ',0.16)';
+        c.fillRect(tx + 0.7, ty + 0.7, tw - 1.4, th - 1.4);
+        c.strokeStyle = 'rgba(230,235,220,0.045)'; c.lineWidth = 0.7;
+        c.beginPath(); c.moveTo(tx + 2, ty + th - 2.5); c.lineTo(tx + tw * 0.45, ty + 2); c.stroke();
+      }
+    }
+    // Dado rail + drop to dark floor
+    c.fillStyle = 'rgba(60,66,52,0.5)'; c.fillRect(0, 129, W, 3);
+    c.fillStyle = 'rgba(8,9,7,0.55)'; c.fillRect(0, 132, W, H - 132);
+    // Overhead lamp pool
+    g = c.createRadialGradient(80, 4, 4, 80, 4, 95);
+    g.addColorStop(0, 'rgba(214,188,120,0.13)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    // High cistern pipe + chain (swaying faintly)
+    c.strokeStyle = 'rgba(96,88,66,0.6)'; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(122, 0); c.lineTo(122, 128); c.stroke();
+    c.strokeStyle = 'rgba(150,140,104,0.35)'; c.lineWidth = 1;
+    var chx = 132 + Math.sin(t * 0.9) * 1.6;
+    c.beginPath(); c.moveTo(131, 0); c.quadraticCurveTo(chx, 30, chx - 1, 58); c.stroke();
+    c.fillStyle = 'rgba(150,140,104,0.4)';
+    c.beginPath(); c.ellipse(chx - 1, 61, 2.2, 4, 0, 0, Math.PI * 2); c.fill();
+    // Sickly glow while retching
+    if (wl > 0.05) {
+      g = c.createRadialGradient(80, 150, 0, 80, 150, 64);
+      g.addColorStop(0, 'rgba(172,148,36,' + (wl * 0.18).toFixed(2) + ')');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, W, H);
+    }
+    // Toilet: pedestal, then bowl
+    var bx = 82, by = 148;
+    c.fillStyle = 'rgba(196,196,188,0.85)';
     c.beginPath();
-    c.ellipse(bx, by + 2, (bRx - 11) * Math.min(1, wl * 1.3), (bRy - 10) * Math.min(1, wl * 1.3), 0, 0, Math.PI * 2);
+    c.moveTo(bx - 18, by + 10); c.lineTo(bx - 13, by + 40); c.lineTo(bx + 13, by + 40); c.lineTo(bx + 18, by + 10);
+    c.closePath(); c.fill();
+    c.fillStyle = 'rgba(120,120,112,0.25)';
+    c.beginPath(); c.ellipse(bx, by + 40, 22, 5, 0, 0, Math.PI * 2); c.fill();
+    g = c.createLinearGradient(bx, by - 26, bx, by + 14);
+    g.addColorStop(0, '#e6e8e0'); g.addColorStop(0.55, '#c9cbc2'); g.addColorStop(1, '#a9aba2');
+    c.fillStyle = g;
+    c.beginPath(); c.ellipse(bx, by, 42, 23, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = 'rgba(246,248,240,0.7)'; c.lineWidth = 1.6;
+    c.beginPath(); c.ellipse(bx, by - 2, 40, 20, 0, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+    // Bowl mouth
+    c.fillStyle = 'rgba(40,42,36,0.9)';
+    c.beginPath(); c.ellipse(bx, by + 1, 31, 15, 0, 0, Math.PI * 2); c.fill();
+    // Water, fouling as the level rises
+    var wrx = 27, wry = 12;
+    var fr = Math.round(96 + wl * 62), fg = Math.round(104 + wl * 30), fb = Math.round(96 - wl * 48);
+    c.fillStyle = 'rgba(' + fr + ',' + fg + ',' + fb + ',' + (0.5 + wl * 0.35).toFixed(2) + ')';
+    c.beginPath(); c.ellipse(bx, by + 2, wrx, wry, 0, 0, Math.PI * 2); c.fill();
+    // Ripples where the stream lands
+    for (i = 0; i < this.ripples.length; i++) {
+      var rp = this.ripples[i];
+      c.strokeStyle = 'rgba(226,206,110,' + (rp.life * 0.28).toFixed(2) + ')';
+      c.lineWidth = 0.9;
+      c.beginPath(); c.ellipse(bx + 2, by + 2, Math.min(rp.r, wrx - 2), Math.min(rp.r * 0.45, wry - 2), 0, 0, Math.PI * 2); c.stroke();
+    }
+    // The figure: solid silhouette, kneeling, hunched over the bowl.
+    // Heave: periodic lurch while retching, slow breathing otherwise.
+    var lurch = this.retching ? Math.pow(Math.max(0, Math.sin(t * 5.2)), 3) * 5 : 0;
+    var breathe = Math.sin(t * 1.5) * 1.2;
+    var hv = lurch + (this.retching ? 1.5 : breathe * 0.8);
+    var hx = 74 + sway * 0.8, hy = 62 + hv;
+    c.fillStyle = 'rgba(30,26,20,0.94)';
+    c.beginPath();
+    c.moveTo(hx - 4, hy - 12);
+    c.quadraticCurveTo(hx + 10, hy - 12, hx + 11, hy + 1);
+    c.quadraticCurveTo(hx + 11.5, hy + 9, hx + 4, hy + 11);
+    c.quadraticCurveTo(hx + 8, hy + 16, hx + 2, hy + 22);
+    c.quadraticCurveTo(hx - 10, hy + 26, hx - 16, hy + 34);
+    c.quadraticCurveTo(hx - 26, hy + 48, hx - 30, hy + 66);
+    c.quadraticCurveTo(hx - 28, hy + 88, hx - 34, hy + 96);
+    c.lineTo(hx - 44, hy + 118 - hv);
+    c.lineTo(hx - 20, hy + 120 - hv);
+    c.quadraticCurveTo(hx - 12, hy + 106 - hv, hx - 14, hy + 92 - hv);
+    c.quadraticCurveTo(hx - 6, hy + 74, hx + 2, hy + 62);
+    c.quadraticCurveTo(hx + 8, hy + 48, hx + 2, hy + 34);
+    c.quadraticCurveTo(hx - 4, hy + 22, hx - 8, hy + 12);
+    c.quadraticCurveTo(hx - 12, hy + 2, hx - 4, hy - 12);
+    c.closePath();
     c.fill();
-    // Surface shimmer
-    c.strokeStyle = 'rgba(240,220,100,0.35)'; c.lineWidth = 0.9;
-    c.beginPath(); c.ellipse(bx + Math.sin(t * 7) * 3, by - 1, (bRx - 16) * Math.min(1, wl), 3.5, 0, 0, Math.PI * 2); c.stroke();
-  }
-  // Streams arcing from figure into bowl
-  if (this.retching && wl > 0) {
-    var sa = Math.min(1, wl * 2.2);
-    c.lineCap = 'round';
-    if (this.mode === 'gents') {
-      // Retching — stream drops from mouth (y≈73) nearly straight down into bowl
-      var sx = bx + Math.sin(t * 3) * 2;
-      c.strokeStyle = 'rgba(210,185,40,' + sa.toFixed(2) + ')';
+    // Near arm gripping the rim
+    c.strokeStyle = 'rgba(30,26,20,0.94)'; c.lineWidth = 6.5; c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(hx - 4, hy + 30);
+    c.quadraticCurveTo(hx + 18, hy + 44, bx + 30, by - 12);
+    c.stroke();
+    c.lineWidth = 5;
+    c.beginPath();
+    c.moveTo(hx - 10, hy + 34);
+    c.quadraticCurveTo(hx + 2, hy + 52, bx - 26, by - 8);
+    c.stroke();
+    // Rim light along the spine (lamp above)
+    c.strokeStyle = 'rgba(216,204,164,0.16)'; c.lineWidth = 1.3;
+    c.beginPath();
+    c.moveTo(hx - 5, hy - 11);
+    c.quadraticCurveTo(hx - 13, hy + 4, hx - 9, hy + 13);
+    c.quadraticCurveTo(hx - 17, hy + 35, hx - 29, hy + 64);
+    c.stroke();
+    // The stream, mouth to water
+    if (this.retching && wl > 0) {
+      var sa = Math.min(1, wl * 2.2);
+      c.lineCap = 'round';
+      var mx = hx + 8, my = hy + 14;
+      c.strokeStyle = 'rgba(186,156,54,' + sa.toFixed(2) + ')';
+      c.lineWidth = 2.6 + Math.sin(t * 3.1) * 0.6;
+      c.beginPath();
+      c.moveTo(mx, my);
+      c.quadraticCurveTo(mx + 4 + Math.sin(t * 4) * 3, (my + by) / 2, bx + 3, by - 6);
+      c.stroke();
+      c.strokeStyle = 'rgba(214,192,88,' + (sa * 0.5).toFixed(2) + ')';
+      c.lineWidth = 1.2;
+      c.beginPath();
+      c.moveTo(mx - 2, my + 2);
+      c.quadraticCurveTo(mx + 1 + Math.sin(t * 4) * 2.4, (my + by) / 2 + 4, bx - 2, by - 3);
+      c.stroke();
+    }
+  } else {
+    // ---- A DOORWAY: brick jambs, dark recess, standing figure, spreading puddle ----
+    g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b0c10'); g.addColorStop(1, '#15161a');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    // Street-lamp side light from the left
+    g = c.createLinearGradient(0, 0, 90, 0);
+    g.addColorStop(0, 'rgba(206,176,112,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    // Brick jambs
+    var bh = 9, bw = 15;
+    for (var side = 0; side < 2; side++) {
+      var x0 = side === 0 ? 0 : 126;
+      for (var r2 = 0; r2 < 19; r2++) {
+        var off = (r2 % 2) * (bw / 2);
+        for (var b2 = -1; b2 < 3; b2++) {
+          var bxp = x0 + b2 * bw + off;
+          if (bxp + bw < x0 - 2 || bxp > x0 + 36) continue;
+          var btone = 46 + ((r2 * 5 + b2 * 11 + side * 3) % 4) * 7;
+          c.fillStyle = 'rgba(' + (btone + 22) + ',' + (btone + 2) + ',' + (btone - 8) + ',0.55)';
+          c.fillRect(Math.max(bxp, x0) + 0.6, r2 * bh + 0.6, bw - 1.2, bh - 1.2);
+        }
+      }
+    }
+    // Recess: near-black boarded door
+    c.fillStyle = 'rgba(6,6,8,0.92)'; c.fillRect(34, 24, 92, 148);
+    c.strokeStyle = 'rgba(120,110,90,0.07)'; c.lineWidth = 1;
+    for (i = 0; i < 5; i++) {
+      c.beginPath(); c.moveTo(46 + i * 17, 26); c.lineTo(46 + i * 17, 170); c.stroke();
+    }
+    // Lintel
+    c.fillStyle = 'rgba(52,48,40,0.8)'; c.fillRect(30, 18, 100, 8);
+    c.fillStyle = 'rgba(150,136,104,0.10)'; c.fillRect(30, 18, 100, 2);
+    // Stone step
+    c.fillStyle = 'rgba(58,58,54,0.85)'; c.fillRect(28, 168, 104, 10);
+    c.fillStyle = 'rgba(170,170,158,0.13)'; c.fillRect(28, 168, 104, 1.6);
+    // Pavement
+    c.fillStyle = 'rgba(24,24,26,0.9)'; c.fillRect(0, 178, W, H - 178);
+    c.strokeStyle = 'rgba(140,140,130,0.06)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(0, 189); c.lineTo(W, 189); c.stroke();
+    // Wet splash mark climbing the door as it goes on
+    if (wl > 0.03) {
+      c.fillStyle = 'rgba(4,4,5,' + (0.3 + wl * 0.3).toFixed(2) + ')';
+      c.beginPath();
+      c.ellipse(106, 166, 7 + wl * 7, 13 + wl * 14, -0.25, 0, Math.PI * 2);
+      c.fill();
+    }
+    // The puddle, spreading toward the street
+    if (wl > 0.04) {
+      var prx = 8 + wl * 30, pry = 2.5 + wl * 5;
+      g = c.createRadialGradient(102, 181, 1, 102, 181, prx);
+      g.addColorStop(0, 'rgba(120,104,44,0.5)');
+      g.addColorStop(0.6, 'rgba(60,54,30,0.42)');
+      g.addColorStop(1, 'rgba(20,20,16,0.05)');
+      c.fillStyle = g;
+      c.beginPath(); c.ellipse(102, 181, prx, pry, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(214,192,110,' + (0.10 + wl * 0.12).toFixed(2) + ')';
+      c.lineWidth = 0.8;
+      c.beginPath(); c.ellipse(100 + Math.sin(t * 5) * 1.5, 180, prx * 0.55, pry * 0.5, 0, 0, Math.PI); c.stroke();
+      if (wl > 0.5) {
+        c.strokeStyle = 'rgba(90,80,38,0.5)'; c.lineWidth = 1.6; c.lineCap = 'round';
+        c.beginPath();
+        c.moveTo(102 - prx * 0.8, 182);
+        c.quadraticCurveTo(70, 186, 44 - (wl - 0.5) * 40, 190);
+        c.stroke();
+      }
+    }
+    // Steam off the impact
+    if (this.retching && wl > 0.15) {
+      c.strokeStyle = 'rgba(210,206,190,0.08)'; c.lineWidth = 2.4; c.lineCap = 'round';
+      for (i = 0; i < 2; i++) {
+        var sx0 = 102 + i * 7, ph = t * 1.6 + i * 2.1;
+        c.beginPath();
+        c.moveTo(sx0, 168);
+        c.quadraticCurveTo(sx0 + Math.sin(ph) * 5, 150, sx0 + Math.sin(ph + 1.2) * 8, 132 - i * 8);
+        c.stroke();
+      }
+    }
+    // The figure: solid silhouette from behind, coat on, feet planted
+    var lean = Math.sin(t * 0.9) * 1.2;
+    var fx = 70 + lean, fy = 40;
+    c.fillStyle = 'rgba(28,25,20,0.95)';
+    c.beginPath(); c.arc(fx + sway * 0.6, fy, 8.5, 0, Math.PI * 2); c.fill();
+    c.beginPath();
+    c.moveTo(fx - 6, fy + 7);
+    c.quadraticCurveTo(fx - 18, fy + 14, fx - 19, fy + 30);
+    c.lineTo(fx - 17, fy + 92);
+    c.quadraticCurveTo(fx - 16, fy + 98, fx - 12, fy + 98);
+    c.lineTo(fx + 15, fy + 98);
+    c.quadraticCurveTo(fx + 19, fy + 98, fx + 20, fy + 92);
+    c.lineTo(fx + 21, fy + 30);
+    c.quadraticCurveTo(fx + 20, fy + 14, fx + 8, fy + 7);
+    c.closePath(); c.fill();
+    // Near arm angled in front (unseen hands)
+    c.strokeStyle = 'rgba(28,25,20,0.95)'; c.lineWidth = 7; c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(fx + 16, fy + 22);
+    c.quadraticCurveTo(fx + 27, fy + 42, fx + 18, fy + 62);
+    c.stroke();
+    // Legs
+    c.lineWidth = 8;
+    c.beginPath(); c.moveTo(fx - 8, fy + 96); c.lineTo(fx - 11, fy + 134); c.stroke();
+    c.beginPath(); c.moveTo(fx + 10, fy + 96); c.lineTo(fx + 14, fy + 134); c.stroke();
+    c.fillStyle = 'rgba(28,25,20,0.95)';
+    c.beginPath(); c.ellipse(fx - 12, fy + 136, 6.5, 3, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(fx + 15, fy + 136, 6.5, 3, 0, 0, Math.PI * 2); c.fill();
+    // Lamp-side rim light
+    c.strokeStyle = 'rgba(200,180,132,0.18)'; c.lineWidth = 1.3;
+    c.beginPath();
+    c.moveTo(fx - 7, fy - 7);
+    c.quadraticCurveTo(fx - 13, fy - 2, fx - 14, fy + 6);
+    c.moveTo(fx - 19, fy + 16);
+    c.lineTo(fx - 17, fy + 92);
+    c.stroke();
+    // The stream, past his side to the door foot
+    if (this.retching && wl > 0) {
+      var pa = Math.min(1, 0.5 + wl * 0.6);
+      c.lineCap = 'round';
+      c.strokeStyle = 'rgba(186,156,54,' + pa.toFixed(2) + ')';
       c.lineWidth = 2.8 + Math.sin(t * 3) * 0.6;
       c.beginPath();
-      c.moveTo(sx, 73);
-      c.quadraticCurveTo(sx + Math.sin(t * 4) * 4, 105, bx + 2, by - bRy + 6);
+      c.moveTo(fx + 22, fy + 66);
+      c.quadraticCurveTo(fx + 40 + Math.sin(t * 4) * 4, fy + 96, 104, 164);
       c.stroke();
-      c.lineWidth = 1.4;
-      c.strokeStyle = 'rgba(230,210,60,' + (sa * 0.55).toFixed(2) + ')';
+      c.strokeStyle = 'rgba(214,192,88,' + (pa * 0.55).toFixed(2) + ')';
+      c.lineWidth = 1.3;
       c.beginPath();
-      c.moveTo(sx - 3, 75);
-      c.quadraticCurveTo(sx + Math.sin(t * 4) * 3 - 2, 108, bx - 3, by - bRy + 9);
-      c.stroke();
-    } else {
-      // Pissing — a brighter, thicker stream arcs forward from standing height
-      // into the bowl. Carries a high alpha floor so it reads clearly as a
-      // stream from the first instant of holding, not a faint dribble.
-      var pa = Math.min(1, 0.55 + sa * 0.6);
-      c.strokeStyle = 'rgba(228,202,58,' + pa.toFixed(2) + ')';
-      c.lineWidth = 3.4 + Math.sin(t * 3) * 0.7;
-      c.beginPath();
-      c.moveTo(bx + 2 + Math.sin(t * 3) * 2, 84);
-      c.quadraticCurveTo(bx + 20 + Math.sin(t * 4) * 5, 116, bx + 2, by - bRy + 8);
-      c.stroke();
-      c.lineWidth = 1.7;
-      c.strokeStyle = 'rgba(242,224,82,' + (pa * 0.6).toFixed(2) + ')';
-      c.beginPath();
-      c.moveTo(bx + Math.sin(t * 3) * 2 - 1, 86);
-      c.quadraticCurveTo(bx + 16 + Math.sin(t * 4) * 4, 118, bx - 3, by - bRy + 11);
+      c.moveTo(fx + 21, fy + 68);
+      c.quadraticCurveTo(fx + 37 + Math.sin(t * 4) * 3, fy + 98, 101, 165);
       c.stroke();
     }
   }
-  // Splatter particles
-  for (var i = 0; i < this.particles.length; i++) {
-    var p = this.particles[i];
-    c.globalAlpha = p.life * 0.75;
+  // Splatter particles (shared)
+  for (i = 0; i < this.particles.length; i++) {
+    p = this.particles[i];
+    c.globalAlpha = p.life * 0.7;
     c.fillStyle = p.col;
     c.beginPath(); c.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); c.fill();
   }
   c.globalAlpha = 1;
-  c.strokeStyle = 'rgba(95,75,55,0.62)';
-  c.lineWidth = 2.5; c.lineCap = 'round'; c.lineJoin = 'round';
-  var headSway = Math.sin(t * 1.2) * 1.5;
-  if (this.mode === 'gents') {
-    // Silhouette — figure kneeling, hunched over the bowl, head drooping
-    var heave = this.retching ? Math.sin(t * 8) * 1.8 : 0;
-    // Head drooping forward toward bowl
-    c.beginPath(); c.arc(bx + headSway, 55 + heave, 8, 0, Math.PI * 2); c.stroke();
-    // Neck arching down
-    c.beginPath();
-    c.moveTo(bx + headSway * 0.5, 63 + heave);
-    c.quadraticCurveTo(bx + 1, 76, bx + 2, 88);
-    c.stroke();
-    // Spine — hunched arc from neck to hips
-    c.beginPath();
-    c.moveTo(bx + 2, 88);
-    c.quadraticCurveTo(bx - 6, 108, bx - 20, 114);
-    c.quadraticCurveTo(bx - 32, 120, bx - 28, 142);
-    c.stroke();
-    // Arms reaching down to grip bowl rim
-    c.beginPath();
-    c.moveTo(bx + 1, 97);
-    c.quadraticCurveTo(bx + 20, 114, bx + 28, 124);
-    c.moveTo(bx + 1, 97);
-    c.quadraticCurveTo(bx - 6, 116, bx, 126);
-    c.stroke();
-    // Kneeling legs
-    c.beginPath();
-    c.moveTo(bx - 28, 142);
-    c.lineTo(bx - 30, 168);
-    c.moveTo(bx - 26, 142);
-    c.lineTo(bx - 8, 162);
-    c.stroke();
-  } else {
-    // Silhouette — figure upright at the urinal
-    // Head
-    c.beginPath(); c.arc(bx + headSway, 18, 8, 0, Math.PI * 2); c.stroke();
-    // Spine, upright
-    c.beginPath();
-    c.moveTo(bx + headSway * 0.4, 26);
-    c.quadraticCurveTo(bx + 2, 55, bx + 3, 85);
-    c.stroke();
-    // Arms loose at sides
-    c.beginPath();
-    c.moveTo(bx, 42); c.lineTo(bx - 16, 68);
-    c.moveTo(bx + 2, 42); c.lineTo(bx + 14, 62);
-    c.stroke();
-  }
 }
 };
 window.showSpewPopup = function(mode) { new window.SpewPopup(mode); };
@@ -38484,12 +38655,12 @@ You're eating at the counter when somebody passes the window: that's Lily.
 <h2 class="venue-title">The Coach and Horses</h2>
 <svg class="gents-tiles-bottom" viewBox="0 0 300 36" width="100%" height="36" preserveAspectRatio="none"><defs><linearGradient id="gtGlaze2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d4cebc"/><stop offset="50%" stop-color="#beb8a3"/><stop offset="100%" stop-color="#9c9682"/></linearGradient><linearGradient id="gtEdge2" x1="0" x2="1"><stop offset="0%" stop-color="#8a7c50" stop-opacity="0"/><stop offset="18%" stop-color="#8a7c50" stop-opacity="0.5"/><stop offset="82%" stop-color="#8a7c50" stop-opacity="0.5"/><stop offset="100%" stop-color="#8a7c50" stop-opacity="0"/></linearGradient><linearGradient id="gtDrip2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(24,28,14,0.6)"/><stop offset="100%" stop-color="rgba(24,28,14,0)"/></linearGradient><pattern id="gtTile2" width="40" height="32" patternUnits="userSpaceOnUse"><rect width="40" height="32" fill="#1d1a14"/><rect x="1" y="1" width="38" height="14" rx="1" fill="url(#gtGlaze2)"/><rect x="2" y="1.5" width="36" height="2" rx="1" fill="rgba(238,240,228,0.18)"/><rect x="-19" y="17" width="38" height="14" rx="1" fill="url(#gtGlaze2)"/><rect x="21" y="17" width="38" height="14" rx="1" fill="url(#gtGlaze2)"/><rect x="-18" y="17.5" width="36" height="2" rx="1" fill="rgba(238,240,228,0.15)"/><rect x="22" y="17.5" width="36" height="2" rx="1" fill="rgba(238,240,228,0.15)"/></pattern></defs><rect width="300" height="36" fill="#171510"/><rect width="300" height="32" fill="url(#gtTile2)"/><g opacity="0.85"><path d="M82,2 q-1.5,9 -3,18" fill="none" stroke="url(#gtDrip2)" stroke-width="1.5" stroke-linecap="round"/><path d="M150,2 q1,8 0,16" fill="none" stroke="url(#gtDrip2)" stroke-width="1.2" stroke-linecap="round"/><path d="M214,2 q-1,7 -2,14" fill="none" stroke="url(#gtDrip2)" stroke-width="1.3" stroke-linecap="round"/><path d="M40,2 q0.5,6 0,12" fill="none" stroke="url(#gtDrip2)" stroke-width="1" stroke-linecap="round"/><path d="M268,2 q-0.5,7 -1.5,15" fill="none" stroke="url(#gtDrip2)" stroke-width="1.1" stroke-linecap="round"/></g><rect y="29" width="300" height="7" fill="rgba(16,20,10,0.55)"/><ellipse cx="66" cy="34" rx="88" ry="8" fill="rgba(24,34,16,0.5)"/><ellipse cx="240" cy="33" rx="70" ry="7" fill="rgba(26,36,18,0.46)"/><ellipse cx="158" cy="35" rx="56" ry="6" fill="rgba(22,30,14,0.46)"/><ellipse cx="300" cy="20" rx="30" ry="14" fill="rgba(26,32,18,0.3)"/><path d="M88,3 l-1.6,3 l1,2.5 l-2,3.4 l0.8,3 l-1.6,4 l1.2,3.5 m-1.2,-3.5 l2.4,1.4 m-3.2,-11 l-2,0.6 l-1.4,1.6" fill="none" stroke="rgba(22,20,14,0.7)" stroke-width="0.4" stroke-linejoin="round"/><path d="M256,2 l2,3.4 l-1.2,2.6 l1.8,3.2 l-1,3 l1.4,3 m-1.4,-3 l2.2,1.2 m-2.8,-9 l-2.2,0.7" fill="none" stroke="rgba(22,20,14,0.6)" stroke-width="0.4" stroke-linejoin="round"/><rect width="300" height="36" fill="rgba(22,26,12,0.18)"/><g opacity="0.65"><circle cx="30" cy="22" r="0.8" fill="rgba(46,56,34,0.6)"/><circle cx="200" cy="9" r="0.7" fill="rgba(44,54,33,0.55)"/><circle cx="120" cy="24" r="0.6" fill="rgba(42,50,30,0.5)"/><circle cx="270" cy="14" r="0.6" fill="rgba(44,52,32,0.5)"/><circle cx="90" cy="26" r="0.7" fill="rgba(40,48,28,0.5)"/><circle cx="174" cy="22" r="0.5" fill="rgba(42,50,30,0.45)"/></g><line x1="0" y1="1.5" x2="300" y2="1.5" stroke="url(#gtEdge2)" stroke-width="1"/></svg>
 
-(if: $resumingFromCall is true)[(set: $resumingFromCall to false)(if: $sobriety <= 15)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]]](else:)[You've come-to in a cubicle, in what you think is the gents in the Coach and Horses.
+(if: $resumingFromCall is true)[(set: $resumingFromCall to false)(if: $sobriety <= 15)[<div class="gents-side-action">(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]</div>]](else:)[You've come-to in a cubicle, in what you think is the gents in the Coach and Horses.
 
 (if: _wasCoachUrgent)[<span class="alba-link-fade">[[Give up. Sleep here.|Alba Incomplete]]</span>
 
 ]\
-(if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 18))(set: $crashedAfterDualRing to false)<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]](else:)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]]]
+<div class="gents-side-action">(if: $crashedAfterDualRing is true)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 18))(set: $crashedAfterDualRing to false)<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]](else:)[(link: "Retch.")[(set: $sobriety to ($statGain: $sobriety, 14))<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('gents',200);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('gents');},200);}</script>]]</div>]
 
 [[You gather your limbs to the bar.|Coach and Horses bar]]
 
@@ -49511,6 +49682,29 @@ clip-path: polygon(32% 0%, 68% 0%, 82% 100%, 18% 100%);
   94%  { opacity: 1; }
   100% { opacity: 0; background: #F1E9E4; }
 }
+/* A small centred side-action (the cubicle Retch) — deliberately NOT styled
+   like a navigation choice; it reads as a thing you might do, not a road. */
+.gents-side-action {
+  text-align: center;
+  margin: 1.7em auto 0.5em;
+}
+.gents-side-action tw-hook { display: inline; }
+.gents-side-action tw-link {
+  display: inline-block;
+  font-family: "Crimson Text", Georgia, serif;
+  font-style: italic;
+  font-size: 0.92em;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: #9aa08a;
+  border: none;
+  padding: 0.1em 0.4em;
+  opacity: 0.85;
+  transition: color 0.3s, opacity 0.3s;
+}
+.gents-side-action tw-link::before { content: "\27E1\2004"; opacity: 0.5; font-style: normal; }
+.gents-side-action tw-link::after  { content: "\2004\27E1"; opacity: 0.5; font-style: normal; }
+.gents-side-action tw-link:hover { color: #cfd4b8; opacity: 1; background: none; }
 
 /* ── TRISHA'S ────────────────────────────────────────────────────────── */
 @keyframes neonPulse {

@@ -4,6 +4,16 @@
 >
 > **State at handoff (2026-07-18, ~03:00):** Enormous mechanics session — the game now has real jeopardy. **NOT yet committed** (the whole night = `Dream Street Shuffle.twee` + `Dream Street Shuffle.html`, commit via GitHub Desktop). Full detail below.
 
+## ⚠ ADDENDUM 8 (2026-07-23) — FLOOD ESCALATION EXTRAS + THE JEOPARDY ROUND
+1. **Flood escalation shipped and TUNED with Sam** (base system in ADDENDUM 7 §4c... actually §4c below): plus this round: **surface CHOP** (12 drifting glint-patch blobs churning the pool; count 4×(visit−1) capped 12, violence scales uncapped), **quicker lightning** (first strike 0.14s, second 0.26s — "they linger too long" fixed), **a streetlamp dies per return** (`phDoomLamps`: pavement lamps at visits 2+3, the big foreground lamp at 4, the pub's own lanterns at 5+6 — by deep visits the street is lit by windows + lightning alone; killed via traverse — panes darkened, halos hidden, `userData.dead` guards BOTH flicker loops or they resurrect). **GOTCHA**: the preview pane STRIPS query strings AND the boot hook replaceState-wipes the whole URL → `?phvisit=` never survives there; testing override = `localStorage dssPhVisitOverride` (dev-gated behind `window.DSS_DEV`; REMEMBER TO CLEAR — was cleared this session).
+2. **THE JEOPARDY ROUND (Sam picked 3 of 4; the doorway-doze banked for later):**
+   - **Pong wager**: "Put a score on it" (his naming, £20) in Watch the decider → `$pongStake`; PP Victory +20 morale ("£20 WON" note), PP Defeat −12 ON TOP of the existing lost turn. Timeout-concede settles too.
+   - **Drink spiral**: ALL TEN drink links (3 pubs ×3 + the Stranger's round) now cost `8 + $drinksRound*5` sobriety and give `5 + $drinksRound*2` morale, `$drinksRound` resets on every Dean Street render — the price climbs glass-by-glass within a round, taught by the rising numbers alone (no prose needed).
+   - **Priced crossing**: `$pillarsVisits` counter (increments in the real-entry charge block only — drink-returns excluded by the resume guard); from visit 3, 'I can walk on water' with sobriety <40 → +1 turn, −8 morale, `$stumbledCrossing` → Sam's shore line ("...haul yourself up on the shore like a regular Bond girl.") renders once at Carthage shore.
+   - Banked ideas NOT built: doorway-doze (turn-for-sobriety press-your-luck).
+3. **Debug-jump caveat learned**: jumped passages can render a STALE duplicate whose links swallow clicks without executing — verify interactions via the live copy or real navigation; stat-header changes are the ground truth.
+4. Uncommitted beyond Sam's last commit: flood extras + jeopardy round + stumble line.
+
 ## ⚠ ADDENDUM 7 (2026-07-22) — THE CHOICE ROUND: real choices restored + THE CALLS ARE NOW THE SPINE
 **All built with Dr Quill writing the prose live in chat; everything verified rendering; 138 passages.**
 1. **Restored Pillars fork**: "Maritime interlude" now ALWAYS offers both [[Yes→Approach The Pillars]] and [[Seek the shore→The coast of Carthage]]. Early crossing verified safe: Green Sea/LINE 2 gated behind `$visitedPyre and $returnedPage` at Carthage shore; The Interval self-guards (fires early = Lily-stairs beat early, accepted).

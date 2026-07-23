@@ -4,6 +4,18 @@
 >
 > **State at handoff (2026-07-18, ~03:00):** Enormous mechanics session — the game now has real jeopardy. **NOT yet committed** (the whole night = `Dream Street Shuffle.twee` + `Dream Street Shuffle.html`, commit via GitHub Desktop). Full detail below.
 
+## ⚠ ADDENDUM 10 (2026-07-23, last) — THE GREEN SEA PASS + final O'Flatterly touch
+1. **The Green Sea approach** (`green-sea-3d-static.html` — a SEPARATE FILE, not built by sync; MUST be committed alongside the .twee/.html pair; the iframe src now cache-busts with Date.now()) got its full pass, all Sam-directed:
+   - **Dusk**: mauve sky (0x453050), low gold raking sun (-9,7,13), violet ambient, lanterns doubled to primary, warm doorLeak light at the threshold.
+   - **The trippy blobs KEPT AND AMPLIFIED (Sam's explicit direction — never botanise them)**: the original plantSprites carried sway params that were NEVER WIRED into the loop — now wired (float/bob/opacity shimmer) + 9 loose drifter blobs crossing the court + **sea-light caustics** breathing on the whitewash (3 additive shimmer bands — the beach present as light).
+   - **Sea-worn textures**: walls (flaked patches, salt bloom, rising damp, cracks — makeSeawornTex), floor (stains/wear/grit), sign (salt streaks, paint flakes, worn border, damp corners).
+   - **Furniture rebuilt**: slatted ladder-back bistro chairs (raked rear posts, splayed legs) + pedestal tables with lip rims and 3 splayed feet — the old box-slab furniture is gone.
+   - **LIVING ELEMENT: cat chases mouse** in a figure-8 round the court — mouse leads, cat runs the same parametric line 0.5 behind; speed = max(0, sin(t·0.33+1)·0.9+0.45) gives bursts + stand-offs (mouse trembles, cat sits, tail sweeps); **fluffy 6-sphere tail w/ lighter tip**; they **hop the kerb onto the pavement platform** (chaseY: platform top y=0.1, kerb z=4.2, smoothstep + hop bump) instead of clipping into its side.
+   - **Door**: the ajar/hanging experiment was REVERTED (Sam: it loses the decoration) — both studded leaves closed as designed.
+2. **O'Flatterly final touch**: the fascia apostrophe in O'FLATTERLY is **flipped 180° (a teardrop)** — drawn per-glyph with save/translate(x,30)/rotate(π). Sam: "perfect". The name weeps over its own door.
+3. GIFs for sharing in ~/Downloads: `trishas-entrance-cat.gif`, `the-green-sea-dusk.gif` (1fps samples).
+4. Sam committed mid-evening; everything after (jeopardy round tail, bookshop, Green Sea, teardrop) may still need a commit — check GitHub Desktop.
+
 > **▶ SAM'S QUEUE FOR TOMORROW (set aside 2026-07-23, he will ask):**
 > 1. **Storm-door weather variants** — two harsher lines for the post-critic Pillars weather beat ("runoff's topped the kerb...") keyed to `$pillarsVisits` (tier 2/3), so the interior prose keeps pace with the escalating flood outside. His prose; wiring is trivial once given.
 > 2. **Jack/Percy acknowledging the score** — optional half-line of theatre when "Put a score on it" is taken (Watch the decider). His prose.

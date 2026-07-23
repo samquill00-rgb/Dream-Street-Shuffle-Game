@@ -4905,6 +4905,7 @@ this.pourTime = 0; this.pourCommitted = false;
 this.handShake = 0;
 this.targetOff = 0; this.targetPhase = Math.random() * Math.PI * 2;
 this.liquidWobble = 0;
+this.spill = 0; this.perfectRing = 0;
 this.pourAccuracy = 0;
 
 // Drink definitions (unchanged from original)
@@ -4948,6 +4949,8 @@ this.carryPhase = {
   obstacles: [],
   nextObstacleTime: 0,
   screenShake: 0,
+  hitFlash: 0,
+  landPuff: 0,
   difficultyPhase: 0,
   wobbling: false,
   wobbleTimer: 0,
@@ -5079,6 +5082,7 @@ var gx = this.W/2, gy = 270;
 this.mScore += this.pourAccuracy;
 var narr = document.getElementById('bar-narrative');
 if (this.pourAccuracy === 2) {
+  this.perfectRing = 1;
   this._spawnSparkles(gx, gy, 15);
   narr.innerHTML = '<em style="color:#4CFF00;">Perfect pour.</em>';
 } else if (this.pourAccuracy === 1) {
@@ -5151,6 +5155,7 @@ this.pourTime = 0; this.pourCommitted = false;
 this.handShake = 0;
 this.targetOff = 0; this.targetPhase = Math.random() * Math.PI * 2;
 this.liquidWobble = 0;
+this.spill = 0; this.perfectRing = 0;
 }
 
 _spawnSparkles(x, y, count) {
@@ -5452,10 +5457,12 @@ for (var i = 0; i < cp.obstacles.length; i++) {
   }
 
   if (collides) {
-    // Bounced back from a high obstacle while airborne — physics only, no
-    // automatic glass loss. The hit still routes through the wobble system
-    // below so the first time it's a "nearly lost it" wobble, not a drop.
-    var bouncedBack = obs.isHigh && cp.playerJumping;
+    // ANY high-obstacle hit is a head-bonk: knocked back, staggered, and the
+    // big rubber duck fires (it used to require being airborne, so plain
+    // forgetting to duck never showed the duck — Sam caught it). Still no
+    // automatic glass loss: the hit routes through the wobble system below,
+    // so the first bonk is a "nearly lost it", and you retry the obstacle.
+    var bouncedBack = obs.isHigh;
     if (bouncedBack) {
       cp.scrollPos = Math.max(0, cp.scrollPos - 100);
       cp.playerJumping = false;
@@ -5478,7 +5485,8 @@ for (var i = 0; i < cp.obstacles.length; i++) {
       cp.wobbling = false;
       cp.wobbleTimer = 0;
       cp.invulnTimer = 1.5;
-      cp.screenShake = 1;
+      cp.screenShake = 1.6;
+      cp.hitFlash = 1;
       if (window.dssAudio && window.dssAudio.punchImpact) window.dssAudio.punchImpact();
       if (window.dssAudio && window.dssAudio.glassClink) window.dssAudio.glassClink();
     }
@@ -5542,24 +5550,24 @@ if (this.pouring && !this.pourDone) {
   var wobbleMult = 1.0 + drunk * 0.4 * Math.sin(this.wobT * 3.1 + Math.sin(this.wobT * 1.7) * 0.5);
   var speed = steadySpeed * ramp * wobbleMult;
   this.pourLevel = Math.min(1.0, this.pourLevel + Math.max(0.00005, speed) * dt);
+  if (this.pourLevel >= 0.995) this.spill = Math.min(1, this.spill + 0.0009 * dt);
   this.bottleAngle = Math.min(0.45, this.bottleAngle + 0.006 * ramp);
   this.pourStream = Math.min(1, this.pourStream + 0.06);
 
   if (Math.random() < 0.25 && ramp > 0.3) {
     this.pourDrops.push({
-      x: this.W/2 + 38 + this.handShake,
-      y: 95 + Math.random()*15,
-      vy: 1.5 + Math.random()*2.5,
-      vx: (Math.random()-0.5) * 0.8,
+      x: this.W/2 - 11 + Math.random()*22,
+      y: (this._surfY || 300) - 2,
+      vy: -(0.6 + Math.random()*1.6),
+      vx: (Math.random()-0.5) * 1.6,
       life: 1
     });
   }
 
   if (this.mRound === 1 && this.pourLevel > 0.08 && Math.random() < 0.12) {
-    var glassBase = 320 - this.pourLevel * 120;
     this.bubbles.push({
       x: this.W/2 - 16 + Math.random()*32,
-      y: glassBase + Math.random() * 20,
+      y: (this._surfY || 300) + 8 + Math.random() * 46,
       vy: -0.2 - Math.random()*0.4,
       life: 1,
       r: 0.8 + Math.random()*2
@@ -5579,6 +5587,7 @@ this.bubbles = this.bubbles.filter(function(b) {
   b.y += b.vy; b.x += Math.sin(b.y * 0.1) * 0.15; b.life -= 0.006;
   return b.life > 0;
 });
+if (this.perfectRing > 0) this.perfectRing = Math.max(0, this.perfectRing - 0.0011 * dt);
 }
 
 _updateCarry(dt) {
@@ -5599,8 +5608,8 @@ if (cp.staggerTimer > 0) {
 // (overshoots groundY slightly, like a proper jump out).
 if (cp.pitFalling) {
   var pitG     = 1600; // gravity for the pit-bounce (stronger than normal)
-  var pitDepth = 62;   // how deep into the pit
-  var pitKick  = -560; // initial upward velocity when bouncing out
+  var pitDepth = 88;   // deep enough that the pit visibly swallows him
+  var pitKick  = -640; // initial upward velocity when bouncing out
   if (cp.pitFallPhase === 'fall') {
     cp.pitFallVel += pitG * s;
     cp.pitFallY += cp.pitFallVel * s;
@@ -5609,12 +5618,13 @@ if (cp.pitFalling) {
       cp.pitFallVel = 0;
       cp.pitFallPhase = 'bottom';
       cp.pitFallBottomT = 0;
+      cp.screenShake = 1.0;
       if (window.dssAudio && window.dssAudio.muffledThud) window.dssAudio.muffledThud();
       if (window.dssAudio && window.dssAudio.glassClink) window.dssAudio.glassClink();
     }
   } else if (cp.pitFallPhase === 'bottom') {
     cp.pitFallBottomT += s;
-    if (cp.pitFallBottomT >= 0.06) {
+    if (cp.pitFallBottomT >= 0.12) {
       cp.pitFallVel = pitKick;
       cp.pitFallPhase = 'rising';
       if (window.dssAudio && window.dssAudio.dodgeWhoosh) window.dssAudio.dodgeWhoosh();
@@ -5629,7 +5639,14 @@ if (cp.pitFalling) {
       cp.playerY = cp.groundY;
       cp.playerVelY = 0;
       cp.playerJumping = false;
-      if (cp.pitFallObs) cp.pitFallObs.hit = true;
+      if (cp.pitFallObs) {
+        cp.pitFallObs.hit = true;
+        // Land on the FAR lip of the gap — he claws out the other side
+        // instead of walking the rest of the hole on invisible floor.
+        cp.scrollPos = Math.max(cp.scrollPos, cp.pitFallObs.x + cp.pitFallObs.width - 94);
+        cp.groundY = this._getTerrainY(cp.scrollPos + 100);
+      }
+      cp.landPuff = 1;
       if (!cp.wobbling) {
         cp.wobbling = true;
         cp.wobbleTimer = 3.0;
@@ -5639,7 +5656,8 @@ if (cp.pitFalling) {
         cp.wobbleTimer = 0;
       }
       cp.invulnTimer = 1.4;
-      cp.screenShake = 0.7;
+      cp.screenShake = 1.3;
+      cp.hitFlash = 1;
       cp.pitFallObs = null;
       if (cp.invulnTimer > 0) cp.invulnTimer -= s;
       cp.screenShake *= 0.92;
@@ -5685,6 +5703,11 @@ cp.scrollPos += cp.scrollSpeed * s;
 this._checkObstacleCollisions();
 
 if (cp.invulnTimer > 0) cp.invulnTimer -= s;
+if (cp.hitFlash > 0) cp.hitFlash = Math.max(0, cp.hitFlash - s * 1.8);
+if (cp.landPuff > 0) cp.landPuff = Math.max(0, cp.landPuff - s * 2.6);
+var airborneNow = cp.playerY < cp.groundY - 2;
+if (this._wasAirborne && !airborneNow && !cp.pitFalling) cp.landPuff = 1;
+this._wasAirborne = airborneNow;
 cp.screenShake *= 0.92;
 
 // Wobble timer: if you survive long enough after a wobble, it resets
@@ -5734,70 +5757,108 @@ var c = this.ctx, W = this.W, H = this.H;
 c.fillStyle = '#0a0804';
 c.fillRect(0, 0, W, H);
 
+// ---- Back-bar: mirror glow, shelf, ranked bottle silhouettes ----
+var shelfY = 128;
+var mg0 = c.createLinearGradient(0, 40, 0, shelfY);
+mg0.addColorStop(0, 'rgba(52,40,26,0)');
+mg0.addColorStop(0.7, 'rgba(70,54,34,0.30)');
+mg0.addColorStop(1, 'rgba(40,30,18,0.42)');
+c.fillStyle = mg0;
+c.fillRect(90, 40, W - 180, shelfY - 40);
+var bcols = ['#3a2a14','#1e2a1e','#2a1c26','#33261a','#20242e','#3a2010','#26301c','#301c1c','#2c2214','#1c2620'];
+for (var bi = 0; bi < 10; bi++) {
+  var bxp = 108 + bi * ((W - 216) / 9);
+  var bhh = 34 + ((bi * 37) % 24);
+  var bww = 11 + ((bi * 13) % 5);
+  c.globalAlpha = 0.85;
+  c.fillStyle = bcols[bi % bcols.length];
+  c.fillRect(bxp - bww / 2, shelfY - bhh, bww, bhh);
+  c.fillRect(bxp - 2, shelfY - bhh - 9, 4, 9);
+  c.globalAlpha = 0.25;
+  c.fillStyle = '#e8cc88';
+  c.fillRect(bxp - bww / 2 + 1.5, shelfY - bhh + 3, 1.6, bhh - 8);
+  c.globalAlpha = 1;
+}
+c.fillStyle = 'rgba(46,30,16,0.9)';
+c.fillRect(86, shelfY, W - 172, 6);
+c.fillStyle = 'rgba(201,160,80,0.28)';
+c.fillRect(86, shelfY, W - 172, 1.4);
+
 this._drawAtmosphere(c);
 
-var gx = W/2, gy = 230;
-var d = this.drinks[this.mRound];
-
-// Bottle
-this._drawBottle(c, gx - 50, 40, 40, 90, d.bottle.col, d.bottle.acc, d.bottle.lab);
-
-// Bottle tilt for pouring
+// spotlight cone on the working glass
+var gx = W / 2;
 c.save();
-c.translate(gx - 30, 85);
-c.rotate(this.bottleAngle);
-c.fillStyle = 'rgba(255, 220, 150, ' + (this.pourStream * 0.4) + ')';
-if (this.pourStream > 0) {
-  for (var i = 0; i < this.pourStream * 8; i++) {
-    var px = (Math.random() - 0.5) * 6;
-    var py = i * 4;
-    c.fillRect(px, py, 3, 3);
-  }
-}
+c.globalAlpha = 0.055 + Math.sin(this.t * 2.3) * 0.012;
+c.fillStyle = '#ffe0a0';
+c.beginPath();
+c.moveTo(gx - 14, 0); c.lineTo(gx + 14, 0);
+c.lineTo(gx + 88, 372); c.lineTo(gx - 88, 372);
+c.closePath(); c.fill();
 c.restore();
 
-// Pour drops
-c.fillStyle = d.liqCol;
-this.pourDrops.forEach((drop) => {
-  c.globalAlpha = drop.life * 0.7;
+// ---- Counter ----
+var counterY = 372;
+var wg = c.createLinearGradient(0, counterY, 0, H);
+wg.addColorStop(0, '#31200f');
+wg.addColorStop(0.14, '#241708');
+wg.addColorStop(1, '#120a04');
+c.fillStyle = wg;
+c.fillRect(0, counterY, W, H - counterY);
+c.fillStyle = 'rgba(220,180,110,0.16)';
+c.fillRect(0, counterY, W, 2);
+c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1;
+for (var wgl = 0; wgl < 5; wgl++) {
   c.beginPath();
-  c.arc(drop.x, drop.y, 2, 0, Math.PI * 2);
-  c.fill();
-});
-c.globalAlpha = 1;
+  c.moveTo(0, counterY + 7 + wgl * 5.5);
+  c.bezierCurveTo(W * 0.3, counterY + 5 + wgl * 5.5 + (wgl % 2), W * 0.7, counterY + 9 + wgl * 5.5 - (wgl % 2), W, counterY + 6 + wgl * 5.5);
+  c.stroke();
+}
+var d = this.drinks[this.mRound];
+c.save();
+c.globalAlpha = 0.10;
+var refl = c.createRadialGradient(gx, counterY + 8, 2, gx, counterY + 8, 60);
+refl.addColorStop(0, d.liqCol);
+refl.addColorStop(1, 'rgba(0,0,0,0)');
+c.fillStyle = refl;
+c.beginPath(); c.ellipse(gx, counterY + 9, 58, 8, 0, 0, Math.PI * 2); c.fill();
+c.restore();
 
-// Glass — scaled up 1.5x
+// ---- Working glass (each type offset so its base meets the counter) ----
+var glassGy = {tulip: 230, copper: 269.7, rocks: 282.7}[d.glass] || 230;
+var gy = glassGy;
 var glassScale = 1.5;
 c.save();
-c.translate(gx, gy);
+c.translate(gx, 230);
 c.scale(glassScale, glassScale);
-c.translate(-gx, -gy);
+c.translate(-gx, -230);
 this._drawGlass(c, d.glass, gx, gy, this.pourLevel, d.target, d.liqCol, d.liqHi);
 
-// Target marker + tolerance band — the band shows the "close enough"
-// zone visibly so the player can see the leniency they have. Inner
-// dashed line is the bullseye (perfect zone), outer is the pass zone.
+// target band: gold-etched centre line with chevrons, brighter zones
 var effTarget = d.target + this.targetOff;
 var targetY    = this._liquidY(d.glass, gy, effTarget);
 var bandTop    = this._liquidY(d.glass, gy, effTarget + 0.16);
 var bandBottom = this._liquidY(d.glass, gy, effTarget - 0.16);
 var perfTop    = this._liquidY(d.glass, gy, effTarget + 0.07);
 var perfBottom = this._liquidY(d.glass, gy, effTarget - 0.07);
-// Outer pass-zone shading
-c.fillStyle = 'rgba(255, 200, 120, 0.07)';
+c.fillStyle = 'rgba(255, 200, 120, 0.10)';
 c.fillRect(gx - 30, bandTop, 60, bandBottom - bandTop);
-// Inner perfect-zone shading (just slightly brighter)
-c.fillStyle = 'rgba(120, 255, 120, 0.10)';
+c.fillStyle = 'rgba(150, 255, 150, 0.14)';
 c.fillRect(gx - 30, perfTop, 60, perfBottom - perfTop);
-// Centre target line
-c.strokeStyle = 'rgba(255, 100, 100, 0.45)';
-c.lineWidth = 1.5;
+c.strokeStyle = 'rgba(232, 204, 136, 0.85)';
+c.lineWidth = 1.6;
 c.beginPath();
 c.moveTo(gx - 30, targetY);
 c.lineTo(gx + 30, targetY);
 c.stroke();
-// Faint outer band edges
-c.strokeStyle = 'rgba(255, 200, 120, 0.20)';
+c.fillStyle = 'rgba(232, 204, 136, 0.9)';
+c.beginPath();
+c.moveTo(gx - 40, targetY - 5); c.lineTo(gx - 32, targetY); c.lineTo(gx - 40, targetY + 5);
+c.closePath(); c.fill();
+c.beginPath();
+c.moveTo(gx + 40, targetY - 5); c.lineTo(gx + 32, targetY); c.lineTo(gx + 40, targetY + 5);
+c.closePath(); c.fill();
+c.strokeStyle = 'rgba(255, 200, 120, 0.30)';
 c.lineWidth = 0.8;
 c.setLineDash([3, 3]);
 c.beginPath();
@@ -5805,35 +5866,134 @@ c.moveTo(gx - 30, bandTop);    c.lineTo(gx + 30, bandTop);
 c.moveTo(gx - 30, bandBottom); c.lineTo(gx + 30, bandBottom);
 c.stroke();
 c.setLineDash([]);
+
+// overfill: rivulets running down the glass
+if (this.spill > 0.02) {
+  c.strokeStyle = 'rgba(' + parseInt(d.liqCol.slice(1,3),16) + ',' + parseInt(d.liqCol.slice(3,5),16) + ',' + parseInt(d.liqCol.slice(5,7),16) + ',0.55)';
+  c.lineWidth = 2;
+  c.lineCap = 'round';
+  var glassBot = {tulip: gy + 65, copper: gy + 55, rocks: gy + 42}[d.glass];
+  var rimY = {tulip: gy - 8, copper: gy, rocks: gy}[d.glass];
+  c.beginPath();
+  c.moveTo(gx - 13, rimY + 2);
+  c.quadraticCurveTo(gx - 17, (rimY + glassBot) / 2, gx - 15, glassBot + this.spill * 8);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(gx + 11, rimY + 3);
+  c.quadraticCurveTo(gx + 15, (rimY + glassBot) / 2 + 6, gx + 13, glassBot + this.spill * 6);
+  c.stroke();
+}
 c.restore();
 
-// Bubbles (Moscow Mule)
+// liquid surface in screen coordinates, for the stream and spray
+var surfP = this._liquidY(d.glass, gy, Math.max(0.02, this.pourLevel));
+this._surfY = 230 + glassScale * (surfP - 230);
+
+// overfill puddle on the counter
+if (this.spill > 0.02) {
+  c.save();
+  c.globalAlpha = 0.4;
+  c.fillStyle = d.liqCol;
+  c.beginPath();
+  c.ellipse(gx + 4, counterY + 5, 10 + this.spill * 42, 3 + this.spill * 4, 0, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+// ---- Bottle: rests on the counter, lifts and tips over the glass ----
+var lift = Math.min(1, this.pourStream * 1.4);
+var ease = lift * lift * (3 - 2 * lift);
+var pvX = gx + 112 - ease * 58 + this.handShake;
+var pvY = 258 - ease * 132;
+var ang = -ease * 2.35;
+c.save();
+c.translate(pvX, pvY);
+c.rotate(ang);
+this._drawBottle(c, -20, 0, 40, 90, d.bottle.col, d.bottle.acc, d.bottle.lab);
+c.restore();
+
+// the stream
+if (this.pourStream > 0.2) {
+  var sAlpha = Math.min(1, (this.pourStream - 0.2) * 1.6);
+  var sy0 = pvY + 2, sx0 = pvX + Math.sin(ang) * 4;
+  var sy1 = this._surfY, sx1 = gx + 2 + this.handShake * 0.4;
+  c.lineCap = 'round';
+  c.strokeStyle = 'rgba(' + parseInt(d.liqCol.slice(1,3),16) + ',' + parseInt(d.liqCol.slice(3,5),16) + ',' + parseInt(d.liqCol.slice(5,7),16) + ',' + (sAlpha * 0.85).toFixed(2) + ')';
+  c.lineWidth = 3.1 + Math.sin(this.t * 9) * 0.5;
+  c.beginPath();
+  c.moveTo(sx0, sy0);
+  c.quadraticCurveTo(sx0 + (sx1 - sx0) * 0.25 + Math.sin(this.t * 6) * 2.5, (sy0 + sy1) * 0.55, sx1, sy1);
+  c.stroke();
+  c.strokeStyle = 'rgba(255, 240, 200, ' + (sAlpha * 0.4).toFixed(2) + ')';
+  c.lineWidth = 1.1;
+  c.beginPath();
+  c.moveTo(sx0 - 1, sy0);
+  c.quadraticCurveTo(sx0 + (sx1 - sx0) * 0.25 + Math.sin(this.t * 6) * 2, (sy0 + sy1) * 0.55, sx1 - 1.5, sy1);
+  c.stroke();
+  // splash crown where it lands
+  c.strokeStyle = 'rgba(255, 235, 190, ' + (sAlpha * 0.5).toFixed(2) + ')';
+  c.lineWidth = 1;
+  for (var sp2 = 0; sp2 < 3; sp2++) {
+    var spx = sx1 - 6 + sp2 * 6;
+    c.beginPath();
+    c.arc(spx, sy1 - 1, 2.2 + Math.sin(this.t * 11 + sp2 * 2.1) * 0.8, Math.PI, Math.PI * 2);
+    c.stroke();
+  }
+}
+
+// spray drops
+c.fillStyle = d.liqCol;
+this.pourDrops.forEach((drop) => {
+  c.globalAlpha = drop.life * 0.7;
+  c.beginPath();
+  c.arc(drop.x, drop.y, 1.8, 0, Math.PI * 2);
+  c.fill();
+});
+c.globalAlpha = 1;
+
+// bubbles (Moscow Mule)
 this.bubbles.forEach((b) => {
   c.save();
   c.globalAlpha = b.life * 0.6;
   c.strokeStyle = 'rgba(200, 200, 255, 0.8)';
   c.lineWidth = 1;
   c.beginPath();
-  c.arc(gx - 16 + b.x, gy + 10 + b.y, b.r, 0, Math.PI * 2);
+  c.arc(b.x, b.y, b.r, 0, Math.PI * 2);
   c.stroke();
   c.restore();
 });
 
-// Completed drinks sidebar
-var sideX = 10, sideY = 10;
-c.fillStyle = 'rgba(100, 80, 60, 0.4)';
-c.fillRect(sideX, sideY, 80, 380);
-c.strokeStyle = 'rgba(200, 180, 160, 0.5)';
-c.lineWidth = 1;
-c.strokeRect(sideX, sideY, 80, 380);
-
-var completed = 0;
-for (var i = 0; i < this.completedDrinks.length; i++) {
-  this._drawCompletedDrink(c, this.completedDrinks[i], sideX + 5, sideY + 10 + i * 120);
-  completed++;
+// perfect-pour flourish ring
+if (this.perfectRing > 0.01) {
+  var pr = (1 - this.perfectRing) * 95 + 24;
+  c.save();
+  c.globalAlpha = this.perfectRing * 0.55;
+  c.strokeStyle = '#ffd97a';
+  c.lineWidth = 2.4;
+  c.beginPath();
+  c.ellipse(gx, 300, pr, pr * 0.6, 0, 0, Math.PI * 2);
+  c.stroke();
+  c.restore();
 }
 
-// Sparkles
+// ---- Completed drinks: walnut tray panel ----
+var sideX = 8, sideY = 8;
+c.save();
+var pg = c.createLinearGradient(sideX, sideY, sideX, sideY + 352);
+pg.addColorStop(0, 'rgba(30,20,10,0.85)');
+pg.addColorStop(1, 'rgba(16,10,5,0.88)');
+c.fillStyle = pg;
+c.beginPath(); c.roundRect(sideX, sideY, 80, 352, 5); c.fill();
+c.strokeStyle = 'rgba(184,154,96,0.4)';
+c.lineWidth = 1;
+c.beginPath(); c.roundRect(sideX + 0.5, sideY + 0.5, 79, 351, 5); c.stroke();
+c.strokeStyle = 'rgba(184,154,96,0.14)';
+c.beginPath(); c.roundRect(sideX + 4.5, sideY + 4.5, 71, 343, 3); c.stroke();
+c.restore();
+for (var ci = 0; ci < this.completedDrinks.length; ci++) {
+  this._drawCompletedDrink(c, this.completedDrinks[ci], sideX + 5, sideY + 18 + ci * 116);
+}
+
 this._drawSparkles(c);
 }
 
@@ -6479,26 +6639,32 @@ c.restore(); // end screen shake
 
 // === UI: Glass counter ===
 c.save();
-c.fillStyle = 'rgba(10, 8, 4, 0.85)';
-c.fillRect(0, 0, 130, 50);
-c.strokeStyle = 'rgba(200, 180, 160, 0.4)';
+c.fillStyle = 'rgba(14, 10, 5, 0.82)';
+c.beginPath(); c.roundRect(10, 10, 126, 48, 5); c.fill();
+c.strokeStyle = 'rgba(184, 154, 96, 0.45)';
 c.lineWidth = 1;
-c.strokeRect(0, 0, 130, 50);
-c.fillStyle = '#d4a574';
-c.font = '11px Georgia';
-c.fillText('Glasses left:', 8, 20);
-// Draw mini glasses
+c.beginPath(); c.roundRect(10.5, 10.5, 125, 47, 5); c.stroke();
+c.fillStyle = '#d4b878';
+c.font = 'italic 11px Georgia';
+c.fillText('Glasses left', 20, 26);
 for (var i = 0; i < 3; i++) {
   var gAlive = i < cp.glassesLeft;
-  c.fillStyle = gAlive ? '#c9a050' : '#3a2a1a';
-  c.fillRect(10 + i * 22, 28, 8, 14);
+  var gxI = 24 + i * 26;
+  c.strokeStyle = gAlive ? '#e8cc88' : 'rgba(90, 70, 45, 0.5)';
+  c.lineWidth = 1;
+  c.strokeRect(gxI, 32, 9, 18);
   if (gAlive) {
-    c.fillStyle = '#e8c060';
-    c.fillRect(11 + i * 22, 34, 6, 7);
+    c.fillStyle = 'rgba(232, 196, 96, 0.75)';
+    c.fillRect(gxI + 1, 41, 7, 8.5);
+    c.fillStyle = 'rgba(255, 245, 220, 0.5)';
+    c.fillRect(gxI + 1.5, 33.5, 1.5, 15);
+  } else {
+    c.strokeStyle = 'rgba(200, 90, 70, 0.55)';
+    c.beginPath();
+    c.moveTo(gxI, 32); c.lineTo(gxI + 9, 50);
+    c.moveTo(gxI + 9, 32); c.lineTo(gxI, 50);
+    c.stroke();
   }
-  c.strokeStyle = gAlive ? '#d4a574' : '#2a1a10';
-  c.lineWidth = 0.8;
-  c.strokeRect(10 + i * 22, 28, 8, 14);
 }
 c.restore();
 
@@ -6523,6 +6689,30 @@ c.textAlign = 'right';
 c.fillText('STAGE', W - 22, H - 12);
 c.textAlign = 'left';
 c.restore();
+
+// Glass-loss red flash (fight-style impact read)
+if (cp.hitFlash > 0) {
+  c.save();
+  c.globalAlpha = Math.min(0.4, cp.hitFlash * 0.4);
+  var hf = c.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.78);
+  hf.addColorStop(0, 'rgba(0,0,0,0)');
+  hf.addColorStop(1, 'rgba(190,40,30,0.85)');
+  c.fillStyle = hf;
+  c.fillRect(0, 0, W, H);
+  c.restore();
+}
+// Landing dust puff
+if (cp.landPuff > 0) {
+  c.save();
+  c.globalAlpha = cp.landPuff * 0.32;
+  c.strokeStyle = '#cbb894';
+  c.lineWidth = 1.6;
+  var lpR = (1 - cp.landPuff) * 24 + 5;
+  c.beginPath(); c.ellipse(100, cp.groundY + 20, lpR, lpR * 0.28, 0, 0, Math.PI * 2); c.stroke();
+  c.globalAlpha = cp.landPuff * 0.18;
+  c.beginPath(); c.ellipse(100, cp.groundY + 20, lpR * 0.6, lpR * 0.2, 0, 0, Math.PI * 2); c.stroke();
+  c.restore();
+}
 }
 
 // ========== BACKGROUND: LEVEL 1 - THE FLOOR ==========
@@ -7666,8 +7856,21 @@ var isAirborne = cp.playerY < cp.groundY - 5;
 var legCycle = Math.sin(this.t * 8);
 var blink = (Math.sin(this.t * 2.1) > 0.95);
 
+// Ground shadow anchors the figure to the boards
+c.save();
+c.globalAlpha = isAirborne ? 0.10 : 0.20;
+c.fillStyle = '#000';
+c.beginPath();
+c.ellipse(px, cp.groundY + 20, isAirborne ? 10 : 14, 3.4, 0, 0, Math.PI * 2);
+c.fill();
+c.restore();
+
 // Invulnerability flash
 if (cp.invulnTimer > 0 && Math.sin(this.t * 30) > 0) { c.globalAlpha = 0.4; }
+// The pit swallows: fade toward black as he drops below the boards
+if (cp.pitFalling && cp.pitFallY > 0) {
+  c.globalAlpha *= Math.max(0.16, 1 - (cp.pitFallY / 88) * 0.85);
+}
 
 c.save();
 
@@ -41673,9 +41876,9 @@ You hear four stories about Ronnie Scotts and half of them are true.
 4. A man was paying for a scotch when the horn started soloing. He finished his drink, put on his coat, his hat and stepped out into the cold Soho rain to see a woman, returning just as the horn seemed to finish her solo.
 </div>]
 
-There is a pianist with a long and sculpted face, like El Greco painted a heron, and a young guitarist who looks like he was groomed by Bruce Springsteen.
+The pianist has a long and sculpted face, like El Greco painted a heron, and a young guitarist who looks like he was groomed by Bruce Springsteen.
 
-Says one: 'Lost boy, get us a drink.' You acquiesce.
+Says Moe: 'Lost boy, get us a drink.' You acquiesce.
 
 'Bourbon.'
 
@@ -41683,7 +41886,7 @@ Says one: 'Lost boy, get us a drink.' You acquiesce.
 
 'Scotch.'
 
-(if: $completedSetlist is false)[<span id="sob-data-bar" style="display:none;">(print: $sobriety)</span>\
+(if: not ($completedSetlist is true))[<span id="sob-data-bar" style="display:none;">(print: $sobriety)</span>\
 (display: "Ronnies Rule SVG h14")\
 <div class="pp-arena" id="bar-arena"><div class="pp-score" id="bar-round-display" style="position:relative;overflow:visible;padding:0.6em 0.5em 0.3em;"><svg viewBox="0 0 400 70" width="100%" height="70" preserveAspectRatio="xMidYMid meet" style="display:block;margin:0 auto;"><defs><linearGradient id="barTG" x1="0" x2="1"><stop offset="0%" stop-color="#b89a60" stop-opacity="0"/><stop offset="15%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="50%" stop-color="#e8cc88" stop-opacity="1"/><stop offset="85%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="100%" stop-color="#b89a60" stop-opacity="0"/></linearGradient><linearGradient id="barTL" x1="0" x2="1"><stop offset="0%" stop-color="#8a7040" stop-opacity="0"/><stop offset="20%" stop-color="#b89a60" stop-opacity="0.6"/><stop offset="80%" stop-color="#b89a60" stop-opacity="0.6"/><stop offset="100%" stop-color="#8a7040" stop-opacity="0"/></linearGradient><radialGradient id="barTGlow" cx="50%" cy="50%" r="40%"><stop offset="0%" stop-color="#e8c060" stop-opacity="0.15"/><stop offset="100%" stop-color="#e8c060" stop-opacity="0"/></radialGradient></defs><rect x="80" y="10" width="240" height="50" fill="url(#barTGlow)"/><line x1="30" y1="18" x2="370" y2="18" stroke="url(#barTL)" stroke-width="0.8"/><line x1="30" y1="52" x2="370" y2="52" stroke="url(#barTL)" stroke-width="0.8"/><g opacity="0.5" stroke="#b89a60" stroke-width="0.6" fill="none"><path d="M40,35 Q50,18 60,35 Q70,52 80,35"/><path d="M320,35 Q330,18 340,35 Q350,52 360,35"/><circle cx="38" cy="35" r="2"/><circle cx="362" cy="35" r="2"/></g><g fill="none" stroke="#d4b878" stroke-width="0.5" opacity="0.35"><path d="M85,22 C90,18 95,18 100,22 L100,48 C95,52 90,52 85,48 Z"/><path d="M300,22 C305,18 310,18 315,22 L315,48 C310,52 305,52 300,48 Z"/></g><text x="200" y="42" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#barTG)" letter-spacing="8" style="font-size:22px">THE BAR</text><g opacity="0.55" fill="#d4b878"><polygon points="155,26 157,30 155,34 153,30"/><polygon points="245,26 247,30 245,34 243,30"/></g></svg></div><canvas id="bar-canvas" aria-label="Bar minigame: pour three drinks, then carry the tray to the stage" width="560" height="400" style="display:none;width:100%;height:auto;"></canvas><div id="pre-bar"><svg viewBox="0 0 420 272" width="100%" height="272" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;"><defs><linearGradient id="pbGold2" x1="0" x2="1"><stop offset="0%" stop-color="#b89a60" stop-opacity="0"/><stop offset="15%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="50%" stop-color="#e8cc88" stop-opacity="1"/><stop offset="85%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="100%" stop-color="#b89a60" stop-opacity="0"/></linearGradient><linearGradient id="pbBg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1c1408" stop-opacity="0.97"/><stop offset="100%" stop-color="#0c0804" stop-opacity="0.99"/></linearGradient><linearGradient id="pbRule2" x1="0" x2="1"><stop offset="0%" stop-color="#c9a050" stop-opacity="0"/><stop offset="25%" stop-color="#c9a050" stop-opacity="0.65"/><stop offset="75%" stop-color="#c9a050" stop-opacity="0.65"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0"/></linearGradient><linearGradient id="tulipFill2" x1="0" x2="1"><stop offset="0%" stop-color="#c9a050" stop-opacity="0.45"/><stop offset="50%" stop-color="#e8c880" stop-opacity="0.65"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0.45"/></linearGradient><linearGradient id="copperFill2" x1="0" x2="1"><stop offset="0%" stop-color="#8a5a20"/><stop offset="30%" stop-color="#c9883a"/><stop offset="50%" stop-color="#daa050"/><stop offset="70%" stop-color="#c98838"/><stop offset="100%" stop-color="#8a5a20"/></linearGradient><radialGradient id="pbGlow2" cx="50%" cy="38%" r="40%"><stop offset="0%" stop-color="#c9a050" stop-opacity="0.07"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0"/></radialGradient></defs><rect x="10" y="6" width="400" height="260" rx="3" fill="url(#pbBg2)" stroke="rgba(184,154,96,0.32)" stroke-width="1"/><rect x="18" y="14" width="384" height="244" rx="2" fill="url(#pbGlow2)" stroke="rgba(184,154,96,0.13)" stroke-width="0.5"/><!-- LEFT BOTANICAL VINE --><g opacity="0.33" fill="none" stroke="#b89a60" stroke-width="0.85"><path d="M28,95 C27,78 30,60 34,44 C37,35 41,26 38,16"/><path d="M33,70 C29,64 22,62 19,56"/><path d="M31,53 C27,47 29,39 26,32"/><path d="M35,41 C31,35 27,28 30,20"/></g><g opacity="0.38" fill="#b89a60"><path d="M33,70 C31,64 26,67 24,62 C28,61 32,64 33,70 Z"/><path d="M31,53 C29,47 24,49 23,45 C27,44 31,48 31,53 Z"/></g><!-- RIGHT BOTANICAL VINE (mirror) --><g opacity="0.33" fill="none" stroke="#b89a60" stroke-width="0.85"><path d="M392,95 C393,78 390,60 386,44 C383,35 379,26 382,16"/><path d="M387,70 C391,64 398,62 401,56"/><path d="M389,53 C393,47 391,39 394,32"/><path d="M385,41 C389,35 393,28 390,20"/></g><g opacity="0.38" fill="#b89a60"><path d="M387,70 C389,64 394,67 396,62 C392,61 388,64 387,70 Z"/><path d="M389,53 C391,47 396,49 397,45 C393,44 389,48 389,53 Z"/></g><!-- TULIP GLASS (left, cx=148) --><g opacity="0.85"><rect x="147" y="71" width="2" height="17" fill="rgba(200,180,140,0.32)"/><ellipse cx="148" cy="89" rx="10" ry="2.5" fill="rgba(200,180,140,0.26)"/><path d="M140,71 C136,60 133,44 137,33 C140,26 144,21 148,19 C152,21 156,26 159,33 C163,44 160,60 156,71 Z" fill="url(#tulipFill2)" stroke="rgba(220,200,150,0.42)" stroke-width="1.2"/><path d="M138,57 L137,41" stroke="rgba(255,255,255,0.14)" stroke-width="1.5"/></g><!-- COPPER MUG (centre, cx=220) --><g opacity="0.9"><path d="M233,41 C242,41 244,48 244,53 C244,58 242,65 233,65" fill="none" stroke="#9a6030" stroke-width="2.5"/><rect x="207" y="35" width="26" height="34" rx="2" fill="url(#copperFill2)" opacity="0.8"/><rect x="207" y="35" width="26" height="3" rx="1" fill="rgba(232,184,96,0.52)"/><line x1="208" y1="47" x2="232" y2="47" stroke="rgba(255,220,140,0.15)" stroke-width="1"/><line x1="208" y1="58" x2="232" y2="58" stroke="rgba(255,220,140,0.09)" stroke-width="0.8"/><rect x="208" y="40" width="24" height="28" rx="1" fill="rgba(180,120,40,0.3)"/></g><!-- ROCKS GLASS (right, cx=292) --><g opacity="0.85"><path d="M280,73 L283,47 L301,47 L304,73 Z" fill="rgba(180,170,150,0.22)" stroke="rgba(220,200,160,0.38)" stroke-width="1.2"/><path d="M281,73 L283,58 L301,58 L303,73 Z" fill="rgba(180,120,40,0.4)"/><rect x="286" y="51" width="8" height="7" rx="1" fill="rgba(200,220,255,0.22)" stroke="rgba(200,220,255,0.3)" stroke-width="0.5"/><line x1="284" y1="66" x2="284" y2="51" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/></g><!-- Dots between glasses --><g fill="#c9a050" opacity="0.4"><circle cx="170" cy="55" r="1.5"/><circle cx="178" cy="51" r="1"/><circle cx="186" cy="55" r="1.5"/><circle cx="254" cy="55" r="1.5"/><circle cx="262" cy="51" r="1"/><circle cx="270" cy="55" r="1.5"/></g><!-- Divider after glasses --><line x1="28" y1="100" x2="392" y2="100" stroke="url(#pbRule2)" stroke-width="0.75"/><polygon points="210,97 213,100 210,103 207,100" fill="#c9a050" opacity="0.68"/><!-- MAIN TEXT --><text x="210" y="124" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#pbGold2)" style="font-size:10px">Three drinks to pour for the band.</text><text x="210" y="145" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#pbGold2)" style="font-size:10px">Then carry the tray to the stage.</text><!-- Inner rule --><line x1="100" y1="158" x2="320" y2="158" stroke="url(#pbRule2)" stroke-width="0.45"/><!-- Control hints --><text x="210" y="174" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">Hold to pour &#183; Release to stop</text><text x="210" y="190" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">&#8593; Jump &#183; &#8595; Duck &#183; Mind the gaps</text><!-- Lower divider --><line x1="28" y1="207" x2="392" y2="207" stroke="url(#pbRule2)" stroke-width="0.75"/><!-- Diamond row --><g fill="#c9a050" opacity="0.44"><polygon points="138,219 141,223 138,227 135,223"/><polygon points="159,217 162,221 159,225 156,221"/><polygon points="180,219 183,223 180,227 177,223"/><polygon points="210,214 214,218 210,222 206,218"/><polygon points="240,219 243,223 240,227 237,223"/><polygon points="261,217 264,221 261,225 258,221"/><polygon points="282,219 285,223 282,227 279,223"/></g><!-- Bottom botanical swags --><g opacity="0.2" fill="none" stroke="#b89a60" stroke-width="0.7"><path d="M42,255 C68,245 105,251 135,243 C160,236 176,241 196,236"/><path d="M378,255 C352,245 315,251 285,243 C260,236 244,241 224,236"/></g><!-- Corner L-brackets --><g opacity="0.3" stroke="#b89a60" stroke-width="0.9" fill="none"><polyline points="20,26 20,18 29,18"/><polyline points="400,26 400,18 391,18"/><polyline points="20,250 20,258 29,258"/><polyline points="400,250 400,258 391,258"/></g></svg><div style="text-align:center;padding:0.1em 0 1.2em;"><button id="bar-start-btn" onclick="window.startBarGame()" style="background:linear-gradient(180deg,#241a0a,#130d05);color:#d4b878;border:1px solid rgba(184,154,96,0.55);outline:2px solid rgba(184,154,96,0.1);outline-offset:4px;padding:13px 52px;font-family:Georgia,serif;font-size:0.95em;cursor:pointer;letter-spacing:0.28em;text-transform:uppercase;box-shadow:0 0 24px rgba(184,154,96,0.12),0 0 6px rgba(184,154,96,0.06),inset 0 1px 0 rgba(255,255,255,0.06);transition:all 0.2s;">&#9670; Go to the Bar &#9670;</button></div></div><div id="bar-narrative" style="text-align:center;padding:0;min-height:0;font-style:italic;"></div><div id="bar-end" style="text-align:center;padding:0;"></div></div>\
 <span id="bar-win-link" style="display:none;">[[Bar Canvas Win]]</span>\

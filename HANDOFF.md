@@ -4,6 +4,13 @@
 >
 > **State at handoff (2026-07-18, ~03:00):** Enormous mechanics session — the game now has real jeopardy. **NOT yet committed** (the whole night = `Dream Street Shuffle.twee` + `Dream Street Shuffle.html`, commit via GitHub Desktop). Full detail below.
 
+## ⚠ ADDENDUM 11 (2026-07-23, evening session) — queue items 1+2 done + window dressing everywhere
+1. **Storm-door weather ladder shipped** (post-critic Pillars block, Sam's prose): base line (visits ≤2) → "Outside, the flood is serious, hard to parse..." (3–4) → "Lamps are going out all over Soho..." (5) → catch-all for ALL visits 6+: "'Water, water everywhere. Another drop to drink.'" (Sam's ruling: the Coleridge line is its own tier, NOT attached to tier 3). `$pillarsVisits` init moved ABOVE the ladder.
+2. **Percy wager line shipped** (Watch the decider): taking "Put a score on it" now renders, under the £20 DOWN note: "Percy Ritson looks at the note, then at Jack. 'Now it's sport.'" Verified live (NB: real clicks on the link are swallowed in a debug-jumped copy — the documented artifact; synthetic click proved the macro).
+3. **Window dressing applied to every scene that lacked it** (Sam's note "apply window dressing to all parts"): Coach neighbour buildings (12 panes → makeDressedWindow, one lit each), Chippy non-brothel upper sashes (5 panes), cecil-court-3d-static.html (local port of the painter — iframes can't reach dssScene; ~16% lit), green-sea-3d-static.html (Mediterranean idiom: lace half-curtains + oil-lamp amber, NOT London drapes; taverna ground floor warm, one lamp per side building). Checked + left alone deliberately: Centre Point honeycomb, Oxford Street dawn (own systems), Copper/Trisha (no windows). All four verified rendering, consoles clean.
+4. **Commit = FOUR files**: .twee + .html + cecil-court-3d-static.html + green-sea-3d-static.html.
+5. Queue remainder: Sam's full human-paced playthrough (item 3, his run).
+
 ## ⚠ ADDENDUM 10 (2026-07-23, last) — THE GREEN SEA PASS + final O'Flatterly touch
 1. **The Green Sea approach** (`green-sea-3d-static.html` — a SEPARATE FILE, not built by sync; MUST be committed alongside the .twee/.html pair; the iframe src now cache-busts with Date.now()) got its full pass, all Sam-directed:
    - **Dusk**: mauve sky (0x453050), low gold raking sun (-9,7,13), violet ambient, lanterns doubled to primary, warm doorLeak light at the threshold.

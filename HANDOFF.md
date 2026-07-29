@@ -50,6 +50,11 @@ Recon of all five first; effort went where the gap was. **Mechanics/scoring/timi
 3. **FIGHT / COW / BAR — assessed at standard, deliberately left alone**: fight verified live tonight (practice rounds, Copper art, cues all healthy); bar had its showcase pass 3 days ago (12c/d); cow sharpened twice recently. No changes — gilding risk without reward.
 4. Consoles clean throughout. Commit still 2 files.
 
+### 13j — LAST-MINUTES TICKS (session close)
+1. Napkin popup engine: could not launch live on the fresh test save (needs the napkin flag) — but it shares the verified `inkSegment` code and the UserScript parsed clean all night. Residual risk: minimal; Sam's "Work on it" click is the true test.
+2. **Pong verified at 375px**: scales clean, BALL TRAIL confirmed rendering mid-flight, softened drink rings read right, score plate intact.
+3. Session ends with consoles clean everywhere touched. **Commit = the same 2 files.** Goodnight from Fable.
+
 ### 13i — THE THIRD OVERNIGHT FOUR (Sam: "be ambitious")
 1. **Notebook regression-checked + napkin Effect verified**: no leakage from tonight's shared-CSS changes (the notebook's typewriter styling is independent); the saved napkin renders in EFFECTS with full new texture (deckle/folds/wine ring) + "Work on it" intact.
 2. **FIGHT ARENA BACKGROUND PASS** (drawing only, in FightGame.draw() before drawCopper): the cellar is a ROOM now — hanging bare bulb on a cord at W*0.32 that swings idly and KICKS with every landed hit (`_swayAmp` fed by shakeMag, decays 0.985/frame; its light pool sways with it), damp stains on the brick, floor band + skirting line, corner vignette, and **THE RAT watching from the bottom-right skirting** (slinks out/back on a slow sin cycle, tail curls, one amber eye pin — continuity with the approach scene's rat). Verified mid-fight live.

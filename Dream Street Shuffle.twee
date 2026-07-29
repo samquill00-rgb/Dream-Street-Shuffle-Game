@@ -4486,27 +4486,44 @@ window.showNapkinPopup = function() {
       ctx.fillRect(0, 0, W, H);
     }
   }
+  // Same felt-tip ink as the Sketch passage: halo soak + solid core,
+  // no halo for the eraser.
+  function inkSegment(x0, y0, x1, y1, col, w) {
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (col !== '#f2e7c9') {
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w * 2.3;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
   function replayStrokes() {
     strokes.forEach(function(s){
       if (!s.points || s.points.length === 0) return;
       var w = s.width || 3.2;
-      ctx.strokeStyle = s.color;
-      ctx.fillStyle = s.color;
-      ctx.lineWidth = w;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
       if (s.points.length === 1) {
+        ctx.fillStyle = s.color;
         ctx.beginPath();
         ctx.arc(s.points[0].x, s.points[0].y, Math.max(w / 2, 1), 0, Math.PI * 2);
         ctx.fill();
         return;
       }
-      ctx.beginPath();
-      ctx.moveTo(s.points[0].x, s.points[0].y);
       for (var i = 1; i < s.points.length; i++) {
-        ctx.lineTo(s.points[i].x, s.points[i].y);
+        var p0 = s.points[i - 1], p1 = s.points[i];
+        inkSegment(p0.x, p0.y, p1.x, p1.y, s.color, p1.w || w);
       }
-      ctx.stroke();
     });
   }
   function updateButtons() {
@@ -4539,16 +4556,11 @@ window.showNapkinPopup = function() {
     if (!drawing) return;
     e.preventDefault();
     var p = getPos(e);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = brushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
+    var dist = Math.sqrt((p.x - lastX) * (p.x - lastX) + (p.y - lastY) * (p.y - lastY));
+    var w = brushSize * Math.max(0.75, Math.min(1.3, 1.25 - dist * 0.022));
+    inkSegment(lastX, lastY, p.x, p.y, color, w);
     lastX = p.x; lastY = p.y;
-    if (currentStroke) currentStroke.points.push({x: p.x, y: p.y});
+    if (currentStroke) currentStroke.points.push({x: p.x, y: p.y, w: w});
   }
   function stopDraw() { drawing = false; currentStroke = null; }
 
@@ -4942,6 +4954,11 @@ this.carryPhase = {
   playerDuckingInput: false,
   gravity: 600,
   jumpPower: -400,
+  jumpHeld: false,
+  coyoteTimer: 0,
+  jumpBufferTimer: 0,
+  speedHold: 0,
+  runLean: 0,
   groundY: 320,
   baseGroundY: 320,
   glassesLeft: 3,
@@ -4998,6 +5015,7 @@ this.canvas.addEventListener('mousedown', (e) => {
     this.pourCommitted = true;
   }
   if (this.phase === 'carry') {
+    this.carryPhase.jumpHeld = true;
     this._playerJump();
   }
 });
@@ -5008,6 +5026,7 @@ this.canvas.addEventListener('mouseup', (e) => {
     this.pourDone = true;
     this._scorePour();
   }
+  if (this.phase === 'carry') this._playerJumpRelease();
 });
 
 this.canvas.addEventListener('mouseleave', (e) => {
@@ -5016,6 +5035,41 @@ this.canvas.addEventListener('mouseleave', (e) => {
     this.pourDone = true;
     this._scorePour();
   }
+  if (this.phase === 'carry') this._playerJumpRelease();
+});
+
+// Native touch: kills synthetic-mouse latency AND gives the hold-jump its
+// full range on phones. Mirrors the mouse handlers for both phases; the
+// cow-ride touchstart pattern.
+this.canvas.addEventListener('touchstart', (e) => {
+  if (this.phase === 'mixing' && !this.pourDone && !this.finishPhase && !this.mTransition) {
+    e.preventDefault();
+    this.pouring = true;
+    this.pourCommitted = true;
+  }
+  if (this.phase === 'carry') {
+    e.preventDefault();
+    this.carryPhase.jumpHeld = true;
+    this._playerJump();
+  }
+}, { passive: false });
+
+this.canvas.addEventListener('touchend', (e) => {
+  if (this.phase === 'mixing' && this.pouring) {
+    this.pouring = false;
+    this.pourDone = true;
+    this._scorePour();
+  }
+  if (this.phase === 'carry') this._playerJumpRelease();
+});
+
+this.canvas.addEventListener('touchcancel', (e) => {
+  if (this.phase === 'mixing' && this.pouring) {
+    this.pouring = false;
+    this.pourDone = true;
+    this._scorePour();
+  }
+  if (this.phase === 'carry') this._playerJumpRelease();
 });
 
 this.canvas.addEventListener('click', () => {
@@ -5026,19 +5080,48 @@ document.addEventListener('keydown', (e) => {
   if (this.phase === 'carry') {
     if (e.code === 'Space' || e.code === 'ArrowUp') {
       e.preventDefault();
-      this._playerJump();
+      if (!e.repeat) {
+        this.carryPhase.jumpHeld = true;
+        this._playerJump();
+      }
     }
     if (e.code === 'ArrowDown') {
       e.preventDefault();
       this.carryPhase.playerDuckingInput = true;
     }
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+      e.preventDefault();
+      this.carryPhase.speedHold = 1;
+    }
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+      e.preventDefault();
+      this.carryPhase.speedHold = -1;
+    }
+  }
+});
+
+// Losing window focus mid-hold would leave jump/run/duck stuck on
+window.addEventListener('blur', () => {
+  if (this.phase === 'carry') {
+    this._playerJumpRelease();
+    this.carryPhase.speedHold = 0;
+    this.carryPhase.playerDuckingInput = false;
   }
 });
 
 document.addEventListener('keyup', (e) => {
   if (this.phase === 'carry') {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+      this._playerJumpRelease();
+    }
     if (e.code === 'ArrowDown') {
       this.carryPhase.playerDuckingInput = false;
+    }
+    if ((e.code === 'ArrowRight' || e.code === 'KeyD') && this.carryPhase.speedHold === 1) {
+      this.carryPhase.speedHold = 0;
+    }
+    if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && this.carryPhase.speedHold === -1) {
+      this.carryPhase.speedHold = 0;
     }
   }
 });
@@ -5404,9 +5487,28 @@ return this.carryPhase.baseGroundY;
 }
 
 _playerJump() {
-if (this.phase === 'carry' && !this.carryPhase.playerJumping && this.carryPhase.staggerTimer <= 0 && this.carryPhase.playerY >= this.carryPhase.groundY - 5) {
-  this.carryPhase.playerJumping = true;
-  this.carryPhase.playerVelY = this.carryPhase.jumpPower;
+if (this.phase !== 'carry' || this.carryPhase.staggerTimer > 0 || this.carryPhase.pitFalling) return;
+var cp = this.carryPhase;
+var onGround = !cp.playerJumping && cp.playerY >= cp.groundY - 5;
+if (onGround || cp.coyoteTimer > 0) {
+  cp.playerJumping = true;
+  cp.playerVelY = cp.jumpPower;
+  cp.coyoteTimer = 0;
+  cp.jumpBufferTimer = 0;
+} else {
+  // Pressed in the air: buffer it, fires the instant you land
+  cp.jumpBufferTimer = 0.12;
+}
+}
+
+_playerJumpRelease() {
+if (this.phase !== 'carry') return;
+var cp = this.carryPhase;
+cp.jumpHeld = false;
+// Jump cut: releasing while still rising caps the arc — tap for a hop,
+// hold for the full jump
+if (cp.playerJumping && !cp.pitFalling && cp.playerVelY < -40) {
+  cp.playerVelY *= 0.55;
 }
 }
 
@@ -5680,25 +5782,47 @@ cp.difficultyPhase = Math.floor(progressRatio * 4);
 // Dynamic terrain: player is at screen x=100, so world x = scrollPos + 100
 cp.groundY = this._getTerrainY(cp.scrollPos + 100);
 
-// Player physics
-cp.playerVelY += cp.gravity * s;
+// Player physics — Mario rules: normal gravity on the way up, heavier
+// on the way down, so the arc floats at its peak and lands with weight
+var grav = cp.playerVelY >= 0 ? cp.gravity * 1.8 : cp.gravity;
+cp.playerVelY += grav * s;
 cp.playerY += cp.playerVelY * s;
 
 // Ground collision / terrain following
 if (cp.playerJumping) {
+  if (cp.coyoteTimer > 0) cp.coyoteTimer -= s;
+  if (cp.jumpBufferTimer > 0) cp.jumpBufferTimer -= s;
   // Airborne: land when reaching the ground
-  if (cp.playerY >= cp.groundY) {
+  if (cp.playerY >= cp.groundY && cp.playerVelY >= 0) {
     cp.playerY = cp.groundY;
     cp.playerVelY = 0;
     cp.playerJumping = false;
+    // A jump pressed just before touchdown fires the moment you land
+    if (cp.jumpBufferTimer > 0 && cp.staggerTimer <= 0) {
+      cp.playerJumping = true;
+      cp.playerVelY = cp.jumpPower;
+      cp.jumpBufferTimer = 0;
+    }
   }
 } else {
-  // On ground: follow terrain smoothly
-  cp.playerY = cp.groundY;
-  cp.playerVelY = 0;
+  if (cp.groundY > cp.playerY + 2) {
+    // The floor stepped DOWN: walk off the ledge into the air instead of
+    // teleporting to it — coyote time lets a late jump still take off
+    cp.playerJumping = true;
+    cp.coyoteTimer = 0.09;
+  } else {
+    // On ground: follow terrain smoothly
+    cp.playerY = cp.groundY;
+    cp.playerVelY = 0;
+    cp.coyoteTimer = 0.09;
+  }
 }
 
-cp.scrollPos += cp.scrollSpeed * s;
+// Hold RIGHT (or D) to hurry, LEFT (or A) to hang back — your pace, your
+// risk; the lean smooths toward the pace for the sprite
+var speedMul = cp.speedHold > 0 ? 1.45 : (cp.speedHold < 0 ? 0.62 : 1);
+cp.runLean += ((speedMul - 1) - cp.runLean) * Math.min(1, s * 6);
+cp.scrollPos += cp.scrollSpeed * speedMul * s;
 
 this._checkObstacleCollisions();
 
@@ -5746,8 +5870,9 @@ c.fillStyle = '#d4a574';
 c.fillText('Get ready...', W/2, H/2 - 20);
 c.font = '14px Georgia';
 c.fillStyle = '#8a7a6a';
-c.fillText('SPACE / UP to jump', W/2, H/2 + 20);
+c.fillText('SPACE / UP to jump. Hold it for a higher jump.', W/2, H/2 + 20);
 c.fillText('DOWN to duck', W/2, H/2 + 45);
+c.fillText('Hold RIGHT to hurry. Hold LEFT to hang back.', W/2, H/2 + 70);
 c.restore();
 }
 
@@ -7873,6 +7998,13 @@ if (cp.pitFalling && cp.pitFallY > 0) {
 }
 
 c.save();
+
+// Run lean: tips forward when hurrying, sits back when hanging back
+if (Math.abs(cp.runLean) > 0.02) {
+  c.translate(px, py);
+  c.rotate(cp.runLean * 0.16);
+  c.translate(-px, -py);
+}
 
 // Stagger shake — character wobbles side to side rapidly
 if (cp.staggerTimer > 0) {
@@ -12178,10 +12310,87 @@ ctx.beginPath(); ctx.moveTo(col, row); ctx.lineTo(col, row + 30); ctx.stroke();
 }
 }
 
-var lg = ctx.createRadialGradient(W / 2, -20, 10, W / 2, -20, 350);
-lg.addColorStop(0, 'rgba(180, 140, 80, 0.10)');
+// ---- The cellar itself ----
+var envT = Date.now() / 1000;
+// Damp stains soaking through the brick (fixed positions)
+var stains = [[W * 0.16, H * 0.3, 60], [W * 0.85, H * 0.5, 75], [W * 0.55, H * 0.12, 48]];
+for (var sn = 0; sn < stains.length; sn++) {
+var sg = ctx.createRadialGradient(stains[sn][0], stains[sn][1], 4, stains[sn][0], stains[sn][1], stains[sn][2]);
+sg.addColorStop(0, 'rgba(0,0,0,0.28)');
+sg.addColorStop(1, 'rgba(0,0,0,0)');
+ctx.fillStyle = sg;
+ctx.fillRect(0, 0, W, H);
+}
+// Floor: a darker band with a skirting line — the Copper stands on ground
+ctx.fillStyle = 'rgba(4,2,2,0.55)';
+ctx.fillRect(-10, H - 46, W + 20, 56);
+ctx.strokeStyle = 'rgba(60,40,30,0.5)';
+ctx.lineWidth = 2;
+ctx.beginPath(); ctx.moveTo(-10, H - 46); ctx.lineTo(W + 10, H - 46); ctx.stroke();
+// The rat, watching from the skirting — slinks out, watches, slips back
+var ratOut = Math.sin(envT * 0.13) > 0.15;
+if (ratOut) {
+var ratX = W - 46 + Math.sin(envT * 0.9) * 4;
+var ratY = H - 50;
+ctx.fillStyle = 'rgba(10,6,5,0.9)';
+ctx.beginPath();
+ctx.ellipse(ratX, ratY, 11, 5, 0, 0, Math.PI * 2);
+ctx.fill();
+ctx.beginPath();
+ctx.ellipse(ratX - 10, ratY - 2, 4.5, 3.5, 0, 0, Math.PI * 2);
+ctx.fill();
+ctx.beginPath();
+ctx.arc(ratX - 12, ratY - 5, 1.8, 0, Math.PI * 2);
+ctx.fill();
+ctx.strokeStyle = 'rgba(10,6,5,0.8)';
+ctx.lineWidth = 1.4;
+ctx.beginPath();
+ctx.moveTo(ratX + 10, ratY);
+ctx.quadraticCurveTo(ratX + 22, ratY + 2 + Math.sin(envT * 2.1) * 2, ratX + 30, ratY - 2);
+ctx.stroke();
+// A pin of eye catching the bulb light
+ctx.fillStyle = 'rgba(255,190,120,0.8)';
+ctx.fillRect(ratX - 13, ratY - 6, 1.4, 1.4);
+}
+// The bare bulb — hung off-centre, swinging; every landed hit kicks it
+if (this.shakeStart) {
+var swSt = (Date.now() - this.shakeStart) / 340;
+if (swSt < 1) this._swayAmp = Math.max(this._swayAmp || 0, this.shakeMag * 0.02);
+}
+this._swayAmp = (this._swayAmp || 0) * 0.985;
+var bulbAng = Math.sin(envT * 4.2) * (0.025 + this._swayAmp);
+var cordTopX = W * 0.32, cordLen = 62;
+var bulbX = cordTopX + Math.sin(bulbAng) * cordLen;
+var bulbY = Math.cos(bulbAng) * cordLen;
+ctx.strokeStyle = 'rgba(20,14,10,0.9)';
+ctx.lineWidth = 1.6;
+ctx.beginPath();
+ctx.moveTo(cordTopX, -6);
+ctx.lineTo(bulbX, bulbY);
+ctx.stroke();
+ctx.fillStyle = 'rgba(30,22,16,0.95)';
+ctx.fillRect(bulbX - 3, bulbY - 2, 6, 6);
+var bulbGrad = ctx.createRadialGradient(bulbX, bulbY + 9, 1, bulbX, bulbY + 9, 9);
+bulbGrad.addColorStop(0, 'rgba(255,236,180,0.95)');
+bulbGrad.addColorStop(0.5, 'rgba(240,190,110,0.55)');
+bulbGrad.addColorStop(1, 'rgba(200,140,70,0)');
+ctx.fillStyle = bulbGrad;
+ctx.beginPath();
+ctx.arc(bulbX, bulbY + 9, 9, 0, Math.PI * 2);
+ctx.fill();
+// Its pool of light sways across the cellar with it
+var lg = ctx.createRadialGradient(bulbX, bulbY + 10, 10, bulbX, bulbY + 10, 380);
+lg.addColorStop(0, 'rgba(180, 140, 80, 0.13)');
 lg.addColorStop(1, 'rgba(0, 0, 0, 0)');
 ctx.fillStyle = lg;
+ctx.fillRect(0, 0, W, H);
+// Corner vignette seats the room
+var envVig = ctx.createLinearGradient(0, 0, W, 0);
+envVig.addColorStop(0, 'rgba(0,0,0,0.34)');
+envVig.addColorStop(0.2, 'rgba(0,0,0,0)');
+envVig.addColorStop(0.8, 'rgba(0,0,0,0)');
+envVig.addColorStop(1, 'rgba(0,0,0,0.34)');
+ctx.fillStyle = envVig;
 ctx.fillRect(0, 0, W, H);
 
 this.drawCopper(ctx);
@@ -15296,6 +15505,16 @@ eastBuildings.add(corniceE);
 
 // Ground floor — dark shopfront
 var eastShop = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.5, 7), shopFront);
+// A glazed band on the shut shopfront — low metalness glass that catches
+// the ginger wash from across the street, so the near-black mass on the
+// right of frame carries one faint readable surface.
+var eastShopGlassM = new THREE.MeshStandardMaterial({ color: 0x101418, roughness: 0.15, metalness: 0.5 });
+var eastShopGlass = new THREE.Mesh(new THREE.BoxGeometry(0.02, 1.9, 5.2), eastShopGlassM);
+eastShopGlass.position.set(3.93, 1.85, -3); // proud of the shopfront face (3.955) — never buried
+eastBuildings.add(eastShopGlass);
+var eastShopStall = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 5.4), greyStone);
+eastShopStall.position.set(3.9, 0.55, -3);
+eastBuildings.add(eastShopStall);
 eastShop.position.set(4.03, 1.75, -3);
 eastBuildings.add(eastShop);
 
@@ -15657,6 +15876,50 @@ var phoneGlowLight = new THREE.PointLight(0xe87818, 0.25, 5);
 phoneGlowLight.position.set(-2.2, 2.0, -5.2);
 scene.add(phoneGlowLight);
 
+// ============================================================
+// LIVING ELEMENT: the ginger cat — of course the Ginger Light has one.
+// Seated by the phone box in the lamp pool, Trisha's-cat manners: breath,
+// tail sweeps, slow head turns, amber eyes that blink out.
+// ============================================================
+var gingerCat = new THREE.Group();
+var catFurMat = new THREE.MeshStandardMaterial({ color: 0x8a4a1e, roughness: 0.9 });
+var catDarkMat = new THREE.MeshStandardMaterial({ color: 0x5e3012, roughness: 0.9 });
+function catPart(geo, mat, x, y, z) {
+  var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); gingerCat.add(m); return m;
+}
+// Seated body: haunches wider than chest
+catPart(new THREE.SphereGeometry(0.16, 10, 8), catFurMat, 0, 0.16, 0).scale.set(1, 1.15, 1.25);
+catPart(new THREE.SphereGeometry(0.11, 10, 8), catFurMat, 0, 0.3, 0.12).scale.set(0.85, 1.1, 0.85);
+// Head group so it can turn
+var catHead = new THREE.Group();
+var chSk = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), catFurMat);
+catHead.add(chSk);
+var earGeo = new THREE.ConeGeometry(0.032, 0.06, 4);
+var earL = new THREE.Mesh(earGeo, catDarkMat); earL.position.set(-0.05, 0.085, 0); catHead.add(earL);
+var earR = new THREE.Mesh(earGeo, catDarkMat); earR.position.set(0.05, 0.085, 0); catHead.add(earR);
+// Amber eyes — small emissive points, streetward
+var catEyeMat = new THREE.MeshBasicMaterial({ color: 0xffb838 });
+var eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 4), catEyeMat); eyeL.position.set(-0.032, 0.01, 0.075); catHead.add(eyeL);
+var eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 4), catEyeMat); eyeR.position.set(0.032, 0.01, 0.075); catHead.add(eyeR);
+catHead.position.set(0, 0.44, 0.16);
+gingerCat.add(catHead);
+// Front legs down to the pavement
+catPart(new THREE.CylinderGeometry(0.025, 0.03, 0.18, 6), catFurMat, -0.055, 0.09, 0.13);
+catPart(new THREE.CylinderGeometry(0.025, 0.03, 0.18, 6), catFurMat, 0.055, 0.09, 0.13);
+// Tail: a jointed curve that sweeps
+var catTail = new THREE.Group();
+for (var ct = 0; ct < 5; ct++) {
+  var seg = new THREE.Mesh(new THREE.SphereGeometry(0.035 - ct * 0.004, 6, 4), ct < 4 ? catFurMat : catDarkMat);
+  seg.position.set(0, 0.02 + ct * 0.015, -(ct * 0.075));
+  catTail.add(seg);
+}
+catTail.position.set(0.1, 0.06, -0.16);
+gingerCat.add(catTail);
+// Seat her on the pavement beside the phone box, facing the street
+gingerCat.position.set(-1.35, 0, -4.3);
+gingerCat.rotation.y = 0.6;
+scene.add(gingerCat);
+var catState = { blinkT: 3 + Math.random() * 4, blinkHold: 0, headTurnT: 6 + Math.random() * 8, headTarget: 0 };
 
 // ============================================================
 // SILHOUETTES IN WINDOWS — gentle sway
@@ -16025,8 +16288,36 @@ function glAnimate() {
     }
   }
 
+  // --- THE GINGER CAT ---
+  var catDt = Math.min(t - (window._glCatLastT || t), 0.1);
+  window._glCatLastT = t;
+  // Breath
+  gingerCat.scale.y = 1 + Math.sin(t * 1.4) * 0.012;
+  // Tail sweeps in slow figure strokes
+  catTail.rotation.y = Math.sin(t * 0.5) * 0.5 + Math.sin(t * 1.3) * 0.12;
+  catTail.rotation.x = Math.sin(t * 0.8) * 0.08;
+  // Occasional slow head turn between street and phone box
+  catState.headTurnT -= catDt;
+  if (catState.headTurnT <= 0) {
+    catState.headTarget = (Math.random() - 0.4) * 0.8;
+    catState.headTurnT = 6 + Math.random() * 9;
+  }
+  catHead.rotation.y += (catState.headTarget - catHead.rotation.y) * Math.min(1, catDt * 2.2);
+  // Blink: eyes wink out for a beat
+  catState.blinkT -= catDt;
+  if (catState.blinkT <= 0) {
+    catState.blinkHold = 0.14;
+    catState.blinkT = 3 + Math.random() * 5;
+  }
+  if (catState.blinkHold > 0) {
+    catState.blinkHold -= catDt;
+    eyeL.visible = eyeR.visible = false;
+  } else {
+    eyeL.visible = eyeR.visible = true;
+  }
+
   // --- WARM GLASS PULSE ---
-  warmGlass.emissiveIntensity = 0.1 + Math.sin(t * 0.6) * 0.04 + Math.sin(t * 1.9) * 0.02;
+  warmGlass.emissiveIntensity = 0.34 + Math.sin(t * 0.6) * 0.06 + Math.sin(t * 1.9) * 0.03; // was 0.10 base — the lit rooms (and their swaying drinkers) were invisible
 
   // --- SILHOUETTE SWAY ---
   for (var i = 0; i < silhouettes.length; i++) {
@@ -16042,8 +16333,8 @@ function glAnimate() {
   }
 
   // --- WINDOW GLOW ---
-  winGlow1.intensity = 0.25 + Math.sin(t * 0.4) * 0.05;
-  winGlow2.intensity = 0.15 + Math.sin(t * 0.7) * 0.03;
+  winGlow1.intensity = 0.42 + Math.sin(t * 0.4) * 0.07;
+  winGlow2.intensity = 0.28 + Math.sin(t * 0.7) * 0.05;
 
   renderer.render(scene, camera);
 }
@@ -19165,9 +19456,12 @@ scene.add(cornerPave);
 // light dies naturally instead of terminating in a line across the road
 // (memory: project_light_range_terminator.md).
 var lampLights = [];
-function createLamp(x, z) {
+function createLamp(x, z, castsShadow) {
   if (chKit && chKit.createVictorianGasLamp) {
     var lamp = chKit.createVictorianGasLamp(scene, x, z, { intensity: 2.2, distance: 30, haloScale: 2.6 });
+    // Only the near lamp pays for a shadow map — four shadow-casting
+    // lights (3 lamps + moon) is silent frame cost for no visible gain
+    if (lamp.userData.light) lamp.userData.light.castShadow = !!castsShadow;
     // The toolkit lantern's side panes are single-sided planes with inward
     // normals — from a three-quarter camera the lantern reads unlit. Render
     // both faces, brighten the halo, and seat a solid emissive glass core
@@ -19202,7 +19496,7 @@ function createLamp(x, z) {
 
 createLamp(1, 1);
 createLamp(1, -8);
-createLamp(7, 4);
+createLamp(7, 4, true);
 
 // ============================================================
 // LIGHTING — low ambient + cold moonlight casting real shadows on the street
@@ -21941,13 +22235,28 @@ cx.ellipse(Math.random() * w, Math.random() * h, 30 + Math.random() * 60, 20 + M
 cx.fill();
 }
 });
-var creamStucco = new THREE.MeshStandardMaterial({ map: stuccoTex, roughness: 0.85 });
-var darkStucco = new THREE.MeshStandardMaterial({ color: 0xb0a890, roughness: 0.85 });
-var sootBrick = new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 0.9 });
-var darkBrick = new THREE.MeshStandardMaterial({ color: 0x3a2a22, roughness: 0.9 });
-var redBrick = new THREE.MeshStandardMaterial({ color: 0x6b3a2a, roughness: 0.85 });
+// Toolkit-grade weathering — the old flat MeshStandard colors read as
+// clean plastic against the reviewed scenes (2026-07-29 audit).
+var loKit = window.dssScene || null;
+var creamStucco = (loKit && loKit.makeWeatheredStucco)
+  ? loKit.makeWeatheredStucco({ baseColor: 0xd5ccb8, repeat: [2, 2.5] })
+  : new THREE.MeshStandardMaterial({ map: stuccoTex, roughness: 0.85 });
+var darkStucco = (loKit && loKit.makeWeatheredStucco)
+  ? loKit.makeWeatheredStucco({ baseColor: 0xb0a890, repeat: [2, 2.5] })
+  : new THREE.MeshStandardMaterial({ color: 0xb0a890, roughness: 0.85 });
+var sootBrick = (loKit && loKit.makeGrimyBrick)
+  ? loKit.makeGrimyBrick({ baseColor: 0x2a2520, repeat: [2, 4], sootStreaks: 9, dampPatches: 5 })
+  : new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 0.9 });
+var darkBrick = (loKit && loKit.makeGrimyBrick)
+  ? loKit.makeGrimyBrick({ baseColor: 0x3a2a22, repeat: [2, 4], sootStreaks: 7 })
+  : new THREE.MeshStandardMaterial({ color: 0x3a2a22, roughness: 0.9 });
+var redBrick = (loKit && loKit.makeGrimyBrick)
+  ? loKit.makeGrimyBrick({ baseColor: 0x6b3a2a, repeat: [2, 4], sootStreaks: 6, dampPatches: 4 })
+  : new THREE.MeshStandardMaterial({ color: 0x6b3a2a, roughness: 0.85 });
 var greyStone = new THREE.MeshStandardMaterial({ color: 0x9a9488, roughness: 0.75 });
-var whiteStone = new THREE.MeshStandardMaterial({ color: 0xc8c0b0, roughness: 0.7 });
+var whiteStone = (loKit && loKit.makeWeatheredStucco)
+  ? loKit.makeWeatheredStucco({ baseColor: 0xc8c0b0, repeat: [1.5, 2] })
+  : new THREE.MeshStandardMaterial({ color: 0xc8c0b0, roughness: 0.7 });
 var paveTex = makeCanvasTexture(512, 512, function(cx, w, h) {
 cx.fillStyle = '#555550';
 cx.fillRect(0, 0, w, h);
@@ -22605,9 +22914,54 @@ addSashWindow(2.2, 11.2, false);
 var amberGlass = new THREE.MeshStandardMaterial({
 color: 0x2a1805, roughness: 0.3, emissive: 0xd8a030, emissiveIntensity: 0.18
 });
-var redGlass = new THREE.MeshStandardMaterial({
-color: 0x4a0505, roughness: 0.2, emissive: 0xff1515, emissiveIntensity: 0.7
+// Red-light windows as DRESSED ROOMS tinted red (the Pillars standard) —
+// drapes at the edges, a shaded lamp burning low, wall tone behind —
+// instead of a flat saturated pane.
+var redRoomTex = makeCanvasTexture(128, 256, function(cx, w, h) {
+  // Deep red room base with darker floor falloff
+  var room = cx.createLinearGradient(0, 0, 0, h);
+  room.addColorStop(0, '#4c0404');
+  room.addColorStop(0.55, '#961010');
+  room.addColorStop(1, '#360202');
+  cx.fillStyle = room; cx.fillRect(0, 0, w, h);
+  // The lamp: a hot shaded core off-centre, mid-height
+  var lamp = cx.createRadialGradient(w * 0.62, h * 0.52, 2, w * 0.62, h * 0.52, w * 0.55);
+  lamp.addColorStop(0, 'rgba(255,70,60,0.95)');
+  lamp.addColorStop(0.25, 'rgba(240,28,24,0.65)');
+  lamp.addColorStop(1, 'rgba(150,8,8,0)');
+  cx.fillStyle = lamp; cx.fillRect(0, 0, w, h);
+  // Lampshade silhouette over the core
+  cx.fillStyle = 'rgba(30,4,4,0.75)';
+  cx.beginPath();
+  cx.moveTo(w * 0.52, h * 0.50); cx.lineTo(w * 0.72, h * 0.50);
+  cx.lineTo(w * 0.68, h * 0.42); cx.lineTo(w * 0.56, h * 0.42);
+  cx.closePath(); cx.fill();
+  // Heavy drapes bunched at both edges
+  cx.fillStyle = 'rgba(20,2,2,0.9)';
+  cx.beginPath();
+  cx.moveTo(0, 0); cx.lineTo(w * 0.24, 0);
+  cx.quadraticCurveTo(w * 0.12, h * 0.5, w * 0.20, h);
+  cx.lineTo(0, h); cx.closePath(); cx.fill();
+  cx.beginPath();
+  cx.moveTo(w, 0); cx.lineTo(w * 0.82, 0);
+  cx.quadraticCurveTo(w * 0.92, h * 0.55, w * 0.86, h);
+  cx.lineTo(w, h); cx.closePath(); cx.fill();
+  // Drape folds
+  cx.strokeStyle = 'rgba(60,8,8,0.5)'; cx.lineWidth = 2;
+  [0.07, 0.13, 0.90, 0.95].forEach(function(fx) {
+    cx.beginPath(); cx.moveTo(w * fx, 0); cx.lineTo(w * (fx + 0.02), h); cx.stroke();
+  });
+  // Pelmet shadow across the top
+  var pel = cx.createLinearGradient(0, 0, 0, h * 0.14);
+  pel.addColorStop(0, 'rgba(15,2,2,0.9)'); pel.addColorStop(1, 'rgba(15,2,2,0)');
+  cx.fillStyle = pel; cx.fillRect(0, 0, w, h * 0.14);
+  // Grime on the glass itself
+  cx.fillStyle = 'rgba(20,10,8,0.12)';
+  for (var g = 0; g < 14; g++) {
+    cx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 8, 1 + Math.random() * 4);
+  }
 });
+var redGlass = new THREE.MeshBasicMaterial({ map: redRoomTex });
 
 var amberWin = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.045), amberGlass);
 amberWin.position.set(-2.2, 11.2, 0.055);
@@ -22621,7 +22975,7 @@ var amberWinGlow = new THREE.PointLight(0xd8a030, 0.15, 4);
 amberWinGlow.position.set(-2.2, 11.2, 0.8);
 scene.add(amberWinGlow);
 
-var redWinGlow = new THREE.PointLight(0xff2020, 0.6, 6);
+var redWinGlow = new THREE.PointLight(0xff2020, 1.0, 6);
 redWinGlow.position.set(2.2, 11.2, 1.2);
 scene.add(redWinGlow);
 
@@ -22629,7 +22983,7 @@ var redWin1F = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.045), redGlass);
 redWin1F.position.set(-2.2, 5.5, 0.055);
 building.add(redWin1F);
 
-var redWinGlow1F = new THREE.PointLight(0xff2020, 0.7, 7);
+var redWinGlow1F = new THREE.PointLight(0xff2020, 1.1, 7);
 redWinGlow1F.position.set(-2.2, 5.5, 1.5);
 scene.add(redWinGlow1F);
 
@@ -22655,6 +23009,60 @@ building.add(workWin1F);
 var workingGlow1F = new THREE.PointLight(0xc08030, 0.0, 4);
 workingGlow1F.position.set(2.2, 5.5, 1.0);
 scene.add(workingGlow1F);
+
+// LIVING ELEMENT: Lackland at the working window — seated silhouette bowed
+// over the desk, breathing; a pale page turns every 16-26s (the O'Flatterly
+// dealer pattern). Sits behind the flickering work light.
+var loFigTex = makeCanvasTexture(128, 256, function(cx, w, h) {
+cx.fillStyle = 'rgba(6,4,3,0.92)';
+// Desk line across the lower third
+cx.fillRect(0, h * 0.72, w, h * 0.05);
+// Seated body: back rising from desk right, leaning over it
+cx.beginPath();
+cx.moveTo(w * 0.78, h * 0.72);
+cx.quadraticCurveTo(w * 0.82, h * 0.42, w * 0.62, h * 0.30);
+cx.quadraticCurveTo(w * 0.46, h * 0.22, w * 0.42, h * 0.34);
+cx.quadraticCurveTo(w * 0.40, h * 0.46, w * 0.50, h * 0.52);
+cx.lineTo(w * 0.52, h * 0.72);
+cx.closePath();
+cx.fill();
+// Bowed head over the papers
+cx.beginPath();
+cx.ellipse(w * 0.40, h * 0.33, w * 0.10, h * 0.062, 0.5, 0, Math.PI * 2);
+cx.fill();
+// Forward arm onto the desk
+cx.beginPath();
+cx.moveTo(w * 0.48, h * 0.50);
+cx.quadraticCurveTo(w * 0.30, h * 0.58, w * 0.18, h * 0.70);
+cx.lineTo(w * 0.26, h * 0.73);
+cx.quadraticCurveTo(w * 0.38, h * 0.62, w * 0.52, h * 0.58);
+cx.closePath();
+cx.fill();
+// Anglepoise hint: stem + shade over the papers, left
+cx.strokeStyle = 'rgba(6,4,3,0.9)'; cx.lineWidth = 3;
+cx.beginPath(); cx.moveTo(w * 0.10, h * 0.72); cx.lineTo(w * 0.16, h * 0.52); cx.stroke();
+cx.fillStyle = 'rgba(6,4,3,0.9)';
+cx.beginPath();
+cx.moveTo(w * 0.08, h * 0.52); cx.lineTo(w * 0.26, h * 0.52);
+cx.lineTo(w * 0.21, h * 0.45); cx.lineTo(w * 0.12, h * 0.45);
+cx.closePath(); cx.fill();
+});
+var loFigure = new THREE.Mesh(
+new THREE.PlaneGeometry(0.62, 1.15),
+new THREE.MeshBasicMaterial({ map: loFigTex, transparent: true, depthWrite: false })
+);
+loFigure.position.set(2.2, 5.42, 0.09);
+loFigure.userData.noShadow = true;
+building.add(loFigure);
+var loPage = new THREE.Mesh(
+new THREE.PlaneGeometry(0.11, 0.075),
+new THREE.MeshBasicMaterial({ color: 0xe8dcc0, transparent: true, opacity: 0.85, depthWrite: false })
+);
+loPage.position.set(2.06, 5.16, 0.095);
+loPage.userData.noShadow = true;
+building.add(loPage);
+var loPageState = { next: 9 + Math.random() * 12, t: -1 };
+var loLastT = 0;
 
 var curtainGlass = new THREE.MeshStandardMaterial({
 color: 0x080808, roughness: 0.95, metalness: 0.0
@@ -23107,6 +23515,30 @@ var wFlicker1F = Math.sin(t * 0.35) * 0.35 + Math.sin(t * 0.9) * 0.25 + Math.sin
 wFlicker1F = Math.max(0, wFlicker1F);
 workingGlass1F.emissiveIntensity = 0.15 + wFlicker1F * 0.35;
 workingGlow1F.intensity = 0.1 + wFlicker1F * 0.5;
+
+// Lackland at the window: breath + the page turn
+var loDt = Math.min(t - loLastT, 0.1); loLastT = t;
+loFigure.scale.y = 1 + Math.sin(t * 0.7) * 0.006;
+loFigure.position.y = 5.42 + Math.sin(t * 0.7) * 0.004;
+loPageState.next -= loDt;
+if (loPageState.next <= 0 && loPageState.t < 0) {
+loPageState.t = 0;
+loPageState.next = 16 + Math.random() * 10;
+}
+if (loPageState.t >= 0) {
+loPageState.t += loDt;
+var pp = loPageState.t / 0.8;
+if (pp < 1) {
+loPage.position.y = 5.16 + Math.sin(pp * Math.PI) * 0.05;
+loPage.rotation.z = Math.sin(pp * Math.PI) * 0.6;
+loPage.scale.x = Math.abs(Math.cos(pp * Math.PI));
+} else {
+loPageState.t = -1;
+loPage.position.y = 5.16;
+loPage.rotation.z = 0;
+loPage.scale.x = 1;
+}
+}
 
 doorPuddleMat.emissiveIntensity = 0.04 + Math.sin(t * 1.7) * 0.02;
 
@@ -38091,15 +38523,35 @@ var link=document.querySelector(sel);if(link)link.click();
 },2000);
 }
 function rRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+// The table itself, pre-rendered once: worn pub baize with drink rings, a
+// cigarette burn, and scuffed paddle zones. A back-room table, not a void.
+var _felt=document.createElement('canvas');_felt.width=W;_felt.height=H;
+(function(fx){
+fx.fillStyle='#0b2212';fx.fillRect(0,0,W,H);
+// Felt mottle
+for(var m=0;m<380;m++){fx.fillStyle='rgba('+(m%2?'6,26,12':'16,44,24')+','+(0.05+Math.random()*0.09)+')';fx.beginPath();fx.arc(Math.random()*W,Math.random()*H,1+Math.random()*2.4,0,Math.PI*2);fx.fill();}
+// Wear at both paddle ends — pale scuffed patches where hands rest
+[[26,'rgba(120,140,110,0.05)'],[W-26,'rgba(140,120,100,0.05)']].forEach(function(z){
+var wg=fx.createRadialGradient(z[0],H/2,10,z[0],H/2,120);wg.addColorStop(0,z[1]);wg.addColorStop(1,'rgba(0,0,0,0)');fx.fillStyle=wg;fx.fillRect(0,0,W,H);});
+// Two drink rings and a cigarette burn — it lives in a Soho back room
+function ring(cx2,cy2,r2){fx.strokeStyle='rgba(200,180,130,0.065)';fx.lineWidth=3;fx.beginPath();fx.arc(cx2,cy2,r2,0.2,Math.PI*1.8);fx.stroke();}
+ring(W*0.19,H*0.2,13);ring(W*0.83,H*0.83,15);
+fx.fillStyle='rgba(30,20,10,0.5)';fx.beginPath();fx.ellipse(W*0.68,H*0.12,4,2.4,0.6,0,Math.PI*2);fx.fill();
+// Boundary line — real table markings, slightly worn
+fx.strokeStyle='rgba(240,240,225,0.20)';fx.lineWidth=2;fx.strokeRect(8,8,W-16,H-16);
+fx.strokeStyle='rgba(240,240,225,0.10)';fx.lineWidth=1;fx.beginPath();fx.moveTo(8,H/2);fx.lineTo(W-8,H/2);fx.stroke();
+})(_felt.getContext('2d'));
+var _ballTrail=[];
 function draw(){
-// Table felt — deep tournament green
-ctx.fillStyle='#0b2212';ctx.fillRect(0,0,W,H);
-// Subtle inner frame line
-ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;ctx.setLineDash([]);ctx.strokeRect(8,8,W-16,H-16);
-// Service mid-line (horizontal)
-ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(8,H/2);ctx.lineTo(W-8,H/2);ctx.stroke();
-// Net — segmented white rectangles
+ctx.setLineDash([]);
+ctx.drawImage(_felt,0,0);
+// The hanging lamp overhead — a warm pool on the baize
+var lp=ctx.createRadialGradient(W/2,H*0.42,20,W/2,H*0.42,W*0.55);
+lp.addColorStop(0,'rgba(255,228,160,0.085)');lp.addColorStop(0.5,'rgba(255,210,130,0.035)');lp.addColorStop(1,'rgba(0,0,0,0)');
+ctx.fillStyle=lp;ctx.fillRect(0,0,W,H);
+// Net — segmented white rectangles, with its shadow thrown slightly right
 var nw=4,nh=7,ng=4,nx=Math.floor(W/2)-Math.floor(nw/2);
+ctx.fillStyle='rgba(0,0,0,0.22)';ctx.fillRect(nx+5,4,3,H-8);
 ctx.fillStyle='rgba(248,248,235,0.72)';
 for(var ni=4;ni<H-4;ni+=nh+ng){ctx.fillRect(nx,ni,nw,Math.min(nh,H-ni-4));}
 // Net post caps (top & bottom)
@@ -38112,6 +38564,15 @@ var eh=ctx.createLinearGradient(0,0,W,0);eh.addColorStop(0,'rgba(0,0,0,0.38)');e
 ctx.shadowColor='rgba(190,210,255,0.85)';ctx.shadowBlur=20;ctx.fillStyle='#dce8f4';rRect(pPad.x,pPad.y,pPad.w,pPad.h,3);ctx.fill();
 // Opponent paddle — red with amber rim glow
 ctx.shadowColor='rgba(220,70,30,0.75)';ctx.shadowBlur=18;ctx.fillStyle='#bf2c14';rRect(oPad.x,oPad.y,oPad.w,oPad.h,3);ctx.fill();
+// Ball trail — a fading comet behind the ball's path
+if(!serving){_ballTrail.push({x:ball.x,y:ball.y});if(_ballTrail.length>7)_ballTrail.shift();}
+else{_ballTrail.length=0;}
+for(var bt=0;bt<_ballTrail.length;bt++){
+var ta=(bt+1)/_ballTrail.length*0.22;
+ctx.fillStyle='rgba(255,250,225,'+ta+')';
+ctx.beginPath();ctx.arc(_ballTrail[bt].x,_ballTrail[bt].y,ball.r*(0.4+0.6*(bt+1)/_ballTrail.length),0,Math.PI*2);ctx.fill();}
+// Cast shadow on the baize — the ball rides above the table
+ctx.fillStyle='rgba(0,0,0,0.30)';ctx.beginPath();ctx.ellipse(ball.x+3,ball.y+5,ball.r*0.9,ball.r*0.55,0,0,Math.PI*2);ctx.fill();
 // Ball — white with strong glow
 ctx.shadowColor='rgba(255,255,220,1.0)';ctx.shadowBlur=22;ctx.fillStyle='#f2ede0';ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();
 ctx.shadowBlur=0;
@@ -38622,11 +39083,15 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
       var now = performance.now();
       hitFlash[laneIdx] = now;
       ripples.push({ x: LANES[laneIdx].x, y: TARGET_Y, t0: now });
+      /* A step landed dead on the beat earns a second, trailing ring —
+         quiet acknowledgement, no score talk. */
+      if (bestDelta <= 80) ripples.push({ x: LANES[laneIdx].x, y: TARGET_Y, t0: now + 130 });
       playDing(laneIdx);
-      /* Burst 10 gold sparks outward — a small flourish for hitting in time. */
+      /* Burst gold sparks outward — a small flourish for hitting in time. */
+      var sparkCount = bestDelta <= 80 ? 16 : 10;
       var sparkX = LANES[laneIdx].x;
       var sparkY = TARGET_Y;
-      for (var k = 0; k < 10; k++) {
+      for (var k = 0; k < sparkCount; k++) {
         var ang = (Math.PI * 2) * (k / 10) + (Math.random() - 0.5) * 0.5;
         var spd = 90 + Math.random() * 120;        /* px/sec */
         sparks.push({
@@ -38717,12 +39182,88 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
         ctx.fill();
       }
     }
+    /* Cecil Court itself — dark terrace walls flanking the street,
+       converging on the vanishing point, with lit shop windows scrolling
+       past in world time. The coloured pools finally have sources. */
+    var halfSt = W * 0.48;
+    for (var side = -1; side <= 1; side += 2) {
+      /* Wall wedge from the bottom corner to the vanishing line */
+      var edgeTopX = VAN_X + side * halfSt * VAN_NARROW;
+      ctx.fillStyle = 'rgba(14,11,8,0.72)';
+      ctx.beginPath();
+      ctx.moveTo(VAN_X + side * W * 0.62, H);
+      ctx.lineTo(VAN_X + side * halfSt * 1.04, H);
+      ctx.lineTo(edgeTopX, SPAWN_Y);
+      ctx.lineTo(VAN_X + side * W * 0.62, SPAWN_Y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    /* Scrolling lit windows along both walls. Each window lives at a
+       world time (like the pools); near a pool's time on its side, the
+       window takes the pool's colour — it is the pool's source. */
+    var WIN_SPACING = 1800;
+    var firstWin = Math.floor((t - APPROACH_MS) / WIN_SPACING) - 1;
+    for (var wv = 0; wv < 6; wv++) {
+      var winT = (firstWin + wv) * WIN_SPACING;
+      var wDelta = winT - t;
+      if (wDelta > APPROACH_MS || wDelta < -600) continue;
+      var wy = TARGET_Y - wDelta * PIXELS_PER_MS - 60;
+      if (wy < SPAWN_Y + 6 || wy > H - 30) continue;
+      var wtf = tFactor(wy);
+      var wSpread = VAN_NARROW + (1 - VAN_NARROW) * wtf;
+      var wSide = ((firstWin + wv) % 2 === 0) ? -1 : 1;
+      var wx = VAN_X + wSide * halfSt * wSpread * 0.99;
+      var wsz = 0.4 + 0.6 * wtf;
+      /* Colour: match a pool arriving near this window's time on this side */
+      var wCol = '218,178,110';
+      for (var pi = 0; pi < POOLS.length; pi++) {
+        var pSide = POOLS[pi].x < W * 0.5 ? -1 : 1;
+        if (pSide === wSide && Math.abs(POOLS[pi].t - winT) < 1100) { wCol = POOLS[pi].col; break; }
+      }
+      var wAlpha = 0.10 + 0.42 * wtf;
+      ctx.fillStyle = 'rgba(' + wCol + ',' + wAlpha + ')';
+      ctx.fillRect(wx - 7 * wsz, wy - 14 * wsz, 14 * wsz, 22 * wsz);
+      /* Glazing bar + faint spill halo */
+      ctx.fillStyle = 'rgba(14,11,8,' + (0.5 * wAlpha) + ')';
+      ctx.fillRect(wx - 7 * wsz, wy - 3 * wsz, 14 * wsz, 1.6 * wsz);
+      var wGlow = ctx.createRadialGradient(wx, wy, 0, wx, wy, 30 * wsz);
+      wGlow.addColorStop(0, 'rgba(' + wCol + ',' + (0.20 * wtf) + ')');
+      wGlow.addColorStop(1, 'rgba(' + wCol + ',0)');
+      ctx.fillStyle = wGlow;
+      ctx.fillRect(wx - 30 * wsz, wy - 30 * wsz, 60 * wsz, 60 * wsz);
+    }
     /* Distance haze — fades the top so things vanish into fog */
     var haze = ctx.createLinearGradient(0, 0, 0, SPAWN_Y + 80);
     haze.addColorStop(0, 'rgba(21,17,13,0.95)');
     haze.addColorStop(1, 'rgba(21,17,13,0)');
     ctx.fillStyle = haze;
     ctx.fillRect(0, 0, W, SPAWN_Y + 80);
+  }
+  /* The waltzing pair — two long soft shadows cast up the street from
+     behind you, swaying in 3/4 time. The dance made visible without
+     breaking the first-person walk. */
+  function drawShadows() {
+    if (!running) return;
+    var t = elapsedMs();
+    var barPhase = (t % BAR_MS) / BAR_MS;
+    var sway = Math.sin(barPhase * Math.PI * 2);
+    var lift = Math.abs(Math.sin(barPhase * Math.PI * 3));
+    for (var d = 0; d < 2; d++) {
+      var sSide = d === 0 ? -1 : 1;
+      var ax = VAN_X + sSide * (24 + sway * sSide * 9);
+      var len = 185 + lift * 24;
+      ctx.save();
+      ctx.translate(ax, H - 6);
+      ctx.rotate(sway * 0.07 + sSide * 0.045);
+      var sGrad = ctx.createLinearGradient(0, 0, 0, -len);
+      sGrad.addColorStop(0, 'rgba(8,6,4,0.30)');
+      sGrad.addColorStop(1, 'rgba(8,6,4,0)');
+      ctx.fillStyle = sGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, -len / 2, 15 + lift * 3, len / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   /* Small coloured pools of light cast on the pavement from unseen shop
@@ -38741,7 +39282,9 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     { t: 23000, x: W * 0.68, r: 200, col: ' 96,184,176'   }   /* teal — bigger still, transitions you into the amber */
   ];
   function drawPools() {
-    var t = elapsedMs();
+    // Scroll time, not wall time — the pools are world-fixed like the
+    // cobbles and windows, so they must decelerate and stop with them
+    var t = running ? scrollTimeAt(elapsedMs()) : 0;
     for (var i = 0; i < POOLS.length; i++) {
       var p = POOLS[i];
       var delta = p.t - t;
@@ -38801,14 +39344,19 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     /* Player line — three chalk circles where your feet will pass over
        each lane. These are the "now" zone: marks that reach this line
        are hit. */
+    /* The rings breathe in 3/4 — a deeper swell on the ONE. */
+    var bt = elapsedMs();
+    var beatInBar = Math.floor((bt % BAR_MS) / BEAT_MS);
+    var beatPhase = (bt % BEAT_MS) / BEAT_MS;
+    var pulse = (running && !ended) ? (1 - beatPhase) * (beatInBar === 0 ? 3.2 : 1.3) : 0;
     for (var j = 0; j < LANES.length; j++) {
       var L = LANES[j];
       var sinceHit = performance.now() - hitFlash[j];
       var glow = sinceHit < 500 ? Math.max(0, 1 - sinceHit / 500) : 0;
-      ctx.strokeStyle = 'rgba(220,196,158,' + (0.45 + 0.5 * glow) + ')';
+      ctx.strokeStyle = 'rgba(220,196,158,' + (0.45 + 0.5 * glow + 0.08 * (pulse / 3.2)) + ')';
       ctx.lineWidth = 1.4 + 1.6 * glow;
       ctx.beginPath();
-      ctx.arc(L.x, TARGET_Y, 26, 0, Math.PI * 2);
+      ctx.arc(L.x, TARGET_Y, 26 + pulse, 0, Math.PI * 2);
       ctx.stroke();
       ctx.fillStyle = 'rgba(232,220,196,' + (0.55 + 0.4 * glow) + ')';
       ctx.font = '22px serif';
@@ -38843,16 +39391,34 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
       var x = laneXAt(n.lane, y);
       var sz = sizeAt(y);
       var L = LANES[n.lane];
-      var alpha = n.missed ? 0.18 : 0.92;
+      var alpha = n.missed ? 0.14 : 0.92;
       ctx.save();
       ctx.translate(x, y);
-      ctx.fillStyle = 'rgba(232,220,196,' + alpha + ')';
-      ctx.strokeStyle = 'rgba(244,232,208,' + (alpha * 0.9) + ')';
-      ctx.lineWidth = 1.6 * sz;
-      ctx.beginPath();
-      ctx.arc(0, 0, 18 * sz, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      if (n.missed) {
+        /* Missed marks smudge — a spread chalk ghost drifting past */
+        ctx.fillStyle = 'rgba(232,220,196,' + alpha + ')';
+        ctx.beginPath();
+        ctx.arc(0, 0, 21 * sz, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        /* Gilt medallion: parchment disc, shaded, in a gold rim */
+        var med = ctx.createRadialGradient(-4 * sz, -5 * sz, 2, 0, 0, 19 * sz);
+        med.addColorStop(0, 'rgba(246,238,214,' + alpha + ')');
+        med.addColorStop(0.75, 'rgba(226,210,178,' + alpha + ')');
+        med.addColorStop(1, 'rgba(200,180,140,' + alpha + ')');
+        ctx.fillStyle = med;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18 * sz, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(212,176,96,' + (alpha * 0.95) + ')';
+        ctx.lineWidth = 2.1 * sz;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(150,118,58,' + (alpha * 0.5) + ')';
+        ctx.lineWidth = 0.8 * sz;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14.5 * sz, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.fillStyle = 'rgba(28,22,18,' + (alpha * 0.85) + ')';
       ctx.font = 'bold ' + Math.round(22 * sz) + 'px serif';
       ctx.textAlign = 'center';
@@ -38866,6 +39432,7 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
     for (var i = ripples.length - 1; i >= 0; i--) {
       var r = ripples[i];
       var age = now - r.t0;
+      if (age < 0) continue; /* trailing ring not born yet */
       if (age > 700) { ripples.splice(i, 1); continue; }
       var p = age / 700;
       var radius = 18 + p * 50;
@@ -38950,7 +39517,7 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
        through the mounting window instead of bailing. */
     if (pgGen !== null && window._passageGen !== pgGen) return;
     drawBackground();
-    if (running) drawPools();
+    if (running) { drawPools(); drawShadows(); }
     drawLanes();
     if (!running) {
       drawIdle();
@@ -42128,7 +42695,7 @@ Says Moe: 'Lost boy, get us a drink.' You acquiesce.
 
 (if: not ($completedSetlist is true))[<span id="sob-data-bar" style="display:none;">(print: $sobriety)</span>\
 (display: "Ronnies Rule SVG h14")\
-<div class="pp-arena" id="bar-arena"><div class="pp-score" id="bar-round-display" style="position:relative;overflow:visible;padding:0.6em 0.5em 0.3em;"><svg viewBox="0 0 400 70" width="100%" height="70" preserveAspectRatio="xMidYMid meet" style="display:block;margin:0 auto;"><defs><linearGradient id="barTG" x1="0" x2="1"><stop offset="0%" stop-color="#b89a60" stop-opacity="0"/><stop offset="15%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="50%" stop-color="#e8cc88" stop-opacity="1"/><stop offset="85%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="100%" stop-color="#b89a60" stop-opacity="0"/></linearGradient><linearGradient id="barTL" x1="0" x2="1"><stop offset="0%" stop-color="#8a7040" stop-opacity="0"/><stop offset="20%" stop-color="#b89a60" stop-opacity="0.6"/><stop offset="80%" stop-color="#b89a60" stop-opacity="0.6"/><stop offset="100%" stop-color="#8a7040" stop-opacity="0"/></linearGradient><radialGradient id="barTGlow" cx="50%" cy="50%" r="40%"><stop offset="0%" stop-color="#e8c060" stop-opacity="0.15"/><stop offset="100%" stop-color="#e8c060" stop-opacity="0"/></radialGradient></defs><rect x="80" y="10" width="240" height="50" fill="url(#barTGlow)"/><line x1="30" y1="18" x2="370" y2="18" stroke="url(#barTL)" stroke-width="0.8"/><line x1="30" y1="52" x2="370" y2="52" stroke="url(#barTL)" stroke-width="0.8"/><g opacity="0.5" stroke="#b89a60" stroke-width="0.6" fill="none"><path d="M40,35 Q50,18 60,35 Q70,52 80,35"/><path d="M320,35 Q330,18 340,35 Q350,52 360,35"/><circle cx="38" cy="35" r="2"/><circle cx="362" cy="35" r="2"/></g><g fill="none" stroke="#d4b878" stroke-width="0.5" opacity="0.35"><path d="M85,22 C90,18 95,18 100,22 L100,48 C95,52 90,52 85,48 Z"/><path d="M300,22 C305,18 310,18 315,22 L315,48 C310,52 305,52 300,48 Z"/></g><text x="200" y="42" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#barTG)" letter-spacing="8" style="font-size:22px">THE BAR</text><g opacity="0.55" fill="#d4b878"><polygon points="155,26 157,30 155,34 153,30"/><polygon points="245,26 247,30 245,34 243,30"/></g></svg></div><canvas id="bar-canvas" aria-label="Bar minigame: pour three drinks, then carry the tray to the stage" width="560" height="400" style="display:none;width:100%;height:auto;"></canvas><div id="pre-bar"><svg viewBox="0 0 420 272" width="100%" height="272" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;"><defs><linearGradient id="pbGold2" x1="0" x2="1"><stop offset="0%" stop-color="#b89a60" stop-opacity="0"/><stop offset="15%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="50%" stop-color="#e8cc88" stop-opacity="1"/><stop offset="85%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="100%" stop-color="#b89a60" stop-opacity="0"/></linearGradient><linearGradient id="pbBg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1c1408" stop-opacity="0.97"/><stop offset="100%" stop-color="#0c0804" stop-opacity="0.99"/></linearGradient><linearGradient id="pbRule2" x1="0" x2="1"><stop offset="0%" stop-color="#c9a050" stop-opacity="0"/><stop offset="25%" stop-color="#c9a050" stop-opacity="0.65"/><stop offset="75%" stop-color="#c9a050" stop-opacity="0.65"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0"/></linearGradient><linearGradient id="tulipFill2" x1="0" x2="1"><stop offset="0%" stop-color="#c9a050" stop-opacity="0.45"/><stop offset="50%" stop-color="#e8c880" stop-opacity="0.65"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0.45"/></linearGradient><linearGradient id="copperFill2" x1="0" x2="1"><stop offset="0%" stop-color="#8a5a20"/><stop offset="30%" stop-color="#c9883a"/><stop offset="50%" stop-color="#daa050"/><stop offset="70%" stop-color="#c98838"/><stop offset="100%" stop-color="#8a5a20"/></linearGradient><radialGradient id="pbGlow2" cx="50%" cy="38%" r="40%"><stop offset="0%" stop-color="#c9a050" stop-opacity="0.07"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0"/></radialGradient></defs><rect x="10" y="6" width="400" height="260" rx="3" fill="url(#pbBg2)" stroke="rgba(184,154,96,0.32)" stroke-width="1"/><rect x="18" y="14" width="384" height="244" rx="2" fill="url(#pbGlow2)" stroke="rgba(184,154,96,0.13)" stroke-width="0.5"/><!-- LEFT BOTANICAL VINE --><g opacity="0.33" fill="none" stroke="#b89a60" stroke-width="0.85"><path d="M28,95 C27,78 30,60 34,44 C37,35 41,26 38,16"/><path d="M33,70 C29,64 22,62 19,56"/><path d="M31,53 C27,47 29,39 26,32"/><path d="M35,41 C31,35 27,28 30,20"/></g><g opacity="0.38" fill="#b89a60"><path d="M33,70 C31,64 26,67 24,62 C28,61 32,64 33,70 Z"/><path d="M31,53 C29,47 24,49 23,45 C27,44 31,48 31,53 Z"/></g><!-- RIGHT BOTANICAL VINE (mirror) --><g opacity="0.33" fill="none" stroke="#b89a60" stroke-width="0.85"><path d="M392,95 C393,78 390,60 386,44 C383,35 379,26 382,16"/><path d="M387,70 C391,64 398,62 401,56"/><path d="M389,53 C393,47 391,39 394,32"/><path d="M385,41 C389,35 393,28 390,20"/></g><g opacity="0.38" fill="#b89a60"><path d="M387,70 C389,64 394,67 396,62 C392,61 388,64 387,70 Z"/><path d="M389,53 C391,47 396,49 397,45 C393,44 389,48 389,53 Z"/></g><!-- TULIP GLASS (left, cx=148) --><g opacity="0.85"><rect x="147" y="71" width="2" height="17" fill="rgba(200,180,140,0.32)"/><ellipse cx="148" cy="89" rx="10" ry="2.5" fill="rgba(200,180,140,0.26)"/><path d="M140,71 C136,60 133,44 137,33 C140,26 144,21 148,19 C152,21 156,26 159,33 C163,44 160,60 156,71 Z" fill="url(#tulipFill2)" stroke="rgba(220,200,150,0.42)" stroke-width="1.2"/><path d="M138,57 L137,41" stroke="rgba(255,255,255,0.14)" stroke-width="1.5"/></g><!-- COPPER MUG (centre, cx=220) --><g opacity="0.9"><path d="M233,41 C242,41 244,48 244,53 C244,58 242,65 233,65" fill="none" stroke="#9a6030" stroke-width="2.5"/><rect x="207" y="35" width="26" height="34" rx="2" fill="url(#copperFill2)" opacity="0.8"/><rect x="207" y="35" width="26" height="3" rx="1" fill="rgba(232,184,96,0.52)"/><line x1="208" y1="47" x2="232" y2="47" stroke="rgba(255,220,140,0.15)" stroke-width="1"/><line x1="208" y1="58" x2="232" y2="58" stroke="rgba(255,220,140,0.09)" stroke-width="0.8"/><rect x="208" y="40" width="24" height="28" rx="1" fill="rgba(180,120,40,0.3)"/></g><!-- ROCKS GLASS (right, cx=292) --><g opacity="0.85"><path d="M280,73 L283,47 L301,47 L304,73 Z" fill="rgba(180,170,150,0.22)" stroke="rgba(220,200,160,0.38)" stroke-width="1.2"/><path d="M281,73 L283,58 L301,58 L303,73 Z" fill="rgba(180,120,40,0.4)"/><rect x="286" y="51" width="8" height="7" rx="1" fill="rgba(200,220,255,0.22)" stroke="rgba(200,220,255,0.3)" stroke-width="0.5"/><line x1="284" y1="66" x2="284" y2="51" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/></g><!-- Dots between glasses --><g fill="#c9a050" opacity="0.4"><circle cx="170" cy="55" r="1.5"/><circle cx="178" cy="51" r="1"/><circle cx="186" cy="55" r="1.5"/><circle cx="254" cy="55" r="1.5"/><circle cx="262" cy="51" r="1"/><circle cx="270" cy="55" r="1.5"/></g><!-- Divider after glasses --><line x1="28" y1="100" x2="392" y2="100" stroke="url(#pbRule2)" stroke-width="0.75"/><polygon points="210,97 213,100 210,103 207,100" fill="#c9a050" opacity="0.68"/><!-- MAIN TEXT --><text x="210" y="124" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#pbGold2)" style="font-size:10px">Three drinks to pour for the band.</text><text x="210" y="145" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#pbGold2)" style="font-size:10px">Then carry the tray to the stage.</text><!-- Inner rule --><line x1="100" y1="158" x2="320" y2="158" stroke="url(#pbRule2)" stroke-width="0.45"/><!-- Control hints --><text x="210" y="174" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">Hold to pour &#183; Release to stop</text><text x="210" y="190" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">&#8593; Jump &#183; &#8595; Duck &#183; Mind the gaps</text><!-- Lower divider --><line x1="28" y1="207" x2="392" y2="207" stroke="url(#pbRule2)" stroke-width="0.75"/><!-- Diamond row --><g fill="#c9a050" opacity="0.44"><polygon points="138,219 141,223 138,227 135,223"/><polygon points="159,217 162,221 159,225 156,221"/><polygon points="180,219 183,223 180,227 177,223"/><polygon points="210,214 214,218 210,222 206,218"/><polygon points="240,219 243,223 240,227 237,223"/><polygon points="261,217 264,221 261,225 258,221"/><polygon points="282,219 285,223 282,227 279,223"/></g><!-- Bottom botanical swags --><g opacity="0.2" fill="none" stroke="#b89a60" stroke-width="0.7"><path d="M42,255 C68,245 105,251 135,243 C160,236 176,241 196,236"/><path d="M378,255 C352,245 315,251 285,243 C260,236 244,241 224,236"/></g><!-- Corner L-brackets --><g opacity="0.3" stroke="#b89a60" stroke-width="0.9" fill="none"><polyline points="20,26 20,18 29,18"/><polyline points="400,26 400,18 391,18"/><polyline points="20,250 20,258 29,258"/><polyline points="400,250 400,258 391,258"/></g></svg><div style="text-align:center;padding:0.1em 0 1.2em;"><button id="bar-start-btn" onclick="window.startBarGame()" style="background:linear-gradient(180deg,#241a0a,#130d05);color:#d4b878;border:1px solid rgba(184,154,96,0.55);outline:2px solid rgba(184,154,96,0.1);outline-offset:4px;padding:13px 52px;font-family:Georgia,serif;font-size:0.95em;cursor:pointer;letter-spacing:0.28em;text-transform:uppercase;box-shadow:0 0 24px rgba(184,154,96,0.12),0 0 6px rgba(184,154,96,0.06),inset 0 1px 0 rgba(255,255,255,0.06);transition:all 0.2s;">&#9670; Go to the Bar &#9670;</button></div></div><div id="bar-narrative" style="text-align:center;padding:0;min-height:0;font-style:italic;"></div><div id="bar-end" style="text-align:center;padding:0;"></div></div>\
+<div class="pp-arena" id="bar-arena"><div class="pp-score" id="bar-round-display" style="position:relative;overflow:visible;padding:0.6em 0.5em 0.3em;"><svg viewBox="0 0 400 70" width="100%" height="70" preserveAspectRatio="xMidYMid meet" style="display:block;margin:0 auto;"><defs><linearGradient id="barTG" x1="0" x2="1"><stop offset="0%" stop-color="#b89a60" stop-opacity="0"/><stop offset="15%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="50%" stop-color="#e8cc88" stop-opacity="1"/><stop offset="85%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="100%" stop-color="#b89a60" stop-opacity="0"/></linearGradient><linearGradient id="barTL" x1="0" x2="1"><stop offset="0%" stop-color="#8a7040" stop-opacity="0"/><stop offset="20%" stop-color="#b89a60" stop-opacity="0.6"/><stop offset="80%" stop-color="#b89a60" stop-opacity="0.6"/><stop offset="100%" stop-color="#8a7040" stop-opacity="0"/></linearGradient><radialGradient id="barTGlow" cx="50%" cy="50%" r="40%"><stop offset="0%" stop-color="#e8c060" stop-opacity="0.15"/><stop offset="100%" stop-color="#e8c060" stop-opacity="0"/></radialGradient></defs><rect x="80" y="10" width="240" height="50" fill="url(#barTGlow)"/><line x1="30" y1="18" x2="370" y2="18" stroke="url(#barTL)" stroke-width="0.8"/><line x1="30" y1="52" x2="370" y2="52" stroke="url(#barTL)" stroke-width="0.8"/><g opacity="0.5" stroke="#b89a60" stroke-width="0.6" fill="none"><path d="M40,35 Q50,18 60,35 Q70,52 80,35"/><path d="M320,35 Q330,18 340,35 Q350,52 360,35"/><circle cx="38" cy="35" r="2"/><circle cx="362" cy="35" r="2"/></g><g fill="none" stroke="#d4b878" stroke-width="0.5" opacity="0.35"><path d="M85,22 C90,18 95,18 100,22 L100,48 C95,52 90,52 85,48 Z"/><path d="M300,22 C305,18 310,18 315,22 L315,48 C310,52 305,52 300,48 Z"/></g><text x="200" y="42" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#barTG)" letter-spacing="8" style="font-size:22px">THE BAR</text><g opacity="0.55" fill="#d4b878"><polygon points="155,26 157,30 155,34 153,30"/><polygon points="245,26 247,30 245,34 243,30"/></g></svg></div><canvas id="bar-canvas" aria-label="Bar minigame: pour three drinks, then carry the tray to the stage" width="560" height="400" style="display:none;width:100%;height:auto;"></canvas><div id="pre-bar"><svg viewBox="0 0 420 272" width="100%" height="272" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;"><defs><linearGradient id="pbGold2" x1="0" x2="1"><stop offset="0%" stop-color="#b89a60" stop-opacity="0"/><stop offset="15%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="50%" stop-color="#e8cc88" stop-opacity="1"/><stop offset="85%" stop-color="#d4b878" stop-opacity="0.9"/><stop offset="100%" stop-color="#b89a60" stop-opacity="0"/></linearGradient><linearGradient id="pbBg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1c1408" stop-opacity="0.97"/><stop offset="100%" stop-color="#0c0804" stop-opacity="0.99"/></linearGradient><linearGradient id="pbRule2" x1="0" x2="1"><stop offset="0%" stop-color="#c9a050" stop-opacity="0"/><stop offset="25%" stop-color="#c9a050" stop-opacity="0.65"/><stop offset="75%" stop-color="#c9a050" stop-opacity="0.65"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0"/></linearGradient><linearGradient id="tulipFill2" x1="0" x2="1"><stop offset="0%" stop-color="#c9a050" stop-opacity="0.45"/><stop offset="50%" stop-color="#e8c880" stop-opacity="0.65"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0.45"/></linearGradient><linearGradient id="copperFill2" x1="0" x2="1"><stop offset="0%" stop-color="#8a5a20"/><stop offset="30%" stop-color="#c9883a"/><stop offset="50%" stop-color="#daa050"/><stop offset="70%" stop-color="#c98838"/><stop offset="100%" stop-color="#8a5a20"/></linearGradient><radialGradient id="pbGlow2" cx="50%" cy="38%" r="40%"><stop offset="0%" stop-color="#c9a050" stop-opacity="0.07"/><stop offset="100%" stop-color="#c9a050" stop-opacity="0"/></radialGradient></defs><rect x="10" y="6" width="400" height="260" rx="3" fill="url(#pbBg2)" stroke="rgba(184,154,96,0.32)" stroke-width="1"/><rect x="18" y="14" width="384" height="244" rx="2" fill="url(#pbGlow2)" stroke="rgba(184,154,96,0.13)" stroke-width="0.5"/><!-- LEFT BOTANICAL VINE --><g opacity="0.33" fill="none" stroke="#b89a60" stroke-width="0.85"><path d="M28,95 C27,78 30,60 34,44 C37,35 41,26 38,16"/><path d="M33,70 C29,64 22,62 19,56"/><path d="M31,53 C27,47 29,39 26,32"/><path d="M35,41 C31,35 27,28 30,20"/></g><g opacity="0.38" fill="#b89a60"><path d="M33,70 C31,64 26,67 24,62 C28,61 32,64 33,70 Z"/><path d="M31,53 C29,47 24,49 23,45 C27,44 31,48 31,53 Z"/></g><!-- RIGHT BOTANICAL VINE (mirror) --><g opacity="0.33" fill="none" stroke="#b89a60" stroke-width="0.85"><path d="M392,95 C393,78 390,60 386,44 C383,35 379,26 382,16"/><path d="M387,70 C391,64 398,62 401,56"/><path d="M389,53 C393,47 391,39 394,32"/><path d="M385,41 C389,35 393,28 390,20"/></g><g opacity="0.38" fill="#b89a60"><path d="M387,70 C389,64 394,67 396,62 C392,61 388,64 387,70 Z"/><path d="M389,53 C391,47 396,49 397,45 C393,44 389,48 389,53 Z"/></g><!-- TULIP GLASS (left, cx=148) --><g opacity="0.85"><rect x="147" y="71" width="2" height="17" fill="rgba(200,180,140,0.32)"/><ellipse cx="148" cy="89" rx="10" ry="2.5" fill="rgba(200,180,140,0.26)"/><path d="M140,71 C136,60 133,44 137,33 C140,26 144,21 148,19 C152,21 156,26 159,33 C163,44 160,60 156,71 Z" fill="url(#tulipFill2)" stroke="rgba(220,200,150,0.42)" stroke-width="1.2"/><path d="M138,57 L137,41" stroke="rgba(255,255,255,0.14)" stroke-width="1.5"/></g><!-- COPPER MUG (centre, cx=220) --><g opacity="0.9"><path d="M233,41 C242,41 244,48 244,53 C244,58 242,65 233,65" fill="none" stroke="#9a6030" stroke-width="2.5"/><rect x="207" y="35" width="26" height="34" rx="2" fill="url(#copperFill2)" opacity="0.8"/><rect x="207" y="35" width="26" height="3" rx="1" fill="rgba(232,184,96,0.52)"/><line x1="208" y1="47" x2="232" y2="47" stroke="rgba(255,220,140,0.15)" stroke-width="1"/><line x1="208" y1="58" x2="232" y2="58" stroke="rgba(255,220,140,0.09)" stroke-width="0.8"/><rect x="208" y="40" width="24" height="28" rx="1" fill="rgba(180,120,40,0.3)"/></g><!-- ROCKS GLASS (right, cx=292) --><g opacity="0.85"><path d="M280,73 L283,47 L301,47 L304,73 Z" fill="rgba(180,170,150,0.22)" stroke="rgba(220,200,160,0.38)" stroke-width="1.2"/><path d="M281,73 L283,58 L301,58 L303,73 Z" fill="rgba(180,120,40,0.4)"/><rect x="286" y="51" width="8" height="7" rx="1" fill="rgba(200,220,255,0.22)" stroke="rgba(200,220,255,0.3)" stroke-width="0.5"/><line x1="284" y1="66" x2="284" y2="51" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/></g><!-- Dots between glasses --><g fill="#c9a050" opacity="0.4"><circle cx="170" cy="55" r="1.5"/><circle cx="178" cy="51" r="1"/><circle cx="186" cy="55" r="1.5"/><circle cx="254" cy="55" r="1.5"/><circle cx="262" cy="51" r="1"/><circle cx="270" cy="55" r="1.5"/></g><!-- Divider after glasses --><line x1="28" y1="100" x2="392" y2="100" stroke="url(#pbRule2)" stroke-width="0.75"/><polygon points="210,97 213,100 210,103 207,100" fill="#c9a050" opacity="0.68"/><!-- MAIN TEXT --><text x="210" y="124" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#pbGold2)" style="font-size:10px">Three drinks to pour for the band.</text><text x="210" y="145" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" fill="url(#pbGold2)" style="font-size:10px">Then carry the tray to the stage.</text><!-- Inner rule --><line x1="100" y1="158" x2="320" y2="158" stroke="url(#pbRule2)" stroke-width="0.45"/><!-- Control hints --><text x="210" y="174" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">Hold to pour &#183; Release to stop</text><text x="210" y="188" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">&#8593; Jump, and hold it for a higher jump &#183; &#8595; Duck</text><text x="210" y="201" text-anchor="middle" font-family="Georgia,serif" font-style="italic" fill="#8a7a60" style="font-size:8.5px">Hold &#8594; to hurry &#183; hold &#8592; to hang back &#183; Mind the gaps</text><!-- Lower divider --><line x1="28" y1="207" x2="392" y2="207" stroke="url(#pbRule2)" stroke-width="0.75"/><!-- Diamond row --><g fill="#c9a050" opacity="0.44"><polygon points="138,219 141,223 138,227 135,223"/><polygon points="159,217 162,221 159,225 156,221"/><polygon points="180,219 183,223 180,227 177,223"/><polygon points="210,214 214,218 210,222 206,218"/><polygon points="240,219 243,223 240,227 237,223"/><polygon points="261,217 264,221 261,225 258,221"/><polygon points="282,219 285,223 282,227 279,223"/></g><!-- Bottom botanical swags --><g opacity="0.2" fill="none" stroke="#b89a60" stroke-width="0.7"><path d="M42,255 C68,245 105,251 135,243 C160,236 176,241 196,236"/><path d="M378,255 C352,245 315,251 285,243 C260,236 244,241 224,236"/></g><!-- Corner L-brackets --><g opacity="0.3" stroke="#b89a60" stroke-width="0.9" fill="none"><polyline points="20,26 20,18 29,18"/><polyline points="400,26 400,18 391,18"/><polyline points="20,250 20,258 29,258"/><polyline points="400,250 400,258 391,258"/></g></svg><div style="text-align:center;padding:0.1em 0 1.2em;"><button id="bar-start-btn" onclick="window.startBarGame()" style="background:linear-gradient(180deg,#241a0a,#130d05);color:#d4b878;border:1px solid rgba(184,154,96,0.55);outline:2px solid rgba(184,154,96,0.1);outline-offset:4px;padding:13px 52px;font-family:Georgia,serif;font-size:0.95em;cursor:pointer;letter-spacing:0.28em;text-transform:uppercase;box-shadow:0 0 24px rgba(184,154,96,0.12),0 0 6px rgba(184,154,96,0.06),inset 0 1px 0 rgba(255,255,255,0.06);transition:all 0.2s;">&#9670; Go to the Bar &#9670;</button></div></div><div id="bar-narrative" style="text-align:center;padding:0;min-height:0;font-style:italic;"></div><div id="bar-end" style="text-align:center;padding:0;"></div></div>\
 <span id="bar-win-link" style="display:none;">[[Bar Canvas Win]]</span>\
 <span id="bar-lose-link" style="display:none;">[[Bar Canvas Lose]]</span>]
 (else:)[<div class="venue-exhausted">They've played out all they have to play, there's no more here tonight.</div>
@@ -42628,7 +43195,7 @@ He looks at you like, painterly, he looked when you were his subject.
 :: Sketch the Painter [venue-french] {"position":"500,1000","size":"100,100"}
 <style>
 .napkin-wrap { display: flex; flex-direction: column; align-items: center; margin: 1em 0; }
-.napkin-canvas { background: #f2e7c9; cursor: crosshair; border: 1px solid rgba(200,170,100,0.35); border-radius: 3px; box-shadow: 0 6px 28px rgba(0,0,0,0.55), inset 0 0 40px rgba(180,140,70,0.15); touch-action: none; max-width: 100%; height: auto; }
+.napkin-canvas { background: #f2e7c9; cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26'><path d='M4 22 L7 14 L20 3 L23 6 L10 19 Z' fill='%232a2a30' stroke='%23d4b878' stroke-width='1'/><path d='M4 22 L7 19' stroke='%23d4b878' stroke-width='1.4'/></svg>") 4 22, crosshair; border: 1px solid rgba(200,170,100,0.35); border-radius: 3px; box-shadow: 0 6px 28px rgba(0,0,0,0.55), inset 0 0 40px rgba(180,140,70,0.15); touch-action: none; max-width: 100%; height: auto; transform: rotate(-1.3deg); transition: transform 0.5s ease; }
 .napkin-tools { display: flex; flex-direction: column; gap: 0.7em; margin-top: 1em; align-items: center; }
 .napkin-tools-row { display: flex; gap: 0.55em; align-items: center; justify-content: center; flex-wrap: wrap; }
 .napkin-color { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0,0,0,0.25); transition: transform 0.15s; }
@@ -42643,8 +43210,8 @@ He looks at you like, painterly, he looked when you were his subject.
   padding: 10px;
   background: #f2e7c9;
   box-shadow: 0 0 0 2px #7a5a30, 0 12px 40px rgba(0,0,0,0.75), inset 0 0 30px rgba(90,60,20,0.2);
-  transition: border 0.4s ease, padding 0.4s ease, box-shadow 0.4s ease, transform 0.4s ease;
-  transform: scale(1.02);
+  transition: border 0.4s ease, padding 0.4s ease, box-shadow 0.4s ease, transform 0.5s ease;
+  transform: rotate(0deg) scale(1.02);
 }
 .napkin-erase {
   background: #f2e7c9 !important;
@@ -42704,7 +43271,14 @@ He looks at you like, painterly, he looked when you were his subject.
   var ctx = canvas.getContext('2d');
   var W = canvas.width, H = canvas.height;
 
-  function drawBackground() {
+  // Deckle wobble computed once so Clear/Undo redraws keep the same edge
+  var deckle = [];
+  (function(){
+    var per = 2 * (W + H) / 9;
+    for (var d = 0; d < Math.ceil(per) + 4; d++) deckle.push(Math.random());
+  })();
+
+  function drawNapkinBase() {
     ctx.fillStyle = '#f2e7c9';
     ctx.fillRect(0, 0, W, H);
     // Paper grain
@@ -42713,12 +43287,55 @@ He looks at you like, painterly, he looked when you were his subject.
       ctx.fillStyle = 'rgba(170,140,80,' + (Math.random() * 0.05) + ')';
       ctx.fillRect(x, y, 1, 1);
     }
-    // Faint fold line
-    ctx.strokeStyle = 'rgba(160,130,70,0.08)';
+    // Quilted embossing — the dot lattice pressed into a paper napkin
+    ctx.fillStyle = 'rgba(160,130,75,0.055)';
+    for (var qy = 14; qy < H - 8; qy += 16) {
+      for (var qx = 14 + ((qy / 16) % 2) * 8; qx < W - 8; qx += 16) {
+        ctx.beginPath();
+        ctx.arc(qx, qy, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Fold creases — quartered, with soft shading along each crease
+    ctx.strokeStyle = 'rgba(160,130,70,0.10)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, H/2 + 20); ctx.lineTo(W, H/2 + 20);
+    ctx.moveTo(W/2 - 14, 0); ctx.lineTo(W/2 - 14, H);
     ctx.stroke();
+    var creaseShade = ctx.createLinearGradient(0, H/2 + 8, 0, H/2 + 32);
+    creaseShade.addColorStop(0, 'rgba(150,120,65,0)');
+    creaseShade.addColorStop(0.5, 'rgba(150,120,65,0.05)');
+    creaseShade.addColorStop(1, 'rgba(150,120,65,0)');
+    ctx.fillStyle = creaseShade;
+    ctx.fillRect(0, H/2 + 8, W, 24);
+    // The wine ring — the glass was here first
+    ctx.strokeStyle = 'rgba(140,45,55,0.13)';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(W - 74, H - 70, 34, 0.3, Math.PI * 1.75);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(140,45,55,0.08)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(W - 71, H - 68, 30, 1.1, Math.PI * 2.4);
+    ctx.stroke();
+    // Deckled edge — the napkin's soft irregular border, drawn as small
+    // bites out of each edge using the fixed wobble table
+    ctx.fillStyle = '#171310';
+    var di = 0;
+    function bite(x, y) {
+      var r = 1.1 + deckle[(di++) % deckle.length] * 2.1;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (var ex = 0; ex < W; ex += 9) { bite(ex, 0); bite(ex, H); }
+    for (var ey = 0; ey < H; ey += 9) { bite(0, ey); bite(W, ey); }
+  }
+
+  function drawBackground() {
+    drawNapkinBase();
     // Ghost outline — a seated painter with wine glass
     ctx.strokeStyle = 'rgba(120,100,70,0.32)';
     ctx.lineWidth = 1.2;
@@ -42840,60 +43457,101 @@ He looks at you like, painterly, he looked when you were his subject.
     ctx.fill();
     updateButtonStates();
   }
+  // One ink segment: felt-tip on soft paper. A faint wide halo soaks in
+  // under the solid core; the eraser gets no halo.
+  function inkSegment(x0, y0, x1, y1, col, w) {
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (col !== '#f2e7c9') {
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w * 2.3;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
   function draw(e) {
     if (!drawing) return;
     e.preventDefault();
     var p = getPos(e);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = brushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
+    // Slow, deliberate strokes press heavier and soak wider; fast flicks
+    // stay light. The width rides with the pen, recorded per point.
+    var dist = Math.sqrt((p.x - lastX) * (p.x - lastX) + (p.y - lastY) * (p.y - lastY));
+    var w = brushSize * Math.max(0.75, Math.min(1.3, 1.25 - dist * 0.022));
+    inkSegment(lastX, lastY, p.x, p.y, color, w);
     lastX = p.x; lastY = p.y;
-    if (currentStroke) currentStroke.points.push({x: p.x, y: p.y});
+    if (currentStroke) currentStroke.points.push({x: p.x, y: p.y, w: w});
   }
   function stopDraw() { drawing = false; currentStroke = null; }
 
   function drawCleanNapkin() {
-    ctx.fillStyle = '#f2e7c9';
-    ctx.fillRect(0, 0, W, H);
-    for (var i = 0; i < 2200; i++) {
-      var x = Math.random() * W, y = Math.random() * H;
-      ctx.fillStyle = 'rgba(170,140,80,' + (Math.random() * 0.05) + ')';
-      ctx.fillRect(x, y, 1, 1);
-    }
-    ctx.strokeStyle = 'rgba(160,130,70,0.08)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, H/2 + 20); ctx.lineTo(W, H/2 + 20);
-    ctx.stroke();
+    drawNapkinBase();
   }
 
   function replayStrokes() {
     strokes.forEach(function(s){
       if (!s.points || s.points.length === 0) return;
       var w = s.width || 3.2;
-      ctx.strokeStyle = s.color;
-      ctx.fillStyle = s.color;
-      ctx.lineWidth = w;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
       if (s.points.length === 1) {
+        ctx.fillStyle = s.color;
         ctx.beginPath();
         ctx.arc(s.points[0].x, s.points[0].y, Math.max(w / 2, 1), 0, Math.PI * 2);
         ctx.fill();
         return;
       }
-      ctx.beginPath();
-      ctx.moveTo(s.points[0].x, s.points[0].y);
       for (var i = 1; i < s.points.length; i++) {
-        ctx.lineTo(s.points[i].x, s.points[i].y);
+        var p0 = s.points[i - 1], p1 = s.points[i];
+        inkSegment(p0.x, p0.y, p1.x, p1.y, s.color, p1.w || w);
       }
-      ctx.stroke();
     });
+  }
+
+  // The reveal: the sketch redraws itself on the clean napkin, stroke by
+  // stroke, as though the evening replays your hand making it.
+  function animateReplay(done) {
+    var segs = [];
+    strokes.forEach(function(s){
+      if (!s.points || s.points.length === 0) return;
+      var w = s.width || 3.2;
+      if (s.points.length === 1) {
+        segs.push({ dot: true, x: s.points[0].x, y: s.points[0].y, r: Math.max(w / 2, 1), col: s.color });
+        return;
+      }
+      for (var i = 1; i < s.points.length; i++) {
+        var p0 = s.points[i - 1], p1 = s.points[i];
+        segs.push({ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, col: s.color, w: p1.w || w });
+      }
+    });
+    if (!segs.length) { done(); return; }
+    var total = Math.max(900, Math.min(2200, segs.length * 6));
+    var perFrame = Math.max(1, Math.ceil(segs.length / (total / 16.7)));
+    var idx = 0;
+    (function step() {
+      if (!document.body.contains(canvas)) return;
+      for (var n = 0; n < perFrame && idx < segs.length; n++, idx++) {
+        var g = segs[idx];
+        if (g.dot) {
+          ctx.fillStyle = g.col;
+          ctx.beginPath();
+          ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          inkSegment(g.x0, g.y0, g.x1, g.y1, g.col, g.w);
+        }
+      }
+      if (idx < segs.length) requestAnimationFrame(step);
+      else done();
+    })();
   }
 
   function clearStrokes() { strokes = []; }
@@ -42945,29 +43603,32 @@ He looks at you like, painterly, he looked when you were his subject.
     // navigate. The fade keeps the transition from feeling abrupt.
     var tools = document.querySelector('.napkin-tools');
     if (tools) tools.style.display = 'none';
-    drawCleanNapkin();
-    replayStrokes();
-    canvas.classList.add('napkin-framed');
     canvas.style.cursor = 'default';
-    if (window.dssAudio && window.dssAudio.cameraShutter) {
-      try { window.dssAudio.cameraShutter(); } catch(e) {}
-    }
-    // Save the finished drawing so the notebook can render it as an Effect.
-    try { localStorage.setItem('dss_napkin', canvas.toDataURL('image/png')); } catch(e) {}
-    var fadeTarget = canvas.closest('.napkin-wrap') || canvas.parentElement || canvas;
-    setTimeout(function(){
-      if (fadeTarget) {
-        fadeTarget.style.transition = 'opacity 0.85s ease';
-        fadeTarget.style.opacity = '0';
+    // The ghost vanishes and your sketch redraws itself on the clean
+    // napkin; only then does the frame land and the shutter fire.
+    drawCleanNapkin();
+    animateReplay(function(){
+      canvas.classList.add('napkin-framed');
+      if (window.dssAudio && window.dssAudio.cameraShutter) {
+        try { window.dssAudio.cameraShutter(); } catch(e) {}
       }
+      // Save the finished drawing so the notebook can render it as an Effect.
+      try { localStorage.setItem('dss_napkin', canvas.toDataURL('image/png')); } catch(e) {}
+      var fadeTarget = canvas.closest('.napkin-wrap') || canvas.parentElement || canvas;
       setTimeout(function(){
-        var navEl = document.getElementById('sketch-nav');
-        if (navEl) {
-          var twLink = navEl.querySelector('tw-link');
-          if (twLink) twLink.click();
+        if (fadeTarget) {
+          fadeTarget.style.transition = 'opacity 0.85s ease';
+          fadeTarget.style.opacity = '0';
         }
-      }, 900);
-    }, 1500);
+        setTimeout(function(){
+          var navEl = document.getElementById('sketch-nav');
+          if (navEl) {
+            var twLink = navEl.querySelector('tw-link');
+            if (twLink) twLink.click();
+          }
+        }, 900);
+      }, 1500);
+    });
   });
 })();
 </script>
@@ -44689,7 +45350,7 @@ overflow: visible;
 
 .stat-group {
 display: grid;
-grid-template-columns: 68px 176px 1.8em;
+grid-template-columns: 80px 176px 1.8em;
 row-gap: 8px;
 column-gap: 8px;
 align-items: center;
@@ -44732,11 +45393,11 @@ font-family: 'Playfair Display', Georgia, serif;
 font-weight: 400;
 letter-spacing: 0.1em;
 text-transform: uppercase;
-font-size: 0.65em;
+font-size: 0.8em;
 min-width: 62px;
 white-space: nowrap;
 text-align: left;
-margin-left: 14px;
+margin-left: 6px;
 }
 
 /* ===== CIGARETTE BAR (base — used by SOBRIETY) ===== */
@@ -44786,23 +45447,21 @@ repeating-linear-gradient(90deg, rgba(80,52,18,0.18) 0px, transparent 1px, trans
 linear-gradient(180deg, #cfa050 0%, #b88838 25%, #a07228 55%, #b88838 80%, #cfa050 100%);
 }
 
-/* MORALE bar: rolled-up note at the left end of the powder line */
+/* MORALE bar: rolled-up banknote at the left end of the powder line.
+   Drawn as SVG so the roll actually reads: the coil spiral at the open
+   end, engraved print lines, the portrait's red band, and the wrap seam
+   where the outer edge of the note spirals round the tube. */
 .stat-row:first-of-type .stat-bar::before {
 content: '';
 position: absolute;
 left: -36px;
-top: -1px;
+top: -2px;
 width: 36px;
-height: 16px;
-background:
-/* Queen's red — portrait colour bleeding warmly through the paper */
-linear-gradient(90deg, transparent 0%, rgba(148,38,28,0.0) 10%, rgba(148,38,28,0.22) 24%, rgba(148,38,28,0.30) 40%, rgba(148,38,28,0.10) 55%, transparent 68%),
-/* Fine banknote engraving lines */
-repeating-linear-gradient(180deg, transparent 0px, transparent 2px, rgba(60,40,10,0.17) 2px, rgba(60,40,10,0.17) 3px),
-/* Cylindrical shading — rolled note seen in profile */
-linear-gradient(180deg, #6a5c3c 0%, #b0a060 14%, #dcd090 34%, #ece498 50%, #dcd090 66%, #b0a060 86%, #6a5c3c 100%);
-border-radius: 3px 0 0 3px;
-box-shadow: inset 0 1px 2px rgba(240,220,160,0.35), inset 0 -1px 2px rgba(50,32,8,0.5), 2px 0 5px rgba(0,0,0,0.4);
+height: 18px;
+background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 36'><defs><linearGradient id='tube' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23786438'/><stop offset='0.15' stop-color='%23c0b070'/><stop offset='0.38' stop-color='%23e8dfa6'/><stop offset='0.5' stop-color='%23f0e8b0'/><stop offset='0.62' stop-color='%23e8dfa6'/><stop offset='0.85' stop-color='%23b0a060'/><stop offset='1' stop-color='%23685430'/></linearGradient><clipPath id='tclip'><rect x='2' y='6' width='70' height='24' rx='8'/></clipPath></defs><rect x='2' y='6' width='70' height='24' rx='8' fill='url(%23tube)'/><g clip-path='url(%23tclip)'><path d='M6 10 Q14 6 22 10 Q30 14 38 10' fill='none' stroke='%23504018' stroke-opacity='0.4' stroke-width='1'/><path d='M4 27 Q12 23 20 27 Q28 31 36 27' fill='none' stroke='%23504018' stroke-opacity='0.35' stroke-width='1'/><ellipse cx='52' cy='42' rx='16' ry='24' fill='%23942618' fill-opacity='0.25'/><ellipse cx='52' cy='42' rx='16' ry='24' fill='none' stroke='%236a2014' stroke-opacity='0.55' stroke-width='1.3'/><ellipse cx='52' cy='-8' rx='14' ry='20' fill='none' stroke='%236a2014' stroke-opacity='0.4' stroke-width='1.1'/><line x1='8' y1='16' x2='30' y2='16' stroke='%23504018' stroke-opacity='0.28' stroke-width='0.9'/><line x1='8' y1='20' x2='26' y2='20' stroke='%23504018' stroke-opacity='0.24' stroke-width='0.9'/><path d='M32 6 L46 30' stroke='%23fff8d0' stroke-opacity='0.6' stroke-width='1.2'/><path d='M34 6 L48 30' stroke='%23403010' stroke-opacity='0.45' stroke-width='1'/></g></svg>") left center / contain no-repeat;
+border-radius: 0;
+box-shadow: none;
+filter: drop-shadow(2px 1px 3px rgba(0,0,0,0.45));
 }
 
 /* The cigarette paper — cream tube with subtle texture */
@@ -45032,6 +45691,35 @@ pointer-events: none;
 /* Danger — ember flickers low */
 .bar-danger::after {
 animation: ember-flicker 1.2s ease-in-out infinite alternate;
+}
+
+/* ===== MORALE = THE POWDER LINE (scoped overrides) =====
+   Morale's row borrowed the cigarette's paper, ash and ember wholesale,
+   so the header read as two cigarettes. The line is chopped on smoked
+   glass instead: dark mirror base, granular chalk-white fill, and the
+   ember + smoke stay with the cigarette where they belong. */
+.stat-row:first-of-type .stat-bar {
+background:
+  linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.07) 12%, transparent 24%),
+  linear-gradient(180deg, #23201c 0%, #14110e 30%, #0e0c0a 55%, #191613 85%, #262220 100%);
+box-shadow: inset 0 2px 5px rgba(0,0,0,0.8), inset 0 -1px 1px rgba(160,150,130,0.10), 0 1px 3px rgba(0,0,0,0.5);
+border-radius: 3px;
+}
+.stat-row:first-of-type .bar-fill:not(.bar-opus) {
+background:
+  radial-gradient(1.5px 1.5px at 12% 30%, rgba(120,110,95,0.5) 0%, transparent 100%),
+  radial-gradient(1.5px 1.5px at 34% 62%, rgba(130,118,100,0.45) 0%, transparent 100%),
+  radial-gradient(1px 1px at 55% 28%, rgba(110,100,88,0.5) 0%, transparent 100%),
+  radial-gradient(1.5px 1px at 76% 58%, rgba(125,115,98,0.4) 0%, transparent 100%),
+  radial-gradient(1px 1.5px at 90% 40%, rgba(115,105,90,0.45) 0%, transparent 100%),
+  repeating-linear-gradient(90deg, rgba(255,252,242,0.0) 0px, rgba(255,252,242,0.10) 2px, rgba(255,252,242,0.0) 4px),
+  linear-gradient(180deg, rgba(252,250,244,0.55) 0%, #f6f2e8 22%, #efe9dc 50%, #f4efe4 78%, rgba(240,236,226,0.5) 100%);
+border-radius: 3px;
+box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 1px 2px rgba(0,0,0,0.35);
+}
+.stat-row:first-of-type .bar-fill::after,
+.stat-row:first-of-type .bar-fill::before {
+display: none;
 }
 
 /* Subtle ember breathing for all states */
@@ -45454,14 +46142,19 @@ text-shadow:
 }
 
 /* ===== STAT PERCENTAGE NUMBER ===== */
+/* Percentages as pencil jottings — graphite margin notes in the ledger,
+   not typeset figures. Gain/loss/danger colour overrides still apply. */
 .stat-pct {
-color: var(--cream-text);
-font-family: 'Playfair Display', Georgia, serif;
+color: #a89f8c;
+font-family: Georgia, 'Times New Roman', serif;
+font-style: italic;
 font-size: 0.68em;
 text-align: right;
-letter-spacing: 0.05em;
+letter-spacing: 0.02em;
 padding-left: 0;
 display: block;
+transform: rotate(-3.5deg) translateY(1px);
+opacity: 0.9;
 }
 
 .pct-loss {
@@ -45524,37 +46217,28 @@ height: 16px;
 padding-left: 2px;
 }
 
+/* The three Alba marks are lily-of-the-valley bells — the flower of the
+   header lily and the Dawn sprig. Hollow ink outline while the line is
+   still waiting; ivory-gold and glowing once caught. */
 .alba-jewel {
 display: inline-block;
 width: 13px;
-height: 13px;
-transform: rotate(45deg);
-background: linear-gradient(135deg, rgba(35,30,22,0.55) 0%, rgba(18,15,12,0.70) 100%);
-border: 1px solid rgba(150, 120, 70, 0.35);
-border-radius: 2px;
-box-shadow:
-  inset 0 0 3px rgba(0,0,0,0.75),
-  inset 0 1px 0 rgba(200, 170, 100, 0.06);
+height: 16px;
+background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 24'><path d='M10 1 Q10 2.5 10 4' stroke='%23c0a468' stroke-width='1.4' fill='none' stroke-linecap='round'/><path d='M4.5 10 Q4.5 4 10 4 Q15.5 4 15.5 10 L14.8 16 Q13.4 19 12.2 16.8 Q11.1 19.6 10 17 Q8.9 19.6 7.8 16.8 Q6.6 19 5.2 16 Z' fill='none' stroke='%23c0a468' stroke-width='1.6' stroke-linejoin='round'/></svg>") center / contain no-repeat;
 position: relative;
 transition: all 0.7s ease;
+opacity: 0.7;
 }
 
 .alba-jewel-filled {
-background:
-  radial-gradient(ellipse at 30% 30%, rgba(255, 248, 200, 0.9) 0%, rgba(255, 220, 120, 0) 45%),
-  linear-gradient(135deg, #fff4c0 0%, #f5c858 40%, #c88830 80%, #8a5a18 100%);
-border: 1px solid rgba(255, 225, 140, 0.9);
-box-shadow:
-  0 0 7px rgba(245, 200, 88, 0.85),
-  0 0 14px rgba(245, 200, 88, 0.40),
-  inset 0 0 3px rgba(255, 240, 180, 0.55),
-  inset 1px 1px 1.5px rgba(255, 255, 220, 0.75);
-animation: alba-jewel-breathe 3.2s ease-in-out infinite;
+background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 24'><path d='M10 1 Q10 2.5 10 4' stroke='%23f5d88a' stroke-width='1.4' fill='none' stroke-linecap='round'/><path d='M4.5 10 Q4.5 4 10 4 Q15.5 4 15.5 10 L14.8 16 Q13.4 19 12.2 16.8 Q11.1 19.6 10 17 Q8.9 19.6 7.8 16.8 Q6.6 19 5.2 16 Z' fill='%23f2e6c4' stroke='%23f5d88a' stroke-width='1.6' stroke-linejoin='round'/></svg>") center / contain no-repeat;
+opacity: 1;
+animation: alba-bell-breathe 3.2s ease-in-out infinite;
 }
 
-@keyframes alba-jewel-breathe {
-0%, 100% { filter: brightness(1) saturate(1); }
-50%      { filter: brightness(1.15) saturate(1.10); }
+@keyframes alba-bell-breathe {
+0%, 100% { filter: drop-shadow(0 0 3px rgba(245,200,88,0.55)) brightness(1); }
+50%      { filter: drop-shadow(0 0 6px rgba(245,200,88,0.9)) brightness(1.15); }
 }
 
 .alba-count {

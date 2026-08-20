@@ -333,3 +333,43 @@ Ported the Oliver Twist "Fagin's den" pipeline (that project taught it: EffectCo
 - Composer deliberately at CSS resolution (no setPixelRatio) — full retina ×3 passes tanks fps.
 - No gamma pass anywhere: DSS scenes were authored under linear output; parity preserved.
 - Verified by screenshot: Ca ✓ RS ✓ (neon blooms) CL ✓ (bulb halos). Late fps readings of 2fps were the PREVIEW PANE squeezed to 280px and throttling — not game perf; re-verify in a normal-size window. Sam should eyeball every scene; per-scene bloom/focus tunable in the opts table at each `_dssBindScene` line.
+
+---
+
+## Addendum 6 — Cinematic pass completed game-wide (2026-08-20 session)
+
+Everything below is in the .twee, synced, and verified live. Sam approved each stage.
+
+### Post pipeline (bloom composer + film grade) — full coverage
+- All 13 inline 3D scenes (previous session) PLUS the three JS-injected iframe scenes:
+  - `oxford-street-from-centre-point-3d-static.html` (dawn vista): composer + grade, threshold 0.8 keeps the smog sky out of bloom. Colour parity A/B-verified.
+  - `cecil-court-3d-static.html`: composer + grade.
+  - `green-sea-3d-static.html`: **film grade ONLY — bloom deliberately removed** (bright pastel scene; even strength 0.14/threshold 0.93 milked the facade — comment in the file explains, don't re-add).
+- Five minigames (pong/waltz/fight/cow/bar): vignette+grain wrapper + contrast lift via a watcher in UserScript (`dssMinigameCanvases` interval; wrappers use fit-content vs fill-parent branch on inline width:100%).
+- Pipes entrance (`coach-plumbing-intro`, plays when $crashedAfterDualRing): deep tunnel vignette + grain via same watcher.
+- Body-function popups (drink / spew gents+doorway / eat / liver): per-canvas grade via same watcher (`popupHosts` list). Napkin sketch canvases deliberately excluded (drawing surface stays clean).
+
+### Napkin sketch = watercolour (`window.dssWatercolourKit`)
+Offscreen scratch canvas per stroke → composited multiply @0.8 → real wash layering (crossings darken, grain shows through, light-over-dark stays dark). Soak halo, edge pooling, granulation, wet-tip spatter trailing the brush (flicks throw more). Eraser stays opaque. BOTH engines (passage + notebook popup) run through the one kit; reveal animation restructured per-stroke (sIdx). Verified: draw, undo replay, Done reveal → Napkin Portrait.
+
+### Ritual/reveal animations upgraded (drama-then-fade preserved)
+- Map pentagram casting: star TRACES itself (pathLength=100 dashoffset) + bright tracer head (dasharray 2.5/97.5), gold drop-shadow glow, bells bloom in trace order (nth-child delays), LBRP lines materialise one by one. 5s total.
+- Notebook lily-pentangle star: same trace treatment in its hold window.
+- Ripley's Wheel: gates light CLOCKWISE (inline animation-delay per gate 3.0+i*0.14s), ouroboros rails self-inscribe (dwm-rail trace 3.4s) then flesh (scales/head/tail in .dwm-serpent-flesh) materialises at 5s, breath from 6s, Sol pulse now flares gold.
+- Dawn petal storm: 3 depth planes (near 22% big/blur1.3/fast ×1.7, far 22% small/dim/slow ×0.55) — CSS bokeh.
+
+### SVG FX toolkit (`#dss-svgfx` defs injected by UserScript)
+Filters: `dss-ink` (waver+fibre displacement), `dss-ink-fine`, `dss-gild`, `dss-gild-strong`, `dss-paper`. Opt-in via filter="url(#…)".
+**Validated rule (Sam's verdicts): ink anything OLD/WEATHERED/ORGANIC; spare crisp lettering, item cards (matchbox = "not improved"), ritual geometry, UI chrome, header lily (never), per-frame-animated elements (perf).**
+Inked so far: collectible lily (+petal mote, nb lily rows, dawn sprig — stars excluded), gents tiles BOTH bands, chippy tube ×2, fetch street+window (captions spared — his prose text stays crisp), carthage pyre ×2, page-emerge, colony fans ×10, pillars+lattice ×10, all decorative rules (dawn/phone/french/ronnies/cecil/dst-an-top). Skipped + why: Green Sea banners (pastel-clean identity), ending vines (full-screen per-frame recompute), Aoife mp-bg (photos, hers), Trisha neon, inventory cards.
+
+### Stat header rework (background + header lily untouched)
+- MORALE: powder line slimmed to 6px granular line (margin-top 4), tapering tail, stray grains on the smoked glass, ghost slimmed to match. Rolled note kept.
+- SOBRIETY: cigarette slimmed to 11px (filter tip + ember rescaled to match, filter = 11px too), detailed paper (grain specks, wrap seams, double gold brand ring, lipstick, scorch ring at burn line). Grey ash REVERTED to dark shadow (Sam: covered the pct). Alba bells: 2px nudge tried and REVERTED (Sam: wrong).
+- **Bug fixed**: .stat-pct was painted OVER by the fill at high stats (fill z-index 1, pct unpositioned) → pct now position:relative z-index:2 + dark halo text-shadow; verified legible at 100% on both bars.
+
+### Open threads
+- Pillars flood "not quite perfect" — Sam wants to revisit.
+- Tarot cards: possible dss-ink demo-first candidate (his call, never blanket-apply).
+- GL/LO/CP/OF scenes never individually reviewed with Sam; Coach parked.
+- Everything uncommitted; Sam commits via GitHub Desktop. Local server on :8732 may still be running (bo0znifd2).

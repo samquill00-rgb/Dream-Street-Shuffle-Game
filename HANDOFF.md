@@ -2,6 +2,45 @@
 >
 > **⚠ Standing gotchas:** `window.Harlowe`/`window.Engine` are `undefined` (DOM-bridge for reads, `(set:)`+`(go-to:)` result passages or JS flags for writes — memory `project_harlowe_not_exposed.md`). HTML/`<script>` render only from top-level hooks. `(after:)` never fires in backgrounded tabs — use guarded `setTimeout` (the Dawn passage shows the `_passageGen` double-defer pattern). Debug-jump half-inits (forwarders stall; the TURNS readout misreports on a raw jump — walk in via a temp passage with a real link). **Header passages render BEFORE the body**, so body-side `(set:)`s (e.g. the `$returns` increment) haven't happened at header time.
 >
+## ⚠ ADDENDUM 14 (2026-08-21) — V2 DREAM-WORLDS PORT ONTO MAIN, PHASE 1 (foundation SHIPPED + verified)
+
+**Context:** Sam wants more routes (Deus Ex conversation). Decision: develop the shelved v2-expansion. IFComp ruled out (2026 intent deadline passed; he's self-promoting — no AI-content constraints apply). **Read-only git on the branch was Sam-approved this session** (still NEVER add/commit/push).
+
+**Design locked with Sam this session (do not relitigate):**
+1. **Five pocket-keys steer the third-pillar crossing**: bag of cocaine→Nazca (lines), Chinese chippy order ticket→Easter Island (script), betting slip→Pyramid (number/odds-as-proportions), lighter→Himalayas/Cave (flame), **glass eye**→Ezekiel (vision; his favourite). NEW objects, deliberately collectable-or-not; NOT the existing trophies (he rejected keying coin/liver/napkin — "they get those anyway").
+2. **One pocket, one key.** Picking up a second offers a swap; the left-behind key RESTS WHERE YOU SWAPPED IT (notebook records where; re-fetchable — deposit/retrieve was his explicit ask). The crossing CONSUMES the key. No key → pure roll among unseen worlds (never lock content behind item luck).
+3. **No destination menu ever** (nobody chooses their dreams); the choice lives in which object you hold. Diegetic steer via carried gift = banked for later, not phase 1.
+4. **Crossings cost a lap** (+1 $returns + $lostTurnCue, the priced-crossing pattern) — keep $nightLength 16, retune after his playthrough if tight.
+5. **Alba 2 latent in ALL FIVE world centres** — surfacing in each world's register (petal/line/proportion/glyph/face-among-eyes), earned by a quiet ATTEND-style choice (the Green Sea "Listen" pattern), NOT auto-granted with the gift — keeps the Carthage road honest. **Alba 3 stays single-road forever** (the calls chain is sacred). Alba gates are source-agnostic ($alba contains — lines 40279/40417 pre-port), so no endgame rewiring.
+
+**Phase 1 SHIPPED to main .twee + synced (186 passages, was 146):**
+- 40 branch passages appended verbatim: 5 world arcs (5 pass. each + Turn-Backs (none for Ezekiel, by design) + Returns), Third Pillar Portal, Dream to Dean, Sanctum ×2, The Synthesis, Alt-Dawn (stub → v1 Dawn), Red Recognises the Name, Benito Recognises the Wheel, Mantra Syllable Cue, Deco Divider. **"French drink" passage deliberately NOT ported** (predates drink-spiral economy; park for Sam).
+- UserScript: worlds/gifts lifetime-localStorage helpers (dssLoadLifetimeWorlds/dssMarkWorldSeen/dssAddLifetimeGift etc., keys `dssWorldsSeenCycle`/`dssLifetimeGifts`) + NEW `window.DSS_KEY_WORLDS` map, inserted at UserScript top.
+- StoryInit: full v2 var block + NEW key vars ($dreamKey="" ; $keyCocaine/Ticket/Slip/Lighter/Eye="seed"|"held"|<passage name>|"spent"). **GOTCHA (bit tonight): StoryInit is [startup] — a trailing `\` on its last line renders a literal "\" above the title.** Last line must end bare.
+- CSS re-added/ported: .claude-draft (pink) + .pillar.centre/first-sight + world-reveal keyframes + hexagram + .mantra-cue + .nb-paths (inserted above the old ".claude-draft styles removed" comment, ~line 45116 pre-port).
+- Entering The Pillars of Hercules: gold third-pillar SVG woven after the right pillar (renders inside .pillars-scene via tw-hook; `.pillars-scene tw-hook {display:block;position:static}` ported with it); step-through/spent/synthesis tail appended at passage end **with old-save guards** ($worldsVisited array-guard, $inisToldOfPillars boolean-guard).
+- O'Flatterly's Gift: Inis third-pillar tip-off (pink) before "[[Back to Dean Street|After Cecil Court]]", boolean-guarded.
+- `v2-prose-AS-WRITTEN.docx` + `v2-prose-REWRITE.docx` pulled off the branch into the project root for Sam's voice pass.
+
+**Verified live (real links, consoles clean, zero tw-errors):** full Himalayan arc Airport Pub→Cave, "Say the mantra"→mandala SVG reveal→dssMarkWorldSeen fired (cycle+gifts=["himalayas"])→Return→Dean Street with clock ticking; fresh save shows 2 pillars only/no leak; Gift tip-off renders pink (#ff3aa8 computed); real walk opening→French→hub→Pillars→Aoife call→venue shows critic fork + "Step through the third pillar" coexisting; synthesis link correctly display:none at <5 gifts. NOT visually eyeballed: the gold pillar itself at full render (preview pane scroll/fixed-header capture kept scrambling — DOM verified correct; **Sam should look at the Pillars venue first visit**).
+
+**PHASE 2 QUEUE (next session, in order):**
+1. **Rewrite Third Pillar Portal** for key logic: read $dreamKey (DOM-bridge span like the existing visited-span), steer via DSS_KEY_WORLDS, consume key ($dreamKey="", $keyX="spent" — needs a (set:)-on-link, not JS), +1 turn on crossing, fallback roll among unseen, keep 2-crossing cap.
+2. **Seed the five pickups** (spread across playstyles): cocaine→Trisha's, order ticket→Chinese Fish and Chips, betting slip→Coach bar (Bernard territory), lighter→The French, glass eye→Lackland's (back room or office). Pickup = quiet link; swap offer when already carrying; deposited key re-fetchable at swap site. All pickup prose PINK. Notebook charm slot (single-slot display).
+3. **Alba 2 attend-moments** in the five centres (guarded `(unless: $alba contains $alba2)`), pink drafts, per-world register.
+4. **Soho-responds weaves into CURRENT main passages** (branch versions diverged — weave by hand): critic $mantraComplete branch, Lackland $nazcaTracing branch, Dean Street links for Inis notebook/Red-under-the-lamp/Word-from-the-French.
+5. **Notebook**: gift OBJECTS entries, CHANT (mantra) section, 22 Hebrew paths, charm slot — main's builder moved (~44925 pre-port); port carefully.
+6. **Mantra syllable cue** (display: "Mantra Syllable Cue") at the 12 haunt-collection sites.
+7. Hexagram map reveal + real Alt-Dawn body (Sam's prose) — still unbuilt (was unbuilt on branch too).
+8. Old-save guard audit over every new $var read; audio beds for world tags someday.
+9. Sam: pairings sanity-check in play, prose docx pass, and the parked French drink ruling.
+
+**Testing this session:** stale `python -m http.server 8732` from an old session reused for preview (it serves the project dir; preview config `dss` port-conflicts against it — reuse, don't kill). Debug-jump artifacts as documented (half-init, stale duplicates, TURNS misreport); backgrounded pane freezes transitions (front the tab, force opacity, or reload fronted).
+
+**Commit = 2 files (.twee + .html), uncommitted; plus 2 NEW untracked docx (v2-prose-*.docx) — Sam commits via GitHub Desktop.**
+
+---
+
 > **State at handoff (2026-07-30, overnight — Sam asleep, the big Fable session):** ADDENDA 13–13g cover it all. In one night: cosmicSewerSuck stretched to 5.6s; the gents-replay edge diagnosed (back-button only, left by ruling); **COACH APPROACH RENOVATED** (toolkit skins, lit gas lamps via AdditiveBlending, the drinker outside); **LACKLAND'S RETEXTURED** (+ Lackland himself at the working window, page turns); **GINGER LIGHT polished** (visible lit rooms, glazed band on the dead wall); Pillars kerb-line CONFIRMED dead at full rate; **WALTZ deep pass** (visible Cecil Court, waltzing shadow pair in 3/4, gilt medallions); **PONG's tabletop became a pub table**; **BAR-GAME CARRY IS CLASSIC MARIO** (variable jump, asymmetric gravity, coyote+buffer, pace control, native touch); **SKETCH THE PAINTER pimped** (napkin materiality, felt-tip ink both engines, stroke-by-stroke reveal); **STATS BAR reworked** (powder line + SVG rolled note, pencil-jotting percentages, lily-bell Alba marks, bigger labels; OPUS-gold regression caught and fixed with `:not(.bar-opus)`). Fight/cow left at standard by assessment; CP left deliberately. **Commit = 2 files: .twee + .html — NOT yet committed; Sam commits via GitHub Desktop when he wakes.**
 
 > **▶ NEEDS SAM'S EYES (morning list):**

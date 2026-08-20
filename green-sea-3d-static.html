@@ -23,6 +23,15 @@ canvas { display: block; }
 <body>
 <div id="location">CARTHAGE COAST, TUNISIA</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Cinematic post pipeline (bloom composer). Shaders must load before the
+     passes that reference them. If any fail (offline), the scene falls back
+     to the plain renderer via the guard where the composer is built. -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script>
 // ============================================================
 // SCENE SETUP — bright Mediterranean daylight
@@ -44,6 +53,34 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 1.2;
 document.body.appendChild(renderer.domElement);
 
+
+// Bloom composer + film grade — same recipe as the in-game scenes.
+// Composited at CSS resolution deliberately (retina through the passes
+// quadruples GPU cost). Threshold 0.8 keeps broad skies out of the bloom
+// so only genuine point sources halo.
+// No bloom composer here, deliberately: the Green Sea is a bright pastel
+// scene where half the frame sits above any usable bloom threshold, so even
+// gentle bloom (verified at strength 0.14 / threshold 0.93) veils the whole
+// facade in milk. The film grade below is the only treatment that suits it.
+var composer = null;
+(function() {
+  var fgV = document.createElement('div');
+  fgV.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:3;' +
+    'background:radial-gradient(ellipse at 50% 44%, transparent 52%, rgba(10,6,4,0.14) 80%, rgba(8,4,2,0.34) 100%);';
+  document.body.appendChild(fgV);
+  var fgC = document.createElement('canvas'); fgC.width = 128; fgC.height = 128;
+  var fgX = fgC.getContext('2d'); var fgD = fgX.createImageData(128, 128);
+  for (var fgI = 0; fgI < fgD.data.length; fgI += 4) {
+    var fgVal = 118 + Math.floor(Math.random() * 20);
+    fgD.data[fgI] = fgD.data[fgI + 1] = fgD.data[fgI + 2] = fgVal;
+    fgD.data[fgI + 3] = 255;
+  }
+  fgX.putImageData(fgD, 0, 0);
+  var fgG = document.createElement('div');
+  fgG.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:4;' +
+    'background:url(' + fgC.toDataURL() + ');opacity:0.04;mix-blend-mode:overlay;';
+  document.body.appendChild(fgG);
+})();
 window.addEventListener('resize', function() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -2070,7 +2107,7 @@ function animate() {
   chase.catPX = cp.x; chase.catPZ = cp.z;
   catTailG.rotation.z = Math.sin(t * (running ? 9 : 5.5)) * (running ? 0.18 : 0.38);
   catTailG.rotation.x = running ? -0.5 : 0.1;
-  renderer.render(scene, camera);
+  if (composer) { composer.render(); } else { renderer.render(scene, camera); }
 }
 
 animate();

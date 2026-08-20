@@ -14724,6 +14724,141 @@ window.dssScene = (function() {
 // each scene a one-line bind (registers the resize + tracks the trio)
 // and a one-line dispose (called from the setInterval !container branch).
 window._dssThreeRegistry = window._dssThreeRegistry || {};
+// ============================================================
+// CINEMATIC POST-PROCESSING (shared) — the Fagin's-den pipeline for every
+// 3D scene: UnrealBloom + Bokeh depth-of-field via EffectComposer, plus a
+// vignette-and-grain film grade. Add-ons load once from CDN; if they fail
+// (offline) every scene falls back to its plain renderer and still works.
+// ============================================================
+window.dssPostScriptURLs = [
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/GammaCorrectionShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/MaskPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js'
+];
+window.dssLoadPost = function(done) {
+  if (typeof THREE !== 'undefined' && THREE.EffectComposer && THREE.BokehPass) { done(); return; }
+  var urls = window.dssPostScriptURLs;
+  (function next(i) {
+    if (i >= urls.length) { done(); return; }
+    var ps = document.createElement('script');
+    ps.src = urls[i];
+    ps.onload = function() { next(i + 1); };
+    ps.onerror = function() { done(); };
+    document.head.appendChild(ps);
+  })(0);
+};
+window.dssMakeComposer = function(scene, camera, renderer, opts) {
+  opts = opts || {};
+  if (typeof THREE === 'undefined' || typeof THREE.EffectComposer !== 'function' ||
+      typeof THREE.UnrealBloomPass !== 'function' || typeof THREE.BokehPass !== 'function') return null;
+  var composer = new THREE.EffectComposer(renderer);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  // Bokeh re-renders the whole scene for depth each frame — affordable only
+  // in the small interior scenes, so it is opt-in via opts.bokeh
+  if (opts.bokeh) {
+    composer.addPass(new THREE.BokehPass(scene, camera, {
+      focus: opts.focus || 12,
+      aperture: opts.aperture || 0.0002,
+      maxblur: opts.maxblur || 0.0035,
+      width: window.innerWidth, height: window.innerHeight
+    }));
+  }
+  composer.addPass(new THREE.UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    opts.bloomStrength || 0.3, opts.bloomRadius || 0.5, opts.bloomThreshold || 0.78));
+  // Composited at CSS resolution deliberately: full retina through three
+  // passes quadruples GPU cost and starves the frame rate on heavy scenes
+  window.addEventListener('resize', function() { composer.setSize(window.innerWidth, window.innerHeight); });
+  return composer;
+};
+window.dssFilmGrade = function(wrapEl) {
+  if (!wrapEl) return;
+  var fgV = document.createElement('div');
+  fgV.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;' +
+    'background:radial-gradient(ellipse at 50% 44%, transparent 52%, rgba(10,6,4,0.14) 80%, rgba(8,4,2,0.34) 100%);';
+  wrapEl.appendChild(fgV);
+  var fgC = document.createElement('canvas'); fgC.width = 128; fgC.height = 128;
+  var fgX = fgC.getContext('2d'); var fgD = fgX.createImageData(128, 128);
+  for (var fgI = 0; fgI < fgD.data.length; fgI += 4) {
+    var fgVal = 118 + Math.floor(Math.random() * 20);
+    fgD.data[fgI] = fgD.data[fgI + 1] = fgD.data[fgI + 2] = fgVal;
+    fgD.data[fgI + 3] = 255;
+  }
+  fgX.putImageData(fgD, 0, 0);
+  var fgG = document.createElement('div');
+  fgG.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:4;' +
+    'background:url(' + fgC.toDataURL() + ');opacity:0.04;mix-blend-mode:overlay;';
+  wrapEl.appendChild(fgG);
+};
+
+// ---------- FILM GRADE FOR THE 2D MINIGAMES ----------
+// The 3D composer cannot run on 2D canvas games, but the grade can:
+// vignette + grain overlays and a gentle contrast/saturation lift, applied
+// to each minigame canvas as it appears. Watcher is idempotent per canvas.
+window.dssGrainURL = null;
+window.dssGetGrainURL = function() {
+  if (window.dssGrainURL) return window.dssGrainURL;
+  var gc = document.createElement('canvas'); gc.width = 128; gc.height = 128;
+  var gx = gc.getContext('2d'); var gd = gx.createImageData(128, 128);
+  for (var i = 0; i < gd.data.length; i += 4) {
+    var gv = 118 + Math.floor(Math.random() * 20);
+    gd.data[i] = gd.data[i + 1] = gd.data[i + 2] = gv;
+    gd.data[i + 3] = 255;
+  }
+  gx.putImageData(gd, 0, 0);
+  window.dssGrainURL = gc.toDataURL();
+  return window.dssGrainURL;
+};
+window.dssMinigameCanvases = ['pong-canvas', 'waltz-canvas', 'fight-canvas', 'cow-canvas', 'bar-canvas'];
+setInterval(function() {
+  // The Coach plumbing intro (the pipes entrance): a one-shot full-screen SVG
+  // overlay. Give it the same film grade — a deeper tunnel vignette here,
+  // since we are looking up a dark pipe and the corners should swallow light.
+  var pipeIntro = document.querySelector('.coach-plumbing-intro');
+  if (pipeIntro && !pipeIntro.dataset.dssGraded) {
+    pipeIntro.dataset.dssGraded = '1';
+    var piSvg = pipeIntro.querySelector('svg');
+    if (piSvg) piSvg.style.filter = 'contrast(1.08) saturate(1.05)';
+    var piV = document.createElement('div');
+    piV.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:2;' +
+      'background:radial-gradient(ellipse at 50% 48%, transparent 38%, rgba(0,0,0,0.4) 74%, rgba(0,0,0,0.68) 100%);';
+    pipeIntro.appendChild(piV);
+    var piG = document.createElement('div');
+    piG.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;' +
+      'background:url(' + window.dssGetGrainURL() + ');opacity:0.055;mix-blend-mode:overlay;';
+    pipeIntro.appendChild(piG);
+  }
+  for (var mi = 0; mi < window.dssMinigameCanvases.length; mi++) {
+    var mc = document.getElementById(window.dssMinigameCanvases[mi]);
+    if (!mc || mc.dataset.dssGraded) continue;
+    mc.dataset.dssGraded = '1';
+    mc.style.filter = 'contrast(1.06) saturate(1.06)';
+    // Wrapper takes over the canvas's flow role so overlays hug it exactly
+    var fillParent = (mc.style.width === '100%');
+    var mWrap = document.createElement('div');
+    mWrap.style.cssText = fillParent
+      ? 'position:relative;width:100%;height:100%;'
+      : 'position:relative;width:fit-content;max-width:100%;margin:0 auto;';
+    mc.parentNode.insertBefore(mWrap, mc);
+    mWrap.appendChild(mc);
+    var mv = document.createElement('div');
+    mv.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:2;' +
+      'background:radial-gradient(ellipse at 50% 46%, transparent 56%, rgba(8,5,3,0.14) 82%, rgba(6,3,2,0.3) 100%);';
+    mWrap.appendChild(mv);
+    var mg = document.createElement('div');
+    mg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;' +
+      'background:url(' + window.dssGetGrainURL() + ');opacity:0.05;mix-blend-mode:overlay;';
+    mWrap.appendChild(mg);
+  }
+}, 600);
+
 window._dssBindScene = function(wrapId, scene, renderer, camera) {
   var resize = function() {
     if (!camera || !renderer) return;
@@ -14790,10 +14925,10 @@ glActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildGLScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildGLScene) : buildGLScene()); };
 document.head.appendChild(s);
 } else {
-buildGLScene();
+(window.dssLoadPost ? window.dssLoadPost(buildGLScene) : buildGLScene());
 }
 }
 
@@ -14835,6 +14970,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.6;
 glWrap.appendChild(renderer.domElement);
 window._dssBindScene('gl-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 12 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('gl-wrap'));
 
 // Store base camera position for subtle breathing sway
 var cameraBase = { x: 6.5, y: 2.2, z: 8 };
@@ -16336,7 +16473,7 @@ function glAnimate() {
   winGlow1.intensity = 0.42 + Math.sin(t * 0.4) * 0.07;
   winGlow2.intensity = 0.28 + Math.sin(t * 0.7) * 0.05;
 
-  renderer.render(scene, camera);
+  if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 
 
@@ -16424,10 +16561,10 @@ fhActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildFHScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildFHScene) : buildFHScene()); };
 document.head.appendChild(s);
 } else {
-buildFHScene();
+(window.dssLoadPost ? window.dssLoadPost(buildFHScene) : buildFHScene());
 }
 }
 
@@ -16493,6 +16630,8 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.55;
 window._dssBindScene('fh-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 16 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fh-wrap'));
 
 // ============================================================
 // MATERIALS
@@ -18424,7 +18563,7 @@ hangSign.rotation.z = Math.sin(t * 0.3) * 0.01;
 // Wet road — static reflection (no shimmer that could look like flashing)
 // bigReflect stays at its initial opacity
 
-renderer.render(scene, camera);
+if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 
 fhAnimate();
@@ -18506,10 +18645,10 @@ chActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildCHScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildCHScene) : buildCHScene()); };
 document.head.appendChild(s);
 } else {
-buildCHScene();
+(window.dssLoadPost ? window.dssLoadPost(buildCHScene) : buildCHScene());
 }
 }
 
@@ -18582,6 +18721,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.62;
 chWrap.appendChild(renderer.domElement);
 window._dssBindScene('ch-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 12 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('ch-wrap'));
 
 // ============================================================
 // MATERIALS
@@ -19784,7 +19925,7 @@ d[i+3] = 255;
 chGrainCtx.putImageData(imgData, 0, 0);
 }
 
-renderer.render(scene, camera);
+if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 
 chAnimate();
@@ -19877,10 +20018,10 @@ if (phLeftAt) phCarryT += Math.min((Date.now() - phLeftAt) / 1000 * 0.4, 80);
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildPHScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildPHScene) : buildPHScene()); };
 document.head.appendChild(s);
 } else {
-buildPHScene();
+(window.dssLoadPost ? window.dssLoadPost(buildPHScene) : buildPHScene());
 }
 }
 
@@ -19921,6 +20062,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.55;
 phWrap.appendChild(renderer.domElement);
 window._dssBindScene('ph-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 14 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('ph-wrap'));
 
 // ============================================================
 // MATERIALS
@@ -22091,7 +22234,7 @@ function phAnimate() {
   alleyEndGlow.intensity = 1.2 + Math.sin(t * 0.8) * 0.15;
   alleyEndGlow2.intensity = 0.6 + Math.sin(t * 1.1 + 0.5) * 0.08;
 
-  renderer.render(scene, camera);
+  if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 // ---- ENTRY BUTTON ----
 var phBtn = document.createElement('div');
@@ -22168,10 +22311,10 @@ loActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildLOScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildLOScene) : buildLOScene()); };
 document.head.appendChild(s);
 } else {
-buildLOScene();
+(window.dssLoadPost ? window.dssLoadPost(buildLOScene) : buildLOScene());
 }
 }
 
@@ -22201,6 +22344,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.54;
 loWrap.appendChild(renderer.domElement);
 window._dssBindScene('lo-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 10 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('lo-wrap'));
 
 // ============================================================
 // MATERIALS
@@ -23554,7 +23699,7 @@ d[i+3] = 255;
 loGrainCtx.putImageData(imgData, 0, 0);
 }
 
-renderer.render(scene, camera);
+if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 
 loAnimate();
@@ -23706,14 +23851,41 @@ if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
 var caActive = false;
 var caAnimId = null;
 
+// Cinematic post-processing add-ons (the Fagin's-den pipeline): bloom,
+// depth of field, composer plumbing. Loaded sequentially after THREE;
+// if any fail (offline), the scene builds without post and still works.
+var CA_POST_SCRIPTS = [
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/GammaCorrectionShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/MaskPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js'
+];
+function caLoadPost(done) {
+  if (typeof THREE.EffectComposer !== 'undefined' && typeof THREE.BokehPass !== 'undefined') { done(); return; }
+  function next(i) {
+    if (i >= CA_POST_SCRIPTS.length) { done(); return; }
+    var ps = document.createElement('script');
+    ps.src = CA_POST_SCRIPTS[i];
+    ps.onload = function() { next(i + 1); };
+    ps.onerror = function() { done(); };
+    document.head.appendChild(ps);
+  }
+  next(0);
+}
 function initCa() {
   if (caActive) return; caActive = true;
   if (typeof THREE === 'undefined') {
     var s = document.createElement('script');
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-    s.onload = function() { buildCaScene(); };
+    s.onload = function() { caLoadPost(buildCaScene); };
     document.head.appendChild(s);
-  } else { buildCaScene(); }
+  } else { caLoadPost(buildCaScene); }
 }
 
 function buildCaScene() {
@@ -23754,6 +23926,52 @@ function buildCaScene() {
   renderer.toneMappingExposure = 0.85;
   caWrap.appendChild(renderer.domElement);
   window._dssBindScene('ca-wrap', scene, renderer, camera);
+
+  // ---------- CINEMATIC POST-PROCESSING (Fagin's-den pipeline) ----------
+  // Bloom lifts the sun, the pyre, and the water's glints into real glow;
+  // a gentle bokeh gives the vista photographic depth. The gamma pass is
+  // deliberately omitted: the scene's colours were authored under this
+  // renderer's linear output, and parity matters more than textbook sRGB.
+  var caComposer = null;
+  if (typeof THREE.EffectComposer === 'function' &&
+      typeof THREE.UnrealBloomPass === 'function' &&
+      typeof THREE.BokehPass === 'function') {
+    caComposer = new THREE.EffectComposer(renderer);
+    caComposer.addPass(new THREE.RenderPass(scene, camera));
+    var caBokeh = new THREE.BokehPass(scene, camera, {
+      focus: 14,           // the colonnade and near shore hold focus
+      aperture: 0.00025,   // landscape-gentle — distance softens, nothing smears
+      maxblur: 0.0042,
+      width: window.innerWidth,
+      height: window.innerHeight
+    });
+    caComposer.addPass(caBokeh);
+    var caBloom = new THREE.UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight), 0.32, 0.55, 0.72);
+    caComposer.addPass(caBloom);
+    window.addEventListener('resize', function() {
+      if (caComposer) caComposer.setSize(window.innerWidth, window.innerHeight);
+    });
+  }
+  // Film grade overlays: vignette + grain, scoped to this scene's wrap
+  var caVignette = document.createElement('div');
+  caVignette.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;' +
+    'background:radial-gradient(ellipse at 50% 44%, transparent 42%, rgba(10,6,4,0.22) 74%, rgba(8,4,2,0.5) 100%);';
+  caWrap.appendChild(caVignette);
+  var caGrainCanvas = document.createElement('canvas');
+  caGrainCanvas.width = 128; caGrainCanvas.height = 128;
+  var caGcx = caGrainCanvas.getContext('2d');
+  var caGd = caGcx.createImageData(128, 128);
+  for (var cgi = 0; cgi < caGd.data.length; cgi += 4) {
+    var cgv = 118 + Math.floor(Math.random() * 20);
+    caGd.data[cgi] = caGd.data[cgi + 1] = caGd.data[cgi + 2] = cgv;
+    caGd.data[cgi + 3] = 255;
+  }
+  caGcx.putImageData(caGd, 0, 0);
+  var caGrain = document.createElement('div');
+  caGrain.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:4;' +
+    'background:url(' + caGrainCanvas.toDataURL() + ');opacity:0.04;mix-blend-mode:overlay;';
+  caWrap.appendChild(caGrain);
 
   // ============================================================
   // MATERIALS — rich canvas textures like Cecil Court
@@ -24735,15 +24953,16 @@ function buildCaScene() {
   var caOrbA = new THREE.Vector3(0.318, 0.925, -0.199);
   var caOrbB = new THREE.Vector3(-0.381, 0.318, 0.87);
   var caPlanetMoons = [];
+  // Each moon its own colour: a gold one, an ice-blue one, a sea-green one
   var caMoonOrbits = [
-    { a: 3.0, spd: 0.28, off: 0.6, size: 0.55 },
-    { a: 3.9, spd: 0.17, off: 2.9, size: 0.7 },
-    { a: 4.8, spd: 0.1, off: 4.6, size: 0.45 }
+    { a: 3.0, spd: 0.28, off: 0.6, size: 0.55, col: 0xf2d488 },
+    { a: 3.9, spd: 0.17, off: 2.9, size: 0.7, col: 0x9cc4ee },
+    { a: 4.8, spd: 0.1, off: 4.6, size: 0.45, col: 0x9ce8c4 }
   ];
   for (var pm = 0; pm < caMoonOrbits.length; pm++) {
     var pmo = caMoonOrbits[pm];
     var pmSpr = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: moonDotTex, transparent: true, opacity: 0.85, depthWrite: false, fog: false
+      map: moonDotTex, color: pmo.col, transparent: true, opacity: 0.85, depthWrite: false, fog: false
     }));
     pmSpr.scale.set(pmo.size, pmo.size, 1);
     scene.add(pmSpr);
@@ -28536,7 +28755,7 @@ function buildCaScene() {
       ss.sprite.material.opacity = ss.baseOpacity * twinkle;
     }
 
-    renderer.render(scene, camera);
+    if (caComposer) { caComposer.render(); } else { if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); } }
   }
 
 
@@ -28685,10 +28904,10 @@ crActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildCRScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildCRScene) : buildCRScene()); };
 document.head.appendChild(s);
 } else {
-buildCRScene();
+(window.dssLoadPost ? window.dssLoadPost(buildCRScene) : buildCRScene());
 }
 }
 
@@ -28742,6 +28961,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.75;
 crWrap.appendChild(renderer.domElement);
 window._dssBindScene('cr-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 12 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('cr-wrap'));
 
 // ============================================================
 // MATERIALS
@@ -30457,7 +30678,7 @@ shopPunch.lights[si].intensity = (si < 3 ? 0.16 : 0.25) + tobPulse * 0.1;
 // Puddle reflection
 doorPuddleMat.emissiveIntensity = 0.04 + Math.sin(t * 1.7) * 0.02;
 
-renderer.render(scene, camera);
+if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 
 crAnimate();
@@ -30559,10 +30780,10 @@ rsActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildRSScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildRSScene) : buildRSScene()); };
 document.head.appendChild(s);
 } else {
-buildRSScene();
+(window.dssLoadPost ? window.dssLoadPost(buildRSScene) : buildRSScene());
 }
 }
 
@@ -30620,6 +30841,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.48;
 rsWrap.appendChild(renderer.domElement);
 window._dssBindScene('rs-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 13 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('rs-wrap'));
 
 // ============================================================
 // MATERIALS
@@ -32474,7 +32697,7 @@ function animate() {
   moon3.position.y = 9 + Math.sin(t * 0.13 + Math.PI) * 0.78;
   moon3.position.z = -2 + Math.cos(t * 0.13 + Math.PI) * 2.1;
 
-    renderer.render(scene, camera);
+    if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 
 animate();
@@ -32545,7 +32768,7 @@ var animFrame = 0;
 function renderRS() {
   rsAnimId = requestAnimationFrame(renderRS);
   
-  renderer.render(scene, camera);
+  if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
   
   // Vignette overlay
   var vCtx = rsWrap.getContext ? null : document.createElement('canvas');
@@ -32599,10 +32822,10 @@ clActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildCLScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildCLScene) : buildCLScene()); };
 document.head.appendChild(s);
 } else {
-buildCLScene();
+(window.dssLoadPost ? window.dssLoadPost(buildCLScene) : buildCLScene());
 }
 }
 
@@ -32631,6 +32854,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.45;
 clWrap.appendChild(renderer.domElement);
 window._dssBindScene('cl-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { bokeh: true, focus: 6, aperture: 0.0005, maxblur: 0.005, bloomStrength: 0.55, bloomThreshold: 0.3 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('cl-wrap'));
 
 // ============================================================
 // MATERIALS
@@ -33559,7 +33784,7 @@ smokeParts[smj].material.opacity = smU.o * Math.min(smF/0.15, 1) * (1 - Math.max
 smokeParts[smj].material.rotation += 0.0006;
 }
 
-renderer.render(scene, camera);
+if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 
 clAnimate();
@@ -33643,10 +33868,10 @@ tsActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildTSScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildTSScene) : buildTSScene()); };
 document.head.appendChild(s);
 } else {
-buildTSScene();
+(window.dssLoadPost ? window.dssLoadPost(buildTSScene) : buildTSScene());
 }
 }
 
@@ -33672,6 +33897,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.68;
 tsWrap.appendChild(renderer.domElement);
 window._dssBindScene('ts-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 7, aperture: 0.0004, maxblur: 0.0045 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('ts-wrap'));
 
 function placeMesh(geo, mat, x, y, z) {
 var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); scene.add(m); return m;
@@ -34017,7 +34244,7 @@ var cta = 4.35 - ctt*(1.95 + Math.sin(catNow*0.0006)*0.06 + catFlick*0.45*ctt);
 var ctr = 0.135 + ctt*0.045;
 catTail[cts].position.set(-Math.cos(cta)*ctr, 0.025 + Math.max(0, 0.3 - ctt)*0.15 + catFlick*ctt*ctt*0.09, Math.sin(cta)*ctr);
 }
-renderer.render(scene,camera);
+if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 tsAnimate();
 
@@ -34079,10 +34306,10 @@ ofActive = true;
 if (typeof THREE === 'undefined') {
 var sc = document.createElement('script');
 sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-sc.onload = function() { buildOFScene(); };
+sc.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildOFScene) : buildOFScene()); };
 document.head.appendChild(sc);
 } else {
-buildOFScene();
+(window.dssLoadPost ? window.dssLoadPost(buildOFScene) : buildOFScene());
 }
 }
 
@@ -34106,6 +34333,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
 renderer.toneMappingExposure = 0.88;
 ofWrap.appendChild(renderer.domElement);
 window._dssBindScene('of-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { bokeh: true, focus: 5, aperture: 0.0005, maxblur: 0.005, bloomStrength: 0.5, bloomThreshold: 0.35 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('of-wrap'));
 
 function placeMesh(geo, mat, x, y, z) {
 var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); scene.add(m); return m;
@@ -34593,7 +34822,7 @@ if (mo.position.y > 2.3) mo.position.y = 0.35;
 // Camera drift
 camera.position.x = 0.1 + Math.sin(t * 0.1) * 0.03;
 camera.position.y = 1.7 + Math.sin(t * 0.14) * 0.012;
-renderer.render(scene, camera);
+if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 ofAnimate();
 
@@ -34650,10 +34879,10 @@ cpActive = true;
 if (typeof THREE === 'undefined') {
 var s = document.createElement('script');
 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s.onload = function() { buildCPScene(); };
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildCPScene) : buildCPScene()); };
 document.head.appendChild(s);
 } else {
-buildCPScene();
+(window.dssLoadPost ? window.dssLoadPost(buildCPScene) : buildCPScene());
 }
 }
 
@@ -34704,6 +34933,8 @@ try {
   cpRenderer.toneMappingExposure = 0.55;
   cpWrap.appendChild(cpRenderer.domElement);
   window._dssBindScene('cp-wrap', cpScene, cpRenderer, cpCamera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(cpScene, cpCamera, cpRenderer, { focus: 40, aperture: 0.0001, maxblur: 0.002 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('cp-wrap'));
 } catch (e) {
   /* WebGL unavailable (Chrome's GPU process is unhealthy or too many contexts
      are active). Skip the 3D ladder; build a plain fallback so the player can
@@ -35327,7 +35558,7 @@ f.baseX += f.drift;
 if (f.baseX > 22) f.baseX = -18;
 }
 
-cpRenderer.render(cpScene, cpCamera);
+if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { cpRenderer.render(cpScene, cpCamera); }
 }
 
 cpAnimate();
@@ -35420,9 +35651,9 @@ function initFc() {
   if (typeof THREE === 'undefined') {
     var s = document.createElement('script');
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-    s.onload = function() { buildFcScene(); };
+    s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildFcScene) : buildFcScene()); };
     document.head.appendChild(s);
-  } else { buildFcScene(); }
+  } else { (window.dssLoadPost ? window.dssLoadPost(buildFcScene) : buildFcScene()); }
 }
 
 function buildFcScene() {
@@ -35455,6 +35686,8 @@ function buildFcScene() {
   renderer.toneMappingExposure = 0.65;
   fcWrap.appendChild(renderer.domElement);
   window._dssBindScene('fc-wrap', scene, renderer, camera);
+var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 10 }) : null;
+if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'));
 
   // ============================================================
   // MATERIALS
@@ -37826,7 +38059,7 @@ function buildFcScene() {
     rwHandMat.opacity = rwLean*0.9*rwMat.opacity;
     redBrothelLight.intensity = 0.7 - rwMat.opacity*0.18;
 
-    renderer.render(scene, camera);
+    if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
   }
 
 

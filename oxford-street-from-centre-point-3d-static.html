@@ -24,6 +24,16 @@ canvas { display: block; }
 <div id="datestamp">24.11.73</div>
 <div id="location">OXFORD STREET FROM CENTRE POINT — LONDON</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Cinematic post pipeline (bloom composer). Shaders must load before the
+     passes that reference them. If any of these fail (offline), the scene
+     falls back to the plain renderer — see the guard where the composer is
+     built. No Bokeh here: the vista focuses at infinity, DOF adds nothing. -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script>
 
 // ============================================================
@@ -84,10 +94,45 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
 document.body.appendChild(renderer.domElement);
 
+// Bloom composer — same recipe as the in-game scenes. Composited at CSS
+// resolution deliberately (retina through three passes quadruples GPU cost).
+// Threshold 0.8 keeps the broad dawn sky out of the bloom so only the point
+// sources halo: BT Tower aviation lights, lit windows, the sun's core.
+var composer = null;
+if (typeof THREE.EffectComposer === 'function' && typeof THREE.UnrealBloomPass === 'function') {
+  composer = new THREE.EffectComposer(renderer);
+  composer.setPixelRatio(1);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  composer.addPass(new THREE.UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight), 0.32, 0.55, 0.8));
+}
+
+// Film grade: vignette + grain over the whole frame, matching the game scenes.
+(function() {
+  var fgV = document.createElement('div');
+  fgV.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:3;' +
+    'background:radial-gradient(ellipse at 50% 44%, transparent 52%, rgba(10,6,4,0.14) 80%, rgba(8,4,2,0.34) 100%);';
+  document.body.appendChild(fgV);
+  var fgC = document.createElement('canvas'); fgC.width = 128; fgC.height = 128;
+  var fgX = fgC.getContext('2d'); var fgD = fgX.createImageData(128, 128);
+  for (var fgI = 0; fgI < fgD.data.length; fgI += 4) {
+    var fgVal = 118 + Math.floor(Math.random() * 20);
+    fgD.data[fgI] = fgD.data[fgI + 1] = fgD.data[fgI + 2] = fgVal;
+    fgD.data[fgI + 3] = 255;
+  }
+  fgX.putImageData(fgD, 0, 0);
+  var fgG = document.createElement('div');
+  fgG.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:4;' +
+    'background:url(' + fgC.toDataURL() + ');opacity:0.04;mix-blend-mode:overlay;';
+  document.body.appendChild(fgG);
+})();
+
 window.addEventListener('resize', function() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // ============================================================
@@ -2622,7 +2667,7 @@ function animate() {
   var breath = Math.sin(t * 0.12) * 0.08;
   camera.position.y = 34 + breath;
 
-  renderer.render(scene, camera);
+  if (composer) { composer.render(); } else { renderer.render(scene, camera); }
 }
 
 animate();

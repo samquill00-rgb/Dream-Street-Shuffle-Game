@@ -322,3 +322,14 @@ Sam chased intermittent sandy-brown flashing across the shore/arch band. It was 
 5. **THE ROOT: near-horizontal shadow sun.** A directional light at height 4 (dir ~10:1 horizontal) smears every shadow texel into long stripes; their boundaries roam with any bias/frustum change. **Fix = two-sun rig**: visual sun stays low (castShadow=false, keeps the raking light/rim), plus `shadowSun` at the same azimuth hoisted high (y=30) that owns castShadow with a tight frustum (±55/40, far 160, 4096 map, bias -0.0012, normalBias 0.08). Both share the sunset-breathing pulse (0.9/0.6 split of the old 1.5).
 
 Also this morning: crescent moved right + brightened + earthshine; planet paled/pink, rings upright, 3 orbiting moons; ship reflection + moon glint on sea; sunlit-sand patches → soft radial; driftwood bedded; foam arcs end-faded; grass = geometry blades; rubble textured; pots tumbled; fracture caps instead of chunk-topped stubs; cattle skull on the (10,-3) stub; left-headland spray removed (was inside the hill volume); crests confined to open water; logarithmicDepthBuffer on the Ca renderer.
+
+### ADDENDUM 5c — Cinematic post-processing rollout (2026-08-20)
+
+Ported the Oliver Twist "Fagin's den" pipeline (that project taught it: EffectComposer + UnrealBloom + BokehPass from three r128 examples/js CDN) to ALL 13 DSS 3D scenes.
+- Shared helpers at top of UserScript: `window.dssPostScriptURLs` (10 jsdelivr scripts), `dssLoadPost(done)` (sequential, offline-tolerant), `dssMakeComposer(scene,camera,renderer,opts)`, `dssFilmGrade(wrapEl)` (vignette+grain divs in the scene wrap).
+- Every scene init wraps its build call in `dssLoadPost`; every render call routed `dssComposerLocal ? composer.render() : renderer.render(...)`. CP scene uses cpScene/cpRenderer/cpCamera names. A 13th scene discovered: buildOFScene = O'Flatterly's Bookshop ('of-wrap').
+- Carthage keeps its own inline composer (focus 14) + moons now coloured (gold/ice-blue/sea-green).
+- **Bokeh is opt-in** (`opts.bokeh`) — it re-renders the whole scene for depth and the big street scenes are draw-call heavy; only interiors CL (focus 6, bloom 0.55/thr 0.3) and OF (focus 5, bloom 0.5/0.35) carry it. Interior bloom thresholds LOW so lone bulbs halo (CL's bulb needed thr 0.3).
+- Composer deliberately at CSS resolution (no setPixelRatio) — full retina ×3 passes tanks fps.
+- No gamma pass anywhere: DSS scenes were authored under linear output; parity preserved.
+- Verified by screenshot: Ca ✓ RS ✓ (neon blooms) CL ✓ (bulb halos). Late fps readings of 2fps were the PREVIEW PANE squeezed to 280px and throttling — not game perf; re-verify in a normal-size window. Sam should eyeball every scene; per-scene bloom/focus tunable in the opts table at each `_dssBindScene` line.

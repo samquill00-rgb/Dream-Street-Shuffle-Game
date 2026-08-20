@@ -4464,6 +4464,7 @@ window.showNapkinPopup = function() {
 
   var canvas = document.getElementById('napkin-popup-canvas');
   var ctx = canvas.getContext('2d');
+  var wc = window.dssWatercolourKit(canvas, ctx, '#f2e7c9');
   var W = canvas.width, H = canvas.height;
   var color = '#111111';
   var brushSize = 3.2;
@@ -4486,44 +4487,20 @@ window.showNapkinPopup = function() {
       ctx.fillRect(0, 0, W, H);
     }
   }
-  // Same felt-tip ink as the Sketch passage: halo soak + solid core,
-  // no halo for the eraser.
-  function inkSegment(x0, y0, x1, y1, col, w) {
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (col !== '#f2e7c9') {
-      ctx.save();
-      ctx.globalAlpha = 0.16;
-      ctx.strokeStyle = col;
-      ctx.lineWidth = w * 2.3;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.strokeStyle = col;
-    ctx.lineWidth = w;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-  }
   function replayStrokes() {
     strokes.forEach(function(s){
       if (!s.points || s.points.length === 0) return;
       var w = s.width || 3.2;
+      wc.begin(s.color);
       if (s.points.length === 1) {
-        ctx.fillStyle = s.color;
-        ctx.beginPath();
-        ctx.arc(s.points[0].x, s.points[0].y, Math.max(w / 2, 1), 0, Math.PI * 2);
-        ctx.fill();
-        return;
+        wc.dot(s.points[0].x, s.points[0].y, Math.max(w / 2, 1));
+      } else {
+        for (var i = 1; i < s.points.length; i++) {
+          var p0 = s.points[i - 1], p1 = s.points[i];
+          wc.seg(p0.x, p0.y, p1.x, p1.y, p1.w || w);
+        }
       }
-      for (var i = 1; i < s.points.length; i++) {
-        var p0 = s.points[i - 1], p1 = s.points[i];
-        inkSegment(p0.x, p0.y, p1.x, p1.y, s.color, p1.w || w);
-      }
+      wc.end();
     });
   }
   function updateButtons() {
@@ -4546,10 +4523,9 @@ window.showNapkinPopup = function() {
     lastX = p.x; lastY = p.y;
     currentStroke = { color: color, width: brushSize, points: [{x: p.x, y: p.y}] };
     strokes.push(currentStroke);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(lastX, lastY, Math.max(brushSize / 2, 1), 0, Math.PI * 2);
-    ctx.fill();
+    wc.begin(color);
+    wc.dot(lastX, lastY, Math.max(brushSize / 2, 1));
+    wc.refresh();
     updateButtons();
   }
   function draw(e) {
@@ -4558,11 +4534,12 @@ window.showNapkinPopup = function() {
     var p = getPos(e);
     var dist = Math.sqrt((p.x - lastX) * (p.x - lastX) + (p.y - lastY) * (p.y - lastY));
     var w = brushSize * Math.max(0.75, Math.min(1.3, 1.25 - dist * 0.022));
-    inkSegment(lastX, lastY, p.x, p.y, color, w);
+    wc.seg(lastX, lastY, p.x, p.y, w);
+    wc.refresh();
     lastX = p.x; lastY = p.y;
     if (currentStroke) currentStroke.points.push({x: p.x, y: p.y, w: w});
   }
-  function stopDraw() { drawing = false; currentStroke = null; }
+  function stopDraw() { if (drawing) wc.end(); drawing = false; currentStroke = null; }
 
   canvas.addEventListener('mousedown', startDraw);
   canvas.addEventListener('mousemove', draw);
@@ -4590,6 +4567,7 @@ window.showNapkinPopup = function() {
   document.getElementById('napkin-popup-undo').addEventListener('click', function() {
     if (strokes.length === 0) return;
     strokes.pop();
+    wc.cancel();
     paintBase();
     replayStrokes();
     updateButtons();
@@ -14798,6 +14776,111 @@ window.dssFilmGrade = function(wrapEl) {
   wrapEl.appendChild(fgG);
 };
 
+// ---------- WATERCOLOUR KIT (napkin sketch, both engines) ----------
+// Each stroke is painted opaquely onto an offscreen scratch canvas, then
+// composited onto the napkin with multiply blending at partial opacity.
+// That gives the three watercolour signatures: paper grain shows through
+// the pigment, crossing strokes genuinely darken where washes layer, and
+// pigment pools darker at the stroke edges. A wet-tip spatter trails the
+// brush; fast flicks throw more. The eraser stays hard and opaque so it
+// still truly erases. Multiply also means light over dark stays dark,
+// which is honest watercolour behaviour.
+window.dssWatercolourKit = function(canvas, ctx, paper) {
+  var scratch = document.createElement('canvas');
+  scratch.width = canvas.width; scratch.height = canvas.height;
+  var sctx = scratch.getContext('2d');
+  var snap = document.createElement('canvas');
+  snap.width = canvas.width; snap.height = canvas.height;
+  var nctx = snap.getContext('2d');
+  var active = false, col = '#111111', erasing = false;
+  function shade(c, f) {
+    var r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
+    return 'rgb(' + Math.round(r * f) + ',' + Math.round(g * f) + ',' + Math.round(b * f) + ')';
+  }
+  function begin(c) {
+    col = c; erasing = (c === paper);
+    nctx.clearRect(0, 0, snap.width, snap.height);
+    nctx.drawImage(canvas, 0, 0);
+    sctx.clearRect(0, 0, scratch.width, scratch.height);
+    active = true;
+  }
+  function seg(x0, y0, x1, y1, w) {
+    if (!active) begin(col);
+    sctx.lineCap = 'round'; sctx.lineJoin = 'round';
+    if (erasing) {
+      sctx.strokeStyle = col; sctx.lineWidth = w * 1.2;
+      sctx.beginPath(); sctx.moveTo(x0, y0); sctx.lineTo(x1, y1); sctx.stroke();
+      return;
+    }
+    var dx = x1 - x0, dy = y1 - y0;
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var nx = -dy / len, ny = dx / len;
+    // Soak halo — the wash bleeding into damp paper
+    sctx.save(); sctx.globalAlpha = 0.13; sctx.strokeStyle = col; sctx.lineWidth = w * 2.6;
+    sctx.beginPath(); sctx.moveTo(x0, y0); sctx.lineTo(x1, y1); sctx.stroke(); sctx.restore();
+    // Body
+    sctx.strokeStyle = col; sctx.lineWidth = w;
+    sctx.beginPath(); sctx.moveTo(x0, y0); sctx.lineTo(x1, y1); sctx.stroke();
+    // Edge pooling — pigment gathers dark along the rim as the wash dries
+    sctx.strokeStyle = shade(col, 0.78); sctx.lineWidth = Math.max(w * 0.28, 0.7);
+    var ox = nx * w * 0.42, oy = ny * w * 0.42;
+    sctx.beginPath();
+    sctx.moveTo(x0 + ox, y0 + oy); sctx.lineTo(x1 + ox, y1 + oy);
+    sctx.moveTo(x0 - ox, y0 - oy); sctx.lineTo(x1 - ox, y1 - oy);
+    sctx.stroke();
+    // Granulation — pigment particles settling into the paper tooth
+    if (Math.random() < 0.4) {
+      var t = Math.random();
+      sctx.save(); sctx.globalAlpha = 0.5; sctx.fillStyle = shade(col, 0.6);
+      sctx.beginPath();
+      sctx.arc(x0 + dx * t + nx * (Math.random() - 0.5) * w * 0.8,
+               y0 + dy * t + ny * (Math.random() - 0.5) * w * 0.8,
+               0.4 + Math.random() * 0.8, 0, Math.PI * 2);
+      sctx.fill(); sctx.restore();
+    }
+    // Wet-tip spatter trailing the brush; flicks throw more and further
+    if (Math.random() < Math.min(0.3, 0.04 + len * 0.01)) {
+      var nSpat = 1 + (Math.random() < 0.3 ? 1 : 0);
+      sctx.save(); sctx.globalAlpha = 0.85; sctx.fillStyle = col;
+      for (var si = 0; si < nSpat; si++) {
+        var back = 3 + Math.random() * 9;
+        sctx.beginPath();
+        sctx.arc(x0 - (dx / len) * back + nx * (Math.random() - 0.5) * w * 2.4,
+                 y0 - (dy / len) * back + ny * (Math.random() - 0.5) * w * 2.4,
+                 0.4 + Math.random() * 0.9, 0, Math.PI * 2);
+        sctx.fill();
+      }
+      sctx.restore();
+    }
+  }
+  function dot(x, y, r) {
+    if (!active) begin(col);
+    if (erasing) {
+      sctx.fillStyle = col;
+      sctx.beginPath(); sctx.arc(x, y, r * 1.2, 0, Math.PI * 2); sctx.fill();
+      return;
+    }
+    sctx.save(); sctx.globalAlpha = 0.13; sctx.fillStyle = col;
+    sctx.beginPath(); sctx.arc(x, y, r * 2.2, 0, Math.PI * 2); sctx.fill(); sctx.restore();
+    sctx.fillStyle = col;
+    sctx.beginPath(); sctx.arc(x, y, r, 0, Math.PI * 2); sctx.fill();
+    sctx.strokeStyle = shade(col, 0.78); sctx.lineWidth = 0.7;
+    sctx.beginPath(); sctx.arc(x, y, Math.max(r * 0.85, 0.6), 0, Math.PI * 2); sctx.stroke();
+  }
+  function refresh() {
+    if (!active) return;
+    ctx.save();
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(snap, 0, 0);
+    if (!erasing) { ctx.globalAlpha = 0.8; ctx.globalCompositeOperation = 'multiply'; }
+    ctx.drawImage(scratch, 0, 0);
+    ctx.restore();
+  }
+  function end() { if (!active) return; refresh(); active = false; }
+  function cancel() { active = false; }
+  return { begin: begin, seg: seg, dot: dot, refresh: refresh, end: end, cancel: cancel };
+};
+
 // ---------- FILM GRADE FOR THE 2D MINIGAMES ----------
 // The 3D composer cannot run on 2D canvas games, but the grade can:
 // vignette + grain overlays and a gentle contrast/saturation lift, applied
@@ -14834,6 +14917,34 @@ setInterval(function() {
     piG.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;' +
       'background:url(' + window.dssGetGrainURL() + ');opacity:0.055;mix-blend-mode:overlay;';
     pipeIntro.appendChild(piG);
+  }
+  // The body-function popups (drink, retch/piss, eat, liver): each is a card
+  // holding a small fixed-size animation canvas. Same wrap treatment as the
+  // minigames, with a gentler vignette scaled for the small canvas, and no
+  // margin on the wrapper so the canvas keeps its exact spot in the card.
+  var popupHosts = ['drink-popup-overlay', 'spew-popup-overlay', 'eat-overlay', 'liver-eat-overlay'];
+  for (var ph = 0; ph < popupHosts.length; ph++) {
+    var host = document.getElementById(popupHosts[ph]);
+    if (!host) continue;
+    var hostCanvases = host.getElementsByTagName('canvas');
+    for (var hc = 0; hc < hostCanvases.length; hc++) {
+      var pc = hostCanvases[hc];
+      if (pc.dataset.dssGraded) continue;
+      pc.dataset.dssGraded = '1';
+      pc.style.filter = 'contrast(1.06) saturate(1.06)';
+      var pWrap = document.createElement('div');
+      pWrap.style.cssText = 'position:relative;width:fit-content;';
+      pc.parentNode.insertBefore(pWrap, pc);
+      pWrap.appendChild(pc);
+      var pv = document.createElement('div');
+      pv.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:2;' +
+        'background:radial-gradient(ellipse at 50% 46%, transparent 58%, rgba(8,5,3,0.1) 84%, rgba(6,3,2,0.24) 100%);';
+      pWrap.appendChild(pv);
+      var pg = document.createElement('div');
+      pg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;' +
+        'background:url(' + window.dssGetGrainURL() + ');opacity:0.05;mix-blend-mode:overlay;';
+      pWrap.appendChild(pg);
+    }
   }
   for (var mi = 0; mi < window.dssMinigameCanvases.length; mi++) {
     var mc = document.getElementById(window.dssMinigameCanvases[mi]);
@@ -43502,6 +43613,7 @@ He looks at you like, painterly, he looked when you were his subject.
   var canvas = document.getElementById('napkin-canvas');
   if (!canvas) return;
   var ctx = canvas.getContext('2d');
+  var wc = window.dssWatercolourKit(canvas, ctx, '#f2e7c9');
   var W = canvas.width, H = canvas.height;
 
   // Deckle wobble computed once so Clear/Undo redraws keep the same edge
@@ -43683,35 +43795,11 @@ He looks at you like, painterly, he looked when you were his subject.
     lastX = p.x; lastY = p.y;
     currentStroke = { color: color, width: brushSize, points: [{x: p.x, y: p.y}] };
     strokes.push(currentStroke);
-    // Small dot on first click for single taps — sized to current brush
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(lastX, lastY, Math.max(brushSize / 2, 1), 0, Math.PI * 2);
-    ctx.fill();
+    // First touch opens the stroke's wash and lays a single wet dot
+    wc.begin(color);
+    wc.dot(lastX, lastY, Math.max(brushSize / 2, 1));
+    wc.refresh();
     updateButtonStates();
-  }
-  // One ink segment: felt-tip on soft paper. A faint wide halo soaks in
-  // under the solid core; the eraser gets no halo.
-  function inkSegment(x0, y0, x1, y1, col, w) {
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (col !== '#f2e7c9') {
-      ctx.save();
-      ctx.globalAlpha = 0.16;
-      ctx.strokeStyle = col;
-      ctx.lineWidth = w * 2.3;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.strokeStyle = col;
-    ctx.lineWidth = w;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
   }
   function draw(e) {
     if (!drawing) return;
@@ -43721,11 +43809,12 @@ He looks at you like, painterly, he looked when you were his subject.
     // stay light. The width rides with the pen, recorded per point.
     var dist = Math.sqrt((p.x - lastX) * (p.x - lastX) + (p.y - lastY) * (p.y - lastY));
     var w = brushSize * Math.max(0.75, Math.min(1.3, 1.25 - dist * 0.022));
-    inkSegment(lastX, lastY, p.x, p.y, color, w);
+    wc.seg(lastX, lastY, p.x, p.y, w);
+    wc.refresh();
     lastX = p.x; lastY = p.y;
     if (currentStroke) currentStroke.points.push({x: p.x, y: p.y, w: w});
   }
-  function stopDraw() { drawing = false; currentStroke = null; }
+  function stopDraw() { if (drawing) wc.end(); drawing = false; currentStroke = null; }
 
   function drawCleanNapkin() {
     drawNapkinBase();
@@ -43735,17 +43824,16 @@ He looks at you like, painterly, he looked when you were his subject.
     strokes.forEach(function(s){
       if (!s.points || s.points.length === 0) return;
       var w = s.width || 3.2;
+      wc.begin(s.color);
       if (s.points.length === 1) {
-        ctx.fillStyle = s.color;
-        ctx.beginPath();
-        ctx.arc(s.points[0].x, s.points[0].y, Math.max(w / 2, 1), 0, Math.PI * 2);
-        ctx.fill();
-        return;
+        wc.dot(s.points[0].x, s.points[0].y, Math.max(w / 2, 1));
+      } else {
+        for (var i = 1; i < s.points.length; i++) {
+          var p0 = s.points[i - 1], p1 = s.points[i];
+          wc.seg(p0.x, p0.y, p1.x, p1.y, p1.w || w);
+        }
       }
-      for (var i = 1; i < s.points.length; i++) {
-        var p0 = s.points[i - 1], p1 = s.points[i];
-        inkSegment(p0.x, p0.y, p1.x, p1.y, s.color, p1.w || w);
-      }
+      wc.end();
     });
   }
 
@@ -43753,37 +43841,41 @@ He looks at you like, painterly, he looked when you were his subject.
   // stroke, as though the evening replays your hand making it.
   function animateReplay(done) {
     var segs = [];
-    strokes.forEach(function(s){
+    strokes.forEach(function(s, si){
       if (!s.points || s.points.length === 0) return;
       var w = s.width || 3.2;
       if (s.points.length === 1) {
-        segs.push({ dot: true, x: s.points[0].x, y: s.points[0].y, r: Math.max(w / 2, 1), col: s.color });
+        segs.push({ dot: true, x: s.points[0].x, y: s.points[0].y, r: Math.max(w / 2, 1), col: s.color, sIdx: si });
         return;
       }
       for (var i = 1; i < s.points.length; i++) {
         var p0 = s.points[i - 1], p1 = s.points[i];
-        segs.push({ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, col: s.color, w: p1.w || w });
+        segs.push({ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, col: s.color, w: p1.w || w, sIdx: si });
       }
     });
     if (!segs.length) { done(); return; }
     var total = Math.max(900, Math.min(2200, segs.length * 6));
     var perFrame = Math.max(1, Math.ceil(segs.length / (total / 16.7)));
     var idx = 0;
+    var revealStroke = -1;
     (function step() {
       if (!document.body.contains(canvas)) return;
       for (var n = 0; n < perFrame && idx < segs.length; n++, idx++) {
         var g = segs[idx];
+        if (g.sIdx !== revealStroke) {
+          wc.end();
+          wc.begin(g.col);
+          revealStroke = g.sIdx;
+        }
         if (g.dot) {
-          ctx.fillStyle = g.col;
-          ctx.beginPath();
-          ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
-          ctx.fill();
+          wc.dot(g.x, g.y, g.r);
         } else {
-          inkSegment(g.x0, g.y0, g.x1, g.y1, g.col, g.w);
+          wc.seg(g.x0, g.y0, g.x1, g.y1, g.w);
         }
       }
+      wc.refresh();
       if (idx < segs.length) requestAnimationFrame(step);
-      else done();
+      else { wc.end(); done(); }
     })();
   }
 
@@ -43809,6 +43901,7 @@ He looks at you like, painterly, he looked when you were his subject.
 
   document.getElementById('napkin-clear').addEventListener('click', function(){
     clearStrokes();
+    wc.cancel();
     drawBackground();
     updateButtonStates();
   });
@@ -43816,6 +43909,7 @@ He looks at you like, painterly, he looked when you were his subject.
   document.getElementById('napkin-undo').addEventListener('click', function(){
     if (strokes.length === 0) return;
     strokes.pop();
+    wc.cancel();
     drawBackground();
     replayStrokes();
     updateButtonStates();

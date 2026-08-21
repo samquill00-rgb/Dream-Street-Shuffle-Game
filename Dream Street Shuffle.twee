@@ -46050,6 +46050,7 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 .nazca-race-stage { position: relative; max-width: 720px; margin: 1.6em auto; }
 #nazca-race-canvas { width: 100%; height: auto; display: block; border: 1px solid rgba(212,174,106,0.25); background: #d9c6a0; }
 #nazca-race-map { position: absolute; top: 10px; right: 10px; width: 150px; height: 100px; pointer-events: none; }
+#nazca-race-item { position: absolute; top: 10px; left: 10px; width: 56px; height: 56px; pointer-events: none; }
 #nazca-race-count { position: absolute; top: 36%; left: 0; right: 0; text-align: center; font-family: 'Playfair Display', Georgia, serif; font-size: 54px; color: rgba(240,225,190,0.95); text-shadow: 0 2px 12px rgba(0,0,0,0.55); opacity: 0; transition: opacity 0.25s ease; pointer-events: none; letter-spacing: 0.1em; }
 #nazca-race-hud { text-align: center; font-family: 'Crimson Text', Georgia, serif; font-size: 0.85em; letter-spacing: 0.12em; color: rgba(200,180,140,0.75); margin-top: 0.6em; }
 
@@ -54952,9 +54953,10 @@ A voice from somewhere says, 'Two laps. The line is the line.'
 <div class="nazca-race-frame">
 <canvas id="nazca-race-canvas" width="720" height="450"></canvas>
 <canvas id="nazca-race-map" width="150" height="100"></canvas>
+<canvas id="nazca-race-item" width="56" height="56"></canvas>
 <div id="nazca-race-count"></div>
 </div>
-<div id="nazca-race-hud">Click the sand to start. Hold ↑ to accelerate. Steer with ← and →. Stay on the line.</div>
+<div id="nazca-race-hud">Click the sand to start. Hold ↑ to accelerate. Steer with ← and →. Space throws what you carry. Stay on the line.</div>
 </div>
 
 <span id="nz-race-win" style="display:none;">(link: "Cross the line")[(set: $nazcaRaceWon to true)(go-to: "The Centre — Nazca")]</span>
@@ -55058,10 +55060,11 @@ A voice from somewhere says, 'Two laps. The line is the line.'
   function txy(y){ return (y - MINY)/WH * TH; }
 
   var renderer, composer, scene, camera, player, opp, sunLight;
-  var playerBody, playerWheels = [], oppWheels = [];
+  var playerBody, oppBody, playerWheels = [], oppWheels = [];
   var dustPool = [], wakePool = [], wakeIdx = 0, lastWakeX = 0, lastWakeY = 0;
   var condor, devils = [];
   var mapCtx = document.getElementById('nazca-race-map').getContext('2d');
+  var itemCtx = document.getElementById('nazca-race-item').getContext('2d');
   var hud = document.getElementById('nazca-race-hud');
   var countEl = document.getElementById('nazca-race-count');
   var animId = null, disposed = false;
@@ -55079,6 +55082,13 @@ A voice from somewhere says, 'Two laps. The line is the line.'
   var playerLapsT = 0, lastT = 0, oppT = -0.04, oppLapsT = -0.04;
   var oppSpeedT = 0.00054;    // ~31s/lap on the long circuit (player flat-out ~23s); eases in corners
   var spinUntil = 0, spinFrom = 0, spinning = false;
+  var drifting = false, driftMs = 0, boost = 0, endFlare = 0;
+  var patches = [], suckPool = [], suckIdx = 0, startLights = [];
+  var eng = null;
+  var item = null, itemBoxes = [], slicks = [], stones = [], condorAtk = null;
+  var oppStun = 0, lastLead = null, finalLapNoted = false, driftStage = 0;
+  var oppDropAt = 0;
+  var slickMat = null, stoneAmmoMat = null;
   var lastTime = null, offJudder = 0;
 
   (function(){
@@ -55387,7 +55397,7 @@ A voice from somewhere says, 'Two laps. The line is the line.'
         bcx.fillStyle = 'rgba(90,60,34,0.9)';
         bcx.font = 'bold 30px Georgia, serif';
         bcx.textAlign = 'center'; bcx.textBaseline = 'middle';
-        bcx.fillText('N A Z C A', 128, 25);
+        bcx.fillText('N A Z C A R', 128, 25);
         for (var bd2 = 0; bd2 < 140; bd2++){ bcx.fillStyle = 'rgba(120,90,60,'+(0.05+Math.random()*0.1)+')'; bcx.fillRect(Math.random()*256, Math.random()*48, 2, 2); }
         var banner = new THREE.Mesh(new THREE.PlaneGeometry(hw*1.7, 12),
           new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(bc), side: THREE.DoubleSide, roughness: 0.9 }));
@@ -55395,6 +55405,13 @@ A voice from somewhere says, 'Two laps. The line is the line.'
         banner.rotation.y = Math.atan2(py, px) + Math.PI/2;
         banner.userData.isBanner = true;
         grp.add(banner);
+        for (var sl2 = 0; sl2 < 3; sl2++){
+          var lamp = new THREE.Mesh(new THREE.SphereGeometry(2.1, 10, 8),
+            new THREE.MeshStandardMaterial({ color: 0x3a1410, roughness: 0.4, emissive: 0x200604, emissiveIntensity: 0.5 }));
+          lamp.position.set(px*((sl2-1)*11), 41.5, py*((sl2-1)*11));
+          grp.add(lamp);
+          startLights.push(lamp);
+        }
       }
       grp.position.set(p.x, 0, p.y);
       scene.add(grp);
@@ -55443,6 +55460,134 @@ A voice from somewhere says, 'Two laps. The line is the line.'
         scene.add(tip);
       }
     }
+
+    // ---- WHITE SAND: gypsum drifts blown onto the straights ----
+    (function(){
+      var lastI = -999;
+      for (var i5 = 0; i5 < N; i5++){
+        if (CURVE[i5] < 0.012 && (i5 - lastI) >= 14){
+          lastI = i5;
+          var dd = cdir(i5/N), pp2 = CL[i5];
+          var off = ((patches.length % 3) - 1) * TRACK_WIDTH*0.22;
+          patches.push({ x: pp2.x - dd.y*off, y: pp2.y + dd.x*off, taken: false, grp: null });
+        }
+      }
+      var duneMat = new THREE.MeshStandardMaterial({ color: 0xf2ead6, roughness: 0.85, emissive: 0x555044, emissiveIntensity: 0.12 });
+      var decalC = document.createElement('canvas'); decalC.width = 64; decalC.height = 64;
+      var dcx = decalC.getContext('2d');
+      var dcg = dcx.createRadialGradient(32,32,3,32,32,30);
+      dcg.addColorStop(0, 'rgba(244,238,220,0.7)');
+      dcg.addColorStop(0.6, 'rgba(240,232,210,0.28)');
+      dcg.addColorStop(1, 'rgba(0,0,0,0)');
+      dcx.fillStyle = dcg; dcx.fillRect(0,0,64,64);
+      var decalTex = new THREE.CanvasTexture(decalC);
+      for (var i6 = 0; i6 < patches.length; i6++){
+        var grp2 = new THREE.Group();
+        var decal = new THREE.Mesh(new THREE.PlaneGeometry(26, 26),
+          new THREE.MeshBasicMaterial({ map: decalTex, transparent: true, depthWrite: false }));
+        decal.rotation.x = -Math.PI/2; decal.position.y = 0.28;
+        grp2.add(decal);
+        for (var dn = 0; dn < 3; dn++){
+          var dune = new THREE.Mesh(new THREE.ConeGeometry(3.4 + Math.random()*2.6, 2.2 + Math.random()*1.6, 7), duneMat);
+          dune.position.set((Math.random()-0.5)*10, 1.1, (Math.random()-0.5)*10);
+          grp2.add(dune);
+        }
+        grp2.position.set(patches[i6].x, 0, patches[i6].y);
+        scene.add(grp2);
+        patches[i6].grp = grp2;
+      }
+    })();
+
+    // ---- ITEM BOXES: spinning gold octahedra, Mario rows of three ----
+    (function(){
+      var rows = [0.12, 0.5, 0.82];
+      var boxMat = new THREE.MeshStandardMaterial({ color: 0xd4ae6a, roughness: 0.3, metalness: 0.7, emissive: 0x8a6a2a, emissiveIntensity: 0.55 });
+      for (var r5 = 0; r5 < rows.length; r5++){
+        var bd5 = cdir(rows[r5]), bp5 = cpt(rows[r5]);
+        for (var c5 = -1; c5 <= 1; c5++){
+          var bx5 = bp5.x - bd5.y*(c5*TRACK_WIDTH*0.27), bz5 = bp5.y + bd5.x*(c5*TRACK_WIDTH*0.27);
+          var bm5 = new THREE.Mesh(new THREE.OctahedronGeometry(6), boxMat);
+          bm5.position.set(bx5, 8, bz5);
+          bm5.castShadow = true;
+          scene.add(bm5);
+          itemBoxes.push({ x: bx5, y: bz5, mesh: bm5, taken: false, respawnAt: 0, ph: Math.random()*6 });
+        }
+      }
+    })();
+    slickMat = new THREE.MeshStandardMaterial({ color: 0x14100c, roughness: 0.15, metalness: 0.5 });
+    stoneAmmoMat = new THREE.MeshStandardMaterial({ color: 0x4c4238, roughness: 0.8 });
+
+    // ---- suck + spark particle pool ----
+    var whiteC = document.createElement('canvas'); whiteC.width = 32; whiteC.height = 32;
+    var wcx2 = whiteC.getContext('2d');
+    var wg3 = wcx2.createRadialGradient(16,16,2,16,16,15);
+    wg3.addColorStop(0, 'rgba(248,242,226,0.9)'); wg3.addColorStop(1, 'rgba(0,0,0,0)');
+    wcx2.fillStyle = wg3; wcx2.fillRect(0,0,32,32);
+    var whiteTex = new THREE.CanvasTexture(whiteC);
+    var sparkC = document.createElement('canvas'); sparkC.width = 32; sparkC.height = 32;
+    var scx2 = sparkC.getContext('2d');
+    var sg2 = scx2.createRadialGradient(16,16,1,16,16,15);
+    sg2.addColorStop(0, 'rgba(255,224,150,1)'); sg2.addColorStop(0.4, 'rgba(240,190,90,0.5)'); sg2.addColorStop(1, 'rgba(0,0,0,0)');
+    scx2.fillStyle = sg2; scx2.fillRect(0,0,32,32);
+    var sparkTex = new THREE.CanvasTexture(sparkC);
+    for (var sp5 = 0; sp5 < 26; sp5++){
+      var ss = new THREE.Sprite(new THREE.SpriteMaterial({ map: whiteTex, transparent: true, opacity: 0, depthWrite: false }));
+      ss.userData = { mode: 0 };
+      scene.add(ss); suckPool.push(ss);
+    }
+    window._nzSpawnSuck = function(x, z){
+      var s6 = suckPool[suckIdx = (suckIdx+1) % suckPool.length];
+      s6.material.map = whiteTex; s6.material.blending = THREE.NormalBlending;
+      if (s6.material.color && s6.material.color.setHex) s6.material.color.setHex(0xffffff);
+      s6.position.set(x + (Math.random()-0.5)*16, 1 + Math.random()*3, z + (Math.random()-0.5)*16);
+      s6.userData = { mode: 1, born: performance.now() };
+      var sc2 = 2 + Math.random()*2; s6.scale.set(sc2, sc2, 1);
+    };
+    window._nzSpawnSpark = function(x, z, hex){
+      var s7 = suckPool[suckIdx = (suckIdx+1) % suckPool.length];
+      s7.material.map = sparkTex; s7.material.blending = THREE.AdditiveBlending;
+      if (s7.material.color && s7.material.color.setHex) s7.material.color.setHex(hex || 0xffe096);
+      s7.position.set(x + (Math.random()-0.5)*8, 1.5 + Math.random()*3, z + (Math.random()-0.5)*8);
+      s7.userData = { mode: 2, born: performance.now(), vx: (Math.random()-0.5)*1.6, vy: 0.6+Math.random(), vz: (Math.random()-0.5)*1.6 };
+      var sc3 = 1.2 + Math.random()*1.4; s7.scale.set(sc3, sc3, 1);
+    };
+
+    // ---- engine: sawtooth pair through a lowpass; honours the mute ----
+    try {
+      var actx = new (window.AudioContext || window.webkitAudioContext)();
+      var eGain = actx.createGain(); eGain.gain.value = 0;
+      var eFilt = actx.createBiquadFilter(); eFilt.type = 'lowpass'; eFilt.frequency.value = 420; eFilt.Q.value = 2.2;
+      var o1 = actx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 52;
+      var o2 = actx.createOscillator(); o2.type = 'square'; o2.frequency.value = 26;
+      var og2 = actx.createGain(); og2.gain.value = 0.35;
+      o1.connect(eFilt); o2.connect(og2); og2.connect(eFilt);
+      eFilt.connect(eGain); eGain.connect(actx.destination);
+      o1.start(); o2.start();
+      eng = {
+        resume: function(){ try { actx.resume(); } catch(e){} },
+        update: function(sp, drift){
+          var muted = (window.dssAudio && window.dssAudio.isMuted && window.dssAudio.isMuted());
+          var tgt = (muted || !racing || finished) ? 0 : (0.016 + 0.03*(sp/4.6));
+          eGain.gain.setTargetAtTime(tgt, actx.currentTime, 0.08);
+          var f = 46 + 130*(sp/4.6) + (drift ? 14 : 0);
+          o1.frequency.setTargetAtTime(f, actx.currentTime, 0.06);
+          o2.frequency.setTargetAtTime(f/2, actx.currentTime, 0.06);
+          eFilt.frequency.setTargetAtTime(300 + 900*(sp/4.6), actx.currentTime, 0.08);
+        },
+        blip: function(){
+          var muted = (window.dssAudio && window.dssAudio.isMuted && window.dssAudio.isMuted());
+          if (muted) return;
+          var b2 = actx.createOscillator(), bg3 = actx.createGain();
+          b2.type = 'sine'; b2.frequency.value = 640;
+          try { b2.frequency.exponentialRampToValueAtTime(980, actx.currentTime + 0.09); } catch(e){}
+          bg3.gain.value = 0.0; bg3.gain.setTargetAtTime(0.05, actx.currentTime, 0.01);
+          bg3.gain.setTargetAtTime(0, actx.currentTime + 0.1, 0.05);
+          b2.connect(bg3); bg3.connect(actx.destination);
+          b2.start(); b2.stop(actx.currentTime + 0.3);
+        },
+        kill: function(){ try { o1.stop(); o2.stop(); actx.close(); } catch(e){} }
+      };
+    } catch(e){ eng = null; }
 
     // ---- cars: real bodywork ----
     function buildCar(bodyColor, glassColor, roundel){
@@ -55514,7 +55659,7 @@ A voice from somewhere says, 'Two laps. The line is the line.'
     var pc = buildCar(0xa8402a, 0x20242a, true);
     player = pc.grp; playerBody = pc.body; playerWheels = pc.wheels;
     var oc = buildCar(0x171512, 0x090808, false);
-    opp = oc.grp; oppWheels = oc.wheels;
+    opp = oc.grp; oppBody = oc.body; oppWheels = oc.wheels;
     scene.add(player); scene.add(opp);
 
     // ---- dust ----
@@ -55608,9 +55753,27 @@ A voice from somewhere says, 'Two laps. The line is the line.'
     hud.textContent = 'LAP ' + lapNum + ' OF ' + TOTAL_LAPS + '   ·   YOU ARE RUNNING ' + lead + '.';
   }
 
+  function useItem(){
+    if (!racing || finished || spinning || !item) return;
+    var used = item; item = null;
+    if (used === 'leaf'){
+      boost = Math.min(2, boost + 1.3);
+      if (window._nzSpawnSpark) for (var uk = 0; uk < 14; uk++) window._nzSpawnSpark(camX + Math.sin(moveAngle)*15, camY - Math.cos(moveAngle)*15, 0x9ae08a);
+    } else if (used === 'stone'){
+      stones.push({ x: camX - Math.sin(moveAngle)*18, y: camY + Math.cos(moveAngle)*18, a: moveAngle, life: 3500, mesh: null });
+    } else if (used === 'slick'){
+      slicks.push({ x: camX + Math.sin(moveAngle)*20, y: camY - Math.cos(moveAngle)*20, armAt: performance.now() + 500, mesh: null });
+      if (slicks.length > 4){ var old2 = slicks.shift(); if (old2.mesh) old2.mesh.visible = false; }
+    } else if (used === 'condor'){
+      condorAtk = { t0: performance.now(), x: camX, y: camY };
+    }
+    if (eng) eng.blip();
+  }
+
   function startCountdown(){
     if (raceStarted || countdownAt) return;
     countdownAt = performance.now();
+    if (eng) eng.resume();
     var seq = ['3','2','1','GO'];
     (function tick(i){
       if (disposed) return;
@@ -55618,7 +55781,20 @@ A voice from somewhere says, 'Two laps. The line is the line.'
         countEl.textContent = seq[i];
         countEl.style.opacity = '1';
         setTimeout(function(){ countEl.style.opacity = '0'; }, 700);
-        if (i === seq.length - 1){ raceStarted = true; racing = true; lastTime = null; updateHud(); }
+        if (i < 3 && startLights[i]){
+          startLights[i].material.color.setHex(0xcc6a1a);
+          startLights[i].material.emissive.setHex(0xff9a20);
+          startLights[i].material.emissiveIntensity = 1.6;
+        }
+        if (i === seq.length - 1){
+          raceStarted = true; racing = true; lastTime = null; updateHud();
+          for (var gl2 = 0; gl2 < startLights.length; gl2++){
+            startLights[gl2].material.color.setHex(0x1a8838);
+            startLights[gl2].material.emissive.setHex(0x22cc55);
+            startLights[gl2].material.emissiveIntensity = 1.8;
+          }
+          setTimeout(function(){ for (var gd = 0; gd < startLights.length; gd++){ startLights[gd].material.emissiveIntensity = 0.3; } }, 2600);
+        }
         setTimeout(function(){ tick(i+1); }, 900);
       }
     })(0);
@@ -55652,13 +55828,15 @@ A voice from somewhere says, 'Two laps. The line is the line.'
         camAngle = spinFrom + 3*Math.PI * (1 - Math.pow(1-pr, 2));
       }
     } else {
-      var accelInput = keys['ArrowUp'] || keys['w'] || keys[' '] || touching;
+      var accelInput = keys['ArrowUp'] || keys['w'] || touching;
       var brakeInput = keys['ArrowDown'] || keys['s'];
       var leftInput  = keys['ArrowLeft'] || keys['a'] || touchSteer < 0;
       var rightInput = keys['ArrowRight'] || keys['d'] || touchSteer > 0;
 
       var on = isOnTrack(camX, camY);
-      var maxSp = on ? maxSpeedOn : maxSpeedOff;
+      if (boost > 0) boost = Math.max(0, boost - 0.012*dt);
+      var maxSp = (on ? maxSpeedOn : maxSpeedOff) + 1.35*Math.min(1, boost);
+      if (boost > 0.05) speed = Math.min(speed + 0.09*dt, maxSp);
       if (accelInput) speed = Math.min(speed + accelRate*dt, Math.max(maxSp, speed));
       else            speed = Math.max(speed - decelRate*dt, 0);
       if (brakeInput) speed = Math.max(speed - brakeRate*dt, 0);
@@ -55681,8 +55859,27 @@ A voice from somewhere says, 'Two laps. The line is the line.'
       }
       camAngle += steerVelocity*dt;
 
-      // gentle drift: motion heading lags the nose a touch
-      var lagK = 1 - Math.pow(0.84, dt);
+      // DRIFT: hold a hard turn at speed and the tail steps out; hold
+      // the slide past ~0.85s and come off the wheel for a gold-spark
+      // turbo. No scrub in the slide — drifting IS the fast way round.
+      var wantDrift = (speed/maxSpeedOn) > 0.6 && Math.abs(steerVelocity) > capV*0.8;
+      if (wantDrift){
+        drifting = true; driftMs += dt*16.67;
+        driftStage = driftMs > 1800 ? 2 : (driftMs > 850 ? 1 : 0);
+        if (driftStage > 0 && Math.random() < 0.5 && window._nzSpawnSpark){
+          window._nzSpawnSpark(camX + Math.sin(moveAngle)*15, camY - Math.cos(moveAngle)*15,
+            driftStage === 2 ? 0xffc46a : 0x9adcf0);
+        }
+      } else {
+        if (drifting && driftStage > 0){
+          boost = Math.min(2, boost + (driftStage === 2 ? 1.2 : 0.6));
+          if (window._nzSpawnSpark) for (var sk = 0; sk < (driftStage === 2 ? 16 : 10); sk++)
+            window._nzSpawnSpark(camX + Math.sin(moveAngle)*15, camY - Math.cos(moveAngle)*15,
+              driftStage === 2 ? 0xffc46a : 0x9adcf0);
+        }
+        drifting = false; driftMs = 0; driftStage = 0;
+      }
+      var lagK = 1 - Math.pow(drifting ? 0.945 : 0.84, dt);
       var dAng = camAngle - moveAngle;
       while (dAng >  Math.PI) dAng -= Math.PI*2;
       while (dAng < -Math.PI) dAng += Math.PI*2;
@@ -55694,7 +55891,7 @@ A voice from somewhere says, 'Two laps. The line is the line.'
       var offC = closestT(camX, camY);
       if (offC.d > TRACK_WIDTH*1.6*wfAt(offC.t)) triggerSpinout();
 
-      if (speed > 0.7 && Math.random() < (on ? 0.4 : 0.9)){
+      if (speed > 0.7 && Math.random() < (drifting ? 0.95 : (on ? 0.4 : 0.9))){
         window._nzSpawnDust(camX + Math.sin(moveAngle)*14, camY - Math.cos(moveAngle)*14, on ? 0.35 : 0.7);
       }
 
@@ -55708,21 +55905,107 @@ A voice from somewhere says, 'Two laps. The line is the line.'
         wkm2.userData.on = true;
         wkm2.userData.born = now;
       }
+
+      // white sand: hoover the gypsum drifts for a boost
+      for (var pc2 = 0; pc2 < patches.length; pc2++){
+        var pt2 = patches[pc2];
+        if (pt2.taken) continue;
+        var pdx = pt2.x - camX, pdy = pt2.y - camY;
+        if (pdx*pdx + pdy*pdy < 620){
+          pt2.taken = true;
+          if (pt2.grp) pt2.grp.visible = false;
+          boost = Math.min(1.5, boost + 0.6);
+          if (window._nzSpawnSuck) for (var su = 0; su < 9; su++) window._nzSpawnSuck(pt2.x, pt2.y);
+          if (eng) eng.blip();
+        }
+      }
+
+      // item boxes: you carry ONE thing at a time
+      for (var ib2 = 0; ib2 < itemBoxes.length; ib2++){
+        var box3 = itemBoxes[ib2];
+        if (box3.taken || item) continue;
+        var bdx = box3.x - camX, bdy = box3.y - camY;
+        if (bdx*bdx + bdy*bdy < 420){
+          box3.taken = true; box3.respawnAt = now + 5000;
+          box3.mesh.visible = false;
+          var roll2 = Math.random();
+          item = roll2 < 0.3 ? 'leaf' : (roll2 < 0.55 ? 'stone' : (roll2 < 0.8 ? 'slick' : 'condor'));
+          if (eng) eng.blip();
+        }
+      }
     }
 
     var cr = closestT(camX, camY);
     var dT = cr.t - lastT;
     if (dT >  0.5) dT -= 1;
     if (dT < -0.5) dT += 1;
-    if (raceStarted) playerLapsT += dT;
+    if (raceStarted){
+      var lapWas = Math.floor(Math.max(0, playerLapsT));
+      playerLapsT += dT;
+      if (Math.floor(Math.max(0, playerLapsT)) > lapWas){
+        for (var pr2 = 0; pr2 < patches.length; pr2++){ patches[pr2].taken = false; if (patches[pr2].grp) patches[pr2].grp.visible = true; }
+      }
+    }
     lastT = cr.t;
+
+    // hazards in flight: stones fly straight, slicks wait, the condor homes
+    var opNow = cpt(oppT), opDirH = cdir(oppT);
+    var opX = opNow.x - opDirH.y*18, opY = opNow.y + opDirH.x*18;
+    for (var st3 = stones.length - 1; st3 >= 0; st3--){
+      var stn = stones[st3];
+      stn.life -= dt*16.67;
+      stn.x += -Math.sin(stn.a)*6.2*dt; stn.y += Math.cos(stn.a)*6.2*dt;
+      var sdx = stn.x - opX, sdy = stn.y - opY;
+      if (sdx*sdx + sdy*sdy < 420){
+        oppStun = 1300; stn.life = 0;
+        if (window._nzSpawnSpark) for (var hk = 0; hk < 10; hk++) window._nzSpawnSpark(opX, opY, 0xffe096);
+      }
+      if (stn.life <= 0){ if (stn.mesh) stn.mesh.visible = false; stones.splice(st3, 1); }
+    }
+    for (var sl3 = slicks.length - 1; sl3 >= 0; sl3--){
+      var slk = slicks[sl3];
+      if (now < slk.armAt) continue;
+      var odx2 = slk.x - opX, ody2 = slk.y - opY;
+      if (odx2*odx2 + ody2*ody2 < 300){ oppStun = 1300; if (slk.mesh) slk.mesh.visible = false; slicks.splice(sl3, 1); continue; }
+      var pdx2 = slk.x - camX, pdy2 = slk.y - camY;
+      if (!spinning && racing && pdx2*pdx2 + pdy2*pdy2 < 260){ if (slk.mesh) slk.mesh.visible = false; slicks.splice(sl3, 1); triggerSpinout(); }
+    }
+    if (condorAtk && (now - condorAtk.t0) >= 2200){
+      oppStun = 1500; condorAtk = null;
+      if (window._nzSpawnSpark) for (var ck = 0; ck < 12; ck++) window._nzSpawnSpark(opX, opY, 0x9adcf0);
+    }
+
+    // the black car plays the game too: when it leads, it sometimes
+    // leaves a slick on the line behind it (your line)
+    if (racing && !finished && now > oppDropAt){
+      oppDropAt = now + 20000 + Math.random()*14000;
+      if (oppLapsT > playerLapsT){
+        slicks.push({ x: opX + Math.sin(Math.atan2(-opDirH.x, opDirH.y))*26, y: opY - Math.cos(Math.atan2(-opDirH.x, opDirH.y))*26, armAt: now + 300, mesh: null });
+        if (slicks.length > 5){ var old3 = slicks.shift(); if (old3.mesh) old3.mesh.visible = false; }
+      }
+    }
 
     var oi = Math.floor(((oppT % 1)+1)%1 * N) % N;
     var oppEase = 1 - Math.min(0.34, CURVE[oi]*3.2);
-    var od = oppSpeedT * oppEase * dt;
+    // Mario rubber band: the black car hustles when behind, coasts when ahead
+    var gap2 = playerLapsT - oppLapsT;
+    var band = Math.max(0.82, Math.min(1.2, 1 + gap2*0.55));
+    var od = oppSpeedT * oppEase * band * dt;
+    if (oppStun > 0){ oppStun -= dt*16.67; od = 0; }
     oppT += od; oppLapsT += od;
 
     updateHud();
+
+    var leadNow = playerLapsT >= oppLapsT;
+    if (lastLead !== null && leadNow !== lastLead && racing && eng) eng.blip();
+    lastLead = leadNow;
+    if (!finalLapNoted && playerLapsT > 0.9 && Math.floor(Math.max(0, playerLapsT)) === TOTAL_LAPS - 1){
+      finalLapNoted = true;
+      countEl.textContent = 'FINAL LAP';
+      countEl.style.opacity = '1';
+      setTimeout(function(){ countEl.style.opacity = '0'; }, 1400);
+      if (eng){ eng.blip(); setTimeout(function(){ if (eng) eng.blip(); }, 180); }
+    }
 
     if (playerLapsT >= TOTAL_LAPS){ endRace(true); }
     else if (oppLapsT >= TOTAL_LAPS){ endRace(false); }
@@ -55734,6 +56017,7 @@ A voice from somewhere says, 'Two laps. The line is the line.'
     countEl.style.opacity = '1';
     countEl.style.fontSize = '26px';
     if (hud) hud.textContent = won ? 'The line is the line.' : 'The line did not mind either way.';
+    if (won) endFlare = performance.now();
     var span = document.getElementById(won ? 'nz-race-win' : 'nz-race-lose');
     if (span) span.style.display = 'block';
     if (window.dssAudio && window.dssAudio.loreUnravel && won) window.dssAudio.loreUnravel();
@@ -55751,8 +56035,9 @@ A voice from somewhere says, 'Two laps. The line is the line.'
 
     // player car: position, nose, body roll + squat, wheel spin
     player.position.set(camX, 0, camY);
-    player.rotation.y = -camAngle;
-    playerBody.rotation.z = steerVelocity*5.2;
+    var slide = camAngle - moveAngle;
+    player.rotation.y = -(camAngle + slide*0.5);
+    playerBody.rotation.z = steerVelocity*(drifting ? 8.5 : 5.2);
     playerBody.rotation.x = -speed*0.008 + Math.sin(t*37)*0.004*offJudder;
     playerBody.position.y = Math.sin(t*41)*0.35*offJudder;
     playerWheelSpin += speed*0.32;
@@ -55763,6 +56048,9 @@ A voice from somewhere says, 'Two laps. The line is the line.'
     var oppX = op.x - odr.y*18, oppZ = op.y + odr.x*18;
     opp.position.set(oppX, 0, oppZ);
     opp.rotation.y = -(Math.atan2(-odr.x, odr.y));
+    var od2 = cdir(oppT + 2.5/N);
+    var crossZ = odr.x*od2.y - odr.y*od2.x;
+    if (oppBody) oppBody.rotation.z = Math.max(-0.12, Math.min(0.12, crossZ*26));
     for (var ow = 0; ow < oppWheels.length; ow++) oppWheels[ow].rotation.x += 0.55;
 
     for (var i = 0; i < dustPool.length; i++){
@@ -55775,12 +56063,74 @@ A voice from somewhere says, 'Two laps. The line is the line.'
       } else d5.material.opacity = 0;
     }
 
+    // boost exhaust sparks
+    if (boost > 0.3 && Math.random() < 0.3 && window._nzSpawnSpark)
+      window._nzSpawnSpark(camX + Math.sin(moveAngle)*16, camY - Math.cos(moveAngle)*16, 0xffd27a);
+
+    // item boxes spin, bob, respawn
+    for (var ib3 = 0; ib3 < itemBoxes.length; ib3++){
+      var box4 = itemBoxes[ib3];
+      if (box4.taken && now >= box4.respawnAt){ box4.taken = false; box4.mesh.visible = true; }
+      if (!box4.taken){
+        box4.mesh.rotation.y += 0.04;
+        box4.mesh.rotation.x += 0.017;
+        box4.mesh.position.y = 8 + Math.sin(t*2 + box4.ph)*1.6;
+      }
+    }
+    // hazard meshes (lazy) + condor swoop + stun wobble
+    for (var st4 = 0; st4 < stones.length; st4++){
+      var stn2 = stones[st4];
+      if (!stn2.mesh){ stn2.mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(4), stoneAmmoMat); scene.add(stn2.mesh); }
+      stn2.mesh.position.set(stn2.x, 3.4, stn2.y);
+      stn2.mesh.rotation.x += 0.3; stn2.mesh.rotation.z += 0.22;
+    }
+    for (var sl4 = 0; sl4 < slicks.length; sl4++){
+      var slk2 = slicks[sl4];
+      if (!slk2.mesh){
+        slk2.mesh = new THREE.Mesh(new THREE.CircleGeometry(9, 14), slickMat);
+        slk2.mesh.rotation.x = -Math.PI/2; slk2.mesh.position.set(slk2.x, 0.34, slk2.y);
+        scene.add(slk2.mesh);
+      }
+    }
+    if (condorAtk && condor){
+      var cpr = Math.min(1, (now - condorAtk.t0)/2200);
+      var opP2 = cpt(oppT), opD2 = cdir(oppT);
+      condor.position.x = condorAtk.x + ((opP2.x - opD2.y*18) - condorAtk.x)*cpr;
+      condor.position.z = condorAtk.y + ((opP2.y + opD2.x*18) - condorAtk.y)*cpr;
+      condor.material.opacity = 0.85;
+      condor.scale.setScalar(1 + 0.3*Math.sin(cpr*20));
+    }
+    if (oppStun > 0 && oppBody){ oppBody.rotation.z = Math.sin(t*30)*0.2; }
+
+    // suck + spark particles
+    for (var sp6 = 0; sp6 < suckPool.length; sp6++){
+      var s8 = suckPool[sp6], sud = s8.userData;
+      if (!sud.mode) continue;
+      var age2 = (now - sud.born)/1000;
+      if (sud.mode === 1){
+        if (age2 > 0.5){ sud.mode = 0; s8.material.opacity = 0; continue; }
+        var k2 = age2/0.5;
+        var tx2 = camX + Math.sin(moveAngle)*10, tz2 = camY - Math.cos(moveAngle)*10;
+        s8.position.x += (tx2 - s8.position.x) * (0.18 + 0.5*k2);
+        s8.position.z += (tz2 - s8.position.z) * (0.18 + 0.5*k2);
+        s8.position.y = Math.max(0.6, s8.position.y - 0.08);
+        s8.material.opacity = 0.8*(1-k2) + 0.1;
+        s8.scale.multiplyScalar(0.97);
+      } else {
+        if (age2 > 0.7){ sud.mode = 0; s8.material.opacity = 0; continue; }
+        s8.position.x += sud.vx; s8.position.y += sud.vy; s8.position.z += sud.vz;
+        sud.vy -= 0.09;
+        s8.material.opacity = 0.9*(1 - age2/0.7);
+      }
+    }
+
     // wake: settle from bright to a steady ember
     for (var wq2 = 0; wq2 < wakePool.length; wq2++){
       var wk3 = wakePool[wq2];
       if (wk3.userData.on){
         var age = (now - wk3.userData.born)/1000;
         var lvl = age < 1.2 ? (0.5 - 0.28*(age/1.2)) : 0.22;
+        if (endFlare){ var fa = (now - endFlare)/1000; lvl = 0.85*Math.exp(-fa/2.2) + 0.2; }
         wk3.material.opacity = lvl * (0.85 + 0.15*Math.sin(t*1.4 + wq2));
       }
     }
@@ -55824,14 +56174,16 @@ A voice from somewhere says, 'Two laps. The line is the line.'
     camPos.z += (tz - camPos.z)*0.12;
     camera.position.set(camPos.x, 30, camPos.z);
     camera.lookAt(camX - Math.sin(camAngle)*80, 5, camY + Math.cos(camAngle)*80);
-    var targetFov = 60 + 9*(speed/maxSpeedOn);
+    var targetFov = 60 + 9*(speed/maxSpeedOn) + (boost > 0.25 ? 5 : 0);
     if (Math.abs(camera.fov - targetFov) > 0.1){
       camera.fov += (targetFov - camera.fov)*0.1;
       camera.updateProjectionMatrix();
     }
 
+    if (eng) eng.update(speed, drifting);
     if (composer) composer.render(); else renderer.render(scene, camera);
     drawMinimap();
+    drawItemSlot();
   }
 
   function drawMinimap(){
@@ -55870,6 +56222,25 @@ A voice from somewhere says, 'Two laps. The line is the line.'
       }
       mapCtx.stroke();
     }
+    // decor feather + eye so the map reads as the whole bird
+    mapCtx.strokeStyle = 'rgba(212,174,106,0.3)';
+    mapCtx.lineWidth = 1;
+    mapCtx.beginPath(); mapCtx.moveTo(mx(-380), my(-40)); mapCtx.quadraticCurveTo(mx(-660), my(-10), mx(-930), my(-60)); mapCtx.stroke();
+    mapCtx.fillStyle = 'rgba(212,174,106,0.55)';
+    mapCtx.beginPath(); mapCtx.arc(mx(330), my(150), 1.6, 0, Math.PI*2); mapCtx.fill();
+    if (endFlare){
+      mapCtx.strokeStyle = 'rgba(255,228,160,' + (0.45 + 0.45*Math.sin(performance.now()/170)) + ')';
+      mapCtx.lineWidth = 2.2;
+      mapCtx.beginPath();
+      for (var fb = 0; fb <= N; fb++){
+        var fq = CL[fb % N];
+        if (fb === 0) mapCtx.moveTo(mx(fq.x), my(fq.y)); else mapCtx.lineTo(mx(fq.x), my(fq.y));
+      }
+      mapCtx.stroke();
+    }
+    mapCtx.fillStyle = 'rgba(240,208,140,0.9)';
+    mapCtx.font = 'italic 9px Georgia';
+    mapCtx.fillText('LAP ' + Math.min(TOTAL_LAPS, Math.floor(Math.max(0, playerLapsT)) + 1) + '/' + TOTAL_LAPS, 8, 12);
     var op2 = cpt(oppT);
     mapCtx.fillStyle = '#0c0b0a';
     mapCtx.strokeStyle = 'rgba(220,200,160,0.85)'; mapCtx.lineWidth = 0.9;
@@ -55878,11 +56249,42 @@ A voice from somewhere says, 'Two laps. The line is the line.'
     mapCtx.beginPath(); mapCtx.arc(mx(camX), my(camY), 3.2, 0, Math.PI*2); mapCtx.fill();
   }
 
+  function drawItemSlot(){
+    itemCtx.clearRect(0, 0, 56, 56);
+    itemCtx.fillStyle = 'rgba(16,11,7,0.72)';
+    itemCtx.beginPath(); itemCtx.arc(28, 28, 26, 0, Math.PI*2); itemCtx.fill();
+    itemCtx.strokeStyle = item ? 'rgba(240,208,140,0.95)' : 'rgba(212,174,106,0.35)';
+    itemCtx.lineWidth = 2;
+    itemCtx.beginPath(); itemCtx.arc(28, 28, 25, 0, Math.PI*2); itemCtx.stroke();
+    if (!item) return;
+    if (item === 'leaf'){
+      itemCtx.fillStyle = '#7fbf6a';
+      itemCtx.beginPath(); itemCtx.ellipse(28, 28, 7, 15, 0.6, 0, Math.PI*2); itemCtx.fill();
+      itemCtx.strokeStyle = '#4a7a3a'; itemCtx.lineWidth = 1.4;
+      itemCtx.beginPath(); itemCtx.moveTo(20, 38); itemCtx.lineTo(35, 18); itemCtx.stroke();
+    } else if (item === 'stone'){
+      itemCtx.fillStyle = '#8a7a66';
+      itemCtx.beginPath(); itemCtx.arc(28, 29, 11, 0, Math.PI*2); itemCtx.fill();
+      itemCtx.fillStyle = 'rgba(255,255,255,0.25)';
+      itemCtx.beginPath(); itemCtx.arc(24, 25, 4, 0, Math.PI*2); itemCtx.fill();
+    } else if (item === 'condor'){
+      itemCtx.strokeStyle = '#d8c9a8'; itemCtx.lineWidth = 3; itemCtx.lineCap = 'round';
+      itemCtx.beginPath(); itemCtx.moveTo(12, 32); itemCtx.quadraticCurveTo(28, 16, 44, 32); itemCtx.stroke();
+      itemCtx.beginPath(); itemCtx.moveTo(28, 24); itemCtx.lineTo(28, 34); itemCtx.stroke();
+    } else if (item === 'slick'){
+      itemCtx.fillStyle = '#1c1814';
+      itemCtx.beginPath(); itemCtx.ellipse(28, 30, 13, 9, 0, 0, Math.PI*2); itemCtx.fill();
+      itemCtx.fillStyle = 'rgba(150,190,210,0.3)';
+      itemCtx.beginPath(); itemCtx.ellipse(24, 27, 4, 2.4, 0.5, 0, Math.PI*2); itemCtx.fill();
+    }
+  }
+
   // ── input ────────────────────────────────────────────────────────
   function bindInput(){
     function kd(e){
       if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].indexOf(e.key) >= 0) e.preventDefault();
       keys[e.key] = true;
+      if (e.key === ' ' && raceStarted) useItem();
       if (!raceStarted) startCountdown();
     }
     function ku(e){ keys[e.key] = false; }
@@ -55902,6 +56304,7 @@ A voice from somewhere says, 'Two laps. The line is the line.'
       touching = true;
       var px = tpos(e);
       touchSteer = px < 0.35 ? -1 : (px > 0.65 ? 1 : 0);
+      if (raceStarted && px >= 0.35 && px <= 0.65) useItem();
     }, { passive: false });
     canvas.addEventListener('touchmove', function(e){
       e.preventDefault();
@@ -55923,6 +56326,7 @@ A voice from somewhere says, 'Two laps. The line is the line.'
     disposed = true;
     if (animId) cancelAnimationFrame(animId);
     if (window._nzRaceCleanup) window._nzRaceCleanup();
+    if (eng){ eng.kill(); eng = null; }
     if (renderer){
       if (scene) scene.traverse(function(ch){
         if (ch.geometry && ch.geometry.dispose) { try { ch.geometry.dispose(); } catch(e){} }

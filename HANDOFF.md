@@ -68,6 +68,7 @@
    - Ridge ring pushed to 1320/1500, sky 2100, shadow frustum 380. All builds clean; **pane stayed hidden — Sam's lap is the verification.** Tuning dials if he reports: oppSpeedT (difficulty), TRACK_WIDTH 100 (forgiveness), steerBuildup (response).
 8. **Sam: "so much better" but "steering too reactive, easy to go off"** → steerBuildup 0.016→0.010, steer cap now SHRINKS with speed (`0.95 - 0.45·min(1, v/3.8)` — agile in hairpins, stable on the beak straight; the old formula GREW with speed = hair-trigger straights), drift smoothing lagK 0.20→0.16. These three lines are THE feel dials for this game.
 9. Second feel step (still hot): steerBuildup 0.0075, maxSteerVel 0.052→0.046. **The door roundel is 93 now, not 73** (Sam's call — Page 93; the date was my guess, the page is his meaning).
+10. **Beak hairpin was "rough for the first bend" (Sam)** → RUN-OFF BULGE at the tip: per-point width factor `WF[]` (apex = easternmost CL point, cosine taper over ±26 samples, peak 1.6×), honoured by isOnTrack + the spinout threshold AND baked into the ground art (tapered per-segment strokes over the tip). The widened tip doubles as the glyph's beak-point. Sam approved the pace at "so much netter" before this; the bulge is the last unreviewed piece.
 
 **Commit = 2 files (.twee + .html), uncommitted; plus 2 NEW untracked docx (v2-prose-*.docx) — Sam commits via GitHub Desktop.**
 

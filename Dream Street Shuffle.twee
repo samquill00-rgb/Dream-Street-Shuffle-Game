@@ -3880,6 +3880,504 @@ window.dssDeferIfBusy = function(retry) {
   window.dssSigils = { update: update, registry: registry };
 })();
 
+// ====== SOHO MAP — the walkable hub (2026-09-01) ======
+// Sam: "a sort of map you can walk around, like the early Pokémon Game Boy
+// games, to get between venues." House palette, little moving legs, arrow
+// keys; walking costs nothing — it is simply how you choose the next door.
+// Round 2 (same night): sits LEFT OF THE STREET LAMP, the click list is
+// docked off-screen (the map still reads it, and it is what gets clicked),
+// every door carries an HTML label (clickable — the mouse/thumb way in) and
+// spills its own colour of light onto the pavement.
+//
+// Design: the map is a VIEW over the Dean Street hub, not a replacement. The
+// hub passage renders its links exactly as before (all the unlock/grey/funnel
+// logic stays in Harlowe); the map scans those rendered <tw-link>s and
+// .greyed-out spans, lights the matching doors, and walking into a lit door
+// (or clicking its label) clicks the link. The hooks that held the list are
+// parked off-screen with a layout box kept (Harlowe drops clicks on links
+// with none — memory project_harlowe_hidden_link_clicks).
+//
+// Lifecycle: the hub carries <div id="soho-map-container">; a 300ms watcher
+// builds the scene when it appears and tears it down when it goes (the same
+// pattern as the 3D approach scenes).
+(function(){
+var T = 16, COLS = 26, ROWS = 22, W = COLS*T, H = ROWS*T;
+// Dean (7-8), Frith (13-14), Greek (19-20) run north-south; Bateman Street
+// (rows 5-6) and Old Compton Street (rows 15-16) cross them.
+var ROAD_COLS = {7:1, 8:1, 13:1, 14:1, 19:1, 20:1};
+var ROAD_ROWS = {5:1, 6:1, 15:1, 16:1};
+var PAVE_COLS = {6:1, 9:1, 12:1, 15:1, 18:1, 21:1};
+var PAVE_ROWS = {4:1, 7:1, 14:1, 17:1};
+
+// Doors: tile position, the pavement tile the player enters from (fc, fr),
+// the display name, the light colour, and the hub-link matcher. 'spot' doors
+// are walkable pavement tiles that trigger on arrival (the lamp corner, the
+// alley mouth, the north exit to Centre Point).
+var DOORS = [
+  { id:'french',   c:5,  r:11, fc:6,  fr:11,  name:'THE FRENCH',                 label:'The French',        col:[192,57,60],   rx:/The French/i },
+  { id:'colony',   c:10, r:9,  fc:9,  fr:9,  name:'THE COLONY ROOM',            label:'Colony Room',       col:[112,196,96],  rx:/Colony Room/i },
+  { id:'doorway',  c:5,  r:2,  fc:6,  fr:2,  name:'A DOORWAY',                  label:'A doorway',         col:[150,168,200], rx:/doorway/i },
+  { id:'chippy',   c:10, r:18, fc:10, fr:17, name:'THE CHINESE FISH AND CHIPS', label:'Fish and Chips',    col:[240,208,112], rx:/chippy/i },
+  { id:'ronnies',  c:11, r:12, fc:12, fr:12,  name:"RONNIE SCOTT'S",             label:"Ronnie Scott's",    col:[138,111,216], rx:/Ronnie Scott/i },
+  { id:'lackland', c:16, r:10, fc:15, fr:10,  name:"LACKLAND'S OFFICE",          label:"Lackland's",        col:[224,160,64],  rx:/Lackland/i },
+  { id:'coach',    c:17, r:12, fc:18, fr:12,  name:'THE COACH AND HORSES',       label:'Coach and Horses',  col:[232,132,40],  rx:/Coach and Horses/i },
+  { id:'pillars',  c:17, r:1,  fc:18, fr:1,  name:'THE PILLARS OF HERCULES',    label:'The Pillars',       col:[74,160,208],  rx:/Pillars/i },
+  { id:'trishas',  c:22, r:2,  fc:21, fr:2,  name:"TRISHA'S",                   label:"Trisha's",          col:[224,90,160],  rx:/Trisha/i },
+  { id:'cecil',    c:25, r:17, fc:24, fr:17, name:'CECIL COURT',                label:'Cecil Court',       col:[180,138,224], rx:/Cecil Court|O'Flatterly|antiquarian/i, spot:true },
+  { id:'ginger',   c:9,  r:14, fc:9,  fr:13,  name:'THE GINGER LIGHT',           label:'The Ginger Light',  col:[232,134,42],  rx:/See who|Ginger Light/i, spot:true },
+  { id:'north',    c:7,  r:-1, fc:7,  fr:0,  name:'CENTRE POINT',               label:'Centre Point',      col:[226,178,148], rx:/dawn is coming|Give up on the night/i, spot:true }
+];
+var LAMPS = [ {c:9,r:14,ginger:true}, {c:6,r:17}, {c:15,r:14}, {c:12,r:17}, {c:21,r:14}, {c:18,r:17}, {c:18,r:1}, {c:6,r:7}, {c:12,r:4}, {c:21,r:7}, {c:9,r:10}, {c:24,r:17} ];
+
+var PAL = {
+  road:'#141419', roadLight:'#1b1b22', roadLine:'#23232b', roadWet:'#20202a',
+  pave:'#2a2b33', paveLine:'#1c1d24', paveLight:'#33343d', kerb:'#3a3b45',
+  brick:'#2a1f1c', brick2:'#241b19', stucco:'#27242a', stucco2:'#221f25', soot:'#1a1517',
+  roof:'#17161b', roofSeam:'#121116', roofLight:'#1d1c22', chimney:'#221f24',
+  winDark:'#0f1018', winWarm:'#b8843a', winGlass:'#1b2030',
+  doorDark:'#0c0b10', doorWood:'#3a2a1c', lintel:'#3b3540', step:'#3f4049',
+  lampPost:'#0d0d12', lampHead:'#e6b95a', ginger:'#e8862a'
+};
+function rgba(col, a) { return 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',' + a + ')'; }
+function mix(col, k) { return 'rgb(' + Math.round(col[0]*k) + ',' + Math.round(col[1]*k) + ',' + Math.round(col[2]*k) + ')'; }
+function lighten(col, k) { return 'rgb(' + Math.round(col[0] + (255-col[0])*k) + ',' + Math.round(col[1] + (255-col[1])*k) + ',' + Math.round(col[2] + (255-col[2])*k) + ')'; }
+
+var state = null;
+
+function seeded(c, r, k) { var x = Math.sin(c*127.1 + r*311.7 + (k||0)*74.7) * 43758.5453; return x - Math.floor(x); }
+function isRoad(c, r) { return !!(ROAD_COLS[c] || ROAD_ROWS[r]); }
+function isPave(c, r) { return !isRoad(c, r) && !!(PAVE_COLS[c] || PAVE_ROWS[r]); }
+function isBuilding(c, r) { return !isRoad(c, r) && !isPave(c, r); }
+function inBounds(c, r) { return c >= 0 && r >= 0 && c < COLS && r < ROWS; }
+function isFacade(c, r) {
+  if (!isBuilding(c, r)) return false;
+  return (inBounds(c-1,r) && isPave(c-1,r)) || (inBounds(c+1,r) && isPave(c+1,r)) ||
+         (inBounds(c,r-1) && isPave(c,r-1)) || (inBounds(c,r+1) && isPave(c,r+1));
+}
+function doorAt(c, r) { for (var i = 0; i < DOORS.length; i++) if (DOORS[i].c === c && DOORS[i].r === r) return DOORS[i]; return null; }
+function doorById(id) { for (var i = 0; i < DOORS.length; i++) if (DOORS[i].id === id) return DOORS[i]; return null; }
+function walkable(c, r) {
+  if (!inBounds(c, r)) return false;
+  var d = doorAt(c, r);
+  if (d && !d.spot) return false;
+  return isRoad(c, r) || isPave(c, r);
+}
+function doorSide(d) { return d.fc < d.c ? 'w' : (d.fc > d.c ? 'e' : (d.fr < d.r ? 'n' : 's')); }
+
+// ---- pixel sprite: 12x16, no face (house rule) ----
+var SPR = {
+  down: [
+    "....hhhh....","...hhhhhh...","..hhhhhhhh..","..bbbbbbbb..","...bbbbbb...","...cccccc...",
+    "..cccccccc..",".cclcccclcc.",".cclcccclcc.",".cccccccccc.","..cccccccc..","..cccccccc..",
+    "...gg..gg...","...gg..gg...","...ss..ss...","............"],
+  up: [
+    "....hhhh....","...hhhhhh...","..hhhhhhhh..","..hhhhhhhh..","...hhhhhh...","...cccccc...",
+    "..cccccccc..",".cclcccclcc.",".cclcccclcc.",".cccccccccc.","..cccccccc..","..cccccccc..",
+    "...gg..gg...","...gg..gg...","...ss..ss...","............"],
+  right: [
+    "....hhhh....","...hhhhhh...","...hhhhhhh..","...bbbbbbbb.","....bbbb....","....cccc....",
+    "...cccccc...","...cccccc...","...cclccc...","...cccccc...","...cccccc...","...cccccc...",
+    "....gggg....","....gg.gg...","....ss.ss...","............"]
+};
+var SPRPAL = { h:'#181a26', b:'#0a0b12', c:'#2c3048', l:'#465072', g:'#1a1c2a', s:'#08090e' };
+function makeSprite(rows, frame, flip, coat) {
+  var cv = document.createElement('canvas'); cv.width = 12; cv.height = 16;
+  var x = cv.getContext('2d');
+  for (var r = 0; r < 16; r++) {
+    for (var c = 0; c < 12; c++) {
+      var ch = rows[r][c];
+      if (ch === '.') continue;
+      var rr = r, drop = false;
+      // walking legs: frame 1 lifts the left leg, frame 2 the right
+      if (r >= 12 && r <= 14 && (ch === 'g' || ch === 's')) {
+        var leftLeg = c < 6;
+        if ((frame === 1 && leftLeg) || (frame === 2 && !leftLeg)) { if (r === 14) drop = true; else rr = r + 1; }
+      }
+      if (drop) continue;
+      var col = SPRPAL[ch];
+      if (coat && (ch === 'c' || ch === 'l')) col = coat[ch];
+      x.fillStyle = col;
+      x.fillRect(flip ? 11 - c : c, rr, 1, 1);
+    }
+  }
+  return cv;
+}
+function buildSprites(coat) {
+  var s = {};
+  ['down','up','right'].forEach(function(d){ s[d] = [0,1,2].map(function(f){ return makeSprite(SPR[d], f, false, coat); }); });
+  s.left = [0,1,2].map(function(f){ return makeSprite(SPR.right, f, true, coat); });
+  return s;
+}
+
+// ---- tiles ----
+function drawRoad(x, c, r) {
+  x.fillStyle = PAL.road; x.fillRect(0, 0, T, T);
+  for (var i = 0; i < 6; i++) { var sx = Math.floor(seeded(c,r,i)*T), sy = Math.floor(seeded(c,r,i+9)*T); x.fillStyle = seeded(c,r,i+20) > 0.5 ? PAL.roadLight : PAL.roadWet; x.fillRect(sx, sy, 2, 1); }
+  if (ROAD_COLS[c] && !ROAD_ROWS[r]) { if ((c === 8 || c === 14 || c === 20) && (r % 2 === 0)) { x.fillStyle = PAL.roadLine; x.fillRect(0, 3, 1, 6); } }
+  if (ROAD_ROWS[r] && !ROAD_COLS[c] && (r === 6 || r === 16) && (c % 2 === 0)) { x.fillStyle = PAL.roadLine; x.fillRect(3, 0, 6, 1); }
+}
+function drawPave(x, c, r) {
+  x.fillStyle = PAL.pave; x.fillRect(0, 0, T, T);
+  x.fillStyle = PAL.paveLine; x.fillRect(0, 7, T, 1); x.fillRect(7, 0, 1, T);
+  x.fillStyle = PAL.paveLight; x.fillRect(1, 1, 3, 1); x.fillRect(9, 9, 2, 1);
+  x.fillStyle = PAL.kerb;
+  if (inBounds(c-1,r) && isRoad(c-1,r)) x.fillRect(0, 0, 1, T);
+  if (inBounds(c+1,r) && isRoad(c+1,r)) x.fillRect(T-1, 0, 1, T);
+  if (inBounds(c,r-1) && isRoad(c,r-1)) x.fillRect(0, 0, T, 1);
+  if (inBounds(c,r+1) && isRoad(c,r+1)) x.fillRect(0, T-1, T, 1);
+}
+function drawRoof(x, c, r) {
+  x.fillStyle = seeded(c,r,1) > 0.5 ? PAL.roof : PAL.roofLight; x.fillRect(0, 0, T, T);
+  x.fillStyle = PAL.roofSeam; x.fillRect(0, 0, T, 1); x.fillRect(0, 0, 1, T);
+  if (seeded(c,r,2) > 0.72) { x.fillStyle = PAL.chimney; x.fillRect(4 + Math.floor(seeded(c,r,3)*7), 3, 3, 4); x.fillStyle = PAL.roofSeam; x.fillRect(4 + Math.floor(seeded(c,r,3)*7), 3, 3, 1); }
+}
+function drawFacade(x, c, r, litCol) {
+  var v = seeded(c, r, 4);
+  x.fillStyle = v < 0.34 ? PAL.brick : (v < 0.67 ? PAL.stucco : PAL.brick2); x.fillRect(0, 0, T, T);
+  if (v < 0.34 || v >= 0.67) { x.fillStyle = PAL.soot; for (var i = 0; i < 4; i++) x.fillRect((i*4 + (r%2)*2) % T, i*4, 3, 1); }
+  else { x.fillStyle = PAL.stucco2; x.fillRect(0, 5, T, 1); x.fillRect(0, 11, T, 1); }
+  var w = litCol ? (seeded(c,r,5) > 0.45 ? lighten(litCol, 0.35) : lighten(litCol, 0.1)) : (seeded(c,r,6) > 0.74 ? PAL.winWarm : PAL.winDark);
+  x.fillStyle = w; x.fillRect(3, 3, 3, 4); x.fillRect(10, 3, 3, 4);
+  x.fillStyle = w === PAL.winDark ? PAL.winGlass : w; x.fillRect(3, 10, 3, 4); x.fillRect(10, 10, 3, 4);
+  x.fillStyle = PAL.soot; x.fillRect(3, 5, 3, 1); x.fillRect(10, 5, 3, 1);
+}
+// A proper doorway: lintel, jambs, a fanlight in the door's own colour, and
+// the doorway itself lit from inside when the venue is open.
+function drawDoorTile(x, c, r, door, status) {
+  drawFacade(x, c, r, status === 'open' ? door.col : null);
+  var side = doorSide(door), open = status === 'open', grey = status === 'grey';
+  var inner = open ? lighten(door.col, 0.42) : (grey ? PAL.doorWood : PAL.doorDark);
+  var frame = open ? '#fff3d6' : (grey ? '#6a5f52' : '#3b3540');
+  var band = open ? lighten(door.col, 0.2) : (grey ? mix(door.col, 0.4) : PAL.lintel);
+  // the doorway fills the tile from the pavement side: frame, then the lit interior
+  x.fillStyle = frame;
+  if (side === 'n') x.fillRect(2, 0, 12, 13); else if (side === 's') x.fillRect(2, 3, 12, 13); else if (side === 'w') x.fillRect(0, 2, 13, 12); else x.fillRect(3, 2, 13, 12);
+  x.fillStyle = inner;
+  if (side === 'n') x.fillRect(3, 0, 10, 12); else if (side === 's') x.fillRect(3, 4, 10, 12); else if (side === 'w') x.fillRect(0, 3, 12, 10); else x.fillRect(4, 3, 12, 10);
+  // awning / sign band along the street edge in the door's own colour
+  x.fillStyle = band;
+  if (side === 'n') x.fillRect(0, 13, T, 3); else if (side === 's') x.fillRect(0, 0, T, 3); else if (side === 'w') x.fillRect(13, 0, 3, T); else x.fillRect(0, 0, 3, T);
+  if (open) {
+    // fanlight over the door, and the door leaf standing open on the light
+    x.fillStyle = '#fff7de';
+    if (side === 'n') x.fillRect(6, 0, 4, 3); else if (side === 's') x.fillRect(6, 13, 4, 3); else if (side === 'w') x.fillRect(0, 6, 3, 4); else x.fillRect(13, 6, 3, 4);
+    x.fillStyle = '#ffffff';
+    x.fillRect(6, 6, (side === 'n' || side === 's') ? 4 : 5, (side === 'n' || side === 's') ? 5 : 4);
+  }
+}
+function drawStep(x, door) {
+  // doorstep on the pavement tile in front, in the paving's lighter tone
+  var side = doorSide(door);
+  x.fillStyle = PAL.step;
+  if (side === 'n') x.fillRect(4, 13, 8, 3); else if (side === 's') x.fillRect(4, 0, 8, 3); else if (side === 'w') x.fillRect(13, 4, 3, 8); else x.fillRect(0, 4, 3, 8);
+}
+function drawAlley(x, door, status) {
+  drawPave(x, 25, 17);
+  x.fillStyle = PAL.lintel; x.fillRect(10, 0, 6, T);
+  x.fillStyle = status === 'open' ? mix(door.col, 0.6) : (status === 'grey' ? PAL.doorWood : PAL.doorDark); x.fillRect(11, 1, 5, 14);
+}
+function drawLampPost(x, lamp) {
+  x.fillStyle = PAL.lampPost; x.fillRect(7, 4, 2, 12); x.fillRect(5, 3, 6, 2);
+  x.fillStyle = lamp.ginger ? PAL.ginger : PAL.lampHead; x.fillRect(6, 1, 4, 3);
+}
+
+function buildBase(doors) {
+  var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  var x = cv.getContext('2d');
+  for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
+    x.save(); x.translate(c*T, r*T);
+    var d = doorAt(c, r);
+    if (d && d.id === 'cecil') drawAlley(x, d, doors.cecil.status);
+    else if (d && !d.spot) drawDoorTile(x, c, r, d, doors[d.id].status);
+    else if (isRoad(c, r)) drawRoad(x, c, r);
+    else if (isPave(c, r)) drawPave(x, c, r);
+    else if (isFacade(c, r)) drawFacade(x, c, r, null);
+    else drawRoof(x, c, r);
+    x.restore();
+  }
+  DOORS.forEach(function(d){
+    if (d.spot) return;
+    if (doors[d.id].status === 'open') {
+      var side = doorSide(d), nbs = (side === 'n' || side === 's') ? [[d.c-1, d.r],[d.c+1, d.r]] : [[d.c, d.r-1],[d.c, d.r+1]];
+      nbs.forEach(function(n){ if (inBounds(n[0], n[1]) && isFacade(n[0], n[1]) && !doorAt(n[0], n[1])) { x.save(); x.translate(n[0]*T, n[1]*T); drawFacade(x, n[0], n[1], d.col); x.restore(); } });
+    }
+    x.save(); x.translate(d.fc*T, d.fr*T); drawStep(x, d); x.restore();
+  });
+  LAMPS.forEach(function(l){ x.save(); x.translate(l.c*T, l.r*T); drawLampPost(x, l); x.restore(); });
+  x.fillStyle = PAL.roadLine; x.fillRect(7*T, 0, 2*T, 1);
+  return cv;
+}
+// Light: sodium lamps, then every door spills its OWN colour — a halo on the
+// facade and a pool on the pavement outside — full when open, a trace when
+// grey (shut but known), nothing when the night has not opened it.
+function buildGlow(doors) {
+  var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  var x = cv.getContext('2d');
+  function halo(px, py, rad, col, a) { var g = x.createRadialGradient(px, py, 1, px, py, rad); g.addColorStop(0, rgba(col, a)); g.addColorStop(0.55, rgba(col, a*0.35)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(px-rad, py-rad, rad*2, rad*2); }
+  function pool(px, py, rx, ry, col, a) { x.save(); x.translate(px, py); x.scale(rx/ry, 1); var g = x.createRadialGradient(0, 0, 1, 0, 0, ry); g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(-ry, -ry, ry*2, ry*2); x.restore(); }
+  LAMPS.forEach(function(l){ halo(l.c*T + 8, l.r*T + 3, 30, l.ginger ? [232,134,42] : [217,164,65], l.ginger ? 0.28 : 0.18); });
+  DOORS.forEach(function(d){
+    var st = doors[d.id].status; if (st === 'shut') return;
+    var a = st === 'open' ? 0.82 : 0.18;
+    if (d.id === 'north') { var g = x.createLinearGradient(0, 0, 0, 56); g.addColorStop(0, rgba(d.col, a*0.9)); g.addColorStop(1, rgba(d.col, 0)); x.fillStyle = g; x.fillRect(5*T, 0, 6*T, 56); return; }
+    var side = doorSide(d);
+    var dx = d.c*T + 8, dy = d.r*T + 8;
+    halo(dx, dy, 30, d.col, a * 0.75);
+    // the pool lies on the pavement in front, stretched along the street
+    var px = d.fc*T + 8, py = d.fr*T + 8;
+    if (side === 'w' || side === 'e') pool(px + (side === 'w' ? 3 : -3), py, 18, 34, d.col, a);
+    else pool(px, py + (side === 'n' ? 3 : -3), 34, 18, d.col, a);
+    if (d.spot) halo(px, py, 26, d.col, a * 0.5);
+  });
+  return cv;
+}
+
+// ---- reading the hub ----
+function labelFromGrey(txt) {
+  var m = txt.match(/\[([^\]]+)\]/);
+  if (!m) return 'Not tonight.';
+  var l = m[1].trim().toLowerCase();
+  return l.charAt(0).toUpperCase() + l.slice(1) + '.';
+}
+function glyphsAfter(link) {
+  var out = '', n = link.nextSibling, guard = 0;
+  while (n && guard++ < 40) {
+    if (n.nodeType === 1 && n.tagName === 'BR') break;
+    if (n.nodeType === 3 && /\n/.test(n.textContent)) break;
+    if (n.nodeType === 1 && n.tagName === 'TW-LINK') break;
+    if (n.nodeType === 1) { var spans = n.matches && n.matches('span') ? [n] : Array.prototype.slice.call(n.querySelectorAll ? n.querySelectorAll('span.hp, span.pp, span.lp, span.al, span.qp') : []); spans.forEach(function(s){ out += s.outerHTML; }); }
+    n = n.nextSibling;
+  }
+  return out;
+}
+function scanHub(passage) {
+  var doors = {}, hooks = [], guided = '';
+  DOORS.forEach(function(d){ doors[d.id] = { status:'shut', link:null, label:'', glyphs:'' }; });
+  function noteHook(el) { var h = null, cur = el; while (cur && cur !== passage) { if (cur.tagName === 'TW-HOOK') h = cur; cur = cur.parentElement; } if (h && hooks.indexOf(h) < 0) hooks.push(h); }
+  var links = passage.querySelectorAll('tw-link');
+  for (var i = 0; i < links.length; i++) {
+    var txt = (links[i].textContent || '').trim();
+    if (/^(← BACK|NOTEBOOK)$/.test(txt) || links[i].closest('.stat-bars, .header-links')) continue;
+    for (var j = 0; j < DOORS.length; j++) {
+      if (DOORS[j].rx.test(txt)) {
+        if (doors[DOORS[j].id].status !== 'open') doors[DOORS[j].id] = { status:'open', link:links[i], label:'', glyphs:glyphsAfter(links[i]) };
+        noteHook(links[i]);
+        if (links[i].closest('.choice-box') && !guided) guided = txt.replace(/\.?$/, '.');
+        break;
+      }
+    }
+  }
+  var greys = passage.querySelectorAll('.greyed-out');
+  for (var g = 0; g < greys.length; g++) {
+    var gt = (greys[g].textContent || '').trim();
+    for (var k = 0; k < DOORS.length; k++) {
+      if (DOORS[k].rx.test(gt)) { if (doors[DOORS[k].id].status === 'shut') doors[DOORS[k].id] = { status:'grey', link:null, label:labelFromGrey(gt), glyphs:glyphsAfter(greys[g]) }; noteHook(greys[g]); break; }
+    }
+  }
+  return { doors: doors, hooks: hooks, guided: guided };
+}
+
+function busy() {
+  try { if (window.dssOverlayBusy && window.dssOverlayBusy()) return true; } catch(e) {}
+  if (document.getElementById('wtw-overlay') || document.getElementById('venue-hint-overlay')) return true;
+  var co = document.getElementById('coin-overlay'); if (co && co.offsetParent) return true;
+  var mo = document.getElementById('match-overlay'); if (mo && mo.style.display !== 'none' && mo.offsetParent) return true;
+  var ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return true;
+  return false;
+}
+
+function init(container) {
+  var passage = container.closest('tw-passage') || document.querySelector('tw-passage');
+  if (!passage) return;
+  var scan = scanHub(passage), doors = scan.doors;
+  // dock the list: off-screen, layout boxes kept, so the links stay clickable by JS
+  scan.hooks.forEach(function(h){ h.classList.add('soho-hub-dock'); });
+
+  var wrap = document.createElement('div'); wrap.className = 'soho-map-wrap';
+  var stage = document.createElement('div'); stage.className = 'soho-map-stage';
+  var cv = document.createElement('canvas'); cv.width = W; cv.height = H; cv.setAttribute('tabindex', '0'); cv.setAttribute('aria-label', 'A map of Soho. Use the arrow keys to walk, and walk into a door to go in.');
+  stage.appendChild(cv);
+  var bar = document.createElement('div'); bar.className = 'soho-map-bar';
+  var place = document.createElement('span'); place.className = 'smb-place';
+  var right = document.createElement('span'); right.className = 'smb-glyphs';
+  bar.appendChild(place); bar.appendChild(right);
+  var dpad = document.createElement('div'); dpad.className = 'soho-dpad';
+  [['up',2,1,'▲'],['left',1,2,'◀'],['right',3,2,'▶'],['down',2,3,'▼']].forEach(function(b){
+    var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = b[3]; btn.setAttribute('aria-label', 'Walk ' + b[0]);
+    btn.style.gridColumn = b[1]; btn.style.gridRow = b[2]; btn.setAttribute('data-dir', b[0]);
+    dpad.appendChild(btn);
+  });
+  wrap.appendChild(stage); wrap.appendChild(bar); wrap.appendChild(dpad);
+  container.appendChild(wrap);
+  passage.classList.add('soho-map-on');
+  var x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
+
+  // HTML door labels — real type, readable at any scale, and the click way in
+  var labels = {};
+  DOORS.forEach(function(d){
+    var st = doors[d.id];
+    if (st.status === 'shut') return; // a door the night has not opened is an unlabelled dark front
+    var el = document.createElement('button'); el.type = 'button';
+    el.className = 'soho-door-label soho-door-' + st.status;
+    el.textContent = d.label;
+    // label floats over the road beside the door (roads are the dark space)
+    var side = doorSide(d), ltx, lty;
+    if (side === 'e') { ltx = d.fc + 2.6; lty = d.r + 0.5; } else if (side === 'w') { ltx = d.fc - 1.6; lty = d.r + 0.5; }
+    else if (side === 'n') { ltx = d.c + 0.5; lty = d.fr - 1.4; } else { ltx = d.c + 0.5; lty = d.fr + 2.4; }
+    if (d.id === 'north') { ltx = 8; lty = 0.7; }
+    if (d.id === 'cecil') { ltx = 22.5; lty = 15.5; }
+    if (d.id === 'ginger') { ltx = 11.6; lty = 14.5; }
+    if (d.id === 'chippy') { ltx = 10.5; lty = 16; }
+    el.style.left = (ltx / COLS * 100) + '%'; el.style.top = (lty / ROWS * 100) + '%';
+    el.style.setProperty('--door-col', rgba(d.col, 1));
+    el.style.setProperty('--door-glow', rgba(d.col, st.status === 'open' ? 0.75 : 0.0));
+    el.setAttribute('aria-label', d.name + (st.status === 'open' ? '' : (st.status === 'grey' ? '. ' + st.label : '. Not tonight.')));
+    el.addEventListener('click', function(e){ e.preventDefault(); if (busy() || S.entering) return; if (st.status === 'open') enter(d); else { S.noteFlash = { name:d.name, text: st.status === 'grey' ? st.label : 'Not tonight.', t: 200 }; refreshBar(); } try { cv.focus({ preventScroll: true }); } catch(err) {} });
+    stage.appendChild(el); labels[d.id] = el;
+  });
+
+  var base = buildBase(doors), glow = buildGlow(doors);
+  var sprites = buildSprites(null);
+  var walkerSprites = buildSprites({ c:'#221c1e', l:'#332a2c' });
+
+  // spawn: outside the door you last went through, else mid Dean Street
+  var spawnC = 7, spawnR = 12, facing = 'down';
+  try { var last = sessionStorage.getItem('dssMapLast'); if (last) { var ld = doorById(last); if (ld && walkable(ld.fc, ld.fr)) { spawnC = ld.fc; spawnR = ld.fr; facing = ld.spot ? 'down' : (ld.c < ld.fc ? 'right' : (ld.c > ld.fc ? 'left' : (ld.r < ld.fr ? 'down' : 'up'))); } sessionStorage.removeItem('dssMapLast'); } } catch(e) {}
+
+  var S = { c:spawnC, r:spawnR, px:spawnC*T, py:spawnR*T, moving:false, dx:0, dy:0, prog:0, facing:facing, frame:0, stepT:0,
+            held:{}, entering:null, enterT:0, t:0, walker:null, walkerNext:14 + Math.random()*12, hintShown:false, noteFlash:null, alive:true, raf:null };
+  state = S;
+
+  var hintSeen = false; try { hintSeen = localStorage.getItem('dssMapHintSeen') === '1'; } catch(e) {}
+  function setBar(name, html, note) { place.textContent = name || ''; right.innerHTML = html || ''; if (note) { right.innerHTML = '<span class="smb-note">' + note + '</span>'; } }
+  function streetName(c, r) {
+    if (r >= 14 && r <= 17 && !(ROAD_COLS[c] || PAVE_COLS[c])) return 'OLD COMPTON STREET';
+    if (r >= 4 && r <= 7 && !(ROAD_COLS[c] || PAVE_COLS[c])) return 'BATEMAN STREET';
+    if (c >= 6 && c <= 9) return 'DEAN STREET'; if (c >= 12 && c <= 15) return 'FRITH STREET'; if (c >= 18 && c <= 21) return 'GREEK STREET';
+    if (r >= 14 && r <= 17) return 'OLD COMPTON STREET'; if (r >= 4 && r <= 7) return 'BATEMAN STREET'; return 'SOHO';
+  }
+  function facingDoor() {
+    var dc = S.c + (S.facing === 'right' ? 1 : S.facing === 'left' ? -1 : 0), dr = S.r + (S.facing === 'down' ? 1 : S.facing === 'up' ? -1 : 0);
+    var d = doorAt(dc, dr); if (d && !d.spot) return d;
+    var here = doorAt(S.c, S.r); if (here && here.spot && here.id !== 'north') return here;
+    if (S.r === 0 && (S.c === 7 || S.c === 8) && S.facing === 'up') return doorById('north');
+    return null;
+  }
+  function refreshBar() {
+    if (S.noteFlash && S.noteFlash.t > 0) { setBar(S.noteFlash.name, '', S.noteFlash.text); return; }
+    if (!hintSeen && !S.hintShown) { S.hintShown = true; setBar(streetName(S.c, S.r), '', 'Use the arrow keys to walk, or click a door.'); return; }
+    var d = facingDoor();
+    if (d) { var st = doors[d.id]; if (st.status === 'open') setBar(d.name, st.glyphs); else if (st.status === 'grey') setBar(d.name, '', st.label); else setBar(d.name, '', 'Not tonight.'); }
+    else if (scan.guided) setBar(streetName(S.c, S.r), '', scan.guided);
+    else setBar(streetName(S.c, S.r), '');
+  }
+  refreshBar();
+
+  function enter(door) {
+    var st = doors[door.id];
+    if (st.status !== 'open' || !st.link) { refreshBar(); return; }
+    S.entering = door; S.enterT = 0;
+    try { sessionStorage.setItem('dssMapLast', door.id); } catch(e) {}
+    setTimeout(function(){ if (S.alive && st.link && document.body.contains(st.link)) st.link.click(); }, 280);
+  }
+  function tryStep(dir) {
+    S.facing = dir;
+    var dc = dir === 'right' ? 1 : dir === 'left' ? -1 : 0, dr = dir === 'down' ? 1 : dir === 'up' ? -1 : 0;
+    var nc = S.c + dc, nr = S.r + dr;
+    if (nr < 0 && (nc === 7 || nc === 8)) { enter(doorById('north')); refreshBar(); return; }
+    var d = doorAt(nc, nr);
+    if (d && !d.spot) { enter(d); refreshBar(); return; }
+    if (!walkable(nc, nr)) { refreshBar(); return; }
+    S.moving = true; S.dx = dc; S.dy = dr; S.prog = 0; S.noteFlash = null;
+    if (!hintSeen) { hintSeen = true; try { localStorage.setItem('dssMapHintSeen', '1'); } catch(e) {} }
+  }
+  function heldDir() { if (S.held.up) return 'up'; if (S.held.down) return 'down'; if (S.held.left) return 'left'; if (S.held.right) return 'right'; return null; }
+
+  var KEYS = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right', W:'up', S:'down', A:'left', D:'right' };
+  function onKeyDown(e) {
+    var dir = KEYS[e.key]; if (!dir) return;
+    var ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    // arrows NEVER scroll the page while the map is up (Sam: "it drops to the
+    // bottom of the page when I press down" — a popup made busy() true and
+    // the key fell through to the browser)
+    if (/^Arrow/.test(e.key)) e.preventDefault();
+    if (busy()) return;
+    S.held[dir] = true;
+    // a tapped key can be released before the next frame — step now
+    if (!S.moving && !S.entering) tryStep(dir);
+  }
+  function onKeyUp(e) { var dir = KEYS[e.key]; if (dir) S.held[dir] = false; }
+  function onBlur() { S.held = {}; }
+  // CAPTURE phase on the document: runs before any other keydown handler, so no
+  // handler that stops propagation can let an arrow through to scroll the page.
+  document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('keyup', onKeyUp, true);
+  window.addEventListener('blur', onBlur);
+  dpad.addEventListener('pointerdown', function(e){ var b = e.target.closest('button'); if (!b) return; e.preventDefault(); var dd = b.getAttribute('data-dir'); S.held[dd] = true; if (!S.moving && !S.entering && !busy()) tryStep(dd); });
+  function padUp(e){ var b = e.target.closest && e.target.closest('button'); if (b) S.held[b.getAttribute('data-dir')] = false; else S.held = {}; }
+  dpad.addEventListener('pointerup', padUp); dpad.addEventListener('pointercancel', padUp); dpad.addEventListener('pointerleave', padUp);
+  cv.addEventListener('click', function(){ try { cv.focus({ preventScroll: true }); } catch(e) {} });
+
+  var STEP_FRAMES = 9;
+  function tick() {
+    if (!S.alive) return;
+    S.t++;
+    if (S.noteFlash && S.noteFlash.t > 0) { S.noteFlash.t--; if (S.noteFlash.t === 0) { S.noteFlash = null; refreshBar(); } }
+    if (S.entering) { S.enterT++; }
+    else if (S.moving) {
+      S.prog++;
+      var k = S.prog / STEP_FRAMES;
+      S.px = (S.c + S.dx * k) * T; S.py = (S.r + S.dy * k) * T;
+      S.stepT++; if (S.stepT % 5 === 0) S.frame = S.frame === 1 ? 2 : 1;
+      if (S.prog >= STEP_FRAMES) {
+        S.c += S.dx; S.r += S.dy; S.px = S.c*T; S.py = S.r*T; S.moving = false;
+        var here = doorAt(S.c, S.r);
+        if (here && here.spot && doors[here.id].status === 'open') { enter(here); }
+        var hd = heldDir(); if (hd && !S.entering && !busy()) tryStep(hd); else S.frame = 0;
+        refreshBar();
+      }
+    } else {
+      var hd2 = heldDir();
+      if (hd2 && !busy()) tryStep(hd2);
+    }
+    if (!S.walker) { S.walkerNext -= 1/60; if (S.walkerNext <= 0) { var fromLeft = Math.random() < 0.5; S.walker = { x: fromLeft ? -14 : W + 2, dir: fromLeft ? 'right' : 'left', y: [4, 7, 14, 17][Math.floor(Math.random()*4)] * T, f:0, t:0 }; } }
+    else { S.walker.x += S.walker.dir === 'right' ? 0.7 : -0.7; S.walker.t++; if (S.walker.t % 7 === 0) S.walker.f = S.walker.f === 1 ? 2 : 1; if (S.walker.x < -16 || S.walker.x > W + 4) { S.walker = null; S.walkerNext = 16 + Math.random()*18; } }
+    draw();
+    S.raf = requestAnimationFrame(tick);
+  }
+  function draw() {
+    x.clearRect(0, 0, W, H);
+    x.drawImage(base, 0, 0);
+    var flick = 0.88 + 0.12 * Math.sin(S.t * 0.21) * Math.sin(S.t * 0.077 + 1.3);
+    x.globalAlpha = flick; x.drawImage(glow, 0, 0); x.globalAlpha = 1;
+    if (S.walker) { x.drawImage(walkerSprites[S.walker.dir][S.walker.f], Math.round(S.walker.x), S.walker.y - 2); }
+    var sp = sprites[S.facing][S.moving ? S.frame : 0];
+    var hx = Math.round(S.px) + 8, hy = Math.round(S.py) + 10;
+    var hg = x.createRadialGradient(hx, hy, 1, hx, hy, 16); hg.addColorStop(0, 'rgba(226,222,240,0.26)'); hg.addColorStop(1, 'rgba(226,222,240,0)'); x.fillStyle = hg; x.fillRect(hx-16, hy-16, 32, 32);
+    x.drawImage(sp, Math.round(S.px) + 2, Math.round(S.py) - 2);
+    var vg = x.createRadialGradient(W/2, H/2, H*0.45, W/2, H/2, W*0.72); vg.addColorStop(0, 'rgba(4,3,8,0)'); vg.addColorStop(1, 'rgba(4,3,8,0.45)');
+    x.fillStyle = vg; x.fillRect(0, 0, W, H);
+    if (S.entering) { x.fillStyle = 'rgba(4,3,8,' + Math.min(1, S.enterT / 14) + ')'; x.fillRect(0, 0, W, H); }
+  }
+  S.dispose = function() {
+    S.alive = false;
+    if (S.raf) cancelAnimationFrame(S.raf);
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('keyup', onKeyUp, true);
+    window.removeEventListener('blur', onBlur);
+  };
+  S.raf = requestAnimationFrame(tick);
+}
+
+setInterval(function(){
+  var container = document.getElementById('soho-map-container');
+  if (container && !state) { try { init(container); } catch(e) { if (window.console) console.error('[sohoMap]', e); state = { alive:false, dispose:function(){} }; } }
+  else if (!container && state) { try { state.dispose(); } catch(e) {} state = null; }
+  else if (container && state && !container.querySelector('canvas')) { try { state.dispose(); } catch(e) {} state = null; }
+}, 300);
+window.dssSohoMap = { doors: DOORS, get state() { return state; } };
+})();
+
 // ====== DEBUG / PLAYTESTING MENU (backtick ` key) ======
 // Strategy: store target passage in URL hash, reload page.
 // Before Harlowe boots, a separate inline script replaces the start passage
@@ -41099,6 +41597,11 @@ Better not tomorrow.
 (if: $justAteChippy is true)[(set: $justAteChippy to false)<script>if(window.showEatPopupSafe){window.showEatPopupSafe('chips',250);}else{setTimeout(function(){if(window.showEatPopup)window.showEatPopup('chips');},250);}</script>]
 <span class="scene-location">Dean Street, Soho, London.</span>
 (if: $midnightJustPassed is true)[<span class="scene-date scene-date-flip">(if: $afterMidnight)[24.11.73](else:)[23.11.73]</span>(set: $midnightJustPassed to false)](else:)[<span class="scene-date">(if: $afterMidnight)[24.11.73](else:)[23.11.73]</span>]
+<!-- SOHO MAP (2026-09-01): the walkable hub, under the date and clear of the lamp.
+     The UserScript engine builds the canvas into this container, reads the venue
+     links rendered below as its doors (all unlock logic stays in the links) and
+     parks those link hooks off-screen. -->
+<div id="soho-map-container"></div>
 <!-- DAWN CLOCK is numeric-only: the TURNS readout in the header carries the
      count (amber at 3 or fewer, ember on the last turn; "The dawn is here."
      at zero). The diegetic sky washes and beat lines were removed at
@@ -54090,6 +54593,30 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 }
 
 
+
+/* ===== SOHO MAP — the walkable hub (2026-09-01) ===== */
+/* Sits UNDER the date, clear of the lamp, and fills the window: as wide as
+   the viewport allows, capped so the whole map also fits the window height. */
+.soho-map-wrap { display: block; position: relative; z-index: 2; clear: both; margin: 0.8em 0 1.2em; left: 50%; transform: translateX(-50%); width: min(96vw, 1180px, calc((100vh - 230px) * 26 / 22)); }
+.soho-map-stage { position: relative; }
+.soho-map-wrap canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid rgba(200,168,106,0.28); box-shadow: 0 0 0 3px rgba(8,7,10,0.9), 0 10px 40px rgba(0,0,0,0.6); background: #0b0b10; outline: none; }
+.soho-map-wrap canvas:focus-visible { border-color: rgba(200,168,106,0.7); }
+/* door labels: real type over the canvas, lit in the door's own colour; clicking one is the mouse way in */
+.soho-door-label { position: absolute; transform: translate(-50%, -50%); margin: 0; padding: 0.14em 0.5em 0.1em; background: rgba(6,5,10,0.86); border: 1px solid var(--door-col); border-radius: 2px; color: #efe2c4; font-family: 'Playfair Display', Georgia, serif; font-size: 0.66em; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; line-height: 1.3; cursor: pointer; box-shadow: 0 0 10px var(--door-glow), 0 0 2px var(--door-glow); text-shadow: 0 0 6px var(--door-glow); z-index: 3; }
+.soho-door-label.soho-door-grey { color: #8f8677; border-color: rgba(120,110,95,0.5); cursor: default; }
+.soho-door-label.soho-door-shut { color: #55504a; border-color: rgba(70,65,60,0.5); background: rgba(6,5,10,0.6); cursor: default; }
+.soho-door-label.soho-door-open:hover, .soho-door-label.soho-door-open:focus-visible { color: #fff6e0; box-shadow: 0 0 16px var(--door-glow), 0 0 4px var(--door-glow); }
+.soho-map-bar { box-sizing: border-box; display: flex; justify-content: space-between; align-items: baseline; gap: 1em; padding: 0.4em 0.2em 0; font-family: 'Playfair Display', Georgia, serif; letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.78em; color: #8a9bae; min-height: 1.7em; }
+.soho-map-bar .smb-glyphs { letter-spacing: 0.1em; text-transform: none; text-align: right; }
+.soho-map-bar .smb-note { color: #b39a68; text-transform: none; letter-spacing: 0.04em; font-style: italic; font-family: 'Crimson Text', Georgia, serif; font-size: 1.1em; }
+.soho-dpad { display: none; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; margin: 0.6em auto 0; width: max-content; }
+@media (hover: none) and (pointer: coarse) { .soho-dpad { display: grid; } }
+.soho-dpad button { background: rgba(20,18,24,0.92); border: 1px solid rgba(200,168,106,0.35); color: #c8a86a; font-size: 1.2em; border-radius: 6px; touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer; }
+.soho-dpad button:active { background: rgba(200,168,106,0.25); }
+/* The hub's own link hooks are parked off-screen while the map is up: no
+   layout gap, but layout boxes KEPT so their links still take a JS click
+   (Harlowe drops clicks on display:none links). */
+tw-passage.soho-map-on tw-hook.soho-hub-dock { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 
 /* ===== REDUCED MOTION (2026-09-01, audit A3/R1) =====
    The 65 infinite decorative loops (mist bands, flicker, sway, drift) run a

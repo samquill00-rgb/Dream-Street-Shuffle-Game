@@ -3903,7 +3903,8 @@ window.dssDeferIfBusy = function(retry) {
 // builds the scene when it appears and tears it down when it goes (the same
 // pattern as the 3D approach scenes).
 (function(){
-var T = 16, COLS = 26, ROWS = 22, W = COLS*T, H = ROWS*T;
+var T = 16, COLS = 26, ROWS = 22, SKY = 3, W = COLS*T, H = (ROWS+SKY)*T; // SKY rows of night above the grid: Centre Point, moon, far roofs
+var WIN_BLINK = [], CHIMNEYS = [];
 // Dean (7-8), Frith (13-14), Greek (19-20) run north-south; Bateman Street
 // (rows 5-6) and Old Compton Street (rows 15-16) cross them.
 var ROAD_COLS = {7:1, 8:1, 13:1, 14:1, 19:1, 20:1};
@@ -4031,7 +4032,7 @@ function drawPave(x, c, r) {
 function drawRoof(x, c, r) {
   x.fillStyle = seeded(c,r,1) > 0.5 ? PAL.roof : PAL.roofLight; x.fillRect(0, 0, T, T);
   x.fillStyle = PAL.roofSeam; x.fillRect(0, 0, T, 1); x.fillRect(0, 0, 1, T);
-  if (seeded(c,r,2) > 0.72) { x.fillStyle = PAL.chimney; x.fillRect(4 + Math.floor(seeded(c,r,3)*7), 3, 3, 4); x.fillStyle = PAL.roofSeam; x.fillRect(4 + Math.floor(seeded(c,r,3)*7), 3, 3, 1); }
+  if (seeded(c,r,2) > 0.72) { var cxp = 4 + Math.floor(seeded(c,r,3)*7); x.fillStyle = PAL.chimney; x.fillRect(cxp, 3, 3, 4); x.fillStyle = PAL.roofSeam; x.fillRect(cxp, 3, 3, 1); if (CHIMNEYS.length < 4 && seeded(c,r,9) > 0.6) CHIMNEYS.push({x: c*T + cxp + 1, y: r*T + 3, k: CHIMNEYS.length}); }
 }
 function drawFacade(x, c, r, litCol) {
   var v = seeded(c, r, 4);
@@ -4040,6 +4041,7 @@ function drawFacade(x, c, r, litCol) {
   else { x.fillStyle = PAL.stucco2; x.fillRect(0, 5, T, 1); x.fillRect(0, 11, T, 1); }
   var w = litCol ? (seeded(c,r,5) > 0.45 ? lighten(litCol, 0.35) : lighten(litCol, 0.1)) : (seeded(c,r,6) > 0.74 ? PAL.winWarm : PAL.winDark);
   x.fillStyle = w; x.fillRect(3, 3, 3, 4); x.fillRect(10, 3, 3, 4);
+  if (w === PAL.winWarm && WIN_BLINK.length < 9 && seeded(c,r,7) > 0.5) WIN_BLINK.push({x: c*T + (seeded(c,r,8) > 0.5 ? 3 : 10), y: r*T + 3, k: WIN_BLINK.length});
   x.fillStyle = w === PAL.winDark ? PAL.winGlass : w; x.fillRect(3, 10, 3, 4); x.fillRect(10, 10, 3, 4);
   x.fillStyle = PAL.soot; x.fillRect(3, 5, 3, 1); x.fillRect(10, 5, 3, 1);
 }
@@ -4083,9 +4085,35 @@ function drawLampPost(x, lamp) {
   x.fillStyle = lamp.ginger ? PAL.ginger : PAL.lampHead; x.fillRect(6, 1, 4, 3);
 }
 
+function drawSky(x, doors) {
+  var sh = SKY*T;
+  var g = x.createLinearGradient(0, 0, 0, sh); g.addColorStop(0, '#05050a'); g.addColorStop(1, '#12121c');
+  x.fillStyle = g; x.fillRect(0, 0, W, sh);
+  // last stars
+  for (var i = 0; i < 26; i++) { var sx = Math.floor(seeded(i, 3, 11) * W), sy = Math.floor(seeded(i, 5, 12) * (sh - 14)); x.fillStyle = seeded(i, 7, 13) > 0.6 ? '#d8d4e6' : '#8c8aa0'; x.fillRect(sx, sy, 1, 1); }
+  // the moon, cut into the night
+  x.fillStyle = '#e9e2cf'; x.beginPath(); x.arc(W - 46, 12, 6, 0, Math.PI*2); x.fill();
+  x.fillStyle = '#12121c'; x.beginPath(); x.arc(W - 43, 10, 5, 0, Math.PI*2); x.fill();
+  // far roofs along the bottom of the sky
+  x.fillStyle = '#0c0c13';
+  for (var c = 0; c < COLS; c++) { var hgt = 4 + Math.floor(seeded(c, 9, 14) * 9); x.fillRect(c*T, sh - hgt, T, hgt); if (seeded(c, 9, 15) > 0.7) x.fillRect(c*T + 5, sh - hgt - 4, 3, 4); }
+  // CENTRE POINT: the honeycomb tower at the top of Dean Street
+  var tx = 7*T + 3, tw = 26, ty = 2, th = sh - 2;
+  var open = doors.north.status === 'open';
+  if (open) { var hg = x.createRadialGradient(tx + tw/2, sh - 6, 2, tx + tw/2, sh - 6, 46); hg.addColorStop(0, 'rgba(226,178,148,0.5)'); hg.addColorStop(1, 'rgba(226,178,148,0)'); x.fillStyle = hg; x.fillRect(tx - 40, 0, tw + 80, sh); }
+  x.fillStyle = '#0a0a11'; x.fillRect(tx, ty, tw, th);
+  x.fillStyle = '#16161f'; x.fillRect(tx + 1, ty, 1, th); x.fillRect(tx + tw - 2, ty, 1, th);
+  for (var wy = ty + 3; wy < th - 2; wy += 4) for (var wx = tx + 3; wx < tx + tw - 3; wx += 4) {
+    var lit = seeded(wx, wy, 16) > (open ? 0.35 : 0.72);
+    x.fillStyle = lit ? (open ? '#e2b294' : '#8a7a5a') : '#14141c'; x.fillRect(wx, wy, 2, 2);
+  }
+}
 function buildBase(doors) {
   var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   var x = cv.getContext('2d');
+  WIN_BLINK.length = 0; CHIMNEYS.length = 0;
+  drawSky(x, doors);
+  x.translate(0, SKY*T);
   for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
     x.save(); x.translate(c*T, r*T);
     var d = doorAt(c, r);
@@ -4107,6 +4135,7 @@ function buildBase(doors) {
   });
   LAMPS.forEach(function(l){ x.save(); x.translate(l.c*T, l.r*T); drawLampPost(x, l); x.restore(); });
   x.fillStyle = PAL.roadLine; x.fillRect(7*T, 0, 2*T, 1);
+  x.setTransform(1, 0, 0, 1, 0, 0);
   return cv;
 }
 // Light: sodium lamps, then every door spills its OWN colour — a halo on the
@@ -4115,13 +4144,24 @@ function buildBase(doors) {
 function buildGlow(doors) {
   var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   var x = cv.getContext('2d');
+  x.translate(0, SKY*T);
+  // wet-road reflections: broken vertical smears of a light on the tarmac
+  function smear(px, py, col, a) {
+    var c0 = Math.floor(px / T), r0 = Math.floor(py / T);
+    for (var i = 0; i < 9; i++) {
+      var sx = px + Math.floor((seeded(px, py, i) - 0.5) * 12), sy = py + 4 + Math.floor(seeded(px, py, i + 30) * 26), len = 2 + Math.floor(seeded(px, py, i + 60) * 6);
+      var cc = Math.floor(sx / T), rr = Math.floor(sy / T);
+      if (!inBounds(cc, rr) || !isRoad(cc, rr)) continue;
+      x.fillStyle = rgba(col, a * (0.35 + 0.4 * seeded(sx, sy, 2))); x.fillRect(sx, sy, 1, len);
+    }
+  }
   function halo(px, py, rad, col, a) { var g = x.createRadialGradient(px, py, 1, px, py, rad); g.addColorStop(0, rgba(col, a)); g.addColorStop(0.55, rgba(col, a*0.35)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(px-rad, py-rad, rad*2, rad*2); }
   function pool(px, py, rx, ry, col, a) { x.save(); x.translate(px, py); x.scale(rx/ry, 1); var g = x.createRadialGradient(0, 0, 1, 0, 0, ry); g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(-ry, -ry, ry*2, ry*2); x.restore(); }
-  LAMPS.forEach(function(l){ halo(l.c*T + 8, l.r*T + 3, 30, l.ginger ? [232,134,42] : [217,164,65], l.ginger ? 0.28 : 0.18); });
+  LAMPS.forEach(function(l){ halo(l.c*T + 8, l.r*T + 3, 30, l.ginger ? [232,134,42] : [217,164,65], l.ginger ? 0.28 : 0.18); [[-1,0],[1,0],[0,1],[0,-1]].forEach(function(d){ if (inBounds(l.c + d[0], l.r + d[1]) && isRoad(l.c + d[0], l.r + d[1])) smear((l.c + d[0])*T + 8, l.r*T - 6, l.ginger ? [232,134,42] : [217,164,65], 0.55); }); });
   DOORS.forEach(function(d){
     var st = doors[d.id].status; if (st === 'shut') return;
     var a = st === 'open' ? 0.82 : 0.18;
-    if (d.id === 'north') { var g = x.createLinearGradient(0, 0, 0, 56); g.addColorStop(0, rgba(d.col, a*0.9)); g.addColorStop(1, rgba(d.col, 0)); x.fillStyle = g; x.fillRect(5*T, 0, 6*T, 56); return; }
+    if (d.id === 'north') { return; }
     var side = doorSide(d);
     var dx = d.c*T + 8, dy = d.r*T + 8;
     halo(dx, dy, 30, d.col, a * 0.75);
@@ -4130,7 +4170,11 @@ function buildGlow(doors) {
     if (side === 'w' || side === 'e') pool(px + (side === 'w' ? 3 : -3), py, 18, 34, d.col, a);
     else pool(px, py + (side === 'n' ? 3 : -3), 34, 18, d.col, a);
     if (d.spot) halo(px, py, 26, d.col, a * 0.5);
+    // the door's colour lies on the wet road beyond the pavement
+    var rc = d.fc + (side === 'e' ? 1 : side === 'w' ? -1 : 0), rr2 = d.fr + (side === 's' ? 1 : side === 'n' ? -1 : 0);
+    if (inBounds(rc, rr2) && isRoad(rc, rr2)) smear(rc*T + 8, rr2*T - 4, d.col, a * 0.9);
   });
+  x.setTransform(1, 0, 0, 1, 0, 0);
   return cv;
 }
 
@@ -4222,15 +4266,29 @@ function init(container) {
     var el = document.createElement('button'); el.type = 'button';
     el.className = 'soho-door-label soho-door-' + st.status;
     el.textContent = d.label;
-    // label floats over the road beside the door (roads are the dark space)
-    var side = doorSide(d), ltx, lty;
-    if (side === 'e') { ltx = d.fc + 2.6; lty = d.r + 0.5; } else if (side === 'w') { ltx = d.fc - 1.6; lty = d.r + 0.5; }
-    else if (side === 'n') { ltx = d.c + 0.5; lty = d.fr - 1.4; } else { ltx = d.c + 0.5; lty = d.fr + 2.4; }
+    // label sits directly above the doorway marker, so name and door read as one thing
+    var side = doorSide(d), ltx = d.c + 0.5, lty = d.r - 1.35;
+    if (!d.spot || d.id === 'cecil') {
+      var mk = document.createElement('div'); mk.className = 'soho-door-mark soho-door-mark-' + st.status;
+      mk.style.setProperty('--door-col', rgba(d.col, 1)); mk.style.setProperty('--door-glow', rgba(d.col, st.status === 'open' ? 0.85 : 0.15));
+      var gid = 'sdg-' + d.id, inner = st.status === 'open' ? 'url(#' + gid + ')' : '#2a2019', frame = st.status === 'open' ? '#f3e6c8' : '#6a5f52';
+      mk.innerHTML = '<svg viewBox="0 0 24 36" aria-hidden="true"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff8e2"/><stop offset="0.55" stop-color="' + lighten(d.col, 0.25) + '"/><stop offset="1" stop-color="' + mix(d.col, 0.8) + '"/></linearGradient></defs>' +
+        '<rect x="0" y="33" width="24" height="3" rx="0.6" fill="#cdbb95"/>' +
+        '<path d="M2.2 33 V12 A9.8 9.8 0 0 1 21.8 12 V33 Z" fill="#0b0a10" stroke="' + frame + '" stroke-width="1.5"/>' +
+        '<path d="M5 33 V12.6 A7 7 0 0 1 19 12.6 V33 Z" fill="' + inner + '"/>' +
+        '<path d="M5 15.5 A7 7 0 0 1 19 15.5" fill="none" stroke="#0b0a10" stroke-width="1.1"/>' +
+        '<line x1="12" y1="6" x2="12" y2="15.5" stroke="#0b0a10" stroke-width="0.9"/>' +
+        '<circle cx="15.6" cy="24.5" r="1.05" fill="#0b0a10"/>' +
+        (st.status === 'open' ? '<circle cx="12" cy="9.5" r="1.6" fill="#fff8e2"/>' : '') +
+        '</svg>';
+      mk.style.left = ((d.c + 0.5) / COLS * 100) + '%'; mk.style.top = ((d.r + 0.5 + SKY) / (ROWS + SKY) * 100) + '%';
+      stage.appendChild(mk);
+    }
     if (d.id === 'north') { ltx = 8; lty = 0.7; }
-    if (d.id === 'cecil') { ltx = 22.5; lty = 15.5; }
+    if (d.id === 'cecil') { ltx = 23.6; lty = 15.6; }
     if (d.id === 'ginger') { ltx = 11.6; lty = 14.5; }
-    if (d.id === 'chippy') { ltx = 10.5; lty = 16; }
-    el.style.left = (ltx / COLS * 100) + '%'; el.style.top = (lty / ROWS * 100) + '%';
+    if (d.id === 'north') { lty = -1.4; }
+    el.style.left = (ltx / COLS * 100) + '%'; el.style.top = ((lty + SKY) / (ROWS + SKY) * 100) + '%';
     el.style.setProperty('--door-col', rgba(d.col, 1));
     el.style.setProperty('--door-glow', rgba(d.col, st.status === 'open' ? 0.75 : 0.0));
     el.setAttribute('aria-label', d.name + (st.status === 'open' ? '' : (st.status === 'grey' ? '. ' + st.label : '. Not tonight.')));
@@ -4352,11 +4410,17 @@ function init(container) {
     x.drawImage(base, 0, 0);
     var flick = 0.88 + 0.12 * Math.sin(S.t * 0.21) * Math.sin(S.t * 0.077 + 1.3);
     x.globalAlpha = flick; x.drawImage(glow, 0, 0); x.globalAlpha = 1;
+    x.save(); x.translate(0, SKY*T);
+    // windows: someone moves about behind a few of them
+    for (var wi = 0; wi < WIN_BLINK.length; wi++) { var wb = WIN_BLINK[wi]; if (((S.t / 60 + wb.k * 3.7) % 11) < 0.9) { x.fillStyle = '#1b1810'; x.fillRect(wb.x, wb.y, 3, 4); } }
+    // chimney smoke
+    for (var ci = 0; ci < CHIMNEYS.length; ci++) { var ch = CHIMNEYS[ci]; for (var pi = 0; pi < 5; pi++) { var ph = ((S.t * 0.35 + pi * 24 + ch.k * 40) % 120) / 120; var sx2 = ch.x + Math.sin(ph * 6 + ch.k) * 3 + ph * 6, sy2 = ch.y - ph * 30; x.fillStyle = 'rgba(150,150,170,' + (0.22 * (1 - ph)) + ')'; x.fillRect(Math.round(sx2), Math.round(sy2), 2 + Math.round(ph * 2), 2); } }
     if (S.walker) { x.drawImage(walkerSprites[S.walker.dir][S.walker.f], Math.round(S.walker.x), S.walker.y - 2); }
     var sp = sprites[S.facing][S.moving ? S.frame : 0];
     var hx = Math.round(S.px) + 8, hy = Math.round(S.py) + 10;
     var hg = x.createRadialGradient(hx, hy, 1, hx, hy, 16); hg.addColorStop(0, 'rgba(226,222,240,0.26)'); hg.addColorStop(1, 'rgba(226,222,240,0)'); x.fillStyle = hg; x.fillRect(hx-16, hy-16, 32, 32);
     x.drawImage(sp, Math.round(S.px) + 2, Math.round(S.py) - 2);
+    x.restore();
     var vg = x.createRadialGradient(W/2, H/2, H*0.45, W/2, H/2, W*0.72); vg.addColorStop(0, 'rgba(4,3,8,0)'); vg.addColorStop(1, 'rgba(4,3,8,0.45)');
     x.fillStyle = vg; x.fillRect(0, 0, W, H);
     if (S.entering) { x.fillStyle = 'rgba(4,3,8,' + Math.min(1, S.enterT / 14) + ')'; x.fillRect(0, 0, W, H); }
@@ -54628,10 +54692,17 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 /* ===== SOHO MAP — the walkable hub (2026-09-01) ===== */
 /* Sits UNDER the date, clear of the lamp, and fills the window: as wide as
    the viewport allows, capped so the whole map also fits the window height. */
-.soho-map-wrap { display: block; position: relative; z-index: 2; clear: both; margin: 0.8em 0 1.2em; left: 50%; transform: translateX(-50%); width: min(96vw, 1180px, calc((100vh - 230px) * 26 / 22)); }
+.soho-map-wrap { display: block; position: relative; z-index: 2; clear: both; margin: 0.8em 0 1.2em; left: 50%; transform: translateX(-50%); width: min(96vw, 1180px, calc((100vh - 230px) * 26 / 25)); }
 .soho-map-stage { position: relative; }
-.soho-map-wrap canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid rgba(200,168,106,0.28); box-shadow: 0 0 0 3px rgba(8,7,10,0.9), 0 10px 40px rgba(0,0,0,0.6); background: #0b0b10; outline: none; }
+.soho-map-wrap canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid rgba(200,168,106,0.45); box-shadow: 0 0 0 4px #08070a, 0 0 0 5px rgba(200,168,106,0.3), 0 12px 44px rgba(0,0,0,0.65); background: #0b0b10; outline: none; }
 .soho-map-wrap canvas:focus-visible { border-color: rgba(200,168,106,0.7); }
+/* doorway markers: a vector arched door standing on its step over the door tile, lit from
+   inside in the door's colour, so a door is unmistakably a door at any map size */
+.soho-door-mark { position: absolute; width: calc(100% * 1.5 / 26); transform: translate(-50%, -58%); pointer-events: none; z-index: 2; filter: drop-shadow(0 0 5px var(--door-glow)) drop-shadow(0 0 14px var(--door-glow)); }
+.soho-door-mark svg { display: block; width: 100%; height: auto; }
+.soho-door-mark-open { animation: sohoDoorBreathe 3.2s ease-in-out infinite; }
+.soho-door-mark-grey { opacity: 0.7; filter: none; }
+@keyframes sohoDoorBreathe { 0%, 100% { filter: drop-shadow(0 0 4px var(--door-glow)) drop-shadow(0 0 12px var(--door-glow)); } 50% { filter: drop-shadow(0 0 7px var(--door-glow)) drop-shadow(0 0 22px var(--door-glow)); } }
 /* door labels: real type over the canvas, lit in the door's own colour; clicking one is the mouse way in */
 .soho-door-label { position: absolute; transform: translate(-50%, -50%); margin: 0; padding: 0.14em 0.5em 0.1em; background: rgba(6,5,10,0.86); border: 1px solid var(--door-col); border-radius: 2px; color: #efe2c4; font-family: 'Playfair Display', Georgia, serif; font-size: 0.66em; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; line-height: 1.3; cursor: pointer; box-shadow: 0 0 10px var(--door-glow), 0 0 2px var(--door-glow); text-shadow: 0 0 6px var(--door-glow); z-index: 3; }
 .soho-door-label.soho-door-grey { color: #8f8677; border-color: rgba(120,110,95,0.5); cursor: default; }

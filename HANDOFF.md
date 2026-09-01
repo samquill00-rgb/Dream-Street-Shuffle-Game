@@ -69,6 +69,16 @@
 3. See the batch below for the live checks (Nazca attend link + a haunt site's cue).
 4. Remaining phase-2 items: Soho-responds weaves into current main passages (critic $mantraComplete, Lackland $nazcaTracing, Dean Street links); notebook gift OBJECTS/CHANT/22 paths; hexagram map reveal + real Alt-Dawn body (Sam's prose).
 
+### 17i — MAP AESTHETIC PASS (Sam: "what about aesthetically?")
+1. **Sky band**: `SKY = 3` rows of night above the grid (canvas H = (ROWS+SKY)*T = 400; base/glow/sprites drawn under a `translate(0, SKY*T)`; labels offset by SKY; CSS aspect 26/25). `drawSky()`: gradient, 26 seeded stars, a crescent moon top-right, jagged far roofs along the sky's foot, and **CENTRE POINT** — the honeycomb tower (2×2 lit cells on a 4px grid) standing over Dean Street's north exit; when the dawn/Fetch is offered the tower's windows go dawn-rose with a glow behind it (the old north glow strip is gone). Centre Point label sits in the sky.
+2. **Wet-road reflections**: `smear()` in buildGlow — broken vertical 1px dashes of a light's colour on ROAD tiles only, under every lamp (all four neighbours) and beyond every open door's pavement.
+3. **Life**: up to 9 warm windows blink dark for ~1s on staggered 11s cycles (`WIN_BLINK`, registered in drawFacade); up to 4 chimneys (`CHIMNEYS`, registered in drawRoof) trail 5-particle smoke wisps.
+4. **Frame**: double gold hairline (1px 0.45 + 5px-offset 0.3) over the dark mat.
+5. Verified live: renders, 0 tw-errors, console clean; screenshot eyeballed (tower, moon, smears, lit doors). Registers reset per build (`WIN_BLINK.length = 0` in buildBase).
+6. **DOORWAY MARKERS (Sam: "still not obviously doors")**: every open/grey door (and the Cecil alley) gets a `.soho-door-mark` DOM overlay — an inline SVG arched doorway (dark frame, cream stroke, interior gradient white→door colour, fanlight bars, knob, step, a lamp dot when open) sized 1.5 tiles wide over the door tile, drop-shadow glow in the door colour, 3.2s breathe on open ones; the label now sits DIRECTLY ABOVE the marker (lty = r − 1.35) instead of out in the road. Shut doors get nothing (still unlabelled). Eyeballed: reads as a door at pane size.
+
+**Commit now = the .twee, the .html, sync_html.py, CLAUDE.md.**
+
 **Commit = 2 files (.twee + .html), uncommitted — Sam commits via GitHub Desktop.**
 
 ## ⚠ ADDENDUM 14 (2026-08-21) — V2 DREAM-WORLDS PORT ONTO MAIN, PHASE 1 (foundation SHIPPED + verified)

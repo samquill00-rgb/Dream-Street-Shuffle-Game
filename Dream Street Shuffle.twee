@@ -181,6 +181,9 @@ Dream Street Shuffle
 (set: $nazcaRaceWon to false)\
 (set: $pyramidRunWon to false)\
 (set: $himalayaClimbWon to false)\
+(set: $wonTurnCue to false)\
+(set: $crossingTurnCue to false)\
+(set: $refusedTurnCue to false)\
 (set: $keyEye to "seed")
 
 
@@ -2271,6 +2274,25 @@ window.dssAudio = (function() {
   window._jazzMiniDataUri = '__DSS_JAZZMINI_DATA_URI__';
   window._pongMiniDataUri = '__DSS_PONGMINI_DATA_URI__';
   window._waltzMiniDataUri = '__DSS_WALTZ_DATA_URI__';
+  /* LINKED-AUDIO PREFETCH (2026-09-01): sync_html.py now writes relative file
+     URLs into the placeholders above instead of base64 (AUDIO_MODE = "link"),
+     which took ~55 MB out of the html. Beds still decode lazily on first play,
+     so warm the browser cache for every real URL a few seconds after boot;
+     data: URIs (embed mode) and unreplaced __DSS_ placeholders are skipped. */
+  setTimeout(function(){
+    try {
+      var urls = [MUSIC_FILE, window._cowGameDataUri, window._jazzMiniDataUri, window._pongMiniDataUri, window._waltzMiniDataUri];
+      for (var i = 0; i < _ambientBeds.length; i++) urls.push(_ambientBeds[i].dataUri);
+      var seen = {};
+      urls.forEach(function(u){
+        if (!u || seen[u] || u.indexOf('data:') === 0 || u.indexOf('__DSS_') === 0) return;
+        seen[u] = true;
+        var l = document.createElement('link');
+        l.rel = 'prefetch'; l.as = 'fetch'; l.href = u; l.crossOrigin = 'anonymous';
+        document.head.appendChild(l);
+      });
+    } catch(e) {}
+  }, 4000);
   // Ronnie Scott's — Dr Quill's original "Firebird jazz" loop: a C# minor
   // folk-hymn (after Stravinsky's Firebird) reharmonised with Coltrane changes.
   // This IS the Ronnie's venue music — it replaced the old jazz-bar field
@@ -4094,11 +4116,21 @@ function createPanel() {
   panel.addEventListener('mouseout', function(e) { if (e.target.classList.contains('dss-dbg-jump')) e.target.style.background = 'rgba(255,255,255,0.03)'; });
 }
 
-/* ── DEV FLAG ── the debug panel (backtick) is dev-only. Set false for the
-   commercial release. The hash-jump boot hook (in sync_html.py's injected
-   script) is left ungated — it needs a hand-typed URL and doubles as the
-   session test harness. */
-window.DSS_DEV = true;
+/* ── DEV FLAG ── the debug panel (backtick), the three dream-game skip links
+   and the climb's summit key all hang off this. It is OPT-IN now (2026-09-01,
+   release hygiene): on for localhost, or with ?dev=1 in the URL (remembered
+   in localStorage until ?dev=0), never on for a plain visit to the live site.
+   The hash-jump boot hook (in the html's injected script) stays ungated — it
+   needs a hand-typed URL and doubles as the session test harness. */
+window.DSS_DEV = (function(){
+  try {
+    var m = location.search.match(/[?&]dev=([01])/);
+    if (m) localStorage.setItem('dssDev', m[1]);
+    if (localStorage.getItem('dssDev') === '1') return true;
+    if (localStorage.getItem('dssDev') === '0') return false;
+  } catch(e) {}
+  return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+})();
 document.addEventListener('keydown', function(e) {
   if (window.DSS_DEV && e.key === '`') { e.preventDefault(); createPanel(); }
 });
@@ -4224,7 +4256,7 @@ window.venueHintPopup = function() {
      own per-element vhEnter animation. */
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(4,3,8,0.85);display:flex;align-items:center;justify-content:center;z-index:19999;opacity:0;transition:opacity 0.55s ease;';
   overlay.innerHTML =
-    '<div class="venue-hint-box wtw-no-enter">' +
+    '<div class="venue-hint-box wtw-no-enter" role="dialog" aria-modal="true" aria-label="A word to the wise" tabindex="-1">' +
       '<div class="vh-mist vh-mist1"></div>' +
       '<div class="vh-mist vh-mist2"></div>' +
       '<div class="vh-mist vh-mist3"></div>' +
@@ -4240,12 +4272,17 @@ window.venueHintPopup = function() {
   document.body.appendChild(overlay);
   void overlay.offsetWidth;
   overlay.style.opacity = '1';
+  /* a11y (audit A3): move focus into the dialog, hand it back on dismiss. */
+  var prevFocus = document.activeElement;
+  var focusBox = overlay.querySelector('.venue-hint-box');
+  if (focusBox) { try { focusBox.focus({ preventScroll: true }); } catch(e) {} }
   var dismissed = false;
   function dismiss(){
     if (dismissed) return;
     dismissed = true;
     overlay.style.opacity = '0';
     document.removeEventListener('keydown', onKey);
+    if (prevFocus && prevFocus.focus && document.body.contains(prevFocus)) { try { prevFocus.focus({ preventScroll: true }); } catch(e) {} }
     setTimeout(function(){ if (overlay.parentNode) overlay.remove(); }, 600);
   }
   function onKey(e){ if (e.key === 'Escape') dismiss(); }
@@ -4762,7 +4799,7 @@ window.wordToTheWisePopup = function(message) {
      the wtw-no-enter class neutralises it. */
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(4,3,8,0.85);display:flex;align-items:center;justify-content:center;z-index:19999;opacity:0;transition:opacity 0.55s ease;';
   overlay.innerHTML =
-    '<div class="venue-hint-box wtw-no-enter">' +
+    '<div class="venue-hint-box wtw-no-enter" role="dialog" aria-modal="true" aria-label="A word to the wise" tabindex="-1">' +
       '<div class="vh-mist vh-mist1"></div>' +
       '<div class="vh-mist vh-mist2"></div>' +
       '<div class="vh-mist vh-mist3"></div>' +
@@ -4774,12 +4811,17 @@ window.wordToTheWisePopup = function(message) {
      animates rather than snapping. */
   void overlay.offsetWidth;
   overlay.style.opacity = '1';
+  /* a11y (audit A3): move focus into the dialog, hand it back on dismiss. */
+  var prevFocus = document.activeElement;
+  var focusBox = overlay.querySelector('.venue-hint-box');
+  if (focusBox) { try { focusBox.focus({ preventScroll: true }); } catch(e) {} }
   var dismissed = false;
   function dismiss(){
     if (dismissed) return;
     dismissed = true;
     overlay.style.opacity = '0';
     document.removeEventListener('keydown', onKey);
+    if (prevFocus && prevFocus.focus && document.body.contains(prevFocus)) { try { prevFocus.focus({ preventScroll: true }); } catch(e) {} }
     setTimeout(function(){ if (overlay.parentNode) overlay.remove(); }, 600);
   }
   function onKey(e){ if (e.key === 'Escape') dismiss(); }
@@ -40614,7 +40656,7 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
 </script>
 
 :: Waltz Result Up {"position":"300,1660","size":"100,100"}
-(set: $confidence to ($statGain: $confidence, 14))(set: $sobriety to ($statGain: $sobriety, 6))(go-to: "Approach O'Flatterly")
+(set: $confidence to ($statGain: $confidence, 14))(set: $sobriety to ($statGain: $sobriety, 6))(set: $returns to (max: 1, $returns - 1))(set: $wonTurnCue to true)(go-to: "Approach O'Flatterly")
 
 :: Waltz Result Down {"position":"450,1660","size":"100,100"}
 (set: $confidence to ($statLoss: $confidence, 14))(set: $sobriety to ($statLoss: $sobriety, 8))(set: $returns to $returns + 1)(set: $lostTurnCue to true)(go-to: "Approach O'Flatterly")
@@ -40710,7 +40752,7 @@ You're eating at the counter when somebody passes the window: that's Lily.
 (if: _lilyRing)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">A phone rings, the barman answers it, then looks you in the eye and mouths, 'Lily'.
 
 |lilyring>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 6))(go-to: "Lily phone call 1")]
-(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
+(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $returns to $returns + 1)(set: $refusedTurnCue to true)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]]]]</div>]
 (else-if: _dualRing)[(set: $lilyCallReturn to "Coach and Horses lock")<div class="phone-ringing">The phone behind the bar rings.
 
@@ -41062,7 +41104,7 @@ Better not tomorrow.
      at zero). The diegetic sky washes and beat lines were removed at
      Dr Quill's request (2026-07-18). -->\
 
-(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)<div id="coin-overlay"><div class="coin-overlay-box"><div class="coin-overlay-stage"><div class="coin-overlay-disc" id="coin-overlay-disc"><div class="cp-face cp-heads"></div><div class="cp-face cp-tails"></div></div></div><p class="coin-overlay-text">You found a coin on the pavement; a rare one, called a &#39;Donkey&#39;. There&#39;s only one. Toss it and pocket it. You&#39;ll want it later.</p><span class="inventory-note">&#9734; COIN ACQUIRED</span><button class="coin-overlay-btn" id="coin-toss-btn">Toss it</button><span class="coin-overlay-result" id="coin-overlay-result"></span><button class="coin-overlay-btn coin-overlay-dismiss" id="coin-keep-btn" style="visibility:hidden">Pocket it</button></div></div><script>(function(){var tossCount=0,maxToss=2,stage=document.querySelector(".coin-overlay-stage");var sequence=[false,true];var pocketed=false;function sparks(){for(var i=0;12>i;i++){var s=document.createElement("div");s.className="cp-spark";var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty("--sx",(Math.cos(a*Math.PI/180)*dist)+"px");s.style.setProperty("--sy",(Math.sin(a*Math.PI/180)*dist)+"px");s.style.animationDelay=(Math.random()*0.3)+"s";s.style.animationDuration=(0.5+Math.random()*0.5)+"s";stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById("coin-toss-btn").addEventListener("click",function(){var d=document.getElementById("coin-overlay-disc"),r=document.getElementById("coin-overlay-result"),b=this,o=document.getElementById("coin-overlay");if(pocketed)return;if(d.classList.contains("cp-flipping"))return;if(window.dssAudio)window.dssAudio.coinFlip();var heads=sequence[tossCount];tossCount++;var endDeg=heads?"1440deg":"1620deg";var restDeg=heads?"0deg":"180deg";d.style.setProperty("--cp-end",endDeg);d.classList.remove("cp-flipping");void d.offsetWidth;d.classList.add("cp-flipping");sparks();r.textContent="";b.classList.add("coin-btn-hidden");setTimeout(function(){if(pocketed)return;r.textContent=heads?"Heads.":"Tails.";d.style.transform="rotateX("+restDeg+")";d.classList.remove("cp-flipping");if(tossCount>=maxToss){setTimeout(function(){if(pocketed)return;o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1800);}else{setTimeout(function(){if(pocketed)return;r.textContent="";b.classList.remove("coin-btn-hidden");b.textContent="Toss again";b.classList.add("coin-overlay-dismiss");var kb=document.getElementById("coin-keep-btn");if(kb){kb.style.visibility="visible";kb.classList.remove("coin-overlay-dismiss");kb.classList.add("coin-overlay-primary");}},2200);}},2000);});var keepBtn=document.getElementById("coin-keep-btn");if(keepBtn){keepBtn.addEventListener("click",function(){if(pocketed)return;pocketed=true;var o=document.getElementById("coin-overlay");var box=o&&o.querySelector(".coin-overlay-box");if(!o||!box)return;var tb=document.getElementById("coin-toss-btn");if(tb){tb.classList.add("coin-btn-hidden");tb.style.pointerEvents="none";}for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}this.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById("coin-overlay");if(ov){ov.addEventListener("click",function(e){if(e.target===ov&&tossCount>0){ov.classList.add("coin-overlay-fade");setTimeout(function(){ov.remove();},800);}});}})();</script>]\
+(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)<div id="coin-overlay"><div class="coin-overlay-box" role="dialog" aria-modal="true" aria-label="A coin on the pavement"><div class="coin-overlay-stage"><div class="coin-overlay-disc" id="coin-overlay-disc"><div class="cp-face cp-heads"></div><div class="cp-face cp-tails"></div></div></div><p class="coin-overlay-text">You found a coin on the pavement; a rare one, called a &#39;Donkey&#39;. There&#39;s only one. Toss it and pocket it. You&#39;ll want it later.</p><span class="inventory-note">&#9734; COIN ACQUIRED</span><button class="coin-overlay-btn" id="coin-toss-btn">Toss it</button><span class="coin-overlay-result" id="coin-overlay-result"></span><button class="coin-overlay-btn coin-overlay-dismiss" id="coin-keep-btn" style="visibility:hidden">Pocket it</button></div></div><script>(function(){var tossCount=0,maxToss=2,stage=document.querySelector(".coin-overlay-stage");var sequence=[false,true];var pocketed=false;function sparks(){for(var i=0;12>i;i++){var s=document.createElement("div");s.className="cp-spark";var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty("--sx",(Math.cos(a*Math.PI/180)*dist)+"px");s.style.setProperty("--sy",(Math.sin(a*Math.PI/180)*dist)+"px");s.style.animationDelay=(Math.random()*0.3)+"s";s.style.animationDuration=(0.5+Math.random()*0.5)+"s";stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById("coin-toss-btn").addEventListener("click",function(){var d=document.getElementById("coin-overlay-disc"),r=document.getElementById("coin-overlay-result"),b=this,o=document.getElementById("coin-overlay");if(pocketed)return;if(d.classList.contains("cp-flipping"))return;if(window.dssAudio)window.dssAudio.coinFlip();var heads=sequence[tossCount];tossCount++;var endDeg=heads?"1440deg":"1620deg";var restDeg=heads?"0deg":"180deg";d.style.setProperty("--cp-end",endDeg);d.classList.remove("cp-flipping");void d.offsetWidth;d.classList.add("cp-flipping");sparks();r.textContent="";b.classList.add("coin-btn-hidden");setTimeout(function(){if(pocketed)return;r.textContent=heads?"Heads.":"Tails.";d.style.transform="rotateX("+restDeg+")";d.classList.remove("cp-flipping");if(tossCount>=maxToss){setTimeout(function(){if(pocketed)return;o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1800);}else{setTimeout(function(){if(pocketed)return;r.textContent="";b.classList.remove("coin-btn-hidden");b.textContent="Toss again";b.classList.add("coin-overlay-dismiss");var kb=document.getElementById("coin-keep-btn");if(kb){kb.style.visibility="visible";kb.classList.remove("coin-overlay-dismiss");kb.classList.add("coin-overlay-primary");}},2200);}},2000);});var keepBtn=document.getElementById("coin-keep-btn");if(keepBtn){keepBtn.addEventListener("click",function(){if(pocketed)return;pocketed=true;var o=document.getElementById("coin-overlay");var box=o&&o.querySelector(".coin-overlay-box");if(!o||!box)return;var tb=document.getElementById("coin-toss-btn");if(tb){tb.classList.add("coin-btn-hidden");tb.style.pointerEvents="none";}for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}this.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById("coin-overlay");if(ov){ov.addEventListener("click",function(e){if(e.target===ov&&tossCount>0){ov.classList.add("coin-overlay-fade");setTimeout(function(){ov.remove();},800);}});}})();</script>]\
 <!-- TURNS teaching — fires once on the second hub visit, queued by the popup
      serializer behind the coin overlay, so it reads: coin pocketed, then the
      word about the night's count (visible in the header directly above).
@@ -41074,12 +41116,26 @@ Better not tomorrow.
      the next hub return, under the count that just dropped by two; after
      that the number speaks for itself. The cue clears on every visit. -->
 (if: $lostTurnCue is true)[(set: $lostTurnCue to false)(if: $shownLostTurnTip is not true)[(set: $shownLostTurnTip to true)<span id="wtw-lostturn-msg" style="display:none">A lost game costs an extra turn of the night. The one you just lost has already been counted.</span><script>setTimeout(function(){var el=document.getElementById('wtw-lostturn-msg');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},600);</script>]]
+<!-- WON-TURN teaching — the performance minigames hand a turn of the night
+     back on a win ($wonTurnCue set in their win passages, where $returns is
+     decremented). Explained ONCE, at the next hub return; the cue clears on
+     every visit. -->
+(if: $wonTurnCue is true)[(set: $wonTurnCue to false)(if: $shownWonTurnTip is not true)[(set: $shownWonTurnTip to true)<span id="wtw-wonturn-msg" style="display:none">A won game gives a turn of the night back. The one you just won has already been counted.</span><script>setTimeout(function(){var el=document.getElementById('wtw-wonturn-msg');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},600);</script>]]
+<!-- CROSSING-TURN teaching — stepping through the third pillar costs a turn
+     ($crossingTurnCue set on the portal's hidden world links, where $returns
+     is incremented). Explained ONCE, at the next hub return. -->
+(if: $crossingTurnCue is true)[(set: $crossingTurnCue to false)(if: $shownCrossingTurnTip is not true)[(set: $shownCrossingTurnTip to true)<span id="wtw-crossing-msg" style="display:none">Crossing the third pillar costs a turn of the night. The crossing you have just made has already been counted.</span><script>setTimeout(function(){var el=document.getElementById('wtw-crossing-msg');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},600);</script>]]
+<!-- REFUSED-TURN teaching — "I'm not here" on a ringing phone costs a turn
+     ($refusedTurnCue set on the six refusal links, where $returns is incremented;
+     "Turn and leave" on the dual ring is untouched, it already ends the night).
+     Explained ONCE, at the next hub return. -->
+(if: $refusedTurnCue is true)[(set: $refusedTurnCue to false)(if: $shownRefusedTurnTip is not true)[(set: $shownRefusedTurnTip to true)<span id="wtw-refused-msg" style="display:none">Pretending you are not here costs a turn of the night. The call you just refused has already been counted.</span><script>setTimeout(function(){var el=document.getElementById('wtw-refused-msg');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},600);</script>]]
 <!-- LEDGER teaching — the filled/hollow rule behind every glyph family on
      the venue links (◆◇ haunts, ❀❁ flowers, ▲△ passwords, ★☆ page, ✦✧
      alba). Fires once, on the first hub visit where haunt pips are actually
      visible ($hauntExplained flips when the haunts modal has shown). -->
 (if: $hauntExplained is true and $shownLedgerTip is not true)[(set: $shownLedgerTip to true)<span id="wtw-ledger-msg" style="display:none">The small marks beside each door are the night's ledger. A filled mark is a thing taken; a hollow mark is a thing still waiting.</span><script>setTimeout(function(){var el=document.getElementById('wtw-ledger-msg');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},600);</script>]
-(if: $visited's French is true and $hasMatches is false and $returns is not 2)[(set: $hasMatches to true)<div id="match-overlay" style="display:none"><div class="coin-overlay-box"><div class="coin-overlay-stage"><svg class="match-svg" viewBox="0 0 100 72" width="92" height="66" xmlns="http://www.w3.org/2000/svg"><rect x="12" y="28" width="76" height="38" rx="3" fill="#c89a3e" stroke="#6e4e18" stroke-width="1.5"/><rect x="12" y="28" width="76" height="9" rx="3" fill="#6e4e18" opacity="0.32"/><rect x="78" y="28" width="10" height="38" fill="#7a2030"/><g stroke="#43121a" stroke-width="0.7" opacity="0.55"><line x1="80" y1="32" x2="80" y2="62"/><line x1="82.5" y1="32" x2="82.5" y2="62"/><line x1="85" y1="32" x2="85" y2="62"/></g><text x="45" y="52" text-anchor="middle" font-family="Georgia,serif" font-size="10" fill="#3a2510" letter-spacing="1">MATCHES</text><g transform="rotate(-10 28 18)"><rect x="26.5" y="8" width="3" height="20" rx="1" fill="#efe6d0"/><ellipse cx="28" cy="8" rx="3.4" ry="4" fill="#b83524"/></g><g transform="rotate(2 38 16)"><rect x="36.5" y="6" width="3" height="21" rx="1" fill="#efe6d0"/><ellipse cx="38" cy="6" rx="3.4" ry="4" fill="#c0392b"/></g></svg></div><p class="coin-overlay-text">On the way out you swipe a box of matches from a newly-empty table. You&#39;ve been looking for a light. Now you can smoke again.</p><span class="inventory-note">&#9734; MATCHES ACQUIRED</span><button class="coin-overlay-btn coin-overlay-dismiss" id="match-keep-btn">Pocket them</button></div></div><script>(function(){var btn=document.getElementById("match-keep-btn"),o=document.getElementById("match-overlay");if(!btn||!o)return;var gen=window._passageGen;function othersBusy(){return window._drinkPopupOpen===true||!!document.querySelector("#coin-overlay,#cig-overlay,#eat-overlay,#venue-hint-overlay,#word-wise-overlay,#wtw-overlay,#liver-eat-overlay,.dss-rules-overlay");}function reveal(){if(window._passageGen!==gen || window._dssMatchPopupDone){if(o.parentNode)o.parentNode.removeChild(o);return;}if(othersBusy()){setTimeout(reveal,200);return;}window._dssMatchPopupDone=true;o.style.display="flex";}function close(){var box=o.querySelector(".coin-overlay-box");if(box){for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}}btn.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);}btn.addEventListener("click",close);o.addEventListener("click",function(e){if(e.target===o)close();});reveal();})();</script>]
+(if: $visited's French is true and $hasMatches is false and $returns is not 2)[(set: $hasMatches to true)<div id="match-overlay" style="display:none"><div class="coin-overlay-box" role="dialog" aria-modal="true" aria-label="A box of matches"><div class="coin-overlay-stage"><svg class="match-svg" viewBox="0 0 100 72" width="92" height="66" xmlns="http://www.w3.org/2000/svg"><rect x="12" y="28" width="76" height="38" rx="3" fill="#c89a3e" stroke="#6e4e18" stroke-width="1.5"/><rect x="12" y="28" width="76" height="9" rx="3" fill="#6e4e18" opacity="0.32"/><rect x="78" y="28" width="10" height="38" fill="#7a2030"/><g stroke="#43121a" stroke-width="0.7" opacity="0.55"><line x1="80" y1="32" x2="80" y2="62"/><line x1="82.5" y1="32" x2="82.5" y2="62"/><line x1="85" y1="32" x2="85" y2="62"/></g><text x="45" y="52" text-anchor="middle" font-family="Georgia,serif" font-size="10" fill="#3a2510" letter-spacing="1">MATCHES</text><g transform="rotate(-10 28 18)"><rect x="26.5" y="8" width="3" height="20" rx="1" fill="#efe6d0"/><ellipse cx="28" cy="8" rx="3.4" ry="4" fill="#b83524"/></g><g transform="rotate(2 38 16)"><rect x="36.5" y="6" width="3" height="21" rx="1" fill="#efe6d0"/><ellipse cx="38" cy="6" rx="3.4" ry="4" fill="#c0392b"/></g></svg></div><p class="coin-overlay-text">On the way out you swipe a box of matches from a newly-empty table. You&#39;ve been looking for a light. Now you can smoke again.</p><span class="inventory-note">&#9734; MATCHES ACQUIRED</span><button class="coin-overlay-btn coin-overlay-dismiss" id="match-keep-btn">Pocket them</button></div></div><script>(function(){var btn=document.getElementById("match-keep-btn"),o=document.getElementById("match-overlay");if(!btn||!o)return;var gen=window._passageGen;function othersBusy(){return window._drinkPopupOpen===true||!!document.querySelector("#coin-overlay,#cig-overlay,#eat-overlay,#venue-hint-overlay,#word-wise-overlay,#wtw-overlay,#liver-eat-overlay,.dss-rules-overlay");}function reveal(){if(window._passageGen!==gen || window._dssMatchPopupDone){if(o.parentNode)o.parentNode.removeChild(o);return;}if(othersBusy()){setTimeout(reveal,200);return;}window._dssMatchPopupDone=true;o.style.display="flex";}function close(){var box=o.querySelector(".coin-overlay-box");if(box){for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}}btn.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);}btn.addEventListener("click",close);o.addEventListener("click",function(e){if(e.target===o)close();});reveal();})();</script>]
 |deanIntro>[A heavy afternoon lingers in rainfall on the pavements though the sky has cleared now and the newborn night is cut with moonshine.
 
 There is an atmosphere of the silver screen. Brando might emerge in a tight and sodden T-shirt, from any door or alleyway, anytime.]
@@ -41116,11 +41172,15 @@ There is an atmosphere of the silver screen. Brando might emerge in a tight and 
 (if: $coachUrgent is false and _dawnHere is false and not (($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2)))[[[To The French|Approach The French]] (if: $haunts contains $haunt4)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt1)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $haunts contains $haunt2)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] (if: $tookLily5 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
 ](if: $coachUrgent is false and _dawnHere is false and ($haunts contains $haunt4) and ($haunts contains $haunt1) and ($haunts contains $haunt2))[(if: $tookLily5 is false)[<div class="choice-box">[[Back to The French|Approach The French]]</div> <span class="lp">❁</span>](else-if: not _towerReady)[[[Back to The French|Approach The French]] <span class="lp lp-done">❀</span>](else:)[<span class="greyed-out">The French</span> <span class="lp lp-done">❀</span>]
 ]\
-(if: $coachUrgent is false and _dawnHere is false and $visited's French is true and $hadPhoneCall is true and $metCritic is false)[[[To The Pillars|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>](if: $tookLily2 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
-](else-if: $coachUrgent is false and _dawnHere is false and $visited's French is true and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>](if: $tookLily2 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
-](else-if: $coachUrgent is false and _dawnHere is false and $visited's French is true and $metCritic is true and $knowsAboutPage is true and not ($alba contains $alba2))[[[The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]<span class="lp lp-done">❀</span>
-](else-if: $coachUrgent is false and _dawnHere is false and $visited's French is true and $metCritic is true and $tookLily2 is false)[<span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>] <span class="lp">❁</span>
-](else-if: $coachUrgent is false and _dawnHere is false and $visited's French is true and $metCritic is true and $tookLily2 is true)[<span class="greyed-out">The Pillars</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]<span class="lp lp-done">❀</span>
+<!-- PILLARS OPEN FROM THE START (2026-09-01, quick win 3): the French-first gate
+     was dropped from every Pillars branch so the first hub with doors offers a real
+     choice (French or Pillars). Nothing at the Pillars reads $visited's French; the
+     stats primer still fires on the first French entry, whenever that comes. -->
+(if: $coachUrgent is false and _dawnHere is false and $hadPhoneCall is true and $metCritic is false)[[[To The Pillars|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>](if: $tookLily2 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
+](else-if: $coachUrgent is false and _dawnHere is false and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>](if: $tookLily2 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
+](else-if: $coachUrgent is false and _dawnHere is false and $metCritic is true and $knowsAboutPage is true and not ($alba contains $alba2))[[[The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]<span class="lp lp-done">❀</span>
+](else-if: $coachUrgent is false and _dawnHere is false and $metCritic is true and $tookLily2 is false)[<span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>] <span class="lp">❁</span>
+](else-if: $coachUrgent is false and _dawnHere is false and $metCritic is true and $tookLily2 is true)[<span class="greyed-out">The Pillars</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]<span class="lp lp-done">❀</span>
 ]\
 (if: $coachUrgent is false and _dawnHere is false and $haunts contains $haunt1 and not ($knowsRonnies is true and $knowsCopperSecret is true))[[[Try the Colony Room|Approach The Colony Room]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] (if: $tookLily4 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
 ](else-if: $coachUrgent is false and _dawnHere is false and $visited's French is true and $visited's Colony is true and $tookLily4 is false)[<div class="choice-box">[[Back to The Colony Room|Approach The Colony Room]]</div> (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] <span class="hp hp-done">◆</span> <span class="lp">❁</span>
@@ -41225,7 +41285,7 @@ Whatever more you choose comes out in the wash:
 (if: _lilyRing)[(set: $lilyCallReturn to "Entering The Pillars of Hercules")<div class="phone-ringing">A phone rings, the barman answers it, then looks you in the eye and mouths, 'Lily'.
 
 |lilyring>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 6))(go-to: "Lily phone call 1")]
-(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
+(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $returns to $returns + 1)(set: $refusedTurnCue to true)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]]]]</div>]
 (else-if: _dualRing)[(set: $lilyCallReturn to "Entering The Pillars of Hercules")<div class="phone-ringing">The phone behind the bar rings.
 
@@ -41237,7 +41297,7 @@ Whatever more you choose comes out in the wash:
 (if: $hadPhoneCall is false)[<div class="phone-ringing">Behind the bar a phone rings and your name is called.
 
 |aoifering>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 9))(go-to: "The phone call")]
-(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 4))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(replace: ?aoifering)[The barman looks you over utterly neutrally. He wishes he wasn't paid to be part of this game. 'Not seen him,' he says, and puts back the receiver.
+(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 4))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $returns to $returns + 1)(set: $refusedTurnCue to true)(replace: ?aoifering)[The barman looks you over utterly neutrally. He wishes he wasn't paid to be part of this game. 'Not seen him,' he says, and puts back the receiver.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]
 [[Back to Dean Street|Dean Street]]]]]</div>]
 (else-if: $metCritic is false)[Through the fumes, vapours and drink, you recognise a man.
@@ -41414,12 +41474,15 @@ You're floored and Copper stands over you, barely moved. He feints a final attac
 
 
 :: Fight Victory [venue-cellar] {"position":"2000,1250","size":"100,100"}
+<!-- DAWN CLOCK: a won fight hands a turn of the night back (mirror of the Fight Defeat charge). -->
+(set: $returns to (max: 1, $returns - 1))(set: $wonTurnCue to true)\
 <!-- Swinging bulb -->
 <div class="cellar-bulb-wrap">
 <svg width="48" height="90" viewBox="0 0 48 90"><line x1="24" y1="0" x2="24" y2="30" stroke="#888878" stroke-width="1.4" opacity="0.75"/><rect x="17" y="28" width="14" height="10" rx="2.5"fill="rgba(80,78,65,0.9)" stroke="rgba(160,155,120,0.7)" stroke-width="1"/><rect x="19" y="36" width="10" height="3" rx="1"fill="none" stroke="rgba(150,145,110,0.55)" stroke-width="0.8"/><ellipse cx="24" cy="60" rx="20" ry="22"fill="rgba(255,245,160,0.12)"/><path d="M24,38 C16,38 10,45 10,55 C10,67 16,78 24,78 C32,78 38,67 38,55 C38,45 32,38 24,38 Z"fill="rgba(255,252,210,0.95)" stroke="rgba(220,210,160,0.6)" stroke-width="0.8"/><ellipse cx="24" cy="57" rx="9" ry="11"fill="rgba(255,240,120,0.55)"/><path d="M18,60 L20,53 L24,58 L28,53 L30,60"fill="none" stroke="rgba(255,200,40,0.95)" stroke-width="1.4" stroke-linejoin="round"/><rect x="20" y="75" width="8" height="3" rx="1"fill="rgba(200,195,155,0.65)" stroke="none"/></svg>
 </div>
 <div class="cellar-scene">
 <div class="cellar-light"></div>
+<div class="inventory-note">GAME WON | TURN +1</div>
 <div class="pp-arena">
 <div class="pp-score"><span class="pp-result-win">🥊 STANDING 🥊</span></div>
 </div>
@@ -41436,12 +41499,15 @@ Copper stumbles. This will go no further; though Quiet Frankie has begun to feel
 [[Escape up the stairs|Standing]]]
 
 :: Fight Victory Perfect [venue-cellar] {"position":"2000,1150","size":"100,100"}
+<!-- DAWN CLOCK: a won fight hands a turn of the night back (mirror of the Fight Defeat charge). -->
+(set: $returns to (max: 1, $returns - 1))(set: $wonTurnCue to true)\
 <!-- Swinging bulb -->
 <div class="cellar-bulb-wrap">
 <svg width="48" height="90" viewBox="0 0 48 90"><line x1="24" y1="0" x2="24" y2="30" stroke="#888878" stroke-width="1.4" opacity="0.75"/><rect x="17" y="28" width="14" height="10" rx="2.5"fill="rgba(80,78,65,0.9)" stroke="rgba(160,155,120,0.7)" stroke-width="1"/><rect x="19" y="36" width="10" height="3" rx="1"fill="none" stroke="rgba(150,145,110,0.55)" stroke-width="0.8"/><ellipse cx="24" cy="60" rx="20" ry="22"fill="rgba(255,245,160,0.12)"/><path d="M24,38 C16,38 10,45 10,55 C10,67 16,78 24,78 C32,78 38,67 38,55 C38,45 32,38 24,38 Z"fill="rgba(255,252,210,0.95)" stroke="rgba(220,210,160,0.6)" stroke-width="0.8"/><ellipse cx="24" cy="57" rx="9" ry="11"fill="rgba(255,240,120,0.55)"/><path d="M18,60 L20,53 L24,58 L28,53 L30,60"fill="none" stroke="rgba(255,200,40,0.95)" stroke-width="1.4" stroke-linejoin="round"/><rect x="20" y="75" width="8" height="3" rx="1"fill="rgba(200,195,155,0.65)" stroke="none"/></svg>
 </div>
 <div class="cellar-scene">
 <div class="cellar-light"></div>
+<div class="inventory-note">GAME WON | TURN +1</div>
 <div class="pp-arena">
 <div class="pp-score"><span class="pp-result-win">🥊 PERFECT SCORE 🥊</span></div>
 </div>
@@ -41767,7 +41833,13 @@ At the back round the biggest table is a family you know, playing cards with an 
 
 Among them, with his back to you, is your old friend. The eldest of the children. You see him before he sees you.
 
-(link: "Listen")[(set: $alba to $alba + (a: $alba2))
+<!-- SOBRIETY GATE (2026-09-01, quick win 4): too drunk and the line goes under the
+     roar. Threshold 30 matches Shana's Devil line. The only exit is Dean Street, so
+     the price is a sober-up and a second crossing; the hub's Pillars link stays open
+     until $alba2 is caught. The drunk prose is a pink draft for Sam. -->
+(if: $sobriety < 30)[(link: "Listen")[<div class="claude-draft">He speaks. The family roars on round, as his sister winds a trick, and the words go under the roar. You are too far gone to hold them. Whatever he said, it was not for tonight.</div>
+
+[[Wake from this dream|Dean Street]]]](else:)[(link: "Listen")[(set: $alba to $alba + (a: $alba2))
 He speaks. The family roars on round, as his sister winds a trick, but you hear this:
 
 <div class="revelation-box" data-alba="2">
@@ -41776,7 +41848,7 @@ He speaks. The family roars on round, as his sister winds a trick, but you hear 
 
 <strong class="alba-counter">THE SECOND LINE OF THREE</strong>
 
-<span class="alba-link-fade">[[Then.|LINE 2 Oxford]]</span>]
+<span class="alba-link-fade">[[Then.|LINE 2 Oxford]]</span>]]
 
 :: LINE 2 Oxford [green-sea] {"position":"1000,200","size":"100,100"}
 (if: $sawMemory2 is false)[(set: $sawMemory2 to true)<div class="memory-photo memory-photo-2"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl2" cx="78%" cy="22%" r="78%"><stop offset="0%" stop-color="#f8d088" stop-opacity="0.95"/><stop offset="26%" stop-color="#d89048" stop-opacity="0.5"/><stop offset="58%" stop-color="#2a2860" stop-opacity="0.3"/><stop offset="100%" stop-color="#0a0820" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl2)"/></svg><div class="mp-prose">Late May night and the sexy airs of summer, the trees' munificence. Her staircase and then her, footsteps away. And in the night-blown roses of your ears, repeating what you've learned for your exams:</div></div></div>]
@@ -42083,7 +42155,10 @@ Inis O'Flatterly is searching for a missing page; page 93 in his manuscript. You
 
 :: PP Victory [venue-lackland-back] {"position":"1200,2550","size":"100,100"}
 (set: $confidence to ($statGain: $confidence, 14))\
+<!-- DAWN CLOCK: a won game hands a turn of the night back (mirror of the PP Defeat charge). -->
+(set: $returns to (max: 1, $returns - 1))(set: $wonTurnCue to true)\
 (if: $pongStake is true)[(set: $pongStake to false)(set: $confidence to ($statGain: $confidence, 20))<div class="inventory-note">&#163;20 WON | MORALE +20</div>]\
+<div class="inventory-note">GAME WON | TURN +1</div>
 <div class="pp-arena">
 <div class="pp-score"><span class="pp-result-win">★ VICTORY ★</span></div>
 </div>
@@ -42118,13 +42193,16 @@ Inis O'Flatterly is searching for a missing page; page 93 in his manuscript. You
 :: Bar Canvas Win [venue-ronnies] {"position":"2050,1900","size":"100,100"}
 <div class="ronnies-scene">
 (display: "Ronnies Rule SVG h14")
+<div class="inventory-note">GAME WON | TURN +1</div>
 <div class="pp-arena">
 <div class="pp-score"><span class="pp-result-win">★ SIGNED, SEALED, DELIVERED ★</span></div>
 </div>
 
 They take the drinks: UNO… DOS… UNO, DOS, TRES, CUATRO!
 (set: $completedSetlist to true)\
-(set: $confidence to ($statGain: $confidence, 12))
+(set: $confidence to ($statGain: $confidence, 12))\
+<!-- DAWN CLOCK: a won game hands a turn of the night back (mirror of the Bar Canvas Lose charge). -->
+(set: $returns to (max: 1, $returns - 1))(set: $wonTurnCue to true)
 [[Listen|The Set]]
 (display: "Ronnies Rule SVG h14")
 </div>
@@ -43712,6 +43790,9 @@ loop();
 (set: $cowRideDone to true)\
 (set: $confidence to ($statGain: $confidence, 8))\
 (set: $sobriety to ($statGain: $sobriety, 8))\
+<!-- DAWN CLOCK: a won ride hands a turn of the night back (the fail charges one). -->
+(set: $returns to (max: 1, $returns - 1))(set: $wonTurnCue to true)\
+<div class="inventory-note">GAME WON | TURN +1</div>
 <div class="typewriter-page">
 Greek, Frith, Dean, Wardour, Berwick, Poland.
 
@@ -43727,6 +43808,8 @@ It's coming up!
 :: Cow ride fail {"position":"900,1300","size":"100,100"}
 (set: $confidence to ($statLoss: $confidence, 6))\
 (set: $cowRideDone to true)\
+<!-- DAWN CLOCK: a lost ride eats an extra turn, like the other performance games. -->
+(set: $returns to $returns + 1)(set: $lostTurnCue to true)\
 <div class="typewriter-page">
 The beast throws you onto the pissant cobblestones, trots off and never looks back.
 
@@ -43746,7 +43829,7 @@ The beast throws you onto the pissant cobblestones, trots off and never looks ba
 (if: _lilyRing)[(set: $lilyCallReturn to "Ronnie Scott's")<div class="phone-ringing">A phone rings, the barman answers it, then looks you in the eye and mouths, 'Lily'.
 
 |lilyring>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 6))(go-to: "Lily phone call 1")]
-(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
+(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $returns to $returns + 1)(set: $refusedTurnCue to true)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]]]]</div>]
 (else-if: _dualRing)[(set: $lilyCallReturn to "Ronnie Scott's")<div class="phone-ringing">The phone behind the bar rings.
 
@@ -44023,7 +44106,7 @@ As you go, you remember, wholly and as a lone, remarkable thought: Ronnie Scott'
 (if: _lilyRing)[(set: $lilyCallReturn to "The Colony Room")<div class="phone-ringing">A phone rings, the barman answers it, then looks you in the eye and mouths, 'Lily'.
 
 |lilyring>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 6))(go-to: "Lily phone call 1")]
-(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
+(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $returns to $returns + 1)(set: $refusedTurnCue to true)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]]]]</div>]
 (else-if: _dualRing)[(set: $lilyCallReturn to "The Colony Room")<div class="phone-ringing">The phone behind the bar rings.
 
@@ -44087,7 +44170,7 @@ Outside, leaning upon Dean Street, with a glass in his hand gone stray from anot
 (if: _lilyRing)[(set: $lilyCallReturn to "The French")<div class="phone-ringing">A phone rings, the barman answers it, then looks you in the eye and mouths, 'Lily'.
 
 |lilyring>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 6))(go-to: "Lily phone call 1")]
-(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
+(link: "I'm not here")[(set: $confidence to ($statLoss: $confidence, 3))(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $returns to $returns + 1)(set: $refusedTurnCue to true)(replace: ?lilyring)[What would Lily want with you? You couldn't speak to her now, you are not ready.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]]]]</div>]
 (else-if: _dualRing)[(set: $lilyCallReturn to "The French")<div class="phone-ringing">The phone behind the bar rings.
 
@@ -46060,6 +46143,9 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 #pyr-run-canvas { width: 100%; height: auto; display: block; border: 1px solid rgba(212,174,106,0.25); background: #17100a; }
 #pyr-run-banner { position: absolute; top: 34%; left: 0; right: 0; text-align: center; font-family: 'Playfair Display', Georgia, serif; font-size: 34px; color: rgba(240,225,190,0.95); text-shadow: 0 2px 12px rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.3s ease; pointer-events: none; letter-spacing: 0.12em; }
 #pyr-run-hud { text-align: center; font-family: 'Crimson Text', Georgia, serif; font-size: 0.85em; letter-spacing: 0.12em; color: rgba(200,180,140,0.75); margin-top: 0.6em; }
+.dss-mini-exit { display: block; text-align: center; margin-top: 1.1em; font-size: 1.25em; letter-spacing: 0.06em; opacity: 0; animation: dssMiniExitIn 1.2s ease 0.6s forwards; }
+.dss-mini-exit tw-link { color: #e8cf8e; text-shadow: 0 0 14px rgba(212,176,80,0.45); }
+@keyframes dssMiniExitIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* v2-expansion: Nazca Race stage */
 .nazca-race-frame { position: relative; overflow: hidden; border-radius: 3px; }
@@ -54005,6 +54091,14 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 
 
 
+/* ===== REDUCED MOTION (2026-09-01, audit A3/R1) =====
+   The 65 infinite decorative loops (mist bands, flicker, sway, drift) run a
+   single cycle and settle; one-shot reveals keep their timing so nothing that
+   waits on animationend breaks. Scroll-smoothing is dropped too. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+
 :: Cecil Rule SVG {"position":"3000,2400","size":"100,100"}
 <svg class="cecil-rule" viewBox="0 0 400 50" width="100%" height="50" preserveAspectRatio="none"><defs><linearGradient id="ccFade" x1="0" x2="1"><stop offset="0%" stop-color="#8a6a30" stop-opacity="0"/><stop offset="10%" stop-color="#a08040" stop-opacity="0.5"/><stop offset="50%" stop-color="#c8a050" stop-opacity="0.55"/><stop offset="90%" stop-color="#a08040" stop-opacity="0.5"/><stop offset="100%" stop-color="#8a6a30" stop-opacity="0"/></linearGradient></defs><g filter="url(#dss-ink-fine)"><line x1="10" y1="4" x2="390" y2="4" stroke="url(#ccFade)" stroke-width="0.8"/><line x1="10" y1="46" x2="390" y2="46" stroke="url(#ccFade)" stroke-width="0.8"/><rect x="42" y="8" width="8" height="34" rx="1" fill="#6b2828" fill-opacity="0.5" stroke="#8a3a3a" stroke-width="0.7"/><line x1="44" y1="10" x2="44" y2="40" stroke="#8a3a3a" stroke-width="0.4" opacity="0.5"/><rect x="51" y="10" width="7" height="30" rx="1" fill="#2a5a30" fill-opacity="0.45" stroke="#4a7a4a" stroke-width="0.6" transform="rotate(-6,54,25)"/><rect x="59" y="12" width="5" height="28" rx="0.5" fill="#8a6a20" fill-opacity="0.4" stroke="#c8a050" stroke-width="0.5"/><rect x="65" y="9" width="10" height="32" rx="1" fill="#28405a" fill-opacity="0.45" stroke="#4a6888" stroke-width="0.7"/><line x1="68" y1="11" x2="68" y2="39" stroke="#4a6888" stroke-width="0.4" opacity="0.4"/><line x1="71" y1="11" x2="71" y2="39" stroke="#4a6888" stroke-width="0.3" opacity="0.3"/><rect x="76" y="14" width="6" height="24" rx="1" fill="#5a2040" fill-opacity="0.4" stroke="#7a3858" stroke-width="0.6" transform="rotate(5,79,26)"/><path d="M84,33 Q90,28 96,33 Q90,37 84,33Z" fill="none" stroke="#c8a050" stroke-width="0.7" opacity="0.5"/><circle cx="90" cy="33" r="1.5" fill="#c8a050" fill-opacity="0.35"/><path d="M90,37 Q88,42 86,46" fill="none" stroke="#c8a050" stroke-width="0.6" opacity="0.4"/><path d="M93,35 Q95,40 93,44" fill="none" stroke="#c8a050" stroke-width="0.5" opacity="0.3"/><rect x="145" y="7" width="9" height="36" rx="1" fill="#1a4a28" fill-opacity="0.5" stroke="#3a6a40" stroke-width="0.7"/><line x1="148" y1="9" x2="148" y2="41" stroke="#3a6a40" stroke-width="0.4" opacity="0.4"/><rect x="155" y="10" width="8" height="30" rx="1" fill="#6a3020" fill-opacity="0.45" stroke="#8a4a30" stroke-width="0.6"/><path d="M165,30 Q172,22 180,30" fill="none" stroke="#d4c4a0" stroke-width="0.7" opacity="0.5"/><path d="M165,30 Q168,26 172,24" fill="#d4c4a0" fill-opacity="0.12" stroke="#c8b890" stroke-width="0.5" opacity="0.45"/><path d="M180,30 Q176,26 172,24" fill="#d4c4a0" fill-opacity="0.12" stroke="#c8b890" stroke-width="0.5" opacity="0.45"/><line x1="167" y1="27" x2="171" y2="25" stroke="#a09070" stroke-width="0.3" opacity="0.35"/><line x1="167" y1="29" x2="170" y2="27" stroke="#a09070" stroke-width="0.3" opacity="0.3"/><line x1="174" y1="25" x2="178" y2="27" stroke="#a09070" stroke-width="0.3" opacity="0.35"/><line x1="174" y1="27" x2="177" y2="29" stroke="#a09070" stroke-width="0.3" opacity="0.3"/><path d="M188,8 Q186,20 184,34 L185,36 Q187,24 190,10 Z" fill="#d0c0a0" fill-opacity="0.25" stroke="#b8a880" stroke-width="0.5" opacity="0.5"/><line x1="184.5" y1="36" x2="183" y2="44" stroke="#b8a880" stroke-width="0.5" opacity="0.4"/><rect x="194" y="8" width="7" height="34" rx="1" fill="#1a2040" fill-opacity="0.45" stroke="#3a4a68" stroke-width="0.6"/><rect x="202" y="11" width="8" height="28" rx="1" fill="#4a2050" fill-opacity="0.4" stroke="#6a3870" stroke-width="0.6"/><circle cx="218" cy="18" r="6" fill="none" stroke="#c8a050" stroke-width="0.9" opacity="0.45"/><circle cx="218" cy="18" r="5" fill="#c8d0e0" fill-opacity="0.04" stroke="none"/><line x1="222" y1="23" x2="228" y2="32" stroke="#c8a050" stroke-width="1" opacity="0.4" stroke-linecap="round"/><rect x="280" y="10" width="7" height="30" rx="1" fill="#205050" fill-opacity="0.45" stroke="#3a7070" stroke-width="0.6"/><rect x="288" y="8" width="9" height="34" rx="1" fill="#7a6020" fill-opacity="0.45" stroke="#a08030" stroke-width="0.7"/><line x1="291" y1="10" x2="291" y2="40" stroke="#a08030" stroke-width="0.4" opacity="0.4"/><rect x="298" y="12" width="6" height="26" rx="1" fill="#6a2020" fill-opacity="0.4" stroke="#8a3030" stroke-width="0.6" transform="rotate(4,301,25)"/><rect x="305" y="9" width="8" height="32" rx="1" fill="#4a5a20" fill-opacity="0.4" stroke="#6a7a30" stroke-width="0.6"/><ellipse cx="320" cy="38" rx="8" ry="3" fill="#d4c4a0" fill-opacity="0.15" stroke="#b8a870" stroke-width="0.6" opacity="0.45"/><line x1="312" y1="38" x2="312" y2="20" stroke="#b8a870" stroke-width="0.4" opacity="0.35"/><path d="M310,20 Q312,16 314,20" fill="none" stroke="#b8a870" stroke-width="0.5" opacity="0.35"/><circle cx="340" cy="32" r="5" fill="none" stroke="#6a8a70" stroke-width="0.6" opacity="0.4"/><path d="M335,32 Q340,28 345,32" fill="none" stroke="#6a8a70" stroke-width="0.4" opacity="0.3"/><path d="M335,32 Q340,36 345,32" fill="none" stroke="#6a8a70" stroke-width="0.4" opacity="0.3"/><line x1="340" y1="27" x2="340" y2="37" stroke="#6a8a70" stroke-width="0.3" opacity="0.3"/><ellipse cx="110" cy="20" rx="2.5" ry="3" fill="none" stroke="#c8a050" stroke-width="0.5" opacity="0.3"/><line x1="110" y1="23" x2="110" y2="32" stroke="#c8a050" stroke-width="0.45" opacity="0.3"/><line x1="108" y1="26" x2="112" y2="26" stroke="#c8a050" stroke-width="0.45" opacity="0.3"/><path d="M128,36 Q131,32 134,36 L131,44Z" fill="none" stroke="#c8a050" stroke-width="0.5" opacity="0.25"/><path d="M238,18 Q242,21 238,24 Q244,21 238,18Z" fill="#c8a050" fill-opacity="0.2" stroke="#c8a050" stroke-width="0.4" opacity="0.3"/><text x="258" y="42" font-size="7" fill="#c8a050" opacity="0.25" font-family="serif">𓂀</text><circle cx="360" cy="15" r="1" fill="#c8a050" opacity="0.2"/></g></svg>
 
@@ -54645,12 +54739,19 @@ The rain doesn't touch the paper.
 <!-- Hidden Harlowe links — JS clicks the matching one to navigate. The
      visible link text is the world identifier so JS can find it.
      The whole container is display:none so the player never sees them. -->
-<div id="dss-portal-roll" style="display:none">
-[[himalayas-go|Airport Pub]]
-[[nazca-go|Nazca Approach]]
-[[easter-go|Easter Island Shore]]
-[[pyramid-go|Pyramid Mouth]]
-[[ezekiel-go|The Plain of Chebar]]
+<!-- PRICED CROSSING: each hidden world link charges a lap ($returns + 1)
+     and raises $crossingTurnCue for the hub's one-time word. The visible
+     link text stays "<world>-go" so the roll script below still matches.
+     HARLOWE GOTCHA (found 2026-09-01): Harlowe ignores clicks on a tw-link
+     that has no layout box, so a display:none container made every hidden
+     link here (and the fallback link) dead to targetLink.click(). The roll
+     is now parked off-screen instead: laid out, clipped, never seen. -->
+<div id="dss-portal-roll" aria-hidden="true" style="position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
+(link: "himalayas-go")[(set: $returns to $returns + 1)(set: $crossingTurnCue to true)(go-to: "Airport Pub")]
+(link: "nazca-go")[(set: $returns to $returns + 1)(set: $crossingTurnCue to true)(go-to: "Nazca Approach")]
+(link: "easter-go")[(set: $returns to $returns + 1)(set: $crossingTurnCue to true)(go-to: "Easter Island Shore")]
+(link: "pyramid-go")[(set: $returns to $returns + 1)(set: $crossingTurnCue to true)(go-to: "Pyramid Mouth")]
+(link: "ezekiel-go")[(set: $returns to $returns + 1)(set: $crossingTurnCue to true)(go-to: "The Plain of Chebar")]
 </div>
 
 <div class="claude-draft">
@@ -54701,6 +54802,7 @@ A door, where no door was. You don't open it; it was open already.
   var hiddenLinks = document.querySelectorAll('#dss-portal-roll tw-link');
   var targetLink = null;
   for (var i = 0; i < hiddenLinks.length; i++) {
+    hiddenLinks[i].setAttribute('tabindex', '-1'); // off-screen: keep out of the tab order
     var txt = (hiddenLinks[i].textContent || '').trim();
     if (txt === chosen + '-go') { targetLink = hiddenLinks[i]; break; }
   }
@@ -56037,7 +56139,13 @@ A voice from somewhere says, 'Two laps. The line is the line.'
     if (hud) hud.textContent = won ? 'The line is the line.' : 'The line did not mind either way.';
     if (won) endFlare = performance.now();
     var span = document.getElementById(won ? 'nz-race-win' : 'nz-race-lose');
-    if (span) span.style.display = 'block';
+    if (span){
+      span.style.display = 'block';
+      span.classList.add('dss-mini-exit');
+      setTimeout(function(){
+        if (span.scrollIntoView) span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 900);
+    }
     if (window.dssAudio && window.dssAudio.loreUnravel && won) window.dssAudio.loreUnravel();
   }
 
@@ -56389,7 +56497,7 @@ Something is written on the walls in light. You will have to run to read it.
 <canvas id="pyr-run-canvas" width="720" height="450"></canvas>
 <div id="pyr-run-banner"></div>
 </div>
-<div id="pyr-run-hud">Click the dark to begin. Hold ↑ to jump higher. Press ↓ to duck. Hold → to hurry and ← to hang back.</div>
+<div id="pyr-run-hud">Click the dark to begin. Hold ↑ to jump higher. Press ↓ to duck. Hold → to hurry and ← to walk back. Run through the blue marks to gather them.</div>
 </div>
 
 <span id="pyr-run-win" style="display:none;">(link: "Step into the Gallery")[(set: $pyramidRunWon to true)(go-to: "Grand Gallery")]</span>
@@ -56411,7 +56519,7 @@ Something is written on the walls in light. You will have to run to read it.
   // ── Sam's Mario dials (ported from the bar-game carry phase) ─────
   var GRAV = 600, JUMP = -400, JUMPCUT = 0.55, FALLMULT = 1.8;
   var COYOTE = 0.09, BUFFER = 0.12;
-  var BASE = 200, HURRY = 1.45, HANG = 0.62;
+  var BASE = 200, HURRY = 1.45, BACK = -0.75;   // ← now WALKS BACK (Sam: for a missed mark); HANG 0.62 retired
 
   var WORLD_END = 5200;
 
@@ -56521,6 +56629,64 @@ Something is written on the walls in light. You will have to run to read it.
         cx.stroke();
       }
     }
+    // block relief: a light-caught top edge and a shadowed base per course
+    for (var rw = 0; rw < 8; rw++){
+      var ry = rw * 64;
+      cx.fillStyle = 'rgba(96,74,50,0.10)'; cx.fillRect(0, ry + 2, 1024, 5);
+      cx.fillStyle = 'rgba(0,0,0,0.22)'; cx.fillRect(0, ry + 57, 1024, 7);
+    }
+    // painted frieze register along the fourth course, pigment nearly gone
+    var fy = 192;
+    cx.fillStyle = 'rgba(122,44,30,0.15)'; cx.fillRect(0, fy + 8, 1024, 12);
+    cx.fillStyle = 'rgba(180,130,52,0.11)'; cx.fillRect(0, fy + 24, 1024, 30);
+    cx.strokeStyle = 'rgba(212,174,106,0.20)'; cx.lineWidth = 1.4;
+    cx.beginPath(); cx.moveTo(0, fy + 6); cx.lineTo(1024, fy + 6);
+    cx.moveTo(0, fy + 58); cx.lineTo(1024, fy + 58); cx.stroke();
+    // a procession of worn figures walking the frieze
+    cx.strokeStyle = 'rgba(212,174,106,0.17)'; cx.lineWidth = 2; cx.lineCap = 'round';
+    for (var pfg = 0; pfg < 19; pfg++){
+      var fx2 = 22 + pfg*54 + Math.random()*12, fy2 = fy + 36;
+      cx.beginPath();
+      cx.arc(fx2, fy2 - 8, 3.2, 0, Math.PI*2);
+      cx.moveTo(fx2, fy2 - 5); cx.lineTo(fx2 - 4, fy2 + 12);
+      cx.moveTo(fx2, fy2 - 5); cx.lineTo(fx2 + 5, fy2 + 12);
+      cx.moveTo(fx2 - 5, fy2 + 2); cx.lineTo(fx2 + 6, fy2 - 1);
+      cx.stroke();
+    }
+    // recessed niches, each with a seated guardian in the dark
+    for (var nn = 0; nn < 2; nn++){
+      var nx = 170 + nn*540 + Math.random()*50, nyTop = 168, nw = 88, nh = 184;
+      var ng = cx.createLinearGradient(nx, 0, nx + nw, 0);
+      ng.addColorStop(0, 'rgba(0,0,0,0.82)');
+      ng.addColorStop(0.5, 'rgba(6,4,2,0.94)');
+      ng.addColorStop(1, 'rgba(0,0,0,0.82)');
+      cx.fillStyle = ng; cx.fillRect(nx, nyTop, nw, nh);
+      cx.strokeStyle = 'rgba(212,174,106,0.22)'; cx.lineWidth = 2;
+      cx.strokeRect(nx, nyTop, nw, nh);
+      var gxc = nx + nw/2;
+      cx.fillStyle = 'rgba(18,12,8,1)';
+      cx.beginPath();
+      cx.moveTo(gxc - 26, nyTop + nh);
+      cx.lineTo(gxc - 26, nyTop + nh - 44);
+      cx.lineTo(gxc - 16, nyTop + nh - 80);
+      cx.lineTo(gxc - 12, nyTop + nh - 106);
+      cx.arc(gxc, nyTop + nh - 114, 13, Math.PI, 0);
+      cx.lineTo(gxc + 16, nyTop + nh - 80);
+      cx.lineTo(gxc + 26, nyTop + nh - 44);
+      cx.lineTo(gxc + 26, nyTop + nh);
+      cx.closePath(); cx.fill();
+      cx.strokeStyle = 'rgba(180,140,80,0.20)';
+      cx.lineWidth = 1.6;
+      cx.beginPath(); cx.arc(gxc, nyTop + nh - 114, 13, -Math.PI*0.92, -Math.PI*0.08); cx.stroke();
+    }
+    // old cracks working down the courses
+    cx.strokeStyle = 'rgba(8,5,3,0.55)'; cx.lineWidth = 1.6; cx.lineCap = 'butt';
+    for (var ck = 0; ck < 5; ck++){
+      var cxx = Math.random()*1024, cyy = Math.random()*260;
+      cx.beginPath(); cx.moveTo(cxx, cyy);
+      for (var cs = 0; cs < 6; cs++){ cxx += (Math.random()-0.5)*26; cyy += 18 + Math.random()*20; cx.lineTo(cxx, cyy); }
+      cx.stroke();
+    }
   })(wallC.getContext('2d'));
 
   function bindKeys(){
@@ -56617,12 +56783,15 @@ Something is written on the walls in light. You will have to run to read it.
         stumble(false); respawn();
       }
     } else {
-      // pace (Sam's 1.45/0.62)
+      // pace: → hurries at 1.45; ← walks you BACK for a missed mark
       var paceMul = (keys['ArrowRight'] || keys['d'] || touchSide > 0) ? HURRY :
-                    ((keys['ArrowLeft'] || keys['a'] || touchSide < 0) ? HANG : 1);
+                    ((keys['ArrowLeft'] || keys['a'] || touchSide < 0) ? BACK : 1);
       px += BASE * paceMul * dt;
-      runPhase += dt * (6 + 5*paceMul);
-      runLean += ((paceMul - 1) * 0.16 - runLean) * Math.min(1, dt*8);
+      if (px < 40) px = 40;
+      // the sealed stone blocks the road back
+      if (ball && ball.done && px < ball.x + ball.r + 18) px = ball.x + ball.r + 18;
+      runPhase += dt * (6 + 5*Math.abs(paceMul));
+      runLean += (Math.max(-0.16, (paceMul - 1) * 0.16) - runLean) * Math.min(1, dt*8);
 
       ducking = !!(keys['ArrowDown'] || keys['s']);
 
@@ -56717,7 +56886,7 @@ Something is written on the walls in light. You will have to run to read it.
         var bgap = px - ball.x;
         ball.v = 236 + (bgap > 420 ? 26 : 0) - (bgap < 120 ? 30 : 0);
         if (bgap < ball.r + 10 && invuln <= 0 && py > 400 - ball.r*2 + 8){ stumble(false); px = ball.x + ball.r + 70; }
-        if (ball.x > 3400){ ball.done = true; shake = 1.8;
+        if (ball.x > 3400){ ball.done = true; ball.x = 3400 + ball.r; shake = 1.8;
           if (banner){ banner.textContent = 'The stone seals the corridor behind you.'; banner.style.opacity = '1';
             setTimeout(function(){ banner.style.opacity = '0'; }, 1800); } }
       }
@@ -56736,7 +56905,13 @@ Something is written on the walls in light. You will have to run to read it.
           'You counted ' + glyphCount + ' of the seven marks. The stone approves of you.' :
           'You stumbled ' + stumbles + ' times and the marks kept their distance.';
         var span2 = document.getElementById(won ? 'pyr-run-win' : 'pyr-run-lose');
-        if (span2) span2.style.display = 'block';
+        if (span2){
+          span2.style.display = 'block';
+          span2.classList.add('dss-mini-exit');
+          setTimeout(function(){
+            if (span2.scrollIntoView) span2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 900);
+        }
         if (won && window.dssAudio && window.dssAudio.loreUnravel) window.dssAudio.loreUnravel();
       }
     }
@@ -56753,7 +56928,7 @@ Something is written on the walls in light. You will have to run to read it.
     camY += (target - camY) * Math.min(1, dt*3);
 
     if (hud && !finished){
-      hud.textContent = 'φ ' + glyphCount + ' OF 7   ·   STUMBLES ' + stumbles + '.';
+      hud.textContent = 'MARKS ' + glyphCount + ' OF 7   ·   STUMBLES ' + stumbles + '.';
     }
   }
 
@@ -56805,6 +56980,19 @@ Something is written on the walls in light. You will have to run to read it.
       ctx.beginPath();
       ctx.ellipse(tx3, tfl - 102, 5, 9 + 3*flick, Math.sin(now2/140 + ti2)*0.2, 0, Math.PI*2);
       ctx.fill();
+      // white heart of the flame
+      ctx.fillStyle = 'rgba(255,240,200,' + (0.55*flick) + ')';
+      ctx.beginPath();
+      ctx.ellipse(tx3, tfl - 100, 2.2, 4.5 + 1.5*flick, 0, 0, Math.PI*2);
+      ctx.fill();
+      // embers rising off it
+      for (var em = 0; em < 3; em++){
+        var et = ((now2/1000)*(0.55 + em*0.2) + ti2*0.7 + em*1.3) % 1;
+        var ex = tx3 + Math.sin(et*6.28 + em*2.1)*(4 + et*10);
+        var ey = (tfl - 108) - et*46;
+        ctx.fillStyle = 'rgba(255,190,110,' + (0.5*(1 - et)) + ')';
+        ctx.fillRect(ex, ey, 1.8, 1.8);
+      }
     }
 
     // floor + pits
@@ -56876,18 +57064,19 @@ Something is written on the walls in light. You will have to run to read it.
       ctx.fillRect(s2.x + s2.dir*6, sfl3 - 7, 1.6, 1.6);
     }
 
-    // glyphs — gold, they glow through the dark
+    // glyphs — electric blue, they glow through the dark
     for (var gd2 = 0; gd2 < GLYPHS.length; gd2++){
       var g4 = GLYPHS[gd2];
       if (g4.got || g4.x < camX - 60 || g4.x > camX + W + 60) continue;
       var gfl = (floorAt(g4.x) || floorAt(g4.x - 80) || 360) + g4.dy;
       var pulse = 0.7 + 0.3*Math.sin(now2/400 + gd2*1.7);
-      var gg2 = ctx.createRadialGradient(g4.x, gfl, 2, g4.x, gfl, 26);
-      gg2.addColorStop(0, 'rgba(240,208,140,' + (0.5*pulse) + ')');
+      var gg2 = ctx.createRadialGradient(g4.x, gfl, 2, g4.x, gfl, 30);
+      gg2.addColorStop(0, 'rgba(200,242,255,' + (0.6*pulse) + ')');
+      gg2.addColorStop(0.4, 'rgba(70,180,255,' + (0.3*pulse) + ')');
       gg2.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = gg2;
-      ctx.fillRect(g4.x - 26, gfl - 26, 52, 52);
-      ctx.strokeStyle = 'rgba(240,208,140,' + (0.9*pulse) + ')';
+      ctx.fillRect(g4.x - 30, gfl - 30, 60, 60);
+      ctx.strokeStyle = 'rgba(120,220,255,' + (0.95*pulse) + ')';
       ctx.lineWidth = 1.8;
       ctx.beginPath();
       for (var ph2 = 0; ph2 < 26; ph2++){
@@ -56901,15 +57090,15 @@ Something is written on the walls in light. You will have to run to read it.
     for (var sp7 = 0; sp7 < sparkles.length; sp7++){
       var spk = sparkles[sp7];
       var sa3 = 1 - spk.t/0.8;
-      ctx.fillStyle = 'rgba(240,208,140,' + (0.8*sa3) + ')';
+      ctx.fillStyle = 'rgba(150,225,255,' + (0.85*sa3) + ')';
       for (var sr2 = 0; sr2 < 6; sr2++){
         var an3 = sr2 + spk.t*6;
         ctx.fillRect(spk.x + Math.cos(an3)*(6 + spk.t*40), spk.y + Math.sin(an3)*(6 + spk.t*40), 2.4, 2.4);
       }
     }
 
-    // THE BALL
-    if (ball && !ball.done && ball.x > camX - 120){
+    // THE BALL (rolls in the chase; rests where it sealed the corridor)
+    if (ball && ball.x > camX - 120 && ball.x < camX + W + 160){
       var bfl = 400;
       ctx.save();
       ctx.translate(ball.x, bfl - ball.r);
@@ -56926,9 +57115,20 @@ Something is written on the walls in light. You will have to run to read it.
         ctx.beginPath(); ctx.arc(Math.cos(ba2)*ball.r*0.6, Math.sin(ba2)*ball.r*0.6, 3.4, 0, Math.PI*2); ctx.fill();
       }
       ctx.restore();
-      // dust behind it
-      ctx.fillStyle = 'rgba(160,130,95,0.22)';
-      ctx.beginPath(); ctx.ellipse(ball.x - ball.r - 12, bfl - 8, 20, 8, 0, 0, Math.PI*2); ctx.fill();
+      if (!ball.done){
+        // dust behind it + flying grit chips
+        ctx.fillStyle = 'rgba(160,130,95,0.22)';
+        ctx.beginPath(); ctx.ellipse(ball.x - ball.r - 12, bfl - 8, 20, 8, 0, 0, Math.PI*2); ctx.fill();
+        for (var ch2 = 0; ch2 < 4; ch2++){
+          var ct2 = ((now2/900) + ch2*0.37) % 1;
+          ctx.fillStyle = 'rgba(190,160,120,' + (0.5*(1 - ct2)) + ')';
+          ctx.fillRect(ball.x - ball.r - 6 - ct2*36, bfl - 6 - ct2*24*(ch2 % 2 ? 1 : 0.4), 2.2, 2.2);
+        }
+      } else {
+        // settled dust at the foot of the seal
+        ctx.fillStyle = 'rgba(200,176,130,0.3)';
+        ctx.beginPath(); ctx.ellipse(ball.x, bfl, ball.r + 10, 5, 0, 0, Math.PI*2); ctx.fill();
+      }
     }
 
     // player: dark-coat silhouette, run cycle, jump tuck, duck squash
@@ -56965,6 +57165,18 @@ Something is written on the walls in light. You will have to run to read it.
 
     ctx.restore();
 
+    // dust motes drifting through the air (screen space)
+    for (var dm = 0; dm < 24; dm++){
+      var mt = (now2/1000)*(2.2 + (dm % 5)*1.0);
+      var mxx = ((dm*137.3 + mt*8) % (W + 60)) - 30;
+      var myy = ((dm*71.7 + mt*4.2) % (H + 40)) - 20;
+      var ma = 0.05 + 0.04*Math.sin(mt + dm);
+      if (ma > 0){
+        ctx.fillStyle = 'rgba(230,200,150,' + ma + ')';
+        ctx.fillRect(mxx, myy, 1.6, 1.6);
+      }
+    }
+
     // darkness between the torches (screen space), fading in the gallery
     var dk = nearestTorchDist(px);
     var darkA = Math.min(0.66, Math.max(0, (dk - 130)/260 * 0.66)) * (1 - galleryLight);
@@ -56982,7 +57194,31 @@ Something is written on the walls in light. You will have to run to read it.
       gl2.addColorStop(1, 'rgba(255,224,160,' + (0.34*galleryLight) + ')');
       ctx.fillStyle = gl2;
       ctx.fillRect(0, 0, W, H);
+      // shafts of gallery light slanting down from the high right
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (var sh2 = 0; sh2 < 3; sh2++){
+        var shx = W - sh2*150;
+        var sg = ctx.createLinearGradient(shx, 0, shx - 160, H);
+        sg.addColorStop(0, 'rgba(255,226,160,' + (0.10*galleryLight) + ')');
+        sg.addColorStop(1, 'rgba(255,226,160,0)');
+        ctx.fillStyle = sg;
+        ctx.beginPath();
+        ctx.moveTo(shx, -10);
+        ctx.lineTo(shx - 70, -10);
+        ctx.lineTo(shx - 230, H + 10);
+        ctx.lineTo(shx - 130, H + 10);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
     }
+
+    // vignette
+    var vg = ctx.createRadialGradient(W/2, H/2, H*0.42, W/2, H/2, H*0.86);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.32)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
 
     if (hitFlash > 0){
       ctx.fillStyle = 'rgba(150,30,20,' + (0.28*hitFlash) + ')';
@@ -57327,7 +57563,13 @@ It does not look back. Not yet.
           'You kept ' + prints + ' of his steps and slipped ' + slips + ' times.' :
           'The snow kept most of his steps. You slipped ' + slips + ' times.';
         var span2 = document.getElementById(won ? 'hc-win' : 'hc-lose');
-        if (span2) span2.style.display = 'block';
+        if (span2){
+          span2.style.display = 'block';
+          span2.classList.add('dss-mini-exit');
+          setTimeout(function(){
+            if (span2.scrollIntoView) span2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 900);
+        }
       }
       return;
     }

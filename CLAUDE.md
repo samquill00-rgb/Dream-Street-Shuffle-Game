@@ -7,11 +7,11 @@ If `HANDOFF.md` exists at the project root, read it before responding to the fir
 ## NEVER read `Dream Street Shuffle.html`
 
 The HTML is a **compiled artifact** — it's generated from the .twee by `sync_html.py`.
-It is now ~3MB (audio is base64-embedded), and reading it wastes huge amounts of tokens.
+It is ~5MB (since 2026-09-01 the audio is LINKED, not embedded — see below), and reading it wastes huge amounts of tokens.
 
 - **Source of truth:** `Dream Street Shuffle.twee` (read this with targeted Greps + partial Reads)
 - **Compiled output:** `Dream Street Shuffle.html` (DO NOT READ — write through .twee + sync)
-- **Build script:** `sync_html.py` (turns the .twee into the .html, also embeds the music MP3/M4A as base64)
+- **Build script:** `sync_html.py` (turns the .twee into the .html; `AUDIO_MODE = "link"` writes relative URLs to the audio files beside the html — set `"embed"` only for a file:// build)
 
 If you need to verify the compiled output (e.g. "did the tag actually make it through?"), use a `grep` via `mcp__workspace__bash`:
 
@@ -46,4 +46,4 @@ When Dr Quill sends a message containing **two or more notes/items** (numbered, 
 The full audio system lives inside `window.dssAudio` in the .twee (around lines 109–900).
 It exposes procedural SFX (`pour`, `phoneBell`, `windFarnell` etc.) and a music player (`startMusic`, `stopMusic`, `setMusicVolume`).
 The music auto-triggers on passages whose tags appear in `MUSIC_PLAY_TAGS` — currently `'hub'` (Dean Street).
-The music file is embedded as base64 by `sync_html.py` — change `MUSIC_SOURCE_FILE` near the top of that script to swap the track.
+The music and ambient beds are LINKED as relative URLs by `sync_html.py` (`AUDIO_MODE = "link"`, `AUDIO_EMBEDS` list near the top of that script) — the html needs an http server (preview config `dss-game`, GitHub Pages); it no longer plays audio from file://. Swap a track by editing its tuple in `AUDIO_EMBEDS`.

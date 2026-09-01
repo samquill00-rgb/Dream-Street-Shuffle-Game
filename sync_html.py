@@ -27,6 +27,16 @@ html_path = os.path.join(_here, "Dream Street Shuffle.html")
 # To add a new ambient bed: pick a placeholder name, drop the audio file in
 # this directory, add a tuple here, and add a registerAmbientBed({ ... }) call
 # in the .twee UserScript using the same placeholder string.
+#
+# AUDIO_MODE (2026-09-01):
+#   "link"  — placeholders become RELATIVE URLS to the audio files sitting
+#             beside the html (URL-encoded). The html drops from ~63 MB to a
+#             few MB, the audio files cache independently of the build, and
+#             the repo stops growing by a full build per commit. Needs an
+#             http(s) server (GitHub Pages, the preview server) — fetch()
+#             cannot read relative files from file://.
+#   "embed" — the old behaviour: base64 data URIs, works from file://.
+AUDIO_MODE = "link"
 AUDIO_EMBEDS = [
     ("__DSS_MUSIC_DATA_URI__",       "Dream Street Shuffle experiment theme loop.m4a", "audio/mp4"),
     ("__DSS_PUB_DATA_URI__",         "the-french-pub-ambience.mp3",                    "audio/mpeg"),
@@ -286,18 +296,23 @@ if userscript_content:
     # Iterate AUDIO_EMBEDS; each placeholder in the userscript is replaced
     # with a full data: URI. Keeps the .twee small and lets the HTML run from
     # file:// without local-file restrictions.
+    from urllib.parse import quote
     for placeholder, source_file, mime in AUDIO_EMBEDS:
         audio_path = os.path.join(_here, source_file)
         if not os.path.exists(audio_path):
             print(f"WARNING: audio file not found: {audio_path} — {placeholder} not embedded")
             continue
-        with open(audio_path, "rb") as af:
-            audio_b64 = base64.b64encode(af.read()).decode("ascii")
-        data_uri = "data:" + mime + ";base64," + audio_b64
+        if AUDIO_MODE == "link":
+            data_uri = quote(source_file)
+            note = f"Linked audio: {source_file} ({os.path.getsize(audio_path)//1024} KB on disk) -> {placeholder}"
+        else:
+            with open(audio_path, "rb") as af:
+                audio_b64 = base64.b64encode(af.read()).decode("ascii")
+            data_uri = "data:" + mime + ";base64," + audio_b64
+            note = f"Embedded audio: {source_file} ({len(audio_b64)//1024} KB base64) -> {placeholder}"
         if placeholder in userscript_content:
             userscript_content = userscript_content.replace(placeholder, data_uri)
-            kb = len(audio_b64) // 1024
-            print(f"Embedded audio: {source_file} ({kb} KB base64) -> {placeholder}")
+            print(note)
         else:
             print(f"WARNING: placeholder {placeholder} not found in UserScript — {source_file} not embedded")
 

@@ -9112,15 +9112,17 @@ window.dssAudio = (function() {
   }
   // Helper: only schedule audio when the context is actually running.
   // If it's still suspending, wait for the resume promise then run.
+  var _noDuckNext = false; // set by quiet, frequent SFX (map footsteps) so they don't pump the beds
   function _play(fn) {
-    if (_muted) return;
-    var ac = getCtx(); if (!ac) return;
+    if (_muted) { _noDuckNext = false; return; }
+    var ac = getCtx(); if (!ac) { _noDuckNext = false; return; }
     // Fire-and-forget resume; don't wait for the promise (some browsers hang).
     if (ac.state === 'suspended') {
       try { ac.resume(); } catch(e) {}
     }
     // Duck the background music + any venue ambient beds so the SFX cuts through clearly
-    try { _duckMusic(); } catch(e) {}
+    if (!_noDuckNext) { try { _duckMusic(); } catch(e) {} }
+    _noDuckNext = false;
     try { _duckAllBeds(); } catch(e) {}
     try { fn(ac); }
     catch(e) { if (window.console && console.error) console.error('dssAudio:', e); }
@@ -10784,6 +10786,140 @@ window.dssAudio = (function() {
   function _duckAllBeds() {
     for (var i = 0; i < _ambientBeds.length; i++) _duckBed(_ambientBeds[i]);
   }
+  // ====== MAP FOOTSTEPS + TAG TICKS (2026-09-11 sound pass) ======
+  // A quiet cobble step for the Soho map walker — no music duck, and never
+  // more than one every 160ms however fast the arrow keys are held.
+  var _lastMapStep = 0;
+  function mapFootstep() {
+    var t = Date.now(); if (t - _lastMapStep < 160) return; _lastMapStep = t;
+    _noDuckNext = true; footstep('cobble');
+  }
+  // TAG TICKS: random one-shot textures tied to a passage tag while you are
+  // on that passage — a drip in the cellar every few seconds, for instance.
+  // Cleared and re-armed on every passage change. Each entry: min/max gap in
+  // seconds, the SFX to fire.
+  var TAG_TICKS = {
+    'venue-cellar':   { min: 5,  max: 12, fn: function(){ dripDrop(); } }
+  };
+  // ----- Soho map street life (2026-09-11 sound pass) -----
+  // Small, un-ducked sounds for the things that move on the map: the black
+  // cab crossing Old Compton Street, pigeons scattering off the pavement,
+  // the passer-by's match under a lamp.
+  function _noiseBuf(ac, secs, brown) {
+    var n = Math.max(1, Math.floor(ac.sampleRate * secs)), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0), last = 0;
+    for (var i = 0; i < n; i++) { var w = Math.random() * 2 - 1; if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; }
+    return buf;
+  }
+  function mapCab() {
+    _noDuckNext = true;
+    _play(function(ac) {
+      var now = ac.currentTime, dur = 6.8;
+      var src = ac.createBufferSource(); src.buffer = _noiseBuf(ac, dur, true);
+      var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240; lp.Q.value = 0.8;
+      var g = ac.createGain(); g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.075, now + 2.8); g.gain.setValueAtTime(0.075, now + 3.6); g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      src.connect(lp); lp.connect(g); g.connect(ac.destination); src.start(now); src.stop(now + dur + 0.05);
+      // tyres on wet tarmac: a thin hiss riding the same swell
+      var hs = ac.createBufferSource(); hs.buffer = _noiseBuf(ac, dur, false);
+      var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.6;
+      var hg = ac.createGain(); hg.gain.setValueAtTime(0.0001, now);
+      hg.gain.exponentialRampToValueAtTime(0.012, now + 3.0); hg.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      hs.connect(bp); bp.connect(hg); hg.connect(ac.destination); hs.start(now); hs.stop(now + dur + 0.05);
+    });
+  }
+  var _lastFlutter = 0;
+  function mapPigeons() {
+    var t = Date.now(); if (t - _lastFlutter < 900) return; _lastFlutter = t;
+    _noDuckNext = true;
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var src = ac.createBufferSource(); src.buffer = _noiseBuf(ac, 0.8, false);
+      var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 850; bp.Q.value = 0.9;
+      var g = ac.createGain(); g.gain.setValueAtTime(0.0001, now);
+      for (var i = 0; i < 7; i++) { var tt = now + i * 0.082; g.gain.linearRampToValueAtTime(0.045 * (1 - i / 9), tt + 0.018); g.gain.linearRampToValueAtTime(0.002, tt + 0.062); }
+      g.gain.linearRampToValueAtTime(0.0001, now + 0.7);
+      src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start(now); src.stop(now + 0.8);
+    });
+  }
+  function mapMatch() { _noDuckNext = true; matchStrike(); }
+  // ----- small hand sounds (2026-09-11 sound pass): a card turned, a notebook
+  // tab pulled, a coin pocketed. All un-ducked; they sit under the beds. -----
+  function cardTurn() {
+    _noDuckNext = true;
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var src = ac.createBufferSource(); src.buffer = _noiseBuf(ac, 0.09, false);
+      var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1600; bp.Q.value = 0.7;
+      var g = ac.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.09, now + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+      src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start(now); src.stop(now + 0.1);
+      var o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(140, now); o.frequency.exponentialRampToValueAtTime(70, now + 0.06);
+      var og = ac.createGain(); og.gain.setValueAtTime(0.05, now); og.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
+      o.connect(og); og.connect(ac.destination); o.start(now); o.stop(now + 0.08);
+    });
+  }
+  function tabTick() {
+    _noDuckNext = true;
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var src = ac.createBufferSource(); src.buffer = _noiseBuf(ac, 0.05, false);
+      var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 1.2;
+      var g = ac.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.045, now + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+      src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start(now); src.stop(now + 0.06);
+    });
+  }
+  // ----- ping pong (2026-09-11 sound pass): a celluloid ball on a bat, the
+  // table edge, and the point — none of them duck the pongmini loop. -----
+  function _pongHit(ac, freq, level, dur) {
+    var now = ac.currentTime;
+    var src = ac.createBufferSource(); src.buffer = _noiseBuf(ac, 0.03, false);
+    var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq * 2.2; bp.Q.value = 1.0;
+    var ng = ac.createGain(); ng.gain.setValueAtTime(level * 0.9, now); ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
+    src.connect(bp); bp.connect(ng); ng.connect(ac.destination); src.start(now); src.stop(now + 0.03);
+    var o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(freq, now); o.frequency.exponentialRampToValueAtTime(freq * 0.7, now + dur);
+    var og = ac.createGain(); og.gain.setValueAtTime(level, now); og.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(og); og.connect(ac.destination); o.start(now); o.stop(now + dur + 0.01);
+  }
+  function pongTock() { _noDuckNext = true; _play(function(ac){ _pongHit(ac, 1150 + Math.random() * 120, 0.11, 0.055); }); }
+  function pongWall() { _noDuckNext = true; _play(function(ac){ _pongHit(ac, 620 + Math.random() * 60, 0.06, 0.07); }); }
+  function pongPoint(won) {
+    _noDuckNext = true;
+    _play(function(ac) {
+      var now = ac.currentTime, f1 = won ? 880 : 440, f2 = won ? 1320 : 330;
+      [[f1, 0], [f2, 0.12]].forEach(function(nf) {
+        var o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = nf[0];
+        var g = ac.createGain(); g.gain.setValueAtTime(0.0001, now + nf[1]); g.gain.linearRampToValueAtTime(0.06, now + nf[1] + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, now + nf[1] + 0.32);
+        o.connect(g); g.connect(ac.destination); o.start(now + nf[1]); o.stop(now + nf[1] + 0.35);
+      });
+    });
+  }
+  function coinPocket() {
+    _noDuckNext = true;
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = 3140;
+      var og = ac.createGain(); og.gain.setValueAtTime(0.0001, now); og.gain.linearRampToValueAtTime(0.05, now + 0.004); og.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+      o.connect(og); og.connect(ac.destination); o.start(now); o.stop(now + 0.12);
+      var src = ac.createBufferSource(); src.buffer = _noiseBuf(ac, 0.14, true);
+      var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
+      var g = ac.createGain(); g.gain.setValueAtTime(0.0001, now + 0.03); g.gain.linearRampToValueAtTime(0.12, now + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      src.connect(lp); lp.connect(g); g.connect(ac.destination); src.start(now + 0.03); src.stop(now + 0.18);
+    });
+  }
+  var _tickTimers = [];
+  function startTagTicks(tags) {
+    for (var i = 0; i < _tickTimers.length; i++) clearTimeout(_tickTimers[i]);
+    _tickTimers = [];
+    var list = Array.prototype.slice.call(tags || []);
+    list.forEach(function(tag){
+      var spec = TAG_TICKS[tag]; if (!spec) return;
+      var arm = function(){
+        var wait = (spec.min + Math.random() * (spec.max - spec.min)) * 1000;
+        var id = setTimeout(function(){ try { spec.fn(); } catch(e) {} arm(); }, wait);
+        _tickTimers.push(id);
+      };
+      arm();
+    });
+  }
   function updateAmbientBedsForPassage(passageNode) {
     for (var i = 0; i < _ambientBeds.length; i++) {
       var bed = _ambientBeds[i];
@@ -11915,6 +12051,7 @@ window.dssAudio = (function() {
     // Venue ambient beds
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
+    mapFootstep: mapFootstep, mapCab: mapCab, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
     startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel,
     prewarmBed: prewarmBedByLabel
   };
@@ -13013,6 +13150,9 @@ function init(container) {
     var st = doors[door.id];
     if (st.status !== 'open' || !st.link) { refreshBar(); return; }
     S.entering = door; S.enterT = 0;
+    // (venue doors sound on ENTERING the venue passage — see the passage hook's
+    // doorMap; the chippy has no venue tag, so its shop bell rings from here)
+    try { if (door.id === 'chippy' && window.dssAudio && window.dssAudio.doorShopBell) setTimeout(function(){ window.dssAudio.doorShopBell(); }, 900); } catch(e) {}
     try { sessionStorage.setItem('dssMapLast', door.id); } catch(e) {}
     setTimeout(function(){ if (S.alive && st.link && document.body.contains(st.link)) st.link.click(); }, 280);
   }
@@ -13071,6 +13211,7 @@ function init(container) {
       S.stepT++; if (S.stepT % 7 === 0) S.frame = S.frame === 1 ? 2 : 1;
       if (S.prog >= STEP_FRAMES) {
         S.c += S.dx; S.r += S.dy; S.px = S.c*T; S.py = S.r*T; S.moving = false;
+        if (window.dssAudio && window.dssAudio.mapFootstep) { try { window.dssAudio.mapFootstep(); } catch(e) {} }
         var here = doorAt(S.c, S.r);
         if (here && here.spot && doors[here.id].status === 'open') { enter(here); }
         var hd = heldDir(); if (hd && !S.entering && !busy()) tryStep(hd); else S.frame = 0;
@@ -13087,13 +13228,13 @@ function init(container) {
       if (wk.pause > 0) { wk.pause--; if (wk.pause === 0) wk.paused = false; }
       else {
         wk.x += wk.dir === 'right' ? 0.45 : -0.45; wk.t++; if (wk.t % 10 === 0) wk.f = wk.f === 1 ? 2 : 1;
-        if (!wk.stopped && wk.t > 60 && Math.random() < 0.004) { var lc = Math.round(wk.x / T); if (LAMPS.some(function(l){ return Math.abs(l.c - lc) <= 1 && l.r * T === wk.y; })) { wk.pause = 90 + Math.random()*60; wk.stopped = true; wk.f = 0; wk.flare = 30; } }
+        if (!wk.stopped && wk.t > 60 && Math.random() < 0.004) { var lc = Math.round(wk.x / T); if (LAMPS.some(function(l){ return Math.abs(l.c - lc) <= 1 && l.r * T === wk.y; })) { wk.pause = 90 + Math.random()*60; wk.stopped = true; wk.f = 0; wk.flare = 30; if (window.dssAudio && window.dssAudio.mapMatch) { try { window.dssAudio.mapMatch(); } catch(e) {} } } }
       }
       if (wk.flare > 0) wk.flare--;
       if (wk.x < -24 || wk.x > W + 12) { S.walker = null; S.walkerNext = 16 + Math.random()*18; }
     }
     // a black cab along Old Compton Street, headlights first
-    if (!S.cab) { S.cabNext -= 1/60; if (S.cabNext <= 0) { var cabLeft = Math.random() < 0.5; S.cab = { x: cabLeft ? -30 : W + 6, dir: cabLeft ? 1 : -1, y: (cabLeft ? 16 : 15) * T + 2 }; } }
+    if (!S.cab) { S.cabNext -= 1/60; if (S.cabNext <= 0) { var cabLeft = Math.random() < 0.5; S.cab = { x: cabLeft ? -30 : W + 6, dir: cabLeft ? 1 : -1, y: (cabLeft ? 16 : 15) * T + 2 }; if (window.dssAudio && window.dssAudio.mapCab) { try { window.dssAudio.mapCab(); } catch(e) {} } } }
     else { S.cab.x += S.cab.dir * 1.25; if (S.cab.x < -34 || S.cab.x > W + 10) { S.cab = null; S.cabNext = 28 + Math.random()*40; } }
     // the shooting star: a second of light across the sky band, then nothing for a minute or more
     if (!S.meteor) { S.meteorNext -= 1/60; if (S.meteorNext <= 0) { S.meteor = { x: 40 + Math.random()*(W - 140), y: 2 + Math.random()*8, vx: 2.2 + Math.random()*1.2, vy: 0.5 + Math.random()*0.4, life: 0, max: 24 + Math.floor(Math.random()*10) }; } }
@@ -13108,7 +13249,7 @@ function init(container) {
       else {
         if (pj.settle > 0) pj.settle--;
         var ddx = (S.px + 8) - pj.x, ddy = (S.py + 12) - pj.y;
-        if (pj.settle === 0 && ddx*ddx + ddy*ddy < (2.2*T)*(2.2*T)) { pj.fly = 50 + Math.random()*20; var ang = Math.atan2(-ddy, -ddx) + (Math.random()-0.5); pj.vx = Math.cos(ang) * 1.4; pj.vy = Math.sin(ang) * 0.6 - 0.9; }
+        if (pj.settle === 0 && ddx*ddx + ddy*ddy < (2.2*T)*(2.2*T)) { pj.fly = 50 + Math.random()*20; if (window.dssAudio && window.dssAudio.mapPigeons) { try { window.dssAudio.mapPigeons(); } catch(e) {} } var ang = Math.atan2(-ddy, -ddx) + (Math.random()-0.5); pj.vx = Math.cos(ang) * 1.4; pj.vy = Math.sin(ang) * 0.6 - 0.9; }
         else if (Math.random() < 0.012) { pj.x += (Math.random() < 0.5 ? -1 : 1) * 2; pj.peck = 8; }
         if (pj.peck > 0) pj.peck--;
       }
@@ -14216,6 +14357,7 @@ var target = tabEl.getAttribute('data-tab');
 tabs.forEach(function(t) { t.classList.remove('nb-tab-active'); });
 panels.forEach(function(p) { p.classList.remove('nb-panel-active'); });
 tabEl.classList.add('nb-tab-active');
+if (window.dssAudio && window.dssAudio.tabTick) { try { window.dssAudio.tabTick(); } catch(e) {} }
 var targetPanel = page.querySelector('.nb-panel-' + target);
 if (targetPanel) targetPanel.classList.add('nb-panel-active');
 
@@ -18805,6 +18947,7 @@ window._passageGen = 0;
                 // Venue ambient beds (pub, club, etc.) — start whichever bed
                 // matches this passage's tags; stop any that don't.
                 if (window.dssAudio.updateAmbientBedsForPassage) window.dssAudio.updateAmbientBedsForPassage(passageNode);
+                if (window.dssAudio.startTagTicks) window.dssAudio.startTagTicks(tags);
                 // Page 93 retrieved from the pyre — a bigger moment than the
                 // old single page-rustle. Layered cue: fist into the flames,
                 // then the heat roaring around the hand, then the paper
@@ -18900,7 +19043,8 @@ window._passageGen = 0;
                 // within a venue (e.g. Davy Merkin inside the Colony) — only
                 // when we ENTER the venue freshly from outside.
                 var VENUES = ['venue-french', 'venue-coach', 'venue-colony',
-                              'venue-trishas', 'venue-cecilcourt', 'venue-ronnies'];
+                              'venue-trishas', 'venue-cecilcourt', 'venue-ronnies',
+                              'venue-pillars']; // pillars added 2026-09-11: it was in doorMap but never matched
                 var newVenue = null;
                 for (var vi = 0; vi < VENUES.length; vi++) {
                   if (tags.indexOf(VENUES[vi]) !== -1) { newVenue = VENUES[vi]; break; }
@@ -18953,7 +19097,7 @@ window._passageGen = 0;
                 // previous one (and any horn timer it may have scheduled).
                 var inDream = (tags.indexOf('dream') !== -1);
                 var inPyre = (tags.indexOf('pyre') !== -1);
-                var inOutdoor = (tags.indexOf('outdoor') !== -1);
+                var inOutdoor = (tags.indexOf('outdoor') !== -1 || tags.indexOf('street-night') !== -1);
                 // Alba revelation passages (LINE 1) carry [outdoor] but should
                 // feel hushed — duck the traffic bed to ~22% so it's a quiet
                 // murmur, not a road, while the line types itself out.
@@ -312494,6 +312638,1392 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="startup" position="0,0" size="100,100">&lt;!-- ═══════════════════════════════════════════════════════════════════
      DREAM STREET SHUFFLE — v1 FIRST DRAFT MILESTONE
      Snapshot: 2026-05-14
@@ -312887,8 +314417,8 @@ oPad.y=Math.max(0,Math.min(H-oPad.h,oPad.y));
 function updateBall(){
 if(serving){if(Date.now()-serveTime&lt;800)return;serving=false;}
 ball.x+=ball.dx;ball.y+=ball.dy;
-if(ball.y-ball.r&lt;0){ball.y=ball.r;ball.dy=Math.abs(ball.dy);}
-if(ball.y+ball.r&gt;H){ball.y=H-ball.r;ball.dy=-Math.abs(ball.dy);}
+if(ball.y-ball.r&lt;0){ball.y=ball.r;ball.dy=Math.abs(ball.dy);if(window.dssAudio&amp;&amp;window.dssAudio.pongWall)window.dssAudio.pongWall();}
+if(ball.y+ball.r&gt;H){ball.y=H-ball.r;ball.dy=-Math.abs(ball.dy);if(window.dssAudio&amp;&amp;window.dssAudio.pongWall)window.dssAudio.pongWall();}
 if(ball.dx&lt;0&amp;&amp;ball.x-ball.r&lt;=pPad.x+pPad.w&amp;&amp;ball.x+ball.r&gt;=pPad.x&amp;&amp;ball.y&gt;=pPad.y&amp;&amp;ball.y&lt;=pPad.y+pPad.h){
 var hp=(ball.y-pPad.y)/pPad.h;var a=(hp-0.5)*Math.PI*0.6;
 var sp=Math.min(Math.sqrt(ball.dx*ball.dx+ball.dy*ball.dy)*1.05,8.5);
@@ -312897,19 +314427,20 @@ ball.dx=sp*Math.cos(a);ball.dy=sp*Math.sin(a);ball.x=pPad.x+pPad.w+ball.r;
    and the return skews with your motion. Skill, not reflexes. */
 ball.dy+=pPadVel*0.35;
 if(ball.dy&gt;7)ball.dy=7;if(ball.dy&lt;-7)ball.dy=-7;
-if(window.dssAudio&amp;&amp;window.dssAudio.vialClink)window.dssAudio.vialClink();
+if(window.dssAudio&amp;&amp;window.dssAudio.pongTock)window.dssAudio.pongTock();
 }
 if(ball.dx&gt;0&amp;&amp;ball.x+ball.r&gt;=oPad.x&amp;&amp;ball.x-ball.r&lt;=oPad.x+oPad.w&amp;&amp;ball.y&gt;=oPad.y&amp;&amp;ball.y&lt;=oPad.y+oPad.h){
 var hp=(ball.y-oPad.y)/oPad.h;var am=opponent===&#x27;Percy Ritson&#x27;?0.8:0.6;
 var a=Math.PI-(hp-0.5)*Math.PI*am;
 var sp=Math.min(Math.sqrt(ball.dx*ball.dx+ball.dy*ball.dy)*1.05,8.5);
 ball.dx=sp*Math.cos(a);ball.dy=sp*Math.sin(a);ball.x=oPad.x-ball.r;
-if(window.dssAudio&amp;&amp;window.dssAudio.vialClink)window.dssAudio.vialClink();
+if(window.dssAudio&amp;&amp;window.dssAudio.pongTock)window.dssAudio.pongTock();
 }
 if(ball.x&lt;-20){oppScore++;pointEnd(false);}
 else if(ball.x&gt;W+20){playerScore++;pointEnd(true);}
 }
 function pointEnd(pw){
+if(window.dssAudio&amp;&amp;window.dssAudio.pongPoint)window.dssAudio.pongPoint(pw);
 /* Brief canvas tint so the point lands visually — cool white when you take
    it, red when it gets past you. Fades over ~500ms in draw(). */
 pointFlashCol=pw?&#x27;rgba(190,220,255,&#x27;:&#x27;rgba(220,60,40,&#x27;;
@@ -314379,7 +315910,7 @@ Better not tomorrow.
      count (amber at 3 or fewer, ember on the last turn; &quot;The dawn is here.&quot;
      at zero). The diegetic sky washes and beat lines were removed at
      Dr Quill&#x27;s request (2026-07-18). --&gt;\
-(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)&lt;div id=&quot;coin-overlay&quot;&gt;&lt;div class=&quot;coin-overlay-box&quot; role=&quot;dialog&quot; aria-modal=&quot;true&quot; aria-label=&quot;A coin on the pavement&quot;&gt;&lt;div class=&quot;coin-overlay-stage&quot;&gt;&lt;div class=&quot;coin-overlay-disc&quot; id=&quot;coin-overlay-disc&quot;&gt;&lt;div class=&quot;cp-face cp-heads&quot;&gt;&lt;/div&gt;&lt;div class=&quot;cp-face cp-tails&quot;&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;p class=&quot;coin-overlay-text&quot;&gt;You found a coin on the pavement; a rare one, called a &amp;#39;Donkey&amp;#39;. There&amp;#39;s only one. Toss it and pocket it. You&amp;#39;ll want it later.&lt;/p&gt;&lt;span class=&quot;inventory-note&quot;&gt;COIN ACQUIRED&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn&quot; id=&quot;coin-toss-btn&quot;&gt;Toss it&lt;/button&gt;&lt;span class=&quot;coin-overlay-result&quot; id=&quot;coin-overlay-result&quot;&gt;&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn coin-overlay-dismiss&quot; id=&quot;coin-keep-btn&quot; style=&quot;visibility:hidden&quot;&gt;Pocket it&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&lt;script&gt;(function(){var tossCount=0,maxToss=2,stage=document.querySelector(&quot;.coin-overlay-stage&quot;);var sequence=[false,true];var pocketed=false;function sparks(){for(var i=0;12&gt;i;i++){var s=document.createElement(&quot;div&quot;);s.className=&quot;cp-spark&quot;;var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty(&quot;--sx&quot;,(Math.cos(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.setProperty(&quot;--sy&quot;,(Math.sin(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.animationDelay=(Math.random()*0.3)+&quot;s&quot;;s.style.animationDuration=(0.5+Math.random()*0.5)+&quot;s&quot;;stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById(&quot;coin-toss-btn&quot;).addEventListener(&quot;click&quot;,function(){var d=document.getElementById(&quot;coin-overlay-disc&quot;),r=document.getElementById(&quot;coin-overlay-result&quot;),b=this,o=document.getElementById(&quot;coin-overlay&quot;);if(pocketed)return;if(d.classList.contains(&quot;cp-flipping&quot;))return;if(window.dssAudio)window.dssAudio.coinFlip();var heads=sequence[tossCount];tossCount++;var endDeg=heads?&quot;1440deg&quot;:&quot;1620deg&quot;;var restDeg=heads?&quot;0deg&quot;:&quot;180deg&quot;;d.style.setProperty(&quot;--cp-end&quot;,endDeg);d.classList.remove(&quot;cp-flipping&quot;);void d.offsetWidth;d.classList.add(&quot;cp-flipping&quot;);sparks();r.textContent=&quot;&quot;;b.classList.add(&quot;coin-btn-hidden&quot;);setTimeout(function(){if(pocketed)return;r.textContent=heads?&quot;Heads.&quot;:&quot;Tails.&quot;;d.style.transform=&quot;rotateX(&quot;+restDeg+&quot;)&quot;;d.classList.remove(&quot;cp-flipping&quot;);if(tossCount&gt;=maxToss){setTimeout(function(){if(pocketed)return;o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1800);}else{setTimeout(function(){if(pocketed)return;r.textContent=&quot;&quot;;b.classList.remove(&quot;coin-btn-hidden&quot;);b.textContent=&quot;Toss again&quot;;b.classList.add(&quot;coin-overlay-dismiss&quot;);var kb=document.getElementById(&quot;coin-keep-btn&quot;);if(kb){kb.style.visibility=&quot;visible&quot;;kb.classList.remove(&quot;coin-overlay-dismiss&quot;);kb.classList.add(&quot;coin-overlay-primary&quot;);}},2200);}},2000);});var keepBtn=document.getElementById(&quot;coin-keep-btn&quot;);if(keepBtn){keepBtn.addEventListener(&quot;click&quot;,function(){if(pocketed)return;pocketed=true;var o=document.getElementById(&quot;coin-overlay&quot;);var box=o&amp;&amp;o.querySelector(&quot;.coin-overlay-box&quot;);if(!o||!box)return;var tb=document.getElementById(&quot;coin-toss-btn&quot;);if(tb){tb.classList.add(&quot;coin-btn-hidden&quot;);tb.style.pointerEvents=&quot;none&quot;;}for(var k=1;k&lt;=12;k++){var m=document.createElement(&quot;span&quot;);m.className=&quot;item-mote item-mote-&quot;+k;box.appendChild(m);}this.style.display=&quot;none&quot;;setTimeout(function(){o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById(&quot;coin-overlay&quot;);if(ov){ov.addEventListener(&quot;click&quot;,function(e){if(e.target===ov&amp;&amp;tossCount&gt;0){ov.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){ov.remove();},800);}});}})();&lt;/script&gt;]\
+(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)&lt;div id=&quot;coin-overlay&quot;&gt;&lt;div class=&quot;coin-overlay-box&quot; role=&quot;dialog&quot; aria-modal=&quot;true&quot; aria-label=&quot;A coin on the pavement&quot;&gt;&lt;div class=&quot;coin-overlay-stage&quot;&gt;&lt;div class=&quot;coin-overlay-disc&quot; id=&quot;coin-overlay-disc&quot;&gt;&lt;div class=&quot;cp-face cp-heads&quot;&gt;&lt;/div&gt;&lt;div class=&quot;cp-face cp-tails&quot;&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;p class=&quot;coin-overlay-text&quot;&gt;You found a coin on the pavement; a rare one, called a &amp;#39;Donkey&amp;#39;. There&amp;#39;s only one. Toss it and pocket it. You&amp;#39;ll want it later.&lt;/p&gt;&lt;span class=&quot;inventory-note&quot;&gt;COIN ACQUIRED&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn&quot; id=&quot;coin-toss-btn&quot;&gt;Toss it&lt;/button&gt;&lt;span class=&quot;coin-overlay-result&quot; id=&quot;coin-overlay-result&quot;&gt;&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn coin-overlay-dismiss&quot; id=&quot;coin-keep-btn&quot; style=&quot;visibility:hidden&quot;&gt;Pocket it&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&lt;script&gt;(function(){var tossCount=0,maxToss=2,stage=document.querySelector(&quot;.coin-overlay-stage&quot;);var sequence=[false,true];var pocketed=false;function sparks(){for(var i=0;12&gt;i;i++){var s=document.createElement(&quot;div&quot;);s.className=&quot;cp-spark&quot;;var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty(&quot;--sx&quot;,(Math.cos(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.setProperty(&quot;--sy&quot;,(Math.sin(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.animationDelay=(Math.random()*0.3)+&quot;s&quot;;s.style.animationDuration=(0.5+Math.random()*0.5)+&quot;s&quot;;stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById(&quot;coin-toss-btn&quot;).addEventListener(&quot;click&quot;,function(){var d=document.getElementById(&quot;coin-overlay-disc&quot;),r=document.getElementById(&quot;coin-overlay-result&quot;),b=this,o=document.getElementById(&quot;coin-overlay&quot;);if(pocketed)return;if(d.classList.contains(&quot;cp-flipping&quot;))return;if(window.dssAudio)window.dssAudio.coinFlip();var heads=sequence[tossCount];tossCount++;var endDeg=heads?&quot;1440deg&quot;:&quot;1620deg&quot;;var restDeg=heads?&quot;0deg&quot;:&quot;180deg&quot;;d.style.setProperty(&quot;--cp-end&quot;,endDeg);d.classList.remove(&quot;cp-flipping&quot;);void d.offsetWidth;d.classList.add(&quot;cp-flipping&quot;);sparks();r.textContent=&quot;&quot;;b.classList.add(&quot;coin-btn-hidden&quot;);setTimeout(function(){if(pocketed)return;r.textContent=heads?&quot;Heads.&quot;:&quot;Tails.&quot;;d.style.transform=&quot;rotateX(&quot;+restDeg+&quot;)&quot;;d.classList.remove(&quot;cp-flipping&quot;);if(tossCount&gt;=maxToss){setTimeout(function(){if(pocketed)return;o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1800);}else{setTimeout(function(){if(pocketed)return;r.textContent=&quot;&quot;;b.classList.remove(&quot;coin-btn-hidden&quot;);b.textContent=&quot;Toss again&quot;;b.classList.add(&quot;coin-overlay-dismiss&quot;);var kb=document.getElementById(&quot;coin-keep-btn&quot;);if(kb){kb.style.visibility=&quot;visible&quot;;kb.classList.remove(&quot;coin-overlay-dismiss&quot;);kb.classList.add(&quot;coin-overlay-primary&quot;);}},2200);}},2000);});var keepBtn=document.getElementById(&quot;coin-keep-btn&quot;);if(keepBtn){keepBtn.addEventListener(&quot;click&quot;,function(){if(pocketed)return;pocketed=true;if(window.dssAudio&amp;&amp;window.dssAudio.coinPocket){try{window.dssAudio.coinPocket();}catch(e){}}var o=document.getElementById(&quot;coin-overlay&quot;);var box=o&amp;&amp;o.querySelector(&quot;.coin-overlay-box&quot;);if(!o||!box)return;var tb=document.getElementById(&quot;coin-toss-btn&quot;);if(tb){tb.classList.add(&quot;coin-btn-hidden&quot;);tb.style.pointerEvents=&quot;none&quot;;}for(var k=1;k&lt;=12;k++){var m=document.createElement(&quot;span&quot;);m.className=&quot;item-mote item-mote-&quot;+k;box.appendChild(m);}this.style.display=&quot;none&quot;;setTimeout(function(){o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById(&quot;coin-overlay&quot;);if(ov){ov.addEventListener(&quot;click&quot;,function(e){if(e.target===ov&amp;&amp;tossCount&gt;0){ov.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){ov.remove();},800);}});}})();&lt;/script&gt;]\
 &lt;!-- TURNS teaching — fires once on the second hub visit, queued by the popup
      serializer behind the coin overlay, so it reads: coin pocketed, then the
      word about the night&#x27;s count (visible in the header directly above).
@@ -314976,6 +316507,7 @@ var card=document.getElementById(&#x27;tc-&#x27;+n);
 if(!card||card.classList.contains(&#x27;flipped&#x27;))return;
 if(n&gt;1&amp;&amp;!flipped[n-2])return;  /* left to right: the past before the present, the present before what awaits */
 card.classList.add(&#x27;flipped&#x27;);
+if(window.dssAudio&amp;&amp;window.dssAudio.cardTurn){try{window.dssAudio.cardTurn();}catch(e){}}
 flipped[n-1]=true;
 lockState();
 setTimeout(function(){showMeaning(n);},680);
@@ -315056,6 +316588,7 @@ window.dssFlipFourth=function(){
 var card=document.getElementById(&#x27;tc-4&#x27;);
 if(!card||card.classList.contains(&#x27;flipped&#x27;))return;
 card.classList.add(&#x27;flipped&#x27;);
+if(window.dssAudio&amp;&amp;window.dssAudio.cardTurn){try{window.dssAudio.cardTurn();}catch(e){}}
 setTimeout(function(){var r=document.getElementById(&#x27;tarot-fourth-result&#x27;);if(r)r.style.display=&#x27;&#x27;;},900);
 };
 })();

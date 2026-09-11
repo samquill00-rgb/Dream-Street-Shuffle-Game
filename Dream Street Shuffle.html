@@ -12752,6 +12752,16 @@ function init(container) {
   var S = { c:spawnC, r:spawnR, px:spawnC*T, py:spawnR*T, moving:false, dx:0, dy:0, prog:0, facing:facing, frame:0, stepT:0,
             held:{}, entering:null, enterT:0, t:0, walker:null, walkerNext:14 + Math.random()*12, hintShown:false, noteFlash:null, alive:true, raf:null };
   state = S;
+  function randomPaveTile(awayTiles) {
+    for (var tries = 0; tries < 60; tries++) {
+      var c = Math.floor(Math.random()*COLS), r = Math.floor(Math.random()*ROWS);
+      if (isPave(c, r) && !doorAt(c, r) && (Math.abs(c - S.c) > awayTiles || Math.abs(r - S.r) > awayTiles)) return { c:c, r:r };
+    }
+    return { c: 6, r: 4 };
+  }
+  S.cab = null; S.cabNext = 8 + Math.random()*20;
+  S.pigeons = []; for (var pgi = 0; pgi < 4; pgi++) { var pspot = randomPaveTile(3); S.pigeons.push({ x: pspot.c*T + 4 + Math.random()*8, y: pspot.r*T + 8 + Math.random()*4, fly: 0, vx: 0, vy: 0, settle: 0, peck: 0 }); }
+  (function(){ var catLamps = LAMPS.filter(function(l){ return !l.ginger; }); var cl = catLamps[Math.floor(Math.random()*catLamps.length)]; S.cat = { x: cl.c*T + 2, row: cl.r, next: 10 + Math.random()*20, moveTo: null, t: 0, blink: false }; })();
 
   // shown until the first step of each NEW GAME (Start clears the flag), not once per browser
   var hintSeen = false; try { hintSeen = sessionStorage.getItem('dssMapHintDone') === '1'; } catch(e) {}
@@ -12828,7 +12838,7 @@ function init(container) {
   dpad.addEventListener('pointerup', padUp); dpad.addEventListener('pointercancel', padUp); dpad.addEventListener('pointerleave', padUp);
   cv.addEventListener('click', function(){ try { cv.focus({ preventScroll: true }); } catch(e) {} });
 
-  var STEP_FRAMES = 9;
+  var STEP_FRAMES = 14;  // 2026-09-12: slowed from 9 (Sam: the map went a bit too quickly)
   function tick() {
     if (!S.alive) return;
     S.t++;
@@ -12839,7 +12849,7 @@ function init(container) {
       S.prog++;
       var k = S.prog / STEP_FRAMES;
       S.px = (S.c + S.dx * k) * T; S.py = (S.r + S.dy * k) * T;
-      S.stepT++; if (S.stepT % 5 === 0) S.frame = S.frame === 1 ? 2 : 1;
+      S.stepT++; if (S.stepT % 7 === 0) S.frame = S.frame === 1 ? 2 : 1;
       if (S.prog >= STEP_FRAMES) {
         S.c += S.dx; S.r += S.dy; S.px = S.c*T; S.py = S.r*T; S.moving = false;
         var here = doorAt(S.c, S.r);
@@ -12851,10 +12861,63 @@ function init(container) {
       var hd2 = heldDir();
       if (hd2 && !busy()) tryStep(hd2);
     }
-    if (!S.walker) { S.walkerNext -= 1/60; if (S.walkerNext <= 0) { var fromLeft = Math.random() < 0.5; S.walker = { x: fromLeft ? -14 : W + 2, dir: fromLeft ? 'right' : 'left', y: [4, 7, 14, 17][Math.floor(Math.random()*4)] * T, f:0, t:0 }; } }
-    else { S.walker.x += S.walker.dir === 'right' ? 0.7 : -0.7; S.walker.t++; if (S.walker.t % 7 === 0) S.walker.f = S.walker.f === 1 ? 2 : 1; if (S.walker.x < -16 || S.walker.x > W + 4) { S.walker = null; S.walkerNext = 16 + Math.random()*18; } }
+    if (!S.walker) { S.walkerNext -= 1/60; if (S.walkerNext <= 0) { var fromLeft = Math.random() < 0.5; S.walker = { x: fromLeft ? -14 : W + 2, dir: fromLeft ? 'right' : 'left', y: [4, 7, 14, 17][Math.floor(Math.random()*4)] * T, f:0, t:0, pair: Math.random() < 0.3, pause: 0 }; } }
+    else {
+      var wk = S.walker;
+      // now and then a walker stops under a lamp for a moment (a light for a cigarette)
+      if (wk.pause > 0) { wk.pause--; if (wk.pause === 0) wk.paused = false; }
+      else {
+        wk.x += wk.dir === 'right' ? 0.45 : -0.45; wk.t++; if (wk.t % 10 === 0) wk.f = wk.f === 1 ? 2 : 1;
+        if (!wk.stopped && wk.t > 60 && Math.random() < 0.004) { var lc = Math.round(wk.x / T); if (LAMPS.some(function(l){ return Math.abs(l.c - lc) <= 1 && l.r * T === wk.y; })) { wk.pause = 90 + Math.random()*60; wk.stopped = true; wk.f = 0; wk.flare = 30; } }
+      }
+      if (wk.flare > 0) wk.flare--;
+      if (wk.x < -24 || wk.x > W + 12) { S.walker = null; S.walkerNext = 16 + Math.random()*18; }
+    }
+    // a black cab along Old Compton Street, headlights first
+    if (!S.cab) { S.cabNext -= 1/60; if (S.cabNext <= 0) { var cabLeft = Math.random() < 0.5; S.cab = { x: cabLeft ? -30 : W + 6, dir: cabLeft ? 1 : -1, y: (cabLeft ? 16 : 15) * T + 2 }; } }
+    else { S.cab.x += S.cab.dir * 1.25; if (S.cab.x < -34 || S.cab.x > W + 10) { S.cab = null; S.cabNext = 28 + Math.random()*40; } }
+    // pigeons: they hop about the pavements and scatter when the figure comes near
+    for (var pg = 0; pg < S.pigeons.length; pg++) {
+      var pj = S.pigeons[pg];
+      if (pj.fly > 0) { pj.x += pj.vx; pj.y += pj.vy; pj.vy -= 0.02; pj.fly--; if (pj.fly === 0) { var spot = randomPaveTile(6); pj.x = spot.c * T + 4 + Math.random()*8; pj.y = spot.r * T + 8 + Math.random()*4; pj.settle = 40; } }
+      else {
+        if (pj.settle > 0) pj.settle--;
+        var ddx = (S.px + 8) - pj.x, ddy = (S.py + 12) - pj.y;
+        if (pj.settle === 0 && ddx*ddx + ddy*ddy < (2.2*T)*(2.2*T)) { pj.fly = 50 + Math.random()*20; var ang = Math.atan2(-ddy, -ddx) + (Math.random()-0.5); pj.vx = Math.cos(ang) * 1.4; pj.vy = Math.sin(ang) * 0.6 - 0.9; }
+        else if (Math.random() < 0.012) { pj.x += (Math.random() < 0.5 ? -1 : 1) * 2; pj.peck = 8; }
+        if (pj.peck > 0) pj.peck--;
+      }
+    }
+    // the cat: sits under a lamp, blinks, and every so often slinks off to another
+    var ct = S.cat;
+    if (ct.moveTo) { var mx = ct.moveTo.x - ct.x; ct.x += Math.sign(mx) * 0.6; ct.t++; if (Math.abs(mx) < 1) { ct.x = ct.moveTo.x; ct.moveTo = null; ct.next = 20 + Math.random()*30; } }
+    else { ct.next -= 1/60; if (ct.next <= 0) { var lamp2 = LAMPS.filter(function(l){ return l.r === ct.row && Math.abs(l.c*T - ct.x) > 3*T; }); if (lamp2.length) { var pick = lamp2[Math.floor(Math.random()*lamp2.length)]; ct.moveTo = { x: pick.c*T + 2 }; } else ct.next = 15; } }
+    ct.blink = (S.t % 200) < 6;
     draw();
     S.raf = requestAnimationFrame(tick);
+  }
+  function drawCab(x, cab) {
+    var cx = Math.round(cab.x), cy = cab.y, fwd = cab.dir;
+    // headlight throw ahead of the cab, then the body: a low black box with a lit roof sign and red tail lamps
+    var hx0 = fwd > 0 ? cx + 22 : cx, hg = x.createRadialGradient(hx0, cy + 5, 1, hx0 + fwd * 14, cy + 5, 26);
+    hg.addColorStop(0, 'rgba(255,240,200,0.42)'); hg.addColorStop(1, 'rgba(255,240,200,0)'); x.fillStyle = hg; x.fillRect(hx0 - 30, cy - 22, 60, 54);
+    x.fillStyle = '#0b0b0f'; x.fillRect(cx, cy + 2, 22, 8); x.fillRect(cx + 4, cy - 1, 13, 4);
+    x.fillStyle = '#1a1a22'; x.fillRect(cx + 5, cy, 11, 2);
+    x.fillStyle = '#e8b040'; x.fillRect(cx + 9, cy - 2, 4, 1);
+    x.fillStyle = '#fff4d0'; x.fillRect(fwd > 0 ? cx + 21 : cx, cy + 3, 1, 2); x.fillRect(fwd > 0 ? cx + 21 : cx, cy + 7, 1, 2);
+    x.fillStyle = '#d0301a'; x.fillRect(fwd > 0 ? cx : cx + 21, cy + 3, 1, 2); x.fillRect(fwd > 0 ? cx : cx + 21, cy + 7, 1, 2);
+    x.fillStyle = '#26262c'; x.fillRect(cx + 3, cy + 10, 3, 1); x.fillRect(cx + 16, cy + 10, 3, 1);
+  }
+  function drawPigeon(x, pj) {
+    var px2 = Math.round(pj.x), py2 = Math.round(pj.y);
+    if (pj.fly > 0) { x.fillStyle = 'rgba(190,190,200,' + Math.min(1, pj.fly / 20) + ')'; var up = (pj.fly % 8) < 4; x.fillRect(px2 - 2, py2 + (up ? -1 : 0), 2, 1); x.fillRect(px2 + 1, py2 + (up ? -1 : 0), 2, 1); x.fillRect(px2, py2, 1, 1); }
+    else { x.fillStyle = '#7c7c88'; x.fillRect(px2 - 1, py2 + (pj.peck > 0 ? 1 : 0), 3, 2); x.fillStyle = '#9a9aa8'; x.fillRect(px2, py2 - 1 + (pj.peck > 0 ? 1 : 0), 1, 1); }
+  }
+  function drawCat(x, ct) {
+    var kx = Math.round(ct.x), ky = ct.row * T + 9;
+    x.fillStyle = '#0a0a0e';
+    if (ct.moveTo) { x.fillRect(kx, ky + 1, 7, 3); x.fillRect(kx + (ct.moveTo.x > ct.x ? 6 : -1), ky, 2, 2); var tw = Math.sin(ct.t * 0.3) * 2; x.fillRect(kx + (ct.moveTo.x > ct.x ? -2 : 7), ky - 1 + Math.round(tw), 2, 1); }
+    else { x.fillRect(kx + 1, ky, 5, 4); x.fillRect(kx + 1, ky - 2, 3, 2); x.fillRect(kx + 6, ky + 2, 3, 1); x.fillRect(kx + 8, ky, 1, 2); if (!ct.blink) { x.fillStyle = '#e8c040'; x.fillRect(kx + 1, ky - 1, 1, 1); x.fillRect(kx + 3, ky - 1, 1, 1); } }
   }
   function draw() {
     x.clearRect(0, 0, W, H);
@@ -12866,7 +12929,15 @@ function init(container) {
     for (var wi = 0; wi < WIN_BLINK.length; wi++) { var wb = WIN_BLINK[wi]; if (((S.t / 60 + wb.k * 3.7) % 11) < 0.9) { x.fillStyle = '#1b1810'; x.fillRect(wb.x, wb.y, 3, 4); } }
     // chimney smoke
     for (var ci = 0; ci < CHIMNEYS.length; ci++) { var ch = CHIMNEYS[ci]; for (var pi = 0; pi < 5; pi++) { var ph = ((S.t * 0.35 + pi * 24 + ch.k * 40) % 120) / 120; var sx2 = ch.x + Math.sin(ph * 6 + ch.k) * 3 + ph * 6, sy2 = ch.y - ph * 30; x.fillStyle = 'rgba(150,150,170,' + (0.22 * (1 - ph)) + ')'; x.fillRect(Math.round(sx2), Math.round(sy2), 2 + Math.round(ph * 2), 2); } }
-    if (S.walker) { x.drawImage(walkerSprites[S.walker.dir][S.walker.f], Math.round(S.walker.x), S.walker.y - 2); }
+    if (S.cab) { drawCab(x, S.cab); }
+    for (var pd = 0; pd < S.pigeons.length; pd++) { drawPigeon(x, S.pigeons[pd]); }
+    drawCat(x, S.cat);
+    if (S.walker) {
+      var wk2 = S.walker;
+      x.drawImage(walkerSprites[wk2.dir][wk2.f], Math.round(wk2.x), wk2.y - 2);
+      if (wk2.pair) x.drawImage(walkerSprites[wk2.dir][wk2.f === 1 ? 2 : (wk2.f === 2 ? 1 : 0)], Math.round(wk2.x) + (wk2.dir === 'right' ? -11 : 11), wk2.y - 1);
+      if (wk2.flare > 0) { var fa = wk2.flare / 30; x.fillStyle = 'rgba(255,170,60,' + (0.9 * fa) + ')'; x.fillRect(Math.round(wk2.x) + (wk2.dir === 'right' ? 10 : 1), wk2.y + 3, 1, 1); var fg2 = x.createRadialGradient(Math.round(wk2.x) + 6, wk2.y + 4, 0, Math.round(wk2.x) + 6, wk2.y + 4, 9); fg2.addColorStop(0, 'rgba(255,170,60,' + (0.35 * fa) + ')'); fg2.addColorStop(1, 'rgba(255,170,60,0)'); x.fillStyle = fg2; x.fillRect(Math.round(wk2.x) - 4, wk2.y - 6, 20, 20); }
+    }
     var sp = sprites[S.facing][S.moving ? S.frame : 0];
     var hx = Math.round(S.px) + 8, hy = Math.round(S.py) + 10;
     var hg = x.createRadialGradient(hx, hy, 1, hx, hy, 16); hg.addColorStop(0, 'rgba(226,222,240,0.26)'); hg.addColorStop(1, 'rgba(226,222,240,0)'); x.fillStyle = hg; x.fillRect(hx-16, hy-16, 32, 32);
@@ -301400,6 +301471,205 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="startup" position="0,0" size="100,100">&lt;!-- ═══════════════════════════════════════════════════════════════════
      DREAM STREET SHUFFLE — v1 FIRST DRAFT MILESTONE
      Snapshot: 2026-05-14
@@ -309020,6 +309290,7 @@ A voice from somewhere says, &#x27;Two laps. The line is the line.&#x27;
   var simTime = 0, accumulator = 0, renderTime = null, paused = false;
   var countdownStep = -1, messageUntil = 0, raceElapsed = 0, lapStartedAt = 0;
   var lapTimes = [], bestLap = null, recoveryT = 0, cameraHeading = null;
+  var completedLaps = 0, nextGate = 1;
   var dashboard, pauseButton, retryButton, itemButton, racePanel, cleanupInput;
   var reducedMotion = window.matchMedia &amp;&amp; window.matchMedia(&#x27;(prefers-reduced-motion: reduce)&#x27;).matches;
   function raceNow(){ return simTime; }
@@ -309691,10 +309962,10 @@ A voice from somewhere says, &#x27;Two laps. The line is the line.&#x27;
     canvas.tabIndex = 0;
     canvas.setAttribute(&#x27;aria-label&#x27;, &#x27;NaZCAR race. Arrow keys or WASD to drive. Space uses an item. P pauses.&#x27;);
     racePanel = document.createElement(&#x27;div&#x27;); racePanel.className = &#x27;nz-dashboard&#x27;;
-    racePanel.innerHTML = &#x27;&lt;div&gt;&lt;small&gt;SPEED&lt;/small&gt;&lt;strong data-nz=&quot;speed&quot;&gt;0&lt;/strong&gt;&lt;/div&gt;&lt;div class=&quot;nz-charge&quot;&gt;&lt;small data-nz=&quot;state&quot;&gt;DRIFT / BOOST&lt;/small&gt;&lt;meter data-nz=&quot;charge&quot; min=&quot;0&quot; max=&quot;1&quot; value=&quot;0&quot; aria-label=&quot;Drift and boost charge&quot;&gt;&lt;/meter&gt;&lt;/div&gt;&lt;div&gt;&lt;small data-nz=&quot;lap&quot;&gt;LAP 1 / 2&lt;/small&gt;&lt;strong data-nz=&quot;time&quot;&gt;0.00s&lt;/strong&gt;&lt;/div&gt;&#x27;;
+    racePanel.innerHTML = &#x27;&lt;div&gt;&lt;small data-nz=&quot;speedLabel&quot;&gt;SPEED&lt;/small&gt;&lt;strong data-nz=&quot;speed&quot;&gt;0&lt;/strong&gt;&lt;/div&gt;&lt;div class=&quot;nz-charge&quot;&gt;&lt;small data-nz=&quot;state&quot;&gt;DRIFT / BOOST&lt;/small&gt;&lt;meter data-nz=&quot;charge&quot; min=&quot;0&quot; max=&quot;1&quot; value=&quot;0&quot; aria-label=&quot;Drift and boost charge&quot;&gt;&lt;/meter&gt;&lt;/div&gt;&lt;div&gt;&lt;small data-nz=&quot;lap&quot;&gt;LAP 1 / 2&lt;/small&gt;&lt;strong data-nz=&quot;time&quot;&gt;0.00s&lt;/strong&gt;&lt;/div&gt;&#x27;;
     canvas.parentElement.appendChild(racePanel);
     dashboard = {};
-    [&#x27;speed&#x27;,&#x27;state&#x27;,&#x27;charge&#x27;,&#x27;lap&#x27;,&#x27;time&#x27;].forEach(function(k){ dashboard[k] = racePanel.querySelector(&#x27;[data-nz=&quot;&#x27;+k+&#x27;&quot;]&#x27;); });
+    [&#x27;speedLabel&#x27;,&#x27;speed&#x27;,&#x27;state&#x27;,&#x27;charge&#x27;,&#x27;lap&#x27;,&#x27;time&#x27;].forEach(function(k){ dashboard[k] = racePanel.querySelector(&#x27;[data-nz=&quot;&#x27;+k+&#x27;&quot;]&#x27;); });
     var controls = document.createElement(&#x27;div&#x27;); controls.className = &#x27;nz-controls&#x27;;
     function button(text, action){
       var b = document.createElement(&#x27;button&#x27;); b.type = &#x27;button&#x27;; b.textContent = text;
@@ -309729,6 +310000,9 @@ A voice from somewhere says, &#x27;Two laps. The line is the line.&#x27;
       touch.appendChild(b);
     });
     canvas.parentElement.parentElement.appendChild(touch);
+    [&#x27;nz-race-win&#x27;,&#x27;nz-race-lose&#x27;].forEach(function(id){
+      var exit = document.getElementById(id); if (exit) canvas.parentElement.parentElement.appendChild(exit);
+    });
   }
   function setPaused(value){
     if (finished || (countdownAt === null &amp;&amp; !raceStarted)) return;
@@ -309751,6 +310025,7 @@ A voice from somewhere says, &#x27;Two laps. The line is the line.&#x27;
     camX = p.x-d.y*24; camY = p.y+d.x*24; camAngle = Math.atan2(-d.x,d.y); moveAngle = camAngle;
     lastT = closestT(camX,camY).t; recoveryT = 0; lastWakeX = camX; lastWakeY = camY;
     playerLapsT = 0; oppT = oppLapsT = -0.04; speed = 0; steerVelocity = 0;
+    completedLaps = 0; nextGate = 1; dashboard.speedLabel.textContent = &#x27;SPEED&#x27;;
     drifting = spinning = paused = racing = raceStarted = finished = false;
     driftMs = driftStage = boost = endFlare = offJudder = 0;
     countdownAt = null; countdownStep = -1; finalLapNoted = false; lastLead = null;
@@ -309962,15 +310237,20 @@ A voice from somewhere says, &#x27;Two laps. The line is the line.&#x27;
     var dT = cr.t - lastT;
     if (dT &gt;  0.5) dT -= 1;
     if (dT &lt; -0.5) dT += 1;
-    if (raceStarted){
-      var lapWas = Math.floor(Math.max(0, playerLapsT));
-      // Reject jumps between nearby circuit branches; recovery earns no distance.
-      if (!spinning &amp;&amp; Math.abs(dT)*trackLength &lt;= speed*dt*4+8) playerLapsT += dT;
-      if (Math.floor(Math.max(0, playerLapsT)) &gt; lapWas){
+    if (raceStarted &amp;&amp; !spinning &amp;&amp; cr.d &lt; TRACK_WIDTH*0.8*wfAt(cr.t) &amp;&amp; Math.abs(dT)*trackLength &lt;= speed*dt*4+8){
+      // Ordered quarter-lap gates prevent shortcut/recovery mileage from
+      // winning a race away from the actual chequered finish line.
+      var gateDistance = ((nextGate/4)%1-lastT+1)%1;
+      if (dT &gt; 0 &amp;&amp; gateDistance &lt;= dT+1e-9){
+        nextGate++;
+      }
+      if (nextGate === 5){
+        nextGate = 1; completedLaps++;
         var lapTime = raceElapsed-lapStartedAt; lapTimes.push(lapTime); lapStartedAt = raceElapsed;
         bestLap = bestLap === null ? lapTime : Math.min(bestLap,lapTime);
         for (var pr2 = 0; pr2 &lt; patches.length; pr2++){ patches[pr2].taken = false; if (patches[pr2].grp) patches[pr2].grp.visible = true; }
       }
+      playerLapsT = completedLaps + cr.t - (nextGate === 1 &amp;&amp; cr.t &gt; 0.75 ? 1 : 0);
     }
     lastT = cr.t;
 
@@ -310032,14 +310312,16 @@ A voice from somewhere says, &#x27;Two laps. The line is the line.&#x27;
       if (eng) eng.blip();
     }
 
-    if (playerLapsT &gt;= TOTAL_LAPS){ endRace(true); }
+    if (completedLaps &gt;= TOTAL_LAPS){ endRace(true); }
     else if (oppLapsT &gt;= TOTAL_LAPS){ endRace(false); }
   }
 
   function endRace(won){
     finished = true; racing = false; messageUntil = Infinity;
     pauseButton.disabled = true; retryButton.hidden = false; itemButton.disabled = true;
-    dashboard.state.textContent = &#x27;BEST LAP&#x27;;
+    dashboard.speedLabel.textContent = &#x27;BEST LAP&#x27;;
+    dashboard.state.textContent = &#x27;RACE COMPLETE&#x27;;
+    dashboard.lap.textContent = &#x27;TOTAL TIME&#x27;;
     dashboard.time.textContent = formatTime(raceElapsed);
     dashboard.charge.value = 0;
     dashboard.speed.textContent = bestLap === null ? &#x27;—&#x27; : formatTime(bestLap);

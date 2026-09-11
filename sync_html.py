@@ -68,8 +68,8 @@ AUDIO_EMBEDS = [
 # replaced with base64 data URIs of the source PNG. Means the game works from
 # file:// or anywhere, and an asset can't go 404 because it's part of the HTML.
 IMAGE_EMBEDS = [
-    ("__DSS_COIN_HEADS_DATA_URI__", "coin-heads.png", "image/png"),
-    ("__DSS_COIN_TAILS_DATA_URI__", "coin-tails.png", "image/png"),
+    ("__DSS_COIN_HEADS_DATA_URI__", "coin-heads.svg", "image/svg+xml"),  # 2026-09-11: Sam's face PNG set into the struck vector frame; coin-heads.png stays on disk
+    ("__DSS_COIN_TAILS_DATA_URI__", "coin-tails.svg", "image/svg+xml"),  # 2026-09-11: vector relief reverse; coin-tails.png is the old Google-sourced quill, kept on disk
 ]
 
 # ============================================================

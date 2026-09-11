@@ -1,3 +1,41 @@
+> **▶ OVERNIGHT BEAUTY RUN — 2026-09-11, 06:49 to 07:46 (Fable 5.1, Sam asleep; his prompt: "the goal is beauty… magical atmosphere"). Full log = Addendum 8 at the foot. Everything below is synced to the .html and UNCOMMITTED — Sam commits via GitHub Desktop.**
+>
+> **SHIPPED TONIGHT, in order:**
+> 1. Mini-game rules cards no longer bleed the passage through (backdrop blur removed from `.dss-rules-overlay`).
+> 2. Bar game result screen restaged as the club: spot, tray with the surviving drinks, smoke, gold type.
+> 3. Bar game + all mini-game result banners onto the house palette (gold / ash claret; lime and tomato gone).
+> 4. Lackland's office lit: green banker's lamp, amber from the amp, the Garrard turning at 33 rpm (CSS on the tag).
+> 5. Cecil Court lit: the shop window's scrumpy amber, fog at the foot, book-dust drifting through the light.
+> 6. Phone: d-pad dressed in the notebook-tab register; hub title no longer drops below the lamp (690px void at 375px fixed; inline h1 size moved to CSS).
+> 7. Phone: tarot spread no longer clipped by the Trisha frame (slots flex).
+> 8. The Colony Room Door: an ink plate of the two doors above the Left/Right choice.
+> 9. Lackland's backroom lit: strip light with a slow flicker, the green of the table.
+> 10. The Coach and Horses lit: gantry amber, mahogany, the brass rail (gents excluded).
+> 11. The Interval lit: red carpet, brass banister, the radio's dial.
+> 12. Eight pavement transit pages (Davy outside, Trisha's refusal, after Cecil Court, the five dream Returns) tagged `street-night`: far sodium lamp + wet-pavement sheen.
+> 13. A shooting star over the Soho map's sky band, once every minute or two.
+> 14. The fight's KNOCKOUT / STANDING / DOWN labels, its call-outs and the pong DEFEAT label onto the same gold/claret (verified: KNOCKOUT renders gold over the K.O. splash).
+> 15. Centre Point's windows on the map go out lap by lap as the turns run down (reads the header's turn count).
+> 16. A cloud drifts across the map's moon every couple of minutes.
+> 17. The Colony Room's two doors: the one you're about to knock on lights its fanlight on hover.
+> 18. Typewriter pages: the wine ring and burns settle onto the paper a beat after it arrives.
+> 19. The far roofs on the map carry a few attic lights that go out with the tower's as the turns run down.
+> 20. Gold keyboard focus rings on the d-pad, notebook tabs, notebook buttons and the bar's start button.
+> 21. The Giant Steps notation on Ronnie's rule breathes slowly, like the spot.
+> Also: sound HARD-MUTED again at Sam's request mid-run (`DSS_SOUND_OFF = true`, ~461) — flip to false to restore. Prose untouched throughout; no pink lines touched; header lily, Three Blue Posts, JT/SQ, pentangle points untouched.
+>
+> **FOR SAM (rulings, not built):**
+> - Is the hard mute to stay off until you say? (It is on now.)
+> - Bar Canvas LOSE has no banner where WIN has SIGNED, SEALED, DELIVERED — adding one means new UI copy ('The tray comes up empty.'); your call.
+> - The five dream-world Return pages are pink stubs on the new `street-night` wash — yours to write when in the mood; the wash is a placeholder atmosphere.
+> - The cellar fight, cow ride, waltz, pong all still run on the CANVAS look from spring; the bar game's result got the club treatment tonight — want the same pass on the others' result screens?
+> - `.lily-window`, `.stat-bars`, `.tarot-reading-body`, `.phone-ringing` still use backdrop blur; they showed no fault, left alone.
+>
+> **NEXT THREE I'd make more beautiful:**
+> 1. The Fight and Pong result screens (canvas) — restage like the bar result: the cellar bulb / the green table under one light.
+> 2. The Aoife memory interstitials ('On.') — the stains now settle (cycle 18); next, a slower ink-in of the first line and the carriage-return sound when audio is back.
+> 3. The hub map's night, next layer: rain-free weather over the roofs (a drift of chimney smoke thickening after midnight), and the far roofs' windows going out with the tower's.
+>
 > **▶ NEXT SESSION — START HERE.** Loop: edit `.twee` → `python3 sync_html.py` → verify via the preview server (`dss-game`, port 8732) or Sam's real Chrome via the Chrome MCP → **never git** (Sam commits via GitHub Desktop). **Never read the `.html`** — grep it. Cache-bust with `?v=n`; Cmd/Ctrl+Shift+R for humans.
 >
 > **State at handoff (2026-09-02, ~01:00, the first Fable 5.1 session):** Sam has committed (and probably pushed) everything below. His verdict on the Soho map: "so so much better. Not perfect but will do very well for now."
@@ -9,7 +47,7 @@
 > 2. **DONE 2026-09-11 (rulings in Addendum 4) — Things Sam has not yet ruled on from the art session:** the 21 tarot faces (weakest to my eye: Death's horse, the Chariot's sphinxes, the Devil), the four pink placeholder lines in the Hanged Man wager, the pressed-lily row, the coin faces, the notebook plan, the venue/dawn/phone rules, the map street life.
 > 3. **Prose strands untouched longest (Sam's, not mine — just the dates):** 'No more' (Centre Point ending text, 03-10); the Maltese cellar strand (Turn to Copper / Standing / Beaten / Copper confronts / Stand your ground / Maltese Gangsters, May–June); the opening (Name Your Book, Night Ahead Part Two, The Night Ahead, May–June); AOIFE (After the call 05-19, After Aoife 06-29 — his own June note said he'd write her; the dates say not yet); The Interval / LINE 2 Oxford / LINE 3 / DBG Complete (June); Cecil Court + O'Flatterly (May–June); Talk to the Artists / Benito's Hour.
 > 4. **AUDITED 2026-09-11 (Addendum 5) — mostly already built; CHANT row + ledger threads shipped; 22 paths need Sam's mapping.** Remaining phase-2 queue: Soho-responds weaves, notebook gift OBJECTS/CHANT/paths, hexagram + Alt-Dawn (Sam's prose). Bigger moves Sam liked but did not green-light: time-windowed venues, ending switchboard, Easter Island's game, stronger first five minutes.
-> 5. Housekeeping: the .git history still holds the old 60 MB builds (option 2 = purge + force-push, Sam's call). `DSS_SOUND_OFF = true` is Sam's temporary hard mute (09-11) — flip to false to restore audio.
+> 5. **AUDIO: restored 2026-09-11 evening, then HARD-MUTED AGAIN overnight at Sam's request ('you are keeping me awake') — `DSS_SOUND_OFF = true` at UserScript ~461; flip to false when he wants it back. Git purge = Sam's call, steps in Addendum 6.** Housekeeping: the .git history still holds the old 60 MB builds (option 2 = purge + force-push, Sam's call). `DSS_SOUND_OFF = true` is Sam's temporary hard mute (09-11) — flip to false to restore audio.
 >
 > **Previously-open items 1 and 2 of 2026-09-02 (scroll jump, map placement) are RESOLVED — kept below for the record.**
 >
@@ -668,3 +706,89 @@ Audit of the phase-2 queue against the .twee (item 4's summary line had gone sta
 - **Notebook DREAMS tab:** ledger of five worlds + echoes existed; the THREAD column was a hard-coded '—'. **Shipped tonight:** thread shows the gift once earned (`_tH.._tZ`: the mantra / the tracing / the glyph / the proportion / the vision); **CHANT section** added under the ledger — the 12-syllable `.nb-mantra-row` (same CSS the Cave uses), Nth syllable `heard` when `$haunts's length >= N`, else a silent dot; caption 'One syllable for each haunt caught.'; old-save guards for `$mantra`/`$haunts`. Verified live after a DBG Complete jump: DREAMS tab renders, 12/12 syllables lit, 0 tw-errors. The thread text was NOT exercised by state (DBG Complete sets no gift flags) — same `(cond:)` pattern as the working `_dH` row classes.
 - **22 Hebrew paths: NOT built — needs Sam.** `.nb-paths-row` / `.nb-path-letter` CSS exists; no milestone→letter mapping exists anywhere on main and the branch builder can't be read without git. 22 = ? (12 haunts + 5 lilies + 3 alba + 2 = coin/page? or the tree's 22 paths between the 10 sefirot venues). Ask before building. Charm slot stays text lines (pocket + resting keys) — Sam has not asked for art.
 - **Bigger moves (time-windowed venues, ending switchboard, Easter Island's game, stronger first five minutes): NOT green-lit, not touched.**
+
+### Addendum 6 — Item 5 housekeeping (2026-09-11)
+
+- **Audio restored.** UserScript line ~461 `var DSS_SOUND_OFF = false` (was Sam's temporary hard mute from 09-11). The setMuted/localStorage path is back to normal (`dssMuted2` honoured again). Verified on a Dean Street jump: `dssAudio.isMuted()` → false, 0 console errors, the linked beds are being fetched. Real music start still needs a real user gesture, as before.
+- **Git history purge — NOT done (never run git; force-push is Sam's call).** Repo is 544 MB on disk after the 09-01 gc; the old ~60 MB html builds are still in history. If Sam wants option 2, the steps (his terminal, not mine): install `git-filter-repo` (`brew install git-filter-repo`), fresh clone, `git filter-repo --path 'Dream Street Shuffle.html' --invert-paths` (or `--strip-blobs-bigger-than 20M` to keep the current html but drop the fat old blobs), re-add the remote, `git push --force --all` + `--tags`, then every other clone (GitHub Pages is fine — it rebuilds from the branch) must re-clone. Alternative that keeps history: do nothing; 544 MB is workable.
+- **22 Hebrew paths (from item 4): Sam — 'I think we got rid of the 22? or maybe they came back with the dream worlds. Let's think about it another time.'** Parked; don't raise unprompted.
+
+### Addendum 7 — Soho map fixes: labels, narrow layout, REAL-SOHO doors on both maps, Romilly band (2026-09-11)
+
+Sam: "This map is a mess now" (labels piled up on the Bateman block at ~480px); then "make the square a bit longer on the vertical"; then "the doors are often in the wrong places… it doesn't match the map (real world or in game)". Ruling: **REAL SOHO is the reference; the pentangle may go slightly lopsided but must not be a mess.**
+1. **Hub labels**: `.soho-door-label` font is `clamp(7.5px, 2.5cqw, 0.66em)` (the stage is a size container), and a `settleLabels()` pass after the labels are built (and on resize) pushes the UPPER of any two overlapping labels up until none overlap (never down onto its door). 0 overlaps at 406px and at pane width.
+2. **Narrow-layout void FIXED**: below 640px the wrap `clear`s the floated `#dean-lamp-svg`, and `sizeLamp()` sized the lamp to the whole passage → the map dropped below a 2400px lamp. `sizeLamp` now measures to the top of `#soho-map-container` on the narrow layout (`measure()`), so the lamp keeps the title company and the map follows at once.
+3. **Romilly Street band**: ROWS 22→30; `ROAD_ROWS` +23,24; `PAVE_ROWS` +22,25; centre-line dashes on row 24; `streetName` returns ROMILLY STREET for rows 22–25; four lamps added on the band; CSS max-width aspect 26/25 → 26/33; canvas is now 416×528.
+4. **Hub doors (real Soho)**: coach → c17 r21 (Greek's west side at the Old Compton/Romilly block, entered from col 18); trishas → c22 r8 (Greek's east side just south of Bateman, entered from col 21); chippy → c5 r2 (west of Dean, north — where the plan's Wardour-side chippy points); doorway → c5 r19 (west of Dean, south of Old Compton); cecil → spot c25 r25 on Romilly's south pavement (label at 23.6,23.6). French/Colony/Ronnie's/Lackland's/Pillars/Ginger/North unchanged.
+5. **Notebook plan (Build Notebook ~46436–46463) + Dawn Approach White/Black overlays (~40533/40542)**: the two cross-street LABELS were swapped into the real order (Bateman y374 north, Old Compton y523 south — only the text changed, the roads didn't move). **Star point moved: Coach (490,460) → (490,560)** (south of Old Compton, Romilly corner) in all polygons + lily groups (plan pentagram, tracer, dawn overlays ×2) — this is the 'slightly lopsided' Sam accepted; **Trisha's (470,200) → (494,200)** (east side of Greek) likewise. Non-star markers: Ronnie's → (340,450) Frith between the cross streets; Colony → (232,420) Dean opposite the French; Pillars → (486,228) Greek's WEST side; Lackland's → (364,430) Frith east side (agrees with the hub); Chippy stays (100,250) — it is a star point. Trisha's label now anchored left of its marker (was running off the right edge); the Coach's label sits BELOW its marker (clear of the LBRP panel). Verified live: hub 0 errors/0 overlaps; MAP tab renders, the forced `.nb-map-pentangle` reveal traces the new star with bells at all five points; Dawn Approach White overlay shows the same star over Oxford Street, 0 errors.
+6. LBRP panel nudged 14px down (rect y 528→542, text 540/558/576/594 → 554/572/590/608) so it clears the OLD COMPTON STREET label and stops short of SHAFTESBURY AVENUE (Sam, same night). Pigeons/cat/cab untouched.
+
+### Addendum 8 — Overnight beauty run (2026-09-11, started 06:49, hard stop 08:19)
+
+**Cycle 1 — mini-game rules cards bled the passage through (Cellar fight, cow ride).** Survey of venues from debug jumps (French, Colony, Pillars, Fetch, Coach, Chippy, Interval, Set, Pong, Fight, Cow). The shared `.dss-rules-overlay` (rules cards + the HAUNTS explainer) carried `backdrop-filter: blur(2px)`; in the pane's Chromium the blurred backdrop painted OVER the opaque card so the prose under it read through the rules. Removed the blur (scrim 0.82→0.86 to compensate). Verified: Cellar card clean immediately after the change; cow card clean once the tab was fronted. Caveat: the pane reported `document.hidden` true for stretches of this run (rAF-driven fades arrive late), so the cow's first bad shot may have been partly that; the blur removal is harmless either way. Other backdrop-filter users left alone (.stat-bars, .lily-window, .tarot-reading-body, .phone-ringing) — none showed the fault.
+
+**Cycle 2 — bar game result screen restaged.** `BarGame._drawResult` (~9097) was a black canvas with a lime headline, three stars and a caption. Now: the club with the lights down — warm back wall, stage boards with a gold lip, a single spot cone from above pooling on the stage, four smoke wisps drifting through the beam, the TRAY set down in the light with the drinks that survived drawn by `_drawGlass` from `completedDrinks` (rings on the tray where the lost ones stood), and the words in gold with a soft glow: a letterspaced strap ('THE TRAY REACHES THE STAGE' / 'THE TRAY COMES UP EMPTY'), 'N OF 3 DELIVERED', the stars, the old captions unchanged. Verified by forcing the result phase on a live game (3/3 drawn correctly; the loop kept it live). No copy changes to the win/lose passages.
+
+**Cycle 3 — mini-game feedback off the palette.** The bar game's five uses of lime `#4CFF00` / tomato `#FF6B6B` (pour feedback 'Perfect pour.' / 'Too much.', the completed-drink star, the `_resultCarry` narrative lines) → house gold `#e8c060` / soft claret `#d8846a`. `.pp-result-win` (mint #aaffaa glow) / `.pp-result-lose` (pink) — shared by the fight (DOWN / STANDING / PERFECT SCORE), pong (DEFEAT / VICTORY) and bar (SIGNED, SEALED, DELIVERED) banners — now gold `#f0dca0` with a gold glow and letterspacing 0.12em, lose = ash claret `#d8a090`. Verified on Bar Canvas Win (gold banner) and Lose (no banner there; prose only, left alone).
+
+**Cycle 4 — Lackland's office given its own light.** The one venue interior that was prose on plain dark (after a full 3D approach). CSS only, keyed on the passage tag (`tw-passage[tags~="venue-lackland"]`, `isolation: isolate`, pseudo-elements at z-index −1 so nothing in the prose changed): `::before` = the green banker's-lamp pool from the top-left (breathes on a 7s cycle) + a warm amber from the amp at the right + a faint green-black wash at the top; `::after` = a data-URI record (grooves, green label, one highlight) turning at 33 rpm (1.82s/rev) at the right margin, opacity 0.42, `prefers-reduced-motion` stops the spin. Applies to the Office, Back Door and the Recognises-the-Tracing branch (same tag). Verified: pseudo-elements computed, 0 tw-errors, screenshot reads as a lit room. The Garrard image sits at top: 11em so it clears the sticky header.
+
+**Cycle 5 — Cecil Court lit.** O'Flatterly's shop (and Watkins, the quest/gift pages, the street page under its shelf rule) were prose on plain dark. CSS keyed on `tw-passage[tags~="venue-cecilcourt"]` (same pattern as cycle 4): `::before` = the late shop window's scrumpy amber from the top right (9s breathe) + a faint warm lift top-left + blue-grey fog rising from the foot; `::after` = a repeating data-URI of eight soft book-dust motes, masked to the window's light, drifting upward on a 38s loop (reduced-motion stops it). Verified on O'Flatterly's shop and Cecil Court: pseudo-elements computed, 0 tw-errors, the amber reads under the prose. Note for the reader of console logs in the pane: the two 'no passage "The Pillars of Hercules"' errors are from MY mistyped jump early in the run (the venue is 'Entering The Pillars of Hercules'); not a game fault.
+
+**Cycle 6 — phone: d-pad dressed, and a hub-title void fixed.** (a) `.soho-dpad button`: radial brass-dark ground, hairline gold border + offset outline (the notebook-tab register), inset lip, gold glow on the glyph; `:active` warms and glows. (b) FOUND on the 375px pass: the hub title `<h1 class="game-title">` had an inline `font-size:2.2em`; beside the floated lamp the word SHUFFLE could not fit the column, dropped BELOW the lamp, and the lamp/sizeLamp loop grew the title block to ~690px of void. The inline size moved into `.game-title` CSS and a `@media (max-width: 640px)` rule scales it `clamp(1.4em, 7vw, 2.6em)`; at 375px the title is 85px tall, lamp 350, map at 357px from the passage top (was 940). The h1 markup lost only its style attribute; the words are untouched.
+
+**Cycle 7 — tarot spread clipped on phones.** At 375px the three `.tarot-card`s (`clamp(96px, 29vw, 150px)`, `flex-shrink:0`) overflowed the Trisha frame and were cut off left and right (PAST/FUTURE half-hidden). `.tarot-slot` is now `flex:1 1 0; min-width:0; max-width:150px`, `.tarot-card { width:100% }`, spread gap `clamp(10px, 3vw, 16px)`; the lone second-look card keeps its own `clamp(150px, 56vw, 230px)` via `.tarot-spread-one .tarot-slot { flex:0 0 auto; max-width:none }`. Verified at 375: three cards inside the frame, flip + label + meaning work; desktop cap unchanged at 150px.
+
+**Cycle 8 — the two doors drawn.** The Colony Room Door (the Left/Right knock the Donkey decides) was prose on plain dark. An inline ink plate (`.two-doors-plate`, `#dss-ink-fine` filter, hairline gold on the house dark) now sits above the prose: brick courses, two identical arched doors with fanlights, four panels, a ring knocker and a step each, the kerb line beneath, a faint moon-glow over the wall. Deliberately identical so the plate spoils nothing. Verified: renders, 0 tw-errors, Left/Right/Toss the Donkey untouched. Prose untouched. Systemic ideas looked at and LEFT: tw-link already has hover/focus glow; a rise-in on `passageFadeIn` was rejected because a transform on tw-passage would make it the containing block for fixed-position descendants (3D wraps, overlays).
+
+**Cycle 9 — Lackland's backroom lit.** `tw-passage[tags~="venue-lackland-back"]` (Back Room, Watch the decider, PP Victory/Defeat): `::before` = a cool white-green strip-light fall from the top centre with a slow stepped flicker (never off; 5.5s cycle, reduced-motion stops it) + the green of the table rising faint from the foot. Verified on Lackland's Back Room and PP Victory (gold banner from cycle 3 also confirmed), 0 tw-errors.
+
+**Cycle 10 — the Coach and Horses lit.** `tw-passage[tags~="venue-coach"]:not([tags~="venue-gents"])::before`: gantry/optics amber from the top left (8s breathe), mahogany warmth down the right, a line of brass-rail light at the foot. The gents (tiles) explicitly excluded and confirmed untouched. Verified on Coach and Horses bar, 0 tw-errors.
+
+**Cycle 11 — The Interval lit.** `tw-passage[tags~="interval-radio"]::before`: red carpet worn thin rising from the foot, the brass banister's warm line down the right edge, the spare radio's amber dial low on the left breathing on a 6s cycle. Verified on a fresh-state jump (the passage redirects to the hub once the night has started, so wipe storage to see it), 0 tw-errors. Survey note: every venue interior now carries its own light (French/Chippy/Trisha's/Pillars/Colony/Ronnie's/gents had scenes already; Lackland's office + backroom, Cecil Court, the Coach and the Interval got theirs tonight).
+
+Check: Dawn Approach Black carries the moved star — later CONFIRMED BY EYE with the tab fronted: overlay at opacity 1, `.iframe-ready` set, the five bells on the new points over Oxford Street, 0 tw-errors.
+
+Checks after the CSS round: (i) the rules card raised from a tagged passage (Cecil Court Waltz) is body-level and stacks above the header — `isolation: isolate` on the tagged passages confines nothing that matters; grep confirms no fixed-position markup inside any tagged passage. (ii) Hub at 1100px: map beside the lamp (424×538, height-capped), 9 labels, 0 overlaps, 0 errors.
+
+**Sound: hard-muted again overnight (Sam, mid-run: 'Please turn the sound onto mute, you are keeping me awake').** The pane's game tab was muted at once (`dssAudio.setMuted(true)`, `dssMuted2=1`), then `DSS_SOUND_OFF` set back to `true` (line ~461) and synced; tab reloaded onto the muted build, `isMuted()` true, no audio elements playing. Item 5's 'audio restored' is therefore reverted: flip the flag to false when Sam wants sound back. Cycle 8 follow-up: the two-doors SVG had `height='auto'` as an attribute (Chrome logs 'Expected length'); moved to the style attribute, verified clean.
+
+**Cycle 12 — the pavement pages.** New tag `street-night` on eight plain transit passages (Colony Member, After Cecil Court, Failure: Trisha's, and the five dream-world Returns — header tags only, prose untouched) with one shared wash: a far sodium lamp high on the right (11s breathe), the wet pavement's cool sheen at the foot. No rain (Ginger Light veto respected everywhere). Verified on Colony Member and Failure: Trisha's, 0 tw-errors, muted.
+
+**Cycle 13 — a shooting star over Soho.** Map engine: `S.meteor`/`S.meteorNext` (first after 40–100s, then every 45–120s); a one-second streak (24–34 frames, 2.2–3.4px/frame right, 0.5–0.9 down) drawn in the sky band before the SKY translate, ivory line with a white head, fading over its life, never below the roofs. Verified live by forcing `state.meteorNext = 0`: spawns, travels ~110px, expires, reschedules (next 57s); tick running at ~50fps; 0 tw-errors.
+
+Check at 375px after the CSS round: no horizontal overflow on Lackland's Office (the record hangs at right:-0.4em inside the passage), The Colony Room Door (doors plate scales), O'Flatterly's shop — `scrollWidth` = viewport on all three.
+
+**Error sweep (raw debug jumps, 13 passages):** the five 3D approaches (French, Coach, Pillars, Lackland's, Copper's Lair — canvases present) and Copper confronts, Shana's Verdict, His round, The Empty Glass, LINE 2, Maltese Gangsters, No more, O'Flatterly's quest: 0 tw-errors each; the console carries only the four stale messages from earlier in the run (my mistyped jump ×2, the since-fixed svg height ×2). Nothing new.
+
+**Cycle 14 — last of the off-palette feedback.** Inline mint/pink in JS: the fight's end labels (KNOCKOUT / STANDING / DOWN, ~12935/12940), the fight's call-out colour (~13035), the pong DEFEAT label (~40272) and their glows → gold `#f0dca0` / ash claret `#d8a090`, glows `rgba(232,196,110,…)` / `rgba(200,110,90,…)`. Zero `#aaffaa` / `#ffaaaa` left in the twee.
+
+Final real-walk smoke after all changes: BEGIN → Night Ahead → hub → notebook (six tabs) → See who's there: 0 tw-errors, muted.
+
+**Cycle 15 — Centre Point's windows go out as the night runs down.** `drawSky` reads the turns left off the header text ('N TURNS LEFT', DOM bridge — Harlowe state isn't exposed) and sets the dark threshold `0.70 + (1 − left/16) × 0.26`: ~30% of the honeycomb lit with the whole night ahead, ~4% on the last turn; the dawn-offered state (north door open) still lights it dawn-rose. `window.__dssSkyTurnsLeft` exposes the read for testing. Verified: 14 and 13 read back correctly on two states, 0 tw-errors. The base is rebuilt on every hub render, so the tower dims lap by lap.
+
+**Cycle 16 — a cloud across the moon.** Map engine: `S.cloud`/`S.cloudNext` (first after 50–140s, then every 90–210s): three overlapping night-dark ellipses with a faint lit upper rim drift in from the right at 0.06–0.11px/frame across the moon's height and out to the left (about two minutes to cross), drawn per frame in the sky band after the meteor. Verified by forcing `state.cloudNext = 0`: spawns at x=454, drifts, 0 tw-errors.
+
+**Cycle 17 — the doors answer the hand.** On The Colony Room Door, hovering or focusing the Left / Right link lights that door's fanlight (`.two-doors-plate.lit-left #td-left .td-fan` → gold at 0.42 with a soft glow, 0.45s ease); a small passage-local script toggles the class on mouseenter/leave and focus/blur. Verified: class toggles, left fanlight fill 0.42 vs right 0.10, clears on leave, 0 tw-errors. The DBG-Complete state redirects past this page (`$metDavy`), so test it on a fresh save.
+
+**Cycle 18 — the typewriter stains settle.** `.typewriter-page::after` (the wine ring + burns layer, all typewriter pages except Night Ahead's own inline ring) now arrives a beat behind the paper: `twStainSettle` 1.9s from opacity 0 / scale 1.035 (origin at the ring) to rest, 0.35s delay, reduced-motion off. Verified on The dark pass: animation running at load, settled at opacity 1 / identity after 2.6s, 0 tw-errors.
+
+**Cycle 19 — the far roofs go dark with the tower.** The turns-left read in `drawSky` moved above the roof loop; the far roofs now carry small attic lights (`seeded(c,11,17)` above `0.55 + (1 − nightFrac) × 0.4`, dull gold 2×2) that thin out as the night runs down alongside Centre Point's windows. Verified on the hub: read = 15, map alive, canvas present, 0 tw-errors, no new console messages.
+
+Phone pass (375px) after cycles 10–19: Coach and Horses bar, Cecil Court (HAUNTS explainer opaque — the backdrop fix holds on phone too), Lackland's Back Room — no horizontal overflow, 0 tw-errors each.
+
+**Cycle 20 — keyboard focus rings on the new buttons.** `.soho-dpad button`, `.nb-tab`, `.nb-inv-btn` and `#bar-start-btn` joined the shared gold `:focus-visible` rule (~55346) so a keyboard user never gets the browser's blue ring on the house palette. Programmatic `focus()` in the pane doesn't trigger `:focus-visible` (the button's own decorative outline showed instead), so this one is verified by the rule, not by eye.
+
+Looked at and left: the cow ride's end (`drawEnd` ~44402) already has gold sparks, a warm flash and gold type — at standard. Final smoke #2 on a fresh save: BEGIN → Night Ahead → hub → NOTEBOOK → MAP tab renders → close: 0 tw-errors, muted, sky read 15 (only the Ginger Light is open on lap 1, as designed).
+
+Phone check: the Dawn ending at 375px — astral wheel, sprig and the star below it render, no horizontal overflow, 0 tw-errors.
+
+**Cycle 21 — the Giant Steps notation breathes.** The notes group in `:: Ronnies Rule SVG h14` is `.rn-notes`, easing 0.78→1→0.78 over 6s (reduced-motion off). Verified live on Ronnie Scott's: animation running, 0 tw-errors, muted.
+
+Looked at and left: LINE 2 (Green Sea bar arches), LINE 2 Oxford (the polaroid), LINE 3 (the dawn-sky panel) — all carry their own scene.
+
+Looked at and left: The Synthesis (pink prose, the hexagram arrives after the fifth gift — Sam's). Pane parked on the muted title with storage wiped.
+
+The meteor and cloud (cycles 13/16) are verified by state, not by eye: at the pane's width the map is ~230px wide and the sky band ~18px, below what a screenshot resolves. Sam should watch the sky for a minute at desktop width.
+
+Run ended 07:46: 21 cycles, all synced (198 passages in the html), pane parked on the muted title with storage wiped (`isMuted()` true, nothing playing). Uncommitted — Sam commits via GitHub Desktop.

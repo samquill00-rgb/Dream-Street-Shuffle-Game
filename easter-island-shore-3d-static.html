@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Easter Island Shore — night</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(170,190,220,0.5);
+  letter-spacing: 2px; pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none;
+}
+#tooltip {
+  position: fixed; padding: 6px 14px; background: rgba(8,12,20,0.9);
+  border: 1px solid rgba(170,190,220,0.4); font: italic 13px Georgia, serif; color: #d8e0ec;
+  pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 10;
+}
+#tooltip.visible { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="datestamp">RAPA NUI</div>
+<div id="location">EASTER ISLAND SHORE</div>
+<div id="tooltip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05080f);
+scene.fog = new THREE.FogExp2(0x0a1220, 0.017);
+
+// LAYOUT: the waterline runs along the z axis at x = 0. Sea is x < 0 (off to the
+// left), the basalt beach rises from x = 0 to x = 16 where the moai stand, backs
+// to the sea, on a low rise. The camera stands on the wet stones near the water,
+// looking up the beach on the diagonal: sea and moon at the left, the near moai
+// up-right, the others dim behind it.
+var camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 300);
+camera.position.set(2.6, 2.3, 11);
+camera.lookAt(3.0, 3.0, -9);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = 0.74;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// CLICK TO ENTER
+// ============================================================
+var clickableObjects = [], venueData = new Map(), mouseNDC = new THREE.Vector2(-2, -2), mouseMoved = false;
+var raycaster = new THREE.Raycaster(), hoveredVenue = null, tooltip = document.getElementById('tooltip');
+function makeClickable(mesh, info) { clickableObjects.push(mesh); venueData.set(mesh, info); }
+document.addEventListener('mousemove', function(e) {
+  mouseMoved = true;
+  mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  tooltip.style.left = (e.clientX + 15) + 'px'; tooltip.style.top = (e.clientY - 30) + 'px';
+});
+document.addEventListener('click', function() {
+  if (hoveredVenue) alert('Entering: ' + hoveredVenue.name + '\n\nTwine passage: "' + hoveredVenue.passage + '"');
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function canvasTex(w, h, draw, rep) {
+  var c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  var t = new THREE.CanvasTexture(c);
+  if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
+  t.anisotropy = 8;
+  return t;
+}
+function rand(a, b) { return a + Math.random() * (b - a); }
+function mesh(geo, mat, x, y, z, parent) {
+  var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
+  m.castShadow = true; m.receiveShadow = true; (parent || scene).add(m); return m;
+}
+function radialTex(r, g, b, a, mid) {
+  return canvasTex(128, 128, function(ctx) {
+    var gr = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')');
+    gr.addColorStop(mid || 0.4, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.4) + ')');
+    gr.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ',0)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, 128, 128);
+  });
+}
+function halo(r, g, b, size, x, y, z, opacity, noFog) {
+  var m = new THREE.SpriteMaterial({ map: radialTex(r, g, b, 0.9), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: opacity || 0.6 });
+  if (noFog) m.fog = false;
+  var s = new THREE.Sprite(m); s.scale.set(size, size, 1); s.position.set(x, y, z); scene.add(s); return s;
+}
+
+// ============================================================
+// SKY: night dome, stars, the moon low over the sea
+// ============================================================
+var skyTex = canvasTex(1024, 1024, function(ctx, w, h) {
+  var g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#020308'); g.addColorStop(0.35, '#050a16'); g.addColorStop(0.5, '#0a1428'); g.addColorStop(0.56, '#101c34'); g.addColorStop(0.62, '#0a1220'); g.addColorStop(1, '#03050a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  // a long low cloud bank on the horizon
+  ctx.globalAlpha = 0.22;
+  for (var i = 0; i < 26; i++) { ctx.fillStyle = i % 3 ? '#0c1626' : '#182a44'; ctx.beginPath(); ctx.ellipse(Math.random() * w, h * 0.5 + Math.random() * h * 0.06, 90 + Math.random() * 300, 5 + Math.random() * 14, 0, 0, 6.3); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  for (var s = 0; s < 700; s++) {
+    var sy = Math.random() * h * 0.5, br = Math.random();
+    ctx.fillStyle = 'rgba(' + (200 + Math.floor(br * 55)) + ',' + (210 + Math.floor(br * 45)) + ',255,' + (0.15 + br * 0.7) + ')';
+    ctx.beginPath(); ctx.arc(Math.random() * w, sy, 0.3 + br * 0.9, 0, 6.3); ctx.fill();
+  }
+});
+var sky = new THREE.Mesh(new THREE.SphereGeometry(140, 32, 24), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }));
+scene.add(sky);
+
+// The moon: a disc sprite with a soft halo, low over the water at the left
+var MOON = new THREE.Vector3(-24, 15, -84);
+var moonTex = canvasTex(128, 128, function(ctx) {
+  var g = ctx.createRadialGradient(58, 58, 4, 64, 64, 30);
+  g.addColorStop(0, '#fbfaf2'); g.addColorStop(0.75, '#e8ecf0'); g.addColorStop(1, 'rgba(210,220,235,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(64, 64, 30, 0, 6.3); ctx.fill();
+  ctx.fillStyle = 'rgba(120,130,150,0.22)';
+  [[52, 56, 7], [72, 70, 5], [60, 78, 4], [78, 50, 3]].forEach(function(m) { ctx.beginPath(); ctx.arc(m[0], m[1], m[2], 0, 6.3); ctx.fill(); });
+});
+var moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent: true, fog: false, depthWrite: false }));
+moon.scale.set(8, 8, 1); moon.position.copy(MOON); scene.add(moon);
+halo(200, 215, 240, 24, MOON.x, MOON.y, MOON.z, 0.45, true);
+halo(180, 200, 235, 60, MOON.x, MOON.y, MOON.z, 0.14, true);
+
+// ============================================================
+// LIGHTING
+// ============================================================
+scene.add(new THREE.AmbientLight(0x2a3a58, 0.55));
+scene.add(new THREE.HemisphereLight(0x46608c, 0x0a0c0a, 0.4));
+var moonLight = new THREE.DirectionalLight(0xcfdcf5, 1.35);
+moonLight.position.set(-24, 24, -50); moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(2048, 2048);
+moonLight.shadow.camera.left = -30; moonLight.shadow.camera.right = 30; moonLight.shadow.camera.top = 30; moonLight.shadow.camera.bottom = -30;
+moonLight.shadow.camera.near = 1; moonLight.shadow.camera.far = 120; moonLight.shadow.bias = -0.0006;
+scene.add(moonLight);
+var backFill = new THREE.DirectionalLight(0x2a3c60, 0.4); backFill.position.set(10, 8, 30); scene.add(backFill);
+
+// ============================================================
+// TEXTURES
+// ============================================================
+// Wet black basalt: dark cobbles with pale glints where the moon catches them
+var basaltTex = canvasTex(512, 512, function(ctx, w, h) {
+  ctx.fillStyle = '#0c0d10'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 900; i++) {
+    var v = 14 + Math.floor(Math.random() * 30);
+    ctx.fillStyle = 'rgb(' + v + ',' + (v + 2) + ',' + (v + 6) + ')';
+    ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 4 + Math.random() * 16, 3 + Math.random() * 10, Math.random() * 3, 0, 6.3); ctx.fill();
+  }
+  for (var k = 0; k < 500; k++) {
+    ctx.fillStyle = 'rgba(150,170,200,' + (0.05 + Math.random() * 0.25) + ')';
+    ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 0.6 + Math.random() * 1.5, Math.random() * 3, 0, 6.3); ctx.fill();
+  }
+  for (var s = 0; s < 3000; s++) { ctx.fillStyle = 'rgba(0,0,0,' + Math.random() * 0.4 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+}, [14, 14]);
+var basaltRough = canvasTex(256, 256, function(ctx, w, h) {
+  ctx.fillStyle = '#707070'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 400; i++) { var v = 40 + Math.floor(Math.random() * 120); ctx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 3 + Math.random() * 10, 2 + Math.random() * 6, Math.random() * 3, 0, 6.3); ctx.fill(); }
+}, [14, 14]);
+
+// Sea: near-black water with faint wave bands
+var seaTex = canvasTex(512, 512, function(ctx, w, h) {
+  ctx.fillStyle = '#060b14'; ctx.fillRect(0, 0, w, h);
+  for (var y = 0; y < h; y += 2) { ctx.fillStyle = 'rgba(40,60,90,' + (0.03 + Math.sin(y * 0.09) * 0.03 + Math.sin(y * 0.31) * 0.015) + ')'; ctx.fillRect(0, y, w, 2); }
+  for (var k = 0; k < 260; k++) { ctx.fillStyle = 'rgba(180,200,230,' + Math.random() * 0.06 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 4 + Math.random() * 24, 1); }
+}, [6, 6]);
+
+// Moai stone: grey-brown tuff, pitted, lichen and a dark damp foot
+var tuffTex = canvasTex(256, 512, function(ctx, w, h) {
+  ctx.fillStyle = '#4a443c'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 1400; i++) { var v = 40 + Math.floor(Math.random() * 60); ctx.fillStyle = 'rgba(' + v + ',' + (v - 5) + ',' + (v - 12) + ',0.6)'; ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 0, 6.3); ctx.fill(); }
+  for (var l = 0; l < 40; l++) { ctx.fillStyle = 'rgba(120,130,80,' + (0.08 + Math.random() * 0.12) + ')'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 4 + Math.random() * 14, 3 + Math.random() * 9, Math.random() * 3, 0, 6.3); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(20,16,12,0.35)'; ctx.lineWidth = 1;
+  for (var c = 0; c < 14; c++) { ctx.beginPath(); var x0 = Math.random() * w, y0 = Math.random() * h; ctx.moveTo(x0, y0); ctx.lineTo(x0 + (Math.random() - 0.5) * 30, y0 + 20 + Math.random() * 60); ctx.stroke(); }
+  var g = ctx.createLinearGradient(0, h * 0.8, 0, h); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+});
+var tuffMat = new THREE.MeshStandardMaterial({ map: tuffTex, roughness: 0.9, color: 0xc0b8b0 });
+var tuffDark = new THREE.MeshStandardMaterial({ map: tuffTex, roughness: 0.95, color: 0x6a645c });
+
+// ============================================================
+// GROUND: the basalt beach rising from the waterline
+// ============================================================
+// A gently rising, lumpy plane. x from -2 (under the water) to 40; z across.
+var beachGeo = new THREE.PlaneGeometry(44, 80, 88, 80);
+(function() {
+  var p = beachGeo.attributes.position;
+  for (var i = 0; i < p.count; i++) {
+    var x = p.getX(i) + 20, z = -p.getY(i); // after rotation: plane y -> world -z
+    var rise = Math.max(0, x) * 0.16 + Math.max(0, x - 12) * 0.22;
+    var lump = Math.sin(x * 1.3 + z * 0.7) * 0.06 + Math.sin(x * 0.4 - z * 1.9) * 0.05 + Math.sin(x * 2.7 + z * 2.3) * 0.025;
+    p.setZ(i, rise + lump * Math.min(1, Math.max(0, x)));
+  }
+  beachGeo.computeVertexNormals();
+})();
+var beachMat = new THREE.MeshStandardMaterial({ map: basaltTex, roughnessMap: basaltRough, roughness: 0.52, metalness: 0.22, color: 0xaab4c4 });
+var beach = new THREE.Mesh(beachGeo, beachMat);
+beach.rotation.x = -Math.PI / 2; beach.position.set(20, -0.05, 0); beach.receiveShadow = true; scene.add(beach);
+function beachY(x, z) { var rise = Math.max(0, x) * 0.16 + Math.max(0, x - 12) * 0.22; var lump = Math.sin(x * 1.3 + z * 0.7) * 0.06 + Math.sin(x * 0.4 - z * 1.9) * 0.05 + Math.sin(x * 2.7 + z * 2.3) * 0.025; return -0.05 + rise + lump * Math.min(1, Math.max(0, x)); }
+
+// pools left in the hollows of the stones
+for (var pi = 0; pi < 22; pi++) {
+  var px = rand(0.5, 9), pz = rand(-24, 18);
+  var pool = new THREE.Mesh(new THREE.CircleGeometry(rand(0.25, 0.9), 14), new THREE.MeshStandardMaterial({ color: 0x1c2a3c, roughness: 0.04, metalness: 0.8, transparent: true, opacity: 0.55, depthWrite: false }));
+  pool.rotation.x = -Math.PI / 2; pool.scale.set(1, rand(0.4, 0.8), 1); pool.position.set(px, beachY(px, pz) + 0.012, pz); scene.add(pool);
+}
+
+// Boulders and stones: basalt lumps, more of them up the beach
+var boulderMat = new THREE.MeshStandardMaterial({ map: basaltTex, roughness: 0.45, metalness: 0.3, color: 0xb0bccc });
+var boulderDry = new THREE.MeshStandardMaterial({ map: basaltTex, roughness: 0.85, metalness: 0.08, color: 0x8a909c });
+for (var bi = 0; bi < 140; bi++) {
+  var bx = rand(-1, 30), bz = rand(-34, 22);
+  if (bx > 6 && bx < 14 && bz > -14 && bz < 0) continue; // keep the path to the moai open
+  if (bz > 2 && bx < 8) continue;                           // nothing big underfoot
+  if (bx > 6 && bx < 12 && bz > -9 && bz < -2) continue;   // and none in the near moai's ahu
+  var r = bx < 6 ? rand(0.08, 0.4) : rand(0.15, 1.0);
+  var b = mesh(new THREE.DodecahedronGeometry(r, 0), bx < 5 ? boulderMat : boulderDry, bx, beachY(bx, bz) + r * 0.35, bz);
+  b.scale.set(rand(0.8, 1.6), rand(0.45, 0.8), rand(0.8, 1.5)); b.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3));
+}
+// gravel / shingle near the waterline
+for (var gi = 0; gi < 400; gi++) {
+  var gx = rand(-0.5, 7), gz = rand(-26, 16), gr = rand(0.03, 0.1);
+  var g = new THREE.Mesh(new THREE.DodecahedronGeometry(gr, 0), gi % 3 ? boulderMat : boulderDry); g.position.set(gx, beachY(gx, gz) + gr * 0.4, gz); g.scale.y = 0.5; g.rotation.set(rand(0, 3), rand(0, 3), 0); scene.add(g);
+}
+// a tangle of dark kelp and driftwood at the tideline
+(function() {
+  var kelp = new THREE.MeshStandardMaterial({ color: 0x151a12, roughness: 0.7 });
+  var wood = new THREE.MeshStandardMaterial({ color: 0x7a6a58, roughness: 0.9 });
+  for (var i = 0; i < 30; i++) { var kx = rand(1.5, 4.5), kz = rand(-20, 14); var k = mesh(new THREE.CylinderGeometry(0.02, 0.04, rand(0.4, 1.4), 5), kelp, kx, beachY(kx, kz) + 0.03, kz); k.rotation.set(Math.PI / 2 + rand(-0.3, 0.3), 0, rand(0, 3)); }
+  var d = mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.2, 6), wood, 3.4, beachY(3.4, 4) + 0.08, 4); d.rotation.set(Math.PI / 2, 0, 0.6);
+  var d2 = mesh(new THREE.CylinderGeometry(0.03, 0.05, 1.1, 5), wood, 2.1, beachY(2.1, -9) + 0.05, -9); d2.rotation.set(Math.PI / 2, 0, -1.1);
+})();
+
+// ============================================================
+// SEA: dark water with a slow swell, the moon's road across it
+// ============================================================
+var seaMat = new THREE.MeshStandardMaterial({ map: seaTex, color: 0x8ea0b8, roughness: 0.25, metalness: 0.55, emissive: 0x040810, emissiveIntensity: 0.4 });
+var seaGeo = new THREE.PlaneGeometry(160, 200, 70, 90);
+var seaBase = [];
+(function() { var p = seaGeo.attributes.position; for (var i = 0; i < p.count; i++) seaBase.push({ x: p.getX(i), y: p.getY(i) }); })();
+var sea = new THREE.Mesh(seaGeo, seaMat); sea.rotation.x = -Math.PI / 2; sea.position.set(-80, -0.12, -30); sea.receiveShadow = true; scene.add(sea);
+// the moon road: a long soft streak from under the moon to the shore
+var roadTex = canvasTex(128, 512, function(ctx, w, h) {
+  var g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, 'rgba(210,225,250,0)'); g.addColorStop(0.15, 'rgba(210,225,250,0.55)'); g.addColorStop(0.6, 'rgba(190,210,240,0.35)'); g.addColorStop(1, 'rgba(180,200,235,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  var side = ctx.createLinearGradient(0, 0, w, 0); side.addColorStop(0, 'rgba(0,0,0,1)'); side.addColorStop(0.35, 'rgba(0,0,0,0)'); side.addColorStop(0.65, 'rgba(0,0,0,0)'); side.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = side; ctx.fillRect(0, 0, w, h); ctx.globalCompositeOperation = 'source-over';
+  for (var i = 0; i < 500; i++) { ctx.fillStyle = 'rgba(240,245,255,' + Math.random() * 0.5 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 10, 1); }
+});
+var moonRoad = new THREE.Mesh(new THREE.PlaneGeometry(9, 90), new THREE.MeshBasicMaterial({ map: roadTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.32 }));
+moonRoad.rotation.x = -Math.PI / 2; moonRoad.rotation.z = -Math.atan2(MOON.x - 0, -(MOON.z - 8)) ; moonRoad.position.set(-22, -0.05, -32); scene.add(moonRoad);
+// glints: little additive sprites that shimmer on the swell
+var glints = [];
+var glintTex = radialTex(220, 232, 255, 0.9, 0.2);
+for (var gi2 = 0; gi2 < 90; gi2++) {
+  var t = Math.random(), gx2 = -2 - t * 42 + rand(-4, 4), gz2 = 4 - t * 70 + rand(-5, 5);
+  var gs = new THREE.Sprite(new THREE.SpriteMaterial({ map: glintTex, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 }));
+  var sz = rand(0.25, 0.9); gs.scale.set(sz * 3, sz * 0.5, 1); gs.position.set(gx2, 0.3, gz2); scene.add(gs);
+  glints.push({ s: gs, ph: rand(0, 6.3), sp: rand(0.5, 1.6), base: rand(0.25, 0.7) });
+}
+
+// Foam at the waterline and up the wet stones
+var foamTex = canvasTex(256, 64, function(ctx, w, h) {
+  ctx.clearRect(0, 0, w, h);
+  for (var i = 0; i < 260; i++) { ctx.fillStyle = 'rgba(225,235,245,' + (0.2 + Math.random() * 0.5) + ')'; ctx.beginPath(); ctx.arc(Math.random() * w, h * 0.2 + Math.random() * h * 0.6, 1 + Math.random() * 5, 0, 6.3); ctx.fill(); }
+  var fade = ctx.createLinearGradient(0, 0, 0, h); fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(0.3, 'rgba(0,0,0,0)'); fade.addColorStop(0.7, 'rgba(0,0,0,0)'); fade.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = fade; ctx.fillRect(0, 0, w, h);
+});
+var foamLines = [];
+for (var fi = 0; fi < 4; fi++) {
+  var fm = new THREE.Mesh(new THREE.PlaneGeometry(80, 1.6 - fi * 0.25), new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, opacity: 0.5 - fi * 0.08 }));
+  fm.rotation.x = -Math.PI / 2; fm.rotation.z = Math.PI / 2; fm.position.set(0.4 + fi * 0.7, 0.03 + fi * 0.1, -8); scene.add(fm);
+  foamLines.push({ m: fm, baseX: fm.position.x, ph: fi * 1.4, baseOp: fm.material.opacity });
+}
+
+// The boat's wake: a V of foam receding out to sea, and the boat itself, far and dark
+(function() {
+  var wakeTex = radialTex(215, 228, 245, 0.7, 0.3);
+  var n = 26;
+  for (var i = 0; i < n; i++) {
+    var t = i / (n - 1), x = -4 - t * 26, z = -8 - t * 34;
+    for (var side = -1; side <= 1; side += 2) {
+      var s = new THREE.Sprite(new THREE.SpriteMaterial({ map: wakeTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.7 * (1 - t * 0.85) }));
+      var sz = 0.6 + t * 2.2; s.scale.set(sz * 1.6, sz * 0.35, 1);
+      s.position.set(x + side * (0.3 + t * 3.2), 0.28, z + side * (0.1 + t * 1.0)); scene.add(s);
+    }
+    if (i % 2 === 0) { var c = new THREE.Sprite(new THREE.SpriteMaterial({ map: wakeTex, transparent: true, depthWrite: false, opacity: 0.35 * (1 - t) })); c.scale.set(1.2 + t * 2, 0.3, 1); c.position.set(x, 0.28, z); scene.add(c); }
+  }
+  // the boat: a low dark hull, a stub mast, a lamp that is only a spark by now
+  var boatTex = canvasTex(128, 64, function(ctx, w, h) {
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(6,8,12,0.95)';
+    ctx.beginPath(); ctx.moveTo(w * 0.1, h * 0.62); ctx.lineTo(w * 0.9, h * 0.62); ctx.lineTo(w * 0.8, h * 0.8); ctx.lineTo(w * 0.22, h * 0.8); ctx.closePath(); ctx.fill();
+    ctx.fillRect(w * 0.36, h * 0.2, 3, h * 0.44);
+    ctx.fillStyle = 'rgba(255,200,120,0.9)'; ctx.beginPath(); ctx.arc(w * 0.38, h * 0.24, 2.2, 0, 6.3); ctx.fill();
+  });
+  var boat = new THREE.Sprite(new THREE.SpriteMaterial({ map: boatTex, transparent: true, depthWrite: false }));
+  boat.scale.set(2.6, 1.3, 1); boat.position.set(-31, 0.35, -44); scene.add(boat);
+  window.__boat = boat;
+  halo(255, 200, 130, 1.2, -31.3, 0.75, -44, 0.5);
+})();
+
+// ============================================================
+// THE MOAI: one near, at the top of the beach, with a white sign on its chest;
+// a row of dimmer ones on the rise behind, their backs to the sea
+// ============================================================
+function moai(x, z, scale, faceSea, mat, withSign) {
+  var g = new THREE.Group();
+  // ahu: a low platform of fitted stones
+  mesh(new THREE.BoxGeometry(3.2, 0.5, 2.2), tuffDark, 0, 0.25, 0, g);
+  mesh(new THREE.BoxGeometry(3.4, 0.16, 2.4), tuffDark, 0, 0.08, 0, g);
+  for (var i = 0; i < 6; i++) mesh(new THREE.BoxGeometry(0.5, 0.18, 0.05), tuffMat, -1.25 + i * 0.5, 0.42, 1.12, g);
+  // torso: a tapered block, narrower at the base, with a slight forward lean
+  var torso = mesh(new THREE.CylinderGeometry(0.72, 0.58, 2.6, 7), mat, 0, 1.8, 0, g); torso.scale.z = 0.72;
+  // shoulders and the long arms folded over the belly
+  mesh(new THREE.BoxGeometry(1.5, 0.5, 0.9), mat, 0, 3.05, 0, g);
+  var arm = mesh(new THREE.BoxGeometry(0.22, 1.6, 0.22), mat, -0.66, 2.2, 0.28, g); arm.rotation.z = -0.08;
+  var arm2 = mesh(new THREE.BoxGeometry(0.22, 1.6, 0.22), mat, 0.66, 2.2, 0.28, g); arm2.rotation.z = 0.08;
+  mesh(new THREE.BoxGeometry(1.3, 0.2, 0.22), mat, 0, 1.45, 0.4, g);
+  // head: tall, the heavy brow, the long nose, the pursed mouth, the long ears
+  var head = mesh(new THREE.BoxGeometry(1.15, 2.1, 0.95), mat, 0, 4.3, 0.05, g);
+  mesh(new THREE.BoxGeometry(1.2, 0.26, 0.4), mat, 0, 4.85, 0.42, g);          // brow
+  var nose = mesh(new THREE.BoxGeometry(0.34, 1.05, 0.34), mat, 0, 4.25, 0.55, g); nose.rotation.x = 0.12;
+  mesh(new THREE.BoxGeometry(0.62, 0.14, 0.16), mat, 0, 3.62, 0.5, g);          // mouth
+  mesh(new THREE.BoxGeometry(0.9, 0.26, 0.7), mat, 0, 3.32, 0.15, g);           // chin
+  mesh(new THREE.BoxGeometry(0.12, 1.2, 0.34), mat, -0.62, 4.2, -0.1, g);       // ears
+  mesh(new THREE.BoxGeometry(0.12, 1.2, 0.34), mat, 0.62, 4.2, -0.1, g);
+  mesh(new THREE.BoxGeometry(1.05, 0.2, 0.85), mat, 0, 5.4, 0.0, g);            // flat top
+  // the eye sockets are hollow: dark recesses, no eyes
+  mesh(new THREE.BoxGeometry(0.28, 0.16, 0.1), new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 }), -0.3, 4.62, 0.53, g);
+  mesh(new THREE.BoxGeometry(0.28, 0.16, 0.1), new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 }), 0.3, 4.62, 0.53, g);
+  if (withSign) {
+    // white paint, still tacky, on the chest: a mark that is not a letter
+    var signTex = canvasTex(256, 256, function(ctx, w, h) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(240,242,236,0.96)'; ctx.lineCap = 'round'; ctx.lineWidth = 22;
+      ctx.beginPath(); for (var a = 0; a < 5.2; a += 0.08) { var rr = 14 + a * 16, xx = 128 + Math.cos(a) * rr, yy = 118 + Math.sin(a) * rr * 0.8; if (a === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); } ctx.stroke();
+      ctx.lineWidth = 14; ctx.beginPath(); ctx.moveTo(40, 220); ctx.lineTo(216, 214); ctx.stroke();
+      ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(128, 30); ctx.lineTo(128, 62); ctx.stroke();
+      for (var d = 0; d < 9; d++) { ctx.fillStyle = 'rgba(240,242,236,0.85)'; ctx.beginPath(); ctx.arc(60 + Math.random() * 150, 200 + Math.random() * 40, 2 + Math.random() * 5, 0, 6.3); ctx.fill(); }
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(240,242,236,0.7)'; ctx.beginPath(); ctx.moveTo(62, 205); ctx.lineTo(60, 250); ctx.stroke(); ctx.beginPath(); ctx.moveTo(118, 152); ctx.lineTo(114, 190); ctx.stroke();
+    });
+    var sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshStandardMaterial({ map: signTex, transparent: true, roughness: 0.35, metalness: 0.05, emissive: 0x404040, emissiveIntensity: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
+    sign.position.set(0, 2.25, 0.535); g.add(sign);
+  }
+  g.scale.set(scale, scale, scale);
+  g.position.set(x, beachY(x, z) - 0.05, z);
+  g.rotation.y = faceSea ? -Math.PI / 2 + 0.25 : Math.PI / 2 + rand(-0.15, 0.15);
+  scene.add(g); return g;
+}
+var nearMoai = moai(9.2, -6.5, 1.25, true, tuffMat, true);
+makeClickable(nearMoai.children[7], { name: 'Easter Island Shore', passage: 'Easter Island Shore' });
+// the row behind, on the rise: backs to the sea, dim in the haze
+moai(19.5, -2.0, 0.95, false, tuffDark, false);
+moai(21.5, 3.5, 1.05, false, tuffDark, false);
+moai(20.5, -13.0, 0.9, false, tuffDark, false);
+moai(24.0, 9.0, 1.0, false, tuffDark, false);
+moai(23.5, -19.0, 0.85, false, tuffDark, false);
+// a fallen one, face down in the stones, half buried
+(function() { var f = moai(17.5, 14.0, 0.9, false, tuffDark, false); f.rotation.set(Math.PI / 2 - 0.15, 0, 0.9); f.position.y -= 0.9; })();
+
+// a faint warm glow at the foot of the near moai: something left burning in the stones
+var EX = 8.6, EZ = -4.6;
+var emberLight = new THREE.PointLight(0xff8a3a, 1.5, 10, 2); emberLight.position.set(EX, beachY(EX, EZ) + 0.25, EZ); scene.add(emberLight);
+var emberHalo = halo(255, 140, 70, 1.6, EX, beachY(EX, EZ) + 0.2, EZ, 0.55);
+(function() {
+  var y = beachY(EX, EZ);
+  for (var i = 0; i < 7; i++) { var a = i / 7 * 6.3; mesh(new THREE.DodecahedronGeometry(0.12, 0), boulderDry, EX + Math.cos(a) * 0.32, y + 0.06, EZ + Math.sin(a) * 0.32); }
+  var ember = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff7a30 })); ember.position.set(EX, y + 0.08, EZ); scene.add(ember);
+})();
+// Pipe-tobacco smoke: a warm wisp drifting past, close to the camera
+var smokeTex = radialTex(225, 190, 150, 0.35, 0.3);
+var smokes = [];
+for (var si = 0; si < 9; si++) {
+  var sm = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true, depthWrite: false, opacity: rand(0.08, 0.2) }));
+  var ss = rand(0.8, 2.2); sm.scale.set(ss, ss * 0.6, 1);
+  sm.position.set(rand(2, 6), rand(1.0, 2.6), rand(4, 8)); scene.add(sm);
+  smokes.push({ s: sm, x0: sm.position.x, y0: sm.position.y, ph: rand(0, 6.3), rise: rand(0.05, 0.12), base: sm.material.opacity });
+}
+
+// ============================================================
+// FOG LAYERS: sea mist, ground haze on the stones, a cold band on the rise
+// ============================================================
+var fogSprites = [];
+function addFog(tex, n, x0, x1, y0, y1, z0, z1, s0, s1, op0, op1, aspect) {
+  for (var i = 0; i < n; i++) {
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: rand(op0, op1) }));
+    var s = rand(s0, s1); sp.scale.set(s, s * aspect, 1);
+    sp.position.set(rand(x0, x1), rand(y0, y1), rand(z0, z1)); scene.add(sp);
+    fogSprites.push({ sprite: sp, baseZ: sp.position.z, drift: rand(0.002, 0.007), sway: rand(0, 6.3), swaySpeed: rand(0.0008, 0.003), swayAmt: rand(0.3, 1.2), lo: z0 - 8, hi: z1 + 8 });
+  }
+}
+var seaMist = radialTex(120, 140, 170, 0.2, 0.4), stoneHaze = radialTex(90, 105, 130, 0.16, 0.45), coldBand = radialTex(70, 90, 125, 0.14, 0.5), moonMist = radialTex(180, 195, 225, 0.12, 0.4);
+addFog(seaMist, 44, -50, -2, 0.2, 2.0, -60, 16, 6, 16, 0.18, 0.34, 0.3);
+addFog(stoneHaze, 34, 0, 18, 0.2, 1.4, -34, 20, 4, 11, 0.12, 0.26, 0.32);
+addFog(coldBand, 22, 14, 30, 1.5, 5, -30, 20, 8, 18, 0.1, 0.22, 0.3);
+addFog(moonMist, 12, -40, -16, 1, 6, -60, -20, 12, 26, 0.08, 0.16, 0.35);
+
+// ============================================================
+// ANIMATION
+// ============================================================
+var clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+  // swell
+  var p = seaGeo.attributes.position;
+  for (var i = 0; i < p.count; i++) { var b = seaBase[i]; p.setZ(i, Math.sin(b.x * 0.18 + t * 0.6) * 0.14 + Math.sin(b.y * 0.11 - t * 0.45 + b.x * 0.05) * 0.1 + Math.sin((b.x + b.y) * 0.5 + t * 1.1) * 0.03); }
+  p.needsUpdate = true; seaGeo.computeVertexNormals();
+  // foam breathes up the stones and back
+  for (var f = 0; f < foamLines.length; f++) { var fl = foamLines[f]; var w = Math.sin(t * 0.45 + fl.ph); fl.m.position.x = fl.baseX + w * 0.5; fl.m.material.opacity = fl.baseOp * (0.6 + 0.4 * Math.max(0, w)); }
+  for (var g = 0; g < glints.length; g++) { var gl = glints[g]; gl.s.material.opacity = gl.base * Math.max(0, Math.sin(t * gl.sp + gl.ph)) * Math.max(0, Math.sin(t * 0.37 + gl.ph * 2)); }
+  moonRoad.material.opacity = 0.3 + Math.sin(t * 0.5) * 0.04;
+  // the boat and its spark creep out
+  if (window.__boat) { window.__boat.position.x -= 0.0015; window.__boat.position.z -= 0.0012; window.__boat.position.y = 0.35 + Math.sin(t * 0.8) * 0.03; }
+  // fog drift along the shore
+  for (var i2 = 0; i2 < fogSprites.length; i2++) { var fs = fogSprites[i2]; fs.sway += fs.swaySpeed; fs.sprite.position.z = fs.baseZ + Math.sin(fs.sway) * fs.swayAmt; fs.baseZ += fs.drift; if (fs.baseZ > fs.hi) fs.baseZ = fs.lo; }
+  // the pipe smoke rises and thins
+  for (var s = 0; s < smokes.length; s++) { var sm = smokes[s]; sm.s.position.y += sm.rise * 0.016; sm.s.position.x = sm.x0 + Math.sin(t * 0.3 + sm.ph) * 0.4; sm.s.material.opacity = sm.base * Math.max(0, 1 - (sm.s.position.y - sm.y0) / 2.2); if (sm.s.position.y > sm.y0 + 2.2) sm.s.position.y = sm.y0; }
+  emberLight.intensity = 1.4 + Math.sin(t * 2.1) * 0.18 + Math.sin(t * 5.3) * 0.08;
+  emberHalo.material.opacity = 0.45 + Math.sin(t * 2.1) * 0.1;
+  // the moon breathes very slowly in its halo
+  moon.material.opacity = 0.94 + Math.sin(t * 0.2) * 0.05;
+
+  raycaster.setFromCamera(mouseNDC, camera);
+  var hits = mouseMoved ? raycaster.intersectObjects(clickableObjects) : [];
+  var hv = hits.length ? venueData.get(hits[0].object) : null;
+  if (hv !== hoveredVenue) {
+    hoveredVenue = hv;
+    if (hv) { tooltip.textContent = hv.name; tooltip.classList.add('visible'); document.body.style.cursor = 'pointer'; }
+    else { tooltip.classList.remove('visible'); document.body.style.cursor = ''; }
+  }
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

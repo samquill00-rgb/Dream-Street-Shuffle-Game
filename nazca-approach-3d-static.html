@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nazca Approach — dusk</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(240,180,110,0.55);
+  letter-spacing: 2px; pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none;
+}
+#tooltip {
+  position: fixed; padding: 6px 14px; background: rgba(20,12,8,0.9);
+  border: 1px solid rgba(240,180,110,0.4); font: italic 13px Georgia, serif; color: #f0dcc0;
+  pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 10;
+}
+#tooltip.visible { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="datestamp">PERU</div>
+<div id="location">NAZCA APPROACH</div>
+<div id="tooltip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2a3450);
+scene.fog = new THREE.FogExp2(0x9a8a80, 0.0072);
+
+// LAYOUT: the coast road runs away down -z. The Pacific is on the RIGHT (x > 12),
+// below a low bluff, the sun going down into it. The cantina stands on the left
+// verge at z = -20 facing the road. The camera is on the right-hand verge, a
+// little way back, looking down the road on the diagonal: cantina left of centre,
+// sea and sun at the right, the road running off into the blue.
+var camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 800);
+camera.position.set(5.3, 1.7, 5.5);
+camera.lookAt(-2.0, 2.2, -24);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = 0.72;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// CLICK TO ENTER
+// ============================================================
+var clickableObjects = [], venueData = new Map(), mouseNDC = new THREE.Vector2(-2, -2), mouseMoved = false;
+var raycaster = new THREE.Raycaster(), hoveredVenue = null, tooltip = document.getElementById('tooltip');
+function makeClickable(mesh, info) { clickableObjects.push(mesh); venueData.set(mesh, info); }
+document.addEventListener('mousemove', function(e) {
+  mouseMoved = true;
+  mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  tooltip.style.left = (e.clientX + 15) + 'px'; tooltip.style.top = (e.clientY - 30) + 'px';
+});
+document.addEventListener('click', function() {
+  if (hoveredVenue) alert('Entering: ' + hoveredVenue.name + '\n\nTwine passage: "' + hoveredVenue.passage + '"');
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function canvasTex(w, h, draw, rep) {
+  var c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  var t = new THREE.CanvasTexture(c);
+  if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
+  t.anisotropy = 8;
+  return t;
+}
+function rand(a, b) { return a + Math.random() * (b - a); }
+function mesh(geo, mat, x, y, z, parent) {
+  var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
+  m.castShadow = true; m.receiveShadow = true; (parent || scene).add(m); return m;
+}
+function box(w, h, d, mat, x, y, z, parent) { return mesh(new THREE.BoxGeometry(w, h, d), mat, x, y, z, parent); }
+function cyl(rt, rb, h, seg, mat, x, y, z, parent) { return mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat, x, y, z, parent); }
+function radialTex(r, g, b, a, mid) {
+  return canvasTex(128, 128, function(ctx) {
+    var gr = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')');
+    gr.addColorStop(mid || 0.4, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.4) + ')');
+    gr.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ',0)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, 128, 128);
+  });
+}
+function halo(r, g, b, size, x, y, z, opacity, noFog, parent) {
+  var m = new THREE.SpriteMaterial({ map: radialTex(r, g, b, 0.9), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: opacity || 0.6 });
+  if (noFog) m.fog = false;
+  var s = new THREE.Sprite(m); s.scale.set(size, size, 1); s.position.set(x, y, z); (parent || scene).add(s); return s;
+}
+
+// ============================================================
+// SKY: the sun on the sea to the right, the east already blue
+// ============================================================
+var skyTex = canvasTex(2048, 1024, function(ctx, w, h) {
+  var g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#0e1a3a'); g.addColorStop(0.3, '#1e3260'); g.addColorStop(0.42, '#3a5a8a'); g.addColorStop(0.48, '#7a88a0'); g.addColorStop(0.52, '#c89a70'); g.addColorStop(0.555, '#e8a050'); g.addColorStop(0.585, '#c07040'); g.addColorStop(0.62, '#4a3838'); g.addColorStop(1, '#1a1820');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  // the sun's glow: right-hand quarter of the dome (texture x ≈ 0.62)
+  var sx = w * 0.62, sy = h * 0.565;
+  var sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, w * 0.22);
+  sg.addColorStop(0, 'rgba(255,220,150,0.85)'); sg.addColorStop(0.12, 'rgba(255,180,90,0.55)'); sg.addColorStop(0.4, 'rgba(240,130,60,0.2)'); sg.addColorStop(1, 'rgba(200,90,40,0)');
+  ctx.fillStyle = sg; ctx.fillRect(0, 0, w, h);
+  var disc = ctx.createRadialGradient(sx, sy, 0, sx, sy, 26);
+  disc.addColorStop(0, 'rgba(255,250,235,1)'); disc.addColorStop(0.7, 'rgba(255,230,180,0.9)'); disc.addColorStop(1, 'rgba(255,200,120,0)');
+  ctx.fillStyle = disc; ctx.fillRect(0, 0, w, h);
+  // long flat clouds, lit underneath
+  for (var i = 0; i < 30; i++) {
+    var cy = h * 0.44 + Math.random() * h * 0.1, cw = 80 + Math.random() * 400, cx = Math.random() * w;
+    ctx.fillStyle = 'rgba(60,50,70,' + (0.15 + Math.random() * 0.25) + ')'; ctx.beginPath(); ctx.ellipse(cx, cy, cw, 3 + Math.random() * 9, 0, 0, 6.3); ctx.fill();
+    ctx.fillStyle = 'rgba(255,170,100,' + (0.12 + Math.random() * 0.2) + ')'; ctx.beginPath(); ctx.ellipse(cx, cy + 5, cw * 0.8, 2 + Math.random() * 3, 0, 0, 6.3); ctx.fill();
+  }
+  // first stars in the east
+  for (var s = 0; s < 120; s++) { var stx = Math.random() * w, sty = Math.random() * h * 0.3; if (Math.abs(stx - sx) < w * 0.25) continue; ctx.fillStyle = 'rgba(255,255,255,' + (0.1 + Math.random() * 0.4) + ')'; ctx.beginPath(); ctx.arc(stx, sty, 0.4 + Math.random() * 0.7, 0, 6.3); ctx.fill(); }
+});
+var sky = new THREE.Mesh(new THREE.SphereGeometry(600, 40, 24), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }));
+sky.rotation.y = 0.6; scene.add(sky);
+// the sun itself, as sprites out over the sea (right, ahead)
+var SUN = new THREE.Vector3(80, 18, -340);
+var sunCore = halo(255, 240, 200, 26, SUN.x, SUN.y, SUN.z, 1.0, true);
+var sunHalo = halo(255, 170, 90, 160, SUN.x, SUN.y, SUN.z, 0.5, true);
+halo(255, 120, 60, 420, SUN.x, SUN.y - 10, SUN.z, 0.22, true);
+
+// ============================================================
+// LIGHTING: a long low sun from the right, the sky blue from above
+// ============================================================
+scene.add(new THREE.AmbientLight(0x4a5470, 0.38));
+scene.add(new THREE.HemisphereLight(0x4a6aa8, 0x8a7a60, 0.42));
+var sun = new THREE.DirectionalLight(0xffa060, 1.15);
+sun.position.set(90, 11, -150); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -60; sun.shadow.camera.right = 60; sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+sun.shadow.camera.near = 20; sun.shadow.camera.far = 400; sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+// ============================================================
+// TEXTURES
+// ============================================================
+var pampaTex = canvasTex(512, 512, function(ctx, w, h) {
+  ctx.fillStyle = '#b8ac98'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 400; i++) { var v = 160 + Math.random() * 60; ctx.fillStyle = 'rgba(' + Math.floor(v) + ',' + Math.floor(v * 0.94) + ',' + Math.floor(v * 0.82) + ',0.35)'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 8 + Math.random() * 40, 5 + Math.random() * 20, Math.random() * 3, 0, 6.3); ctx.fill(); }
+  for (var p = 0; p < 1600; p++) { var pv = 70 + Math.random() * 110; ctx.fillStyle = 'rgb(' + Math.floor(pv) + ',' + Math.floor(pv * 0.9) + ',' + Math.floor(pv * 0.78) + ')'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 0.8 + Math.random() * 3, 0.6 + Math.random() * 2, Math.random() * 3, 0, 6.3); ctx.fill(); }
+  for (var c = 0; c < 40; c++) { ctx.strokeStyle = 'rgba(90,80,64,0.25)'; ctx.lineWidth = 1; ctx.beginPath(); var cx0 = Math.random() * w, cy0 = Math.random() * h; ctx.moveTo(cx0, cy0); ctx.lineTo(cx0 + (Math.random() - 0.5) * 60, cy0 + (Math.random() - 0.5) * 60); ctx.stroke(); }
+}, [30, 30]);
+var pampaMat = new THREE.MeshStandardMaterial({ map: pampaTex, roughness: 0.96, color: 0xc8c0b4 });
+
+var tarmacTex = canvasTex(256, 1024, function(ctx, w, h) {
+  ctx.fillStyle = '#4a4744'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 6000; i++) { var v = 50 + Math.random() * 60; ctx.fillStyle = 'rgba(' + v + ',' + v + ',' + (v - 4) + ',0.5)'; ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+  // sun-faded centre line, broken
+  for (var y = 0; y < h; y += 120) { ctx.fillStyle = 'rgba(220,200,150,0.45)'; ctx.fillRect(w / 2 - 4, y, 8, 60); }
+  // cracks and patches
+  ctx.strokeStyle = 'rgba(20,18,16,0.6)'; ctx.lineWidth = 1.5;
+  for (var c = 0; c < 30; c++) { ctx.beginPath(); var x0 = Math.random() * w, y0 = Math.random() * h; ctx.moveTo(x0, y0); for (var k = 0; k < 5; k++) { x0 += (Math.random() - 0.5) * 30; y0 += Math.random() * 30; ctx.lineTo(x0, y0); } ctx.stroke(); }
+  for (var pt = 0; pt < 8; pt++) { ctx.fillStyle = 'rgba(30,28,26,0.5)'; ctx.fillRect(Math.random() * w, Math.random() * h, 30 + Math.random() * 60, 20 + Math.random() * 50); }
+  // pale dust blown across the edges
+  var eg = ctx.createLinearGradient(0, 0, w, 0); eg.addColorStop(0, 'rgba(180,170,150,0.5)'); eg.addColorStop(0.15, 'rgba(180,170,150,0)'); eg.addColorStop(0.85, 'rgba(180,170,150,0)'); eg.addColorStop(1, 'rgba(180,170,150,0.5)');
+  ctx.fillStyle = eg; ctx.fillRect(0, 0, w, h);
+}, [1, 40]);
+var tarmacMat = new THREE.MeshStandardMaterial({ map: tarmacTex, roughness: 0.62, metalness: 0.1 });
+
+var adobeTex = canvasTex(512, 256, function(ctx, w, h) {
+  ctx.fillStyle = '#d8c8a8'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 3000; i++) { ctx.fillStyle = 'rgba(120,100,70,' + Math.random() * 0.18 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 4, 2); }
+  // render cracked and flaking, a damp tide mark along the base
+  ctx.strokeStyle = 'rgba(80,60,40,0.45)'; ctx.lineWidth = 1;
+  for (var c = 0; c < 16; c++) { ctx.beginPath(); var x0 = Math.random() * w, y0 = Math.random() * h; ctx.moveTo(x0, y0); for (var k = 0; k < 6; k++) { x0 += (Math.random() - 0.5) * 24; y0 += (Math.random() - 0.3) * 24; ctx.lineTo(x0, y0); } ctx.stroke(); }
+  for (var f = 0; f < 10; f++) { ctx.fillStyle = 'rgba(160,120,80,0.35)'; ctx.beginPath(); ctx.ellipse(Math.random() * w, h * 0.6 + Math.random() * h * 0.4, 10 + Math.random() * 30, 6 + Math.random() * 16, 0, 0, 6.3); ctx.fill(); }
+  var tg = ctx.createLinearGradient(0, h * 0.75, 0, h); tg.addColorStop(0, 'rgba(90,70,50,0)'); tg.addColorStop(1, 'rgba(90,70,50,0.45)'); ctx.fillStyle = tg; ctx.fillRect(0, h * 0.75, w, h * 0.25);
+}, [2, 1]);
+var adobeMat = new THREE.MeshStandardMaterial({ map: adobeTex, roughness: 0.95, color: 0xe8d8b8 });
+var adobeBlue = new THREE.MeshStandardMaterial({ map: adobeTex, roughness: 0.95, color: 0x6a9ab8 });
+
+var tinTex = canvasTex(256, 256, function(ctx, w, h) {
+  for (var x = 0; x < w; x += 16) { var v = 120 + Math.sin(x * 0.4) * 30 + Math.random() * 20; ctx.fillStyle = 'rgb(' + Math.floor(v) + ',' + Math.floor(v * 0.92) + ',' + Math.floor(v * 0.8) + ')'; ctx.fillRect(x, 0, 16, h); }
+  for (var r = 0; r < 60; r++) { ctx.fillStyle = 'rgba(150,70,30,' + (0.2 + Math.random() * 0.4) + ')'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 3 + Math.random() * 18, 2 + Math.random() * 8, 0, 0, 6.3); ctx.fill(); }
+}, [3, 1]);
+var tinMat = new THREE.MeshStandardMaterial({ map: tinTex, roughness: 0.5, metalness: 0.5, side: THREE.DoubleSide });
+
+var seaTex = canvasTex(512, 512, function(ctx, w, h) {
+  ctx.fillStyle = '#1c3450'; ctx.fillRect(0, 0, w, h);
+  for (var y = 0; y < h; y += 2) { ctx.fillStyle = 'rgba(80,120,150,' + (0.04 + Math.sin(y * 0.07) * 0.03) + ')'; ctx.fillRect(0, y, w, 2); }
+  for (var k = 0; k < 400; k++) { ctx.fillStyle = 'rgba(255,220,180,' + Math.random() * 0.08 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 4 + Math.random() * 30, 1); }
+}, [8, 8]);
+
+// ============================================================
+// GROUND: the pampa, the road, the bluff and the sea
+// ============================================================
+var ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), pampaMat);
+ground.rotation.x = -Math.PI / 2; ground.position.set(-590, 0, 0); ground.receiveShadow = true; scene.add(ground);
+// the land stops at x = 14: a low bluff dropping to the beach
+(function() {
+  var bluffMat = new THREE.MeshStandardMaterial({ map: pampaTex, roughness: 0.95, color: 0x9a8e7c });
+  for (var z = 120; z > -400; z -= 6) {
+    var bx = 9.5 + Math.sin(z * 0.05) * 1.2, bh = 3.2 + Math.sin(z * 0.11) * 0.6;
+    var b = box(3, bh, 6.2, bluffMat, bx + 1.5, -bh / 2 + 0.02, z - 3); b.castShadow = false;
+    var b2 = box(2, bh * 0.5, 6.2, bluffMat, bx + 3.4, -bh * 0.75, z - 3); b2.castShadow = false;
+  }
+  // the beach below the bluff, wet and catching the sun
+  var beach = new THREE.Mesh(new THREE.PlaneGeometry(14, 600), new THREE.MeshStandardMaterial({ color: 0x8a8070, roughness: 0.35, metalness: 0.25 }));
+  beach.rotation.x = -Math.PI / 2; beach.position.set(19, -3.3, -140); scene.add(beach);
+})();
+var seaMat = new THREE.MeshStandardMaterial({ map: seaTex, color: 0x6a86a0, roughness: 0.22, metalness: 0.6, emissive: 0x0a1a2a, emissiveIntensity: 0.5 });
+var seaGeo = new THREE.PlaneGeometry(600, 700, 60, 70);
+var seaBase = [];
+(function() { var p = seaGeo.attributes.position; for (var i = 0; i < p.count; i++) seaBase.push({ x: p.getX(i), y: p.getY(i) }); })();
+var sea = new THREE.Mesh(seaGeo, seaMat); sea.rotation.x = -Math.PI / 2; sea.position.set(322, -3.5, -180); scene.add(sea);
+// the sun's road across the water, toward the camera
+var sunRoad = new THREE.Mesh(new THREE.PlaneGeometry(40, 320), new THREE.MeshBasicMaterial({ map: canvasTex(128, 512, function(ctx, w, h) {
+  var g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,190,110,0.8)'); g.addColorStop(0.5, 'rgba(255,170,90,0.4)'); g.addColorStop(1, 'rgba(255,150,80,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  var side = ctx.createLinearGradient(0, 0, w, 0); side.addColorStop(0, 'rgba(0,0,0,1)'); side.addColorStop(0.35, 'rgba(0,0,0,0)'); side.addColorStop(0.65, 'rgba(0,0,0,0)'); side.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = side; ctx.fillRect(0, 0, w, h); ctx.globalCompositeOperation = 'source-over';
+  for (var i = 0; i < 700; i++) { ctx.fillStyle = 'rgba(255,240,200,' + Math.random() * 0.5 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 12, 1); }
+}), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.55 }));
+sunRoad.rotation.x = -Math.PI / 2; sunRoad.rotation.z = -Math.atan2(SUN.x - 30, -(SUN.z + 40)); sunRoad.position.set(50, -3.4, -190); scene.add(sunRoad);
+// surf at the foot of the bluff
+var foamTex = canvasTex(512, 64, function(ctx, w, h) { ctx.clearRect(0, 0, w, h); for (var i = 0; i < 500; i++) { ctx.fillStyle = 'rgba(240,235,225,' + (0.2 + Math.random() * 0.5) + ')'; ctx.beginPath(); ctx.arc(Math.random() * w, h * 0.2 + Math.random() * h * 0.6, 1 + Math.random() * 5, 0, 6.3); ctx.fill(); } var f = ctx.createLinearGradient(0, 0, 0, h); f.addColorStop(0, 'rgba(0,0,0,1)'); f.addColorStop(0.35, 'rgba(0,0,0,0)'); f.addColorStop(0.65, 'rgba(0,0,0,0)'); f.addColorStop(1, 'rgba(0,0,0,1)'); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = f; ctx.fillRect(0, 0, w, h); });
+var foamLines = [];
+for (var fi = 0; fi < 3; fi++) {
+  var fm = new THREE.Mesh(new THREE.PlaneGeometry(600, 2.2 - fi * 0.4), new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, opacity: 0.55 - fi * 0.12 }));
+  fm.rotation.x = -Math.PI / 2; fm.rotation.z = Math.PI / 2; fm.position.set(24 + fi * 1.6, -3.28 + fi * 0.02, -140); scene.add(fm);
+  foamLines.push({ m: fm, baseX: fm.position.x, ph: fi * 1.5, baseOp: fm.material.opacity });
+}
+
+// the road: a long strip with a slight bend away to the left in the distance
+(function() {
+  var segs = 40;
+  for (var i = 0; i < segs; i++) {
+    var z0 = 20 - i * 12, bend = Math.max(0, -z0 - 60) * 0.06;
+    var r = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 12.2), tarmacMat);
+    r.rotation.x = -Math.PI / 2; r.rotation.z = -bend * 0.01; r.position.set(-bend, 0.03, z0 - 6); r.receiveShadow = true; scene.add(r);
+  }
+  // gravel verges and a rusty crash barrier on the sea side
+  var verge = new THREE.MeshStandardMaterial({ color: 0x9a9080, roughness: 1 });
+  var v1 = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 420), verge); v1.rotation.x = -Math.PI / 2; v1.position.set(4.3, 0.02, -180); scene.add(v1);
+  var v2 = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 420), verge); v2.rotation.x = -Math.PI / 2; v2.position.set(-4.3, 0.02, -180); scene.add(v2);
+  var rust = new THREE.MeshStandardMaterial({ color: 0x7a5a48, roughness: 0.7, metalness: 0.4 });
+  for (var z = 14; z > -110; z -= 4) { cyl(0.06, 0.06, 0.7, 6, rust, 6.2, 0.35, z); }
+  box(0.05, 0.3, 124, rust, 6.24, 0.62, -48);
+  // stones and scrub along the verges
+  var stone = new THREE.MeshStandardMaterial({ color: 0x8a8278, roughness: 0.95 });
+  var scrub = new THREE.MeshStandardMaterial({ color: 0x5a5a3a, roughness: 1 });
+  for (var i = 0; i < 260; i++) {
+    var sx = (Math.random() < 0.5 ? -1 : 1) * rand(4.5, 40), sz = rand(-200, 16);
+    if (sx > 8) continue;
+    var st = mesh(new THREE.DodecahedronGeometry(rand(0.08, 0.5), 0), stone, sx, 0.08, sz); st.scale.y = 0.5; st.rotation.y = rand(0, 3);
+    if (Math.random() < 0.35) { var sc = mesh(new THREE.SphereGeometry(rand(0.2, 0.6), 6, 4), scrub, sx + rand(-1, 1), 0.15, sz + rand(-1, 1)); sc.scale.y = 0.5; }
+  }
+})();
+
+// ============================================================
+// THE CANTINA: a low rendered block on the left verge, tin awning on poles,
+// the propeller against the wall, one bulb coming on
+// ============================================================
+var CX = -10.5, CZ = -21;
+var cantina = new THREE.Group();
+(function() {
+  var g = cantina;
+  box(9, 3.4, 7, adobeMat, 0, 1.7, 0, g);                       // the block
+  box(9.3, 0.35, 7.3, adobeMat, 0, 3.55, 0, g);                 // parapet cap
+  box(9.3, 0.35, 0.3, adobeBlue, 0, 3.2, 3.55, g);              // blue band along the front
+  box(9.2, 0.6, 0.06, adobeBlue, 0, 0.3, 3.53, g);              // blue skirting
+  // the front wall faces +x (toward the road): rotate the whole group later. Front = local +z here.
+  // door, window, shutters
+  var wood = new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.85 });
+  var doorG = new THREE.Group(); g.add(doorG);
+  box(1.1, 2.3, 0.08, wood, 0, 1.15, 3.54, doorG);
+  for (var p = 0; p < 4; p++) box(0.02, 2.2, 0.03, new THREE.MeshStandardMaterial({ color: 0x2a1c12 }), -0.45 + p * 0.3, 1.15, 3.6, doorG);
+  box(0.06, 0.06, 0.1, new THREE.MeshStandardMaterial({ color: 0xb08a40, metalness: 0.8, roughness: 0.3 }), 0.4, 1.05, 3.62, doorG);
+  doorG.position.x = -1.6;
+  // door frame, worn step
+  box(1.3, 0.06, 0.16, wood, -1.6, 2.36, 3.56, g); box(0.06, 2.4, 0.16, wood, -2.22, 1.2, 3.56, g); box(0.06, 2.4, 0.16, wood, -0.98, 1.2, 3.56, g);
+  box(1.6, 0.14, 0.7, new THREE.MeshStandardMaterial({ color: 0x9a9088, roughness: 0.9 }), -1.6, 0.07, 3.85, g);
+  // the window: a warm room behind it, a curtain half drawn
+  box(1.5, 1.2, 0.1, wood, 1.9, 1.9, 3.52, g);
+  var win = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.0), new THREE.MeshBasicMaterial({ color: 0xffc070, transparent: true, opacity: 0.85 })); win.position.set(1.9, 1.9, 3.58); g.add(win);
+  var curtain = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.0), new THREE.MeshLambertMaterial({ color: 0xb8402a })); curtain.position.set(1.55, 1.9, 3.59); g.add(curtain);
+  box(0.03, 1.0, 0.03, wood, 1.9, 1.9, 3.6, g); box(1.3, 0.03, 0.03, wood, 1.9, 1.9, 3.6, g);
+  box(0.5, 1.25, 0.05, adobeBlue, 2.85, 1.9, 3.55, g); box(0.5, 1.25, 0.05, adobeBlue, 0.95, 1.9, 3.55, g);   // shutters folded back
+  var winLight = new THREE.PointLight(0xffb060, 1.2, 9, 2); winLight.position.set(1.9, 1.8, 4.2); g.add(winLight);
+  halo(255, 190, 110, 3.2, 1.9, 1.9, 3.7, 0.4, false, g);
+  // CANTINA painted on the render, faded, and a tin beer sign
+  var painted = canvasTex(512, 128, function(ctx, w, h) {
+    ctx.clearRect(0, 0, w, h); ctx.fillStyle = 'rgba(140,40,30,0.75)'; ctx.font = 'bold 84px Arial, Helvetica, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('CANTINA', w / 2, h / 2);
+    for (var i = 0; i < 600; i++) { ctx.clearRect(Math.random() * w, Math.random() * h, 3, 2); }
+  });
+  var pm = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 1.0), new THREE.MeshLambertMaterial({ map: painted, transparent: true })); pm.position.set(0.2, 2.75, 3.54); g.add(pm);
+  var tinSign = canvasTex(256, 128, function(ctx, w, h) { ctx.fillStyle = '#e8d8a8'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#b02020'; ctx.fillRect(0, 0, w, 44); ctx.fillStyle = '#f0e8d0'; ctx.font = 'bold 34px Arial'; ctx.textAlign = 'center'; ctx.fillText('CERVEZA', w / 2, 34); ctx.fillStyle = '#2a4a8a'; ctx.font = 'bold 44px Arial'; ctx.fillText('FRIA', w / 2, 96); for (var i = 0; i < 400; i++) { ctx.fillStyle = 'rgba(140,80,40,' + Math.random() * 0.5 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 3, 2); } });
+  var ts = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), new THREE.MeshStandardMaterial({ map: tinSign, roughness: 0.6, metalness: 0.3 })); ts.position.set(3.6, 2.6, 3.54); ts.rotation.z = -0.05; g.add(ts);
+  // the tin awning on four poles, a string of dead bulbs along its edge and the one that works
+  var poleMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.6, metalness: 0.4 });
+  for (var px = -3.6; px <= 3.6; px += 2.4) cyl(0.05, 0.06, 2.7, 6, poleMat, px, 1.35, 6.6, g);
+  var aw = new THREE.Mesh(new THREE.PlaneGeometry(9.4, 3.6), tinMat); aw.position.set(0, 2.95, 5.2); aw.rotation.x = Math.PI / 2 + 0.12; aw.castShadow = true; aw.receiveShadow = true; g.add(aw);
+  for (var rx = -4.4; rx <= 4.4; rx += 0.8) { var rib = box(0.06, 0.06, 3.6, poleMat, rx, 2.9, 5.2, g); rib.rotation.x = 0.12; }
+  box(9.4, 0.08, 0.08, poleMat, 0, 2.72, 6.9, g);
+  var bulbWire = []; for (var bx = -4.2; bx <= 4.2; bx += 0.7) bulbWire.push(new THREE.Vector3(bx, 2.62 - Math.sin((bx + 4.2) / 8.4 * Math.PI) * 0.12, 6.95));
+  g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(bulbWire), new THREE.LineBasicMaterial({ color: 0x1a1a1a })));
+  for (var bx2 = -4.2; bx2 <= 4.2; bx2 += 0.7) { if (Math.abs(bx2 + 0.7) < 0.1) continue; var db = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), new THREE.MeshStandardMaterial({ color: 0x8a8a80, roughness: 0.3 })); db.position.set(bx2, 2.5 - Math.sin((bx2 + 4.2) / 8.4 * Math.PI) * 0.12, 6.95); g.add(db); }
+  // THE bulb: bare, on a flex under the awning, just coming on
+  var flex = cyl(0.008, 0.008, 0.5, 4, new THREE.MeshBasicMaterial({ color: 0x111 }), -0.7, 2.7, 5.4, g);
+  var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), new THREE.MeshBasicMaterial({ color: 0xffd8a0 })); bulb.position.set(-0.7, 2.42, 5.4); g.add(bulb);
+  window.__bulb = bulb;
+  var bl = new THREE.PointLight(0xffb868, 0.2, 12, 2); bl.position.set(-0.7, 2.35, 5.4); g.add(bl); window.__bulbLight = bl;
+  window.__bulbHalo = halo(255, 200, 130, 2.6, -0.7, 2.42, 5.4, 0.1, false, g);
+  window.__bulbHalo2 = halo(255, 170, 100, 7, -0.7, 2.3, 5.5, 0.05, false, g);
+  // porch: plastic chairs, a table, crates of empties, a drum, a broom
+  var plastic = new THREE.MeshStandardMaterial({ color: 0xe8e4d8, roughness: 0.5 });
+  function chair(x, z, r) { var c = new THREE.Group(); box(0.42, 0.04, 0.42, plastic, 0, 0.44, 0, c); box(0.42, 0.42, 0.04, plastic, 0, 0.66, -0.2, c); [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]].forEach(function(p) { box(0.03, 0.44, 0.03, plastic, p[0], 0.22, p[1], c); }); c.position.set(x, 0, z); c.rotation.y = r; g.add(c); }
+  chair(2.2, 5.2, 0.4); chair(3.4, 5.6, -0.6); chair(-3.6, 5.0, 2.8);
+  var tbl = mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.04, 14), plastic, 2.8, 0.72, 4.9, g); cyl(0.03, 0.03, 0.7, 6, plastic, 2.8, 0.36, 4.9, g);
+  var bottle = new THREE.MeshStandardMaterial({ color: 0x6a4a1a, roughness: 0.1, transparent: true, opacity: 0.85 });
+  cyl(0.03, 0.035, 0.22, 8, bottle, 2.7, 0.85, 4.85, g); cyl(0.03, 0.035, 0.22, 8, bottle, 2.95, 0.85, 5.0, g);
+  var crateMat = new THREE.MeshStandardMaterial({ color: 0xb03020, roughness: 0.8 });
+  for (var ci = 0; ci < 3; ci++) { box(0.5, 0.3, 0.34, crateMat, -3.9, 0.15 + ci * 0.31, 2.4 + (ci % 2) * 0.05, g); for (var bi = 0; bi < 6; bi++) cyl(0.028, 0.03, 0.2, 6, bottle, -4.1 + (bi % 3) * 0.16, 0.36 + ci * 0.31, 2.32 + Math.floor(bi / 3) * 0.16, g); }
+  cyl(0.32, 0.32, 0.9, 12, new THREE.MeshStandardMaterial({ color: 0x3a4a8a, roughness: 0.6, metalness: 0.4 }), 3.9, 0.45, 2.6, g);
+  var broom = cyl(0.015, 0.015, 1.4, 5, new THREE.MeshStandardMaterial({ color: 0x8a7050 }), 4.2, 0.72, 3.2, g); broom.rotation.z = -0.12;
+  // a water butt and a hose, a gas bottle by the door
+  cyl(0.28, 0.25, 0.8, 12, new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 }), -3.9, 0.4, 5.9, g);
+  cyl(0.16, 0.16, 0.7, 10, new THREE.MeshStandardMaterial({ color: 0xc8a020, roughness: 0.5, metalness: 0.3 }), -2.6, 0.35, 3.9, g);
+  // THE PROPELLER: a Cessna two-blade, leaning against the wall by the window
+  var alu = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: 0.35, metalness: 0.85 });
+  var propG = new THREE.Group();
+  var hub = cyl(0.12, 0.12, 0.16, 12, alu, 0, 0, 0, propG); hub.rotation.x = Math.PI / 2;
+  cyl(0.08, 0.06, 0.24, 10, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 }), 0, 0, 0.16, propG).rotation.x = Math.PI / 2;
+  for (var bl2 = 0; bl2 < 2; bl2++) {
+    var blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.0, 0.03), alu); blade.position.set(0, bl2 ? 0.55 : -0.55, 0); blade.rotation.y = bl2 ? 0.35 : -0.35; blade.scale.set(1, 1, 1); blade.castShadow = true; propG.add(blade);
+    var tip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.03), new THREE.MeshStandardMaterial({ color: 0xe0d020, roughness: 0.5 })); tip.position.set(0, bl2 ? 1.15 : -1.15, 0); tip.rotation.y = bl2 ? 0.35 : -0.35; propG.add(tip);
+  }
+  propG.position.set(-3.3, 1.28, 3.72); propG.rotation.z = 0.28; propG.rotation.x = -0.18; g.add(propG);
+  makeClickable(propG.children[0], { name: 'The cantina', passage: 'Nazca Approach' });
+  // rooftop: a water tank on legs, a bent aerial, a bird-shaped nothing
+  box(1.2, 0.9, 1.2, new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.6, metalness: 0.4 }), 2.5, 4.35, -1.5, g);
+  for (var lx = -1; lx <= 1; lx += 2) for (var lz = -1; lz <= 1; lz += 2) cyl(0.03, 0.03, 0.5, 5, poleMat, 2.5 + lx * 0.5, 3.85, -1.5 + lz * 0.5, g);
+  var aerial = cyl(0.015, 0.015, 2.0, 4, poleMat, -3, 4.6, -2, g); aerial.rotation.z = 0.1;
+  box(0.9, 0.02, 0.02, poleMat, -3, 5.4, -2, g); box(0.6, 0.02, 0.02, poleMat, -3, 5.1, -2, g);
+  // the whole block faces the road
+  g.position.set(CX, 0, CZ); g.rotation.y = Math.PI / 2 - 0.12;
+  scene.add(g);
+  makeClickable(g.children[0], { name: 'The cantina', passage: 'Nazca Approach' });
+})();
+// the bare-earth forecourt and the tyre marks where the bus stops
+(function() {
+  var fc = new THREE.Mesh(new THREE.CircleGeometry(9, 24), new THREE.MeshStandardMaterial({ color: 0xa89a84, roughness: 1 })); fc.rotation.x = -Math.PI / 2; fc.position.set(CX + 6, 0.025, CZ); fc.scale.set(1, 0.7, 1); scene.add(fc);
+  for (var i = 0; i < 2; i++) { var tm = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 14), new THREE.MeshBasicMaterial({ color: 0x5a5048, transparent: true, opacity: 0.4, depthWrite: false })); tm.rotation.x = -Math.PI / 2; tm.rotation.z = 0.15; tm.position.set(CX + 5.2 + i * 1.7, 0.035, CZ + 2); scene.add(tm); }
+  // bus stop: a leaning post with a small tin plate, an arrow, NAZCA in caps
+  var post = cyl(0.04, 0.05, 2.4, 6, new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.6, metalness: 0.4 }), -5.2, 1.2, -12); post.rotation.z = 0.06;
+  var plate = canvasTex(256, 128, function(ctx, w, h) { ctx.fillStyle = '#1a3a8a'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#f0f0e8'; ctx.font = 'bold 54px Arial'; ctx.textAlign = 'center'; ctx.fillText('NAZCA', w / 2 + 20, 80); ctx.beginPath(); ctx.moveTo(24, 64); ctx.lineTo(60, 40); ctx.lineTo(60, 88); ctx.fill(); for (var i = 0; i < 300; i++) { ctx.fillStyle = 'rgba(160,100,50,' + Math.random() * 0.5 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 3, 2); } });
+  var pl = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), new THREE.MeshStandardMaterial({ map: plate, roughness: 0.6, side: THREE.DoubleSide })); pl.position.set(-5.05, 2.1, -12); pl.rotation.y = Math.PI / 2 + 0.3; scene.add(pl);
+})();
+
+// ============================================================
+// POWER LINE along the road, poles receding into the dusk
+// ============================================================
+(function() {
+  var poleMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.9 });
+  var wireMat = new THREE.LineBasicMaterial({ color: 0x141414 });
+  var prev = null;
+  for (var i = 0; i < 14; i++) {
+    var z = 10 - i * 22, x = -6.5 - Math.max(0, -z - 60) * 0.06;
+    cyl(0.09, 0.12, 7, 7, poleMat, x, 3.5, z);
+    box(1.4, 0.1, 0.1, poleMat, x, 6.6, z);
+    var ins = new THREE.MeshStandardMaterial({ color: 0xd8d8d0, roughness: 0.3 });
+    cyl(0.05, 0.05, 0.12, 6, ins, x - 0.6, 6.7, z); cyl(0.05, 0.05, 0.12, 6, ins, x + 0.6, 6.7, z);
+    var cur = [new THREE.Vector3(x - 0.6, 6.75, z), new THREE.Vector3(x + 0.6, 6.75, z)];
+    if (prev) for (var w = 0; w < 2; w++) { var pts = []; for (var k = 0; k <= 12; k++) { var t = k / 12; pts.push(new THREE.Vector3(prev[w].x + (cur[w].x - prev[w].x) * t, 6.75 - Math.sin(t * Math.PI) * 0.7, prev[w].z + (cur[w].z - prev[w].z) * t)); } scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), wireMat)); }
+    prev = cur;
+  }
+})();
+// distant hills to the left and the road vanishing
+(function() {
+  var hillMat = new THREE.MeshStandardMaterial({ color: 0x3a3a48, roughness: 1 });
+  for (var i = 0; i < 6; i++) { var h = mesh(new THREE.SphereGeometry(rand(90, 160), 12, 8), hillMat, -260 - i * 60 + rand(-30, 30), -70, -420 - i * 60 + rand(-40, 40)); h.scale.set(1.8, 0.45, 1); h.castShadow = false; }
+})();
+
+// ============================================================
+// HEAT SHIMMER: pale sprites low over the road and the pampa, wavering
+// ============================================================
+var shimmerTex = radialTex(240, 230, 215, 0.14, 0.5);
+var shimmers = [];
+for (var si = 0; si < 40; si++) {
+  var sh = new THREE.Sprite(new THREE.SpriteMaterial({ map: shimmerTex, transparent: true, depthWrite: false, opacity: rand(0.15, 0.4) }));
+  var ss = rand(2, 6); sh.scale.set(ss, ss * 0.28, 1);
+  sh.position.set(rand(-14, 12), rand(0.15, 0.9), rand(-120, -6)); scene.add(sh);
+  shimmers.push({ s: sh, y0: sh.position.y, ph: rand(0, 6.3), sp: rand(1.2, 2.6), base: sh.material.opacity, sx: ss });
+}
+
+// ============================================================
+// FOG LAYERS: dust haze over the road, a blue band on the pampa, sea mist under the sun, warm haze at the cantina
+// ============================================================
+var fogSprites = [];
+function addFog(tex, n, x0, x1, y0, y1, z0, z1, s0, s1, op0, op1, aspect) {
+  for (var i = 0; i < n; i++) {
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: rand(op0, op1) }));
+    var s = rand(s0, s1); sp.scale.set(s, s * aspect, 1);
+    sp.position.set(rand(x0, x1), rand(y0, y1), rand(z0, z1)); scene.add(sp);
+    fogSprites.push({ sprite: sp, baseX: sp.position.x, drift: rand(0.001, 0.004), sway: rand(0, 6.3), swaySpeed: rand(0.0005, 0.002), swayAmt: rand(0.3, 1.5), lo: x0 - 8, hi: x1 + 8 });
+  }
+}
+var dustHaze = radialTex(200, 180, 150, 0.18, 0.4), blueBand = radialTex(90, 110, 160, 0.14, 0.45), seaMist = radialTex(255, 200, 150, 0.12, 0.4), warmHaze = radialTex(255, 190, 120, 0.14, 0.4);
+addFog(dustHaze, 40, -30, 12, 0.2, 1.8, -220, 10, 8, 26, 0.12, 0.26, 0.3);
+addFog(blueBand, 26, -80, 10, 1.5, 6, -260, -30, 20, 60, 0.08, 0.18, 0.3);
+addFog(seaMist, 20, 30, 260, -2, 4, -300, -40, 30, 90, 0.08, 0.16, 0.3);
+addFog(warmHaze, 12, CX - 4, CX + 8, 0.5, 3.5, CZ - 5, CZ + 5, 4, 10, 0.1, 0.2, 0.4);
+
+// ============================================================
+// ANIMATION
+// ============================================================
+var clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  var t = clock.getElapsedTime();
+  var p = seaGeo.attributes.position;
+  for (var i = 0; i < p.count; i++) { var b = seaBase[i]; p.setZ(i, Math.sin(b.x * 0.05 + t * 0.5) * 0.35 + Math.sin(b.y * 0.04 - t * 0.4 + b.x * 0.02) * 0.3 + Math.sin((b.x + b.y) * 0.2 + t * 1.0) * 0.08); }
+  p.needsUpdate = true; seaGeo.computeVertexNormals();
+  for (var f = 0; f < foamLines.length; f++) { var fl = foamLines[f]; var w = Math.sin(t * 0.4 + fl.ph); fl.m.position.x = fl.baseX - w * 0.6; fl.m.material.opacity = fl.baseOp * (0.6 + 0.4 * Math.max(0, w)); }
+  for (var i2 = 0; i2 < fogSprites.length; i2++) { var fs = fogSprites[i2]; fs.sway += fs.swaySpeed; fs.sprite.position.x = fs.baseX + Math.sin(fs.sway) * fs.swayAmt; fs.baseX += fs.drift; if (fs.baseX > fs.hi) fs.baseX = fs.lo; }
+  for (var s = 0; s < shimmers.length; s++) { var sh = shimmers[s]; sh.s.position.y = sh.y0 + Math.sin(t * sh.sp + sh.ph) * 0.08; sh.s.material.opacity = sh.base * (0.6 + 0.4 * Math.sin(t * sh.sp * 1.3 + sh.ph)); sh.s.scale.x = sh.sx * (1 + Math.sin(t * sh.sp * 0.7 + sh.ph) * 0.08); }
+  // the bulb coming on: warms over the first half minute, then a slow breathing with a tired flicker
+  var on = Math.min(1, t / 28), fl2 = 0.94 + Math.sin(t * 9.1) * 0.03 + Math.sin(t * 23.7) * 0.03;
+  window.__bulbLight.intensity = (0.15 + on * 1.4) * fl2;
+  window.__bulbHalo.material.opacity = (0.08 + on * 0.55) * fl2;
+  window.__bulbHalo2.material.opacity = (0.03 + on * 0.22) * fl2;
+  window.__bulb.material.color.setRGB(0.6 + on * 0.4, 0.45 + on * 0.4, 0.3 + on * 0.35);
+  sunHalo.material.opacity = 0.48 + Math.sin(t * 0.15) * 0.04;
+  sunRoad.material.opacity = 0.5 + Math.sin(t * 0.6) * 0.05;
+  raycaster.setFromCamera(mouseNDC, camera);
+  var hits = mouseMoved ? raycaster.intersectObjects(clickableObjects) : [];
+  var hv = hits.length ? venueData.get(hits[0].object) : null;
+  if (hv !== hoveredVenue) {
+    hoveredVenue = hv;
+    if (hv) { tooltip.textContent = hv.name; tooltip.classList.add('visible'); document.body.style.cursor = 'pointer'; }
+    else { tooltip.classList.remove('visible'); document.body.style.cursor = ''; }
+  }
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

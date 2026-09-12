@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Plain of Chebar</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#datestamp {
+  position: absolute; top: 18px; right: 24px;
+  font: 14px monospace; color: rgba(190,180,200,0.5);
+  letter-spacing: 2px; pointer-events: none;
+}
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none;
+}
+#tooltip {
+  position: fixed; padding: 6px 14px; background: rgba(20,18,26,0.9);
+  border: 1px solid rgba(190,180,200,0.4); font: italic 13px Georgia, serif; color: #e8e4ec;
+  pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 10;
+}
+#tooltip.visible { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="datestamp">BABYLON</div>
+<div id="location">THE PLAIN OF CHEBAR</div>
+<div id="tooltip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SCENE SETUP
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb8b4b0);
+scene.fog = new THREE.FogExp2(0xb4b0ac, 0.0105);
+
+// LAYOUT: a flat bleached plain. NORTH is -z. The river comes in from the
+// left foreground and runs away to the north-west. The stone stands fifty
+// yards off, right of centre. The camera is on the plain looking north, a
+// little turned so the river cuts the left of the frame on the diagonal.
+var camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 900);
+camera.position.set(6, 1.7, 8);
+camera.lookAt(-4, 2.6, -40);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = 0.7;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// CLICK TO ENTER
+// ============================================================
+var clickableObjects = [], venueData = new Map(), mouseNDC = new THREE.Vector2(-2, -2), mouseMoved = false;
+var raycaster = new THREE.Raycaster(), hoveredVenue = null, tooltip = document.getElementById('tooltip');
+function makeClickable(mesh, info) { clickableObjects.push(mesh); venueData.set(mesh, info); }
+document.addEventListener('mousemove', function(e) {
+  mouseMoved = true;
+  mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  tooltip.style.left = (e.clientX + 15) + 'px'; tooltip.style.top = (e.clientY - 30) + 'px';
+});
+document.addEventListener('click', function() {
+  if (hoveredVenue) alert('Entering: ' + hoveredVenue.name + '\n\nTwine passage: "' + hoveredVenue.passage + '"');
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function canvasTex(w, h, draw, rep) {
+  var c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  var t = new THREE.CanvasTexture(c);
+  if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
+  t.anisotropy = 8;
+  return t;
+}
+function rand(a, b) { return a + Math.random() * (b - a); }
+function mesh(geo, mat, x, y, z, parent) {
+  var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
+  m.castShadow = true; m.receiveShadow = true; (parent || scene).add(m); return m;
+}
+function radialTex(r, g, b, a, mid) {
+  return canvasTex(128, 128, function(ctx) {
+    var gr = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')');
+    gr.addColorStop(mid || 0.4, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.4) + ')');
+    gr.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ',0)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, 128, 128);
+  });
+}
+function halo(r, g, b, size, x, y, z, opacity, noFog) {
+  var m = new THREE.SpriteMaterial({ map: radialTex(r, g, b, 0.9), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: opacity || 0.6 });
+  if (noFog) m.fog = false;
+  var s = new THREE.Sprite(m); s.scale.set(size, size, 1); s.position.set(x, y, z); scene.add(s); return s;
+}
+
+// ============================================================
+// SKY: a white overcast, and in the north a bruise of light
+// ============================================================
+var skyTex = canvasTex(2048, 1024, function(ctx, w, h) {
+  var g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#8a8c96'); g.addColorStop(0.3, '#a8a8ac'); g.addColorStop(0.46, '#c4c0ba'); g.addColorStop(0.52, '#cac4bc'); g.addColorStop(0.6, '#a8a29c'); g.addColorStop(1, '#6a6660');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  // the cloud: a sheet with a grain to it, thicker toward the north
+  for (var i = 0; i < 260; i++) {
+    var cy = Math.random() * h * 0.5, cx = Math.random() * w, cw = 60 + Math.random() * 300, ch = 6 + Math.random() * 30;
+    var dark = Math.random() < 0.5;
+    ctx.fillStyle = dark ? 'rgba(110,108,118,' + (0.08 + Math.random() * 0.14) + ')' : 'rgba(228,226,224,' + (0.08 + Math.random() * 0.14) + ')';
+    ctx.beginPath(); ctx.ellipse(cx, cy, cw, ch, 0, 0, 6.3); ctx.fill();
+  }
+  // THE BRUISE: north is texture x = 0.75. A dull violet-brown stain low in the
+  // sky with a sick amber glow somewhere behind it. Not a shape. Not yet.
+  var bx = w * 0.75, by = h * 0.47;
+  var b1 = ctx.createRadialGradient(bx, by, 0, bx, by, w * 0.11);
+  b1.addColorStop(0, 'rgba(80,50,90,0.4)'); b1.addColorStop(0.5, 'rgba(100,70,95,0.2)'); b1.addColorStop(1, 'rgba(140,120,120,0)');
+  ctx.fillStyle = b1; ctx.fillRect(0, 0, w, h);
+  var b2 = ctx.createRadialGradient(bx + 40, by + 14, 0, bx + 40, by + 14, w * 0.035);
+  b2.addColorStop(0, 'rgba(230,170,90,0.28)'); b2.addColorStop(0.5, 'rgba(200,120,70,0.1)'); b2.addColorStop(1, 'rgba(160,90,60,0)');
+  ctx.fillStyle = b2; ctx.fillRect(0, 0, w, h);
+});
+var sky = new THREE.Mesh(new THREE.SphereGeometry(700, 40, 24), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }));
+scene.add(sky);
+// the bruise's slow glow, as sprites, low in the north over the river's vanishing point
+var BR = new THREE.Vector3(-90, 48, -600);
+var bruiseCore = halo(210, 150, 90, 70, BR.x + 10, BR.y - 6, BR.z, 0.16, true);
+var bruiseRing = halo(120, 70, 130, 200, BR.x, BR.y, BR.z, 0.14, true);
+var bruiseDark = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTex(40, 20, 50, 0.5, 0.5), transparent: true, depthWrite: false, fog: false, opacity: 0.22 }));
+bruiseDark.scale.set(180, 70, 1); bruiseDark.position.set(BR.x, BR.y + 4, BR.z); scene.add(bruiseDark);
+
+// ============================================================
+// LIGHTING: overcast. Nothing casts much. The stone does.
+// ============================================================
+scene.add(new THREE.AmbientLight(0x9a9aa4, 0.55));
+scene.add(new THREE.HemisphereLight(0xc8c4c0, 0x6a6660, 0.6));
+var grey = new THREE.DirectionalLight(0xd8d4d0, 0.6);
+grey.position.set(70, 34, 50); grey.castShadow = true;
+grey.shadow.mapSize.set(2048, 2048);
+grey.shadow.camera.left = -80; grey.shadow.camera.right = 80; grey.shadow.camera.top = 80; grey.shadow.camera.bottom = -80;
+grey.shadow.camera.near = 10; grey.shadow.camera.far = 300; grey.shadow.bias = -0.0006; grey.shadow.radius = 4;
+scene.add(grey);
+var northLight = new THREE.DirectionalLight(0x8a6a90, 0.22); northLight.position.set(-40, 20, -200); scene.add(northLight);
+
+// ============================================================
+// TEXTURES
+// ============================================================
+// Bleached alluvium: cracked into plates, salt in the cracks, pale
+var plainTex = canvasTex(1024, 1024, function(ctx, w, h) {
+  ctx.fillStyle = '#c8c2b6'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 500; i++) { var v = 180 + Math.random() * 50; ctx.fillStyle = 'rgba(' + Math.floor(v) + ',' + Math.floor(v * 0.97) + ',' + Math.floor(v * 0.9) + ',0.35)'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 10 + Math.random() * 60, 8 + Math.random() * 40, Math.random() * 3, 0, 6.3); ctx.fill(); }
+  // the crack net: polygonal plates
+  ctx.strokeStyle = 'rgba(70,62,56,0.55)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+  var pts = [];
+  for (var p = 0; p < 160; p++) pts.push([Math.random() * w, Math.random() * h]);
+  for (var a = 0; a < pts.length; a++) {
+    var near = pts.map(function(q, j) { return [Math.hypot(q[0] - pts[a][0], q[1] - pts[a][1]), j]; }).sort(function(u, v) { return u[0] - v[0]; }).slice(1, 4);
+    near.forEach(function(nb) { if (nb[1] > a) { ctx.beginPath(); ctx.moveTo(pts[a][0], pts[a][1]); var mx = (pts[a][0] + pts[nb[1]][0]) / 2 + (Math.random() - 0.5) * 16, my = (pts[a][1] + pts[nb[1]][1]) / 2 + (Math.random() - 0.5) * 16; ctx.quadraticCurveTo(mx, my, pts[nb[1]][0], pts[nb[1]][1]); ctx.stroke(); } });
+  }
+  // salt crust, brighter, in patches and along the cracks
+  for (var s = 0; s < 220; s++) { ctx.fillStyle = 'rgba(240,238,232,' + (0.15 + Math.random() * 0.3) + ')'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 3 + Math.random() * 14, 2 + Math.random() * 8, Math.random() * 3, 0, 6.3); ctx.fill(); }
+  for (var d = 0; d < 6000; d++) { ctx.fillStyle = 'rgba(80,70,60,' + Math.random() * 0.25 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); }
+  // curled plate edges: a dark crescent on one side of some plates
+  for (var c = 0; c < 80; c++) { ctx.strokeStyle = 'rgba(60,52,46,0.35)'; ctx.lineWidth = 4; ctx.beginPath(); var cx0 = Math.random() * w, cy0 = Math.random() * h; ctx.arc(cx0, cy0, 12 + Math.random() * 20, Math.random() * 3, Math.random() * 3 + 3.5); ctx.stroke(); }
+}, [200, 200]);
+var plainMat = new THREE.MeshStandardMaterial({ map: plainTex, roughness: 0.95, color: 0xb4aea4 });
+
+// The river: slow, grey-brown, a skin of light on it
+var riverTex = canvasTex(512, 512, function(ctx, w, h) {
+  ctx.fillStyle = '#6a6862'; ctx.fillRect(0, 0, w, h);
+  for (var y = 0; y < h; y += 2) { ctx.fillStyle = 'rgba(120,118,110,' + (0.04 + Math.sin(y * 0.12) * 0.03) + ')'; ctx.fillRect(0, y, w, 2); }
+  for (var k = 0; k < 300; k++) { ctx.fillStyle = 'rgba(200,196,190,' + Math.random() * 0.08 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 6 + Math.random() * 40, 1); }
+  for (var m = 0; m < 30; m++) { ctx.fillStyle = 'rgba(80,72,60,' + Math.random() * 0.2 + ')'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 20 + Math.random() * 60, 4 + Math.random() * 10, 0, 0, 6.3); ctx.fill(); }
+}, [3, 30]);
+var riverMat = new THREE.MeshStandardMaterial({ map: riverTex, color: 0xc8c6c2, roughness: 0.22, metalness: 0.12, emissive: 0x6a6a70, emissiveIntensity: 0.55 });
+
+var mudTex = canvasTex(256, 256, function(ctx, w, h) {
+  ctx.fillStyle = '#7a7268'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 600; i++) { var v = 90 + Math.random() * 50; ctx.fillStyle = 'rgba(' + v + ',' + Math.floor(v * 0.94) + ',' + Math.floor(v * 0.86) + ',0.5)'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 3 + Math.random() * 12, 2 + Math.random() * 6, Math.random() * 3, 0, 6.3); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(40,34,30,0.4)'; ctx.lineWidth = 1.5;
+  for (var c = 0; c < 40; c++) { ctx.beginPath(); var x0 = Math.random() * w, y0 = Math.random() * h; ctx.moveTo(x0, y0); ctx.lineTo(x0 + (Math.random() - 0.5) * 40, y0 + (Math.random() - 0.5) * 40); ctx.stroke(); }
+}, [4, 40]);
+var mudMat = new THREE.MeshStandardMaterial({ map: mudTex, roughness: 0.7, metalness: 0.1, color: 0x9a9088 });
+
+var stoneTex = canvasTex(512, 512, function(ctx, w, h) {
+  ctx.fillStyle = '#4a4442'; ctx.fillRect(0, 0, w, h);
+  for (var i = 0; i < 2500; i++) { var v = 40 + Math.random() * 60; ctx.fillStyle = 'rgba(' + v + ',' + Math.floor(v * 0.95) + ',' + Math.floor(v * 0.92) + ',0.5)'; ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 5, 0, 6.3); ctx.fill(); }
+  for (var l = 0; l < 30; l++) { ctx.fillStyle = 'rgba(200,196,180,' + (0.1 + Math.random() * 0.2) + ')'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 6 + Math.random() * 20, 4 + Math.random() * 12, Math.random() * 3, 0, 6.3); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(20,16,14,0.5)'; ctx.lineWidth = 2;
+  for (var c = 0; c < 10; c++) { ctx.beginPath(); var x0 = Math.random() * w, y0 = Math.random() * h; ctx.moveTo(x0, y0); for (var k = 0; k < 5; k++) { x0 += (Math.random() - 0.5) * 40; y0 += Math.random() * 40; ctx.lineTo(x0, y0); } ctx.stroke(); }
+});
+var stoneMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.85, color: 0x8a8480 });
+
+// ============================================================
+// THE PLAIN, with the river's trough dug into it
+// ============================================================
+var RIVER_ANGLE = 0.32; // radians off north, toward the west
+function riverX(x, z) { return (x + 22) * Math.cos(RIVER_ANGLE) - z * Math.sin(RIVER_ANGLE); }
+function plainY(x, z) {
+  var d = Math.hypot(x, z);
+  var y = Math.sin(x * 0.07) * Math.cos(z * 0.05) * 0.35 + Math.sin(x * 0.31 + z * 0.17) * 0.08 + (d > 60 ? Math.sin(x * 0.02) * Math.sin(z * 0.03) * 1.6 : 0);
+  var rx = Math.abs(riverX(x, z));
+  if (rx < 19) { var u = Math.min(1, (19 - rx) / 7); y -= 1.9 * u * u * (3 - 2 * u); }
+  return y;
+}
+var plainGeo = new THREE.PlaneGeometry(1400, 1400, 140, 140);
+(function() {
+  var p = plainGeo.attributes.position;
+  for (var i = 0; i < p.count; i++) {
+    var x = p.getX(i), z = -p.getY(i);
+    p.setZ(i, plainY(x, z));
+  }
+  plainGeo.computeVertexNormals();
+})();
+var plain = new THREE.Mesh(plainGeo, plainMat);
+plain.rotation.x = -Math.PI / 2; plain.position.set(0, 0, 0); plain.receiveShadow = true; scene.add(plain);
+
+
+// ============================================================
+// THE RIVER: cut into the plain, running from the left foreground to the north-west
+// ============================================================
+var riverGroup = new THREE.Group();
+riverGroup.rotation.y = -RIVER_ANGLE; riverGroup.position.set(-22, 0, 0);
+(function() {
+  // the channel: a shallow trough with banks, water at the bottom
+  var bankMat = mudMat;
+  // the water, vertex-rippled
+  var wg = new THREE.PlaneGeometry(22, 1400, 22, 220); window.__wg = wg; window.__wbase = [];
+  var wp = wg.attributes.position; for (var i = 0; i < wp.count; i++) window.__wbase.push({ x: wp.getX(i), y: wp.getY(i) });
+  var water = new THREE.Mesh(wg, riverMat); water.rotation.x = -Math.PI / 2; water.position.set(0, -1.25, -300); riverGroup.add(water);
+  // the far bank drops a little lower than the near, so the water shows its skin against it
+  // mud margins: dark wet bands beside the water, the cracked plain above them
+  var wet = new THREE.MeshStandardMaterial({ color: 0x7a746e, roughness: 0.3, metalness: 0.1 });
+  for (var side = -1; side <= 1; side += 2) { var m = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1400), wet); m.rotation.x = -Math.PI / 2; m.rotation.y = -side * 0.12; m.position.set(side * 12.6, -1.5, -300); riverGroup.add(m); }
+  // reeds, dead, in clumps along the water; driftwood; a snag
+  var reedMat = new THREE.MeshStandardMaterial({ color: 0x8a7e66, roughness: 1, side: THREE.DoubleSide });
+  for (var r = 0; r < 120; r++) {
+    var side2 = Math.random() < 0.5 ? -1 : 1, rz = -rand(-6, 200), rx = side2 * rand(11.5, 14.5);
+    var n = 3 + Math.floor(Math.random() * 6);
+    for (var k = 0; k < n; k++) { var reed = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, rand(0.6, 1.5), 4), reedMat); reed.position.set(rx + rand(-0.3, 0.3), -1.0, rz + rand(-0.3, 0.3)); reed.rotation.set(rand(-0.35, 0.35), 0, rand(-0.35, 0.35)); reed.castShadow = true; riverGroup.add(reed); }
+  }
+  var wood = new THREE.MeshStandardMaterial({ color: 0xa89c88, roughness: 0.95 });
+  var snag = mesh(new THREE.CylinderGeometry(0.12, 0.3, 4.5, 6), wood, 4, -0.6, -28, riverGroup); snag.rotation.set(0.5, 0.3, 1.1);
+  mesh(new THREE.CylinderGeometry(0.05, 0.1, 1.6, 5), wood, 4.8, 0.1, -27.2, riverGroup).rotation.set(0.9, 0.2, 0.4);
+  var log2 = mesh(new THREE.CylinderGeometry(0.1, 0.16, 3, 6), wood, -13.5, -1.1, -12, riverGroup); log2.rotation.set(Math.PI / 2, 0, 0.3);
+})();
+scene.add(riverGroup);
+(function() {
+  var skin = new THREE.Mesh(new THREE.PlaneGeometry(14, 260), new THREE.MeshBasicMaterial({ map: canvasTex(64, 512, function(ctx, w, h) { var g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(230,200,180,0)'); g.addColorStop(0.35, 'rgba(230,205,190,0.4)'); g.addColorStop(0.7, 'rgba(220,200,200,0.22)'); g.addColorStop(1, 'rgba(210,200,210,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); var side = ctx.createLinearGradient(0, 0, w, 0); side.addColorStop(0, 'rgba(0,0,0,1)'); side.addColorStop(0.4, 'rgba(0,0,0,0)'); side.addColorStop(0.6, 'rgba(0,0,0,0)'); side.addColorStop(1, 'rgba(0,0,0,1)'); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = side; ctx.fillRect(0, 0, w, h); }), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 }));
+  skin.rotation.x = -Math.PI / 2; skin.position.set(0, -1.2, -180);
+  riverGroup.add(skin); window.__skin = skin;
+})();
+
+// ============================================================
+// THE STONE, fifty yards off
+// ============================================================
+var SX = 9, SZ = -38;
+(function() {
+  var sy = plainY(SX, SZ);
+  var stone = mesh(new THREE.DodecahedronGeometry(1.35, 1), stoneMat, SX, sy + 0.82, SZ);
+  stone.scale.set(1.25, 0.85, 1.0); stone.rotation.set(0.3, 0.8, 0.15);
+  makeClickable(stone, { name: 'The stone', passage: 'The Plain of Chebar' });
+  // a lesser stone half sunk beside it; the ground worn pale around them
+  var s2 = mesh(new THREE.DodecahedronGeometry(0.5, 0), stoneMat, SX + 1.9, sy + 0.2, SZ + 0.6); s2.rotation.set(0.6, 0.2, 0.9);
+  var worn = new THREE.Mesh(new THREE.CircleGeometry(3.2, 20), new THREE.MeshStandardMaterial({ color: 0xdedad2, roughness: 1, transparent: true, opacity: 0.55, depthWrite: false })); worn.rotation.x = -Math.PI / 2; worn.position.set(SX, sy + 0.03, SZ); scene.add(worn);
+  // the stone's own shadow side, darkened: a soft dark sprite at its foot on the north side
+  var sh = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTex(30, 26, 30, 0.6, 0.4), transparent: true, depthWrite: false, opacity: 0.35 })); sh.scale.set(3.6, 1.2, 1); sh.position.set(SX - 0.6, sy + 0.12, SZ + 0.6); scene.add(sh);
+})();
+
+// ============================================================
+// THE PLAIN'S FURNITURE: what a bleached river plain has. Little.
+// ============================================================
+(function() {
+  var pale = new THREE.MeshStandardMaterial({ color: 0xd4cec2, roughness: 1 });
+  var dark = new THREE.MeshStandardMaterial({ color: 0x6a645e, roughness: 0.95 });
+  // scattered pale stones, a few dark ones; salt pans; curled plates standing proud
+  for (var i = 0; i < 700; i++) {
+    var x = rand(-90, 90), z = rand(-160, 14);
+    // keep off the river (in river space, x within ±14)
+    var rx = riverX(x, z);
+    if (Math.abs(rx) < 16) continue;
+    var r = rand(0.04, 0.3);
+    var st = mesh(new THREE.DodecahedronGeometry(r, 0), Math.random() < 0.8 ? pale : dark, x, plainY(x, z) + r * 0.35, z); st.scale.y = 0.5; st.rotation.y = rand(0, 3);
+  }
+  for (var c = 0; c < 140; c++) {
+    var x = rand(-70, 70), z = rand(-120, 12);
+    var rx = riverX(x, z);
+    if (Math.abs(rx) < 16) continue;
+    var plate = new THREE.Mesh(new THREE.BoxGeometry(rand(0.15, 0.4), 0.02, rand(0.15, 0.4)), pale); plate.position.set(x, plainY(x, z) + 0.08, z); plate.rotation.set(rand(-0.5, 0.5), rand(0, 3), rand(-0.5, 0.5)); plate.castShadow = true; scene.add(plate);
+  }
+  for (var s = 0; s < 40; s++) {
+    var x = rand(-80, 80), z = rand(-160, 10);
+    var rx = riverX(x, z);
+    if (Math.abs(rx) < 18) continue;
+    var pan = new THREE.Mesh(new THREE.CircleGeometry(rand(1.5, 5), 16), new THREE.MeshStandardMaterial({ color: 0xf0ece4, roughness: 0.8, transparent: true, opacity: 0.6, depthWrite: false })); pan.rotation.x = -Math.PI / 2; pan.scale.set(1, rand(0.4, 0.8), 1); pan.position.set(x, plainY(x, z) + 0.02, z); scene.add(pan);
+  }
+  // a dead tamarisk, far off to the right; a line of old bank on the horizon
+  var wood = new THREE.MeshStandardMaterial({ color: 0x7a7066, roughness: 1 });
+  var tx = 44, tz = -70, ty = plainY(tx, tz);
+  var trunk = mesh(new THREE.CylinderGeometry(0.1, 0.22, 3.2, 6), wood, tx, ty + 1.6, tz); trunk.rotation.z = 0.12;
+  [[0.4, 2.2, 0.5, 1.6, 0.9], [-0.35, 2.6, 0.4, 1.3, -0.8], [0.1, 3.0, 0.3, 1.0, 0.3], [0.5, 1.6, 0.35, 1.1, 1.2]].forEach(function(b) { var br = mesh(new THREE.CylinderGeometry(0.02, 0.06, b[3], 5), wood, tx + b[0], ty + b[1], tz + b[2]); br.rotation.z = b[4]; br.rotation.x = b[2]; });
+  var bankMat2 = new THREE.MeshStandardMaterial({ color: 0xa8a29a, roughness: 1 });
+  var oldBank = mesh(new THREE.BoxGeometry(400, 2.2, 8), bankMat2, 80, 0.9, -230); oldBank.rotation.y = 0.12; oldBank.castShadow = false;
+})();
+
+// ============================================================
+// WIND FROM NO DIRECTION: dust and haze, each drift its own way
+// ============================================================
+var fogSprites = [];
+function addFog(tex, n, x0, x1, y0, y1, z0, z1, s0, s1, op0, op1, aspect) {
+  for (var i = 0; i < n; i++) {
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: rand(op0, op1) }));
+    var s = rand(s0, s1); sp.scale.set(s, s * aspect, 1);
+    sp.position.set(rand(x0, x1), rand(y0, y1), rand(z0, z1)); scene.add(sp);
+    var a = rand(0, 6.3), sp2 = rand(0.004, 0.012);
+    fogSprites.push({ sprite: sp, x0: sp.position.x, z0: sp.position.z, dx: Math.cos(a) * sp2, dz: Math.sin(a) * sp2, sway: rand(0, 6.3), swaySpeed: rand(0.0006, 0.002), swayAmt: rand(0.4, 1.6), reach: rand(6, 16), t: rand(0, 1000) });
+  }
+}
+var whiteHaze = radialTex(220, 216, 210, 0.2, 0.4), dust = radialTex(200, 190, 172, 0.16, 0.4), violetHaze = radialTex(140, 120, 150, 0.12, 0.45), riverMist = radialTex(190, 190, 195, 0.16, 0.4);
+addFog(dust, 46, -60, 60, 0.2, 2.0, -120, 12, 6, 22, 0.14, 0.3, 0.3);
+addFog(whiteHaze, 30, -90, 90, 1.5, 7, -200, -20, 20, 70, 0.1, 0.22, 0.28);
+addFog(violetHaze, 16, -180, 20, 6, 30, -420, -180, 60, 160, 0.08, 0.18, 0.3);
+addFog(riverMist, 22, -60, -10, 0.1, 1.2, -140, 4, 5, 14, 0.12, 0.24, 0.3);
+// low dust streamers crossing the ground, thin and quick to fade
+var streamers = [];
+var streamTex = canvasTex(256, 32, function(ctx, w, h) { var g = ctx.createLinearGradient(0, 0, w, 0); g.addColorStop(0, 'rgba(210,200,185,0)'); g.addColorStop(0.3, 'rgba(210,200,185,0.35)'); g.addColorStop(0.7, 'rgba(210,200,185,0.35)'); g.addColorStop(1, 'rgba(210,200,185,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); var v = ctx.createLinearGradient(0, 0, 0, h); v.addColorStop(0, 'rgba(0,0,0,1)'); v.addColorStop(0.5, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,1)'); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = v; ctx.fillRect(0, 0, w, h); });
+for (var si = 0; si < 14; si++) {
+  var st = new THREE.Sprite(new THREE.SpriteMaterial({ map: streamTex, transparent: true, depthWrite: false, opacity: 0 }));
+  st.scale.set(rand(6, 14), rand(0.25, 0.6), 1); scene.add(st);
+  streamers.push({ s: st, life: rand(0, 8), dir: rand(0, 6.3), speed: rand(1.5, 4) });
+}
+function resetStreamer(sr) { sr.life = 0; sr.dir = rand(0, 6.3); sr.speed = rand(1.5, 4); sr.dur = rand(4, 9); var x = rand(-40, 50), z = rand(-90, 6); sr.s.position.set(x, plainY(x, z) + rand(0.15, 0.6), z); }
+streamers.forEach(resetStreamer);
+
+// ============================================================
+// ANIMATION
+// ============================================================
+var clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  var dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  // the river's skin
+  var wp = window.__wg.attributes.position;
+  for (var i = 0; i < wp.count; i++) { var b = window.__wbase[i]; wp.setZ(i, Math.sin(b.y * 0.12 + t * 0.35) * 0.05 + Math.sin(b.x * 0.6 + b.y * 0.05 - t * 0.5) * 0.03); }
+  wp.needsUpdate = true; window.__wg.computeVertexNormals();
+  // haze that cannot agree on a direction
+  for (var f = 0; f < fogSprites.length; f++) {
+    var fs = fogSprites[f]; fs.t += 1; fs.sway += fs.swaySpeed;
+    var k = Math.sin(fs.t * 0.0025);
+    fs.sprite.position.x = fs.x0 + fs.dx * fs.reach * 60 * k + Math.sin(fs.sway) * fs.swayAmt;
+    fs.sprite.position.z = fs.z0 + fs.dz * fs.reach * 60 * k;
+  }
+  for (var s = 0; s < streamers.length; s++) {
+    var sr = streamers[s]; sr.life += dt;
+    if (sr.life > sr.dur) resetStreamer(sr);
+    sr.s.position.x += Math.cos(sr.dir) * sr.speed * dt; sr.s.position.z += Math.sin(sr.dir) * sr.speed * dt;
+    sr.s.material.opacity = 0.5 * Math.sin(Math.PI * sr.life / sr.dur);
+  }
+  // the bruise breathes, slowly, like something behind it is not asleep
+  bruiseCore.material.opacity = 0.14 + Math.sin(t * 0.21) * 0.05 + Math.sin(t * 0.53) * 0.02;
+  bruiseRing.material.opacity = 0.13 + Math.sin(t * 0.17 + 1) * 0.04;
+  bruiseDark.material.opacity = 0.2 + Math.sin(t * 0.13) * 0.04;
+  northLight.intensity = 0.2 + Math.sin(t * 0.21) * 0.06;
+  window.__skin.material.opacity = 0.42 + Math.sin(t * 0.21) * 0.1;
+  raycaster.setFromCamera(mouseNDC, camera);
+  var hits = mouseMoved ? raycaster.intersectObjects(clickableObjects) : [];
+  var hv = hits.length ? venueData.get(hits[0].object) : null;
+  if (hv !== hoveredVenue) {
+    hoveredVenue = hv;
+    if (hv) { tooltip.textContent = hv.name; tooltip.classList.add('visible'); document.body.style.cursor = 'pointer'; }
+    else { tooltip.classList.remove('visible'); document.body.style.cursor = ''; }
+  }
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

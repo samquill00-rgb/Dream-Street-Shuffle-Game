@@ -2071,6 +2071,11 @@ window.dssAudio = (function() {
     if (!passageNode) return false;
     var tagAttr = passageNode.getAttribute('tags') || '';
     var tags = tagAttr.split(/\s+/).filter(Boolean);
+    if (bed.notTags) {
+      for (var j = 0; j < tags.length; j++) {
+        if (bed.notTags[tags[j]]) return false;
+      }
+    }
     for (var i = 0; i < tags.length; i++) {
       if (bed.tags[tags[i]]) return true;
     }
@@ -2462,13 +2467,32 @@ window.dssAudio = (function() {
   // Both venues are members'-club bars with subdued lounge feel; one bed
   // covers them via two tags. (If you want them to sound distinct later,
   // duplicate this block with a different recording for each tag.)
+  // 2026-09-12: split into two generated beds (tools_make_beds.py). The Colony
+  // is a small bright members' room (murmur, ice, a cackle, lighter clicks);
+  // Trisha's is a basement (electrics hum, few voices, footsteps overhead).
   registerAmbientBed({
-    label: 'quiet-cafe',
-    dataUri: '__DSS_QUIET_CAFE_DATA_URI__',
-    tags: { 'venue-colony': 1, 'venue-trishas': 1 },
+    label: 'colony',
+    dataUri: '__DSS_COLONY_DATA_URI__',
+    tags: { 'venue-colony': 1 },
     volume: 0.20,
     duckVolume: 0.07
   });
+  registerAmbientBed({
+    label: 'trishas',
+    dataUri: '__DSS_TRISHAS_DATA_URI__',
+    tags: { 'venue-trishas': 1 },
+    volume: 0.20,
+    duckVolume: 0.07
+  });
+  // Dream-world beds (2026-09-12, generated): one per world, matched on the
+  // world tag so every passage of that world carries it. The passage hook
+  // skips the generic procedural wind (windFarnell) when one of these is on.
+  // Sam may write music for the worlds later; these are the room tone under it.
+  registerAmbientBed({ label: 'world-himalaya', dataUri: '__DSS_HIMALAYA_DATA_URI__', tags: { 'himalayan': 1 }, volume: 0.18, duckVolume: 0.06 });
+  registerAmbientBed({ label: 'world-nazca',    dataUri: '__DSS_NAZCA_DATA_URI__',    tags: { 'nazca': 1 },     volume: 0.18, duckVolume: 0.06 });
+  registerAmbientBed({ label: 'world-easter',   dataUri: '__DSS_EASTER_DATA_URI__',   tags: { 'easter': 1 },    volume: 0.18, duckVolume: 0.06 });
+  registerAmbientBed({ label: 'world-pyramid',  dataUri: '__DSS_PYRAMID_DATA_URI__',  tags: { 'pyramid': 1 },   volume: 0.20, duckVolume: 0.07 });
+  registerAmbientBed({ label: 'world-ezekiel',  dataUri: '__DSS_EZEKIEL_DATA_URI__',  tags: { 'ezekiel': 1 },   volume: 0.18, duckVolume: 0.06 });
   // Cellar pump-station hum — Copper's cellar (the fight) AND Lackland's
   // back room (the table-tennis basement). Same physical aesthetic — a
   // damp basement under Soho — so they share the bed. Two tags route to
@@ -2573,10 +2597,15 @@ window.dssAudio = (function() {
   // the Soho-map you-are-here pulse + the venue door SFX), but this bed
   // deliberately does NOT auto-play off that tag — it would collide with the
   // gents bed during the cubicle intro. Started by hand: startBed('coach-bar').
+  // 2026-09-12: now ALSO tag-matched on 'venue-coach' (Coach and Horses bar,
+  // the slip pickup) but never while 'venue-gents' is on the passage, so the
+  // cubicle intro still opens on the gents bed alone; the SpewPopup hand-start
+  // below is unchanged and the tag keeps the bed running into the bar passage.
   registerAmbientBed({
     label: 'coach-bar',
     dataUri: '__DSS_COACH_NIGHT_DATA_URI__',
-    tags: {},
+    tags: { 'venue-coach': 1 },
+    notTags: { 'venue-gents': 1 },
     volume: 0.20,
     duckVolume: 0.07
   });
@@ -10657,6 +10686,11 @@ window._passageGen = 0;
                 // Each takes the _ambient slot; switching cleanly stops the
                 // previous one (and any horn timer it may have scheduled).
                 var inDream = (tags.indexOf('dream') !== -1);
+                // 2026-09-12: the five worlds carry their own generated beds; keep
+                // the generic wind for the un-bedded dream passages (sanctum, synthesis).
+                var WORLD_BED_TAGS = ['himalayan', 'nazca', 'easter', 'pyramid', 'ezekiel'];
+                var inWorldBed = false;
+                for (var wb = 0; wb < WORLD_BED_TAGS.length; wb++) { if (tags.indexOf(WORLD_BED_TAGS[wb]) !== -1) { inWorldBed = true; break; } }
                 var inPyre = (tags.indexOf('pyre') !== -1);
                 var inOutdoor = (tags.indexOf('outdoor') !== -1 || tags.indexOf('street-night') !== -1);
                 // Alba revelation passages (LINE 1) carry [outdoor] but should
@@ -10669,6 +10703,8 @@ window._passageGen = 0;
                   // ambientOff() clears any wind/traffic left from the previous passage
                   // (and the old fire crackle); it touches only the procedural _ambient
                   // slot, never the registered beds, so the lament keeps playing.
+                  window.dssAudio.ambientOff();
+                } else if (inDream && inWorldBed) {
                   window.dssAudio.ambientOff();
                 } else if (inDream) {
                   window.dssAudio.windFarnell();
@@ -40397,6 +40433,7 @@ var W = 540, H = 340;
 var canvas = document.getElementById('pong-canvas');
 var ctx = canvas.getContext('2d');
 var playerScore = 0, oppScore = 0, rallyCount = 0; // rallyCount escalates ball speed each serve
+var playerStreak = 0, rallyBurst = 0, hitSparks = [];
 var gameOver = false, paused = false, serving = true, serveTime = Date.now();
 var ball = {x:W/2,y:H/2,dx:0,dy:0,r:5,base:5.0};
 var pPad = {x:12,y:H/2-35,w:8,h:70};
@@ -40547,6 +40584,16 @@ ball.dx=sp*Math.cos(a);ball.dy=sp*Math.sin(a);ball.x=pPad.x+pPad.w+ball.r;
    and the return skews with your motion. Skill, not reflexes. */
 ball.dy+=pPadVel*0.35;
 if(ball.dy>7)ball.dy=7;if(ball.dy<-7)ball.dy=-7;
+// The centre of the bat is the sweet spot. Three clean returns create a
+// faster house special, rewarding players who read the rally.
+if(Math.abs(hp-0.5)<0.15){
+  playerStreak++;
+  hitSparks.push({x:ball.x,y:ball.y,life:1});
+  if(playerStreak>=3){
+    var burstSpeed=Math.min(Math.sqrt(ball.dx*ball.dx+ball.dy*ball.dy)*1.16,8.5);
+    ball.dx=burstSpeed; rallyBurst=1; playerStreak=0;
+  }
+} else { playerStreak=0; }
 if(window.dssAudio&&window.dssAudio.pongTock)window.dssAudio.pongTock();
 }
 if(ball.dx>0&&ball.x+ball.r>=oPad.x&&ball.x-ball.r<=oPad.x+oPad.w&&ball.y>=oPad.y&&ball.y<=oPad.y+oPad.h){
@@ -40554,6 +40601,7 @@ var hp=(ball.y-oPad.y)/oPad.h;var am=opponent==='Percy Ritson'?0.8:0.6;
 var a=Math.PI-(hp-0.5)*Math.PI*am;
 var sp=Math.min(Math.sqrt(ball.dx*ball.dx+ball.dy*ball.dy)*1.05,8.5);
 ball.dx=sp*Math.cos(a);ball.dy=sp*Math.sin(a);ball.x=oPad.x-ball.r;
+playerStreak=0;
 if(window.dssAudio&&window.dssAudio.pongTock)window.dssAudio.pongTock();
 }
 if(ball.x<-20){oppScore++;pointEnd(false);}
@@ -40566,6 +40614,7 @@ if(window.dssAudio&&window.dssAudio.pongPoint)window.dssAudio.pongPoint(pw);
 pointFlashCol=pw?'rgba(190,220,255,':'rgba(220,60,40,';
 pointFlashAt=Date.now();
 updateScore();paused=true;
+playerStreak=0; rallyBurst=0;
 /* First to 5, flat (no win-by-2): a match always resolves in 5–9 points and is
    always decisive. Difficulty climbs via the serve-speed ramp in serve() (the
    ball quickens each point, capped at the 9th), not via score-catchup — see aiBias. */
@@ -40645,6 +40694,15 @@ ctx.fillStyle='rgba(0,0,0,0.30)';ctx.beginPath();ctx.ellipse(ball.x+3,ball.y+5,b
 // Ball — white with strong glow
 ctx.shadowColor='rgba(255,255,220,1.0)';ctx.shadowBlur=22;ctx.fillStyle='#f2ede0';ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();
 ctx.shadowBlur=0;
+// Sweet-spot sparks and the brief gold flare from a completed phrase.
+hitSparks=hitSparks.filter(function(s){s.life-=0.07;return s.life>0;});
+for(var hs=0;hs<hitSparks.length;hs++){
+  var spk=hitSparks[hs]; ctx.save(); ctx.globalAlpha=spk.life;
+  ctx.strokeStyle='#dce8f4'; ctx.lineWidth=1.5;
+  for(var ray=0;ray<6;ray++){var ra=ray*Math.PI/3+Date.now()*0.002;ctx.beginPath();ctx.moveTo(spk.x,spk.y);ctx.lineTo(spk.x+Math.cos(ra)*12,spk.y+Math.sin(ra)*12);ctx.stroke();}
+  ctx.restore();
+}
+if(rallyBurst){ctx.fillStyle='rgba(255,220,130,0.16)';ctx.fillRect(0,0,W,H);rallyBurst=Math.max(0,rallyBurst-0.035);}
 // Point flash — fades over 500ms
 if(pointFlashCol){var pfa=1-(Date.now()-pointFlashAt)/500;if(pfa>0){ctx.fillStyle=pointFlashCol+(pfa*0.12)+')';ctx.fillRect(0,0,W,H);}else{pointFlashCol=null;}}
 // End flourish — victory washes the table in gold; defeat lets the dark in
@@ -40654,6 +40712,8 @@ else{ctx.fillStyle='rgba(0,0,0,'+(0.55*et)+')';ctx.fillRect(0,0,W,H);}}
 // Drunk radial vignette
 if(sobriety<30){var dg=ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.7);dg.addColorStop(0,'rgba(0,0,0,0)');dg.addColorStop(1,'rgba(0,0,0,0.5)');ctx.fillStyle=dg;ctx.fillRect(0,0,W,H);}
 if(serving){ctx.fillStyle='rgba(255,248,200,0.55)';ctx.font='13px Courier New';ctx.textAlign='center';ctx.fillText('\u00b7  \u00b7  \u00b7',W/2,H/2+40);}
+ctx.textAlign='left';ctx.font='10px Courier New';ctx.fillStyle='rgba(220,232,244,0.72)';
+ctx.fillText(playerStreak ? ('SWEET SPOT  ' + playerStreak + '/3') : 'CENTRE HITS BUILD A SPECIAL', 18, H-14);
 }
 function drawCountdown(){
 var elapsed = Date.now() - countdownStart;

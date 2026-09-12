@@ -13,6 +13,10 @@ TARGET_LUFS = {
     "the-french-pub-ambience.mp3": -30.2, "the-pillars-pub-ambience.m4a": -29.4, "the-coach-night-ambience.m4a": -40.0,
     "the-quiet-cafe-ambience.m4a": -37.8, "the-gents-coach-toilet.mp3": -33.3, "the-cellar-pump-ambience.m4a": -37.7,
     "the-carthage-cicadas-ambience.m4a": -30.9, "the-green-sea-cafe-ambience.m4a": -35.4, "the-soho-dawn-ambience.m4a": -23.7,
+    # 2026-09-12 additions (no originals; levels chosen next to the beds above)
+    "the-himalaya-ambience.m4a": -33.0, "the-nazca-ambience.m4a": -34.0, "the-easter-island-ambience.m4a": -33.0,
+    "the-pyramid-ambience.m4a": -37.0, "the-ezekiel-ambience.m4a": -34.0,
+    "the-colony-ambience.m4a": -33.0, "the-trishas-ambience.m4a": -36.5,
 }
 
 # ---------------------------------------------------------------- helpers
@@ -396,8 +400,142 @@ def soho_dawn():
     b.add(np.concatenate([tone([2900, 4100], 0.06, 0.02, [1, 0.5], b.r) * b.r.uniform(0.3, 1) for _ in range(9)]), 0.08, 0.7, 40.0)
     write(b.finish(0.5), "the-soho-dawn-ambience.m4a")
 
+# ---------------------------------------------------------------- 2026-09-12: dream worlds, Colony, Trisha's
+def flag_flutter(r):
+    dur = r.uniform(1.5, 4.0); m = int(dur * SR); t = np.arange(m) / SR
+    y = shaped(m, bp(300, 2400, 1.5), r)
+    am = 0.5 + 0.5 * np.sin(2 * np.pi * r.uniform(11, 19) * t + 3 * np.sin(2 * np.pi * 0.7 * t))
+    env = np.sin(np.pi * t / dur) ** 0.8
+    return y * am * env
+
+def himalaya():
+    b = Bed(101); n = b.n; r = b.r
+    # high wind: thinner and gustier than the Farnell wind, with a whistling edge
+    l = shaped(n, mul(pinkish, bp(120, 1800, 1.2)), r) * lfo_env(n, r, periods=(3.0, 7.5, 17.0), depth=0.8)
+    rr = shaped(n, mul(pinkish, bp(120, 1800, 1.2)), r) * lfo_env(n, r, periods=(3.0, 7.5, 17.0), depth=0.8)
+    b.add_stereo(l, rr, 0.8)
+    t = np.arange(n) / SR
+    whistle = np.sin(2 * np.pi * (900 + 60 * np.sin(2 * np.pi * 0.13 * t)) * t) * lfo_env(n, r, periods=(2.0, 5.0), depth=1.0) ** 6
+    b.add(whistle, 0.05, 0.2)
+    b.scatter(lambda: flag_flutter(r), 12, 0.22, spread=0.9)
+    # snow settling, far: one long soft rumble
+    b.add(burst(6.0, mul(brownish, lp(120)), r, 1.5, 2.5), 0.5, -0.6, 47.0)
+    write(b.finish(0.5), "the-himalaya-ambience.m4a")
+
+def cricket(r, f, rate):
+    dur = r.uniform(2.0, 6.0); m = int(dur * SR); t = np.arange(m) / SR
+    carrier = np.sin(2 * np.pi * f * t) + 0.3 * np.sin(2 * np.pi * f * 2.01 * t)
+    pulse = (np.sin(2 * np.pi * rate * t) > 0.6).astype(float)
+    pulse = np.convolve(pulse, np.ones(60) / 60, mode="same")
+    return carrier * pulse * np.sin(np.pi * t / dur) ** 0.4
+
+def nazca():
+    b = Bed(113); n = b.n; r = b.r
+    wind(b, 0.5, hi=900, depth=0.7)
+    # heat: a faint high hiss that never quite stops
+    b.add_stereo(shaped(n, bp(5000, 9000, 3), r) * 0.08, shaped(n, bp(5000, 9000, 3), r) * 0.08, 1.0)
+    for _ in range(9):
+        b.scatter(lambda: cricket(r, r.uniform(3200, 4600), r.uniform(18, 40)), 1, 0.08, spread=0.95)
+    # the Cessna: a small engine crossing high, once
+    dur = 22.0; m = int(dur * SR); t = np.arange(m) / SR
+    f0 = 95 * (1.0 - 0.12 * (t / dur)) * (1 + 0.004 * np.sin(2 * np.pi * 7 * t))
+    drone = sum(np.sin(2 * np.pi * f0 * k * np.cumsum(np.ones(m)) / SR / 1.0 + r.uniform(0, 6)) / (k ** 1.1) for k in range(1, 9))
+    drone = sum(np.sin(2 * np.pi * np.cumsum(f0 * k) / SR + r.uniform(0, 6)) / (k ** 1.1) for k in range(1, 9))
+    env = np.exp(-((t - dur * 0.5) ** 2) / (2 * (dur * 0.2) ** 2))
+    b.add(drone * env, 0.12, 0.0, 30.0)
+    write(b.finish(0.5), "the-nazca-ambience.m4a")
+
+def easter():
+    b = Bed(127); r = b.r
+    sea_wash(b, 1.0, period=12.0)  # bigger, slower swells than the Green Sea
+    wind(b, 0.45, hi=700, depth=0.7)
+    # surf boom on the basalt every so often: a low thud with a long tail
+    b.scatter(lambda: reverb(tone([48, 96], 0.8, 0.3, [1, 0.3], r), 2.5, r, 0.5), 6, 0.35, spread=0.6)
+    # water running off the rocks
+    b.scatter(lambda: burst(3.0, bp(1200, 6000, 1.5), r, 0.4, 1.2), 5, 0.12, spread=0.9)
+    write(b.finish(0.5), "the-easter-island-ambience.m4a")
+
+def pyramid():
+    b = Bed(139); n = b.n; r = b.r; t = np.arange(n) / SR
+    # the chamber: near silence with a low pressure hum, and a long stone reverb on everything
+    hum = sum(np.sin(2 * np.pi * 54.0 * k * t + r.uniform(0, 6)) / (k ** 2.2) for k in range(1, 5))
+    b.add_stereo(hum * lfo_env(n, r, periods=(9.0, 23.0), depth=0.35), hum * lfo_env(n, r, periods=(9.0, 23.0), depth=0.35), 0.35)
+    b.add_stereo(shaped(n, mul(brownish, lp(200)), r) * 0.25, shaped(n, mul(brownish, lp(200)), r) * 0.25, 1.0)
+    # stone settling: tiny clicks in a huge space
+    b.scatter(lambda: reverb(burst(0.02, bp(800, 4000), r, 0.001, 0.006), 3.5, r, 0.85), 9, 0.3, spread=0.9)
+    # a held note, somebody humming under yours, every so often (the Bard)
+    for at in (12.0, 38.0, 58.0):
+        d = r.uniform(4.0, 6.5); m = int(d * SR); tt = np.arange(m) / SR
+        f = 110.0 * (1 + 0.003 * np.sin(2 * np.pi * 5.2 * tt))
+        v = np.sin(2 * np.pi * np.cumsum(f) / SR) + 0.35 * np.sin(2 * np.pi * np.cumsum(f * 2) / SR) + 0.15 * np.sin(2 * np.pi * np.cumsum(f * 3) / SR)
+        v *= np.sin(np.pi * tt / d) ** 1.4
+        b.add(reverb(v, 3.0, r, 0.6), 0.14, r.uniform(-0.3, 0.3), at)
+    b.L = reverb(b.L, 4.0, r, 0.35); b.R_ = reverb(b.R_, 4.0, r, 0.35)
+    write(b.finish(0.5), "the-pyramid-ambience.m4a")
+
+def ezekiel():
+    b = Bed(151); n = b.n; r = b.r; t = np.arange(n) / SR
+    # the river: a broad wash with burbles
+    river_l = shaped(n, mul(pinkish, bp(200, 3000, 1.2)), r) * (0.7 + 0.3 * lfo_env(n, r, periods=(0.6, 1.3, 2.9), depth=1.0))
+    river_r = shaped(n, mul(pinkish, bp(200, 3000, 1.2)), r) * (0.7 + 0.3 * lfo_env(n, r, periods=(0.6, 1.3, 2.9), depth=1.0))
+    b.add_stereo(river_l, river_r, 0.45)
+    # wind from no direction: it slowly circles the listener
+    w = shaped(n, mul(brownish, lp(700, 1.5)), r) * lfo_env(n, r, periods=(4.0, 9.0, 21.0), depth=0.7)
+    ang = 2 * np.pi * t / 37.0
+    b.add_stereo(w * (0.5 + 0.5 * np.cos(ang)), w * (0.5 + 0.5 * np.sin(ang)), 0.55)
+    # thunder walking in from the north, three times, each nearer
+    for i, at in enumerate((14.0, 36.0, 57.0)):
+        d = r.uniform(5.0, 8.0); m = int(d * SR); tt = np.arange(m) / SR
+        th = shaped(m, mul(brownish, lp(90 + 40 * i)), r) * (np.exp(-tt / (d * 0.35)) * (0.6 + 0.4 * lfo_env(m, r, periods=(0.4, 0.9), depth=1.0)))
+        b.add(reverb(th, 3.0, r, 0.5), 0.35 + 0.2 * i, -0.4 + 0.2 * i, at)
+    # a thin high shimmer: the amber light
+    b.add_stereo(shaped(n, bp(6000, 10000, 3), r) * lfo_env(n, r, periods=(11.0, 27.0), depth=0.9) * 0.05, shaped(n, bp(6000, 10000, 3), r) * lfo_env(n, r, periods=(11.0, 27.0), depth=0.9) * 0.05, 1.0)
+    write(b.finish(0.5), "the-ezekiel-ambience.m4a")
+
+def cackle(r):
+    dur = r.uniform(0.8, 1.6); m = int(dur * SR); t = np.arange(m) / SR
+    f0 = r.uniform(500, 900)
+    v = shaped(m, bp(f0, f0 * 3.5, 2.5), r)
+    am = (np.sin(2 * np.pi * r.uniform(6.5, 8.5) * t) > 0.0).astype(float) * 0.85 + 0.15
+    return v * am * np.exp(-t / (dur * 0.6)) * np.minimum(1, t / 0.03)
+
+def ice(r):
+    return np.concatenate([tone([r.uniform(2600, 3400), r.uniform(4200, 5200)], 0.08, 0.02, [1, 0.5], r, 0.02) * r.uniform(0.3, 1) for _ in range(r.integers(2, 4))])
+
+def colony():
+    b = Bed(163); r = b.r
+    murmur(b, 0.75, brightness=1500, depth=0.55, voices=45, syll_gain=0.5)
+    fan_hum(b, 0.1, f0=50.0)
+    b.scatter(lambda: clink(r), 14, 0.22)
+    b.scatter(lambda: ice(r), 12, 0.16)
+    b.scatter(lambda: cackle(r), 6, 0.24)
+    b.scatter(lambda: laugh(r), 4, 0.18)
+    b.scatter(lambda: burst(0.03, hp(1500), r, 0.001, 0.01), 5, 0.12)  # lighter click
+    b.scatter(lambda: chair_scrape(r), 2, 0.1)
+    # a small room: short bright reverb
+    b.L = reverb(b.L, 0.6, r, 0.18); b.R_ = reverb(b.R_, 0.6, r, 0.18)
+    write(b.finish(0.5), "the-colony-ambience.m4a")
+
+def trishas():
+    b = Bed(173); n = b.n; r = b.r
+    fan_hum(b, 0.2, f0=60.0)  # basement electrics
+    murmur(b, 0.4, brightness=900, depth=0.6, voices=16, syll_gain=0.4)
+    b.scatter(lambda: clink(r), 6, 0.14)
+    b.scatter(lambda: tone([420, 1100, 2300], 0.2, 0.05, [1, 0.5, 0.3], r), 5, 0.14)  # bottle on the table
+    b.scatter(lambda: chair_scrape(r), 2, 0.08)
+    # footsteps on the pavement overhead: soft thumps in twos and threes
+    def steps():
+        k = r.integers(3, 7); gap = r.uniform(0.42, 0.6)
+        parts = []
+        for _ in range(k):
+            parts.append(tone([64, 128], 0.16, 0.04, [1, 0.25], r) * r.uniform(0.5, 1.0)); parts.append(np.zeros(int(gap * SR)))
+        return np.concatenate(parts)
+    b.scatter(steps, 5, 0.22, spread=0.8)
+    b.L = reverb(b.L, 0.9, r, 0.22); b.R_ = reverb(b.R_, 0.9, r, 0.22)
+    write(b.finish(0.5), "the-trishas-ambience.m4a")
+
 if __name__ == "__main__":
     only = sys.argv[2:] if len(sys.argv) > 2 else None
-    for fn in (pub_french, pub_pillars, coach_night, quiet_cafe, gents, cellar, cicadas, green_sea, soho_dawn):
+    for fn in (pub_french, pub_pillars, coach_night, quiet_cafe, gents, cellar, cicadas, green_sea, soho_dawn, himalaya, nazca, easter, pyramid, ezekiel, colony, trishas):
         if only and fn.__name__ not in only: continue
         fn()

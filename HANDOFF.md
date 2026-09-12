@@ -1068,3 +1068,27 @@ Implemented in the Twee and synced (222 passages). `Soho Square Gents` contains 
 `Alley: Soho Square` now displays `Soho Hut Art` and links down to the gents. The hub Square link stays available for practice/stashes, and the existing bench +8 is guarded by `$squareBenchTaken` to prevent repeated collection. The scrolling map's existing hut now has a cream gable, dark bargeboards, diagonal beams and leaded windows. New inline SVG shows the hut and descending steps. Keep that SVG on ONE LINE: Harlowe inserts BRs into multiline SVG, breaking its rendering.
 
 Verified in isolated Chromium against localhost: full timed rounds scoring 0/20/35 produced correct loss/win/distinction and +8/+12 messages, no tw-errors; real navigation back to Square and down again showed practice. Desktop and 390px mobile layouts inspected; hut rendering inspected after fixing SVG line breaks. Harlowe BRs inside the game grids are explicitly hidden. Reward links are off-screen (NOT display:none) until activated, then unused links hidden, to preserve Harlowe programmatic clicks. Timing was accelerated in browser verification; human difficulty tuning remains Sam's playthrough. Test scripts/screenshots in /tmp only. No git commands run.
+
+### Addendum 35 — the knock on Salvu's door (2026-09-12)
+Sam, from playthrough notes: "When you knock on the door to get to Slavu's lair it doesn't sound like a knock at all, can we improve that?"
+
+**Why it did not read as a knock.** `doorKnock` in `window.dssAudio` built each rap from a 40ms noise burst put through a **bandpass at 380Hz with Q 4.5**, which threw away everything that makes a knock legible, plus a single 110→70Hz sine. So there was no crack at the top and only one resonance underneath: a tick with a hum, not knuckles on a door.
+
+**Rebuilt** around what actually carries a knock: a broadband knuckle crack, lowpassed at 2.7kHz and highpassed at 200Hz so it is wood rather than a stick on tile; the panel answering on **three modes at once** (94 / 151 / 237 Hz) with the lowest hanging longest; a short 62→44Hz thud through the frame; and a quiet bandpassed noise tail so the rap lands on something with a cellar behind it. Each rap also gets its own `vary` (pitch and weight) and `hit` (how hard it landed), so three raps are no longer one rap three times.
+
+**Measured rather than asserted**, since I cannot listen. Both the old and the new DSP were rendered through an `OfflineAudioContext` in the page and compared:
+
+| | attack | decay to 1% | peak |
+|---|---|---|---|
+| old | 7.3 ms | 100 ms | 0.169 |
+| new | 2.8 ms | 212 ms | 0.443 |
+
+Faster transient, twice the ring, and 2.6x the level. That is the difference between a tick and a rap. Peak 0.443 leaves plenty of headroom; raps are 190ms apart against a 212ms decay so only the tails overlap.
+
+**Verified in the passage:** `Maltese Gangsters`, the `copperKnockBtn`, three clicks, counter went ○ ○ ○ to ● ● ●, button disabled, the creak and reveal followed, no JS errors and no `tw-error`.
+
+**Gotcha worth remembering:** `_play()` short-circuits when muted, so calling a sound while the game is muted proves nothing about whether it works. My first "no throw" test was worthless for that reason. Unmute before testing audio.
+
+Nothing else in the audio system was touched; `doorKnock` is still the only definition and is still exported on `dssAudio`.
+
+synced, commit when ready

@@ -924,3 +924,8 @@ User asked to improve the Cow Ride and, if possible, continue with Luna. Luna wa
 - A compact in-canvas cue tells the player how to build the phrase without changing the existing wager, opponent, or first-to-five structure.
 - Source of truth edited in `Dream Street Shuffle.twee`; compiled output synced with `python3 sync_html.py`.
 - Verification: pong passage script extracted and passed `deno check`; sync completed. Full automated replay remains blocked by the account usage limit.
+### Addendum 20 — remaining minigames polish (2026-09-12)
+- Waltz: dead-on three-step runs now build a visible CLEAN STEPS chain, with a warm acknowledgement that resets when a note is missed. Existing timing, scoring buckets and outcomes remain unchanged.
+- Cellar fight: consecutive clean dodges/counters now appear as a CLEAN CHAIN call on the fight board, making skilled play legible without changing damage or verdict rules.
+- Source synced with `python3 sync_html.py`; full UserScript passed `deno check`.
+- Full automated replay remains limited by the account usage cap; no git commands run.

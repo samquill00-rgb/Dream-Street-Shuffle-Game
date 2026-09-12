@@ -935,3 +935,8 @@ User asked to improve the Cow Ride and, if possible, continue with Luna. Luna wa
 - Distinct visual language: volcanic dusk, distant moai silhouettes, red occupation lamps, turquoise spirits, brass reticle and a compact progress readout.
 - Added a separate link from Among the Moai so the player can choose to stand with the revolution, while the existing direct approach to the sixth moai remains.
 - Source synced with `python3 sync_html.py`; the new game script passes `deno check`; compiled passage confirmed by targeted grep. No git commands run.
+### Addendum 22 — opening walk-in (2026-09-12)
+- Luna was unavailable due to the account usage limit; the primary agent completed the pass.
+- Added `The Walk In` between `Name Your Book` and `Dean Street`. It is a short atmospheric threshold before the map: lit facades, a swinging lamp pool, a passing cab, wet road reflections, a faint Lily signal, and the existing morning-song direction.
+- The scene respects the opening prose: the rain has stopped. There is no falling rain, only puddles, sheen, mist-light and one gutter drip.
+- `Name Your Book` now enters the walk-in before opening the full hub map. Source synced with `python3 sync_html.py`; passage count is 212.

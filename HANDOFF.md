@@ -970,3 +970,12 @@ User asked to improve the Cow Ride and, if possible, continue with Luna. Luna wa
 - Map engine: `drawFacade` now records every ordinary warm-lit window tile in `WARM_WINS` with a seeded bedtime u in [0,1). Each frame `draw()` reads `window.__dssSkyTurnsLeft` (the sky already reads "N TURNS LEFT" from the stat bar) and paints dark every recorded window whose u < (1 - turnsLeft/16) * 0.92, view-clipped. So the first lap has every window lit and the last laps leave only a handful, while the venue fronts (FRONTS) and the tiles lit by an open door keep their own light. Nothing is rebuilt; it is an overlay on the static base.
 - Verified by capture: same view at 15 turns left vs 2 turns left (`.night-cell` text edited in the DOM to fake the late night).
 - Remaining audit items: a pull toward the hidden edge spots; a stronger lamp pool on the player.
+
+### Addendum 17 (2026-09-12): the pull toward the hidden edges
+
+- Each lure shows only while its hidden spot is still `open` (unvisited this night):
+  - Soho Square: `S.sqcat`, a second cat sitting on the south railing of the garden (35,10). When the player is within 13 tiles it gets up and walks north into the garden and sits by the hut; if the player wanders more than 16 tiles off it goes back to the railing.
+  - Charing Cross Road / Foyles: `S.porter`, a warm lamp that drifts up and down behind the book spines once the player is within 9 tiles of the door (someone inside after hours). If the notebook is stolen (new hub flag `data-k="notebook"`), the fence stands on the Foyles step instead, with his holdall open.
+  - Oxford Street end: a lone figure under the corner at (50,0), facing away, a cigarette flare every four seconds.
+- Verified by capture: the cat in the garden with the player at the ring road, then back on the railing from the far corner; the corner figure at the top-right. The porter's lamp is a 2 px dot and needs a closer look in Chrome.
+- Remaining audit item: a stronger lamp pool on the player.

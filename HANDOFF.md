@@ -1059,3 +1059,12 @@ Sam: "can we add multiple doorways that you can piss or retch in, maybe 4 over t
 **Yours.** The four doorways carry no prose at all, deliberately, because the Dean Street one does not either. If you want each to feel like its own street, a line in each is the place for it.
 
 synced, commit when ready
+
+### Soho Square — Whack-a-Worm and mock-Tudor hut (2026-09-12, Codex)
+Sam authorised a non-explicit whack-a-mole game with giant earthworms entering the underground gents through holes in the tiles. His exact outcomes: **GLORY!** and **LA PETITE MORT!**. Also requested the central hut's mock-Tudor façade.
+
+Implemented in the Twee and synced (222 passages). `Soho Square Gents` contains a self-contained six-hole game: click/tap or keys 1–6, 30 active seconds, increasingly frequent worms, scrubbing-brush hit flash, quiet procedural hit/miss sounds. Pauses when tab hidden; removes frame/input/audio resources on exit. 18 hits wins +8 morale; 28 hits wins +12. `$wormPlayed` settles the first completed round (including a loss); revisits are practice. No turn refund/penalty for this small optional game. Existing creative prose unchanged; new introductory prose is pink draft.
+
+`Alley: Soho Square` now displays `Soho Hut Art` and links down to the gents. The hub Square link stays available for practice/stashes, and the existing bench +8 is guarded by `$squareBenchTaken` to prevent repeated collection. The scrolling map's existing hut now has a cream gable, dark bargeboards, diagonal beams and leaded windows. New inline SVG shows the hut and descending steps. Keep that SVG on ONE LINE: Harlowe inserts BRs into multiline SVG, breaking its rendering.
+
+Verified in isolated Chromium against localhost: full timed rounds scoring 0/20/35 produced correct loss/win/distinction and +8/+12 messages, no tw-errors; real navigation back to Square and down again showed practice. Desktop and 390px mobile layouts inspected; hut rendering inspected after fixing SVG line breaks. Harlowe BRs inside the game grids are explicitly hidden. Reward links are off-screen (NOT display:none) until activated, then unused links hidden, to preserve Harlowe programmatic clicks. Timing was accelerated in browser verification; human difficulty tuning remains Sam's playthrough. Test scripts/screenshots in /tmp only. No git commands run.

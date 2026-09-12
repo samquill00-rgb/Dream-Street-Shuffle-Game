@@ -11940,33 +11940,82 @@ window.dssAudio = (function() {
       cSrc.start(now + 0.28);
     });
   }
-  // Door knock — a few sharp wood knocks. Times defaults to 3.
+  // Door knock — knuckles on a heavy cellar door. Times defaults to 3.
+  // REBUILT 2026-09-12 (Sam: "it doesn't sound like a knock at all"). The old
+  // one was a 5ms noise burst bandpassed hard at 380Hz plus a single sine, so
+  // everything above 400Hz was thrown away and it read as a tick, not a rap.
+  // What actually makes a knock legible:
+  //   1. a broadband knuckle crack with real HF in it, rolled off at the top so
+  //      it is wood and not a stick on tile;
+  //   2. the panel answering on SEVERAL modes at once, not one sine, the lowest
+  //      hanging longest;
+  //   3. a short thud through the frame, felt more than heard;
+  //   4. a little of the stairwell behind it, because this door is below ground;
+  //   5. per-rap variation, so three raps are not one rap three times.
   function doorKnock(times) {
     times = times || 3;
     _play(function(ac) {
       var now = ac.currentTime;
       for (var k = 0; k < times; k++) {
-        var t = now + k * 0.18;
-        // Sharp wood-impact transient
-        var bufLen = Math.floor(ac.sampleRate * 0.04);
-        var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
-        var d = buf.getChannelData(0);
-        for (var i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.005));
-        var src = ac.createBufferSource(); src.buffer = buf;
-        var f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 4.5;
-        var g = ac.createGain(); g.gain.value = 0.42;
-        src.connect(f); f.connect(g); g.connect(ac.destination);
-        src.start(t);
-        // Low resonance — the door's body
-        var o = ac.createOscillator(); o.type = 'sine';
-        o.frequency.setValueAtTime(110, t);
-        o.frequency.exponentialRampToValueAtTime(70, t + 0.10);
-        var og = ac.createGain();
-        og.gain.setValueAtTime(0, t);
-        og.gain.linearRampToValueAtTime(0.18, t + 0.005);
-        og.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-        o.connect(og); og.connect(ac.destination);
-        o.start(t); o.stop(t + 0.14);
+        var t = now + k * 0.19;
+        var vary = 0.92 + Math.random() * 0.16;   // pitch/weight of this rap
+        var hit  = 0.88 + Math.random() * 0.24;   // how hard it landed
+
+        // 1. The knuckle itself: a very short crack, band-limited to wood.
+        var nLen = Math.floor(ac.sampleRate * 0.06);
+        var nb = ac.createBuffer(1, nLen, ac.sampleRate);
+        var nd = nb.getChannelData(0);
+        for (var i = 0; i < nLen; i++) {
+          nd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.0038));
+        }
+        var nsrc = ac.createBufferSource(); nsrc.buffer = nb;
+        var lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+        lp.frequency.value = 2700 * vary; lp.Q.value = 0.6;
+        var hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 200;
+        var ng = ac.createGain(); ng.gain.value = 0.34 * hit;
+        nsrc.connect(lp); lp.connect(hp); hp.connect(ng); ng.connect(ac.destination);
+        nsrc.start(t);
+
+        // 2. The panel: three modes, the low one hanging longest.
+        var modes = [[94, 0.24, 0.30], [151, 0.15, 0.18], [237, 0.085, 0.12]];
+        for (var m = 0; m < modes.length; m++) {
+          var f0 = modes[m][0] * vary, amp = modes[m][1] * hit, dur = modes[m][2];
+          var o = ac.createOscillator(); o.type = 'sine';
+          o.frequency.setValueAtTime(f0 * 1.07, t);
+          o.frequency.exponentialRampToValueAtTime(f0, t + 0.045);
+          var og = ac.createGain();
+          og.gain.setValueAtTime(0.0001, t);
+          og.gain.linearRampToValueAtTime(amp, t + 0.004);
+          og.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+          o.connect(og); og.connect(ac.destination);
+          o.start(t); o.stop(t + dur + 0.03);
+        }
+
+        // 3. The frame taking it: a short low thud under everything.
+        var th = ac.createOscillator(); th.type = 'sine';
+        th.frequency.setValueAtTime(62 * vary, t);
+        th.frequency.exponentialRampToValueAtTime(44 * vary, t + 0.09);
+        var thg = ac.createGain();
+        thg.gain.setValueAtTime(0.0001, t);
+        thg.gain.linearRampToValueAtTime(0.20 * hit, t + 0.006);
+        thg.gain.exponentialRampToValueAtTime(0.0008, t + 0.13);
+        th.connect(thg); thg.connect(ac.destination);
+        th.start(t); th.stop(t + 0.15);
+
+        // 4. The stairwell behind the door: a quiet filtered tail so the rap
+        //    sounds like it is landing on something with a cellar behind it.
+        var rLen = Math.floor(ac.sampleRate * 0.28);
+        var rb = ac.createBuffer(1, rLen, ac.sampleRate);
+        var rd = rb.getChannelData(0);
+        for (var j = 0; j < rLen; j++) {
+          rd[j] = (Math.random() * 2 - 1) * Math.exp(-j / (ac.sampleRate * 0.075));
+        }
+        var rsrc = ac.createBufferSource(); rsrc.buffer = rb;
+        var rf = ac.createBiquadFilter(); rf.type = 'bandpass';
+        rf.frequency.value = 430 * vary; rf.Q.value = 1.1;
+        var rg = ac.createGain(); rg.gain.value = 0.055 * hit;
+        rsrc.connect(rf); rf.connect(rg); rg.connect(ac.destination);
+        rsrc.start(t + 0.012);
       }
     });
   }
@@ -327906,6 +327955,672 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="startup" position="0,0" size="100,100">&lt;!-- ═══════════════════════════════════════════════════════════════════
      DREAM STREET SHUFFLE — v1 FIRST DRAFT MILESTONE
      Snapshot: 2026-05-14
@@ -339376,22 +340091,7 @@ It does not look back. Not yet.
 (display: &quot;Stash Point&quot;)
 [[Back to Dean Street|Dean Street]]</tw-passagedata>
 <tw-passagedata pid="221" name="Soho Hut Art" position="0,0" size="100,100">&lt;div class=&quot;soho-hut-art&quot; style=&quot;max-width:460px;margin:1.5em auto&quot;&gt;
-&lt;svg viewBox=&quot;0 0 460 255&quot; role=&quot;img&quot; aria-label=&quot;The little mock-Tudor hut in Soho Square: steep tiled roof, cream plaster, black timber beams and leaded windows, with steps descending to the gents&quot;&gt;
-&lt;ellipse cx=&quot;230&quot; cy=&quot;231&quot; rx=&quot;198&quot; ry=&quot;15&quot; fill=&quot;#141b16&quot;/&gt;
-&lt;path d=&quot;M35 225V65m0 50L9 81m26 12L68 46M413 223V40m0 57l30-42m-30 80l-27-36&quot; stroke=&quot;#33382c&quot; stroke-width=&quot;9&quot; fill=&quot;none&quot;/&gt;
-&lt;path d=&quot;M95 128L134 47H298L350 128Z&quot; fill=&quot;#594239&quot; stroke=&quot;#231f1c&quot; stroke-width=&quot;5&quot;/&gt;
-&lt;path d=&quot;M133 66h177M124 83h197M115 101h218&quot; stroke=&quot;#876454&quot; stroke-width=&quot;2&quot; opacity=&quot;.5&quot;/&gt;
-&lt;path d=&quot;M108 127H337V220H108Z&quot; fill=&quot;#c8c4ae&quot; stroke=&quot;#211f1b&quot; stroke-width=&quot;7&quot;/&gt;
-&lt;path d=&quot;M168 130L226 55L283 130Z&quot; fill=&quot;#ddd6be&quot; stroke=&quot;#211f1b&quot; stroke-width=&quot;8&quot;/&gt;
-&lt;path d=&quot;M226 61v157M110 166h224M144 128v91M306 128v91M111 174l32 44m162 0l28-44M186 127l40-53 39 53&quot; stroke=&quot;#28251f&quot; stroke-width=&quot;6&quot; fill=&quot;none&quot;/&gt;
-&lt;path d=&quot;M165 140h39v47h-39zm85 0h39v47h-39z&quot; fill=&quot;#637976&quot; stroke=&quot;#2a2922&quot; stroke-width=&quot;5&quot;/&gt;
-&lt;path d=&quot;M165 142l39 43m-39-22l21-23m-21 46l39-43m46-1l39 43m-39-22l21-23m-21 46l39-43&quot; stroke=&quot;#b2b19a&quot; stroke-width=&quot;1.3&quot;/&gt;
-&lt;path d=&quot;M208 175h36v46h-36z&quot; fill=&quot;#292a23&quot;/&gt;&lt;circle cx=&quot;237&quot; cy=&quot;199&quot; r=&quot;2&quot; fill=&quot;#c5ac67&quot;/&gt;
-&lt;path d=&quot;M93 222h252&quot; stroke=&quot;#6c6b58&quot; stroke-width=&quot;7&quot;/&gt;
-&lt;path d=&quot;M351 191h56v46h-56z&quot; fill=&quot;#090d0d&quot;/&gt;&lt;path d=&quot;M352 197h51m-51 8h43m-43 8h34m-34 8h25m-25 8h16&quot; stroke=&quot;#62665a&quot; stroke-width=&quot;3&quot;/&gt;
-&lt;path d=&quot;M348 220v-47h63v47m-42-47v24m21-24v39&quot; stroke=&quot;#858878&quot; stroke-width=&quot;3&quot; fill=&quot;none&quot;/&gt;
-&lt;rect x=&quot;349&quot; y=&quot;151&quot; width=&quot;62&quot; height=&quot;19&quot; rx=&quot;2&quot; fill=&quot;#c4c3ab&quot;/&gt;&lt;text x=&quot;380&quot; y=&quot;164&quot; text-anchor=&quot;middle&quot; fill=&quot;#272c27&quot; font-family=&quot;Georgia,serif&quot; font-size=&quot;10&quot; letter-spacing=&quot;2&quot;&gt;GENTS&lt;/text&gt;
-&lt;/svg&gt;
+&lt;svg viewBox=&quot;0 0 460 255&quot; role=&quot;img&quot; aria-label=&quot;The little mock-Tudor hut in Soho Square: steep tiled roof, cream plaster, black timber beams and leaded windows, with steps descending to the gents&quot;&gt;&lt;ellipse cx=&quot;230&quot; cy=&quot;231&quot; rx=&quot;198&quot; ry=&quot;15&quot; fill=&quot;#141b16&quot;/&gt;&lt;path d=&quot;M35 225V65m0 50L9 81m26 12L68 46M413 223V40m0 57l30-42m-30 80l-27-36&quot; stroke=&quot;#33382c&quot; stroke-width=&quot;9&quot; fill=&quot;none&quot;/&gt;&lt;path d=&quot;M95 128L134 47H298L350 128Z&quot; fill=&quot;#594239&quot; stroke=&quot;#231f1c&quot; stroke-width=&quot;5&quot;/&gt;&lt;path d=&quot;M133 66h177M124 83h197M115 101h218&quot; stroke=&quot;#876454&quot; stroke-width=&quot;2&quot; opacity=&quot;.5&quot;/&gt;&lt;path d=&quot;M108 127H337V220H108Z&quot; fill=&quot;#c8c4ae&quot; stroke=&quot;#211f1b&quot; stroke-width=&quot;7&quot;/&gt;&lt;path d=&quot;M168 130L226 55L283 130Z&quot; fill=&quot;#ddd6be&quot; stroke=&quot;#211f1b&quot; stroke-width=&quot;8&quot;/&gt;&lt;path d=&quot;M226 61v157M110 166h224M144 128v91M306 128v91M111 174l32 44m162 0l28-44M186 127l40-53 39 53&quot; stroke=&quot;#28251f&quot; stroke-width=&quot;6&quot; fill=&quot;none&quot;/&gt;&lt;path d=&quot;M165 140h39v47h-39zm85 0h39v47h-39z&quot; fill=&quot;#637976&quot; stroke=&quot;#2a2922&quot; stroke-width=&quot;5&quot;/&gt;&lt;path d=&quot;M165 142l39 43m-39-22l21-23m-21 46l39-43m46-1l39 43m-39-22l21-23m-21 46l39-43&quot; stroke=&quot;#b2b19a&quot; stroke-width=&quot;1.3&quot;/&gt;&lt;path d=&quot;M208 175h36v46h-36z&quot; fill=&quot;#292a23&quot;/&gt;&lt;circle cx=&quot;237&quot; cy=&quot;199&quot; r=&quot;2&quot; fill=&quot;#c5ac67&quot;/&gt;&lt;path d=&quot;M93 222h252&quot; stroke=&quot;#6c6b58&quot; stroke-width=&quot;7&quot;/&gt;&lt;path d=&quot;M351 191h56v46h-56z&quot; fill=&quot;#090d0d&quot;/&gt;&lt;path d=&quot;M352 197h51m-51 8h43m-43 8h34m-34 8h25m-25 8h16&quot; stroke=&quot;#62665a&quot; stroke-width=&quot;3&quot;/&gt;&lt;path d=&quot;M348 220v-47h63v47m-42-47v24m21-24v39&quot; stroke=&quot;#858878&quot; stroke-width=&quot;3&quot; fill=&quot;none&quot;/&gt;&lt;rect x=&quot;349&quot; y=&quot;151&quot; width=&quot;62&quot; height=&quot;19&quot; rx=&quot;2&quot; fill=&quot;#c4c3ab&quot;/&gt;&lt;text x=&quot;380&quot; y=&quot;164&quot; text-anchor=&quot;middle&quot; fill=&quot;#272c27&quot; font-family=&quot;Georgia,serif&quot; font-size=&quot;10&quot; letter-spacing=&quot;2&quot;&gt;GENTS&lt;/text&gt;&lt;/svg&gt;
 &lt;/div&gt;</tw-passagedata>
 <tw-passagedata pid="222" name="Soho Square Gents" position="0,0" size="100,100">&lt;div class=&quot;claude-draft&quot;&gt;Under the little mock-Tudor hut, the roots of Soho Square have found their way through the tiles. So have the earthworms. There is a scrubbing brush by the sink.&lt;/div&gt;
 &lt;div id=&quot;dss-worm-game&quot;&gt;
@@ -339420,6 +340120,7 @@ It does not look back. Not yet.
 [[Back up to the Square|Alley: Soho Square]]
 &lt;style&gt;
 #dss-worm-game{max-width:640px;margin:24px auto;text-align:center;color:#d6cfb3;font-family:Georgia,serif}
+#dss-worm-game &gt; br,#dss-worm-game .worm-wall &gt; br,#dss-worm-game .worm-meters &gt; br{display:none}
 #dss-worm-game h2{font-size:clamp(24px,5vw,38px);letter-spacing:.1em;margin:8px 0;color:#dfc791}
 #dss-worm-game .worm-heading{letter-spacing:.3em;font-size:11px;color:#899b90}
 #dss-worm-game .worm-instructions{font-size:15px;line-height:1.65;margin:12px 0}
@@ -339455,6 +340156,7 @@ It does not look back. Not yet.
   var root = document.querySelector(&#x27;tw-passage:last-of-type #dss-worm-game&#x27;);
   if (!root || root.dataset.mounted) return;
   root.dataset.mounted = &#x27;yes&#x27;;
+  root.querySelectorAll(&#x27;.worm-payment tw-link&#x27;).forEach(function (link) { link.setAttribute(&#x27;tabindex&#x27;, &#x27;-1&#x27;); });
   var holes = Array.from(root.querySelectorAll(&#x27;.worm-hole&#x27;));
   var score = 0, elapsed = 0, nextSpawn = 0, running = false, ended = false;
   var last = 0, frame = 0, audio;

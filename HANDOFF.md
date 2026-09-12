@@ -1008,6 +1008,35 @@ Sam, after playing: "I don't like how they are introduced/displayed. At my last 
 
 **Note for future sessions.** The Browser pane screenshots this overlay as though the page behind it were undimmed. It is not: the overlay hit-tests on top at full viewport with `rgba(0,0,0,0.82)`, the same rule the coin and match pickups use. Do not "fix" the backdrop on the strength of a screenshot.
 
-**Yours to change.** The popup's header reads "⟡ WITHIN REACH ⟡", which is my placeholder label, and the blurbs are still the original pink prose, now shown in the popup instead of the passage.
+**Header approved.** The popup's header reads "⟡ WITHIN REACH ⟡" and Sam has signed it off ("I like within reach, it does the job"), so leave it alone. The blurbs are still the original pink prose, now shown in the popup instead of the passage.
+
+synced, commit when ready
+
+### Addendum 33 — stashes: bins by the venue doors, hiding places in the alleys (2026-09-12)
+Sam: "When you gather an item, if you give up another item, that item should be retrievable without going through the whole venue again. There should be like a hiding place, maybe a bin by the door of each venue and also a few other places around the map which you can stash object, or where they are stored if you abandon them to take another."
+
+His two rulings when asked: stash spots are **the five venue-door bins plus the alleys**, and **alley hiding places are safe while the venue bins are public and can be turned over**.
+
+**Where the bins are.** Each of the five key venues already had an `[outdoor]` approach passage, which is literally the pavement outside its door, so that is the bin: `Approach Chinese Fish and Chips`, `Approach The Coach`, `Approach Lacklands Office`, `Approach The French`, `Approach Trisha's`. `$binOf` in `Key Guards` maps venue to bin. Swapping *inside* a venue now leaves the old key outside it, so you collect it in passing instead of walking the room again.
+
+**Nine alleys, not ten.** Every alley is a hiding place except **Bourchier Street**, which is left out on purpose: it is the mugging fork, not a place you would leave anything. Each has its own spot, named in `$stashLabel` so the notebook can say where a thing actually is: behind the loose brick in Meard Street, on the ledge over the doorway in St Anne's Court, under the lifted flagstone in Bateman's Buildings, in the phone box at the Oxford Street end, and so on.
+
+**New system passages.** `Stash Point` is the single line that makes any passage a stash site; it is displayed at the five bins and the nine alleys (14 sites) and bundles three things: `Raided Bins` (the reveal), `Resting Keys` (pick a key back up, which raises the existing popup), and `Key Stash Here` (the voluntary "Leave the X here"). `Key Sites` rebuilds `$stashSites`, the list of passages currently holding something, which the hub reads.
+
+**Raiding.** `Key Drop Here` rolls one in three when the destination is a bin and stores the key as `"raid:<bin>"`. The player finds out only on coming back for it, in `Raided Bins`. Alleys never roll. The notebook strips the prefix, so a doomed key still reads as being in the bin until you go and look, which is the point.
+
+**Hub.** A visited alley normally drops off the hub list. It now stays listed while it is holding something of yours, and disappears again once you collect it. Verified in real play: stashed the slip in Meard Street, went back to Dean Street, Meard Street was still listed, went back in, took it, and it dropped off again.
+
+**Two Harlowe traps hit, both worth remembering.**
+1. `(if: $x is not "a" and $x is not "b" and not ($list contains $x))` throws "This use of `is not` and `and` is grammatically ambiguous". The second test has to be nested in its own `(unless:)` rather than chained.
+2. **`not` binds across a following `or`.** `(if: not ($alleys contains "walkers") or ($stashSites contains "..."))` parses as `not (A or B)` and was silently always false. Put `not (...)` **last**: `(if: (B) or not (A))`. The codebase's own pre-existing Charing Cross line already used that order, which is what gave it away.
+
+**Also fixed in passing:** the notebook's stash test let `"stolen"` and `"traded"` through, so a mugged key would have displayed as "left at stolen". Those are now excluded.
+
+**Verified live, all by real navigation rather than debug jumps** (the debug jump kept restoring a pre-change autosave and is not to be trusted for this): swapping inside Trisha's put the slip "in the bin outside Trisha's" in the notebook; the voluntary stash link appears at both bins and alleys and empties the pocket; the hub re-listed and then un-listed Meard Street; returning to Meard Street raised the popup reading "The betting slip is where you left it." with the slip art and "Pocket the betting slip"; taking it restored the pocket. Zero `tw-error` throughout. 216 passages, `[[` links unchanged at 306, 14 stash points wired.
+
+**Not yet seen fire:** the raid note itself, since it is a one-in-three roll and none of the test deposits rolled it. The code path runs at every stash site without error and is a plain `(if:)` plus a pink line, but it has not been observed in play.
+
+**Yours.** The fourteen hiding-place names in `$stashLabel` and the two pink lines (the stash confirmation and the raided-bin note) are drafted and pink.
 
 synced, commit when ready

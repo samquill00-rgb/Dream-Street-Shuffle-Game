@@ -985,3 +985,29 @@ Both from Sam's play session: "the Pillars isn't open enough. You go once then i
 **Worth a look.** Inis's tip-off speech still says "Most nights you'll only see the two", which fits the new rule better than the old one, but he never tells you that you need to be carrying something. The shut branch is currently the only place that is explained. If you want Inis to say it, that line is yours.
 
 synced, commit when ready
+
+### Addendum 32 — the pocket-keys are now a popup decision, not a line under the links (2026-09-12)
+Sam, after playing: "I don't like how they are introduced/displayed. At my last play they were often hidden below the link, and therefore a player is highly likely to miss them. I think when you encounter a pocket key it should be a popup with a clear decision about where they take it in exchange for anything you possess or to leave it."
+
+**What was wrong.** Each of the five key venues rendered the offer as a pink line plus a `(link:)` sitting after the venue's own links, at the bottom of the passage. Easy to scroll past, and the swap case was a single link buried in the same place.
+
+**Shape of the fix.** The offer is still authored in Harlowe exactly as before, but the whole thing is now wrapped in `<div class="dss-key-offer" data-key="..." data-kind="seed|rest">` and parked off-screen by CSS. It is moved out of the viewport rather than `display:none` because Harlowe drops `.click()` on a link with no layout box (the portal-roll bug of 2026-09-01); `pointer-events:none` keeps the player from ever reaching it by hand. A new `window.dssKeyPopup` then raises it as a tactile decision in the existing coin/match pickup style.
+
+- Wrapped all ten offer sites: five seeds (chippy ticket, Coach betting slip, Lackland glass eye, French brass lighter, Trisha's cocaine) and the five resting offers in `Resting Keys`.
+- The trigger lives once in `Resting Keys`, which is already displayed at the end of all five key venues, so no per-venue script was needed.
+- Buttons are built one per parked `tw-link`, wearing that link's own wording, so the swap case reads "Leave the betting slip here and take the glass eye" with no new copy invented. Plus "Leave it" / "Leave them" to decline.
+- Clicking a button clicks the parked Harlowe hook. That hook replaces itself in place off-screen, so its confirmation prose ("It goes in your pocket...", "You set the one down where the other was...") is read back out of the parked container and shown in the popup, with an `inventory-note` naming the key and the twelve `item-mote` sparks the match pickup uses. Nothing is lost behind the curtain.
+- If a venue holds more than one offer (a seed plus a key you left there earlier) each gets its own panel with its own art, under one shared decline button.
+- The art is **extracted from the notebook entry at build time** by the edit script rather than retyped, so the popup and the EFFECTS page can never drift apart.
+
+**Registered with the popup serializer**, per the standing rule for any new overlay: `#dss-key-overlay` is now in `window.dssOverlayBusy`, in the rising-number `up()` check that gates the stat-delta animation, and in the match overlay's own `othersBusy()` list, so soft nudges queue behind it and it never lands on top of another overlay.
+
+**Two things found while testing.** `window._passageGen` is incremented *after* a passage's own scripts run, so the usual `var gen = window._passageGen` guard inside a passage script never matches at fire time and silently killed the first version of the trigger. The trigger now fires unguarded and `dssKeyPopup` does its own dedup. Second, dismissing the popup sets `window._dssKeyPopupSeenGen` so an in-passage re-render does not bring it straight back; it returns on the next visit.
+
+**Verified live** at port 8732: auto-opens on entering the Coach with the slip art, the pink blurb and "Pocket the betting slip"; taking it swaps the popup to the confirmation with "THE BETTING SLIP · POCKETED"; auto-opens again at the chippy; multi-offer and swap-wording cases checked by injecting synthetic parked offers, which produced two panels, two pieces of art, both swap labels verbatim and one shared "Leave them"; dismiss-then-recall correctly does not reopen. Zero `tw-error` throughout. `[[` links unchanged at 306, all ten offers wrapped.
+
+**Note for future sessions.** The Browser pane screenshots this overlay as though the page behind it were undimmed. It is not: the overlay hit-tests on top at full viewport with `rgba(0,0,0,0.82)`, the same rule the coin and match pickups use. Do not "fix" the backdrop on the strength of a screenshot.
+
+**Yours to change.** The popup's header reads "⟡ WITHIN REACH ⟡", which is my placeholder label, and the blurbs are still the original pink prose, now shown in the popup instead of the passage.
+
+synced, commit when ready

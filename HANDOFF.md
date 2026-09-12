@@ -1040,3 +1040,22 @@ His two rulings when asked: stash spots are **the five venue-door bins plus the 
 **Yours.** The fourteen hiding-place names in `$stashLabel` and the two pink lines (the stash confirmation and the raided-bin note) are drafted and pink.
 
 synced, commit when ready
+
+### Addendum 34 — four more doorways, always open (2026-09-12)
+Sam: "can we add multiple doorways that you can piss or retch in, maybe 4 over the map in addition to the one already and they should always be open. But keep the prompt to piss as it is."
+
+**The prompt is untouched.** All four fire the same `showSpewPopupSafe('doorway', 300)` as `A Doorway on Dean Street`. `SpewPopup` and its two modes were not edited.
+
+**Where.** Sam chose one per quarter: **Livonia Street** (north-west), **Diadem Court** (north-east, off Dean Street), **Ham Yard** (south-west), **Romilly Street** (south-east). Four new passages `Doorway: <street>`, modelled line for line on the Dean Street doorway: `$hadBreather`, morale +12, sobriety +8 with food or +18 without, the popup, then `(go-to: "Dean Street")`.
+
+**Always open, with no new gate, and nothing to farm.** This fell out of the economy that was already there rather than needing a rule invented for it. Returning from an alley sets `$alleyReturn`, which suppresses the lap increment on Dean Street, so **alleys are free**. The Dean Street doorway does a plain `(go-to:)` and therefore **costs a lap**. The four new ones do the same, so they can be always open with no `$hadBreather` gate: every visit spends one of the sixteen turns, which is the limiter. Verified in play, 14 turns left before and 13 after.
+
+**On the map.** Four new `DOORS` entries beside the alleys, in the existing doorway blue `[150,168,200]`, `label:''` with `spot:true, event:true` so you walk onto the tile and it fires, the same as an alley. Tiles were chosen against the map's own grid rules rather than by eye, and each was then checked by re-implementing `roadAt`/`alleyAt`/`tileAt` in the page and asserting the result: Livonia `c4,r10`, Diadem `c19,r10`, Ham Yard `c2,r40`, Romilly `c37,r34`. All four come out `P` (pavement) with an `R` road tile to enter from, so all are walkable and reachable. Hub links are unconditional, which is what keeps their map status `open`.
+
+**Verified live:** all four listed on the hub, Livonia and Romilly both walked, the spew popup fired on return (correctly queued behind a coin pickup that landed at the same moment, so the overlay serializer is doing its job), stats applied, a turn spent, map renders, console clean, zero `tw-error`. 220 passages; `[[` links 306 to 310, the four new hub links.
+
+**Worth knowing.** A stale `$alleyReturn` from earlier alley testing made the first turn-cost check read 14 to 14 and look like a bug. It is not: the flag is consumed by the next Dean Street render. If a turn ever fails to be spent, suspect that flag before suspecting the passage.
+
+**Yours.** The four doorways carry no prose at all, deliberately, because the Dean Street one does not either. If you want each to feel like its own street, a line in each is the place for it.
+
+synced, commit when ready

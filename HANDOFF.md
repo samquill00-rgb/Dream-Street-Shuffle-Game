@@ -904,3 +904,9 @@ User asked to improve the Cow Ride and, if possible, continue with Luna. Luna wa
 - In draw(), before the sprite: a warm amber pool on the pavement under his feet (ellipse, radius breathing 0.85-1.0 on a 38-frame sine), a shadow ellipse thrown AWAY from the nearest lamp within 6 tiles (up to 3 px offset, stretched a little with the offset), and the pale halo widened to 17 px at 0.32 alpha. Verified by capture beside the Ginger Light lamp: pool + shadow + halo.
 - All five map-audit items are now done (fronts, street life, windows dimming, edge lures, player light). Map dev hooks for future sessions: `__dssSohoTeleport(c, r)`, `__dssSohoLife(near)`.
 - (last four minutes) The Pillars of Hercules ARCH across Manette Street: two stone piers on the pavements at rows 7-10 by the Greek Street end (cols 43-46), a span over the road with a lamp hung in the middle and a warm halo. Drawn in drawFronts, lit in drawFrontGlow. Captured; check it in Chrome at full size.
+
+### Addendum 27 — 3D render lighting pass, standalone scenes (2026-09-12)
+- Finished the remaining standalone renders with small scene-specific exposure/ambient lifts (toneMappingExposure / AmbientLight intensity): French House 0.55→0.64 / 0.25→0.31; Dean Street prototype 0.85→0.90 / 0.35→0.40; Greek Street 0.80→0.86 / 0.30→0.35; Greek Street North (Pillars) 0.80→0.86 / 0.30→0.35; Greek Street South (Coach) 0.75→0.82 / 0.30→0.35.
+- Carthage coast was already at the target values (0.92 / 0.36) when checked, so it was left as found.
+- All six inspected in the pane after editing: focal facades and doors read more clearly, palettes and nocturnal/historical mood intact, no console errors.
+- Standalone render files only; no Twee sync, no `SAVED-*` backups touched, no git commands run.

@@ -1064,7 +1064,13 @@ Sam: "can we add multiple doorways that you can piss or retch in, maybe 4 over t
 >
 > Measured over 16 consecutive visits from a fresh 70/70 game: 6 misses (a 1-in-4 rate would predict ~4, well inside variance), hits running +2/+4 early and tapering to +1/+1, ending at 86/91. So it climbs slowly if you spam it and is never worth farming, without any rule forbidding it. Zero `tw-error`. The same note is stamped into all four `Doorway:` passages in the .twee.
 >
-> **Still different on purpose:** `A Doorway on Dean Street` is untouched — still gated by `$hadBreather` and still the bigger one-off (morale +12, sobriety +8/+18). If it should match the other four, that is a one-line change and has not been made.
+> **FOLLOW-UP, same day: the Dean Street doorway now matches too.** Sam: *"make the Dean Street one match the others"*, and then the reason — *"the idea is that it teaches you what the doorways are for."*
+>
+> That reframes it. `A Doorway on Dean Street` is the **teaching doorway**: it is the one the hub offers you by name, through the two `$hadBreather`-gated "Step into a doorway" nudges, when you are flagging. Its old morale +12 / sobriety +8-18 was therefore teaching the wrong lesson — no doorway you find afterwards is worth anything close to that, so the tutorial was overselling the very mechanic it exists to explain. It now uses the identical line to the other four: `(if: (random: 1, 4) > 1)[…, 4)…, 6)]`.
+>
+> **The teaching structure is deliberately unchanged.** Both nudges are still gated on `$hadBreather`, so the prompt appears until you have used a doorway and then retires — the lesson has landed and the four out on the map take over. For that to work, `(set: $hadBreather to true)` was **restored** to all four map doorways; it had been removed only to stop them eating a big one-off that no longer exists.
+>
+> End state: **five doorways, one formula.** Verified — all five carry the identical relief line, all five set `$hadBreather`, both nudges still gated, and the retuned Dean Street passage fires its prompt, applies a small gain and bounces to the hub with zero `tw-error`. The remaining `$statGain … 12` calls in the file are drinks and food, not doorways.
 
 **On the map.** Four new `DOORS` entries beside the alleys, in the existing doorway blue `[150,168,200]`, `label:''` with `spot:true, event:true` so you walk onto the tile and it fires, the same as an alley. Tiles were chosen against the map's own grid rules rather than by eye, and each was then checked by re-implementing `roadAt`/`alleyAt`/`tileAt` in the page and asserting the result: Livonia `c4,r10`, Diadem `c19,r10`, Ham Yard `c2,r40`, Romilly `c37,r34`. All four come out `P` (pavement) with an `R` road tile to enter from, so all are walkable and reachable. Hub links are unconditional, which is what keeps their map status `open`.
 

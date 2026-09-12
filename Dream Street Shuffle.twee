@@ -4088,7 +4088,7 @@ window.dssDeferIfBusy = function(retry) {
 var T = 16, COLS = 52, ROWS = 44, VC = 26, VR = 26, SKY = 3;
 var W = VC*T, H = (VR+SKY)*T;         // the canvas: the view plus the sky band
 var WW = COLS*T, WH = ROWS*T;         // the world in pixels
-var WIN_BLINK = [], CHIMNEYS = [];
+var WIN_BLINK = [], CHIMNEYS = [], WARM_WINS = []; // WARM_WINS (2026-09-12): lit windows that go dark as the night runs down
 
 // ---- the streets -------------------------------------------------------------
 // vertical roads (two lanes each): Wardour 5-6, Dean 17-18, Frith 29-30, Greek 41-42, Charing Cross 49-50
@@ -4291,6 +4291,7 @@ function drawFacade(x, c, r, litCol) {
   var w = litCol ? (seeded(c,r,5) > 0.45 ? lighten(litCol, 0.35) : lighten(litCol, 0.1)) : (seeded(c,r,6) > 0.74 ? PAL.winWarm : PAL.winDark);
   x.fillStyle = w; x.fillRect(3, 3, 3, 4); x.fillRect(10, 3, 3, 4);
   if (w === PAL.winWarm && WIN_BLINK.length < 24 && seeded(c,r,7) > 0.5) WIN_BLINK.push({x: c*T + (seeded(c,r,8) > 0.5 ? 3 : 10), y: r*T + 3, k: WIN_BLINK.length});
+  if (w === PAL.winWarm) WARM_WINS.push({ x: c*T, y: r*T, u: seeded(c, r, 9) }); // bedtime: this window goes dark once the night is u of the way through
   x.fillStyle = w === PAL.winDark ? PAL.winGlass : w; x.fillRect(3, 10, 3, 4); x.fillRect(10, 10, 3, 4);
   x.fillStyle = PAL.soot; x.fillRect(3, 5, 3, 1); x.fillRect(10, 5, 3, 1);
 }
@@ -4512,7 +4513,7 @@ function drawSky(x, doors, camX) {
 function buildBase(doors) {
   var cv = document.createElement('canvas'); cv.width = WW; cv.height = WH;
   var x = cv.getContext('2d');
-  WIN_BLINK.length = 0; CHIMNEYS.length = 0;
+  WIN_BLINK.length = 0; CHIMNEYS.length = 0; WARM_WINS.length = 0;
   for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
     x.save(); x.translate(c*T, r*T);
     var d = doorAt(c, r), t = tileAt(c, r);
@@ -4717,6 +4718,19 @@ function init(container) {
   var base = buildBase(doors), glow = buildGlow(doors);
   var sprites = buildSprites(null);
   var walkerSprites = buildSprites({ c:'#221c1e', l:'#332a2c' });
+  // street life (2026-09-12): a constable on the beat and a drunk who wants a light
+  var copSprites = buildSprites({ c:'#1a2238', l:'#2a3658' });
+  var drunkSprites = buildSprites({ c:'#3a2a1c', l:'#5a4230' });
+  var fenceSprites = buildSprites({ c:'#2a2a24', l:'#3c3a30' });
+  var LIFE_ROWS = [0, 3, 14, 17, 26, 29, 34, 37, 40, 43];
+  function hubFlag(k) { var el = document.querySelector('.dss-hub-flag[data-k="' + k + '"]'); return el ? el.textContent.trim() : ''; }
+  // Lines the street says. Sam's to rewrite; they are UI notes, not passage prose.
+  var STREET_LINES = {
+    copMove: 'Move along now, sir. Nothing to see.',
+    copKey: 'He looks at you a moment longer than he needs to, then moves you along.',
+    drunkLight: "'Got a light, pal?' You have. He takes his time over it and calls you a gentleman.",
+    drunkNone: "'Got a light, pal?' You haven't. He tells you, at length, what he thinks of that."
+  };
 
   // spawn: outside the door you last went through, else on Dean Street by the corner
   var spawnC = 17, spawnR = 22, facing = 'down';
@@ -4724,7 +4738,9 @@ function init(container) {
 
   var S = { c:spawnC, r:spawnR, px:spawnC*T, py:spawnR*T, moving:false, dx:0, dy:0, prog:0, facing:facing, frame:0, stepT:0,
             held:{}, entering:null, enterT:0, t:0, walker:null, walkerNext:14 + Math.random()*12, hintShown:false, noteFlash:null, alive:true, raf:null,
-            cam:{ x:0, y:0 }, camMoving:true, edge:null };
+            cam:{ x:0, y:0 }, camMoving:true, edge:null,
+            still:0, cop:null, copNext:24 + Math.random()*20, copCool:0, drunk:null, drunkNext:38 + Math.random()*24, drunkCool:0,
+            sqcat:{ x:35*T + 4, y:10*T, mode:'sit', t:0 }, porter:{ y:2*T + 4, dir:1, on:false }, corner:{ flare:0, t:0 } };
   state = S;
   function camTarget() {
     var tx = S.px + 8 - W/2, ty = S.py + 8 - VR*T/2;
@@ -4734,6 +4750,7 @@ function init(container) {
   // dev hook (2026-09-12): drop the walker on any walkable tile with the camera snapped to it,
   // so a session can look at every corner of the map without walking there. Not used by the game.
   window.__dssSohoTeleport = function(c, r) { if (!walkable(c, r)) return false; S.c = c; S.r = r; S.px = c*T; S.py = r*T; S.moving = false; S.prog = 0; var ct = camTarget(); S.cam.x = ct.x; S.cam.y = ct.y; return true; };
+  window.__dssSohoLife = function(near) { S.copNext = 0; S.drunkNext = 0; S.still = 600; S.copCool = 0; S.drunkCool = 0; if (near) { S.drunk = { x: S.px - 40, dir:'right', y0: S.py, y: S.py, f:0, t:0, pause:0, asked:false, wob:0 }; } return true; };
   function viewRect() { var c0 = Math.floor(S.cam.x / T), r0 = Math.floor(S.cam.y / T); return { c0:c0, r0:r0, c1:c0 + VC, r1:r0 + VR }; }
   function randomPaveTile(awayTiles) {
     var v = viewRect();
@@ -4834,7 +4851,7 @@ function init(container) {
     var d = doorAt(nc, nr);
     if (d && !d.spot) { enter(d); refreshBar(); return; }
     if (!walkable(nc, nr)) { refreshBar(); return; }
-    S.moving = true; S.dx = dc; S.dy = dr; S.prog = 0; S.noteFlash = null;
+    S.moving = true; S.dx = dc; S.dy = dr; S.prog = 0; S.noteFlash = null; S.still = 0;
     if (!hintSeen) { hintSeen = true; try { sessionStorage.setItem('dssMapHintDone', '1'); } catch(e) {} }
   }
   function heldDir() { if (S.held.up) return 'up'; if (S.held.down) return 'down'; if (S.held.left) return 'left'; if (S.held.right) return 'right'; return null; }
@@ -4913,6 +4930,61 @@ function init(container) {
       if (wk.flare > 0) wk.flare--;
       if (wk.x < S.cam.x - 40 || wk.x > S.cam.x + W + 28 || wk.x < -24 || wk.x > WW + 12) { S.walker = null; S.walkerNext = 16 + Math.random()*18; }
     }
+    // ---- street life (2026-09-12) ----
+    if (!S.moving && !S.edge) S.still++;
+    if (S.copCool > 0) S.copCool--;
+    if (S.drunkCool > 0) S.drunkCool--;
+    function lifeRow() { var rows = LIFE_ROWS.filter(function(rw){ return rw >= vr.r0 - 1 && rw <= vr.r1; }); return rows.length ? rows[Math.floor(Math.random()*rows.length)] : -1; }
+    function offscreen(o) { return o.x < S.cam.x - 40 || o.x > S.cam.x + W + 28 || o.x < -24 || o.x > WW + 12; }
+    // the constable: walks his beat; if you stand about too long on his row he comes over and moves you on
+    if (!S.cop) { S.copNext -= 1/60; if (S.copNext <= 0) { var lr = lifeRow(); if (lr >= 0) { var fl = Math.random() < 0.5; S.cop = { x: fl ? S.cam.x - 14 : S.cam.x + W + 2, dir: fl ? 'right' : 'left', y: lr * T, f:0, t:0, pause:0, mode:'beat' }; } else S.copNext = 5; } }
+    else {
+      var cp = S.cop;
+      if (cp.mode === 'beat') {
+        cp.x += cp.dir === 'right' ? 0.3 : -0.3; cp.t++; if (cp.t % 14 === 0) cp.f = cp.f === 1 ? 2 : 1;
+        if (S.copCool === 0 && S.still > 420 && Math.abs(cp.y - S.py) <= T && Math.abs(cp.x - S.px) < W * 0.6) { cp.mode = 'approach'; cp.dir = cp.x < S.px ? 'right' : 'left'; }
+        if (offscreen(cp)) { S.cop = null; S.copNext = 30 + Math.random()*30; }
+      } else if (cp.mode === 'approach') {
+        var gap = S.px - cp.x, want = gap > 0 ? 13 : -13;
+        if (Math.abs(gap) <= 14 || S.moving) { cp.mode = 'word'; cp.pause = 110; cp.f = 0; var key = hubFlag('key'); S.noteFlash = { name:'A CONSTABLE', text: key === 'cocaine' ? STREET_LINES.copKey : STREET_LINES.copMove, t:170 }; refreshBar(); }
+        else { cp.x += gap > 0 ? 0.55 : -0.55; cp.t++; if (cp.t % 9 === 0) cp.f = cp.f === 1 ? 2 : 1; }
+      } else {
+        cp.pause--; if (cp.pause <= 0) { cp.mode = 'beat'; S.copCool = 60 * 60; S.still = 0; cp.dir = Math.random() < 0.5 ? 'left' : 'right'; }
+      }
+    }
+    // the drunk: staggers along the pavement; if he reaches you he wants a light
+    if (!S.drunk) { S.drunkNext -= 1/60; if (S.drunkNext <= 0) { var dr0 = lifeRow(); if (dr0 >= 0) { var fl2 = Math.random() < 0.5; S.drunk = { x: fl2 ? S.cam.x - 14 : S.cam.x + W + 2, dir: fl2 ? 'right' : 'left', y0: dr0 * T, y: dr0 * T, f:0, t:0, pause:0, asked:false, wob: Math.random()*6 }; } else S.drunkNext = 5; } }
+    else {
+      var dk = S.drunk;
+      if (dk.pause > 0) { dk.pause--; }
+      else {
+        dk.t++; dk.x += (dk.dir === 'right' ? 0.32 : -0.32) * (0.6 + 0.6 * Math.sin(dk.t / 23 + dk.wob));
+        dk.y = dk.y0 + Math.round(2.2 * Math.sin(dk.t / 17 + dk.wob));
+        if (dk.t % 12 === 0) dk.f = dk.f === 1 ? 2 : 1;
+        if (Math.random() < 0.006) { dk.pause = 30 + Math.random()*50; dk.f = 0; if (Math.random() < 0.3) dk.dir = dk.dir === 'right' ? 'left' : 'right'; }
+        if (!dk.asked && S.drunkCool === 0 && Math.abs(dk.y0 - S.py) <= T && Math.abs(dk.x - S.px) <= 15) {
+          dk.asked = true; dk.pause = 130; dk.f = 0; dk.dir = dk.x < S.px ? 'right' : 'left';
+          var lit = hubFlag('matches') === '1';
+          S.noteFlash = { name:'A DRUNK', text: lit ? STREET_LINES.drunkLight : STREET_LINES.drunkNone, t:200 }; refreshBar();
+          if (lit && window.dssAudio && window.dssAudio.mapMatch) { try { window.dssAudio.mapMatch(); } catch(e) {} }
+          S.drunkCool = 45 * 60;
+        }
+      }
+      if (offscreen(dk)) { S.drunk = null; S.drunkNext = 40 + Math.random()*40; }
+    }
+    // ---- the pull toward the hidden edges (2026-09-12): each lure shows only while its spot is still unvisited ----
+    var sqOpen = doors.square && doors.square.status === 'open', fyOpen = doors.foyles && doors.foyles.status === 'open', oxOpen = doors.oxfordend && doors.oxfordend.status === 'open';
+    // Soho Square: a cat on the south railing gets up and walks into the garden when you come near
+    if (sqOpen) {
+      var sc = S.sqcat, dcat = Math.abs(S.c - 35) + Math.abs(S.r - 10);
+      if (sc.mode === 'sit' && dcat <= 13) { sc.mode = 'go'; }
+      if (sc.mode === 'go') { sc.t++; sc.y -= 0.45; if (sc.y <= 7*T + 2) { sc.mode = 'garden'; sc.y = 7*T + 2; } }
+      if (sc.mode === 'garden' && dcat > 16) { sc.mode = 'sit'; sc.y = 10*T; }
+    }
+    // Foyles: a lamp moves behind the books once you are on the Charing Cross Road side
+    if (fyOpen) { var pt = S.porter; pt.on = (Math.abs(S.c - 51) <= 9 && Math.abs(S.r - 5) <= 9); if (pt.on) { pt.y += pt.dir * 0.12; if (pt.y > 8*T + 8) pt.dir = -1; if (pt.y < 2*T + 4) pt.dir = 1; } }
+    // the Oxford Street corner: someone waiting under the last lamp, a cigarette now and then
+    if (oxOpen) { var cn = S.corner; cn.t++; if (cn.flare > 0) cn.flare--; else if (cn.t % 240 === 0) cn.flare = 34; }
     // a black cab along Old Compton Street, headlights first
     if (!S.cab) { S.cabNext -= 1/60; if (S.cabNext <= 0) { var cabLeft = Math.random() < 0.5; S.cab = { x: cabLeft ? 7*T - 30 : 49*T + 6, dir: cabLeft ? 1 : -1, y: (cabLeft ? 28 : 27) * T + 2 }; if (window.dssAudio && window.dssAudio.mapCab && S.cab.y >= vr.r0*T - T && S.cab.y <= vr.r1*T + T) { try { window.dssAudio.mapCab(); } catch(e) {} } } }
     else { S.cab.x += S.cab.dir * 1.25; if (S.cab.x < 7*T - 34 || S.cab.x > 49*T + 10) { S.cab = null; S.cabNext = 28 + Math.random()*40; } }
@@ -4971,6 +5043,18 @@ function init(container) {
     if (S.meteor) { var mt3 = S.meteor, mf3 = Math.max(0, 1 - mt3.life / mt3.max); x.save(); x.globalAlpha = 0.85 * mf3; x.strokeStyle = '#e8e2d0'; x.lineWidth = 1; x.beginPath(); x.moveTo(mt3.x - mt3.vx*7, mt3.y - mt3.vy*7); x.lineTo(mt3.x, mt3.y); x.stroke(); x.fillStyle = '#fff8e8'; x.fillRect(Math.round(mt3.x), Math.round(mt3.y), 1, 1); x.restore(); }
     if (S.cloud) { var cl = S.cloud; x.save(); x.globalAlpha = 0.62; x.fillStyle = '#0d0d16'; x.beginPath(); x.ellipse(cl.x, cl.y + 4, cl.w * 0.5, 4.5, 0, 0, Math.PI * 2); x.ellipse(cl.x - cl.w * 0.22, cl.y + 2, cl.w * 0.32, 3.5, 0, 0, Math.PI * 2); x.ellipse(cl.x + cl.w * 0.2, cl.y + 1, cl.w * 0.28, 3, 0, 0, Math.PI * 2); x.fill(); x.globalAlpha = 0.18; x.strokeStyle = '#d8d4e6'; x.lineWidth = 0.6; x.beginPath(); x.ellipse(cl.x, cl.y + 4, cl.w * 0.5, 4.5, 0, Math.PI * 1.05, Math.PI * 1.95); x.stroke(); x.restore(); }
     x.save(); x.beginPath(); x.rect(0, SKY*T, W, VR*T); x.clip(); x.translate(-cx, SKY*T - cy);
+    // Soho goes to bed: the later the night, the more of the ordinary windows are dark (venue fronts keep their own light)
+    var tl = (typeof window.__dssSkyTurnsLeft === 'number') ? window.__dssSkyTurnsLeft : 16;
+    var bed = (1 - Math.max(0, Math.min(1, tl / 16))) * 0.92;
+    if (bed > 0) {
+      var vx0 = cx - T, vx1 = cx + W + T, vy0 = cy - T, vy1 = cy + VR*T + T;
+      for (var ww = 0; ww < WARM_WINS.length; ww++) {
+        var wn = WARM_WINS[ww]; if (wn.u > bed || wn.x < vx0 || wn.x > vx1 || wn.y < vy0 || wn.y > vy1) continue;
+        x.fillStyle = PAL.winDark; x.fillRect(wn.x + 3, wn.y + 3, 3, 4); x.fillRect(wn.x + 10, wn.y + 3, 3, 4);
+        x.fillStyle = PAL.winGlass; x.fillRect(wn.x + 3, wn.y + 10, 3, 4); x.fillRect(wn.x + 10, wn.y + 10, 3, 4);
+        x.fillStyle = PAL.soot; x.fillRect(wn.x + 3, wn.y + 5, 3, 1); x.fillRect(wn.x + 10, wn.y + 5, 3, 1);
+      }
+    }
     for (var wi = 0; wi < WIN_BLINK.length; wi++) { var wb = WIN_BLINK[wi]; if (((S.t / 60 + wb.k * 3.7) % 11) < 0.9) { x.fillStyle = '#1b1810'; x.fillRect(wb.x, wb.y, 3, 4); } }
     for (var ci = 0; ci < CHIMNEYS.length; ci++) { var ch = CHIMNEYS[ci]; for (var pi = 0; pi < 5; pi++) { var ph = ((S.t * 0.35 + pi * 24 + ch.k * 40) % 120) / 120; var sx2 = ch.x + Math.sin(ph * 6 + ch.k) * 3 + ph * 6, sy2 = ch.y - ph * 30; x.fillStyle = 'rgba(120,118,130,' + (0.22 * (1 - ph)) + ')'; x.fillRect(Math.round(sx2), Math.round(sy2), 2 + Math.round(ph * 3), 2); } }
     if (S.cab) { drawCab(x, S.cab); }
@@ -4982,6 +5066,18 @@ function init(container) {
       if (wk2.pair) x.drawImage(walkerSprites[wk2.dir][wk2.f === 1 ? 2 : (wk2.f === 2 ? 1 : 0)], Math.round(wk2.x) + (wk2.dir === 'right' ? -11 : 11), wk2.y - 1);
       if (wk2.flare > 0) { var fa = wk2.flare / 30; x.fillStyle = 'rgba(255,170,60,' + (0.9 * fa) + ')'; x.fillRect(Math.round(wk2.x) + (wk2.dir === 'right' ? 10 : 1), wk2.y + 3, 1, 1); var fg2 = x.createRadialGradient(Math.round(wk2.x) + 6, wk2.y + 4, 0, Math.round(wk2.x) + 6, wk2.y + 4, 10); fg2.addColorStop(0, 'rgba(255,170,60,' + (0.35 * fa) + ')'); fg2.addColorStop(1, 'rgba(255,170,60,0)'); x.fillStyle = fg2; x.fillRect(Math.round(wk2.x) - 4, wk2.y - 6, 20, 20); }
     }
+    if (doors.square && doors.square.status === 'open') { var sc2 = S.sqcat; drawCat(x, { x: sc2.x, row: Math.floor(sc2.y / T), moveTo: null, t: sc2.t, blink: (S.t % 200) < 6 }); }
+    if (doors.foyles && doors.foyles.status === 'open') {
+      var nb = hubFlag('notebook');
+      if (nb === 'stolen') { x.drawImage(fenceSprites.left[0], 51*T - 3, 5*T - 4); x.fillStyle = '#3a2a1c'; x.fillRect(51*T - 6, 5*T + 8, 6, 4); x.fillStyle = '#c8b090'; x.fillRect(51*T - 5, 5*T + 9, 1, 1); x.fillRect(51*T - 3, 5*T + 9, 1, 1); }
+      else if (S.porter.on) { x.fillStyle = 'rgba(255,220,150,0.85)'; x.fillRect(51*T + 13, Math.round(S.porter.y), 2, 2); var pg = x.createRadialGradient(51*T + 14, S.porter.y + 1, 0, 51*T + 14, S.porter.y + 1, 9); pg.addColorStop(0, 'rgba(255,210,130,0.35)'); pg.addColorStop(1, 'rgba(255,210,130,0)'); x.fillStyle = pg; x.fillRect(51*T + 5, S.porter.y - 8, 12, 18); }
+    }
+    if (doors.oxfordend && doors.oxfordend.status === 'open') {
+      x.drawImage(walkerSprites.left[0], 50*T + 2, 0*T - 2);
+      if (S.corner.flare > 0) { var cf = S.corner.flare / 34; x.fillStyle = 'rgba(255,170,60,' + (0.9 * cf) + ')'; x.fillRect(50*T + 3, 0*T + 3, 1, 1); var cg = x.createRadialGradient(50*T + 4, 0*T + 4, 0, 50*T + 4, 0*T + 4, 10); cg.addColorStop(0, 'rgba(255,170,60,' + (0.35 * cf) + ')'); cg.addColorStop(1, 'rgba(255,170,60,0)'); x.fillStyle = cg; x.fillRect(50*T - 6, 0*T - 6, 20, 20); }
+    }
+    if (S.cop) { var cq = S.cop; x.drawImage(copSprites[cq.dir][cq.f], Math.round(cq.x), cq.y - 2); x.fillStyle = '#0d1020'; x.fillRect(Math.round(cq.x) + 3, cq.y - 4, 6, 3); x.fillRect(Math.round(cq.x) + 5, cq.y - 5, 2, 1); x.fillStyle = '#c8c0a0'; x.fillRect(Math.round(cq.x) + 5, cq.y - 3, 2, 1); }
+    if (S.drunk) { var dq = S.drunk; x.drawImage(drunkSprites[dq.dir][dq.f], Math.round(dq.x), dq.y - 2); if (dq.pause > 0 && dq.asked) { x.fillStyle = 'rgba(255,240,200,0.9)'; x.fillRect(Math.round(dq.x) + (dq.dir === 'right' ? 12 : -2), dq.y + 3, 1, 1); } }
     var sp = sprites[S.facing][(S.moving || S.edge) ? S.frame : 0];
     var hx = Math.round(S.px) + 8, hy = Math.round(S.py) + 10;
     var hg = x.createRadialGradient(hx, hy, 1, hx, hy, 16); hg.addColorStop(0, 'rgba(226,222,240,0.26)'); hg.addColorStop(1, 'rgba(226,222,240,0)'); x.fillStyle = hg; x.fillRect(hx-16, hy-16, 32, 32);
@@ -41097,12 +41193,14 @@ You surface to Dean Street.
 
 :: White page [white-page piano-bed] {"position":"1700,150","size":"100,100"}
 (display: "Ending Vines SVG")
+<div class="ending-switchboard ending-switchboard-white" aria-label="The night's remaining signals"><span class="ending-switch-line"></span>(if: $lilyCount > 0)[<span class="ending-switch-node is-live" aria-hidden="true">✦</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">✧</span>](if: $haunts's length > 0)[<span class="ending-switch-node is-live" aria-hidden="true">◇</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">◇</span>](if: $alba's length > 0)[<span class="ending-switch-node is-live" aria-hidden="true">△</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">▽</span>](if: $metRed is true or $metCritic is true)[<span class="ending-switch-node is-live" aria-hidden="true">○</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">·</span>](if: $confidence >= 60)[<span class="ending-switch-node is-live" aria-hidden="true">·</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">·</span>]</div>
 (after: 6.2s)[EXPLICIT. LIBER. EST.]
 
 <span class="plus-ultra-fade">(link-goto: "PLUS. ULTRA.", "Dawn")</span>
 
 :: Black page [black-page piano-bed] {"position":"1700,200","size":"100,100"}
 (display: "Ending Vines SVG")
+<div class="ending-switchboard ending-switchboard-black" aria-label="The night's remaining signals"><span class="ending-switch-line"></span>(if: $lilyCount > 0)[<span class="ending-switch-node is-live" aria-hidden="true">✦</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">✧</span>](if: $haunts's length > 0)[<span class="ending-switch-node is-live" aria-hidden="true">◇</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">◇</span>](if: $alba's length > 0)[<span class="ending-switch-node is-live" aria-hidden="true">△</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">▽</span>](if: $metRed is true or $metCritic is true)[<span class="ending-switch-node is-live" aria-hidden="true">○</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">·</span>](if: $confidence >= 60)[<span class="ending-switch-node is-live" aria-hidden="true">·</span>](else:)[<span class="ending-switch-node is-dim" aria-hidden="true">·</span>]</div>
 (after: 6.2s)[EXPLICIT. LIBER. EST.]
 
 <span class="plus-ultra-fade">(link-goto: "PLUS. ULTRA.", "Dawn")</span>
@@ -42415,7 +42513,7 @@ There is an atmosphere of the silver screen. Brando might emerge in a tight and 
 
 [[See who's there|Approach The Ginger Light]]]\
 <!-- SOHO MAP alleys and corners (2026-09-11): each fires ONCE a night when the figure walks onto its tile; the links are read by the map like the doors and parked off-screen -->
-<div class="soho-alley-links soho-hub-dock">(unless: $alleys contains "meard")[[[Meard Street|Alley: Meard Street]]](unless: $alleys contains "stannes")[[[St Anne's Court|Alley: St Anne's Court]]](unless: $alleys contains "bourchier")[[[Bourchier Street|Alley: Bourchier Street]]](unless: $alleys contains "richmond")[[[Richmond Buildings|Alley: Richmond Buildings]]](unless: $alleys contains "batemans")[[[Bateman's Buildings|Alley: Bateman's Buildings]]](unless: $alleys contains "walkers")[[[Walker's Court|Alley: Walker's Court]]](unless: $alleys contains "greekcourt")[[[Greek Court|Alley: Greek Court]]](unless: $alleys contains "square")[[[Soho Square|Alley: Soho Square]]](if: $notebook is "stolen" or not ($alleys contains "foyles"))[[[Charing Cross Road|Alley: Charing Cross Road]]](unless: $alleys contains "oxfordend")[[[Oxford Street|Alley: Oxford Street]]]</div>\
+<span class="dss-hub-flag" data-k="matches" style="display:none">(if: $hasMatches is true)[1](else:)[0]</span><span class="dss-hub-flag" data-k="key" style="display:none">(print: $dreamKey)</span><span class="dss-hub-flag" data-k="notebook" style="display:none">(print: $notebook)</span><div class="soho-alley-links soho-hub-dock">(unless: $alleys contains "meard")[[[Meard Street|Alley: Meard Street]]](unless: $alleys contains "stannes")[[[St Anne's Court|Alley: St Anne's Court]]](unless: $alleys contains "bourchier")[[[Bourchier Street|Alley: Bourchier Street]]](unless: $alleys contains "richmond")[[[Richmond Buildings|Alley: Richmond Buildings]]](unless: $alleys contains "batemans")[[[Bateman's Buildings|Alley: Bateman's Buildings]]](unless: $alleys contains "walkers")[[[Walker's Court|Alley: Walker's Court]]](unless: $alleys contains "greekcourt")[[[Greek Court|Alley: Greek Court]]](unless: $alleys contains "square")[[[Soho Square|Alley: Soho Square]]](if: $notebook is "stolen" or not ($alleys contains "foyles"))[[[Charing Cross Road|Alley: Charing Cross Road]]](unless: $alleys contains "oxfordend")[[[Oxford Street|Alley: Oxford Street]]]</div>\
 (if: $metRed is true)[\
 (if: _towerReady or (_dawnHere and $coachUrgent is false))[<div class="choice-box"><span class="guided-link">[[The dawn is coming|The Fetch]]</span></div>]\
 (if: $coachUrgent is true and _towerReady is false)[<div class="choice-box">'[Noises off. Blackout.]'
@@ -55594,10 +55692,12 @@ tw-story[tags~="dawn-end"] .alba-final .alba-line {
   inset: 0;
   width: 100%;
   height: 100%;
+  transform: scale(1.1);
+  transform-origin: center;
 }
 .ev-vine {
   fill: none;
-  stroke-width: 1.6;
+  stroke-width: 1.85;
   stroke-linecap: round;
   stroke-dasharray: 1800;
   stroke-dashoffset: 1800;
@@ -55607,7 +55707,7 @@ tw-story[tags~="dawn-end"] .alba-final .alba-line {
 }
 .ev-vine-h {
   fill: none;
-  stroke-width: 0.5;
+  stroke-width: 0.65;
   stroke-linecap: round;
   stroke-dasharray: 1800;
   stroke-dashoffset: 1800;
@@ -55644,10 +55744,10 @@ tw-story[tags~="dawn-end"] .alba-final .alba-line {
 }
 
 /* 0–6s: blank. 6s: "EXPLICIT LIBER EST" (text alone for 4s). 10s: everything rushes in fast. */
-.ev-v1, .ev-h1 { animation-delay: 10s;   animation-duration: 2.5s; }
-.ev-v2, .ev-h2 { animation-delay: 10.1s; animation-duration: 2.2s; }
-.ev-v3, .ev-h3 { animation-delay: 10.2s; animation-duration: 2.8s; }
-.ev-v4, .ev-h4 { animation-delay: 10.3s; animation-duration: 2.4s; }
+.ev-v1, .ev-h1 { animation-delay: 10s;   animation-duration: 3.4s; }
+.ev-v2, .ev-h2 { animation-delay: 10.1s; animation-duration: 3.1s; }
+.ev-v3, .ev-h3 { animation-delay: 10.2s; animation-duration: 3.7s; }
+.ev-v4, .ev-h4 { animation-delay: 10.3s; animation-duration: 3.3s; }
 
 .ev-l1a { animation-delay: 11s;   }
 .ev-l1b { animation-delay: 11.3s; }
@@ -55909,6 +56009,54 @@ tw-passage[tags~="dawn-approach"] tw-story::before {
   max-width: 70vmin;
   text-shadow: 0 0 6px rgba(10,9,8,0.95), 0 0 14px rgba(0,0,0,0.7);
   opacity: 0;
+}
+/* Ending switchboard: five quiet signals carry the night's state into the
+   black/white choice without turning it into a scorecard or summary. */
+.ending-switchboard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.1rem, 4vw, 2.8rem);
+  width: min(34rem, 86vw);
+  margin: 2.4rem auto 1.2rem;
+  min-height: 2.4rem;
+  isolation: isolate;
+}
+.ending-switch-line {
+  position: absolute;
+  left: 8%; right: 8%; top: 50%;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.22;
+  z-index: -1;
+}
+.ending-switch-node {
+  display: grid;
+  place-items: center;
+  width: 1.9rem; height: 1.9rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-family: Georgia, serif;
+  font-size: 1.05rem;
+  line-height: 1;
+  background: inherit;
+  transition: opacity 0.8s ease, box-shadow 0.8s ease, transform 0.8s ease;
+}
+.ending-switch-node.is-live {
+  opacity: 0.9;
+  box-shadow: 0 0 0.8rem currentColor;
+  animation: endingSignal 3.6s ease-in-out infinite;
+}
+.ending-switch-node.is-dim { opacity: 0.22; }
+.ending-switchboard-black { color: #e8d8b0; }
+.ending-switchboard-white { color: #8a5d25; }
+@keyframes endingSignal {
+  0%, 100% { transform: scale(0.96); }
+  50% { transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ending-switch-node.is-live { animation: none; }
 }
 /* Gawain caption is delayed until AFTER the lily cascade — they bloom in
    clockwise around the pent first, then the line lands as the summative

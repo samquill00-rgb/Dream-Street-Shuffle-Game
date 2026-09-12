@@ -941,9 +941,32 @@ User asked to improve the Cow Ride and, if possible, continue with Luna. Luna wa
 - The scene respects the opening prose: the rain has stopped. There is no falling rain, only puddles, sheen, mist-light and one gutter drip.
 - `Name Your Book` now enters the walk-in before opening the full hub map. Source synced with `python3 sync_html.py`; passage count is 212.
 
+### Addendum 23 — visual ending switchboard (2026-09-12)
+- Added a silent five-signal visual strip to both `White page` and `Black page`. The signals light or dim from existing play state (lilies, haunts, alba lines, human encounters, confidence) so the final black/white choice carries the night's texture without summary prose or a score.
+- The ending structure and black/white pages are unchanged; this is atmospheric visual consequence only.
+- Source synced with `python3 sync_html.py`; no git commands run.
+
+### Addendum 24 — ending vine return (2026-09-12)
+- Restored a fuller botanical presence around the ending switchboard: the existing four corner vines now reach farther into the page, with slightly richer strokes and a slower, more deliberate growth sequence.
+- Black/white pages and their prose remain unchanged. Source synced with `python3 sync_html.py`.
+
 ### Addendum 14 (2026-09-12): the map's buildings get faces
 
 - Map engine: new `FRONTS` table + `drawFronts()` (called in buildBase after the doors/steps, before lamps) and `drawFrontGlow()` (in buildGlow). Each venue's frontage (up to two facade tiles either side of its door, via `frontageTiles`) is redrawn with a front you can read without the label; `faceTile()` rotates the tile so every front is drawn with the street at the bottom. Fronts: Ronnie's magenta neon panels (dark when shut) with a pink pavement pool; the French's tricolour on a bracket + red-curtained window; the Colony's green-lit windows, brass plaque and dustbin; the doorway's red-shaded window and bell push; the chippy's wide lit window with fish fascia (dim unless open); the Coach's frosted pub windows, hanging lantern sign and awning; the Pillars' stone columns with a lantern; Trisha's basement railings and pink bulb; Lackland's green lamp window and brass plate. Landmarks off the door list: Foyles' lit window with book spines along the east edge (col 51, rows 2-8, door gap at the spot row 5) with a warm pool; the Tudor hut in Soho Square garden (36-37,7); St Anne's tower with clock and green copper bulb at (8-9,37-39). `drawFacade` also tints facades per block (warm red-brick blocks, painted-grey blocks) so districts differ.
 - Dev hook: `window.__dssSohoTeleport(c, r)` drops the walker on any walkable tile with the camera snapped; used for inspection captures. Capturing the map in the pane: the tab reports hidden so rAF stalls; take a (tiny) screenshot action after a teleport to force a frame, then read the stage canvas. Inspection captures were POSTed to a throwaway local receiver (scratchpad recv.py, now stopped).
 - Verified by capture at 2x: all fronts, the hut, the tower, Foyles' spines. No new console errors.
 - Not done from the audit (Sam's call): street life (policeman / drunk wanting a light / taxi), windows going dark with the turns, a pull toward the hidden edge spots, a stronger lamp pool on the player.
+
+### Addendum 15 (2026-09-12): street life on the map, the constable and the drunk
+
+- Hub → map state bridge: Dean Street now prints two hidden spans `.dss-hub-flag[data-k=matches]` (1/0 from $hasMatches) and `[data-k=key]` ($dreamKey) just before the alley dock; the engine reads them with `hubFlag(k)`. Extend this rather than trying to read Harlowe from JS.
+- Constable (`S.cop`, navy coat + helmet drawn over the sprite): spawns every ~30-60 s on a visible pavement row (LIFE_ROWS adds Bateman and Romilly to the passer-by's rows), walks his beat at 0.3 px/frame. If the player has stood still for 7 s (`S.still` > 420) on his row band and within reach, he walks over, stops a pace off and moves you on (note flash "A CONSTABLE"); with cocaine in the pocket the line is the longer look. Then a 60 s cooldown. No stat cost (map cannot write Harlowe state; make it a docked link + passage if a cost is ever wanted).
+- Drunk (`S.drunk`, brown coat): staggers along a pavement row with a sinusoidal wobble, random pauses and turn-backs. If he reaches the player on his row he stops and asks for a light: with matches the note is the gentleman line + mapMatch flare; without, he tells you what he thinks. 45 s cooldown, once per drunk.
+- Lines live in `STREET_LINES` in the engine (Sam's to rewrite; UI notes, not passage prose).
+- Dev hooks: `window.__dssSohoLife(near)` forces both spawns (near=true drops the drunk beside the player); `window.__dssSohoTeleport(c, r)`. Verified live: constable approach + "Move along", drunk ask with matches=0 line. Remaining audit items: windows going dark with the turns, the pull toward the hidden edges, a stronger lamp pool on the player.
+
+### Addendum 16 (2026-09-12): Soho goes to bed
+
+- Map engine: `drawFacade` now records every ordinary warm-lit window tile in `WARM_WINS` with a seeded bedtime u in [0,1). Each frame `draw()` reads `window.__dssSkyTurnsLeft` (the sky already reads "N TURNS LEFT" from the stat bar) and paints dark every recorded window whose u < (1 - turnsLeft/16) * 0.92, view-clipped. So the first lap has every window lit and the last laps leave only a handful, while the venue fronts (FRONTS) and the tiles lit by an open door keep their own light. Nothing is rebuilt; it is an overlay on the static base.
+- Verified by capture: same view at 15 turns left vs 2 turns left (`.night-cell` text edited in the DOM to fake the late night).
+- Remaining audit items: a pull toward the hidden edge spots; a stronger lamp pool on the player.

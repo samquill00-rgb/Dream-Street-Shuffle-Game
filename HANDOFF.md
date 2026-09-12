@@ -929,3 +929,9 @@ User asked to improve the Cow Ride and, if possible, continue with Luna. Luna wa
 - Cellar fight: consecutive clean dodges/counters now appear as a CLEAN CHAIN call on the fight board, making skilled play legible without changing damage or verdict rules.
 - Source synced with `python3 sync_html.py`; full UserScript passed `deno check`.
 - Full automated replay remains limited by the account usage cap; no git commands run.
+### Addendum 21 — Easter Island: The Reclamation (2026-09-12)
+- Added a new `The Reclamation` canvas minigame between Among the Moai and The Listening Moai. The revolutionary hands you the rifle; the player aims and fires at moving occupation machinery and survey marks while avoiding the luminous ancestral spirits.
+- Three waves / twelve targets: silence ten machines to win, or disturb three spirits and the man lowers the rifle. Mouse, touch and a wide reticle support the same accessible input pattern as the other canvas games.
+- Distinct visual language: volcanic dusk, distant moai silhouettes, red occupation lamps, turquoise spirits, brass reticle and a compact progress readout.
+- Added a separate link from Among the Moai so the player can choose to stand with the revolution, while the existing direct approach to the sixth moai remains.
+- Source synced with `python3 sync_html.py`; the new game script passes `deno check`; compiled passage confirmed by targeted grep. No git commands run.

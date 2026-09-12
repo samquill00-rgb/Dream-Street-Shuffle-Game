@@ -1150,3 +1150,53 @@ Sam requested an overhaul of the turn limiter to suit the walkable open world, e
 **Verification:** isolated test build under /tmp (test passages never added to the actual game). Old save with 199 visits and a stale 16-turn budget entered Dean Street at 200, with normal map/links and 70/70 condition. Twenty voluntary-dawn detours preserved 70/70 and the initial phase. All four milestone phases checked. Complete and incomplete Fetch both retained their return choice. Stolen notebook warning checked after fixing display-temp scoping. Lily and dual calls appeared with their existing spacing; refusal, fight win/loss and Shana did not alter the visit counter. Low-sobriety late-game fixture retained the Coach recovery route. No tw-errors in these cases. Final header, map and mobile dawn-choice screen visually inspected. Actual build: 224 passages, two additions, none removed. No remaining nightLength/dawnHere/lapsLeft/turns-left/turn-reward references; exactly one returns increment. No git commands run.
 
 Synced, commit when ready. Human playthrough remains the test of the new pacing and difficulty; phase thresholds are atmosphere only and need no deadline balancing.
+
+### Addendum 37 — the opening funnel restored, and the new-game resets that were never happening (2026-09-13)
+Sam, on his staged opening: *"the first time you land on the map you have to go to the ginger light, it's the only option... On the first return only the french and the pillars should open and it should grow out from there."* And, when I claimed it was broken: *"I thought that wasn't broken."*
+
+**He was right twice, and I was wrong twice. Recorded so nobody re-derives my mistakes.**
+1. I reported that ~20 hub links needed gating on the first lap. They do not. The entire "Where now?" block is wrapped in **`(if: $metRed is true)`**, so the first landing already offered only the corner. I had been reading each link's guard in isolation without noticing the conditional enclosing all of them.
+2. I reported the Chippy as an always-on venue link. It is not. Every Chippy link is **nested inside the nudge chain** (liver tip / "You seem hungry" / the gents nudge), so it only ever opens on a prompt — exactly as he wanted.
+
+**The one thing genuinely outside the funnel** was the alley and doorway dock, which sat on the line immediately *above* the `(if: $metRed is true)` wrapper and so rendered from the first landing: nine alleys plus five doorways crowding the corner. The alleys have been outside it since 2026-09-11; **the four new doorways were mine from the night before**, dropped into that same dock, which is what made it obvious. Fixed by moving only the dock inside the wrapper. The `dss-hub-flag` spans and `(display: "Key Sites")` stay outside, because the map reads them on every hub render.
+
+Verified by walking a fresh game: **first landing** = "See who's there" plus his "Head towards dawn", nothing else. **First return** = To The French, To The Pillars of Hercules, plus the alleys and doorways (he approved those arriving at this point). No Chippy, no Colony, no Trisha's, no Ronnie's. Zero `tw-error`.
+
+**The bug that fell out of testing it: a new game was never resetting most of its state.**
+A fresh game opened with Meard Street and Walker's Court already walked — the two alleys I had walked while testing stashes. `$alleys` was declared only by `(unless: ... is an array)` type-guards, which fire the first time a variable is created and therefore **never** on a replay in the same browser. An audit of `Start` found the same hole in thirteen variables. The alleys were the least of it:
+
+- **the five pocket-keys** — left `"spent"` from a previous night, so a replay could begin with no keys at all, which shuts the third pillar for the whole night;
+- **`$notebook`** — left `"stolen"` or `"traded"`, so you start without a notebook;
+- **`$worldsVisited`** — left full, which shuts the pillar on its own `< 5` guard;
+- plus `$alleyReturn`, `$dreamKey`, `$keyPick`, `$stashSites`, `$notebookStake`.
+
+`Start` now resets all of them. `$hadBreather`, `$hasCoin`, `$haunts`, `$metRed`, `$returns` and `$nightPhase` were always reset correctly and are untouched.
+
+**A Harlowe trap worth remembering, which cost two test cycles here.** The first version of this block failed silently: the resets did not run and **no error appeared**. The cause was the explanatory comment above them, which contained example macro syntax. **Harlowe parses macros inside HTML comments**, so a macro written as illustration inside `<!-- -->` is executed, and a malformed one swallows everything after it without complaint. The comment is now written in plain prose and carries a warning to that effect. If a block of sets ever appears to do nothing, check the comment above it before checking the sets.
+
+Also noticed while reading the values: `$alleys` accumulates duplicates (`[square,walkers,walkers,meard,meard]`) because each alley does a bare `(set: $alleys to it + (a: "x"))` with no contains-check — only Charing Cross guards with `(unless: $alleys contains "foyles")`. Harmless today, since every read is a `contains`. Not fixed, not asked for.
+
+synced, commit when ready
+
+### Addendum 38 — the way out becomes a place on the map (2026-09-13)
+Sam, once he'd worked out what "Head towards dawn" was: *"there should be an exit at the edge of the map which is towards Centre point. That's the way out of the game and the night. It should warn you that you will lose (I'll write the prose) if you try to take it before you have the whole ALBA, but it should be there."*
+
+**The map was already built for this and the door had simply never opened.** `DOORS` carries a `north` entry at **c17, r0** — the top edge of the map, in Dean Street's own column, labelled CENTRE POINT, `spot:true`. Its matcher was `rx:/dawn is coming|Give up on the night/i`. The hub link says "Head towards dawn", so it never matched: the only thing that ever opened that tile was the morale-collapse link "Give up on the night", which needs `$confidence <= 5`.
+
+**Two changes.**
+1. `[[Head towards dawn|Towards Dawn]]` moved off the visible hub and parked in a dock div, so it is no longer a line of text on Dean Street. The `_towerReady` message ("The poem is complete. Stay as long as you like.") stays visible where it was.
+2. The `north` door's matcher is now `/Head towards dawn|dawn is coming|Give up on the night/i`.
+
+The exit is therefore a place you walk to at the top of the map, always present, with `Towards Dawn` doing the warning before you commit. That passage already shows ALBA/FLOWERS/HAUNTS and warns on an unfinished poem or a missing notebook; **the prose there is Sam's to write.**
+
+**A CSS gotcha worth recording.** `.soho-hub-dock` does NOT park anything on its own. The only rule is `tw-passage.soho-map-on tw-hook.soho-hub-dock`, which needs a **tw-hook**, not a div — the alley dock is parked by the map JS adding that class to hooks it has already scanned (`scan.hooks.forEach(...)`), not by the class being in the markup. Putting the class on a plain div left the link fully visible. It is now parked by explicit inline style, the same shape the portal roll uses: off-screen with a real layout box, because Harlowe drops `.click()` on a link with no box.
+
+**Verified:** the link renders, is scannable, and sits at x −9757 with a live 17px box; no visible text links remain on the hub; the `north` DOORS entry reads back from `window.dssSohoMap` at c17/r0 with the new regex; zero `tw-error`.
+
+**NOT verified, and it needs a human:** that the north tile actually lights and fires in play. The Browser pane's synthetic key events do not reach the map canvas — the walker sat at c17/r22 through 130 Up presses — and the live door statuses are not exposed (`dssSohoMap.doors` is the static DOORS array; `.state` is walker state only). Both necessary conditions are confirmed in the data, but someone should walk to the top of the map once and check the exit fires.
+
+**The tip is gone, not rewritten.** I had flagged that the open-night word-to-the-wise still said *"When you want to finish, choose Head towards dawn below the map"*, and assumed it wanted repointing at the north edge. Sam: *"No, I don't want them to know about head towards the dawn. They shouldn't be tipped towards it. If they discover it so be it, but it's mad to tell them how to quit the game from the very start."* So that sentence was deleted rather than corrected. The rest of his tip stands unchanged.
+
+**The exit is now unadvertised everywhere.** The only remaining occurrences of the phrase in the .twee are the map's `north` matcher, the off-screen link the map scans, a code comment, and the `<h2>` inside `Towards Dawn` itself — which you only see once you have arrived. Nothing tells the player it exists. Verified on the hub: the tip renders without the sentence, and there are zero visible text links.
+
+synced, commit when ready

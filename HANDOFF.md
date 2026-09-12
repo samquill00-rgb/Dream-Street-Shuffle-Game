@@ -1,3 +1,5 @@
+**CURRENT OVERRIDE — 2026-09-12: OPEN NIGHT SHIPPED.** Sam has removed the turn-limit design. Exploration no longer drains condition; no visit budget or forced dawn. Discovery-based night phases and a voluntary Head towards dawn choice replace the clock. Earlier turn-budget/refund/penalty notes below are historical and superseded. See the final “Open night overhaul” addendum for implementation and verification.
+
 **STATE 2026-09-12 (mid-session; Sam works through the night and is continuing after a usage reset).** Everything below is synced to the .html and uncommitted. Today: key states split (spent/stolen/traded); the stolen NOTEBOOK loop (Bourchier Street joint choice → car park theft; recover from the Charing Cross Road fence for a pocket key, or win it at Percy's pong table); the dream-world cast recast as Sam's friends (India=John, Nazca=Joe Gallagher as the black-car driver, Easter=Costa as the revolutionary, Pyramid=Al Hubz, Ezekiel=anonymous prophet + Nicole reading); ALL licensed ambience beds replaced by generated ones plus seven new beds (five worlds, Colony, Trisha's) via tools_make_beds.py; the map audit done in full (fronts, constable + drunk, windows dimming, edge lures, player light). STILL OPEN: venue sides on the scrolling map (Sam: "the French is on the wrong side of the road"; his corrections not yet given); Sam's listen-through of all beds; the 10 alley passages and every new pink line are his to write. Next three: (1) venue sides once Sam gives them (DOORS c/fc/fr + notebook plan markers), (2) listen-through fixes to bed levels, (3) music for the dream worlds under the beds (Sam's).
 
 
@@ -1092,3 +1094,39 @@ Faster transient, twice the ring, and 2.6x the level. That is the difference bet
 Nothing else in the audio system was touched; `doorKnock` is still the only definition and is still exported on `dssAudio`.
 
 synced, commit when ready
+
+### Addendum 36 — the walk-in moved to the front, where it was meant to be (2026-09-12)
+Sam: "Order at the start is wrong. So I inserted a little introductory passage which was supposed to lead you in. It appears between the first alba and the return to dean street now. it should appear straight after the first click to enter the game."
+
+The passage is **`The Walk In`** (the opening-walk scene, Addendum 22).
+
+**How it was wired.** `Start` went straight to `The Night Ahead`, and the walk-in was hanging off the end of the book-naming branch instead: `LINE 1` (the first alba, from Red) → `Night Ahead Part Two` → `Name Your Book` → **`The Walk In`** → `Dean Street`. So it played about an hour into the night, right after the first alba, exactly as he described. The giveaway was that `Name Your Book`'s own link already reads **"Back to Dean Street."** while actually routing to the walk-in, which is the signature of a passage inserted one step too far down the chain.
+
+**Four changes, all rewiring, no prose touched.**
+1. `Start` now does `(go-to: "The Walk In")` instead of `(go-to: "The Night Ahead")`. `Start` is a silent setup passage, so the walk-in is the first thing the player sees after the first click.
+2. `The Walk In` hands on with `[[Enter the night|The Night Ahead]]` instead of straight to `Dean Street`. His link text is untouched; only the target moved.
+3. `Name Your Book` now does `(go-to: "Dean Street")`, which is what its link already claimed to do.
+4. `"The Walk In"` added to `_hideStats`, so the stat bar stays hidden on it the way it already does on Title, Start, The Night Ahead and Name Your Book. It did not need this when the passage sat mid-game; it does now that it is an opening page.
+
+**New order:** Title → BEGIN → (Start, silent) → **The Walk In** → The Night Ahead → Dean Street. The later branch is now LINE 1 → Night Ahead Part Two → Name Your Book → Dean Street.
+
+**Verified by walking it:** from the Title, one click lands on the walk-in with the stat bar hidden; "Enter the night" goes to the typewriter page; "Step into the night" reaches the hub. Separately, `Name Your Book` → "Back to Dean Street." now lands on the hub and no longer on the walk-in. Zero `tw-error` throughout.
+
+**Note for whoever reads counts.** Passage and `[[` link totals drifted upward during this session (222→224 passages, 310→314 links) with no edit of mine accounting for it. That is not a fault: **Sam was editing the .twee at the same time** — `Soho Hut Art`, `Soho Square Gents`, `Night Progress` and `Towards Dawn` all appeared mid-session. `sync_html.py` only ever reads the .twee, so it is not the culprit. Every edit here re-reads the file immediately before writing, so nothing of his was clobbered, but do not treat global counts as a regression check while he has the file open.
+
+synced, commit when ready
+
+### Open night overhaul — no turn limit (2026-09-12, Codex)
+Sam requested an overhaul of the turn limiter to suit the walkable open world, explicitly allowing its complete removal.
+
+**Design now shipped:** exploration has no time budget. No deadline, forced dawn from hub visits, passive hub morale/sobriety loss, game turn rewards/penalties, refusal time charges, or portal time charges. Existing condition changes from decisions/games/drinks, story gates, pocket-key consumption, and deliberate final-call refusal remain. `$returns` survives ONLY as the backwards-compatible, monotonic story visit counter for introductions, coin and phone-call spacing: its sole increment is in Dean Street, with the existing alley-return exemption. Old `$nightLength` values in saves are ignored (no source references remain).
+
+**Night Progress** derives `$nightPhase` from collected story milestones, monotonically: 0 Before midnight; 1 After midnight at 4 haunts / 1 Alba line / an existing after-midnight flag; 2 Small hours at 8 haunts / 2 Alba lines; 3 Dawn awaits at all 3 lines. It updates the existing date/midnight cue. Header displays the phase. Map sky and ordinary windows follow this discovery-based depth, with some ordinary windows always lit and venue lights retaining their existing logic. No elapsed-time or visit-count dependency. Important: `$nightAlbaCount` is a derived STORY variable because a temp variable set inside `(display:)` is not reliably accessible to the caller on direct arrival; this was caught and fixed during tests.
+
+**Voluntary ending:** Head towards dawn is visible immediately below the map, outside its parked navigation hooks, even before Red. New `Towards Dawn` shows Alba/flower/haunt totals, makes incomplete-ending and stolen-notebook consequences explicit, and offers Go towards dawn → The Fetch or Keep exploring → Dean Street. The latter sets alleyReturn so merely checking the ending does not advance phone pacing. The Fetch's original return prose remains; its Not yet option now stays available at any visit count, even with all collections complete. Explicit `$refusedDualRing` still intentionally removes that retreat. All original endings are retained. Completing the poem also no longer closes The French's return link.
+
+**Other consequences:** Shana's once-per-game second reading costs 4 morale, not a turn; finding the Hanged Man retains its existing +6 morale. Her existing prose remains verbatim; a new small UI note names the actual morale stake. Existing draft line "The night is shorter for it" is now metaphorical; Sam can rephrase it if desired. Old time tutorial/popups and TURN ±1 notices are removed. A once-only, serialized open-night tutorial works for fresh and older saves. Initial phase/tutorial reset occurs in both StoryInit and Start.
+
+**Verification:** isolated test build under /tmp (test passages never added to the actual game). Old save with 199 visits and a stale 16-turn budget entered Dean Street at 200, with normal map/links and 70/70 condition. Twenty voluntary-dawn detours preserved 70/70 and the initial phase. All four milestone phases checked. Complete and incomplete Fetch both retained their return choice. Stolen notebook warning checked after fixing display-temp scoping. Lily and dual calls appeared with their existing spacing; refusal, fight win/loss and Shana did not alter the visit counter. Low-sobriety late-game fixture retained the Coach recovery route. No tw-errors in these cases. Final header, map and mobile dawn-choice screen visually inspected. Actual build: 224 passages, two additions, none removed. No remaining nightLength/dawnHere/lapsLeft/turns-left/turn-reward references; exactly one returns increment. No git commands run.
+
+Synced, commit when ready. Human playthrough remains the test of the new pacing and difficulty; phase thresholds are atmosphere only and need no deadline balancing.

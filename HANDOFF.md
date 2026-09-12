@@ -865,6 +865,10 @@ User asked to improve the Cow Ride and, if possible, continue with Luna. Luna wa
 - Methodical follow-on pass: Coach & Horses, Chinese Fish & Chips, and Lackland's Office received small exposure/ambient lifts after visual inspection showed their focal facades were sinking into darkness.
 - These are standalone render files; no Twee sync was needed. No git commands run.
 
+### Addendum 26 — 3D render lighting pass continued (2026-09-12)
+- Adjusted Colony Room, Copper's Lair, and the Dean Street corner with restrained exposure and ambient lifts so their doors, signs and street planes remain legible.
+- Centre Point also received a small lift; the historical Carthage coast render and saved/prototype files remain untouched pending a separate visual review.
+
 ### Addendum 14 (2026-09-12): the map's buildings get faces
 
 - Map engine: new `FRONTS` table + `drawFronts()` (called in buildBase after the doors/steps, before lamps) and `drawFrontGlow()` (in buildGlow). Each venue's frontage (up to two facade tiles either side of its door, via `frontageTiles`) is redrawn with a front you can read without the label; `faceTile()` rotates the tile so every front is drawn with the street at the bottom. Fronts: Ronnie's magenta neon panels (dark when shut) with a pink pavement pool; the French's tricolour on a bracket + red-curtained window; the Colony's green-lit windows, brass plaque and dustbin; the doorway's red-shaded window and bell push; the chippy's wide lit window with fish fascia (dim unless open); the Coach's frosted pub windows, hanging lantern sign and awning; the Pillars' stone columns with a lantern; Trisha's basement railings and pink bulb; Lackland's green lamp window and brass plate. Landmarks off the door list: Foyles' lit window with book spines along the east edge (col 51, rows 2-8, door gap at the spot row 5) with a warm pool; the Tudor hut in Soho Square garden (36-37,7); St Anne's tower with clock and green copper bulb at (8-9,37-39). `drawFacade` also tints facades per block (warm red-brick blocks, painted-grey blocks) so districts differ.
@@ -899,3 +903,4 @@ User asked to improve the Cow Ride and, if possible, continue with Luna. Luna wa
 
 - In draw(), before the sprite: a warm amber pool on the pavement under his feet (ellipse, radius breathing 0.85-1.0 on a 38-frame sine), a shadow ellipse thrown AWAY from the nearest lamp within 6 tiles (up to 3 px offset, stretched a little with the offset), and the pale halo widened to 17 px at 0.32 alpha. Verified by capture beside the Ginger Light lamp: pool + shadow + halo.
 - All five map-audit items are now done (fronts, street life, windows dimming, edge lures, player light). Map dev hooks for future sessions: `__dssSohoTeleport(c, r)`, `__dssSohoLife(near)`.
+- (last four minutes) The Pillars of Hercules ARCH across Manette Street: two stone piers on the pavements at rows 7-10 by the Greek Street end (cols 43-46), a span over the road with a lamp hung in the middle and a warm halo. Drawn in drawFronts, lit in drawFrontGlow. Captured; check it in Chrome at full size.

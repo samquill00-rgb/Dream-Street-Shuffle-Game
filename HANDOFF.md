@@ -3168,3 +3168,39 @@ save exists; both are offered.
 
 Zero errors in both. Reproduced the returning-player case by seeding a
 correctly-shaped save key rather than waiting for one to accrue.
+
+### Addendum 64 — "The Walk In" deleted (2026-09-13)
+
+Sam: "this recently inserted screen before the typewriter and after begin is
+rubbish and redundant. I made a bad call with that. Can you delete it please?"
+
+Removed the passage `The Walk In` — the short interstitial with the star row,
+"DEAN STREET · 23 NOVEMBER 1973", and "The city has left a light on for you.
+Somewhere ahead, a morning song is waiting to be found."
+
+It sat between `Start` and the typewriter page `The Night Ahead`, and had exactly
+one inbound, `Start`'s own `(go-to:)`, so nothing else pointed at it.
+
+Done in four parts:
+1. The passage block deleted (229 passages to 228).
+2. `Start` now goes straight to `The Night Ahead`.
+3. `"The Walk In"` removed from `_hideStats`.
+4. Its 22 lines of dead CSS removed (`.opening-walk*`, `.opening-star`,
+   `.opening-lamp*`, `.opening-road*`, and the `openingTwinkle` / `openingLamp`
+   keyframes). Zero references to any of it remain, and the stylesheet's braces
+   still balance at 2249 each.
+
+**The opening is now: BEGIN → The Night Ahead (the typewriter) → Dean Street.**
+Verified end to end, zero errors, no broken link targets anywhere in the file.
+
+**A note to stop making the same mistake.** On first check this looked broken:
+the passage reported `innerText` of `"\"` with no links, and stayed that way for
+eight seconds. It was fine. `The Night Ahead` is a `.typewriter-page` that
+reveals its text progressively, and `innerText` does not report text that has not
+been revealed yet. Reading the DOM instead showed `DIV.typewriter-page` present
+and the prose already in it; the link appeared 1.5s later.
+
+That is the **third** time today a timed reveal has been mistaken for breakage
+(the Fetch, the merged primer, and now this). The rule: before concluding a
+passage is broken, check `innerHTML` and the child elements, not `innerText`, and
+wait at least two seconds.

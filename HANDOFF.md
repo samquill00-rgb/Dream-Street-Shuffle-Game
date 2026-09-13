@@ -3290,3 +3290,61 @@ lamp.
 **Standing lesson, now twice proven in one session:** pulling a camera in cuts
 things out of the *back* of a scene as well as crowding the front. Check what
 sits between the old and new camera positions before moving one.
+
+---
+
+## Addendum 67 — street labels, the spawn tile, and a false alarm about the opening (2026-09-13)
+
+**1. "Back to Dean Street" inside venues → "Back to the street".**
+Seventeen links reading exactly `[[Back to Dean Street|Dean Street]]` sat inside
+venue-tagged passages, where the player is indoors and the exit puts him back
+outside the door, not on the hub. Each was repointed to that venue's own approach
+passage and relabelled:
+
+- Approach The Colony Room ×4
+- Approach The French ×3
+- Approach The Pillars ×3
+- Approach Lacklands Office ×2
+- Approach Ronnie Scott's ×2
+- Approach Trisha's ×2
+- Approach The Coach ×1
+
+Deliberately **not** touched: alleys, doorways and the approach passages
+themselves, which genuinely do return to the hub and should keep saying Dean
+Street; and the distinctive prose exits ("Not tonight. Back to Dean Street.",
+"Try Dean Street again", "I'll look for it", "Leave the French", "Not tonight.")
+which are his lines, not UI chrome. Verified: no broken targets, alleys unchanged.
+
+**2. The opening spawn moved one block north.**
+`var spawnC = 17, spawnR = 22` → `spawnR = 14` (twee ~line 4737). Dean Street is
+columns 17–18; the block boundary going north is the Bateman Street crossing at
+rows 15–16, so r14 is the first tile of the next block up. There is already a
+streetlamp at c16,r14, so he arrives under a light, still facing south with the
+venue block laid out below him. Verified live: `dssSohoMap.state` reads
+`{c:17, r:14, facing:"down"}` on a fresh session.
+
+**3. False alarm — the opening was never broken.**
+Earlier in the session BEGIN appeared to stall on `Start`, rendering
+`<tw-open-button goto="" label="GO">` and never reaching `The Night Ahead`. Two
+things were true and both were misread:
+
+- `tw-open-button[goto]` is **Harlowe's own hidden debug affordance** for a
+  `(go-to:)` (`tw-open-button[goto]{display:none}` in the engine CSS; it only
+  becomes visible under `.debug-mode`). Its presence is normal, not a symptom.
+- The real cause was `document.hidden === true` — the Browser pane tab was
+  backgrounded, which stalls rAF, which stalls the passage transition, which
+  leaves the `(go-to:)` waiting. Measured: **10+ seconds** before it fired.
+  With the pane fronted and a frame forced, BEGIN → The Night Ahead is instant.
+
+The two literal backslashes at the end of `(set: $liverReturnTo to "Dean Street")\\`
+are pre-existing in every backup and harmless (they print one stray `\` that is
+invisible against the page). Left alone.
+
+**Lesson, now the fourth time this trap has been sprung this session:** before
+diagnosing a Harlowe timing or reveal bug from the pane, check `document.hidden`.
+A hidden tab breaks transitions, `(after:)`, and anything rAF-driven, and it looks
+exactly like broken game logic. See `project_preview_tab_backgrounded`.
+
+**4. Re-verified while in there:** with `localStorage` cleared,
+`#dss-continue-wrap` computes to `display:none` on the Title — the
+"CONTINUE WHERE I LEFT OFF" gate from Addendum 62 still holds.

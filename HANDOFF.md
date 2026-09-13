@@ -1328,3 +1328,18 @@ Two traps that came with it, both recorded because they will recur:
 **Still open:** whether the corner monograms stay once characters have faces. Deliberately not touched — that decision is better made with something to compare against, and there are now five to compare.
 
 synced, commit when ready
+
+### Addendum 44 — monograms retired; Red out of the poem (2026-09-13)
+Sam, once he had five faces to compare against: *"Get rid of the monograms. Also No red in the poem, that is separate."*
+
+**The corner sigils are gone.** They were the gold cartouche plus emblem plus hand-drawn initial in the bottom-left, raised per passage from `char-<id>` tags. With the line-drawing portraits doing the work behind the prose, an abstract badge beside a face was redundant.
+
+Retired rather than deleted: the call in the navigation handler is now `if (false && window.dssSigils)`, and `#dss-sigil-corner` carries `display: none !important`. The whole module above it — the 13-entry `CHARS` table, the `_L` monogram paths, the cartouche/emblem builders, the fade and stacking logic — is untouched and simply never invoked. Flipping that `false` and dropping the `display:none` brings it all back. Roughly 100 lines of hand-drawn SVG letterforms that took real work; not worth destroying at 2am on a preference that might swing back.
+
+Verified: `#dss-sigil-corner` is never even created now (`ensureCorner()` lives inside the `update()` that no longer runs), and `.dss-sigil` count is 0 in character scenes that previously showed one.
+
+**Red is out of the poem.** `LINE 1` carried `char-red`, so his portrait was appearing behind the alba. That scene is its own thing. The tag is removed from `LINE 1` only; he still appears in `At the Corner of Dean Street and Greek Street` and `You speak to the poet`. Verified: `LINE 1` now renders with no tags at all and no background art, and the alba text is unchanged.
+
+**Note:** `char-` tags now have exactly one consumer, the portrait CSS. Nothing else in the build reads them. So adding or removing a `char-` tag is purely a question of whether that character's face should appear in that scene.
+
+synced, commit when ready

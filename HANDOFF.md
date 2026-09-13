@@ -3562,3 +3562,134 @@ the destination was honest; only the label was off.
 - **Dream returns** — labelled plain "Dean Street"; correct.
 
 Every remaining "Back to the street" label now targets `Dean Street` directly.
+
+---
+
+## Addendum 72 — Greek Street corrected against the real street (2026-09-13)
+
+Sam supplied a Google Maps screenshot of Soho with pins on Trisha's, Ronnie
+Scott's, the Coach and Horses, the French House and The Little Scarlet Door
+("about where the Pillars used to be"), plus the note that the Pillars stood on
+the Greek Street / Manette Street corner, at the arch, on the same side as the
+Scarlet Door.
+
+**Changed on the walkable hub map** (Greek Street is c41-42: west kerb c40 /
+west buildings c39, east kerb c43 / east buildings c44):
+
+- **Trisha's** — was on the EAST side of Greek (door c44,r19). It is on the
+  **west** side (57 Greek Street). Now door c39,r19, entered from c40,r19.
+- **The Coach and Horses** — was on the WEST side (door c39,r33). It is on the
+  **east** side, on the Romilly Street corner, which is itself east of Greek.
+  Now door c44,r33, entered from c43,r33.
+
+**Checked and left alone:**
+
+- **The Pillars** was already right: east side of Greek, door c44,r11 — the
+  first building south of the Manette Street arch. Moving it one north to r10
+  looked correct on paper but broke it: Manette runs at r8-9, so every tile at
+  r10 east of Greek is kerb, not building. Same trap caught the Coach at r34
+  (Romilly is r35-36). **Rule for anyone moving a door: a tile orthogonally
+  adjacent to a road is always pavement, so the corner building is two rows off
+  the cross-street, not one.** Verified every door afterwards by re-running the
+  map's own tile rules: all 27 sit on a building (or a walkable spot) with a
+  walkable approach.
+- **Ronnie Scott's** — already correct, west side of Frith Street (47 Frith St).
+- The lamp at c43,r34 stayed put; the Coach's door at r33 clears it.
+
+**Still open — two things I would not decide alone:**
+
+1. **The notebook map draws Trisha's NORTH of the Pillars** (Trisha's 494,200;
+   Pillars 486,228), which is backwards — Manette Street is far north of 57
+   Greek Street. Fixing it properly means moving Trisha's south, and Trisha's is
+   one of the five pentangle anchors (`points='280,70 490,560 100,250 494,200
+   230,470'`), so the star changes shape. Sam's call. Moving only the Pillars
+   north is possible but it would crowd the GREEK STREET label at y=160.
+2. **Dean Street sides.** The game has the French on the west side (door c15)
+   and the Colony on the east (door c20). 49 and 41 Dean Street are both odd
+   numbers, so in reality they are on the same side. The screenshot pins only
+   the French. Needs Sam to say which side both belong on.
+
+---
+
+## Addendum 73 — Trisha's moved, the pentangle redrawn (2026-09-13)
+
+On the notebook plan Trisha's was drawn NORTH of the Pillars, which is backwards:
+the Pillars stood at the Manette Street arch, right at the top of Greek Street,
+and Trisha's (57 Greek Street) is well south of it.
+
+- **Trisha's** `494,200` → `494,262` — south of the Pillars, still north of
+  Bateman Street.
+- **The Pillars** `486,228` → `486,205` — up to the top of Greek Street, at the
+  arch.
+
+The pentangle geometry exists in **three** places and all three were updated, so
+the star stays consistent: the notebook map (`map-pentagram` + `map-pent-tracer`
++ `map-pent-lilies`), **Dawn Approach White** and **Dawn Approach Black** (`_pv`,
+polygon + `pent-lily`). The gathered-lily mark for lily 2 moved with the Pillars
+node.
+
+**The star is still a true pentagram.** Checked by computing the angular ring
+round the centroid — Chippy → Centre Point → Trisha's → Coach → French — and the
+draw order steps two points each time, five times over, which is the definition.
+The apex (Centre Point) has not moved.
+
+It also reads *better* than before: the left arm (Chippy) sits at y=250 and the
+right arm was at y=200, so the old star was tilted; at y=262 the two arms are
+nearly level. Confirmed on the Dawn Approach over the rooftops — a clean,
+slightly lopsided five-pointed star, which is the house rule.
+
+Positions now agree between the walkable map and the notebook plan: on Greek
+Street, north to south, the Pillars (at Manette) → Trisha's → the Coach and
+Horses (at Romilly).
+
+---
+
+## Addendum 74 — Dean Street: the Colony crosses the road (2026-09-13)
+
+Sam's ruling: the French (49 Dean St) and the Colony (41 Dean St) are both on the
+**west** side. The French was already there (door c15,r25). The Colony moved from
+the east side (door c20,r24) to **c15,r22**, entered from c16,r22 — three tiles
+north of the French, since 41 is north of 49.
+
+Dean Street's four now all sit west: the chippy (c15,r6), the Colony (c15,r22),
+the French (c15,r25), the teaching doorway (c15,r30). Re-ran the map's own tile
+rules over all 27 doors afterwards: no bad tiles, no two doors sharing a tile.
+
+**Honest note on the screenshot.** Sam asked me to confirm the side from the
+Google Maps image. I could not. Measuring the pin against the street-label
+centrelines put the French House 28px **east** of Dean Street — but the same
+method put it 63px **south** of Old Compton Street, which is certainly wrong
+(the French is a few doors north of that junction). The cross-checks landed
+correctly (Ronnie's -12px west of Frith, Trisha's -18px west of Greek), so the
+method is not broken, but it is not good enough at this resolution to settle a
+question of one street's width. Went with Sam's call. If the sides ever come up
+again, a photograph or a street-number check beats reading pins off a rotated
+map.
+
+---
+
+## Addendum 75 — the hub nudges removed (2026-09-13)
+
+Sam: "I don't like the 'Go where the light is already on.' type prompts. Can you
+get rid of those, people will work it out."
+
+Deleted the whole `.dss-thread-cue` block from Dean Street — all four states of
+it, not just the first:
+
+- `$returns <= 1` — "Go where the light is already on."
+- poem incomplete — "The morning still has lines missing."
+- fewer than 12 haunts — "The night is not finished marking you."
+- otherwise — "Go towards the morning."
+
+All the styling was inline on that one div, so nothing is left behind in the
+stylesheet. The map now runs straight into the Dean Street prose; the page came
+down again from 1595px to 1454px, because that div was the second of the two
+`clear: both` blocks under the lamp.
+
+**Left in place, same neighbourhood, different register — flag if he wants them
+gone too:**
+
+- `.dss-night-choice` — "The poem is complete. Stay as long as you like." Not a
+  nudge; it tells you the ending has opened and that there is no rush.
+- `.alba-hint` in the header — "One line is caught. Two more still to find." A
+  status readout under the ALBA counter rather than an instruction.

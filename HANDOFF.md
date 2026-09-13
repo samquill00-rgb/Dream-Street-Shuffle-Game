@@ -1343,3 +1343,19 @@ Verified: `#dss-sigil-corner` is never even created now (`ensureCorner()` lives 
 **Note:** `char-` tags now have exactly one consumer, the portrait CSS. Nothing else in the build reads them. So adding or removing a `char-` tag is purely a question of whether that character's face should appear in that scene.
 
 synced, commit when ready
+
+### Addendum 45 — sigil code deleted outright (2026-09-13)
+Sam: *"delete the sigil code properly."* Addendum 44 had retired the monograms behind an `if (false && …)` and a `display:none`; they are now gone from the source.
+
+**150 lines removed across three sites**, cut back-to-front so the line numbers stayed valid, with every boundary asserted before cutting:
+- **107 lines** — the whole sigil module in the UserScript: the `// ====== CHARACTER SIGILS ======` IIFE, the 13-entry `CHARS` table, the `_L` hand-drawn monogram paths, the gradient/frame/emblem builders, `ensureCorner`, the fade-in/fade-out `update()`, and the `window.dssSigils` export.
+- **17 lines** — the call site in the navigation handler, including the `[data-sigil]` scan that let a passage declare a character inline.
+- **26 lines** — the stylesheet block: `#dss-sigil-corner`, `.dss-sigil`, `.dss-sigil-in`, the `svg` rule and `@keyframes dssSigilBreathe`.
+
+**Verified after rebuild:** zero occurrences of `dssSigils`, `dss-sigil`, `dssSigilBreathe` or `CHARACTER SIGILS` anywhere in the .twee **or** the compiled .html; `window.dssSigils` is `undefined` at runtime; `dssAudio`, `dssSohoMap` and `dssKeyPopup` all still alive; 225 passages written, 229 headers, 321 links; console clean; zero `tw-error` in Davy Merkin, PP Pong and on load. All three seams inspected by eye — the JS block now runs straight from the drink handler into `// ====== SOHO MAP`, the navigation handler from the tags parse into `if (window.dssAudio)`, and the CSS from the typewriter-paper rule into `.cellar-scene`.
+
+**One orphan left deliberately.** `PP Pong` still carries `<span data-sigil="jack">` / `<span data-sigil="percy">` markers, which declared the current opponent to the retired system. They are inert and invisible (zero `[data-sigil]` elements render, and the passage shows no stray spans), and they are inside Sam's own conditional prose, so removing them means editing his passage text for no functional gain. Left as harmless residue; a future session may tidy them if it is editing that passage anyway.
+
+**A backup of the pre-deletion .twee is at `/tmp/twee-before-sigil-delete.twee`** for the rest of this machine's uptime. After that, the monogram artwork exists only in git history — the last commit containing it is whatever precedes this one.
+
+synced, commit when ready

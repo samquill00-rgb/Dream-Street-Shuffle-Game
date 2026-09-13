@@ -1200,3 +1200,35 @@ The exit is therefore a place you walk to at the top of the map, always present,
 **The exit is now unadvertised everywhere.** The only remaining occurrences of the phrase in the .twee are the map's `north` matcher, the off-screen link the map scans, a code comment, and the `<h2>` inside `Towards Dawn` itself — which you only see once you have arrived. Nothing tells the player it exists. Verified on the hub: the tip renders without the sentence, and there are zero visible text links.
 
 synced, commit when ready
+
+### Addendum 39 — the cow moos when it swerves (2026-09-13)
+Sam: *"When the cow moves left or right on the cow game it should make a moo noise instead of the noise it makes now."*
+
+Lane changes were calling `dssAudio.dodgeWhoosh()`. They now call a new `dssAudio.cowMooShort()`.
+
+**Why not the existing `cowMoo()`.** There already is one, and it is 1.2s long and already in use as the ride's ambience, firing on a random 5-to-12-second timer. A swerve can fire every 90ms (the keyboard throttle), so reusing it would have stacked a herd of overlapping 1.2s moos on top of the ambience. `cowMooShort` is the same animal clipped: sawtooth 205 to 150Hz, 7Hz vibrato, lowpass 820, **331ms** long and peaking at **0.076** against the ambient moo's **1121ms** and **0.103**. Each one gets a small random pitch scatter so repeated swerves are not one sample on a loop.
+
+**Four call sites changed**, all of them lane changes: the two keyboard branches (`playerLane--` / `playerLane++`) and the click and touch handlers. All three input routes stay identical to each other, which was the original intent of the code there.
+
+**Deliberately left alone:** the near-miss `dodgeWhoosh` at the obstacle-passing check. That one is a genuine whoosh of something going past, not a move, so it keeps its whoosh. The `hoofBeat` gallop and the ambient `cowMoo` are untouched. `dodgeWhoosh` itself is unchanged and still used by two other games.
+
+**Verified in the game**, instrumenting `dssAudio` and swerving six times: six `cowMooShort` calls, zero `dodgeWhoosh`, hoofbeats still running underneath and one ambient `cowMoo` in the same window. Zero `tw-error`. Note that `_play()` short-circuits when muted, so this was tested unmuted; testing audio muted proves nothing.
+
+synced, commit when ready
+
+### Addendum 40 — the Donkey coin's portrait re-framed (2026-09-13)
+Sam, with a screenshot: *"You see how the coin here is sort of misaligned with its border? Can you fix that for all appearances of the coin?"*
+
+**What was actually wrong: the coin was two coins.** `coin-heads.svg` is a 400x400 vector coin — body, rings, and the SEX ANTONIUS / NUMBEX ADAMUS lettering on a `ring` path at r=156 — with a raster portrait clipped into it at `circle cx=200 cy=200 r=136`. But the embedded PNG is **not a portrait, it is a whole finished coin**: its own rim, its own lettering band, its own face. It was placed at `x=22 y=22 width=356 height=356`, which scales it by 0.89, so the PNG's own lettering ring landed at about r=139 in SVG units, against a clip at r=136. The clip was cutting the PNG **three units inside its own border**, so a sliver of the raster coin's rim showed as a second, not-quite-concentric arc inside the vector one. That mismatched inner arc is what reads as the portrait being off-centre. Nothing was actually off-centre: measured radially, the SVG's geometry is symmetric to the pixel and the image box is centred on 200,200.
+
+**Fix:** the image is now `x='-25' y='-25' width='450' height='450'`. Scaling it past the clip pushes the raster coin's own rim and lettering outside r=136 entirely, so only its face shows and the vector frame is the only border in the picture.
+
+**Sam chose the framing off a rendered comparison sheet** (356 as-is, 410, 450 side by side in the real `.coin-overlay-disc` styling). He first said 356, then changed to 450: *"it's funnier if it's more difficult to work out the face: one for the real Anseral fans."* So the larger crop is a deliberate choice, not just a technical fix. Do not "restore" the smaller framing.
+
+**All appearances covered by the one asset.** `__DSS_COIN_HEADS_DATA_URI__` is used in four places and they all take the change together: the notebook EFFECTS entry, the JS that swaps `src` on the notebook flip, `.coin-overlay-disc .cp-heads` (the pickup popup and the Colony-doors coin gate), and the `.coin-heads` rule. `coin-tails.svg` needed nothing — it is pure vector with no raster. `coin-toss-preview.html` is a standalone dev preview still pointing at the superseded `coin-heads.png` and was left alone.
+
+**Verified in the game after sync:** the notebook coin renders with the face filling the field and concentric with the milled edge, no competing inner ring; the `flipCoinPopup` overlay renders the same asset correctly. Zero `tw-error`. All scratch files (`coin-check-TEMP.html`, `coin-var-*-TEMP.svg`) removed.
+
+**Method note for next time.** Three rounds of pixel measurement on the PNG were a dead end — texture detection caught the lettering, colour separation failed because the portrait is a gold duotone with no skin hue, and a radial edge-fit was biased by the dark hair at the top of the head. What settled it in one step was rendering candidates side by side in the real CSS and looking. For a framing question, render and look first.
+
+synced, commit when ready

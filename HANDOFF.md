@@ -1274,3 +1274,57 @@ Sam's idea, from noticing the K6 modelled in the Ginger Light render: *"I quite 
 **Verified:** passage renders with no errors in the coin-but-no-refusals state; hub link present and parked off-screen with no visible text links added; map door reads back from `dssSohoMap` at c19/r24 with its matcher. **Not verified live:** the spend itself and the `$refusedCalls > 0` branch, because the save had `$hadPhoneCall` already true so no call would ring to refuse. The branch is a plain if/else-if chain and compiles clean, but nobody has watched the coin go in.
 
 synced, commit when ready
+
+### Addendum 43 — character line drawings as background presence: Red (2026-09-13)
+Sam has generated single-line ink portraits of the cast and dislikes the corner monograms. After trying a few framings his own idea won: *"We have a black background. Maybe these single line drawings can become part of the background in which against the black?"*
+
+**Red is wired as a prototype.** One CSS rule, no JavaScript, sigils untouched. It uses the mechanism the venues already use — `tw-passage[tags~="venue-french"]` tints a passage by tag — so `tw-passage[tags~="char-red"]` needs nothing new. It applies automatically to his three passages: `At the Corner of Dean Street and Greek Street`, `LINE 1`, `You speak to the poet`.
+
+**Two dead ends worth recording, because both will recur with the other twelve.**
+1. **A ::before with `filter: invert(1)` + `mix-blend-mode: screen` rendered completely invisibly.** Filter and mix-blend-mode each open a stacking context, and at `z-index:-1` the layer ended up behind `tw-story`'s **opaque** gradient. Computed styles all looked correct (403x1159 at left -91px), which is what made it confusing. Do not reach for blend modes here.
+2. **`opacity` cannot be used to knock the art back**, because on the element it fades the prose too.
+
+**What works.** The art was converted on disk to **line-on-transparent** (warm ink `#e8d6b4`, alpha taken from the darkness of the original line, paper noise below 14 clipped to zero, line firmed 1.25x): 1144x1375, 1.7MB RGB in, 691KB RGBA out. Then two background layers on the passage — the drawing underneath, and a flat scrim of the page's own ground on top:
+
+```
+background-image: linear-gradient(rgba(10,9,8,0.86), rgba(10,9,8,0.86)), url('char-red.png');
+background-position: center, left -16% center;
+background-size: cover, auto 96%;
+```
+
+**The scrim alpha is the dial.** 0.86 is where it landed: the beret, one eye and the jaw read out of the dark, the lamp sits over it, and the prose is unaffected. Higher = fainter. Size and horizontal position are the other two dials.
+
+**Linked, not embedded.** `char-red.png` sits beside the .html and is referenced relatively, like the audio. Thirteen of these inside the build would be absurd, and linking means an image can be swapped without a rebuild. **Do not add them to `IMAGE_EMBEDS`.**
+
+**For the other twelve:** the source files are in `Claude work/` one level up (`The great Ham.png`, `John st john line.png`, `Clive james.png`, `John St John.png`, `Jeremy Reed Image.png` so far). Each needs the same on-disk conversion to line-on-transparent, then one CSS rule. The conversion script is inline in this session's history; it decodes and re-encodes PNG with zlib and needs no Pillow, which is not installed and cannot be pip-installed here (PEP 668).
+
+**The drawing is FIXED to the viewport** (`background-attachment: scroll, fixed` — scrim scrolls, art does not). Sam's idea, and it solved the framing problem outright: the portrait no longer depends on how tall the passage is, so a long scene and a short one look identical, and he simply stands there while the lamp and the prose scroll up over him.
+
+Two traps that came with it, both recorded because they will recur:
+- With `fixed`, the layer is positioned against the **viewport** but still **clipped to the passage box**. A `left 2%` position therefore put him beside the text column and all you saw was a sliver of hair. **Centre it**: the passage is itself centred with a max-width, so `center` keeps the two aligned at any window width with no arithmetic on the gutter.
+- Percentage sizes also resolve against the viewport under `fixed`, which is what makes the framing stable. Current values: `auto 96%` desktop, `auto 80%` under 720px.
+- iOS Safari ignores `background-attachment: fixed` and falls back to scroll. That degrades to roughly the old behaviour rather than breaking.
+
+**Red's likeness was regenerated.** The first drawing was, in Sam's words, "clearly Percy Shelley in a beret"; he supplied a photograph of the real poet and produced `New RED POET.png`, which carries the fringe, the hooded eyes, the cravat and the beret pushed back. Converted and installed as `char-red.png` (1145x1374, 373KB). **I cannot draw or regenerate these** — no image generation is available in this session — so every likeness has to come from Sam; my side is conversion, placement and tuning.
+
+**Five faces wired (2026-09-13, 02:15).** Each is one line of CSS plus a converted PNG beside the .html; all shared behaviour (scrim, fixed attachment, centring, sizing) lives in one rule above them.
+
+| character | tag | source drawing |
+|---|---|---|
+| Red, the poet | `char-red` | New RED POET.png |
+| John St John | `char-john` | John st john line.png |
+| The Great Ham | `char-ham` | The great Ham.png *(re-converted from Sam's 02:08 re-save)* |
+| The novelist | `char-novelist` | Noevlist.png |
+| Davy Merkin | `char-davy` | Australian.png |
+
+**Two mapping traps, both resolved by asking rather than guessing.**
+- **The novelist had no `char-` tag at all** — alone among the cast, `The novelist` and `Approach the novelist` were tagged `venue-french` only, so there was nothing for the CSS to key off. `char-novelist` added to both. He has no sigil registry entry either, which is harmless: `update()` guards with `if (registry[id])`, so no corner mark appears for him.
+- **"Clive the Australian" is Davy Merkin.** The drawing arrived as `Australian.png`, but the words "Australian" and "Clive" appear **nowhere** in the .twee. Sam identified him as the drinking man at the Colony Room bar, which is `char-davy`; the file was renamed to `char-davy.png` to match the tag. Confirmed correct by his own prose in that scene: *"The accent is Anglo-Antipodean… it strays audibly at its burnt edges into an outback."*
+
+**Not line drawings:** `Clive james.png` and `John St John.png` are watercolours — full colour, tonal, on painted grounds. They will NOT survive the line-on-transparent conversion (alpha-from-darkness turns a painting into a solid mass) and are presumably references rather than assets.
+
+**The converter is saved at `/tmp/linify.py`** — decodes and re-encodes PNG with zlib, no Pillow (which is not installed and cannot be pip-installed here, PEP 668). Usage: `python3 /tmp/linify.py <source> <dest>`. Ink `#e8d6b4`, alpha from line darkness, noise below 14 clipped, line firmed 1.25x.
+
+**Still open:** whether the corner monograms stay once characters have faces. Deliberately not touched — that decision is better made with something to compare against, and there are now five to compare.
+
+synced, commit when ready

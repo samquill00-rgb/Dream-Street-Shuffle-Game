@@ -2961,3 +2961,88 @@ pulling in can push UI out of frame. All present: ENTER THE CHIPPY at y=736, GO
 TO THE PILLARS at y=729, and the rest. Twice I thought a button had vanished and
 twice it was on screen and simply too small to read in a scaled screenshot —
 check the DOM rect, not the picture.
+
+---
+
+## Addendum 60 — acting on the independent Codex audit (2026-09-13)
+
+Sam had Codex audit the build after my work. Nine mechanics findings, several of
+them caused by my own recent changes. Each was **verified against the source
+before touching anything** rather than taken on trust.
+
+### Fixed and verified (6 of 9)
+
+**#9 — the Colony agent exited to the French. Mine.** `Talk to the intimidating
+agent` is reached from `Colony drink` and `The Colony Room`, but was tagged
+`venue-french`. My venue-tag exit rule therefore put the player outside the wrong
+pub. Worse than the exit: that tag also drives the **French's pub ambience, door
+sound and CSS**, so you heard the wrong pub while standing in the Colony.
+Retagged `venue-colony`. Verified: the exit now lands on `cr-container`, the
+Colony's approach.
+
+**#5 — Play again destroyed permanent things.** The Dawn's "Play again" button
+called `localStorage.clear()`, which wipes `dss_napkin` (the player's own napkin
+drawing) and `dssMuted2` (the mute preference), not just the save. The correct
+targeted pattern already existed in the debug wipe at line 5307. Replaced.
+Verified by seeding all three keys and running the handler body: save removed,
+napkin and mute survive. Written without any `<` character so nothing depends on
+entity decoding inside an inline handler.
+
+**#1 and #4 — the Coach. Partly mine.** Both Coach links on Dean Street require
+the `$coachUrgent` collapse; there is no ordinary route to the Coach at all. That
+was survivable until I gated the cow on holding lines one and two, which made
+**the last line of the poem depend on drinking yourself into a crisis**. And #4
+on top: line 103 was `$coachUrgent is true and _towerReady is false`, so a
+completed poem plus a collapse removed even the crisis route, since the only
+other Coach link needs `$metRed is false`, long past by then.
+- #4: dropped `and _towerReady is false`, so the recovery route survives a
+  finished poem.
+- #1: added a Coach link that opens exactly while the cow can be ridden
+  (`$coachUrgent is false and both lines held and $cowRideDone is false`) and
+  closes once it has been.
+
+Verified with a temporary probe: `urgent:false | a1:true | a2:true | ridden:true
+| whole:false` — three terms true, the only blocker the intended one. Probe removed.
+
+**#2 — line two could close the Pillars.** The post-critic branch was gated
+`not ($alba contains $alba2)`, so picking up line two shut the Pillars even with
+unvisited dream worlds and a key in pocket. Now also stays open while
+`$inisToldOfPillars is true and $worldsVisited's length < 5`. The `not()` is
+placed **last** in the or-chain, per the parsing rule that bit us before.
+
+**#6 — stashed keys stranded when a venue closes. Mine.** The ten alleys already
+keep themselves reachable while holding a key; the five bins did not, so a key
+left in a bin outside a venue that later closed was unreachable. Added the same
+escape for all five, labelled to match the map's door regexes so the right door
+lights.
+
+**#7 — losing at pong closed the rematch.** On defeat `$notebookStake` is
+consumed while `$notebook` stays `"stolen"`, and `Watch the decider` re-offers
+the stake — but only if Lackland's is still reachable, and its hub link closes on
+`$haunts contains $haunt5`. Lackland's now stays open while the notebook is
+stolen. (The notebook was never unrecoverable: Charing Cross Road reopens for it.
+This restores the *pong* route.)
+
+**Also hardened while in there:** Dean Street reads `$stashSites` and
+`$worldsVisited` in its dock guards without the defensive `is an array` checks it
+uses for `$alba` and `$alleys`. Under a debug jump that produced eight
+"The number 0 cannot contain any values" errors. Both now self-heal alongside the
+others. Not reachable in normal play, but free to fix.
+
+### Not yet done (3 of 9)
+
+- **#3** — the street exits can abandon unfinished rewards from Shana, Ronnie's,
+  Davy and the painter.
+- **#8** — several dream recognition scenes lack a route back to the character
+  after the gift.
+
+Both are the same shape and both are **design decisions, not clear bugs**:
+the answer is either to suppress the exit while a reward is pending, or to make
+those scenes re-enterable, and which one is right depends on whether Sam wants
+those beats repeatable. Flagged for his ruling rather than guessed at.
+
+### Regression check
+
+Clean opening walk plus a 54-step crawl over 25 distinct passages: **zero
+`tw-error`s**, no spurious bin links before anything is stashed, hub links
+correct.

@@ -2512,3 +2512,84 @@ observe by scripted clicking. The primer fires on a 1200–1600ms timer and has 
 navigation-safety observer that tears it down if the passage changes, so any
 crawler that clicks faster than that sees nothing and wrongly concludes it is
 broken. Test it by stopping still and waiting.
+
+### Addendum 50 — leaving a venue puts you outside its door (2026-09-13)
+
+Sam: "When you leave a venue you should arrive outside the door, not teleport to
+dean street."
+
+The header exit added in Addendum 47 went to `Dean Street` for every venue. It
+now returns you to that venue's own approach passage, so you step out of the door
+you came in by and the street is still where you left it.
+
+| tag | exit lands on |
+| --- | --- |
+| venue-french | Approach The French |
+| venue-colony | Approach The Colony Room |
+| venue-ronnies | Approach Ronnie Scott's |
+| venue-coach, venue-gents | Approach The Coach |
+| venue-trishas | Approach Trisha's |
+| venue-lackland, venue-lackland-back | Approach Lacklands Office |
+| venue-cecilcourt | Cecil Court Approach |
+| venue-pillars | Approach The Pillars |
+| venue-cellar | Approach Coppers Lair |
+
+Built as an `(if:)/(else-if:)` chain in the header setting a temp `_exitTo`, then
+`(link-goto: "← Exit to the street", _exitTo)`. The link only renders
+`(unless: _exitTo is "")`, so non-venue passages show nothing, exactly as before,
+and no `is not` comparison appears anywhere in it.
+
+From the approach you are one click from the street ("← Back to Dean Street") or
+one click back inside ("·"), so nothing got further away.
+
+**Verified live on six venues** — the French, the Colony, the Coach's gents,
+Lackland's back room, the Pillars and the cellar. Every one showed the exit link
+and landed on its own approach, none teleported to the hub, zero `tw-error`s.
+
+**Checked for side effects.** The French counts its visits through
+`$frenchApproached`, which is set on the approach and consumed on entry, so I
+wanted to be sure bouncing in and out did not inflate `_fc` and unlock the bar
+drink early. It does not: you always pass through the approach either way, so the
+count per re-entry is exactly as before.
+
+One genuine consequence, flagged rather than changed: you can now bounce between
+a venue and its door without touching Dean Street, so `$returns` climbs more
+slowly than it used to. That only delays the `$returns >= 2` nudges slightly. It
+is a pacing effect, not a fault, and it is inherent in what was asked for.
+
+### Addendum 51 — walking the map is no longer "returning to Dean Street" (2026-09-13)
+
+Sam: "'return to dean street' should be when you return to the page, not walk on
+the street in the little map."
+
+`$returns` increments on every render of `Dean Street` unless `$alleyReturn` is
+set, which is the flag that says "you only stepped onto a map tile". All ten
+alleys set it. **The tiles added since did not**, so they were counting as full
+returns to the hub:
+
+- `Doorway: Livonia Street`, `Doorway: Diadem Court`, `Doorway: Ham Yard`,
+  `Doorway: Romilly Street` (added 2026-09-12)
+- `A Doorway on Dean Street` (the teaching doorway)
+- `The Phone Box` (added 2026-09-13)
+
+So stopping to piss in a doorway advanced the night exactly as much as coming
+back from a venue. All six now set `(set: $alleyReturn to true)`, matching the
+alleys. `Soho Square Gents` deliberately does not need it: it is only reachable
+through `Alley: Soho Square`, which already sets the flag, and the flag survives
+until the next Dean Street render.
+
+**Verified with a temporary probe on the increment itself, since `$nightPhase` is
+driven by haunts and alba lines rather than returns and is therefore useless as a
+proxy:**
+
+| trip | `$returns` |
+| --- | --- |
+| two doorway round-trips | 2 → 2 |
+| two alley round-trips | 2 → 2 |
+| into the French, out of the door, back to the hub | 2 → **3** |
+
+Probe removed; zero `dss-probe` occurrences remain.
+
+This also settles the pacing question left open at the end of Addendum 50:
+bouncing between a venue and its own door does not count, and should not. Only
+arriving back on the Dean Street page does.

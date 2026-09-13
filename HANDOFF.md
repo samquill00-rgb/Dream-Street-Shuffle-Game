@@ -2414,3 +2414,101 @@ The `$cowRideDone` half also closes a smaller pre-existing quirk: the ride had n
 guard, so you could ride twice and append line 3 to `$alba` twice. Harmless,
 since the display tests whether you hold a line rather than counting, but it is
 tidy now.
+
+---
+
+## Addendum 49 — the explaining popups cut back (2026-09-13)
+
+Sam: "All the popups are too much (the ones that explain the rules of the game).
+It needs to be simplified in order to take the new complexity of the whole game",
+and on the minigame cards: "you are confronted with a lot of text which sort of
+ruins the flow".
+
+A first night could throw **ten** explanatory popups at you, each one stopping
+the game until dismissed, on top of the tactile ones.
+
+### Minigame cards: 14 lines of instruction down to 5
+
+All four go through one shared builder, `dssShowMinigameRules`, so only the
+`lines:` each game passes needed changing. Emblems, the Art-Nouveau corner
+ornament and the Play button are untouched — it was the text that broke the
+flow, not the art.
+
+| card | was | now |
+| --- | --- | --- |
+| PING PONG | 3 lines | "Move the paddle with your mouse or finger. First to five points wins." |
+| CECIL COURT WALTZ | 3 lines | "Press ← ↓ → or A S D as each note reaches the line." |
+| THE CELLAR | 5 lines | one line for the three moves, one for the keys |
+| JEFFREY BERNARD'S COW | 3 lines | "Use ← → or click LEFT, MID and RIGHT to change lane. You have three lives." |
+
+The rule was: keep only what a player cannot work out by looking. Objectives the
+game shows you anyway ("Don't let the ball get past you", "Empty his bar for a
+knockout") are gone; controls stay.
+
+### Seven nudges: no longer popups at all
+
+The "⟡ A WORD TO THE WISE ⟡" full-screen overlay is gone. The same words now
+appear as a quiet gold italic line under the ALBA strip, `.wtw-inline`, in the
+same voice as the existing `.liver-hint`. Nothing blocks, so the queueing and
+`dssDeferIfBusy` dance those popups needed is gone with them.
+
+This was one function, `wordToTheWisePopup`, so it demoted six nudges at a
+stroke: the open-night tip, the ledger tip, the liver tip and the three morale
+warnings. Both it and `venueHintPopup` now call a shared `window.dssInlineHint`.
+
+The **venue hint** also carried a five-row legend of the door marks (◆◇ ▲△ ✦✧
+★☆ ❀❁). That is **dropped, not moved**, because the notebook's `.nb-key` block
+already carries the same ten glyphs, permanently and on demand. The line now
+points there instead.
+
+`showWordToTheWise` is defined but never called anywhere — dead code, left alone.
+
+**Verified live:** nudges render as inline lines under the ALBA strip, fading in;
+`#wtw-overlay`, `#venue-hint-overlay` and `#word-wise-overlay` are never built;
+zero `tw-error`s. The open-night tip was observed firing on its own natural
+trigger, not just when called by hand.
+
+**One thing to watch:** if two or more nudges fire on the same render they stack,
+and three at once looks tight in the header band. They are one-per-night each so
+it should be rare, and stacking is deliberate — replacing would lose a lesson,
+since the `$shown*` flags are consumed at render.
+
+### The two rule primers, merged
+
+Sam: "Merge them whole and I'll trim it myself later." So every sentence is kept
+verbatim; none of his prose was cut.
+
+There is now one card, `window.dssShowPrimer`, titled **MORALE, SOBRIETY &
+HAUNTS** (the old title named only half its contents). It carries the four stats
+paragraphs followed by the haunts paragraph and "Collect more haunts to unlock
+the map."
+
+It is raised by whichever trigger comes first — the first drink at the French
+(`$visited's French is false`) or the first haunt caught (`$haunts's length is
+1`) — and guarded by a new `$primerShown` so it can only ever appear once.
+`$hauntExplained` and `$statsExplained` are still set exactly as before, which
+matters: `$hauntExplained` alone is read in 40 places.
+
+13 call sites were rewired (12 haunt sites, 1 stats site) and
+`dssShowHauntsModal` now has no callers at all.
+
+`$primerShown` is declared in **both** StoryInit and the `Start` reset block. Per
+Sweep 2, StoryInit does not run again on a new game, so a flag in only one place
+would survive into a second playthrough and suppress the primer for ever.
+
+**One thing I dropped, and it is chrome not prose:** the old haunts card had an
+"↑ Saved to your notebook" arrow pointing at the haunt you had just caught. In a
+merged card that can fire at a drink instead, it would be pointing at nothing, so
+it is gone. Say the word if you want it back conditionally.
+
+**Verified in natural play.** Walked a fresh game to The French. The brass-lighter
+key popup came up first and the primer correctly **deferred behind it**; the
+moment the key was dismissed the primer appeared, one card, right title, both
+texts present, zero errors. A haunt was then caught later in the same night and
+the primer did **not** reappear.
+
+Worth recording, because it cost me four false negatives: this is very hard to
+observe by scripted clicking. The primer fires on a 1200–1600ms timer and has a
+navigation-safety observer that tears it down if the passage changes, so any
+crawler that clicks faster than that sees nothing and wrongly concludes it is
+broken. Test it by stopping still and waiting.

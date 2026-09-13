@@ -3478,3 +3478,53 @@ map — instead of the venue's 3D approach. The labels stay as they are: "Back t
 the street" in the body, "← Exit to the street" in the header. The approach
 scenes are still reached the intended way, by walking the map to a door.
 Verified: leaving the Pillars lands on `hub` with `#soho-map-container` present.
+
+---
+
+## Addendum 70 — four from the playthrough (2026-09-13)
+
+**1. The phone box was standing on the Colony's doorstep.** The Colony Room's
+door is at map tile (20,24) and you enter it from the pavement at (19,24). The
+phone box was a `spot` door occupying (19,24) — the very tile you have to stand
+on to reach the Colony — so walking to the Colony fired the phone box every
+time. Moved the box two tiles north to (19,22), still on the Dean Street
+pavement, clear of the Colony, the Ginger Light corner and the lamps.
+
+**2. The blue box round the lily at the Pillars.** Harlowe's own styling. A
+`(click:)` on a hook containing block content becomes an
+`.enchantment-clickblock`, and the engine paints
+`box-shadow: inset 0 0 0 .5vmax` in `rgba(65,105,225,.5)` — royal blue, deep sky
+blue on hover. The Chippy's lily escapes it because that hook is inline and
+becomes an `enchantment-link` instead. Overrode the engine rule: no box at rest,
+and a faint gold breath (`inset 0 0 22px rgba(226,186,96,0.16)`) on hover so the
+lily still reads as touchable. Verified at the Pillars: `::after` now computes to
+`box-shadow: none`, `color: transparent`.
+
+**3. 'A doorway' no longer dresses as a venue.** It was the only non-event door
+without a venue behind it, so it was getting the full treatment: a lit door icon,
+a light spill across the pavement, a beckoning chevron, a coloured frontage on
+the block, a 30px halo and a glowing name plate. New `quiet: true` flag on that
+door now: drops the icon, the spill and the chevron entirely; leaves the building
+front unlit; cuts the halo to 16px and the light to 28%; and gives the label a
+`soho-door-quiet` class — grey-blue, 0.72 opacity, smaller, no glow, hairline
+border. Verified the flag reaches the map and the two label styles side by side.
+**Not** seen in situ: the doorway link only opens under the low-morale nudge, so
+the live look on the map is unconfirmed — worth a glance next playthrough.
+
+**4. The dead column on the hub.** Two bugs stacked.
+
+The Dean Street lamp sizes itself to the bottom of the last visible content.
+`findContentBottom` measured relative to the PASSAGE top, but the lamp starts
+213px below that, so the pole always overshot by 213px. Worse, `.dss-night-choice`
+and `.dss-thread-cue` carry `clear: both`, so they were pushed below the
+overshooting pole — which raised the content bottom, which grew the pole, which
+pushed them further down. The page settled at 2782px with roughly 1200px of
+nothing but lamp.
+
+Fixed both: the measurement now stops at the first cleared block (it and
+everything after it sits below the float by definition, and is none of the lamp's
+business), and the height subtracts the lamp's own offset from the passage top.
+Pass 2 also gained a timeout fallback, since rAF stalls in a backgrounded tab.
+
+Measured on the hub: lamp 1976px → 789px, ending level with the map instead of
+1200px past it; the thread cue moved from 2220 to 1033; page height 2782 → 1595.

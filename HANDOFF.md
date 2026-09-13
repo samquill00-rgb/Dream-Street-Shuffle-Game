@@ -2694,3 +2694,122 @@ Note for anyone previewing an inventory SVG by cloning it into the page: both
 copies define the same gradient ids, so a clone shown while the original is still
 in the DOM renders with dead fills. Remove or replace the original first. That
 cost me one confusing screenshot.
+
+### Addendum 55 — brightness audit of the Soho 3D scenes (2026-09-13)
+
+Sam: "Maybe the 3D scenes are a bit dark (the soho ones; check them)."
+
+Measured rather than eyeballed. Each approach was loaded, given ~5s to render,
+and its WebGL canvas sampled for mean luminance (0-255), the share of near-black
+pixels and the share of genuinely lit ones.
+
+| scene | mean | % below 20 | % above 60 |
+| --- | --- | --- | --- |
+| Trisha's | **2.9** | 95.6 | 0.9 |
+| The Ginger Light | **5.4** | 96.0 | **0.2** |
+| The Pillars | 10.4 | 83.5 | 1.5 |
+| The French | 11.2 | 84.3 | 0.2 |
+| Ronnie Scott's | 12.5 | 76.5 | 1.9 |
+| The Colony Room | 17.5 | 76.9 | 7.2 |
+| Chinese Fish and Chips | 22.8 | 64.5 | 8.4 |
+| The Coach | 25.1 | 61.0 | 15.0 |
+| Lackland's Office | 25.6 | 52.4 | 8.8 |
+| O'Flatterly | 35.4 | 64.3 | 20.6 |
+| Coppers Lair | 35.8 | 59.8 | 18.9 |
+
+**He is right, and the interesting part is the spread: 12x between the darkest
+and the brightest.** The pack sits around 10-25. Two sit far below it.
+
+**1. The Ginger Light has a black right third.** Scanning the frame in ten
+vertical bands, left to right: 3.3, 4.2, 5.2, 9.5, 13.1, 8.6, 7.2, **2.0, 1.7,
+2.1**. The lamp lights the middle properly, then the right 30% falls off a hard
+edge to near-black. That is a region, not a falloff, and it is what drags the
+scene to the bottom of the table. Worth looking at as possible geometry rather
+than lighting: compare `project_buried_plane_bug` and
+`project_backface_hidden_wrong_geometry`.
+
+**2. Trisha's is a composition problem more than a lighting one.** The scene
+itself reads — door, number 57, the lamp, the cat on the step — but the camera is
+pulled back far enough that ~96% of the frame is empty black around a small lit
+doorway.
+
+**Cecil Court is the reference for what right looks like** and was nearly missed:
+it is an **iframe** (`cc-approach` holding `cecil-court-3d-static.html`), not an
+inline canvas, so the container scan and the luminance sampler both skipped it.
+Visually it is the best-lit scene in the game: bookshop windows, a red moon, a
+legible street.
+
+**Method note, so nobody trusts a wrong number later:** sampling an iframe's
+canvas from the parent document returns all zeros, because the parent's
+`requestAnimationFrame` is not synced to the iframe's draw. Cecil Court measured
+"mean 0" and is in fact the brightest scene there is. For iframe scenes, judge by
+screenshot only.
+
+**Nothing changed yet.** How dark the night should be is Sam's call, and lifting
+everything globally would flatten a look that is deliberate. The targeted change
+I would recommend is to bring only the two outliers up to sit with the pack, and
+to treat the Ginger Light's right third as a separate question.
+
+### Addendum 56 — the two dark outliers lifted; the Ginger Light is NOT a geometry fault
+
+Sam: "Do both, and check the ginger light isn't a geometry fault."
+
+#### The Ginger Light: not geometry, and not lighting either
+
+Exposed the scene temporarily and raycast a grid across the frame from the
+camera, per `project_backface_hidden_wrong_geometry` (probe, do not reason from
+transforms). Findings, in the order I got them wrong:
+
+1. I first blamed a `sideWall` plane at x=4.01 next to a camera at x=4.00. **That
+   was the French House scene, not this one** — the anchor I matched
+   (`camera.lookAt(-0.5, 5.2, 0)`) belongs to `fhCanvas`. The Ginger Light is
+   `initGingerLight()` at line 16591, camera at (6.5, 2.2, 8).
+2. Then a `CylinderGeometry` 3.1 units from the camera on the right looked like
+   the culprit. It is a lamp post, but at radius 0.06-0.1 it covers about 5% of
+   the frame width, nowhere near the third that was dark.
+3. Raycasting *all* hits on both sides showed **identical geometry left and
+   right** — the same stack of haze sprites, then geometry at ~7 units. So
+   nothing is occluding and nothing is mis-rotated. **Not a geometry fault.**
+
+The real cause: **most of the dark area is not surface at all, it is empty
+frame.** `scene.background` and the fog were both `0x08080e`. No light can lift
+background, which is why raising the ambient from 0.2 to 0.34 and the
+directional from 0.08 to 0.26 moved the mean by about 0.4 — I confirmed those
+values were live in the running scene before concluding the edit had failed.
+
+**The lever was the background and fog colour**, raised to `0x15151f`:
+
+| | before | after |
+| --- | --- | --- |
+| mean luminance | 5.4 | **11.1** |
+| % near-black | 96.0 | 84.8 |
+| bands, left to right | 3.3 / 4.2 / 9.5 / 2.0 / 2.1 | 7.5 / 13.4 / 20.4 / 11.1 / 3.0 |
+
+That puts it in the pack beside the Pillars (10.4) and the French (11.2). The
+brick, the phone box and the pavement all read now, and it still looks like
+night. The ambient and directional lifts were kept; they do no harm.
+
+#### Trisha's: lifted, but it is a composition, not a setting
+
+Trisha's is the opposite case — its darkness *is* unlit geometry, not void (the
+background colour alone would measure about 17, and the frame measures far
+below that). So ambient was the right lever, and it was starting from nothing:
+`0x060510` at 0.22, with a "moon" of `0x1a1830` at 0.10, both effectively black.
+
+Raised to `0x171530` at 0.68, moon to `0x2b2850` at 0.24, background and fog to
+`0x121019` (and the wrapper div to match, or the edges band).
+
+| | before | after |
+| --- | --- | --- |
+| mean luminance | 2.9 | **5.6** |
+| % near-black | 95.6 | 93.4 |
+
+**Honest result: it has nearly doubled but it is still the darkest scene in the
+game.** The last big ambient jump (0.42 to 0.68) bought only 0.4, so the lever is
+exhausted. The reason is compositional: it is a tight shot of one doorway lit by
+one lantern, with a lot of unlit brick and empty pavement around it. Getting it
+to 10+ means re-lighting or pulling the camera in, which is a bigger aesthetic
+decision than was asked for. The brick texture, the number 57 and the cat on the
+step all read now, where before they barely did.
+
+Temporary scene probe removed; zero occurrences remain.

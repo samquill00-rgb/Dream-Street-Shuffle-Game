@@ -2626,3 +2626,71 @@ Worth remembering as a pattern: `position: absolute` does not immunise an elemen
 against an inherited margin. If a thing is offset from a rim, ring or frame that
 is drawn as a sibling or pseudo-element, compare their bounding boxes and check
 the margin before suspecting the artwork.
+
+### Addendum 53 — the lighter now reads "Property of PDR" (2026-09-13)
+
+Sam: "The lighter you find for the cigs reads JT SQ, engraved on it... that's from
+a different project, JT isnt a cowriter on this one. It should read, 'Property of
+PDR' (it's an in joke, easter egg)."
+
+The JT/SQ monogram is the **Oliver Twist** game's makers' signature (James Toole
+and Sam Quill) and had leaked into this one. It appeared in exactly two places,
+both the same lighter SVG: `window.DSS_KEY_ART` for the key popup, and the
+notebook inventory art. Nothing else in DSS carried it. Both are changed; zero
+occurrences of "JT SQ" remain.
+
+**Set as two engraved lines**, because it will not fit on one. The lighter body's
+inner panel spans x 20.5 to 49.5 in a 70x104 viewBox, so 29 units wide. "Property
+of PDR" at the old size (6.4 with 1.1 letter-spacing) would need roughly 64. So:
+
+- "Property of" at font-size 4.4, letter-spacing 0.15
+- "PDR" at the original 6.4 / 1.1, sitting under it as the punchline
+
+Same colour and family as the old engraving, so it reads as the same tool-stamp.
+
+**Measured, not eyeballed:** "Property of" renders x 23.3 to 46.9 and "PDR" x 26.8
+to 43.2, both comfortably inside the 20.5–49.5 panel. No overflow, zero errors.
+
+Two memories updated so this does not get undone or repeated: the JT/SQ note is
+now explicitly scoped to Oliver Twist with a warning not to let it into DSS, and
+the engraving is recorded as deliberate and never to be "corrected", with the
+warning that its SVG exists in two copies.
+
+**Superseded the same day:** the engraving is now **Property of J. St John**, and
+the lighter is drawn as a Zippo. See below.
+
+### Addendum 54 — the lighter is now a Zippo, engraved to J. St John (2026-09-13)
+
+Sam: "Can you make it look more like a zippo lighter? And change the engraving to
+'Property of J. St John'."
+
+Engraving changed in both copies of the SVG (key popup art and notebook
+inventory art). It reads "Property of" on one line and "J. St John" beneath, both
+inside the engraved panel (x 21.6 to 48.4); measured at x 23.3–46.9 and
+22.1–47.9, so no overflow.
+
+**The drawing was rebuilt.** The old art was a generic brass case with a flint
+wheel sitting on top of the lid and a pale wick, which read as a flask more than
+a lighter.
+
+**First attempt was wrong and is worth recording.** I drew an *open* Zippo with
+the lid flipped back on a `rotate(-128)`, plus a chimney with slots and a flame.
+At icon size the rotated lid read as a detached wing rather than a hinged lid. An
+open lid needs foreshortening to be legible and there is not enough room for it
+here. Reverted to closed.
+
+**What it is now:** a closed Zippo. Case and lid 32 x 50 units in the 70x104
+viewBox, which is the real 36x56mm proportion (1.56); lid a shade under a third;
+a seam line with a bright lip above it; and a **hinge barrel on the left of the
+seam**, which is the single detail that makes it read as a Zippo rather than any
+brass case. Brushed-brass gradients kept from the original, plus polish
+highlights on lid and case and a base stamp line.
+
+**Checked at all three sizes it actually appears at** — 104px in the notebook,
+172px in the popup, and large. The silhouette reads at the smallest; the
+engraving is legibly faint at popup size, which is right for an engraving.
+
+Note for anyone previewing an inventory SVG by cloning it into the page: both
+copies define the same gradient ids, so a clone shown while the original is still
+in the DOM renders with dead fills. Remove or replace the original first. That
+cost me one confusing screenshot.

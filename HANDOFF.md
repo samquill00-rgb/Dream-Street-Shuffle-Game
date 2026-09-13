@@ -3528,3 +3528,37 @@ Pass 2 also gained a timeout fallback, since rAF stalls in a backgrounded tab.
 
 Measured on the hub: lamp 1976px → 789px, ending level with the map instead of
 1200px past it; the thread cue moved from 2220 to 1033; page height 2782 → 1595.
+
+---
+
+## Addendum 71 — re-audit of the 'Dean Street' exit labels (2026-09-13)
+
+Swept all 59 links whose label mentions Dean Street or the street, against the
+passage's tags and the link's actual target. Two were genuinely wrong — both
+inside a venue, both promising Dean Street from indoors:
+
+- **The Set** `[venue-ronnies]` — `[[Back to Dean Street|After the music]]` →
+  "Back to the street". You are still in Ronnie Scott's when the set ends.
+- **O'Flatterly's Gift** `[venue-cecilcourt]` — `[[Back to Dean Street|After
+  Cecil Court]]` → "Back to the street". Doubly wrong: indoors, and Cecil Court
+  is off Charing Cross Road, not Dean Street.
+
+Both targets are outdoor typewriter interstitials that land on Dean Street, so
+the destination was honest; only the label was off.
+
+**Deliberately left alone** (checked, not wrong):
+
+- **The cellar three** — `Standing`, `Beaten`, `St. John's Word` `[venue-cellar]`
+  say Dean Street but go to `The dark pass`. The prose has already walked him
+  out: "you push out onto Dean Street", "You surface to Dean Street." The label
+  matches the fiction and `The dark pass` lands on the hub.
+- **`Watkins`** — "Not tonight. Back to Dean Street." — a written refusal line,
+  not UI chrome. **Worth a look from Sam**: it is in Cecil Court, so strictly it
+  names the wrong street, but it is his line to change, not mine.
+- **`The critic's judgement`** — "Try Dean Street again" — his line.
+- **Approaches and alleys** — all say "Back to Dean Street" and all go there.
+  Correct: you are already outdoors on the street.
+- **`LINE 3`** — untagged vision passage; "Back to Dean Street" is right.
+- **Dream returns** — labelled plain "Dean Street"; correct.
+
+Every remaining "Back to the street" label now targets `Dean Street` directly.

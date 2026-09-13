@@ -1354,8 +1354,880 @@ Sam: *"delete the sigil code properly."* Addendum 44 had retired the monograms b
 
 **Verified after rebuild:** zero occurrences of `dssSigils`, `dss-sigil`, `dssSigilBreathe` or `CHARACTER SIGILS` anywhere in the .twee **or** the compiled .html; `window.dssSigils` is `undefined` at runtime; `dssAudio`, `dssSohoMap` and `dssKeyPopup` all still alive; 225 passages written, 229 headers, 321 links; console clean; zero `tw-error` in Davy Merkin, PP Pong and on load. All three seams inspected by eye — the JS block now runs straight from the drink handler into `// ====== SOHO MAP`, the navigation handler from the tags parse into `if (window.dssAudio)`, and the CSS from the typewriter-paper rule into `.cellar-scene`.
 
-**One orphan left deliberately.** `PP Pong` still carries `<span data-sigil="jack">` / `<span data-sigil="percy">` markers, which declared the current opponent to the retired system. They are inert and invisible (zero `[data-sigil]` elements render, and the passage shows no stray spans), and they are inside Sam's own conditional prose, so removing them means editing his passage text for no functional gain. Left as harmless residue; a future session may tidy them if it is editing that passage anyway.
+**The last residue went too**, on Sam's say-so: `PP Pong` carried `(if: $opponent is "Jack Curtis")[<span data-sigil="jack"></span>](else-if: …)[<span data-sigil="percy"></span>]`, which declared the current opponent to the retired system. Removed. **`<span id="pp-data-opponent">` on the same line was kept** — it is live, and the Pong script reads it 20 lines later (`var opponent = (document.getElementById('pp-data-opponent') || {}).textContent || 'Opponent';`). Verified after rebuild: zero `data-sigil` in the .twee or the .html, `pp-data-opponent` still present twice (the span and its reader), PP Pong renders its canvas with no `tw-error` and a clean console.
+
+*(On a debug jump into PP Pong that span reads empty, because `$opponent` is only set coming through Lackland's back room. The script's `|| 'Opponent'` fallback covers it. Pre-existing behaviour, not a consequence of this edit.)*
 
 **A backup of the pre-deletion .twee is at `/tmp/twee-before-sigil-delete.twee`** for the rest of this machine's uptime. After that, the monogram artwork exists only in git history — the last commit containing it is whatever precedes this one.
 
 synced, commit when ready
+
+### Addendum 46 — autonomous mechanics run (2026-09-13, started 02:43 BST, 2.5 hours)
+Sam asleep. Focus: mechanics, not aesthetics. No prose changes; pink `.claude-draft` lines untouched. No git. No `SAVED-*` / `BACKUP-*`. Game hard-muted for all live testing.
+
+**Baseline at 02:43:** 229 passages, 321 `[[` links, 158 `claude-draft`, 3643 KB.
+
+**This addendum is written incrementally** — every completed item is synced, logged here and copied to `PLAYTEST.html` before the next begins, so an abrupt stop at any point leaves a coherent build and an accurate record. Entries below are in the order they were done.
+
+#### Log
+
+**1. SOFT-LOCK SWEEP — clean, no new instances (02:43–02:56).** Nothing changed; this is a negative result, recorded so it need not be redone.
+
+Three checks, each narrowing on the class that produced tonight's five-instance bug:
+- **Passages with no exit at all:** 3 candidates, all legitimate — `StoryInit` (startup), `Dawn` (the ending), and `None of us likes it!`, which was a false positive: it exits via `(link-goto:)` with a *computed* label (`"Put //" + (text: $bookTitle) + "//…"`), which a naive regex misses. Worth knowing: **any sweep for exits must handle computed `(link-goto:)`** or it will report phantom dead ends.
+- **Passages whose every exit is conditional:** 14 candidates, narrowed to 8 once hooks opened by `(link:)` (always clickable) were distinguished from hooks opened by `(if:)` (possibly never shown). All 8 — `Approach Centre Point`, `Failure: Trisha's`, both `Fight Victory` passages, `Shana Looks Again`, `LINE 2`, `LINE 3`, `Carthage shore` — carry a matching `(else:)`, so a branch always fires. Safe.
+- **The actual failure mode from tonight** was not a missing exit but a *fixed overlay with a click-catching scrim* whose content could reach a state with no link inside it. Swept the stylesheet for all 26 `position: fixed` classes and cross-referenced against passage markup. **`.phone-ringing` is the only passage-rendered fixed overlay with a full-page scrim**, and it is the one already fixed in all five venues. The only other passage-rendered fixed overlay, `.coach-plumbing-intro`, is harmless: `pointer-events: none`, a 5.6s fade, and an explicit `removeChild` at 6100ms.
+
+Tooling written for this and reused by later sweeps: `/tmp/dss_parse.py` (passage/tag/link parser) and `/tmp/hookscan.py` (walks a body tracking *which macro opened each hook*, so a nav inside `(if:)` is distinguished from one inside `(link:)`).
+
+### Sweep 2 — new-game resets (done)
+
+**The bug.** `[[BEGIN|Start]]` on the Title is a plain passage link. There is no
+`(restart:)` anywhere in the file (count: 0). So StoryInit does **not** run again
+on a new game, and every variable that StoryInit declared and play then latched
+`true` carried straight into the next playthrough.
+
+Verified empirically rather than assumed: a probe printed at the Title after a
+completed run read `lilyCount=5`, proving state survives the walk back to the
+Title intact. (A second probe reading `mantraComplete=false` was a debug-jump
+artefact, not evidence against this — see `project_debug_jump_autosave`. Debug
+jumps restore the autosave, so they cannot be used to test persistence.)
+
+**Effect on a replay before the fix:** the whole v2 dream layer (all five world
+centres, both mantra halves, the third-pillar crossing, every `*Recognised` and
+`*ResidueSeen` flag), all three minigame win flags, and a dozen one-off stat
+gains began the second night already completed and already spent.
+
+**Fixed.** 31 variables added to the NEW-GAME RESETS block in `Start`, each set
+to its exact StoryInit value:
+
+- dream layer: `$critEndorsed` `$crossedThreshold` `$easterGlyph`
+  `$easterResidueSeen` `$ezekielResidueSeen` `$ezekielVision`
+  `$himalayaResidueSeen` `$nazcaResidueSeen` `$nazcaTracing` `$pyramidNumber`
+  `$pyramidResidueSeen` `$inisRecognised` `$inisToldOfPillars`
+  `$lacklandRecognised` `$redRecognised` `$spanishArtistRecognised`
+  `$mantraComplete` `$mantraHalf1` `$mantraHalf2` `$sawHexagram`
+  `$sawThirdPillar` `$tonightsWorld`
+- minigames: `$himalayaClimbWon` `$nazcaRaceWon` `$pyramidRunWon`
+- constant data restored to pristine order: `$mantra`, `$keyNames`,
+  `$haunt1`–`$haunt12`
+
+Plus six one-way latches that were **never initialised anywhere at all**, not
+even in StoryInit — they only ever got written the moment play consumed them:
+`$easterReclaim` `$hangedManLooked` `$shownLedgerTip` `$squareBenchTaken`
+`$stumbledCrossing` `$wormPlayed`. On a replay the Soho Square bench gain, the
+worm-game gain, the ledger tip and Shana's second look all stayed consumed.
+`$prevConfidence`/`$prevSobriety` also reset to 70 so the first stat-bar delta
+of a new night animates from the right place.
+
+**Deliberately left alone** (self-healing, no bug): `$binOf` and `$stashLabel`
+rebuild themselves behind an `(unless: ... is a datamap)` guard; `$nightAlbaCount`
+is recomputed from zero every time it is read.
+
+**Verified:** clean load, storage cleared, BEGIN clicked. Zero `tw-error`s, and
+the passage advanced to The Walk In. Since the `(go-to:)` at the foot of `Start`
+sits after the new block, arriving at The Walk In proves all 27 inserted lines
+executed.
+
+Both temporary debug probes (`resetprobe` on Dean Street, `titleprobe` on the
+Title) have been removed. Zero occurrences remain in the file.
+
+### Sweep 3 — unreachable content (done, one fix)
+
+Scanned every link form (`[[x]]`, `[[x|Y]]`, `[[x->Y]]`, `[[Y<-x]]`, `(go-to:)`,
+`(display:)`, `(link-goto:)`, `(link-reveal-goto:)`, `(redirect:)`) against the
+passage list.
+
+**Broken targets: 1 real.** `Fetch Street SVG` carried `[[Follow him]]` — a bare
+link with no target, and no passage of that name exists. It sat inside an HTML
+comment describing the animation, which is exactly the construction that bit us
+in `Start`: Harlowe parses inside HTML comments. Reworded to plain prose, no
+brackets. Zero occurrences remain.
+
+Everything else the first scan flagged was a false positive worth recording so
+the next pass does not re-chase it:
+- `UserScript` is a bare-JS passage with no `<script>` wrapper, so its nested
+  array literals `[[1,2],[3,4]]` read as Twine links. Strip script passages by
+  name, not just by tag.
+- `(link-goto: label, target)` puts the **label first**. A naive "first quoted
+  string" scan reports labels as broken targets, and a "last quoted string" scan
+  breaks when an argument contains a nested macro such as
+  `(link-goto: "Put //" + (text: $bookTitle) + "// on the table", "The critic's judgement")`,
+  because the regex stops at the inner `)`.
+
+**Orphans: 0 real.** `Title` has no inbound because it is the engine's start
+passage (`"start": "Title"` in StoryData). `The critic's judgement` looked
+orphaned only because of the nested-macro regex fault above; it is reached from
+the guided link in `None of us likes it!`. The `DBG *` passages are debug-menu
+only.
+
+**Hard dead ends: 0 real.** All 16 link-free passages are art or system
+fragments pulled in with `(display:)`.
+
+### Sweep 4 — variables read but never set, set but never read (done, no fixes)
+
+**Read but never set: 0 real.** `$albaN`, `$hauntN`, `$tookLilyN` and `$stat` all
+appear only inside comments as generic placeholders standing for a family
+(`$haunt1`–`$haunt12`) or as example syntax.
+
+**Set but never read: 10 genuine dead writes.** `$albaRevealed` `$cigReturnTo`
+`$crossedThreshold` `$drankAtFrench` `$easterReclaim` `$mantraHalf2` `$oppScore`
+`$ppScore` `$sawHexagram` `$sawInvertedPentangle`. Each is written during play
+and read by nothing anywhere in the file. They are harmless, and I have **not**
+removed them: deciding whether `$crossedThreshold` or `$drankAtFrench` was meant
+to gate something is a design call, not a correctness one. They are listed here
+as a question, below.
+
+`$mantraHalf1` is the one that is read, but only by its own
+`(if: $mantraHalf1 is false)` once-only guard around the HALF A MANTRA item box.
+So both halves are vestigial bookkeeping: `$mantraComplete`, set in `The Cave`,
+is the flag that actually gates the Himalayas ledger, the residue mark and the
+critic's endorsement.
+
+### Sweep 5 — Harlowe grammar landmines (done, one fix, and it was the big one)
+
+**Found a live, player-reachable error on the endgame gate.** Walking the game
+from a clean start and clicking through, `Approach Centre Point` threw:
+
+> This use of "is not" and "and" is grammatically ambiguous.
+
+The line was the gate that decides which ending the player gets:
+
+```
+(if: $notebook is not "stolen" and ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))[ ... Alba Complete ... ](else:)[ ... Alba Incomplete ... ]
+```
+
+Because the `(if:)` errored rather than evaluating, a player who reached Centre
+Point saw a Harlowe error where the ending should be. Fixed by moving the
+`is not` clause to the end and parenthesising it. `and` is commutative, so the
+condition is semantically identical:
+
+```
+(if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3) and ($notebook is not "stolen"))[
+```
+
+**Verified live:** clean load, walked the same route, zero `tw-error`s, and the
+passage now resolves to an ending and runs on to "Traveller, sleep!" and the
+endless-knot close.
+
+This is the same failure class as the `Entering The Pillars of Hercules` gate
+earlier tonight. The rule, now confirmed twice: **in a chain of `and`s, an
+`is not` comparison must come last and be wrapped in its own parentheses.**
+`(if: $matchesLeft is not a number or $matchesLeft <= 0)` on Dean Street is
+*not* an instance of this and parses fine, because `is not a` is a type check
+rather than a value comparison. Left alone.
+
+**Macros inside HTML comments: 10 comment blocks contain macro-shaped text**
+(`Dawn`, `Dean Street` x3, `Fetch Window SVG`, `header header` x2, `The Cave`,
+`Mantra Syllable Cue`, `Resting Keys`). None of them currently break anything,
+and `header header` runs on every passage in the game, so if that one were
+executing we would know instantly. The distinction that matters: the `Start`
+comment that broke the resets held a **complete, valid** macro call, whereas
+these hold fragments such as `(if:`, `(set:)` or `(display:)` with no arguments.
+Left alone, but they are a standing hazard: anyone completing one of those
+fragments while editing a comment will silently break the passage below it.
+
+### Sweep 6 — soft-locks (done, no fixes; one risk flagged)
+
+Method: find every passage whose exits are **all** nested inside a conditional
+hook, then subtract the ones that are safe anyway. 20 passages had only nested
+exits, but the safety net is `header header`: it draws "← BACK" on every passage
+**except** the 161 names in `_hideStats`. So the only real risk is a passage that
+is both header-suppressed and has no unconditional exit.
+
+That leaves two, and both turn out to be fine: `Dawn Approach White` and
+`Dawn Approach Black` each carry a single `(after: 16s)[(go-to: "White page")]`.
+The game advances itself; there is no link because the player is not meant to
+click one.
+
+**Flagged, not fixed.** Per `project_preview_tab_backgrounded`, a hidden tab
+stalls Harlowe's `(after:)` while plain `setTimeout` keeps running. If a player
+switches away during the 16-second dawn cinematic, the auto-advance may not fire,
+and these two passages have no link and no header, so there is nothing to click
+on return. In real Chrome a background tab throttles timers rather than stopping
+them, so this is most likely a delay rather than a lock, and it was the preview
+pane where we actually saw `(after:)` die. That is why I have not touched it:
+the cheap robust fix (an off-screen-parked link plus a `setTimeout` that clicks
+it as a fallback) would be invisible, but it puts belt-and-braces machinery into
+the climax of the game on an unproven premise, and that is your call rather than
+mine. A 30-second human test settles it: start the dawn sequence, switch tabs for
+half a minute, switch back, and see whether it has moved on.
+
+The other 18 are all genuinely safe: `Approach Centre Point`, `Fight Victory` and
+`Fight Victory Perfect` have `(else:)` branches carrying an exit, and the rest
+(`Coach and Horses bar`, `Ronnie Scott's`, `The Colony Room`, `Lily phone call 1`,
+`The dual ring`, `Build Notebook`, the five `Key Take *` passages and
+`Key Stash Here`) all keep the header, so "← BACK" is always there.
+
+### Sweep 7 — stat arithmetic (done, no fixes; one question with numbers)
+
+134 stat writes go through `($statGain:)` / `($statLoss:)`. 33 do not, and 19 of
+those are legitimate: the StoryInit and `Start` initialisers, the `DBG Complete`
+setup, the 0/100 clamps in `Dean Street` and `header header`, and the deliberate
+hard sets in `The dual ring`.
+
+The remaining **14 are raw arithmetic, and all 14 are in the v2 dream worlds** —
+added during the expansion without going through the macros:
+
+- losses: `The Mountain` (-12 sobriety, -9 confidence), `Walking the Pampa` (-6),
+  `The Ridge` (-4), `The Listening Moai` (-6), `Descending Corridor` (-4),
+  `Grand Gallery` (-5), `Storm from the North` (-5), `Four Living Creatures` (-8)
+- gains: the five recognition beats — `Red Recognises the Name` (+10),
+  `Benito Recognises the Wheel` (+14), `The Critic Hears the Mantra` (+10),
+  `Lackland Recognises the Tracing` (+10), `Inis Recognises the Proportion` (+10)
+
+**This is not a correctness bug.** `header header` clamps both stats to 0–100 on
+every render, so nothing can go negative or over 100 for more than a frame. I
+have changed nothing.
+
+It is a **feel** difference, which is yours to rule on. The macros are
+proportional to headroom; raw arithmetic is flat. Concretely:
+
+- At sobriety 20, `($statLoss: 20, 12)` costs about 5 and leaves 15. Raw `- 12`
+  leaves 8. The raw version is roughly twice as punishing when you are already
+  in trouble, and it has no floor protection.
+- At confidence 90, `($statGain: 90, 10)` gives about +2, to 92. Raw `+ 10`
+  takes you to 100. The raw version is far more generous when you are already
+  flying, and the five recognition beats together can lift a middling night
+  straight to the ceiling.
+
+So the dream worlds currently punish harder at the bottom and reward harder at
+the top than the rest of the game. If you want them to match Soho, the change is
+mechanical: swap each to the macro form with the same number. If you want the
+dream worlds to hit differently on purpose, leave them. Say which and it is a
+ten-minute job.
+
+### Sweep 8 — Soho map doors vs hub links (done, no bugs)
+
+The map has 28 entries in `DOORS`, each matching a rendered `tw-link` by regex.
+A stale regex would mean a dead tile; a missing entry would mean a venue absent
+from the map. Checked every regex against every link label Dean Street can emit.
+
+All 28 resolve. A first static pass appeared to show 10 doors with no matching
+link (`phonebox`, `meard`, `stannes`, `bourchier`, `richmond`, `batemans`,
+`walkers`, `greekcourt`, `foyles`, `oxfordend`) but that was my own scanner: when
+a link is the first thing inside a conditional hook the source reads
+`)[[[Meard Street|Alley: Meard Street]]`, and a naive `[[...]]` regex swallows the
+hook's opening bracket, producing the label `[Meard Street`, which of course fails
+`^Meard Street$`.
+
+Confirmed live rather than by argument: walked a clean game to Dean Street and
+read the rendered labels straight off the DOM. No label carries a leading
+bracket, so the anchored regexes match as intended. Noting the artefact here so
+the next pass does not re-chase it.
+
+Incidentally confirmed while there: on the first visit only `Head towards dawn`
+and `See who's there` are in the dock, both parked off-screen, so the player is
+not tipped towards the exit from the map. That is the behaviour you asked for.
+
+### Note on testing while muted
+
+The mute flag lives in `localStorage` under `dssMuted2`, so a plain
+`localStorage.clear()` — which is how you force a clean new game for testing —
+**wipes the mute**. Session restore also uses `sessionStorage`, so both need
+clearing to actually reach the Title. The safe reset for unattended work is:
+
+```
+localStorage.clear(); sessionStorage.clear(); localStorage.setItem('dssMuted2','1');
+```
+
+then reload. Verified: `dssAudio.isMuted()` reads true through the reload and all
+the way into Dean Street.
+
+### Sweep 9 — pocket keys and the stash system (done, no bugs; one comment corrected)
+
+This is the newest code in the game and no human has played it, so I traced the
+whole state machine rather than spot-checking.
+
+**The five key variables are coherent.** Each of `$keyCocaine` `$keyTicket`
+`$keySlip` `$keyLighter` `$keyEye` holds one of `seed`, `held`, `spent`,
+`stolen`, `traded`, or the name of the passage it is lying in. Every value that
+is written is tested for somewhere, and every value tested for is written
+somewhere. No orphan states.
+
+**The retrieval loop is closed.** 14 stash sites: 9 alley hiding places and 5
+bins. Every bin in `$binOf` resolves to a real approach passage, and all 14 sites
+are themselves stash sites, so a key can always be picked up where it was put
+down. `Key Drop Here` ends with `(display: "Key Sites")`, so `$stashSites` is
+rebuilt at the moment of the drop, and the Dean Street dock keeps an alley in the
+list while it holds a key even after that alley has been used once. That is the
+retrieve path and it is wired correctly.
+
+`Resting Keys` does not read `$stashSites` at all; it tests
+`$keyCocaine is (passage:)'s name` directly, so the offer to pick a key back up
+cannot go stale.
+
+**Bourchier Street looked like a bug and is not.** It is the only one of the ten
+alleys whose dock guard lacks the `$stashSites` escape, which would strand a key
+left there. It cannot be stranded, because Bourchier Street is not a stash site:
+it has no `Stash Point`. It is the mugging alley, dark red on the map. Not being
+able to hide anything in it is right.
+
+**`Key Sites` uses the correct long form** of the negated chain
+(`$k is not "a" and $k is not "b" ...`, repeating the variable), which is exactly
+what Harlowe's own error message prescribes. That is why it does not throw the
+way the Centre Point gate did.
+
+**One comment corrected.** The note at the top of `Key Drop Here` claimed that
+setting a key down inside a venue leaves it in the bin by that venue's door. It
+cannot: the drop is only ever offered by `Key Stash Here`, which only appears via
+`Stash Point`, and no venue interior is a stash site. The remap is harmless
+defensive code, so I left it, but the comment now says what actually happens
+instead of describing a path that does not exist.
+
+### Sweep 10 — venue opening progression (done, no bugs)
+
+I did not re-derive the design here: the gradual-opening rework is yours and you
+signed it off, so I only checked the mechanical question, which is whether any
+venue can be permanently shut because its guard can never become true.
+
+None can. All 23 flags that gate the Dean Street venue links — `$coachUrgent`,
+`$metCritic`, `$knowsRonnies`, `$knowsLackland`, `$knowsCopperSecret`,
+`$knowsCecilCourt`, `$hasTrishaMatchbook`, `$hadPhoneCall`, `$hadChippy`,
+`$completedSetlist`, `$returnedPage`, `$hasMissingPage`, `$metShana`,
+`$hauntExplained`, `$lilyHintShown`, `$metRed`, `$hadBreather`,
+`$knowsAboutPage` and `$tookLily1`–`5` — are set true somewhere in ordinary play,
+not only in `DBG Complete`.
+
+Confirming the shape of it: the progression is driven entirely by story flags,
+not by a turn counter, which is consistent with `$nightLength` having been
+removed. The Pillars opens on `$metCritic is false`, so it is available early;
+the French opens once the coach-urgent funnel clears; everything else hangs off
+learning about it first.
+
+### Sweep 11 — the ALBA and the notebook (done, no bugs)
+
+The win condition is the one thing that must not be breakable, so I traced both
+halves of it.
+
+**Alba acquisition matches the design.** `$alba1` comes from `LINE 1` only.
+`$alba2` has six routes: `LINE 2` plus all five dream-world centres (`The Cave`,
+`The Centre — Nazca`, `The Glyph`, `King's Chamber`, `The Wheel`). `$alba3` comes
+from `LINE 3` only. That is exactly "alba 2 findable in all five world centres,
+alba 3 stays single-road".
+
+**Nothing can wipe a collected line.** Seven passages contain
+`(set: $alba to (a:))`, which empties it, and five of those are ordinary play
+passages — `Dean Street`, `The Interval`, `header header`, `Build Notebook`,
+`Night Progress`. All five are guarded `(unless: $alba is an array)`, so they only
+ever fire as a type self-heal and never against a populated list. The two
+unguarded ones are StoryInit and `Start`, which is correct.
+
+**The notebook cannot be permanently lost.** It is taken in exactly one place,
+`Bourchier Street: The Car Park`, which is the mugging alley, and there are two
+independent ways back:
+- `Alley: Charing Cross Road`. The Dean Street dock guard for that alley is
+  `$notebook is "stolen" or ($stashSites contains ...) or not ($alleys contains "foyles")`,
+  so losing the notebook specifically reopens Foyles to let you get it back. That
+  is a nice piece of design and it is wired correctly.
+- `PP Victory`, if you staked it, via `$notebookStake`.
+
+The `(set: $notebook to "held")` lines in `header header` and `Key Guards` are
+both `(unless: $notebook is a string)` type self-heals, so they do not undo the
+theft on the next render. `header header` also draws the "notebook gone"
+indicator while it is missing.
+
+So there is no state in which the game becomes unwinnable.
+
+### Sweep 12 — minigame outcome bridges (done, no bugs, and one standing belief disproved)
+
+Every minigame reports its result the same way: a hidden span wrapping a Twine
+link, which the game's JS clicks when the round ends. If those clicks were being
+dropped, a player would finish PP Pong or the bar canvas and simply sit there.
+
+Twelve such bridges exist. Nine of them park the link with `display:none`:
+`#pp-go-win`, `#pp-go-lose`, `#bar-win-link`, `#bar-lose-link`, `#go-copper-yes`,
+`#go-copper-no`, `#go-lackland-yes`, `#salvuGoLink`, `#dss-portal-fallback`.
+Three park it off-screen instead: `#dss-portal-roll`, `#reclaim-exit`,
+`#dss-portal-action`. None of the nine un-hides before clicking.
+
+By the rule we have been carrying since the portal bug — that Harlowe drops
+clicks on a link with no layout box — all nine should be broken. They are not,
+and PP Pong plainly works, so I tested the rule itself instead of trusting it.
+
+**Result: the rule is wrong.** On a live Dean Street I took a real `tw-link`, set
+its containing `tw-hook` to `display:none`, confirmed it had no layout box
+(`offsetParent === null` and `getClientRects().length === 0`), and clicked it
+programmatically. It navigated, `hub` to `outdoor`. A scripted `.click()`
+dispatches a bubbling event whatever the layout, and Harlowe's delegated handler
+catches it.
+
+So all twelve bridges are sound and **none of them should be "fixed"**. I have
+corrected the project memory that carried the wrong rule, because it was the kind
+of belief that causes someone to rewrite nine working things.
+
+Whatever broke the Third Pillar Portal's hidden links on 2026-09-01, it was not
+`display:none`. The likelier cause is the link not yet being in the DOM when the
+click fired. Off-screen parking remains a good pattern and the three that use it
+should stay as they are.
+
+### Sweep 13 — full graph reachability (done, no bugs; one thing to confirm is intentional)
+
+Built the whole link graph (every `[[ ]]` form plus `(go-to:)`, `(display:)`,
+`(link-goto:)`, `(link-reveal-goto:)`, with the header's links treated as
+available everywhere) and asked of every passage: can the player still get back
+to Dean Street from here?
+
+47 cannot, and 46 of those are correct:
+- the ending chain, which is one-way by design: `Approach Centre Point` into
+  `Alba Complete` / `Alba Incomplete`, into `Dawn Approach White` / `Black`, into
+  `White page` / `Black page`, into `Dawn`. Also `No more`.
+- art and system fragments that are `(display:)`ed into a host and never
+  navigated to: the rule SVGs, `Lily SVG`, `Tarot Card Back`, `Soho Hut Art`,
+  `Dawn Lily Sprig`, `Ending Vines SVG`, `Night Progress`, `Mantra Syllable Cue`,
+  and the whole `Key *` / `Stash Point` family.
+
+**Two looked stranded and are not.** `Lily phone call 1` and `Eat Shelleys Liver`
+appear to have no exit at all, because their exits are
+`(link-goto: "Hang up.", $lilyCallReturn)` and `(link-goto: "·", $liverReturnTo)`
+— the destination is a variable, which a static graph cannot follow. Both
+variables are set at every call site, are initialised in **both** StoryInit and
+`Start`, and default to `"Dean Street"`. So even if a call site ever forgot to
+set one, the player lands on the hub rather than a dead link. That is the right
+way round and worth keeping.
+
+**One to confirm is deliberate.** `The Synthesis` is a one-way commit to an
+ending: `The Synthesis` into `The Sanctum` into `The Sanctum — Sitting` into
+`Alt-Dawn` into `Dawn`, with no route back to Soho. It is entered from a single
+choice-box link, `[[Perform the synthesis]]`, so it reads as an intentional
+alternate ending for the esoteric layer rather than something a player wanders
+into. Flagging it only because it is the one place in the game where a single
+click ends the night without saying so, and the warning-before-you-leave idea you
+described for the Centre Point exit would apply here too if you wanted it.
+
+### Sweep 14 — hook brackets and an automated error crawl (done, no bugs)
+
+**Hook brackets: every passage balances.** Harlowe hooks are `[ ]` and one
+unbalanced bracket silently swallows everything after it, which matters here
+because some Dean Street lines are thousands of characters long. Checked all 229
+passages with scripts, styles, SVG, comments, strings and Twine links discounted.
+Zero imbalances.
+
+(A first pass reported 11 imbalances, all negative, Dean Street at −26. Same
+`)[[[` artefact as Sweep 8: a link that opens a hook reads as `[` + `[[`, and a
+lazy `\[\[.*?\]\]` swallows the hook bracket. Matching links as `\[\[[^\[\]]*\]\]`
+fixes it and everything balances. Third time this construct has produced a false
+positive tonight, hence the repeated notes.)
+
+**Automated error crawl: 80 steps, 41 distinct passages, zero `tw-error`s.**
+A random walk from a clean start, ignoring BACK and NOTEBOOK so it explores
+rather than pacing. It reached the Colony, Trisha's, the Pillars threshold,
+Ronnie Scott's, Lackland's office, Foyles, Soho Square, Greek Court, Richmond
+Buildings, the phone box, the Fetch, Carthage and a PP Pong victory.
+
+This is the same method that turned up the Centre Point endgame error earlier,
+so a clean run over this much of the game is meaningful evidence rather than
+just an absence of news.
+
+It also exercised the stash system in live play, hitting both
+"Leave the bag of cocaine here" and, later, "The bag of cocaine is where you left
+it." That is the drop and the retrieve offer both rendering under real
+conditions, which is the part of Sweep 9 that static analysis could not prove.
+
+### Verification of the Sweep 2 reset fix (proved on a dirty state)
+
+Earlier I could only show that the new reset block *executes*. That is weaker
+than showing it *clears real progress*, so I proved the whole thing with a
+temporary probe printing five of the newly-reset variables, then removed it.
+
+The run, in the exact shape a returning player produces:
+
+| stage | probe |
+| --- | --- |
+| fresh game, arrived at Dean Street | `bench:false | worm:false | ledger:false | mantra:false | world:` |
+| after walking into Soho Square | `bench:true | ...` |
+| reload to the Title, then **BEGIN**, then back to Dean Street | `bench:false | ...` |
+
+`$squareBenchTaken` is one of the six flags that were never initialised anywhere
+in the file, so before tonight it would have stayed `true` into the second night
+and the Soho Square bench would have been silently spent. It now clears.
+
+Worth recording about the Title, because it shaped the test: the reload that gets
+you there must clear `sessionStorage` only. Harlowe's own session restore lives
+there, so clearing it returns you to the Title with both **BEGIN** and
+**CONTINUE WHERE I LEFT OFF** offered, which is the real returning-player choice.
+Clearing `localStorage` as well throws away the save (and the mute).
+
+The probe has been removed. Zero occurrences of `resetcheck`, `resetprobe`,
+`titleprobe` or `dss-probe` remain in the file, and the game reloads clean with
+no `tw-error`s.
+
+### Sweep 15 — the v2 dream layer, live (done, no errors)
+
+The random crawl never reached the dream worlds, because they need the portal,
+and `DBG Complete` is not a way in: it sets all five lilies taken, which
+correctly suppresses the venue links and drops you at the end of the night.
+
+So I jumped straight into the newest content instead, using the debug jump
+(`#dss-debug-jump=<passage>` in the URL, which is all the debug panel's `jumpTo`
+does — no dev flag needed). Eight passages, each loaded cold and checked for
+`tw-error`:
+
+| passage | result |
+| --- | --- |
+| The Cave | clean, offers "Say the mantra" |
+| The Centre — Nazca | clean |
+| The Glyph | clean |
+| King's Chamber | clean |
+| The Wheel | clean |
+| Third Pillar Portal | clean |
+| The Synthesis | clean |
+| Airport Pub | clean |
+
+Zero errors across all eight, so all five world centres, the portal, the
+synthesis and the mantra's first half render correctly.
+
+Note for whoever reads a jumped `Third Pillar Portal` next: its rendered text
+comes back as "himalayas-go nazca-go easter-go pyramid-go ezekiel-go". That is
+the off-screen-parked link list, not breakage — `innerText` still reports
+off-screen elements. The 3D scene draws over it in normal play.
+
+### Sweep 16 — the two sketch engines and the audio mute (done, no bugs)
+
+**The napkin sketch's two engines are still in step.** The passage engine
+(`updateButtonStates`) and the notebook popup engine (`updateButtons`) both carry
+undo, clear, done, stroke history, touch handling, `toDataURL` and the audio
+hooks, and **both draw through the same shared `window.dssWatercolourKit`**, so
+there is no drawing-layer divergence. The standing advice to edit both when
+changing one still holds.
+
+**The game is genuinely silent, not just flagged silent.** Worth recording
+because the overnight rule depends on it. On the Title and again on Dean Street,
+where the music auto-triggers on the `hub` tag, there are **zero** `audio` or
+`video` elements in the document at all, nothing playing, and no live
+AudioContext. The mute stops the music player before it ever creates an element,
+so it is not a case of something playing at volume zero.
+
+---
+
+## Addendum 46 — summary of the mechanics run
+
+Twenty-two sweeps over the mechanics of the game rather than its look, plus two
+open items closed by playing them. Everything below is in the .twee and synced;
+`PLAYTEST.html` is refreshed.
+
+### What was actually broken, and is now fixed
+
+**1. The endgame gate threw an error instead of giving you an ending.**
+`Approach Centre Point` decided between `Alba Complete` and `Alba Incomplete`
+with a condition Harlowe refuses to parse (`is not` followed by `and`). A player
+who walked to Centre Point got a red Harlowe error where the ending should be.
+Reordered so the `is not` clause comes last and is parenthesised. Verified live:
+the route now resolves and runs on into "Traveller, sleep!".
+
+**2. A second playthrough began with the game already half-played.**
+`BEGIN` on the Title is a plain link and nothing calls `(restart:)`, so StoryInit
+never runs again. 31 variables that StoryInit declared, and 6 more that were never
+declared anywhere, carried their `true` values straight into the next night: the
+whole v2 dream layer, all three minigame wins, and a dozen one-off stat gains.
+All 37 now reset in `Start`. Proved on a dirty state, not just in principle —
+walked into Soho Square to set a flag, came back to the Title, pressed BEGIN, and
+watched it clear.
+
+**3. A broken link inside a comment.** `Fetch Street SVG` carried
+`[[Follow him]]`, pointing at a passage that does not exist, inside an HTML
+comment — the construction that silently broke the resets in `Start`. Reworded.
+
+**4. A comment that described a path that does not exist**, at the top of
+`Key Drop Here`. Corrected to say what the code actually does.
+
+### What I checked and found sound
+
+Unreachable content and broken targets; dead ends; variables read-but-never-set
+and set-but-never-read; soft-locks; stat arithmetic; the Soho map's 28 door
+regexes; the venue-opening progression; the pocket-key and stash system end to
+end; the ALBA and the notebook; full graph reachability; hook-bracket balance;
+the minigame outcome bridges; the two sketch engines; and the whole v2 dream
+layer live, one passage at a time.
+
+Three things back this up, all with zero Harlowe errors: a random 80-step walk
+over 41 distinct passages; a second, coverage-biased crawl of 182 steps over 88
+distinct passages that played a complete night through to the Dawn; and a cold
+load of all five dream-world centres plus the portal, the synthesis and the
+Airport Pub. The same crawl method is what turned up the endgame bug, so clean
+results from it mean something. Both endings were then verified explicitly, the
+winning one for the first time.
+
+### One belief of mine that turned out to be wrong
+
+I have been carrying a rule that Harlowe drops clicks on links with no layout
+box, dating from the portal bug. Nine of the game's twelve minigame bridges park
+their link with `display:none` and would all be broken if that were true, and
+they are not. I tested it directly: a `tw-link` with `offsetParent === null` and
+no client rects still navigates when clicked from script. **The rule is false**,
+the nine bridges are fine, and none of them should be "fixed". The project memory
+has been corrected, because that belief was the kind that makes someone rewrite
+nine working things.
+
+### Decisions left to you (I did not make them)
+
+1. **The dream worlds use flat stat arithmetic** where the rest of the game uses
+   the proportional macros. Not a bug, stats are clamped. But at sobriety 20 a
+   raw `-12` leaves 8 where the macro would leave 15, and the five recognition
+   beats can lift a middling night straight to 100. Match Soho, or keep the
+   dream worlds harsher at the bottom and richer at the top? Ten minutes either
+   way.
+2. **Ten variables are written and never read**, including `$crossedThreshold`,
+   `$drankAtFrench` and `$sawHexagram`. Harmless. Were any meant to gate
+   something?
+3. **`The Synthesis` is a one-way commit to an ending** from a single
+   choice-box link, with no route back to Soho. Almost certainly deliberate, but
+   it is the one place a single click ends the night without warning, and the
+   warning you described for the Centre Point exit would suit it.
+4. **The two dawn-approach passages rely on `(after: 16s)`** with no link and no
+   header. If the tab is hidden the auto-advance may stall. Likely a delay rather
+   than a lock in real Chrome. A 30-second human test settles it: start the dawn
+   sequence, switch tabs, come back.
+
+### Two open items closed by playing them
+
+- **The north-edge map tile fires.** Walked the map to Centre Point; it triggers,
+  shows the "the night ends when you choose" warning, and lets you back out.
+- **The pocket-key complaint is resolved.** Keys are offered as a popup with a
+  clear decision, and a held key appears in the notebook under "In Your Pocket",
+  named and drawn. The full stash round-trip — take, stash in an alley, leave,
+  come back, retrieve — was played end to end and works.
+
+### Still yours to write
+
+Aoife's lines for the phone box, the warning prose in `Towards Dawn`, and the
+drawings for the remaining characters.
+
+The north-edge map tile is no longer on this list: I walked the map to it and it
+fires correctly, warns, and lets you back out. See Sweep 18 below.
+
+### Housekeeping
+
+Both temporary debug probes from earlier are gone, and so is the one I added to
+prove the reset fix. Zero occurrences of `resetprobe`, `titleprobe`, `resetcheck`
+or `dss-probe` remain. The game is hard-muted and verified silent: on Dean Street,
+where the music triggers, there are no audio elements in the document at all.
+No git commands were run.
+
+**Testing note that cost me time, so it is written down:** the mute lives in
+`localStorage` under `dssMuted2`, and Harlowe's session restore lives in
+`sessionStorage`. A clean new game needs both cleared, which wipes the mute, so
+the safe reset is `localStorage.clear(); sessionStorage.clear();
+localStorage.setItem('dssMuted2','1')` then reload. To reach the Title with the
+save intact, clear `sessionStorage` only. And any passage can be loaded directly
+with `#dss-debug-jump=<name>` in the URL, which is all the debug panel does.
+
+### Sweep 17 — macro-name typos (done, no bugs, and the comment hazard is narrower than feared)
+
+Every macro name used anywhere in the game, checked against Harlowe's vocabulary.
+Only four came back unrecognised and all four are fine:
+
+- `(dm-names:)` is a real macro.
+- `(loadgame:)` and `(savegame:)` are real: Harlowe ignores hyphens and case in
+  macro names, so they resolve to `(load-game:)` and `(save-game:)`.
+- `(Sam:` is not a macro at all. It appears four times inside comments, quoting
+  you — two in JS comments, and two in **HTML** comments, in
+  `Entering The Pillars of Hercules` and `Nazca Race`.
+
+The last one mattered, because macros inside HTML comments do execute — that is
+what broke the resets in `Start`. If `(Sam: "the Pillars isn't open enough")`
+were being parsed as a macro call, it would throw "unknown macro" on a venue
+passage.
+
+It does not. Cold-loaded both passages: zero errors, and the `(Sam:` text does
+not leak into the rendered page either.
+
+**So the comment hazard is narrower than I wrote it up in Sweep 5.** Harlowe only
+executes *recognised* macro names inside an HTML comment; an arbitrary
+parenthesised word is left alone. That is why quoting you in a comment is safe,
+and why the `Start` comment was not — it contained a real `(set:)`. The rule to
+keep is: never put a **real macro name** followed by a colon inside a comment.
+
+The only two custom macros in the game are `$statGain` and `$statLoss`.
+
+### Sweep 18 — the north-edge map tile (partly closed, honestly)
+
+This was on the open list as "nobody has yet watched the north-edge map tile
+actually fire". I got it two thirds of the way closed.
+
+**Confirmed:** the mechanism resolves. Sweep 8 showed the `north` door's regex
+(`/Head towards dawn|dawn is coming|Give up on the night/i`) matches the label
+Dean Street actually renders, with no stray bracket. And the tile is genuinely
+drawn: the map exposes `window.dssSohoMap`, whose `state` carries the walker's
+position, so I moved the walker to the north edge and sampled the canvas. The
+Centre Point door colour then appears at the top of the map (y=17), 88 pixels of
+it, where before it was nowhere near the top edge.
+
+The first attempt at this was misleading and is worth recording so nobody repeats
+it: sampling the canvas from a normal Dean Street view finds that colour only in
+a small blob around x≈170, y≈290, nothing at the top. That is not the door. The
+map is a scrolling viewport centred on the walker, so the north edge is simply
+off-screen until you travel there.
+
+**Still not confirmed:** that stepping onto the tile navigates. Drawing the door
+and resolving its regex are not the same as the step firing the link, and I moved
+the walker by setting its coordinates rather than walking it, so I have not seen
+the transition happen. That last part still wants a human at the keyboard walking
+north, or a keyboard-driven walk on the map.
+
+#### Sweep 18, resolved: the north-edge tile fires correctly
+
+I can close this properly. It works.
+
+Walked the map walker from its start at column 17, row 22 straight up to row 0,
+which is the Centre Point tile, and the door fired. The correction to what I
+wrote a moment ago: my first reading said it did **not** navigate, because I
+sampled the passage immediately on arrival and was still on Dean Street. Walking
+onto a `spot` door starts an entering animation (`S.entering`), so the navigation
+lands a beat later. It had fired by the next check.
+
+What the player gets is exactly the edge exit you specified:
+
+> Head towards dawn. The night ends when you choose. You can keep exploring, or
+> go to Centre Point with what you have found.
+
+with **Go towards dawn** and **Keep exploring**. I took "Keep exploring" and it
+returned cleanly to Dean Street with the map intact and zero errors. So the exit
+is real, it warns before it takes you, and it is escapable.
+
+**How to drive the map from script, since this cost me several attempts.**
+Neither synthetic `KeyboardEvent`s nor real arrow keys moved the walker: the
+handler is `document`-level with capture and looks fine, but the keys did not
+reach it and the page did not scroll either. What does work is the hidden d-pad —
+`document.querySelector('[data-dir="up"]')` and its `down`/`left`/`right`
+siblings — driven with `pointerdown` then `pointerup`. Holding produces
+continuous movement, so a 300ms hold covers about two tiles.
+
+Also worth knowing: `window.dssSohoMap.state` goes **null** when the map is not
+on screen, so re-read it through a function rather than caching the object, or
+the next passage throws a null dereference.
+
+Incidental confirmation along the way: the coin popup fires on the hub as
+designed, offers a toss and then "Pocket it", and the phone box link appears on
+Dean Street once `$hasCoin` is set. That whole chain works.
+
+### Sweep 19 — second error crawl, and both endings verified
+
+**Second crawl, biased toward links it had not tried yet: 182 steps, 88 distinct
+passages, 106 distinct links, zero `tw-error`s.** It ran until it played a
+complete night and came to rest at the Dawn. Between the two crawls and the cold
+loads, that is a large share of the player-facing game exercised without a single
+Harlowe error.
+
+**Both endings now confirmed, which matters because the endgame fix had only ever
+been tested on one side.** The gate I rewrote decides between `Alba Complete` and
+`Alba Incomplete`, and every crawl had landed on the incomplete branch. The
+complete branch is the win state, and before tonight it could not be reached at
+all without throwing.
+
+So I forced it: built a night, jumped to `DBG Complete` to hold all three alba
+lines with the notebook intact, then walked out through "Head towards dawn", "Go
+towards dawn", the Fetch, and "Follow him" into `Approach Centre Point`.
+
+| state | branch | zero errors |
+| --- | --- | --- |
+| alba incomplete | "Traveller, **sleep!**" | yes |
+| all three lines held | "Traveller, **wake!**" | yes |
+
+Both run on into the Dawn and the closing line, "And the English call it
+everywhere, as I hear, the endless knot." The condition routes correctly in both
+directions.
+
+### Sweep 20 — the pocket-key complaint, closed (no bugs)
+
+Your original note was: *"you never actually seem to get the object keys in your
+notebook, you collect one or swap one and nothing changes"*, and later that the
+keys were *"often hidden below the link"*. I played the whole loop to check it
+properly rather than trusting the code.
+
+Walked a night, jumped into `The French`, and the brass lighter is offered as a
+**popup**, not as text under a link: "⟡ WITHIN REACH ⟡", the hand-drawn lighter
+with the JT/SQ initials on it, the blurb, and two clear buttons, "Pocket the
+brass lighter" and "Leave it".
+
+Taking it transitions the same popup to a confirmation — "It goes in your pocket.
+One pocket, one thing; that is the rule tonight. THE BRASS LIGHTER · POCKETED" —
+with a single "Good" to dismiss. It dismisses cleanly and the overlay is removed
+from the document.
+
+The notebook then shows it. EFFECTS reads:
+
+> ◈ A 'Donkey' Coin … ◈ **In Your Pocket** … The brass lighter, from the bar at
+> The French.
+
+and the 104px hand-drawn key SVG renders there properly: `display:block`,
+`visibility:visible`, opacity 1, no hidden ancestor, laid out at 104×155 and
+inside the viewport. So the key is both named and drawn.
+
+Two things worth knowing for future checks of the notebook:
+
+- `offsetParent` is **null** for elements inside the notebook because it is a
+  fixed overlay, so it is a useless visibility test there. Use
+  `getBoundingClientRect` plus a walk up the ancestors checking `display`,
+  `visibility` and `opacity`, which is what I did.
+- The key inventory lives on the **EFFECTS** tab; the notebook opens on FINDS, so
+  anything checking it has to switch tabs first.
+
+Incidentally visible in the same panel: the Donkey coin now sits properly inside
+its dotted border, which is the 450 sizing you picked.
+
+### Sweep 21 — the stash round-trip, played end to end (works)
+
+The stash system is the thing you asked for most recently and no human had played
+it, so I played the whole loop rather than reasoning about it.
+
+1. Arrived at `The French`. The brass lighter is offered as a popup with
+   "Pocket the brass lighter" / "Leave it".
+2. Pocketed it. The popup turned to its confirmation, dismissed cleanly, and the
+   notebook's EFFECTS tab showed it under **In Your Pocket** with its drawing.
+3. Walked to `Alley: Meard Street`. The offer **"Leave the brass lighter here"**
+   was there. Left it.
+4. Back on Dean Street, **Meard Street was still listed** even though it is now a
+   used alley. That is the `$stashSites` escape in the dock guard doing exactly
+   its job: an alley stays reachable while it is holding something of yours.
+5. Went back in. The offer returned as `data-kind="rest"` — "The brass lighter is
+   where you left it" — and "Pocket the brass lighter" took it back.
+
+Zero errors throughout. Drop, keep, return and retrieve all work.
+
+**One thing that cost me half an hour and is worth knowing: `← BACK` in the
+header is `(link-undo:)`, a real Harlowe undo.** It rewinds *variables*, not just
+the passage. I pocketed the lighter, pressed BACK to leave the venue, and then
+found no stash offer anywhere — because the undo had put the lighter back on the
+bar. Nothing was broken. But it is worth being aware that a player who picks
+something up and then uses BACK loses it again, which is standard Twine behaviour
+and may be exactly what you want, but is the sort of thing that reads as a bug
+when a tester reports it. Not a change I would make without you saying so.
+
+Also worth noting for testing: a passage entered by debug jump can be a dead end
+that only BACK escapes, because you arrive without the context that normally
+supplies the exit. `The French` reached that way offers only "Approach". That is
+an artefact of jumping, not a real dead end — Sweep 13 confirmed it is reachable
+and escapable in normal play.
+
+### Sweep 22 — can a minigame trap you? (done, no bugs)
+
+Minigames are the one place a player could be stranded: several are in
+`_hideStats`, so they have no header and no "← BACK", and if the game stalled
+there would be nothing to click.
+
+Only two are in that position with no escape link that avoids winning:
+**PP Pong** and **Fight starts**. (`Nazca Race`, `Pyramid Run` and `The Climb`
+keep the header, so they always have BACK. `Soho Square Gents` has "Back up to
+the Square" and `Cecil Court Waltz` has "Slip out into Cecil Court".)
+
+So I tested the worst case on PP Pong: started the match and then **touched
+nothing at all**.
+
+It resolves itself. The opponent took the five points, the score ran to
+"YOU 0 · OPPONENT 1" and on, and the game exited on its own to **DEFEAT**, where
+Percy Ritson tosses you the Trisha's matchbook and offers "Back to Dean Street".
+Zero errors.
+
+Two useful things fall out of that:
+
+- **You cannot be trapped by being unable to play.** Losing by doing nothing is a
+  complete, exiting outcome.
+- **Losing does not block progression** — the defeat still hands over the
+  matchbook, which is what sets `$hasTrishaMatchbook` and opens Trisha's.
+
+It also confirms Sweep 12 in live play from the other direction: `#pp-go-lose` is
+one of the `display:none` bridges, and it fired by itself under real conditions.
+
+`Fight starts` is the same shape and almost certainly behaves the same way, but I
+did not sit through a fight to prove it.

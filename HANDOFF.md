@@ -3204,3 +3204,45 @@ That is the **third** time today a timed reveal has been mistaken for breakage
 (the Fetch, the merged primer, and now this). The rule: before concluding a
 passage is broken, check `innerHTML` and the child elements, not `innerText`, and
 wait at least two seconds.
+
+### Addendum 65 — matches moved to the Pillars; the lighter now lights a cigarette (2026-09-13)
+
+Sam: "You collect the lighter and then immediately after the matches, in the
+french. They have different functions but close together they seem weird. Can we
+make it so you find the matches in the Pillars and while you have the lighter you
+can use it to light a cig if you have cigs" — and, clarifying, **not** when you
+do not have it.
+
+**1. The matches moved.** The find is a Dean Street overlay gated on having
+visited a venue, so only the gate changed: `$visited's French` to
+`$visited's Pillars`. The lighter is still found in the French, so the two are
+now a venue apart instead of back to back.
+
+No prose was touched. The popup already reads "On the way out you swipe a box of
+matches from a newly-empty table", which is true of any pub.
+
+Note `$visited's Pillars` is set inside `Entering The Pillars of Hercules`, the
+interior — not the interlude or the approach. So the matches arrive on the first
+return to Dean Street after actually going in, which is the same rhythm the
+French had.
+
+**2. The lighter lights a cigarette while you hold it.** The notebook's cigarette
+branch now tests `$keyLighter is "held"` **first**:
+
+| lighter | matches | what the notebook offers |
+| --- | --- | --- |
+| not held | none | "You need to find matches." |
+| **held** | none | **"Smoke one"** |
+| held | some | "Smoke one" — and it spends **no match** |
+| stashed, spent, traded or stolen | none | back to "You need to find matches." |
+
+Checking the lighter first means it is preferred while you have it, so it saves
+your matches, and because it tests `is "held"` specifically it stops working the
+instant the lighter leaves your pocket by any route — put in a bin, swapped for
+another key, spent on a crossing, or taken in Bourchier Street. That is the part
+Sam corrected me on and it is the part the state machine already made easy.
+
+**Verified live, all four states**, by actually pocketing the lighter at the
+French, then stashing it in the bin outside and re-reading the notebook. Also
+verified the move end to end in a natural playthrough: after visiting the French
+no match overlay appears; after coming out of the Pillars it does. Zero errors.

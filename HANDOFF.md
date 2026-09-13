@@ -2593,3 +2593,36 @@ Probe removed; zero `dss-probe` occurrences remain.
 This also settles the pacing question left open at the end of Addendum 50:
 bouncing between a venue and its own door does not count, and should not. Only
 arriving back on the Dean Street page does.
+
+### Addendum 52 — the coin's rim sat askew from its face (2026-09-13)
+
+Sam: "The coin is still misaligned when you collect it. The border is askew from
+the face."
+
+**It was not the artwork.** The earlier fix to `coin-heads.svg` (the `<image>`
+re-framed to x/y −25, 450×450 in a 400×400 viewBox) is correct and centred. This
+was a CSS layout bug in the collect popup only.
+
+**The cause, measured rather than guessed.** `.coin-overlay-disc .cp-face` is
+`position: absolute` with `top: 0`, but it was inheriting a default
+**`margin-top: 13.44px`**. A margin displaces an absolutely positioned box even
+when `top` is set. The milled rim is the disc's own `::before` at `inset: -4px`,
+anchored to the disc, so the rim stayed put while both faces dropped 13.44px
+inside it. Measured before the fix: disc at y=144.8, face at y=158.3, a 13.5px
+drop with no transform on either.
+
+**The fix:** `inset: 0; margin: 0;` on `.cp-face`.
+
+**Verified:** face-to-disc offset is now exactly `{dx: 0, dy: 0}`, on the heads
+face, through the flip animation, and on the tails face (which carries
+`rotateX(180deg)`). Screenshots before and after confirm the gold rim is now even
+the whole way round. Zero `tw-error`s.
+
+**The notebook's coin was never affected** and has not been touched: it is built
+from a different set of elements (`.nb-coin-3d`, `.nb-coin-edge`,
+`.nb-coin-face`, `.nb-coin-img`), all of which already share a centre.
+
+Worth remembering as a pattern: `position: absolute` does not immunise an element
+against an inherited margin. If a thing is offset from a rim, ring or frame that
+is drawn as a sibling or pseudo-element, compare their bounding boxes and check
+the margin before suspecting the artwork.

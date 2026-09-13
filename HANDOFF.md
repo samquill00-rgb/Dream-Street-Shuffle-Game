@@ -3246,3 +3246,47 @@ Sam corrected me on and it is the part the state machine already made easy.
 French, then stashing it in the bin outside and re-reading the notebook. Also
 verified the move end to end in a natural playthrough: after visiting the French
 no match overlay appears; after coming out of the Pillars it does. Zero errors.
+
+### Addendum 66 — the green fairy's lamp restored at the French (2026-09-13)
+
+Sam: "When you approach the pillars now, the beautiful streetlamp with the
+absinthe fairy flying around it has disappeared. I think this is maybe because it
+zoomed in past that. Could you restore it?"
+
+**He was right about the cause and it was the French, not the Pillars.** The
+green fairy lives only in `initFrenchHouse`: a sprite orbiting (3, 4.5, 12), with
+its own emerald PointLight. In Addendum 58 I pulled the French camera from
+z=16 in to z=11.5 — **putting the lamp at z=12 behind the lens**. Exactly the
+mistake I warned about in that same addendum after the Pillars post, and then
+made again one scene over.
+
+Camera restored to its original `(4.0, 4.2, 16)`. The lighting changes are kept:
+they came from the background, fog and ambient, not the camera.
+
+**Verified the fairy is actually back**, not just the lamp: exposed the scene and
+read the sprite directly — position (3.14, 4.63, 12.09), `visible: true`,
+opacity 0.77, projecting to NDC (0.05, 0.03), which is dead centre of frame.
+Probe removed afterwards.
+
+**A measurement trap worth recording.** My first two pixel sweeps reported zero
+green and I nearly concluded she was gone. Both detectors were wrong. She is a
+*pale* luminous green — body `rgba(230,255,235)`, halo `rgba(190,255,210)` — and
+she flies in front of a bright warm lantern, so the blend leaves red at or above
+green. Do not look for saturated green; read the scene graph instead.
+
+**Brightness after the trade:**
+
+| French | mean |
+| --- | --- |
+| original | 11.2 |
+| with the pulled-in camera | 19.3 |
+| camera restored | 15.3 |
+| ambient nudged 0.34 → 0.46 to compensate | **15.8** |
+
+So the shot Sam likes is back and the scene is still half again brighter than it
+was. The remaining gap to 19.3 was the closer framing, which is not worth the
+lamp.
+
+**Standing lesson, now twice proven in one session:** pulling a camera in cuts
+things out of the *back* of a scene as well as crowding the front. Check what
+sits between the old and new camera positions before moving one.

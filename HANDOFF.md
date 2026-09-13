@@ -3693,3 +3693,47 @@ gone too:**
   nudge; it tells you the ending has opened and that there is no rush.
 - `.alba-hint` in the header — "One line is caught. Two more still to find." A
   status readout under the ALBA counter rather than an instruction.
+
+---
+
+## Addendum 76 — Cecil Court: opened early, and a thread of light to it (2026-09-13)
+
+Sam wanted players in Cecil Court early, and couldn't see how they'd find it.
+
+**1. The haunt box was already promising it.** THE REFUSAL — the novelist at the
+French, one of the first beats in the game — carries
+`<div class="haunt-opens">You know Cecil Court very well.</div>`. Every other
+`haunt-opens` line announces a place the haunt unlocks, but the hub gates Cecil
+Court on `$knowsCecilCourt`, which was set in exactly one place in play: `The
+critic's judgement`, after the Pillars and the Great Ham. So the game told the
+player they knew Cecil Court and then kept it shut for another half-hour.
+
+`(set: $knowsCecilCourt to true)` now sits with the haunt in `The novelist`, and
+the two back-fill lines (Dean Street + the header) were widened from
+`$metCritic is true` to `$metCritic is true or ($haunts is an array and $haunts
+contains $haunt2)` so existing saves that already hold THE REFUSAL get it too.
+
+Verified: collect THE REFUSAL, walk back out, and the hub offers **"Visit the
+antiquarian in Cecil Court"** with no critic involved. The critic's referral is
+untouched and still the better introduction — he names Inis, the haunt box
+doesn't.
+
+**2. The thread of light.** Cecil Court's door is at c51,r38, off the bottom-right
+corner of a 26-tile view — never on screen from anywhere the player starts. While
+the court is open, the map now lays a line of its own violet light
+(`[180,138,224]`, the court's colour) along the pavement from the player's feet
+towards it, with a pulse running away down the route. Drawn in world space under
+the street life, `globalCompositeOperation = 'lighter'`, view-culled.
+
+The route is a breadth-first search over `walkable()`, cached and recomputed only
+when the player changes tile, so it costs nothing per frame and always leads from
+wherever they are. It needs no words, which is what Sam wanted after Addendum 75.
+
+**It puts itself away on its own**, because it keys off `doors.cecil.status`,
+which the map derives from the hub link: open while the visit is the thing to do,
+**grey** (thread off) while Page 93 is still to be found, and gone once the page
+is returned. So it guides the first trip and then stops.
+
+Verified live: a 59-tile route found from the spawn; path tiles sample
+50.7/49.1/62.3 against 39.5/40.5/48.4 for the pavement beside them — about 28%
+brighter and violet-leaning, and visibly running to the lit Cecil Court mouth.

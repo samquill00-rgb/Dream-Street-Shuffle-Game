@@ -2353,3 +2353,64 @@ the dual ring. On the dual ring, hanging up is still what sets
 consequence of the beat is unchanged; it just arrives sooner.
 
 Verified live on both: the link appears at the new time and no `tw-error`s.
+
+### Addendum 48 — the alba can no longer be collected out of order (2026-09-13)
+
+**The complaint:** you could be handed the final line of the poem before the
+second, and the scene announced it as the last line, which made no sense.
+
+**The cause was one missing check.** `LINE 3` has exactly one way in — the cow
+ride, from both of its outcomes ("Listen" if you stay on, "Look up." if you are
+thrown) — and neither asked whether you held line 2 yet. Meanwhile line 2 has six
+sources (the Green Sea, plus all five dream-world centres). The two were entirely
+unsynchronised.
+
+Two things were already right and did not need touching: the poem never
+*displays* out of order (the notebook and the Dawn both render `$alba1/2/3` in
+poem order, each simply checking whether you hold it), and `LINE 3` only declares
+"THE ALBA IS COMPLETE" when you genuinely hold lines 1 and 2.
+
+**The fix, in one line.** The cow question and the ride link are now gated:
+
+```
+(if: ($alba contains $alba1) and ($alba contains $alba2) and ($cowRideDone is false))[What will you do with his cow?
+...
+[[Ride the beast|Ride Jeffrey Bernard's cow]]]]
+```
+
+So the cow is only offered when line 3 can actually *be* the last line, and only
+once. No prose was written or changed: an early visit simply ends at "he's
+disappeared to a timeshare on the seacoast of Bohemia", and the cow is not
+mentioned again until you are ready for it.
+
+**Two wrong turns on the way, recorded so they are not repeated.**
+
+1. I first proposed gating the whole Coach with a `$coachUrgent` override for the
+   crisis. Sam spotted that the override reopens the hole — enter the Coach on the
+   crisis with one line and you can ride the cow, which is the original bug. A
+   gate with an override is not a gate.
+2. I then believed the cow was a one-shot beat and that gating it risked losing
+   line 3 forever. That was wrong. Checking hook depths: the
+   `(if: not ($haunts contains $haunt3))` gate wraps **only** the HAUNT COLLECTED
+   box. The cow question and the ride link sit outside it, in the branch that
+   runs whenever you are at the Coach and no phone rings, so the offer **recurs
+   on every visit**. That is what makes gating the link safe and the venue gate
+   unnecessary.
+
+**Verified live, with a temporary probe that has since been removed.** Two real
+states observed at the Coach:
+
+| state | `contains $alba1` | `contains $alba2` | `$cowRideDone` | gate | result |
+| --- | --- | --- | --- | --- | --- |
+| line 1 only | true | false | false | false | hidden, waiting for line 2 |
+| full alba, already ridden | true | **true** | true | false | hidden by the new re-ride guard |
+
+Every component of the condition is therefore proven to evaluate correctly on
+real state, including the `$alba contains $alba2` half, and the conjunction
+behaves in both observed cases. The Jeffrey scene, the betting-slip key and the
+street exit are all intact, with zero `tw-error`s.
+
+The `$cowRideDone` half also closes a smaller pre-existing quirk: the ride had no
+guard, so you could ride twice and append line 3 to `$alba` twice. Harmless,
+since the display tests whether you hold a line rather than counting, but it is
+tidy now.

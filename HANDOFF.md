@@ -2887,3 +2887,11 @@ And the Pillars' "GO TO THE PILLARS" button looked to have vanished after the
 camera move. It had not: it was on screen at y=729 the whole time and simply too
 small to read in a 0.75-scale screenshot. Check the DOM rect before believing a
 scaled screenshot about small UI.
+
+### Independent Codex mechanics audit — 2026-09-13
+
+Sam requested an independent check of Opus's work and the whole game's mechanics/structure. See `MECHANICS-AUDIT-2026-09-13.md` for nine actionable findings, reproductions, source anchors and proposed fixes. Game source and compiled output are unchanged; no git commands run.
+
+Priority: missing Coach return after the new cow ordering gate; Pillars closing with line two despite unfinished dream business; new street exits abandoning Shana/Ronnie/Davy/painter encounter rewards; complete-alba crisis hiding its own Coach recovery route; Dawn Play again clearing permanent gifts. Further: closed venues blocking outside stashes, pong notebook rematch blocked, dream recognition scenes lacking return paths, Colony agent wrongly tagged French.
+
+Evidence: 229 source headers and 292 literal links checked (no missing targets), 113 executable JS blocks parse, 29 build assets present, 17 isolated seeded browser scenarios plus an actual replay-storage test. Details and limitations in the report; reproducible harnesses/results under `scratchpad/mechanics-audit-2026-09-13/`. No claim of a complete minigame/visual/audio playtest. These are findings for a fixing pass, not changes already shipped.

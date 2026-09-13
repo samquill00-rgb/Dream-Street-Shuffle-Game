@@ -3413,3 +3413,68 @@ Shifted the alba ladder up one rung, leaving the haunt counts alone:
 Verified live: alba 1 collected, header reads ALBA 1/3 and **Before midnight**.
 The Coach gents scene still sets `$afterMidnight` directly, which is the intended
 story beat where midnight actually passes.
+
+---
+
+## Addendum 69 — nine notes from the playthrough (2026-09-13)
+
+**1. A haunt now arrives with a flare.** New `hauntBloom` keyframes: the box
+blooms gold (30px core, 74px halo) within 0.3s of landing and settles back to
+its resting shadow over 2.4s. The reveal JS adds `.haunt-bloom` at the moment it
+fades the box back in, and strips the class at 2.6s; the final keyframe matches
+`.haunt-box`'s own `box-shadow`, so the handover is invisible. Honours
+`prefers-reduced-motion`. Only haunts bloom — items, pages and revelations still
+just fade, as before.
+
+**2. Gathered lilies appear on the notebook map.** Each lily now marks the venue
+it came from, reusing the `_bell` glyph the pentangle already uses, at
+`scale(0.58)` and lifted clear of the node: Chippy (100,250), Pillars (486,228),
+Ronnie Scott's (340,450), Colony (232,420), the French (230,470). At five lilies
+the Chippy and the French marks stand down, because the pentangle blooms its own
+bells at those two points and they would otherwise double up.
+
+**3. `NOTEBOOK))))))))))))` — found and fixed.** Twelve lines in the CHANT block
+of `Build Notebook` read
+`(set: _nb to _nb + (cond: …, '…', '…')))` — one `)` too many each. Harlowe
+printed the twelve orphans as text, and because the header link is
+`(link-repeat:)`, every notebook opening appended another twelve. Reproduced
+(12, then 24, then 36…), removed the surplus paren from all twelve lines, and
+confirmed the label stays clean across repeated opens.
+
+**4. Carthage is now a second-visit offer.** The whole
+`'I can walk on water'` block is wrapped in `(if: $pillarsVisits >= 2)`.
+`$pillarsVisits` only increments on a real entry (not on `$resumingFromCall`),
+so a phone call does not buy a visit.
+
+**5. The worm takes a sad trombone.** A hit is now one short brassy blat: a
+sawtooth through a lowpass, held a beat at Bb3 then sliding down a minor third,
+with an 11Hz wobble fading in on the tail, under half a second so a fast run of
+hits doesn't smear. Verified the graph builds (sawtooth + sine LFO + biquad).
+The miss sound is untouched. **The worm game also respects the mute button now** —
+it had its own AudioContext and ignored it completely.
+
+**6. The matchbook moved into the Pillars.** It was firing on the hub, gated on
+having visited the Pillars, so it could be pocketed walking out of the Ginger
+Light. It now lives in `Entering The Pillars of Hercules` under a plain
+`(if: $hasMatches is false)`. Verified: the overlay comes up inside the pub.
+
+**7. The mute button is reachable everywhere.** It was never missing from the
+DOM — it was being buried. Harlowe's own dialog backdrop is `z-index: 999996`,
+so the notebook covered it, and the rules and primer cards (99990) covered it
+too. Raised to `999999` and given a MutationObserver that re-attaches it if
+anything ever removes it. Verified clickable with the notebook dialog open.
+
+**8. The primer fades in.** The scrim always faded, but the card did not fade on
+its own. It now starts at opacity 0, `translateY(14px) scale(0.985)`, and comes
+up over 0.62s after a 0.1s beat; the scrim's fade went 0.28s → 0.5s. The reveal
+uses a double rAF with a 140ms timeout fallback, because a backgrounded tab
+stalls rAF and would otherwise leave the card invisible. Applies to all three
+`.dss-rules-overlay` modals, and honours `prefers-reduced-motion`.
+
+**9. 'Back to the street' goes back to the street.** Reversing Addendum 47 at
+Sam's word ("I made an error in my instructions"). All 17 venue exits and all 11
+header-exit targets now land on `Dean Street` — the hub page with the walkable
+map — instead of the venue's 3D approach. The labels stay as they are: "Back to
+the street" in the body, "← Exit to the street" in the header. The approach
+scenes are still reached the intended way, by walking the map to a door.
+Verified: leaving the Pillars lands on `hub` with `#soho-map-container` present.

@@ -3036,13 +3036,103 @@ others. Not reachable in normal play, but free to fix.
 - **#8** — several dream recognition scenes lack a route back to the character
   after the gift.
 
-Both are the same shape and both are **design decisions, not clear bugs**:
-the answer is either to suppress the exit while a reward is pending, or to make
-those scenes re-enterable, and which one is right depends on whether Sam wants
-those beats repeatable. Flagged for his ruling rather than guessed at.
+**#3 is now done** — Sam ruled: suppress the exit while a reward is pending. See
+below. **#8 is still open** and wants the same ruling applied to the dream
+recognition scenes, which I have not touched.
 
 ### Regression check
 
 Clean opening walk plus a 54-step crawl over 25 distinct passages: **zero
 `tw-error`s**, no spurious bin links before anything is stashed, hub links
 correct.
+
+### Addendum 61 — #3: the street exit is suppressed while a reward is pending
+
+Sam's ruling: "Suppress the exit while a reward is pending."
+
+Four passages hold a reward one click ahead, and the header exit let the player
+walk out past it. All four are now in `_backHide`, which is the mechanism that
+already suppresses the header link:
+
+| passage | reward one click ahead | forward route it keeps |
+| --- | --- | --- |
+| The Painter's Gaze | the napkin sketch, and the painting | "Sketch him on a napkin" |
+| The Set | `$completedSetlist`, via After the music | "Back to Dean Street" |
+| Shana Reads | the Hanged Man reading | two choices |
+| Davy Merkin | `$knowsLackland`, `$knowsCopperSecret` | "Listen" |
+
+**Verified on all four:** the street exit is gone, the forward route remains,
+zero errors. Suppression cannot strand anyone because each keeps its own link.
+
+**`Sketch the Painter` was deliberately left alone**, and this is the judgement
+worth recording. Leaving it mid-sketch does abandon the painting, so by the rule
+it should be suppressed. But its only link is a hidden `nav` fired by the **Done
+button, which starts `disabled` and only enables once you have drawn something**.
+Suppressing the exit there would strand any player who opens the napkin and
+draws nothing. Between abandoning a reward and being unable to leave at all, the
+second is worse, so the exit stays. Say if you would rather it were suppressed
+and the Done button always enabled instead.
+
+### A crawler artefact worth not chasing twice
+
+The regression crawl reported *"I can't find a save slot named 'auto'"* at the
+Title. That is **not player-reachable**: the CONTINUE link lives inside
+`<div id="dss-continue-wrap" style="display:none">` and is only revealed when a
+save exists. Confirmed on a fresh install: wrap is `display:none`, the link has
+no layout box, a player cannot click it, and the Title renders with zero errors.
+
+The crawler hit it because, as established earlier today, **Harlowe honours
+programmatic clicks on `display:none` links** — which is exactly why that rule
+matters. Any future crawler should filter to links with a layout box, or it will
+keep finding this ghost.
+
+### Addendum 62 — #8: the recognition scenes no longer teleport you to the hub
+
+Sam: "Yes, do the same for #8."
+
+It turned out to be the same fault as Addendum 50, in a different place. All five
+dream recognition scenes ended by dumping the player on **Dean Street**, so the
+gift was collected and the character was gone, with no way back into the room.
+
+One of them was outright lying: `Inis Recognises the Proportion` offered
+**"Back into Cecil Court"** and sent you to the hub.
+
+Each is now pointed at what its own label already promises, so **none of Sam's
+link prose had to change**:
+
+| scene | its label | now lands on |
+| --- | --- | --- |
+| Benito Recognises the Wheel | "Leave him to the light" | The French |
+| Inis Recognises the Proportion | "Back into Cecil Court" | Cecil Court |
+| Lackland Recognises the Tracing | "Leave the office" | Approach Lacklands Office |
+| The Critic Hears the Mantra | "Leave him to his papers" | Entering The Pillars of Hercules |
+| Red Recognises the Name | "Walk on" | Dean Street, unchanged |
+
+Two judgements in that table worth naming. **Lackland goes to the approach, not
+the office**, because the label says "leave the office" and putting the player
+back inside it would contradict the words. **Red is left alone**: he is an
+outdoor encounter on the corner, so walking on to the street is already right.
+
+**Verified by walking all five**: each lands where the table says (confirmed by
+passage text, and by `lo-container` for Lackland's approach), none lands on the
+hub except Red, zero `tw-error`s. Link-target sweep over the whole file confirms
+no broken literal targets.
+
+### Status of the Codex audit: all nine addressed
+
+| # | finding | outcome |
+| --- | --- | --- |
+| 1 | no normal route back to the Coach | fixed — Coach opens while the cow is rideable |
+| 2 | line two closed the Pillars | fixed — stays open while worlds remain |
+| 3 | street exits abandoned pending rewards | fixed — exit suppressed on four mid-beat passages |
+| 4 | complete poem hid the Coach recovery | fixed — `_towerReady` no longer suppresses it |
+| 5 | Play again wiped permanent gifts | fixed — targeted save wipe only |
+| 6 | stored keys unreachable when a venue closed | fixed — bins get the alleys' escape |
+| 7 | losing at pong closed the rematch | fixed — Lackland's stays open while the notebook is stolen |
+| 8 | recognition scenes had no route back | fixed — each returns where its label says |
+| 9 | Colony agent tagged as the French | fixed — retagged, which also corrects his pub ambience |
+
+Three of the nine were mine (3, 6, 9) and two more (1, 4) were latent faults that
+my cow gate turned into real ones. One deliberate exception stands:
+`Sketch the Painter` keeps its street exit, because its Done button starts
+disabled and suppressing the exit would strand a player who draws nothing.

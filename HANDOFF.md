@@ -2813,3 +2813,77 @@ decision than was asked for. The brick texture, the number 57 and the cat on the
 step all read now, where before they barely did.
 
 Temporary scene probe removed; zero occurrences remain.
+
+### Addendum 57 — Trisha's camera pulled in (2026-09-13)
+
+Sam: "Pull the camera in on Trisha's."
+
+`camera.position.set(-0.6, 2.6, 7.4)` to `(-0.45, 2.6, 5.2)`. The lookAt is
+unchanged at (0, 2.55, 0), which was deliberately set to a near-level gaze to
+keep the verticals straight, so moving only the distance preserves that.
+
+This did what the lighting could not. The scene's problem was never really
+brightness, it was that a third of the frame was unlit brick and empty pavement
+around a small lit doorway. Filling the frame with the lit part fixes the measure
+and the composition at once:
+
+| Trisha's | mean | % near-black | % lit |
+| --- | --- | --- | --- |
+| original | 2.9 | 95.6 | 0.9 |
+| after the light lift | 5.6 | 93.4 | 1.3 |
+| **after pulling the camera in** | **9.6** | **84.9** | **4.0** |
+
+Lit pixels are up more than four times on the original, and it now sits at the
+bottom edge of the pack rather than far below it (the Pillars 10.4, the French
+11.2). It is still the darkest Soho approach, which seems right for a basement
+door on Greek Street.
+
+**Checked for clipping, since pulling in can push things out of frame:** all
+three links are on screen and in the viewport (← Back to Dean Street, the "·"
+entry at y=299, NOTEBOOK), the TRISHA'S entry button sits over the doorstep, and
+the "GREEK STREET, SOHO" caption ends at y=819 in an 837 viewport. The brick, the
+number 57, the lamp, the awning and the cat all read.
+
+### Addendum 58 — the French and the Pillars given the same treatment (2026-09-13)
+
+Sam: "Now do the same for the Pillars and the French."
+
+Both had the same three faults as the other two: a near-black `scene.background`
+and matching fog that no light can lift, a token ambient, and a camera parked
+well back at z=16.
+
+| | background + fog | ambient | camera |
+| --- | --- | --- | --- |
+| The French | `0x050508` to `0x121218` | `0x121225` @0.18 to `0x1a1a30` @0.34 | z 16 to 11.5, x 4.0 to 3.0 |
+| The Pillars | `0x0a0a12` to `0x16161f` | `0x1a1a2a` @0.2 to `0x22223a` @0.34, hemisphere 0.08 to 0.16 | z 16 to 11.5, x 0 to 2.1 |
+
+| scene | mean | % near-black | % lit |
+| --- | --- | --- | --- |
+| The French, before | 11.2 | 84.3 | 0.2 |
+| **The French, after** | **19.3** | **64.5** | **5.4** |
+| The Pillars, before | 10.4 | 83.5 | 1.5 |
+| **The Pillars, after** | **19.3** | **65.4** | **5.7** |
+
+Both now sit mid-pack, above the Colony (17.5) and near the Chippy (22.8). The
+French House sign, the tricolour bunting, RICARD and the PARIS shop next door all
+read; so do the Pillars' timber framing, window boxes and the No7 sign.
+
+**Pulling in caused one regression, which is worth recording as a rule.** At
+z=11.5 with the camera dead centre at x=0, a foreground post ran straight down
+the middle of the Pillars and cut the "PILLARS OF HERCULES" sign in half. It was
+harmless at z=16 and only became obtrusive once the camera moved closer.
+Offsetting the camera sideways to x=2.1 put it out of frame and improved the
+composition as well, since the two lamp posts now frame the shot.
+
+**So: when pulling a camera in, re-check for foreground geometry.** What reads as
+depth at distance becomes an obstruction up close.
+
+**Two checks worth noting.** `0x050508` is used by **two** scenes, the French and
+the Coach and Horses, so a global string replace would have silently re-lit the
+Coach as well. All nine edits were made by line number instead, and the Coach's
+background and fog are confirmed unchanged at `0x050508`.
+
+And the Pillars' "GO TO THE PILLARS" button looked to have vanished after the
+camera move. It had not: it was on screen at y=729 the whole time and simply too
+small to read in a 0.75-scale screenshot. Check the DOM rect before believing a
+scaled screenshot about small UI.

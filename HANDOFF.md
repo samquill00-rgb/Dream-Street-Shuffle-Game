@@ -3136,3 +3136,35 @@ Three of the nine were mine (3, 6, 9) and two more (1, 4) were latent faults tha
 my cow gate turned into real ones. One deliberate exception stands:
 `Sketch the Painter` keeps its street exit, because its Done button starts
 disabled and suppressing the exit would strand a player who draws nothing.
+
+### Addendum 63 — you could not start a new game once a save existed (2026-09-13)
+
+Sam, on opening the playtest build: "It says 'continue where I left off', even
+after a hard refresh."
+
+**The Continue gate itself was telling the truth.** It requires a localStorage
+key containing "Saved Game", "auto" and the IFID, with real content, so it only
+appears when a genuine auto-save exists. A hard refresh does not clear
+localStorage, so a save from an earlier play survives it. That part is correct.
+
+**The bug was the line after it:** on finding a save it also ran
+`beginw.style.display = 'none'`. So a returning player was shown **only**
+"CONTINUE WHERE I LEFT OFF" and had no way to start a new night at all.
+
+That is worse than an inconvenience. **Loading a save skips `Start`**, and `Start`
+is where all 37 new-game resets live (Addendum 46). So a player with an old save
+was forced into continuing pre-fix state, with no route to a clean game — which
+is exactly the position Sam was in opening tonight's build.
+
+**Fix:** BEGIN is never hidden. Continue is still revealed prominently when a
+save exists; both are offered.
+
+**Verified in both states:**
+
+| state | BEGIN | CONTINUE |
+| --- | --- | --- |
+| fresh browser, no save | visible | hidden |
+| save present | **visible** | visible |
+
+Zero errors in both. Reproduced the returning-player case by seeding a
+correctly-shaped save key rather than waiting for one to accrue.

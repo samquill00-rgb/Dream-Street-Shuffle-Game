@@ -2231,3 +2231,106 @@ one of the `display:none` bridges, and it fired by itself under real conditions.
 
 `Fight starts` is the same shape and almost certainly behaves the same way, but I
 did not sit through a fight to prove it.
+
+---
+
+## Addendum 47 — BACK removed, venue street-exit added (2026-09-13)
+
+At your instruction: "when you go into a venue there can be an 'Exit to the
+street' option, but not a back."
+
+### Why it mattered
+
+`← BACK` was `(link-undo:)`, a real Harlowe undo. It rewound **variables**, not
+just the passage, which quietly undercut most of the night's economy: it undid a
+drink, a spent coin, a lost fight, and — the one that decided it — a pocket-key
+swap. The stash system exists precisely so that giving something up is
+recoverable *by walking back for it*. An undo button made that system pointless.
+
+### What changed
+
+**1. The header.** `(link-undo: "← BACK")` is gone. In its place, on venue
+passages only, is `[[← Exit to the street|Dean Street]]`. It sits inside the same
+`(unless: _backHide contains (passage:)'s name)` wrapper and the same
+`_hideStats` suppression, so it can never appear anywhere BACK did not. The test
+is an explicit list of the eleven `venue-*` tags rather than a prefix match or a
+determiner, deliberately: after last night's grammar landmines I wanted no new
+syntax in the header, which runs on every passage in the game.
+
+61 passages gain the exit — every room of the French, the Colony, Ronnie's, the
+Coach, Trisha's, Cecil Court, Lackland's, the Pillars, the cellar and the gents.
+Any future passage tagged with a venue tag gets it automatically.
+
+**2. The thirteen approach passages.** These each had their own
+`<div class="approach-back">(link-undo: "← BACK")</div>`, and on an approach that
+undo was the *only* way to decide not to go in. Removing it would have forced the
+player through the door. They are now real links:
+
+- the eleven `[outdoor]` approaches → `[[← Back to Dean Street|Dean Street]]`
+- `Approach Coppers Lair` → `[[← Back|Maltese Gangsters]]`, where it is entered from
+- `Green Sea Approach` → `[[← Back|Carthage shore]]`, likewise
+
+**3.** A stale JS comment that named `(link-undo:)` was corrected. The guard it
+describes is still needed: the `·` link finder must still skip the first
+`tw-link`, which is now the `← Back` link.
+
+### Nothing was stranded
+
+Worth recording because it changed the plan. My soft-lock scan had flagged seven
+passages as depending on BACK, but three of those — `Failure: Trisha's`, `LINE 2`
+and `Shana Looks Again` — turned out to be exhaustive `(if:)/(else:)` pairs where
+**both** branches carry an exit. The scan cannot tell an exhaustive if/else from
+an open-ended chain. So removing BACK stranded nobody, and the street exit is
+purely the design change you asked for rather than a soft-lock patch.
+
+### Verified live
+
+- Dean Street: no BACK, and no exit link either, which is right — the hub is not
+  a venue.
+- `Approach The French`: shows "← Back to Dean Street" and "·". You can still
+  decline to go in.
+- Inside `The French`: "← Exit to the street" in the header, no BACK.
+- **The point of the whole change:** pocketed the brass lighter, left via
+  "← Exit to the street", landed on Dean Street, and the lighter was **still in
+  the pocket**. Under the old BACK it would have been back on the bar.
+- Crawl of 76 steps over 36 passages: zero errors, and the only dead end reached
+  was the Dawn, which is the ending and is meant to be one.
+
+### Correction to Sweep 6, and the phone-call question (2026-09-13)
+
+Sam asked whether a soft-lock he hit "on one of the popups when I turned down a
+phone call" is fixed. Checking it exposed a **fault in my Sweep 6 method**, which
+is worth recording so it is not trusted blindly.
+
+**The fault:** Sweep 6 decided a passage was safe if it was not in `_hideStats`,
+on the grounds that it would then show "← BACK". That is wrong. The header also
+wraps BACK in `(unless: _backHide contains (passage:)'s name)`, and `_backHide`
+holds 21 names. Any passage in `_backHide` never showed BACK at all, so Sweep 6
+marked several as "safe (BACK in header)" that had no such protection —
+`Lily phone call 1` and `The dual ring` among them. Any future soft-lock audit
+must check **both** lists.
+
+**The phone-decline lock is fixed.** There are six places the Lily phone can ring
+— `Coach and Horses bar`, `Entering The Pillars of Hercules` (twice),
+`Ronnie Scott's`, `The Colony Room` and `The French`. Declining runs
+`(replace: ?lilyring)`, drops the second-refusal `glass-pane` with the Fetch
+window if `$refusedCalls is 2`, and all six now end with
+`[[Back to Dean Street|Dean Street]]`. Confirmed on every one of the six.
+
+The `.glass-pane` itself is not a trap: it is `position: relative`, 500px,
+sitting in the normal flow, so it never covers the exit link.
+
+**What remains, and is by design:** accepting a call puts you on a passage with
+**no link whatsoever** for a while — `Lily phone call 1` shows "Hang up." only
+after 15s and auto-exits at 28s; `The dual ring` shows it at 28s and auto-exits
+at 40s. Neither has a header. So for those seconds there is genuinely nothing to
+click, which reads exactly like being stuck.
+
+I tested the worst case, since `(after:)` is the macro we know can stall in a
+hidden tab: loaded `Lily phone call 1`, confirmed zero links, backgrounded the
+tab for 40 seconds, came back. **It had escaped on its own.** So the auto-exit
+holds and this is not a lock. It is a long silent wait by design, not a bug, and
+I have changed nothing.
+
+Also worth noting: both phone passages are in `_backHide`, so they never had a
+BACK link. Removing BACK in Addendum 47 did not make any of this worse.

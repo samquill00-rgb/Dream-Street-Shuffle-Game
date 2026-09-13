@@ -1232,3 +1232,45 @@ Sam, with a screenshot: *"You see how the coin here is sort of misaligned with i
 **Method note for next time.** Three rounds of pixel measurement on the PNG were a dead end — texture detection caught the lettering, colour separation failed because the portrait is a gold duotone with no skin hue, and a radial edge-fit was biased by the dark hair at the top of the head. What settled it in one step was rendering candidates side by side in the real CSS and looking. For a framing question, render and look first.
 
 synced, commit when ready
+
+### Addendum 41 — soft-lock: declining a phone call sealed you inside the modal (2026-09-13)
+Sam, playing: *"I got stuck on one of the popups when I turned down a phonecall."*
+
+**Real bug, five instances.** `.phone-ringing` is not inline prose, it is `position: fixed` — a centred modal — and `tw-story:has(.phone-ringing)::before` lays a full-screen scrim over the page that **catches clicks**. Declining a call runs `(replace: ?lilyring)[...]`, which swaps the text *inside* that modal and leaves the modal and its scrim standing. Where the replacement offered no link, the player was sealed in with nothing clickable anywhere on screen. Only a browser Back or a reload got you out.
+
+Affected, all five carrying byte-identical markup: **Coach and Horses bar**, **Entering The Pillars of Hercules**, **Ronnie Scott's**, **The Colony Room**, **The French** — all of them the Lily ring.
+
+**Why the Aoife call was fine.** Its decline already ended `...(display: "Fetch Window SVG")</div>]\n[[Back to Dean Street|Dean Street]]]]]</div>]`. The five Lily branches were missing exactly that one line. Fixed by giving them the same exit, so the pattern is now uniform.
+
+**Why not simply dismiss the popup and stay in the venue.** `_lilyRing` is `$lilyCount >= 1 and $hadLilyCall1 is false and $hadPhoneCall is true and ($returns - $phoneCallReturnsAt) >= 1`, and declining sets **none** of those. Any fix that re-rendered the venue would have re-rung the phone immediately, incrementing `$refusedCalls` each time and marching the player into the Fetch omen through a loop they could not leave. Leaving to Dean Street breaks the cycle cleanly, and she rings again next visit, which is the intended behaviour.
+
+**Verified:** all five decline branches in the compiled html now carry a "Back to Dean Street" exit, none without. `[[` links 314 to 319, the five new exits. I could not trigger a live Lily ring to watch it — the ring needs a specific state (a lily gathered, the Aoife call already taken, and at least one lap since) that the debug Complete tool does not produce — so this is verified structurally against the working Aoife branch rather than by playing it.
+
+**Sam is play-testing from `PLAYTEST.html`**, a frozen copy of the build served off the same port, so edits and syncs do not disturb a session in progress. Refreshed after this fix.
+
+synced, commit when ready
+
+### Addendum 42 — the phone box (2026-09-13)
+Sam's idea, from noticing the K6 modelled in the Ginger Light render: *"I quite like the idea that you can ring her... if you turned down a phone call then regretted it, you could ring her back and undo the damage."* And on the coin: *"once you use it for the colony room doors it's just sitting there and you can, if you want, decide to spend this valuable coin to call Aoife."*
+
+**Why it fits.** Every phone in this game rings AT you; you take it or you say you are not here. You can never ring out. And the Donkey coin had exactly one use (the flip at the Colony Room Door) against a pickup line that promises **"You'll want it later"** and was never paid off. The box uses both.
+
+**New passage `The Phone Box`.** Spending the coin buys back **one refused call**: `$refusedCalls` comes down by one, so the Fetch omen that appears at two refusals recedes. Four states:
+- no coin: nothing to put in it;
+- `$refusedDualRing is true`: **the box cannot help.** That refusal sends you to The Fetch and rewrites the hub, and it stays unrecoverable by design;
+- a coin and at least one refusal: the offer, and the spend;
+- a coin and nothing to take back: she will be asleep, and the daughter with her.
+
+**The trade is real.** Spending the Donkey here means not having it to flip at the Colony doors. That is deliberate and it is now enforced, because of the next item.
+
+**The coin gate can finally see the coin.** `window.coinGate` is plain JS and Harlowe state is not exposed to it, so it never checked `$hasCoin` — you could flip a coin you had never found, and would still have been able to flip one you had spent. `The Colony Room Door` now prints `$hasCoin` into a hidden `.dss-coin-flag` span and `coinGate` reads it. **No coin means no gate at all: you pick a door yourself.** That is the graceful fallback for arriving before `$returns is 2`, and the consequence of spending the coin at the box.
+
+**Where it lives.** A parked hub link (shown only while `$hasCoin is true`) plus a `DOORS` entry at **c19, r24** — the pavement beside the Ginger Light corner, where the K6 actually stands, verified walkable ('P', entered from the Dean Street road at c18). Same pattern as the doorways: invisible as text, a place on the map.
+
+**A problem worth recording.** The K6 is modelled in the *Approach The Ginger Light* render, which since the opening-funnel work is reachable only on the very first landing, before you have refused anything or found the coin. So the box could not live there and be usable. It is its own map location instead, on the same corner.
+
+**AOIFE'S LINES ARE NOT WRITTEN.** The passage carries a clearly-marked `PLACEHOLDER` where she answers. Everything around it is scene-setting (the box, the coin, the dialling); none of it is her, and none of it should be taken as a draft of her. Sam writes her himself (see `project_aoife_underwritten`).
+
+**Verified:** passage renders with no errors in the coin-but-no-refusals state; hub link present and parked off-screen with no visible text links added; map door reads back from `dssSohoMap` at c19/r24 with its matcher. **Not verified live:** the spend itself and the `$refusedCalls > 0` branch, because the save had `$hadPhoneCall` already true so no call would ring to refuse. The branch is a plain if/else-if chain and compiles clean, but nobody has watched the coin go in.
+
+synced, commit when ready

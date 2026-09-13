@@ -3348,3 +3348,68 @@ exactly like broken game logic. See `project_preview_tab_backgrounded`.
 **4. Re-verified while in there:** with `localStorage` cleared,
 `#dss-continue-wrap` computes to `display:none` on the Title — the
 "CONTINUE WHERE I LEFT OFF" gate from Addendum 62 still holds.
+
+---
+
+## Addendum 68 — four notes from the playthrough (2026-09-13)
+
+**1. Prose below the links.**
+Audited every passage for prose that renders *alongside* the links but *after*
+them (a scanner that ignores prose parked inside deferred `(link:)`/`(click:)`
+hooks, and prose inside `.dss-key-offer`, which is off-screen by CSS and read
+into the WITHIN REACH popup). Almost everything flagged was a false positive.
+Two were real, and both were v2 material appended at the bottom of a venue:
+
+- **The French** — the orange-paperback paragraph (the India-world remnant) sat
+  under the whole venue link block. Moved above it.
+- **Entering The Pillars of Hercules** — the entire third-pillar block (the
+  column prose, "Step through the third pillar", and the lifetime-gift synthesis
+  link) sat below "Get a drink", "I can walk on water" and "Back to the street".
+  Moved to just after the Hobson verse, which puts it above the links in *every*
+  branch of that passage without duplicating it into each one. The trailing
+  `</div>` was deliberately left where it was so the div balance is unchanged.
+
+New `.prose-tilde` class marks the seam: a centred `~`, sandstone, letter-spaced,
+0.7 opacity. In the Pillars it is wrapped in `(if: $inisToldOfPillars is true)`
+so it never appears over an empty block, and the synthesis div carries its own
+(that block can show with `$inisToldOfPillars` false, on lifetime gifts alone).
+
+**2. The coin now tosses once on pickup.**
+`maxToss` 2 → 1 and `sequence` `[false,true]` → `[false]`. The "Toss again"
+branch is gone; after the single toss, "Pocket it" is revealed as the primary
+button and the overlay waits for it (the old 1800ms auto-fade is gone too, so
+the player is never rushed). Verified live: one toss, result "Tails.", the toss
+button stays hidden, "Pocket it" comes up primary. The notebook's own coin is a
+different engine (`window.flipCoinPopup` → `showCoinModal`, `maxToss: 1`) and was
+not touched, so tossing again there still works.
+
+**3. Soho Square is lit on the map.**
+`hidden:true` dropped from the `square` door, so it takes the same faint warm
+pool as Meard Street and the other alley mouths. That is the map-level signpost
+for the gents (Soho Square → "Down to the gents" → whack-a-worm). Verified by
+sampling the map canvas: the door tile reads 45.6/44.4/31.6 against 20.8/27.9/21.4
+for the garden beside it — warm and about twice as bright.
+
+**Gotcha for next time:** the glow layer is a canvas built ONCE per render by
+`buildGlow()`. Toggling `d.hidden` at runtime changes nothing, so an A/B test
+that flips the flag live will always read "no difference". Compare against a
+neighbouring tile instead, or rebuild.
+
+**4. "After midnight" from the off — a real bug.**
+`Night Progress` advanced to phase 1 on `$nightAlbaCount >= 1`. Alba 1 comes from
+LINE 1, which is reached straight off the first Dean Street visit (Red is on the
+corner with no gate but `$metRed is false`), so the header flipped to "After
+midnight" within a couple of clicks — and `$afterMidnight` latches, which also
+turned the date over to 24.11.73. The haunt thresholds were not the problem and
+no haunt is double-counted (all 13 addition sites are guarded by
+`(if: not ($haunts contains …))`).
+
+Shifted the alba ladder up one rung, leaving the haunt counts alone:
+
+- phase 1 "After midnight": `$haunts's length >= 4 or $nightAlbaCount >= 2`
+- phase 2 "Small hours":    `$haunts's length >= 8 or $nightAlbaCount >= 3`
+- phase 3 "Dawn awaits":    `$nightAlbaCount >= 3` (unchanged)
+
+Verified live: alba 1 collected, header reads ALBA 1/3 and **Before midnight**.
+The Coach gents scene still sets `$afterMidnight` directly, which is the intended
+story beat where midnight actually passes.

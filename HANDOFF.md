@@ -2895,3 +2895,69 @@ Sam requested an independent check of Opus's work and the whole game's mechanics
 Priority: missing Coach return after the new cow ordering gate; Pillars closing with line two despite unfinished dream business; new street exits abandoning Shana/Ronnie/Davy/painter encounter rewards; complete-alba crisis hiding its own Coach recovery route; Dawn Play again clearing permanent gifts. Further: closed venues blocking outside stashes, pong notebook rematch blocked, dream recognition scenes lacking return paths, Colony agent wrongly tagged French.
 
 Evidence: 229 source headers and 292 literal links checked (no missing targets), 113 executable JS blocks parse, 29 build assets present, 17 isolated seeded browser scenarios plus an actual replay-storage test. Details and limitations in the report; reproducible harnesses/results under `scratchpad/mechanics-audit-2026-09-13/`. No claim of a complete minigame/visual/audio playtest. These are findings for a fixing pass, not changes already shipped.
+
+### Addendum 59 — the remaining Soho scenes (2026-09-13)
+
+Sam: "Do the rest of them too."
+
+Judged per scene rather than blanket-applied, because after the earlier work the
+pack sits around 19-26 and pushing an already-bright scene would flatten it.
+"At standard, leave alone" was a valid answer for four of the seven.
+
+**Changed:**
+
+| scene | what it needed | before | after |
+| --- | --- | --- | --- |
+| Ronnie Scott's | bg/fog `0x0a0a12` to `0x16161f`; **no ambient existed**, added `0x1c1c30` @0.34 | 12.5 | 15.5 |
+| The Colony Room | bg/fog `0x08060a` to `0x131018`; ambient `0x080815` @0.18 to `0x15152a` @0.32 | 17.5 | 19.7 |
+| Chinese Fish and Chips | bg/fog `0x080810` to `0x101019`; **no ambient existed**, added `0x18182a` @0.26; camera z 14 to 10.5 | 22.8 | **29.1** |
+
+Two of these scenes had **no AmbientLight at all**, only point lights, which is
+exactly why anything beyond a lamp's reach fell to pure black. That is now three
+scenes found with the same omission (Ronnie's, the Chippy, and earlier the French
+and Pillars had only token ambients).
+
+**Left alone, and confirmed unchanged within measurement noise**, which also
+proves the line-scoped edits did not leak into neighbours:
+
+| scene | before | after |
+| --- | --- | --- |
+| The Coach | 25.1 | 25.7 |
+| Lackland's Office | 25.6 | 26.1 |
+| O'Flatterly | 35.4 | 35.0 |
+| Coppers Lair | 35.8 | 35.6 |
+
+The Coach and Coppers Lair both carry comments from earlier deliberate tuning
+("was 0.20 — the corner was reading as void"), so they had already had this
+treatment. Cecil Court is the iframe scene and is the brightest in the game.
+
+**Ronnie's was left at 15.5 on purpose.** It is the lowest of the changed set but
+its light is *even*: left half 12.1, right half 15.1, sky 11.8, pavement 12.4,
+shopfront 15.0. No dead regions. That is a different condition from the scenes
+that were 96% black around one lit spot, and the neon, the COSMOGRAMM sign and
+the pavement all read. Brightening further would mostly brighten the night sky.
+
+**The whole Soho set, before and after:**
+
+| scene | was | now |
+| --- | --- | --- |
+| Trisha's | 2.9 | 9.6 |
+| The Ginger Light | 5.4 | 11.1 |
+| The Pillars | 10.4 | 19.3 |
+| The French | 11.2 | 19.3 |
+| Ronnie Scott's | 12.5 | 15.5 |
+| The Colony Room | 17.5 | 19.7 |
+| Chinese Fish and Chips | 22.8 | 29.1 |
+| The Coach | 25.1 | 25.7 |
+| Lackland's Office | 25.6 | 26.1 |
+| O'Flatterly | 35.4 | 35.0 |
+| Coppers Lair | 35.8 | 35.6 |
+
+The spread was 12x from darkest to brightest; it is now 3.7x, and the bottom of
+the range has moved from 2.9 to 9.6. Nothing at the bright end was touched.
+
+**Entry buttons checked on every changed scene** after the camera moves, since
+pulling in can push UI out of frame. All present: ENTER THE CHIPPY at y=736, GO
+TO THE PILLARS at y=729, and the rest. Twice I thought a button had vanished and
+twice it was on screen and simply too small to read in a scaled screenshot —
+check the DOM rect, not the picture.

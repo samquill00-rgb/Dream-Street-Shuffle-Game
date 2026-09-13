@@ -2334,3 +2334,22 @@ I have changed nothing.
 
 Also worth noting: both phone passages are in `_backHide`, so they never had a
 BACK link. Removing BACK in Addendum 47 did not make any of this worse.
+
+### Phone-call hold times shortened (2026-09-13)
+
+Both calls hold you with no link on screen until a timer reveals "Hang up.".
+Sam judged the waits too long. Changed at his instruction:
+
+| passage | "Hang up." appears | automatic exit |
+| --- | --- | --- |
+| `Lily phone call 1` | 15s → **8s** | 28s, unchanged |
+| `The dual ring` | 28s → **15s** | 40s, unchanged |
+
+Only the reveal timers moved. The automatic exits are untouched, so the safety
+net that gets a player off the call is exactly as it was, and the window in which
+you can choose to hang up is now wider in both cases — 20s on Lily's call, 25s on
+the dual ring. On the dual ring, hanging up is still what sets
+`$crashedAfterDualRing` and drops sobriety to 8 and confidence to 18, so the
+consequence of the beat is unchanged; it just arrives sooner.
+
+Verified live on both: the link appears at the new time and no `tw-error`s.

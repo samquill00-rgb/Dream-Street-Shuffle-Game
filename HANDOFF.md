@@ -4425,3 +4425,42 @@ you wanted to or not — and `Maritime interlude` is tagged `dream`, so it carri
 no header exit either. `[[Back to Soho|Dean Street]]` now sits outside both
 `(if:)` hooks, so it is there in every phase. Verified: phase 1 offers
 "Yes" / "Back to Soho", and the link lands on the hub with no errors.
+
+---
+
+## Addendum 91 — straight to the column, and a reminder about the page (2026-09-14)
+
+**1. Walking into the Pillars with everything takes you straight through.** Sam:
+"when you return to the pillars and have everything you need for a dream quest,
+it should immediately go to the third pillar screen when you walk in off the
+map." `Entering The Pillars of Hercules` now does
+`(go-to: "Third Pillar Portal")` when the tip-off, a pocket key and an unused
+crossing are all in hand.
+
+**The guard is the important part.** The portal's three turn-backs link straight
+back to the pub, so an unguarded redirect would have thrown the player between
+the two passages for ever. Those turn-backs are now
+`(link: "Back to the Pillars")[(set: $pillarsNoAuto to true)(go-to: …)]`, and the
+pub skips the redirect when that flag is set, clearing it immediately after.
+Verified live: with tip-off + lighter, the hub → storm → approach → **column**
+with "Step through" and no pub in between; then "Back to the Pillars" lands on
+`venue-pillars` and is **still there three seconds later**.
+
+**2. A reminder that Inis is waiting.** The page-found box already says "Return
+it to Inis O'Flatterly in Cecil Court", but only once, at the moment you take it
+in Carthage. A hint slip now fires on the street, once, while `$hasMissingPage`
+is true and `$returnedPage` is false. The violet Cecil Court thread lights at the
+same time, so the words and the road agree.
+
+**3. DBG Complete now reaches the portal it claims to unlock.** It set 41 flags
+but neither `$inisToldOfPillars` nor any pocket key, so "Complete all" could not
+actually test a crossing. It now grants the tip-off and the brass lighter.
+
+**A mistake worth recording.** I first inserted those grants by anchoring on the
+first `(set: $returnedPage to true)` in the file — which is in **O'Flatterly's
+Gift**, a story passage, not `DBG Complete`. That shipped a free lighter to every
+player at the moment Inis hands over the liver, overwriting whatever key they
+were carrying. Caught by checking which passage the line had landed in, reverted,
+and redone by locating `DBG Complete`'s own block and appending after its last
+`(set:)`. **Anchor edits by passage, never by the first match of a common
+string** — several passages share these lines.

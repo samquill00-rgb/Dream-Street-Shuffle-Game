@@ -3457,7 +3457,13 @@ text-transform: uppercase;
 
 .back-one-link {
 position: fixed;
-top: 158px; /* clear air below the header bar */
+/* Was a hard-coded 158px, which assumed the header is always exactly 148 tall.
+   It isn't: the ALBA strip wraps to a second line on a narrower window (and the
+   pocket-key cell added in Addendum 81 made that likelier), and the exit then
+   sat inside the header — Sam, 2026-09-14, at O'Flatterly's. --dss-header-h is
+   measured from the real header on every render and on resize; the 148 is only
+   a fallback for the first paint. */
+top: calc(var(--dss-header-h, 148px) + 22px);
 left: 1.4em;
 z-index: 1001;
 margin: 0;
@@ -9179,8 +9185,56 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
    column (2026-09-11: no longer reaches into the page margin — Sam wants it within the
    header banner's width). Capped so it also fits the window height. On narrow screens it
    clears below the lamp at full width. */
+/* THE HINT SLIP (2026-09-14) — white paper, typed, gone after eight seconds. */
+.dss-hint-slip {
+  position: fixed;
+  right: 22px;
+  bottom: 74px;
+  z-index: 99400;
+  max-width: min(30em, 68vw);
+  box-sizing: border-box;
+  padding: 0.95em 1.25em 1em;
+  background: #f6f1e2;
+  color: #2a2118;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.86em;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(120, 96, 58, 0.4);
+  box-shadow: 0 10px 34px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.5) inset;
+  transform: translateY(14px) rotate(-0.5deg);
+  opacity: 0;
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.2,0.7,0.3,1);
+  pointer-events: none;
+}
+.dss-hint-slip.in  { opacity: 1; transform: translateY(0) rotate(-0.5deg); }
+.dss-hint-slip.out { opacity: 0; transform: translateY(-8px) rotate(-0.5deg); transition: opacity 0.85s ease, transform 0.85s ease; }
+.dss-hint-mark { color: #8a6a2c; margin-right: 0.5em; }
+.dss-hint-type::after {
+  content: '';
+  display: inline-block;
+  width: 0.55em; height: 1em;
+  margin-left: 0.12em;
+  vertical-align: -0.16em;
+  background: #2a2118;
+  animation: dssHintCaret 0.9s step-end infinite;
+}
+.dss-hint-slip.out .dss-hint-type::after { display: none; }
+@keyframes dssHintCaret { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+@media (max-width: 640px) {
+  .dss-hint-slip { right: 12px; left: 12px; bottom: 64px; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dss-hint-slip { transition: opacity 0.3s ease; transform: none; }
+  .dss-hint-slip.in { transform: none; }
+}
 .soho-map-wrap { display: block; position: relative; z-index: 2; margin: 0.2em 0 0.8em; }
+/* 100vh changes under you in Safari when the toolbar collapses, which resized
+   the map mid-play (Sam, 2026-09-14: "the map just changed size when I left the
+   French"). svh is the SMALL viewport height — the toolbar-out measurement — and
+   it does not move. vh first as the fallback for anything that lacks svh. */
 .soho-map-stage, .soho-map-bar { width: calc(100% - 178px); max-width: min(920px, calc((100vh - 200px) * 26 / 29)); margin-left: auto; margin-right: 178px; }
+.soho-map-stage, .soho-map-bar { max-width: min(920px, calc((100svh - 200px) * 26 / 29)); }
 .soho-map-stage { position: relative; container-type: inline-size; overflow: hidden; }
 @media (max-width: 640px) { .soho-map-wrap { clear: both; margin-left: 0; } .soho-map-stage, .soho-map-bar { width: 100%; max-width: none; margin-right: 0; } }
 .soho-map-wrap canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid rgba(200,168,106,0.45); box-shadow: 0 0 0 4px #08070a, 0 0 0 5px rgba(200,168,106,0.3), 0 12px 44px rgba(0,0,0,0.65); background: #0b0b10; outline: none; }
@@ -15451,18 +15505,82 @@ window.showNapkinPopup = function() {
 // overlay that stopped the game (2026-09-13). Nothing here blocks, so nothing
 // needs queueing or deferring. Callers' once-only flags still make each lesson
 // appear exactly once a night.
-window.dssInlineHint = function(html) {
+// A NOTE TYPED ON PAPER (2026-09-14). These lessons used to print as a line
+// inside the header, over the lily art, where Sam couldn't read them: "they
+// aren't readable". They now arrive as a small slip of white paper in the
+// corner, typed out a character at a time, and gone eight seconds after the
+// last letter lands. Paper, because it is the one surface in this game that
+// isn't Soho at night, so the eye goes straight to it.
+// Two lessons can fall due on the same screen (the open-night tip and the door
+// marks both fire on an early hub visit). One slip at a time, in order: the
+// second waits for the first to leave rather than landing on top of it.
+window.__dssHintQueue = window.__dssHintQueue || [];
+window.__dssHintBusy = window.__dssHintBusy || false;
+// The header's height is not a constant — the ALBA strip wraps on a narrow
+// window — so anything pinned below it has to be told where "below" is.
+window.dssMeasureHeader = function() {
   try {
-    var line = document.createElement('div');
-    line.className = 'wtw-inline';
-    line.innerHTML = '<span class="wtw-inline-mark">\u27E1</span> ' + html;
-    var host = document.querySelector('.alba-hint');
-    if (host && host.parentNode) { host.parentNode.insertBefore(line, host.nextSibling); return; }
-    // No header on this passage (it is in _hideStats): put it at the top of the
-    // passage instead, so the lesson is not simply lost.
-    var psg = document.querySelector('tw-passage');
-    if (psg) psg.insertBefore(line, psg.firstChild);
+    var b = document.getElementById('stat-bars-lifted') || document.querySelector('.stat-bars');
+    var h = b ? Math.round(b.getBoundingClientRect().height) : 0;
+    if (h > 0) document.documentElement.style.setProperty('--dss-header-h', h + 'px');
   } catch (e) {}
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', function() { window.dssMeasureHeader(); });
+  setInterval(function() { window.dssMeasureHeader(); }, 700);
+}
+
+window.dssInlineHint = function(html) {
+  window.__dssHintQueue.push(html);
+  if (!window.__dssHintBusy) window.__dssHintNext();
+};
+window.__dssHintNext = function() {
+  if (window.__dssHintBusy) return;
+  var html = window.__dssHintQueue.shift();
+  if (html === undefined) return;
+  window.__dssHintBusy = true;
+  window.__dssHintShow(html);
+};
+window.__dssHintShow = function(html) {
+  try {
+    var card = document.createElement('div');
+    card.className = 'dss-hint-slip';
+    var mark = document.createElement('span');
+    mark.className = 'dss-hint-mark';
+    mark.textContent = '⟡';
+    var body = document.createElement('span');
+    body.className = 'dss-hint-type';
+    card.appendChild(mark);
+    card.appendChild(body);
+    document.body.appendChild(card);
+    requestAnimationFrame(function() { card.classList.add('in'); });
+    setTimeout(function() { card.classList.add('in'); }, 120);   // backgrounded tabs stall rAF
+
+    // Type it. The text is taken from the markup so any <em> survives as plain
+    // words; these lessons are one sentence or two, never formatted.
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var text = (tmp.textContent || '').trim();
+    var i = 0;
+    var step = function() {
+      if (!card.parentNode) return;
+      body.textContent = text.slice(0, ++i);
+      if (window.dssAudio && window.dssAudio.typewriterTick && i % 2 === 0) {
+        try { window.dssAudio.typewriterTick(0.35); } catch (e) {}
+      }
+      if (i < text.length) { setTimeout(step, 17 + Math.random() * 16); return; }
+      // eight seconds from the last letter, then it goes
+      setTimeout(function() {
+        card.classList.add('out');
+        setTimeout(function() {
+          if (card.parentNode) card.parentNode.removeChild(card);
+          window.__dssHintBusy = false;
+          window.__dssHintNext();
+        }, 900);
+      }, 8000);
+    };
+    setTimeout(step, 420);
+  } catch (e) { window.__dssHintBusy = false; }
 };
 window.wordToTheWisePopup = function(message) { window.dssInlineHint(message); };
 
@@ -20936,7 +21054,7 @@ window.dssOpusReveal = function(hold) {
 // Centre Point up top. The point of the reveal is "the city you walked
 // is this cosmic shape" — that lands only if the shape IS the city.
 // Fires once on first arrival at Centre Point.
-window._DSS_PASSAGE_GRAPH = [{"n":"Approach Centre Point","x":1650.0,"y":50.0,"t":"piano-bed","l":[44,46]},{"n":"PP Pong","x":1300.0,"y":1550.0,"t":"pong","l":[81,82]},{"n":"A Doorway on Dean Street","x":700.0,"y":550.0,"t":"outdoor hub","l":[48]},{"n":"Doorway: Livonia Street","x":700.0,"y":620.0,"t":"outdoor hub","l":[48]},{"n":"Doorway: Diadem Court","x":800.0,"y":620.0,"t":"outdoor hub","l":[48]},{"n":"Doorway: Ham Yard","x":900.0,"y":620.0,"t":"outdoor hub","l":[48]},{"n":"Doorway: Romilly Street","x":1000.0,"y":620.0,"t":"outdoor hub","l":[48]},{"n":"The Phone Box","x":1400.0,"y":300.0,"t":"outdoor street-night","l":[48]},{"n":"Approach Shana","x":700.0,"y":1700.0,"t":"venue-trishas","l":[61,127]},{"n":"Approach the novelist","x":500.0,"y":550.0,"t":"venue-french char-novelist","l":[48,119]},{"n":"Approach The French","x":1100.0,"y":300.0,"t":"outdoor","l":[48,104]},{"n":"Approach The Coach","x":1100.0,"y":1400.0,"t":"outdoor","l":[36,48]},{"n":"Approach The Pillars","x":300.0,"y":1050.0,"t":"outdoor","l":[48,50]},{"n":"Approach Lacklands Office","x":1200.0,"y":1050.0,"t":"outdoor","l":[48,75]},{"n":"Approach The Ginger Light","x":1200.0,"y":300.0,"t":"outdoor","l":[19,48]},{"n":"Approach The Colony Room","x":1200.0,"y":500.0,"t":"outdoor","l":[48,102]},{"n":"Approach Ronnie Scott's","x":1900.0,"y":1400.0,"t":"outdoor","l":[48,94]},{"n":"Approach Coppers Lair","x":1600.0,"y":650.0,"t":"venue-cellar","l":[73,128]},{"n":"Approach Trisha's","x":700.0,"y":1300.0,"t":"outdoor","l":[48]},{"n":"At the Corner of Dean Street and Greek Street","x":1200.0,"y":400.0,"t":"outdoor char-red","l":[133,174]},{"n":"Beaten","x":2200.0,"y":1250.0,"t":"venue-cellar char-john char-salvu","l":[21,55]},{"n":"St. John's Word","x":2200.0,"y":1350.0,"t":"venue-cellar char-john","l":[55]},{"n":"White page","x":1700.0,"y":150.0,"t":"white-page piano-bed","l":[47]},{"n":"Black page","x":1700.0,"y":200.0,"t":"black-page piano-bed","l":[47]},{"n":"Dawn Approach White","x":1850.0,"y":150.0,"t":"dawn-approach dawn-approach-white piano-bed","l":[22]},{"n":"Dawn Approach Black","x":1850.0,"y":200.0,"t":"dawn-approach dawn-approach-black piano-bed","l":[23]},{"n":"Cecil Court Approach","x":300.0,"y":1500.0,"t":"outdoor","l":[28,48]},{"n":"Approach O'Flatterly","x":250.0,"y":1650.0,"t":"outdoor","l":[33,48,79]},{"n":"Cecil Court","x":300.0,"y":1550.0,"t":"venue-cecilcourt","l":[29]},{"n":"Watkins","x":300.0,"y":1580.0,"t":"venue-cecilcourt","l":[30,48]},{"n":"Cecil Court Waltz","x":300.0,"y":1610.0,"t":"venue-cecilcourt waltz-game","l":[27,31,32]},{"n":"Waltz Result Up","x":300.0,"y":1660.0,"t":"","l":[]},{"n":"Waltz Result Down","x":450.0,"y":1660.0,"t":"","l":[]},{"n":"O'Flatterly's shop","x":300.0,"y":1700.0,"t":"venue-cecilcourt","l":[79,178]},{"n":"Approach Chinese Fish and Chips","x":50.0,"y":1300.0,"t":"outdoor","l":[35,48]},{"n":"Chinese Fish and Chips","x":100.0,"y":1300.0,"t":"","l":[48]},{"n":"Coach and Horses lock","x":100.0,"y":1400.0,"t":"venue-gents venue-coach","l":[37,46]},{"n":"Coach and Horses bar","x":150.0,"y":1450.0,"t":"venue-coach","l":[45,48,91,121,125]},{"n":"Colony drink","x":1400.0,"y":850.0,"t":"venue-colony","l":[39,48,100]},{"n":"Davy Merkin","x":1400.0,"y":950.0,"t":"venue-colony char-davy","l":[40]},{"n":"Davy Merkin's tip","x":1400.0,"y":1050.0,"t":"venue-colony char-davy","l":[48]},{"n":"Colony drink choice","x":1200.0,"y":850.0,"t":"venue-colony","l":[38]},{"n":"Copper Word Accepted","x":2100.0,"y":500.0,"t":"venue-cellar","l":[59]},{"n":"Copper confronts","x":1800.0,"y":700.0,"t":"venue-cellar char-salvu","l":[59,95]},{"n":"Alba Complete","x":1550.0,"y":50.0,"t":"piano-bed","l":[24]},{"n":"The Fetch","x":1600.0,"y":50.0,"t":"","l":[0,48]},{"n":"Alba Incomplete","x":1550.0,"y":100.0,"t":"piano-bed","l":[25]},{"n":"Dawn","x":1700.0,"y":100.0,"t":"dawn-end piano-bed","l":[]},{"n":"Dean Street","x":900.0,"y":400.0,"t":"hub","l":[2,3,4,5,6,7,10,11,13,14,15,16,18,26,27,34,74,77,122,123,124,197,198,199,202,203,204,205,206,207,208,212]},{"n":"Dido","x":100.0,"y":1700.0,"t":"dream pyre","l":[87,97,116,117]},{"n":"Entering The Pillars of Hercules","x":300.0,"y":1100.0,"t":"venue-pillars","l":[45,48,53,99,116,120,121,125,169,172]},{"n":"Fetch Window SVG","x":1550.0,"y":0.0,"t":"","l":[]},{"n":"Fetch Street SVG","x":1650.0,"y":0.0,"t":"","l":[]},{"n":"Which drink at the Pillars?","x":200.0,"y":1150.0,"t":"venue-pillars","l":[50]},{"n":"Standing","x":2200.0,"y":1350.0,"t":"venue-cellar","l":[55]},{"n":"The dark pass","x":2300.0,"y":1350.0,"t":"outdoor","l":[48]},{"n":"Fight Defeat","x":2000.0,"y":1350.0,"t":"venue-cellar","l":[20]},{"n":"Fight Victory","x":2000.0,"y":1250.0,"t":"venue-cellar","l":[54]},{"n":"Fight Victory Perfect","x":2000.0,"y":1150.0,"t":"venue-cellar","l":[54]},{"n":"Fight starts","x":2000.0,"y":550.0,"t":"minigame","l":[56,57,58]},{"n":"Tarot Card Back","x":1050.0,"y":1600.0,"t":"","l":[]},{"n":"Shana Reads","x":900.0,"y":1700.0,"t":"venue-trishas char-shana","l":[62,63]},{"n":"Shana Looks Again","x":1050.0,"y":1700.0,"t":"venue-trishas char-shana","l":[63]},{"n":"Shana's Verdict","x":900.0,"y":1850.0,"t":"venue-trishas char-shana","l":[64]},{"n":"After Shana","x":900.0,"y":1950.0,"t":"venue-trishas","l":[48]},{"n":"His round","x":300.0,"y":850.0,"t":"venue-french","l":[66]},{"n":"The Empty Glass","x":300.0,"y":950.0,"t":"venue-french char-john","l":[48]},{"n":"LINE 1","x":700.0,"y":200.0,"t":"","l":[107]},{"n":"Green Sea Approach","x":850.0,"y":200.0,"t":"carthage-shore","l":[69,117]},{"n":"LINE 2","x":900.0,"y":200.0,"t":"green-sea","l":[48,70]},{"n":"LINE 2 Oxford","x":1000.0,"y":200.0,"t":"green-sea","l":[48]},{"n":"LINE 3","x":1100.0,"y":200.0,"t":"","l":[45,48]},{"n":"Lackland's Back Room","x":1200.0,"y":1150.0,"t":"venue-lackland-back","l":[129]},{"n":"Maltese Gangsters","x":1400.0,"y":550.0,"t":"","l":[17]},{"n":"Maritime interlude","x":300.0,"y":1000.0,"t":"dream","l":[12,116]},{"n":"Martin Lackland's Office","x":1200.0,"y":1000.0,"t":"char-lack venue-lackland","l":[76,177]},{"n":"Martin Lackland's Back Door","x":1300.0,"y":1000.0,"t":"char-lack venue-lackland","l":[72,75]},{"n":"No more","x":1700.0,"y":300.0,"t":"","l":[23]},{"n":"None of us likes it!","x":500.0,"y":1400.0,"t":"venue-pillars char-ham","l":[]},{"n":"O'Flatterly introduction","x":300.0,"y":1700.0,"t":"venue-cecilcourt char-inis","l":[80,88]},{"n":"O'Flatterly's quest","x":300.0,"y":1850.0,"t":"venue-cecilcourt char-inis","l":[48]},{"n":"PP Defeat","x":1400.0,"y":2550.0,"t":"venue-lackland-back","l":[48]},{"n":"PP Victory","x":1200.0,"y":2550.0,"t":"venue-lackland-back","l":[48]},{"n":"Bar Canvas Win","x":2050.0,"y":1900.0,"t":"venue-ronnies","l":[85]},{"n":"Bar Canvas Lose","x":1750.0,"y":1900.0,"t":"venue-ronnies","l":[85]},{"n":"The Set","x":2050.0,"y":2200.0,"t":"venue-ronnies","l":[86]},{"n":"After the music","x":2050.0,"y":2300.0,"t":"outdoor","l":[48]},{"n":"Rescue the page","x":100.0,"y":1850.0,"t":"dream pyre","l":[117]},{"n":"Return the page","x":500.0,"y":1850.0,"t":"venue-cecilcourt char-inis","l":[89]},{"n":"O'Flatterly's Gift","x":500.0,"y":1950.0,"t":"venue-cecilcourt char-inis","l":[90]},{"n":"After Cecil Court","x":500.0,"y":2050.0,"t":"outdoor street-night","l":[48]},{"n":"Ride Jeffrey Bernard's cow","x":900.0,"y":1200.0,"t":"cow char-jeff","l":[92,93]},{"n":"Cow ride success","x":1200.0,"y":1200.0,"t":"","l":[71]},{"n":"Cow ride fail","x":900.0,"y":1300.0,"t":"","l":[71]},{"n":"Ronnie Scott's","x":1900.0,"y":1500.0,"t":"venue-ronnies","l":[45,48,83,84,121,125]},{"n":"Stand your ground","x":1800.0,"y":850.0,"t":"venue-cellar char-salvu","l":[59]},{"n":"Start","x":300.0,"y":50.0,"t":"","l":[106]},{"n":"Stay in Carthage","x":100.0,"y":1950.0,"t":"pyre","l":[105]},{"n":"Talk to the Artists","x":500.0,"y":650.0,"t":"venue-french","l":[109]},{"n":"Talk to the critic","x":500.0,"y":1100.0,"t":"venue-pillars char-ham","l":[78,176]},{"n":"Talk to the intimidating agent","x":1400.0,"y":700.0,"t":"venue-colony","l":[48]},{"n":"The Colony Room","x":1200.0,"y":700.0,"t":"venue-colony","l":[39,41,45,48,100,121,125]},{"n":"The Colony Room Door","x":1200.0,"y":550.0,"t":"outdoor","l":[73,101,103]},{"n":"Colony Member","x":1300.0,"y":550.0,"t":"outdoor street-night","l":[39]},{"n":"The French","x":300.0,"y":550.0,"t":"venue-french","l":[9,45,48,98,102,115,121,125,130,175]},{"n":"The Interval","x":900.0,"y":250.0,"t":"interval-radio","l":[48]},{"n":"The Night Ahead","x":500.0,"y":50.0,"t":"night-ahead","l":[48]},{"n":"Night Ahead Part Two","x":700.0,"y":350.0,"t":"night-ahead","l":[48,108]},{"n":"Name Your Book","x":100.0,"y":350.0,"t":"","l":[48]},{"n":"The Spanish Artist","x":500.0,"y":800.0,"t":"venue-french","l":[110]},{"n":"Benito's Hour","x":500.0,"y":850.0,"t":"venue-french","l":[111]},{"n":"The Painter's Gaze","x":500.0,"y":900.0,"t":"venue-french","l":[112]},{"n":"Sketch the Painter","x":500.0,"y":1000.0,"t":"venue-french","l":[113]},{"n":"Give him the painting","x":500.0,"y":1100.0,"t":"venue-french","l":[114]},{"n":"After the painter","x":500.0,"y":1200.0,"t":"outdoor","l":[48]},{"n":"The Stranger at the French","x":300.0,"y":700.0,"t":"venue-french","l":[65,104]},{"n":"The coast of Carthage","x":100.0,"y":1550.0,"t":"carthage-cicadas carthage-shore","l":[117]},{"n":"Carthage shore","x":100.0,"y":1650.0,"t":"carthage-cicadas carthage-shore","l":[49,68,105]},{"n":"The critic's judgement","x":300.0,"y":1400.0,"t":"venue-pillars char-ham","l":[48]},{"n":"The novelist","x":700.0,"y":550.0,"t":"venue-french char-novelist","l":[48]},{"n":"The phone call","x":100.0,"y":1100.0,"t":"char-aoife","l":[50]},{"n":"Lily phone call 1","x":100.0,"y":1200.0,"t":"char-lily","l":[]},{"n":"After the call","x":100.0,"y":1300.0,"t":"outdoor","l":[48]},{"n":"After Aoife","x":100.0,"y":1350.0,"t":"outdoor","l":[48]},{"n":"Aoife memory 2","x":100.0,"y":1450.0,"t":"outdoor","l":[48]},{"n":"The dual ring","x":100.0,"y":1500.0,"t":"char-aoife char-lily","l":[36]},{"n":"Title","x":100.0,"y":50.0,"t":"","l":[96]},{"n":"Trisha's","x":700.0,"y":1550.0,"t":"venue-trishas","l":[8,16,48]},{"n":"Turn to Copper","x":1600.0,"y":850.0,"t":"venue-cellar","l":[42,43]},{"n":"Watch the decider","x":1200.0,"y":1300.0,"t":"venue-lackland-back","l":[1]},{"n":"Which drink at the French?","x":100.0,"y":650.0,"t":"venue-french","l":[104]},{"n":"DBG Matchbook","x":1900.0,"y":750.0,"t":"","l":[48]},{"n":"DBG Complete","x":2000.0,"y":750.0,"t":"","l":[48]},{"n":"You speak to the poet","x":1400.0,"y":450.0,"t":"outdoor char-red","l":[67]},{"n":"header header","x":700.0,"y":50.0,"t":"header","l":[]},{"n":"Cecil Rule SVG","x":3000.0,"y":2400.0,"t":"","l":[]},{"n":"Trisha Strip SVG","x":3000.0,"y":2450.0,"t":"","l":[]},{"n":"Dawn Lily Sprig","x":3000.0,"y":2850.0,"t":"","l":[]},{"n":"Airport Pub","x":700.0,"y":2200.0,"t":"dream himalayan","l":[139]},{"n":"The Road to India","x":900.0,"y":2200.0,"t":"dream himalayan","l":[140]},{"n":"Foothills","x":1100.0,"y":2200.0,"t":"dream himalayan","l":[141,144]},{"n":"The Mountain","x":1300.0,"y":2200.0,"t":"dream himalayan","l":[182]},{"n":"The Cave","x":1500.0,"y":2200.0,"t":"dream himalayan cave","l":[143]},{"n":"Himalayan Return","x":1500.0,"y":2400.0,"t":"outdoor street-night","l":[48]},{"n":"Himalayan Turn-Back","x":1100.0,"y":2400.0,"t":"outdoor","l":[48]},{"n":"Nazca Approach","x":1700.0,"y":2200.0,"t":"dream nazca","l":[146]},{"n":"Walking the Pampa","x":1900.0,"y":2200.0,"t":"dream nazca","l":[147,150]},{"n":"The Ridge","x":2100.0,"y":2200.0,"t":"dream nazca","l":[180]},{"n":"The Centre \u2014 Nazca","x":2300.0,"y":2200.0,"t":"dream nazca centre","l":[149]},{"n":"Nazca Return","x":2300.0,"y":2400.0,"t":"outdoor street-night","l":[48]},{"n":"Nazca Turn-Back","x":1900.0,"y":2400.0,"t":"outdoor","l":[48]},{"n":"Easter Island Shore","x":1700.0,"y":2600.0,"t":"dream easter","l":[152]},{"n":"Among the Moai","x":1900.0,"y":2600.0,"t":"dream easter","l":[153,154,157]},{"n":"The Reclamation","x":2100.0,"y":2700.0,"t":"dream easter reclamation","l":[154]},{"n":"The Listening Moai","x":2100.0,"y":2600.0,"t":"dream easter","l":[155]},{"n":"The Glyph","x":2300.0,"y":2600.0,"t":"dream easter centre","l":[156]},{"n":"Easter Island Return","x":2300.0,"y":2800.0,"t":"outdoor street-night","l":[48]},{"n":"Easter Island Turn-Back","x":1900.0,"y":2800.0,"t":"outdoor","l":[48]},{"n":"Pyramid Mouth","x":1700.0,"y":3000.0,"t":"dream pyramid","l":[159]},{"n":"Descending Corridor","x":1900.0,"y":3000.0,"t":"dream pyramid","l":[181]},{"n":"Grand Gallery","x":2100.0,"y":3000.0,"t":"dream pyramid","l":[161,163]},{"n":"King's Chamber","x":2300.0,"y":3000.0,"t":"dream pyramid centre","l":[162]},{"n":"Pyramid Return","x":2300.0,"y":3200.0,"t":"outdoor street-night","l":[48]},{"n":"Pyramid Turn-Back","x":1900.0,"y":3200.0,"t":"outdoor","l":[48]},{"n":"The Plain of Chebar","x":1700.0,"y":3400.0,"t":"dream ezekiel","l":[165]},{"n":"Storm from the North","x":1900.0,"y":3400.0,"t":"dream ezekiel","l":[166]},{"n":"Four Living Creatures","x":2100.0,"y":3400.0,"t":"dream ezekiel","l":[167]},{"n":"The Wheel","x":2300.0,"y":3400.0,"t":"dream ezekiel centre","l":[168]},{"n":"Ezekiel Return","x":2300.0,"y":3600.0,"t":"outdoor street-night","l":[48]},{"n":"Third Pillar Portal","x":500.0,"y":2200.0,"t":"dream","l":[50,138,145,151,158,164]},{"n":"The Sanctum","x":500.0,"y":2700.0,"t":"dream sanctum","l":[171]},{"n":"The Sanctum \u2014 Sitting","x":700.0,"y":2700.0,"t":"dream sanctum","l":[173]},{"n":"The Synthesis","x":500.0,"y":2500.0,"t":"dream synthesis","l":[170]},{"n":"Alt-Dawn","x":900.0,"y":2700.0,"t":"dawn alt-dawn","l":[47]},{"n":"Red Recognises the Name","x":2500.0,"y":400.0,"t":"outdoor","l":[48]},{"n":"Benito Recognises the Wheel","x":2500.0,"y":800.0,"t":"venue-french","l":[104]},{"n":"The Critic Hears the Mantra","x":2500.0,"y":1200.0,"t":"venue-pillars char-ham","l":[50]},{"n":"Lackland Recognises the Tracing","x":2500.0,"y":1300.0,"t":"char-lack venue-lackland","l":[13]},{"n":"Inis Recognises the Proportion","x":2500.0,"y":1400.0,"t":"venue-cecilcourt char-inis","l":[28]},{"n":"Mantra Syllable Cue","x":500.0,"y":2100.0,"t":"system","l":[]},{"n":"Nazca Race","x":2250.0,"y":3250.0,"t":"dream nazca","l":[148]},{"n":"Pyramid Run","x":2400.0,"y":3250.0,"t":"dream pyramid","l":[160]},{"n":"The Climb","x":1450.0,"y":3250.0,"t":"dream himalayan","l":[142]},{"n":"Key Guards","x":2600.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Set Held","x":2700.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Drop Here","x":2800.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Sites","x":3100.0,"y":2600.0,"t":"system","l":[]},{"n":"Raided Bins","x":3200.0,"y":2600.0,"t":"system","l":[]},{"n":"Spend Held Key","x":0.0,"y":0.0,"t":"system","l":[]},{"n":"Key Stash Here","x":3300.0,"y":2600.0,"t":"system","l":[]},{"n":"Stash Point","x":3400.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take cocaine","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take ticket","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take slip","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take lighter","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take eye","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Resting Keys","x":3000.0,"y":2600.0,"t":"system","l":[]},{"n":"Alley: Meard Street","x":2600.0,"y":600.0,"t":"street-night","l":[48]},{"n":"Alley: St Anne's Court","x":2600.0,"y":660.0,"t":"street-night","l":[48]},{"n":"Alley: Bourchier Street","x":2600.0,"y":720.0,"t":"street-night","l":[200,201]},{"n":"Bourchier Street: The Car Park","x":2600.0,"y":740.0,"t":"street-night","l":[48]},{"n":"Bourchier Street: The Doorway","x":2600.0,"y":760.0,"t":"street-night","l":[48]},{"n":"Alley: Richmond Buildings","x":2600.0,"y":780.0,"t":"street-night","l":[48]},{"n":"Alley: Bateman's Buildings","x":2600.0,"y":840.0,"t":"street-night","l":[48]},{"n":"Alley: Walker's Court","x":2600.0,"y":900.0,"t":"street-night","l":[48]},{"n":"Alley: Greek Court","x":2600.0,"y":960.0,"t":"street-night","l":[48]},{"n":"Alley: Soho Square","x":2600.0,"y":1020.0,"t":"street-night","l":[48,210]},{"n":"Alley: Charing Cross Road","x":2600.0,"y":1080.0,"t":"street-night","l":[48]},{"n":"Alley: Oxford Street","x":2600.0,"y":1140.0,"t":"street-night","l":[48]},{"n":"Soho Hut Art","x":0.0,"y":0.0,"t":"","l":[]},{"n":"Soho Square Gents","x":0.0,"y":0.0,"t":"","l":[206]},{"n":"Night Progress","x":0.0,"y":0.0,"t":"","l":[]},{"n":"Towards Dawn","x":0.0,"y":0.0,"t":"street-night","l":[45,48]}];
+window._DSS_PASSAGE_GRAPH = [{"n":"Approach Centre Point","x":1650.0,"y":50.0,"t":"piano-bed","l":[44,46]},{"n":"PP Pong","x":1300.0,"y":1550.0,"t":"pong","l":[81,82]},{"n":"A Doorway on Dean Street","x":700.0,"y":550.0,"t":"outdoor hub","l":[48]},{"n":"Doorway: Livonia Street","x":700.0,"y":620.0,"t":"outdoor hub","l":[48]},{"n":"Doorway: Diadem Court","x":800.0,"y":620.0,"t":"outdoor hub","l":[48]},{"n":"Doorway: Ham Yard","x":900.0,"y":620.0,"t":"outdoor hub","l":[48]},{"n":"Doorway: Romilly Street","x":1000.0,"y":620.0,"t":"outdoor hub","l":[48]},{"n":"The Phone Box","x":1400.0,"y":300.0,"t":"outdoor street-night","l":[48]},{"n":"Approach Shana","x":700.0,"y":1700.0,"t":"venue-trishas","l":[61,127]},{"n":"Approach the novelist","x":500.0,"y":550.0,"t":"venue-french char-novelist","l":[48,119]},{"n":"Approach The French","x":1100.0,"y":300.0,"t":"outdoor","l":[48,104]},{"n":"Approach The Coach","x":1100.0,"y":1400.0,"t":"outdoor","l":[36,48]},{"n":"Approach The Pillars","x":300.0,"y":1050.0,"t":"outdoor","l":[48,50]},{"n":"Approach Lacklands Office","x":1200.0,"y":1050.0,"t":"outdoor","l":[48,75]},{"n":"Approach The Ginger Light","x":1200.0,"y":300.0,"t":"outdoor","l":[19,48]},{"n":"Approach The Colony Room","x":1200.0,"y":500.0,"t":"outdoor","l":[48,102]},{"n":"Approach Ronnie Scott's","x":1900.0,"y":1400.0,"t":"outdoor","l":[48,94]},{"n":"Approach Coppers Lair","x":1600.0,"y":650.0,"t":"venue-cellar","l":[73,128]},{"n":"Approach Trisha's","x":700.0,"y":1300.0,"t":"outdoor","l":[48]},{"n":"At the Corner of Dean Street and Greek Street","x":1200.0,"y":400.0,"t":"outdoor char-red","l":[133,174]},{"n":"Beaten","x":2200.0,"y":1250.0,"t":"venue-cellar char-john char-salvu","l":[21,55]},{"n":"St. John's Word","x":2200.0,"y":1350.0,"t":"venue-cellar char-john","l":[55]},{"n":"White page","x":1700.0,"y":150.0,"t":"white-page piano-bed","l":[47]},{"n":"Black page","x":1700.0,"y":200.0,"t":"black-page piano-bed","l":[47]},{"n":"Dawn Approach White","x":1850.0,"y":150.0,"t":"dawn-approach dawn-approach-white piano-bed","l":[22]},{"n":"Dawn Approach Black","x":1850.0,"y":200.0,"t":"dawn-approach dawn-approach-black piano-bed","l":[23]},{"n":"Cecil Court Approach","x":300.0,"y":1500.0,"t":"outdoor","l":[28,48]},{"n":"Approach O'Flatterly","x":250.0,"y":1650.0,"t":"outdoor","l":[33,48,79]},{"n":"Cecil Court","x":300.0,"y":1550.0,"t":"venue-cecilcourt","l":[29]},{"n":"Watkins","x":300.0,"y":1580.0,"t":"venue-cecilcourt","l":[30,48]},{"n":"Cecil Court Waltz","x":300.0,"y":1610.0,"t":"venue-cecilcourt waltz-game","l":[27,31,32]},{"n":"Waltz Result Up","x":300.0,"y":1660.0,"t":"","l":[]},{"n":"Waltz Result Down","x":450.0,"y":1660.0,"t":"","l":[]},{"n":"O'Flatterly's shop","x":300.0,"y":1700.0,"t":"venue-cecilcourt","l":[79,178]},{"n":"Approach Chinese Fish and Chips","x":50.0,"y":1300.0,"t":"outdoor","l":[35,48]},{"n":"Chinese Fish and Chips","x":100.0,"y":1300.0,"t":"","l":[48]},{"n":"Coach and Horses lock","x":100.0,"y":1400.0,"t":"venue-gents venue-coach","l":[37,46]},{"n":"Coach and Horses bar","x":150.0,"y":1450.0,"t":"venue-coach","l":[45,48,91,121,125]},{"n":"Colony drink","x":1400.0,"y":850.0,"t":"venue-colony","l":[39,48,100]},{"n":"Davy Merkin","x":1400.0,"y":950.0,"t":"venue-colony char-davy","l":[40]},{"n":"Davy Merkin's tip","x":1400.0,"y":1050.0,"t":"venue-colony char-davy","l":[48]},{"n":"Colony drink choice","x":1200.0,"y":850.0,"t":"venue-colony","l":[38]},{"n":"Copper Word Accepted","x":2100.0,"y":500.0,"t":"venue-cellar","l":[59]},{"n":"Copper confronts","x":1800.0,"y":700.0,"t":"venue-cellar char-salvu","l":[59,95]},{"n":"Alba Complete","x":1550.0,"y":50.0,"t":"piano-bed","l":[24]},{"n":"The Fetch","x":1600.0,"y":50.0,"t":"","l":[0,48]},{"n":"Alba Incomplete","x":1550.0,"y":100.0,"t":"piano-bed","l":[25]},{"n":"Dawn","x":1700.0,"y":100.0,"t":"dawn-end piano-bed","l":[]},{"n":"Dean Street","x":900.0,"y":400.0,"t":"hub","l":[2,3,4,5,6,7,10,11,13,14,15,16,18,26,27,34,74,77,122,123,124,197,198,199,202,203,204,205,206,207,208,212]},{"n":"Dido","x":100.0,"y":1700.0,"t":"dream pyre","l":[87,97,116,117]},{"n":"Entering The Pillars of Hercules","x":300.0,"y":1100.0,"t":"venue-pillars","l":[45,48,53,99,116,120,121,125,169,172]},{"n":"Fetch Window SVG","x":1550.0,"y":0.0,"t":"","l":[]},{"n":"Fetch Street SVG","x":1650.0,"y":0.0,"t":"","l":[]},{"n":"Which drink at the Pillars?","x":200.0,"y":1150.0,"t":"venue-pillars","l":[50]},{"n":"Standing","x":2200.0,"y":1350.0,"t":"venue-cellar","l":[55]},{"n":"The dark pass","x":2300.0,"y":1350.0,"t":"outdoor","l":[48]},{"n":"Fight Defeat","x":2000.0,"y":1350.0,"t":"venue-cellar","l":[20]},{"n":"Fight Victory","x":2000.0,"y":1250.0,"t":"venue-cellar","l":[54]},{"n":"Fight Victory Perfect","x":2000.0,"y":1150.0,"t":"venue-cellar","l":[54]},{"n":"Fight starts","x":2000.0,"y":550.0,"t":"minigame","l":[56,57,58]},{"n":"Tarot Card Back","x":1050.0,"y":1600.0,"t":"","l":[]},{"n":"Shana Reads","x":900.0,"y":1700.0,"t":"venue-trishas char-shana","l":[62,63]},{"n":"Shana Looks Again","x":1050.0,"y":1700.0,"t":"venue-trishas char-shana","l":[63]},{"n":"Shana's Verdict","x":900.0,"y":1850.0,"t":"venue-trishas char-shana","l":[64]},{"n":"After Shana","x":900.0,"y":1950.0,"t":"venue-trishas","l":[48]},{"n":"His round","x":300.0,"y":850.0,"t":"venue-french","l":[66]},{"n":"The Empty Glass","x":300.0,"y":950.0,"t":"venue-french char-john","l":[48]},{"n":"LINE 1","x":700.0,"y":200.0,"t":"","l":[107]},{"n":"Green Sea Approach","x":850.0,"y":200.0,"t":"carthage-shore","l":[69,117]},{"n":"LINE 2","x":900.0,"y":200.0,"t":"green-sea","l":[48,70]},{"n":"LINE 2 Oxford","x":1000.0,"y":200.0,"t":"green-sea","l":[48]},{"n":"LINE 3","x":1100.0,"y":200.0,"t":"","l":[45,48]},{"n":"Lackland's Back Room","x":1200.0,"y":1150.0,"t":"venue-lackland-back","l":[129]},{"n":"Maltese Gangsters","x":1400.0,"y":550.0,"t":"","l":[17]},{"n":"Maritime interlude","x":300.0,"y":1000.0,"t":"dream","l":[12,48,116]},{"n":"Martin Lackland's Office","x":1200.0,"y":1000.0,"t":"char-lack venue-lackland","l":[76,177]},{"n":"Martin Lackland's Back Door","x":1300.0,"y":1000.0,"t":"char-lack venue-lackland","l":[72,75]},{"n":"No more","x":1700.0,"y":300.0,"t":"","l":[23]},{"n":"None of us likes it!","x":500.0,"y":1400.0,"t":"venue-pillars char-ham","l":[]},{"n":"O'Flatterly introduction","x":300.0,"y":1700.0,"t":"venue-cecilcourt char-inis","l":[80,88]},{"n":"O'Flatterly's quest","x":300.0,"y":1850.0,"t":"venue-cecilcourt char-inis","l":[48]},{"n":"PP Defeat","x":1400.0,"y":2550.0,"t":"venue-lackland-back","l":[48]},{"n":"PP Victory","x":1200.0,"y":2550.0,"t":"venue-lackland-back","l":[48]},{"n":"Bar Canvas Win","x":2050.0,"y":1900.0,"t":"venue-ronnies","l":[85]},{"n":"Bar Canvas Lose","x":1750.0,"y":1900.0,"t":"venue-ronnies","l":[85]},{"n":"The Set","x":2050.0,"y":2200.0,"t":"venue-ronnies","l":[86]},{"n":"After the music","x":2050.0,"y":2300.0,"t":"outdoor","l":[48]},{"n":"Rescue the page","x":100.0,"y":1850.0,"t":"dream pyre","l":[117]},{"n":"Return the page","x":500.0,"y":1850.0,"t":"venue-cecilcourt char-inis","l":[89]},{"n":"O'Flatterly's Gift","x":500.0,"y":1950.0,"t":"venue-cecilcourt char-inis","l":[90]},{"n":"After Cecil Court","x":500.0,"y":2050.0,"t":"outdoor street-night","l":[48]},{"n":"Ride Jeffrey Bernard's cow","x":900.0,"y":1200.0,"t":"cow char-jeff","l":[92,93]},{"n":"Cow ride success","x":1200.0,"y":1200.0,"t":"","l":[71]},{"n":"Cow ride fail","x":900.0,"y":1300.0,"t":"","l":[71]},{"n":"Ronnie Scott's","x":1900.0,"y":1500.0,"t":"venue-ronnies","l":[45,48,83,84,121,125]},{"n":"Stand your ground","x":1800.0,"y":850.0,"t":"venue-cellar char-salvu","l":[59]},{"n":"Start","x":300.0,"y":50.0,"t":"","l":[106]},{"n":"Stay in Carthage","x":100.0,"y":1950.0,"t":"pyre","l":[105]},{"n":"Talk to the Artists","x":500.0,"y":650.0,"t":"venue-french","l":[109]},{"n":"Talk to the critic","x":500.0,"y":1100.0,"t":"venue-pillars char-ham","l":[78,176]},{"n":"Talk to the intimidating agent","x":1400.0,"y":700.0,"t":"venue-colony","l":[48]},{"n":"The Colony Room","x":1200.0,"y":700.0,"t":"venue-colony","l":[39,41,45,48,100,121,125]},{"n":"The Colony Room Door","x":1200.0,"y":550.0,"t":"outdoor","l":[73,101,103]},{"n":"Colony Member","x":1300.0,"y":550.0,"t":"outdoor street-night","l":[39]},{"n":"The French","x":300.0,"y":550.0,"t":"venue-french","l":[9,45,48,98,102,115,121,125,130,175]},{"n":"The Interval","x":900.0,"y":250.0,"t":"interval-radio","l":[48]},{"n":"The Night Ahead","x":500.0,"y":50.0,"t":"night-ahead","l":[48]},{"n":"Night Ahead Part Two","x":700.0,"y":350.0,"t":"night-ahead","l":[48,108]},{"n":"Name Your Book","x":100.0,"y":350.0,"t":"","l":[48]},{"n":"The Spanish Artist","x":500.0,"y":800.0,"t":"venue-french","l":[110]},{"n":"Benito's Hour","x":500.0,"y":850.0,"t":"venue-french","l":[111]},{"n":"The Painter's Gaze","x":500.0,"y":900.0,"t":"venue-french","l":[112]},{"n":"Sketch the Painter","x":500.0,"y":1000.0,"t":"venue-french","l":[113]},{"n":"Give him the painting","x":500.0,"y":1100.0,"t":"venue-french","l":[114]},{"n":"After the painter","x":500.0,"y":1200.0,"t":"outdoor","l":[48]},{"n":"The Stranger at the French","x":300.0,"y":700.0,"t":"venue-french","l":[65,104]},{"n":"The coast of Carthage","x":100.0,"y":1550.0,"t":"carthage-cicadas carthage-shore","l":[117]},{"n":"Carthage shore","x":100.0,"y":1650.0,"t":"carthage-cicadas carthage-shore","l":[49,68,105]},{"n":"The critic's judgement","x":300.0,"y":1400.0,"t":"venue-pillars char-ham","l":[48]},{"n":"The novelist","x":700.0,"y":550.0,"t":"venue-french char-novelist","l":[48]},{"n":"The phone call","x":100.0,"y":1100.0,"t":"char-aoife","l":[50]},{"n":"Lily phone call 1","x":100.0,"y":1200.0,"t":"char-lily","l":[]},{"n":"After the call","x":100.0,"y":1300.0,"t":"outdoor","l":[48]},{"n":"After Aoife","x":100.0,"y":1350.0,"t":"outdoor","l":[48]},{"n":"Aoife memory 2","x":100.0,"y":1450.0,"t":"outdoor","l":[48]},{"n":"The dual ring","x":100.0,"y":1500.0,"t":"char-aoife char-lily","l":[36]},{"n":"Title","x":100.0,"y":50.0,"t":"","l":[96]},{"n":"Trisha's","x":700.0,"y":1550.0,"t":"venue-trishas","l":[8,16,48]},{"n":"Turn to Copper","x":1600.0,"y":850.0,"t":"venue-cellar","l":[42,43]},{"n":"Watch the decider","x":1200.0,"y":1300.0,"t":"venue-lackland-back","l":[1]},{"n":"Which drink at the French?","x":100.0,"y":650.0,"t":"venue-french","l":[104]},{"n":"DBG Matchbook","x":1900.0,"y":750.0,"t":"","l":[48]},{"n":"DBG Complete","x":2000.0,"y":750.0,"t":"","l":[48]},{"n":"You speak to the poet","x":1400.0,"y":450.0,"t":"outdoor char-red","l":[67]},{"n":"header header","x":700.0,"y":50.0,"t":"header","l":[]},{"n":"Cecil Rule SVG","x":3000.0,"y":2400.0,"t":"","l":[]},{"n":"Trisha Strip SVG","x":3000.0,"y":2450.0,"t":"","l":[]},{"n":"Dawn Lily Sprig","x":3000.0,"y":2850.0,"t":"","l":[]},{"n":"Airport Pub","x":700.0,"y":2200.0,"t":"dream himalayan","l":[139]},{"n":"The Road to India","x":900.0,"y":2200.0,"t":"dream himalayan","l":[140]},{"n":"Foothills","x":1100.0,"y":2200.0,"t":"dream himalayan","l":[141,144]},{"n":"The Mountain","x":1300.0,"y":2200.0,"t":"dream himalayan","l":[182]},{"n":"The Cave","x":1500.0,"y":2200.0,"t":"dream himalayan cave","l":[143]},{"n":"Himalayan Return","x":1500.0,"y":2400.0,"t":"outdoor street-night","l":[48]},{"n":"Himalayan Turn-Back","x":1100.0,"y":2400.0,"t":"outdoor","l":[48]},{"n":"Nazca Approach","x":1700.0,"y":2200.0,"t":"dream nazca","l":[146]},{"n":"Walking the Pampa","x":1900.0,"y":2200.0,"t":"dream nazca","l":[147,150]},{"n":"The Ridge","x":2100.0,"y":2200.0,"t":"dream nazca","l":[180]},{"n":"The Centre \u2014 Nazca","x":2300.0,"y":2200.0,"t":"dream nazca centre","l":[149]},{"n":"Nazca Return","x":2300.0,"y":2400.0,"t":"outdoor street-night","l":[48]},{"n":"Nazca Turn-Back","x":1900.0,"y":2400.0,"t":"outdoor","l":[48]},{"n":"Easter Island Shore","x":1700.0,"y":2600.0,"t":"dream easter","l":[152]},{"n":"Among the Moai","x":1900.0,"y":2600.0,"t":"dream easter","l":[153,154,157]},{"n":"The Reclamation","x":2100.0,"y":2700.0,"t":"dream easter reclamation","l":[154]},{"n":"The Listening Moai","x":2100.0,"y":2600.0,"t":"dream easter","l":[155]},{"n":"The Glyph","x":2300.0,"y":2600.0,"t":"dream easter centre","l":[156]},{"n":"Easter Island Return","x":2300.0,"y":2800.0,"t":"outdoor street-night","l":[48]},{"n":"Easter Island Turn-Back","x":1900.0,"y":2800.0,"t":"outdoor","l":[48]},{"n":"Pyramid Mouth","x":1700.0,"y":3000.0,"t":"dream pyramid","l":[159]},{"n":"Descending Corridor","x":1900.0,"y":3000.0,"t":"dream pyramid","l":[181]},{"n":"Grand Gallery","x":2100.0,"y":3000.0,"t":"dream pyramid","l":[161,163]},{"n":"King's Chamber","x":2300.0,"y":3000.0,"t":"dream pyramid centre","l":[162]},{"n":"Pyramid Return","x":2300.0,"y":3200.0,"t":"outdoor street-night","l":[48]},{"n":"Pyramid Turn-Back","x":1900.0,"y":3200.0,"t":"outdoor","l":[48]},{"n":"The Plain of Chebar","x":1700.0,"y":3400.0,"t":"dream ezekiel","l":[165]},{"n":"Storm from the North","x":1900.0,"y":3400.0,"t":"dream ezekiel","l":[166]},{"n":"Four Living Creatures","x":2100.0,"y":3400.0,"t":"dream ezekiel","l":[167]},{"n":"The Wheel","x":2300.0,"y":3400.0,"t":"dream ezekiel centre","l":[168]},{"n":"Ezekiel Return","x":2300.0,"y":3600.0,"t":"outdoor street-night","l":[48]},{"n":"Third Pillar Portal","x":500.0,"y":2200.0,"t":"dream","l":[50,138,145,151,158,164]},{"n":"The Sanctum","x":500.0,"y":2700.0,"t":"dream sanctum","l":[171]},{"n":"The Sanctum \u2014 Sitting","x":700.0,"y":2700.0,"t":"dream sanctum","l":[173]},{"n":"The Synthesis","x":500.0,"y":2500.0,"t":"dream synthesis","l":[170]},{"n":"Alt-Dawn","x":900.0,"y":2700.0,"t":"dawn alt-dawn","l":[47]},{"n":"Red Recognises the Name","x":2500.0,"y":400.0,"t":"outdoor","l":[48]},{"n":"Benito Recognises the Wheel","x":2500.0,"y":800.0,"t":"venue-french","l":[104]},{"n":"The Critic Hears the Mantra","x":2500.0,"y":1200.0,"t":"venue-pillars char-ham","l":[50]},{"n":"Lackland Recognises the Tracing","x":2500.0,"y":1300.0,"t":"char-lack venue-lackland","l":[13]},{"n":"Inis Recognises the Proportion","x":2500.0,"y":1400.0,"t":"venue-cecilcourt char-inis","l":[28]},{"n":"Mantra Syllable Cue","x":500.0,"y":2100.0,"t":"system","l":[]},{"n":"Nazca Race","x":2250.0,"y":3250.0,"t":"dream nazca","l":[148]},{"n":"Pyramid Run","x":2400.0,"y":3250.0,"t":"dream pyramid","l":[160]},{"n":"The Climb","x":1450.0,"y":3250.0,"t":"dream himalayan","l":[142]},{"n":"Key Guards","x":2600.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Set Held","x":2700.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Drop Here","x":2800.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Sites","x":3100.0,"y":2600.0,"t":"system","l":[]},{"n":"Raided Bins","x":3200.0,"y":2600.0,"t":"system","l":[]},{"n":"Spend Held Key","x":0.0,"y":0.0,"t":"system","l":[]},{"n":"Key Stash Here","x":3300.0,"y":2600.0,"t":"system","l":[]},{"n":"Stash Point","x":3400.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take cocaine","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take ticket","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take slip","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take lighter","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Key Take eye","x":2900.0,"y":2600.0,"t":"system","l":[]},{"n":"Resting Keys","x":3000.0,"y":2600.0,"t":"system","l":[]},{"n":"Alley: Meard Street","x":2600.0,"y":600.0,"t":"street-night","l":[48]},{"n":"Alley: St Anne's Court","x":2600.0,"y":660.0,"t":"street-night","l":[48]},{"n":"Alley: Bourchier Street","x":2600.0,"y":720.0,"t":"street-night","l":[200,201]},{"n":"Bourchier Street: The Car Park","x":2600.0,"y":740.0,"t":"street-night","l":[48]},{"n":"Bourchier Street: The Doorway","x":2600.0,"y":760.0,"t":"street-night","l":[48]},{"n":"Alley: Richmond Buildings","x":2600.0,"y":780.0,"t":"street-night","l":[48]},{"n":"Alley: Bateman's Buildings","x":2600.0,"y":840.0,"t":"street-night","l":[48]},{"n":"Alley: Walker's Court","x":2600.0,"y":900.0,"t":"street-night","l":[48]},{"n":"Alley: Greek Court","x":2600.0,"y":960.0,"t":"street-night","l":[48]},{"n":"Alley: Soho Square","x":2600.0,"y":1020.0,"t":"street-night","l":[48,210]},{"n":"Alley: Charing Cross Road","x":2600.0,"y":1080.0,"t":"street-night","l":[48]},{"n":"Alley: Oxford Street","x":2600.0,"y":1140.0,"t":"street-night","l":[48]},{"n":"Soho Hut Art","x":0.0,"y":0.0,"t":"","l":[]},{"n":"Soho Square Gents","x":0.0,"y":0.0,"t":"","l":[206]},{"n":"Night Progress","x":0.0,"y":0.0,"t":"","l":[]},{"n":"Towards Dawn","x":0.0,"y":0.0,"t":"street-night","l":[45,48]}];
 window.dssAstralReveal = function(onDone) {
   if (document.getElementById('dss-astral-modal')) { if (onDone) onDone(); return; }
   var graph = window._DSS_PASSAGE_GRAPH;
@@ -363650,6 +363768,906 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="startup" position="0,0" size="100,100">&lt;!-- ═══════════════════════════════════════════════════════════════════
      DREAM STREET SHUFFLE — v1 FIRST DRAFT MILESTONE
      Snapshot: 2026-05-14
@@ -366683,6 +367701,11 @@ Do you keep going?
 (if: $metCritic is false or $inisToldOfPillars is true)[[[Yes|Approach The Pillars]]]
 (if: $pillarsVisits &gt;= 1)[//Somewhere out past the breakers, an older shore. //
 [[Seek the shore|The coast of Carthage]]]
+&lt;!-- A WAY BACK (2026-09-14, Sam: &quot;so you don&#x27;t have to loop loads&quot;). In the
+     middle phase the pub is shut and the shore was the only thing on offer, so
+     answering NE PLUS ULTRA meant crossing whether you wanted to or not. The
+     storm always lets you turn round now. --&gt;
+[[Back to Soho|Dean Street]]
 &lt;/div&gt;</tw-passagedata>
 <tw-passagedata pid="80" name="Martin Lackland&#x27;s Office" tags="char-lack venue-lackland" position="1200,1000" size="100,100">(if: $nazcaTracing is true and $lacklandRecognised is false)[(go-to: &quot;Lackland Recognises the Tracing&quot;)]\
 (if: $nazcaTracing is true)[&lt;div class=&quot;dss-dream-residue dss-residue-nazca&quot;&gt;&lt;span aria-hidden=&quot;true&quot;&gt;⌁&lt;/span&gt;(if: $nazcaResidueSeen is false)[(set: $nazcaResidueSeen to true)&lt;div class=&quot;claude-draft&quot;&gt;On the green blotter, the lamplight arranges itself into a line you could follow from far above.&lt;/div&gt;]&lt;/div&gt;]\

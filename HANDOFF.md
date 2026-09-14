@@ -4362,3 +4362,66 @@ swallowing them, so it looked like the code was broken when it was the probe.
 Patch once, restore in the same call. Also: the hub map rewrites
 `window.__dssNightDepth` every frame, so injecting a test value there is useless
 — drive it through `setBirdLevel()` instead. Pane left muted.
+
+---
+
+## Addendum 90 — the hints come on paper, and the map stops moving (2026-09-14)
+
+**1. The lessons are a typed slip now.** Sam: "I don't like the way those
+instructions in the header look. They aren't readable. Have them appear briefly
+in typewriter form against a white background then fade after 8 seconds."
+
+`dssInlineHint` no longer prints a line inside the header over the lily art. It
+raises a small slip of cream paper, bottom-right, in Courier, typed a character
+at a time with a blinking caret and the typewriter's own tick under it, and eight
+seconds after the last letter it fades and removes itself. Paper because it is
+the one surface in this game that isn't Soho at night, so the eye goes to it.
+
+**Queued, one at a time.** Two lessons can fall due on the same screen — the
+open-night tip and the door marks both fire on an early hub visit — and as first
+built they were two fixed slips landing on the same coordinates. There is now a
+queue: the second waits for the first to leave. Verified: fire two together and
+you get `slipsOnScreen: 1, queued: 1`, the first typing correctly.
+
+**2. The map resizing.** `.soho-map-stage` takes
+`max-width: min(920px, calc((100vh - 200px) * 26 / 29))`. **`100vh` is not stable
+in Safari** — it changes when the toolbar collapses — and Sam is playing in
+Safari, which fits "the map just changed size when I left the French": navigate,
+the page scrolls to top, the toolbar state changes, the map resizes under him.
+Added a second declaration in `svh` (the small-viewport height, measured with the
+toolbar out, which does not move), leaving the `vh` line above it as the fallback
+for anything that lacks `svh`.
+
+**Honest note: not reproduced.** In the preview browser the map held at 387px
+through a 1200px change in page height, and this pane has overlay scrollbars so
+it never loses width either. The `svh` change is reasoning from the symptom and
+the platform, not from a reproduction. If it moves again in Safari, the next
+thing to check is whether the width term (`100% - 178px`) is shifting instead,
+which would point at the lamp gutter rather than the viewport.
+
+**Addendum 90a — the exit link follows the header now.**
+
+Sam: "Exit to street in O'Flatterly's needs to be lower." It was not an
+O'Flatterly's problem. `.back-one-link` was `position: fixed; top: 158px`, a
+number that assumes the header is always exactly 148px tall. It isn't: the ALBA
+strip wraps to a second line when the window is narrow, and **the pocket-key cell
+I added in Addendum 81 made that much likelier** — with a key in your pocket the
+header grows and the exit ends up sitting inside it, which is what Sam saw.
+
+`--dss-header-h` is now measured from the real header (on resize and on a 700ms
+poll, since Harlowe re-renders the header on every passage) and the link takes
+`top: calc(var(--dss-header-h, 148px) + 22px)`.
+
+Verified by forcing the wrap: header 148 → exit at 170; pocket-key cell added,
+header 165 → exit at 187. The gap stays 22px either way, clear of the header and
+well above the prose.
+
+**Addendum 90b — the storm lets you turn round.**
+
+Sam: "This should have a 'Back to Soho' option so you don't have to loop loads."
+In the middle Pillars phase the pub is shut and `[[Seek the shore]]` was the only
+thing on the page, so walking to the Pillars meant crossing to Carthage whether
+you wanted to or not — and `Maritime interlude` is tagged `dream`, so it carries
+no header exit either. `[[Back to Soho|Dean Street]]` now sits outside both
+`(if:)` hooks, so it is there in every phase. Verified: phase 1 offers
+"Yes" / "Back to Soho", and the link lands on the hub with no errors.

@@ -6404,18 +6404,82 @@ window.showNapkinPopup = function() {
 // overlay that stopped the game (2026-09-13). Nothing here blocks, so nothing
 // needs queueing or deferring. Callers' once-only flags still make each lesson
 // appear exactly once a night.
-window.dssInlineHint = function(html) {
+// A NOTE TYPED ON PAPER (2026-09-14). These lessons used to print as a line
+// inside the header, over the lily art, where Sam couldn't read them: "they
+// aren't readable". They now arrive as a small slip of white paper in the
+// corner, typed out a character at a time, and gone eight seconds after the
+// last letter lands. Paper, because it is the one surface in this game that
+// isn't Soho at night, so the eye goes straight to it.
+// Two lessons can fall due on the same screen (the open-night tip and the door
+// marks both fire on an early hub visit). One slip at a time, in order: the
+// second waits for the first to leave rather than landing on top of it.
+window.__dssHintQueue = window.__dssHintQueue || [];
+window.__dssHintBusy = window.__dssHintBusy || false;
+// The header's height is not a constant — the ALBA strip wraps on a narrow
+// window — so anything pinned below it has to be told where "below" is.
+window.dssMeasureHeader = function() {
   try {
-    var line = document.createElement('div');
-    line.className = 'wtw-inline';
-    line.innerHTML = '<span class="wtw-inline-mark">\u27E1</span> ' + html;
-    var host = document.querySelector('.alba-hint');
-    if (host && host.parentNode) { host.parentNode.insertBefore(line, host.nextSibling); return; }
-    // No header on this passage (it is in _hideStats): put it at the top of the
-    // passage instead, so the lesson is not simply lost.
-    var psg = document.querySelector('tw-passage');
-    if (psg) psg.insertBefore(line, psg.firstChild);
+    var b = document.getElementById('stat-bars-lifted') || document.querySelector('.stat-bars');
+    var h = b ? Math.round(b.getBoundingClientRect().height) : 0;
+    if (h > 0) document.documentElement.style.setProperty('--dss-header-h', h + 'px');
   } catch (e) {}
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', function() { window.dssMeasureHeader(); });
+  setInterval(function() { window.dssMeasureHeader(); }, 700);
+}
+
+window.dssInlineHint = function(html) {
+  window.__dssHintQueue.push(html);
+  if (!window.__dssHintBusy) window.__dssHintNext();
+};
+window.__dssHintNext = function() {
+  if (window.__dssHintBusy) return;
+  var html = window.__dssHintQueue.shift();
+  if (html === undefined) return;
+  window.__dssHintBusy = true;
+  window.__dssHintShow(html);
+};
+window.__dssHintShow = function(html) {
+  try {
+    var card = document.createElement('div');
+    card.className = 'dss-hint-slip';
+    var mark = document.createElement('span');
+    mark.className = 'dss-hint-mark';
+    mark.textContent = '⟡';
+    var body = document.createElement('span');
+    body.className = 'dss-hint-type';
+    card.appendChild(mark);
+    card.appendChild(body);
+    document.body.appendChild(card);
+    requestAnimationFrame(function() { card.classList.add('in'); });
+    setTimeout(function() { card.classList.add('in'); }, 120);   // backgrounded tabs stall rAF
+
+    // Type it. The text is taken from the markup so any <em> survives as plain
+    // words; these lessons are one sentence or two, never formatted.
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var text = (tmp.textContent || '').trim();
+    var i = 0;
+    var step = function() {
+      if (!card.parentNode) return;
+      body.textContent = text.slice(0, ++i);
+      if (window.dssAudio && window.dssAudio.typewriterTick && i % 2 === 0) {
+        try { window.dssAudio.typewriterTick(0.35); } catch (e) {}
+      }
+      if (i < text.length) { setTimeout(step, 17 + Math.random() * 16); return; }
+      // eight seconds from the last letter, then it goes
+      setTimeout(function() {
+        card.classList.add('out');
+        setTimeout(function() {
+          if (card.parentNode) card.parentNode.removeChild(card);
+          window.__dssHintBusy = false;
+          window.__dssHintNext();
+        }, 900);
+      }, 8000);
+    };
+    setTimeout(step, 420);
+  } catch (e) { window.__dssHintBusy = false; }
 };
 window.wordToTheWisePopup = function(message) { window.dssInlineHint(message); };
 
@@ -44045,6 +44109,11 @@ Do you keep going?
 (if: $metCritic is false or $inisToldOfPillars is true)[[[Yes|Approach The Pillars]]]
 (if: $pillarsVisits >= 1)[//Somewhere out past the breakers, an older shore. //
 [[Seek the shore|The coast of Carthage]]]
+<!-- A WAY BACK (2026-09-14, Sam: "so you don't have to loop loads"). In the
+     middle phase the pub is shut and the shore was the only thing on offer, so
+     answering NE PLUS ULTRA meant crossing whether you wanted to or not. The
+     storm always lets you turn round now. -->
+[[Back to Soho|Dean Street]]
 </div>
 
 :: Martin Lackland's Office [char-lack venue-lackland] {"position":"1200,1000","size":"100,100"}
@@ -51397,7 +51466,13 @@ text-transform: uppercase;
 
 .back-one-link {
 position: fixed;
-top: 158px; /* clear air below the header bar */
+/* Was a hard-coded 158px, which assumed the header is always exactly 148 tall.
+   It isn't: the ALBA strip wraps to a second line on a narrower window (and the
+   pocket-key cell added in Addendum 81 made that likelier), and the exit then
+   sat inside the header — Sam, 2026-09-14, at O'Flatterly's. --dss-header-h is
+   measured from the real header on every render and on resize; the 148 is only
+   a fallback for the first paint. */
+top: calc(var(--dss-header-h, 148px) + 22px);
 left: 1.4em;
 z-index: 1001;
 margin: 0;
@@ -57119,8 +57194,56 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
    column (2026-09-11: no longer reaches into the page margin — Sam wants it within the
    header banner's width). Capped so it also fits the window height. On narrow screens it
    clears below the lamp at full width. */
+/* THE HINT SLIP (2026-09-14) — white paper, typed, gone after eight seconds. */
+.dss-hint-slip {
+  position: fixed;
+  right: 22px;
+  bottom: 74px;
+  z-index: 99400;
+  max-width: min(30em, 68vw);
+  box-sizing: border-box;
+  padding: 0.95em 1.25em 1em;
+  background: #f6f1e2;
+  color: #2a2118;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.86em;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(120, 96, 58, 0.4);
+  box-shadow: 0 10px 34px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.5) inset;
+  transform: translateY(14px) rotate(-0.5deg);
+  opacity: 0;
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.2,0.7,0.3,1);
+  pointer-events: none;
+}
+.dss-hint-slip.in  { opacity: 1; transform: translateY(0) rotate(-0.5deg); }
+.dss-hint-slip.out { opacity: 0; transform: translateY(-8px) rotate(-0.5deg); transition: opacity 0.85s ease, transform 0.85s ease; }
+.dss-hint-mark { color: #8a6a2c; margin-right: 0.5em; }
+.dss-hint-type::after {
+  content: '';
+  display: inline-block;
+  width: 0.55em; height: 1em;
+  margin-left: 0.12em;
+  vertical-align: -0.16em;
+  background: #2a2118;
+  animation: dssHintCaret 0.9s step-end infinite;
+}
+.dss-hint-slip.out .dss-hint-type::after { display: none; }
+@keyframes dssHintCaret { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+@media (max-width: 640px) {
+  .dss-hint-slip { right: 12px; left: 12px; bottom: 64px; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dss-hint-slip { transition: opacity 0.3s ease; transform: none; }
+  .dss-hint-slip.in { transform: none; }
+}
 .soho-map-wrap { display: block; position: relative; z-index: 2; margin: 0.2em 0 0.8em; }
+/* 100vh changes under you in Safari when the toolbar collapses, which resized
+   the map mid-play (Sam, 2026-09-14: "the map just changed size when I left the
+   French"). svh is the SMALL viewport height — the toolbar-out measurement — and
+   it does not move. vh first as the fallback for anything that lacks svh. */
 .soho-map-stage, .soho-map-bar { width: calc(100% - 178px); max-width: min(920px, calc((100vh - 200px) * 26 / 29)); margin-left: auto; margin-right: 178px; }
+.soho-map-stage, .soho-map-bar { max-width: min(920px, calc((100svh - 200px) * 26 / 29)); }
 .soho-map-stage { position: relative; container-type: inline-size; overflow: hidden; }
 @media (max-width: 640px) { .soho-map-wrap { clear: both; margin-left: 0; } .soho-map-stage, .soho-map-bar { width: 100%; max-width: none; margin-right: 0; } }
 .soho-map-wrap canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid rgba(200,168,106,0.45); box-shadow: 0 0 0 4px #08070a, 0 0 0 5px rgba(200,168,106,0.3), 0 12px 44px rgba(0,0,0,0.65); background: #0b0b10; outline: none; }

@@ -4668,3 +4668,59 @@ re-instrumenting, kept the counter on `window` so each probe could be short, and
 restored it at the end. **Check the prototype is native before patching it.**
 
 Synced, commit when ready.
+
+## Addendum 96 — the prose comes before the street (2026-09-14)
+
+Sam: "you don't pay any attention to the prose if the walkable map is above it."
+
+**It was worse than not paying attention.** Measured on an 837px viewport, the
+map ran 552 to 1026 and the night's prose began at **1137**. On arriving at the
+hub the writing was not merely out-competed by the map, it was entirely below the
+fold. Nobody was ignoring it; nobody could see it.
+
+**The map now sits below the prose** on Dean Street. Door discovery is unaffected:
+`scanHub()` reads every `tw-link` in the passage wherever the container sits.
+Prose now lands at 629 to 752, fully visible on arrival.
+
+**Two things fell out of the measuring, both worth having on their own.**
+
+*Four blank lines on every page in the game.* The `[header]` passage had
+unsuppressed newlines before its `.stat-bars` div: a three-line HTML comment and
+two macro lines with no trailing backslashes. Harlowe turns each of those
+newlines into a `<br>`, and because the passage is tagged `[header]` it prepends
+to **every passage**, so every page in the game opened with ~88px of nothing.
+Suppressed.
+
+*The header clearance was an accident.* Removing those four breaks dropped the
+title underneath the fixed stat bar, which exposed the real problem:
+`tw-passage` had a hard-coded `padding: 92px`, the passage box starts at 52, and
+the bar is 165 tall. Content had been starting at 144, **21px under the bar**,
+and the only reason nothing overlapped was the stray breaks. It is now measured:
+
+```
+tw-story:has(#stat-bars-lifted) tw-passage {
+  padding-top: calc(var(--dss-header-h, 148px) + 28px);
+}
+```
+
+Hung off `tw-story` because the bar is lifted out of the passage, and tracking
+the measured height because the bar wraps to two rows at some widths. Passages in
+`_hideStats` render no bar, do not match the selector, and keep the plain 92px.
+Verified on both: Title 92px and no bar, the Pillars 193px and clear of it.
+
+Also removed two stray breaks between the prose and the map, and moved the one
+that separates the Ginger Light corner beat **inside** its own hook, so it prints
+only when that beat does rather than on every hub visit for ever.
+
+**The trade-off, which is Sam's call.** The map now begins at 842 on an 837px
+viewport, so it takes one scroll. The two cannot both fit: the map is sized
+`100svh - 200px` at a 26:29 aspect, and with the prose above it there is no
+reserve that leaves it usable. Three ways out if the scroll annoys:
+
+1. Leave it. Read, then scroll to the street.
+2. On return visits, drop the two intro paragraphs rather than dimming them. They
+   are already dimmed to 60% as "you have read this", so hiding them once read is
+   the same decision carried one step further, and the map rises by ~180px.
+3. Shrink the map.
+
+Synced, commit when ready.

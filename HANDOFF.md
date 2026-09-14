@@ -3737,3 +3737,418 @@ is returned. So it guides the first trip and then stops.
 Verified live: a 59-tile route found from the spawn; path tiles sample
 50.7/49.1/62.3 against 39.5/40.5/48.4 for the pavement beside them — about 28%
 brighter and violet-leaning, and visibly running to the lit Cecil Court mouth.
+
+---
+
+## Addendum 77 — Carthage had a second door (2026-09-14)
+
+Sam: "I was able to go straight to Carthage from my first visit to the Pillars.
+I thought it was meant to be gated."
+
+He was right, and the gate from Addendum 69 was in the wrong place — or rather,
+in only one of two places. It went on the in-pub link
+(`'I can walk on water'`, now `$pillarsVisits >= 2`). But the hub does not link
+to the pub directly: `[[To The Pillars of Hercules|Maritime interlude]]`. The
+interlude — the storm, NE PLUS ULTRA — is a fork, and its second branch
+`[[Seek the shore|The coast of Carthage]]` went straight to Carthage with no
+gate at all, on the very first trip.
+
+**Worth knowing before touching it again:** that fork is deliberate. Its comment
+reads "RESTORED FORK (2026-07-22): both destinations always on offer — press on
+to the pub, or answer NE PLUS ULTRA and cross early. Early crossing is safe:
+Green Sea/LINE 2 is gated behind the page quest at Carthage shore, and The
+Interval self-guards. The lap is the price." So someone put it back on purpose.
+I have narrowed it on Sam's word; the original comment is kept above mine and
+deleting one `(if:)` restores it exactly.
+
+**Now:** the sea-road appears once he has been inside the Pillars once
+(`$pillarsVisits >= 1` at the interlude). That lines up with the pub link's own
+gate at `>= 2`, because the counter increments on entering: first trip you go to
+the pub, and from the second trip both routes are open together.
+
+The prose still stands on its own with one branch — NE PLUS ULTRA, "Do you keep
+going?", "Yes" is a complete beat; the shore was always the other answer.
+
+Verified: first visit offers only "Yes" and no shore line; after one visit inside,
+both "Yes" and "Seek the shore" are back, with the italic line above it.
+
+---
+
+## Addendum 78 — playthrough notes, part one (2026-09-14)
+
+**Done:**
+
+**3. After the Great Ham** — `[[Try Dean Street again|Dean Street]]` →
+`[[Leave the pub.|Dean Street]]`.
+
+**5. The phone box is now a phone box.** It was an `event` door, and event doors
+draw a faint pool and no label, so it was an unmarked patch of red light on the
+pavement. There is now a K2 box drawn on its tile in `buildBase` — red frame,
+domed crown with a gold sign, glazed panes — drawn **always**, because it is
+street furniture and should be visible before you have a coin, and lit from the
+inside (plus a halo and a stronger pool) only when the hub is offering it.
+
+**2. The Pillars camera** — tilted, not retreated. The drain and its pool sit at
+`(2.2, 0, 6.4)`; the old framing (`pos 2.1,3.5,11.5`, `lookAt 0,5,0`) pointed
+*up* the facade at +7°, putting the flood ~42° below the camera axis and well
+outside a 55° frame, so the whole flood mechanic was playing out off screen. Now
+`pos 2.1,3.9,12.0`, `lookAt 0,2.6,2.5`: axis −7.6°, flood 27° below it, inside
+the frame's bottom edge, with the sign and the timber frontage still in shot.
+**Do not fix this by pulling the camera back** — the fog is near 5 / far 40 and
+the facade goes flat long before the road arrives. Tilt, don't retreat.
+
+**Investigated, not changed — needs Sam:**
+
+**4b. The gents.** Checked live: `[[Back up to the Square|Alley: Soho Square]]`
+does land on the Square (the king on his plinth, the hut, the way back to Dean
+Street). The likeliest cause of "the first screen of that little minigame" is
+that the Square page leads with the Soho Hut Art and "Down to the gents" — so
+coming back up looks like the game's front door. Easy fix once confirmed: show
+the hut and the way down only before you have played.
+The lighter prompt is the stash mechanic: `Alley: Soho Square` carries
+`(display: "Stash Point")`, which every stash site does, and it offers to leave
+whatever pocket-key you are carrying. It can come off the Square in one line.
+Could not reproduce the stray `//` — zero in the Square, the gents, or any of
+the Stash Point displays, with and without a key.
+
+**1 + 6. The Pillars.** Deferred together, because the matchbook's home depends
+on the phase model. The structure Sam describes is *nearly* what is coded: the
+hub reopens the Pillars only when `$knowsAboutPage` is true, which Inis sets in
+Cecil Court. The leak is `$metCritic`: it is set inside `Talk to the critic`, so
+a player who enters the Pillars and does not talk to the Ham leaves it false, the
+first branch stays open, and they can go back in again and again — collecting the
+Aoife call, the Lily call and the dual ring in quick succession.
+
+**4. Quests as modals** — needs to know which quests.
+
+---
+
+## Addendum 79 — quests are modals now (2026-09-14)
+
+Sam: "The quests should be modal pop ups not just part of the page… atm it's just
+the page hunt from Cecil Court, but I might add more." Built as a **pattern**, not
+a one-off, using the idiom the pocket-keys already proved: park the thing in the
+passage, raise it as a popup.
+
+**To add a quest anywhere, that is the whole job:**
+
+```
+<div class="dss-quest-offer" data-go="I'll look for it">
+<div class="dss-quest-title">PAGE 93</div>
+<div class="dss-quest-body">…the quest…</div>
+</div>
+<script>(function(){setTimeout(function(){if(window.dssQuestPopup)window.dssQuestPopup();},1500);})();</script>
+
+[[I'll look for it|Dean Street]]
+```
+
+`.dss-quest-offer` is parked off-screen by CSS. `window.dssQuestPopup()` reads the
+title, body and optional `.dss-quest-art`, raises a card, and its button clicks
+the passage link named by `data-go`. An optional `.dss-quest-art` block is
+supported for future quests that want an object on the card.
+
+**Two things it gets right on purpose:**
+
+- **It cannot strand the player.** The passage keeps its own visible link, so
+  Escape or a click on the scrim closes the card and leaves the way out on the
+  page. Only the card's button navigates.
+- **It queues.** `#dss-quest-overlay` is registered with `dssOverlayBusy`, so it
+  defers behind the drink/coin/key overlays rather than fighting them, and the
+  1500ms delay lets the haunt ceremony in that passage (THE FEEDING) finish
+  first.
+
+Dressed as the primer card — the same gradient, gold border, offset outline and
+shadow — ID-qualified because `.coin-overlay-box` comes later in the sheet and
+would otherwise cap it at 320px. Fades in like the other cards, and honours
+`prefers-reduced-motion`.
+
+Verified: card reads ⟡ QUEST ⟡ / PAGE 93 / the body / I'LL LOOK FOR IT; the
+button lands on the hub; the passage link survives underneath.
+
+---
+
+## Addendum 80 — the Pillars in three phases (2026-09-14)
+
+Sam handed me the call on this. Built as:
+
+**Phase 1 — the critic.** The pub is open while `$metCritic` is false, and holds
+the Aoife call and the Ham and nothing else. No drink, no sea-road from inside,
+no matchbox. The call and the critic land on the **same visit**: accepting the
+call returns through `$resumingFromCall`, which does not count a visit, so you
+hang up and the Ham is there. Refusing still rings again next time, as designed.
+
+**Phase 2 — shut to the pub, open to the sea.** Once the critic is met, the
+storm drops `[[Yes|Approach The Pillars]]` and offers only `[[Seek the shore]]`.
+The hub keeps a Pillars link, so the street still leads there — it just leads
+past the door.
+
+**Phase 3 — the portal.** `$inisToldOfPillars` (set by `O'Flatterly's Gift`,
+i.e. page 93 **returned**, not merely Inis met) restores "Yes" and the hub's
+open link. Sam confirmed this was his intent once he re-read it: reopening and
+becoming the portal are the same beat. The hub branch was rekeyed from
+`$knowsAboutPage` to `$inisToldOfPillars` accordingly.
+
+**The three-calls leak is closed twice over.** The Lily ring and the dual ring
+now require `_pillarsOpen` (`$metCritic is true`), so they cannot be farmed by
+bouncing in and out before meeting the Ham; and after the Ham the pub is shut
+anyway. Both calls still live at the French and the Coach, so nothing is lost.
+
+**The matchbox moved to the Chippy.** It cannot sit in a phased pub — phase 1 is
+the critic, phase 2 has no pub, phase 3 is far too late for something that lights
+cigarettes all night. A counter you eat at is the natural home, it is early, and
+Trisha's matchbook stays the other, better-dressed source. **This overrides Sam's
+"find the matches in the Pillars" from 2026-09-13** — flagged to him.
+
+**Verified live, whole chain:** phase 1 storm offers only "Yes"; pub offers only
+the call; hang up and the Ham is there; the judgement ends on "Leave the pub.";
+phase 2 storm offers only "Seek the shore"; after `O'Flatterly's Gift`, phase 3
+storm offers "Yes" and "Seek the shore". Zero `tw-error`s throughout.
+
+**Worth keeping in view:** line two of the poem exists only in the five dream
+worlds, which are only reachable through the portal. So Cecil Court and page 93
+are now the sole road to a complete alba. That was already true; the phases make
+it load-bearing. A player who skips Inis still finishes the night, on the other
+ending.
+
+---
+
+## Addendum 81 — the French moves, a second path, the pocket key surfaces (2026-09-14)
+
+**1. The French crossed the road and went south.** Hub map: door c15,r25 (west of
+Dean, north of Old Compton) → **c20,r30**, entered from c19,r30 — east side,
+south of Old Compton. This also matches the measurement I took off Sam's Google
+screenshot on 2026-09-13, which read east and south; I had discounted it then
+because it disagreed with his own call at the time.
+
+The notebook plan followed, and the French is a **pentangle anchor**, so all
+eleven occurrences moved together: `230,470` → `248,566` (three node variants,
+the gathered-lily mark, three pentagram polygons, the notebook tracer, three
+pent-lily groups). Star re-checked by the angular-ring test — ring is
+Chippy → Centre Point → Trisha's → Coach → French and the draw order still steps
+two each time, so it is still a true pentagram. **Note this puts the French
+opposite the Colony again**, reversing half of Addendum 74; Sam asked only about
+the French, so the Colony stayed west.
+
+**2.** The cellar approach button now reads **ANNOUNCE YOURSELF IN COPPER'S LAIR**.
+
+**3. A second pavement path, to Ronnie Scott's.** The agent's
+`[[You remember that Ronnie Scott's is open and close.|Approach Ronnie Scott's]]`
+teleport is gone; you leave the Colony and the street leads you instead.
+
+The Cecil Court thread from Addendum 76 is now a **table**, so a path is a row:
+
+```
+var THREADS = [
+  { id: 'cecil',   flag: 'thread-cecil',   col: [180, 138, 224] },   // violet
+  { id: 'ronnies', flag: 'thread-ronnies', col: [92, 146, 232] }     // blue
+];
+```
+
+Two things had to change to generalise it. Routes are now cached **per
+destination**, not globally. And a real door's own tile is not walkable, so the
+search leads to `fc,fr` — the pavement you enter from — where a `spot` door like
+Cecil still leads to `c,r`.
+
+Each row is gated on a **hub flag**, a small string Dean Street prints for the
+map (`hubFlag()` existed and nothing had ever emitted one — `hubFlag('notebook')`
+was reading `''` forever, which is why the Foyles fence never appeared; that is
+now emitted too). Ronnie's path lights while `$knowsRonnies` is true and the
+player has not been in, and puts itself away on arrival.
+
+Verified on the live map: route tiles sample 51.8/60.1/79.4 and 56.9/68.1/92.2 —
+blue-dominant — against 39.7/40.7/48.4 for the pavement beside them, and plainly
+a different colour from Cecil's violet.
+
+**4. The pocket key is in the header.** A `.pocket-cell` in the ALBA strip naming
+what is in the pocket — `⚲ BRASS LIGHTER` — so it is visible everywhere instead
+of only in the notebook inventory. **Harlowe has no `'s uppercase`** (it errored
+loudly); the CSS `text-transform` does that job. `$dreamKey` is only committed by
+`Key Guards` on the **next** render after a key is pocketed, so the cell appears
+when you step out of the venue, not the instant you take it.
+
+---
+
+## Addendum 82 — the pocket key lands on its world (2026-09-14)
+
+Sam went looking for the pocket key under **DREAMS** and didn't find it. It was
+in the notebook all along, under **EFFECTS** — "◈ In Your Pocket", the object
+drawn, and a caption naming it and where it came from ("The brass lighter, from
+the bar at The French"). The tab is called EFFECTS, not Inventory, which is
+probably why it was missed.
+
+But his instinct was the better design: the key **is** the ticket to one
+particular world (`DSS_KEY_WORLDS`: lighter→Himalayas, cocaine→Nazca,
+ticket→Easter, slip→Pyramid, eye→Ezekiel), so the dream ledger is where that
+connection belongs.
+
+The ledger row for the world your key opens now carries a line under it:
+
+```
+☸ HIMALAYAS          —          THE CRITIC
+    ⚲ brass lighter, in your pocket
+⌁ NAZCA              —          LACKLAND
+```
+
+**Only the key in hand is shown.** Naming all five pairings would hand the player
+the whole map of key to world; showing just the one you carry answers "what is
+this for" without spoiling the other four, which are still something to find out.
+
+Implementation: five temp vars (`_kH/_kN/_kE/_kP/_kZ`), one per world, all empty
+but the matching one, spliced into each row before its closing `</div>`. The row
+is a four-column grid, so `.dream-ledger-key` takes `grid-column: 1 / -1` and
+reads as a note under the world rather than a fifth column.
+
+The EFFECTS entry stays — that is the inventory record, with the art and the
+provenance. DREAMS says what it opens; EFFECTS says what it is. The header cell
+from Addendum 81 says only that you have one at all, which is the bit you need
+while walking about.
+
+---
+
+## Addendum 83 — Ezekiel is the last world (2026-09-14)
+
+Sam asked whether Ezekiel should be something more final. Looking at the five
+side by side, the game was already half-saying yes:
+
+| world | passages | prose | set-piece | turn-back |
+|---|---|---|---|---|
+| Himalayas | 8 | ~15.0k | The Climb | yes |
+| Pyramid | 7 | ~12.3k | Pyramid Run | yes |
+| Nazca | 7 | ~10.0k | Nazca Race | yes |
+| Easter | 7 | ~9.5k | — | yes |
+| **Ezekiel** | **5** | **~8.5k** | **—** | **no** |
+
+The other four all offer a refusal at the centre ("Turn back", "Walk on past
+it", "Turn around, you've seen enough"). **Ezekiel has none** — at the Wheel
+there is only "Come back". And thematically it is not a site at all: the other
+four are places the book points at; Ezekiel is the vision the argument is built
+on. The glass eye and "wheels full of eyes round about" were already paired.
+
+**My first proposal was wrong and Sam corrected it.** I suggested making it the
+fifth crossing of a night. But the portal excludes lifetime-visited worlds
+*before* per-night ones — variation across replays is the spine of the feature,
+and a night is not meant to hold all five. Gating to "fifth in a night" would
+have buried the world almost entirely.
+
+**Built instead on the lifetime axis.** In `Third Pillar Portal`:
+
+```js
+var FINAL = "ezekiel";
+var seen = lifetime.concat(visited);
+var finalReady = all.every(function(w) { return w === FINAL || seen.indexOf(w) >= 0; });
+function allowed(w) { return w !== FINAL || finalReady; }
+```
+
+`allowed()` filters both the primary pool and the drop-lifetime fallback, so
+Ezekiel is simply not in the roll until the other four have been walked — across
+playthroughs, or within one night if a player manages four.
+
+**The glass eye had to be handled or it would have defeated the gate**, because a
+held key overrides lifetime variety and steers straight to its world. Both
+`steerPre` and `steer` now drop to null when they point at Ezekiel before it is
+due, so the eye travels as an ordinary key. It is **not** spent by a crossing to
+another world (only the matching key is consumed), so it keeps for the night it
+is good for.
+
+**Tested the logic across seven lifetimes** — night one with the eye rolls among
+the four; three lifetime + the eye still excludes it; four lifetime gives a pool
+of exactly Ezekiel; three lifetime plus the fourth walked that night opens it;
+all five lifetime returns everything to the roll for replays. No state reaches
+the fallback dead-end. Live: both a fresh lifetime and a four-world lifetime
+build a working "Step through" with zero errors, and the four-world one lands on
+`dream ezekiel` — "A river you have never named…".
+
+**Sam is adding hints across the game that a night cannot hold every world**, so
+players know to play again — which is what makes this gate readable rather than
+arbitrary.
+
+---
+
+## Addendum 84 — one crossing a night, and the key decides (2026-09-14)
+
+**CORRECTION to Addenda 80 and 83.** I twice told Sam that line two of the poem
+exists only in the five dream worlds. It does not. `LINE 2 [green-sea]` grants
+`$alba2` as well, reached Carthage shore → Green Sea Approach → LINE 2. So there
+are **two** roads to line two. The larger claim held — the Green Sea is gated on
+`$visitedPyre is true and $returnedPage is true`, so both roads still run through
+Cecil Court and page 93 — but "only in the dream worlds" was wrong.
+
+**One crossing a night.** The column now wants `$worldsVisited's length < 1`. Its
+second branch was rekeyed from `>= 5` to `>= 1` and redrafted: "it will not take
+you twice in a night." The worlds are 9–15k words apiece; one is a night's worth,
+and the cap is what makes the five-night shape real rather than hoped for.
+
+**The key decides the world. The roll is gone.** `Third Pillar Portal` used to
+pick from a pool with the key merely steering. Now the pocket-key names the world
+and nothing else does, so which world you get is something the player chose in
+Soho. Three ways it can come to nothing, each with its own turn-back and each
+carrying its own way out (verified — no soft-lock):
+
+- **no key** → the existing fallback
+- **its world already walked** → `#dss-portal-seen`, "You have been down this one"
+- **the eye before its time** → `#dss-portal-notyet`, "The column will not take the eye. Not yet"
+
+"Already walked" is measured **across playthroughs**, not the night. Each key is
+good once ever: five keys, five worlds, five nights, and the way to see a new one
+is to carry a different key. This makes Sam's planned "come back" hints point at
+a real rule.
+
+**Decision table exercised** across eight lifetimes: night one with the lighter
+crosses to Himalayas; night one with the eye is turned back "not yet"; night two
+with the lighter is turned back "already been" while the cocaine crosses to
+Nazca; four done plus the eye crosses to Ezekiel; four done plus the lighter is
+turned back; all five done turns every key back; no key falls back.
+
+**Consequence worth weighing:** once all five are walked in a lifetime, the third
+pillar never opens again — every key turns you back. The Synthesis is then the
+remaining dream-world content. If Sam would rather the worlds stay re-walkable
+after a complete set, that is one line in the "already walked" test.
+
+**Not verified live:** an actual crossing with a key in hand. `$dreamKey` does not
+survive a debug jump on a save with `$returns < 1`, because the autosave is not
+written at all below that threshold (see `project_debug_jump_autosave`). The
+no-key path, the three turn-backs and their exits were verified in the running
+game with zero `tw-error`s.
+
+---
+
+## Addendum 85 — the worlds stay walkable (2026-09-14)
+
+Sam: the worlds should stay walkable after a complete set, and there should be
+one last return to the Pillars.
+
+**Both were already true, and my first attempt at it was dead code.** I added an
+`allWalked` escape to the "already been" test — but `dssMarkWorldSeen()` **empties
+the lifetime worlds list the moment it reaches five**:
+
+```js
+if (lifetime.length >= window.DSS_WORLDS_ALL.length) lifetime = [];
+```
+
+So the saved list can never hold five, `allWalked` could never be true, and the
+reopening it was meant to provide was already happening by cycle reset. Removed
+it and wrote the real mechanism into the comment instead.
+
+**Walked the whole cycle through the real bookkeeping:**
+
+```
+himalayas -> worlds=[himalayas]                       gifts=1
+nazca     -> worlds=[himalayas|nazca]                 gifts=2
+easter    -> worlds=[himalayas|nazca|easter]          gifts=3
+pyramid   -> worlds=[himalayas|nazca|easter|pyramid]  gifts=4
+ezekiel   -> worlds=[]                                gifts=5
+```
+
+The fifth world wipes the **worlds** list, so every road opens again and the next
+cycle starts with Ezekiel last once more (`finalReady` back to false, the lighter
+crossing again — both confirmed). The **gifts** list never resets, which is what
+makes the last return survive the wipe.
+
+**The one last return to the Pillars is the Synthesis**, and it is keyed to the
+permanent gifts list, not the resettable worlds list. Verified live: with five
+gifts banked, `Entering The Pillars of Hercules` reveals `#dss-synthesis-link`
+with "Perform the synthesis", zero errors.
+
+So the full shape is now: five nights, one world each, Ezekiel last; then the
+Pillars one final time for the ritual; and afterwards the worlds are open again
+for another lifetime, with the ritual already earned.

@@ -4053,6 +4053,7 @@ window.dssOverlayBusy = function() {
   if (window._drinkPopupOpen === true) return true;
   return !!document.querySelector(
     '#coin-overlay,#match-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,' +
+    '#dss-quest-overlay,' +
     '#venue-hint-overlay,#word-wise-overlay,#wtw-overlay,' +
     '#liver-eat-overlay,#napkin-popup-overlay,.dss-rules-overlay,' +
     '#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro'
@@ -4143,7 +4144,7 @@ function tileAt(c, r) { return (c < 0 || r < 0 || c >= COLS || r >= ROWS) ? '#' 
 // name, the light colour, the hub-link matcher. 'spot' doors are walkable tiles that fire on
 // arrival (the Ginger Light corner, the Cecil Court alley mouth, the north exit to Centre Point).
 var DOORS = [
-  { id:'french',   c:15, r:25, fc:16, fr:25, name:'THE FRENCH',                 label:'The French',        col:[192,57,60],   rx:/The French/i },
+  { id:'french',   c:20, r:30, fc:19, fr:30, name:'THE FRENCH',                 label:'The French',        col:[192,57,60],   rx:/The French/i },
   { id:'colony',   c:15, r:22, fc:16, fr:22, name:'THE COLONY ROOM',            label:'Colony Room',       col:[112,196,96],  rx:/Colony Room/i },
   { id:'doorway',  c:15, r:30, fc:16, fr:30, name:'A DOORWAY',                  label:'A doorway',         col:[150,168,200], rx:/doorway/i, quiet:true },
   { id:'chippy',   c:15, r:6,  fc:16, fr:6,  name:'THE CHINESE FISH AND CHIPS', label:'Fish and Chips',    col:[240,208,112], rx:/chippy/i },
@@ -4339,6 +4340,19 @@ function drawAlley(x, door, status) {
   drawPave(x, door.c, door.r);
   x.fillStyle = PAL.lintel; x.fillRect(10, 0, 6, T);
   x.fillStyle = status === 'open' ? mix(door.col, 0.6) : (status === 'grey' ? PAL.doorWood : PAL.doorDark); x.fillRect(11, 1, 5, 14);
+}
+// A K2 box, drawn whether or not you have a coin for it: it is street furniture,
+// and Sam walked into it without knowing it was there (2026-09-14). It lights
+// from the inside once the hub offers it.
+function drawPhoneBox(x, lit) {
+  x.fillStyle = 'rgba(0,0,0,0.45)'; x.fillRect(3, 15, 10, 1);
+  x.fillStyle = '#5d0c10'; x.fillRect(4, 2, 8, 2);
+  x.fillStyle = lit ? '#c02026' : '#7e1216'; x.fillRect(4, 4, 8, 12);
+  x.fillStyle = lit ? '#e04a3c' : '#94191c'; x.fillRect(4, 4, 1, 12);
+  x.fillStyle = lit ? '#f6e2ae' : '#2a2028'; x.fillRect(6, 6, 4, 7);
+  x.fillStyle = lit ? '#c02026' : '#7e1216';
+  x.fillRect(7, 6, 1, 7); x.fillRect(6, 8, 4, 1); x.fillRect(6, 10, 4, 1);
+  x.fillStyle = lit ? '#e8c86a' : '#6a5a3a'; x.fillRect(6, 2, 4, 1);
 }
 function drawLampPost(x, lamp) {
   x.fillStyle = PAL.lampPost; x.fillRect(7, 4, 2, 12); x.fillRect(5, 3, 6, 2);
@@ -4571,6 +4585,8 @@ function buildBase(doors) {
   });
   drawFronts(x, doors);
   LAMPS.forEach(function(l){ x.save(); x.translate(l.c*T, l.r*T); drawLampPost(x, l); x.restore(); });
+  var pb = doorById('phonebox');
+  if (pb) { x.save(); x.translate(pb.c*T, pb.r*T); drawPhoneBox(x, doors.phonebox && doors.phonebox.status === 'open'); x.restore(); }
   x.setTransform(1, 0, 0, 1, 0, 0);
   return cv;
 }
@@ -4592,7 +4608,11 @@ function buildGlow(doors) {
     var st = doors[d.id].status; if (st === 'shut') return;
     var a = st === 'open' ? 0.82 : 0.18;
     if (d.id === 'north') { return; }
-    if (d.event) { if (!d.hidden && st === 'open') pool(d.c*T + 8, d.r*T + 8, 22, 14, d.col, 0.22); return; }
+    if (d.event) {
+      if (d.hidden || st !== 'open') return;
+      if (d.id === 'phonebox') { halo(d.c*T + 8, d.r*T + 6, 22, d.col, 0.34); pool(d.c*T + 8, d.r*T + 12, 24, 13, d.col, 0.40); return; }
+      pool(d.c*T + 8, d.r*T + 8, 22, 14, d.col, 0.22); return;
+    }
     var side = doorSide(d);
     // Quiet doors (a doorway, not a venue) get a fraction of the light.
     if (d.quiet) a = a * 0.28;
@@ -5076,18 +5096,28 @@ function init(container) {
   // No words, and it puts itself away: the door greys while Page 93 is still
   // to be found and shuts once the errand is done, so the thread appears only
   // while the way there is actually the thing to do.
-  var cecilRoute = null, cecilRouteFrom = '';
+  // Each entry: the door to lead to, the colour of its light, and the hub flag
+  // that says the errand is live. Add a row to add a path.
+  var THREADS = [
+    { id: 'cecil',   flag: 'thread-cecil',   col: [180, 138, 224] },
+    { id: 'ronnies', flag: 'thread-ronnies', col: [92, 146, 232] }
+  ];
+  var routeCache = {}, routeFrom = {};
   function routeToCecil(d) {
     var key = S.c + ',' + S.r;
-    if (cecilRouteFrom === key) return cecilRoute;
-    cecilRouteFrom = key;
-    cecilRoute = null;
+    if (routeFrom[d.id] === key) return routeCache[d.id];
+    routeFrom[d.id] = key;
+    routeCache[d.id] = null;
+    var cecilRoute = null;
     if (!walkable(S.c, S.r)) return null;
-    var goal = d.c + ',' + d.r, prev = {}, seen = {}, q = [[S.c, S.r]], head = 0, found = false;
+    // Cecil Court is a 'spot' door you walk onto; Ronnie's is a real door, and
+    // its own tile is not walkable — lead to the pavement you enter it from.
+    var gc = d.spot ? d.c : d.fc, gr = d.spot ? d.r : d.fr;
+    var goal = gc + ',' + gr, prev = {}, seen = {}, q = [[S.c, S.r]], head = 0, found = false;
     seen[key] = 1;
     while (head < q.length) {
       var cur = q[head++], cc = cur[0], rr = cur[1];
-      if (cc === d.c && rr === d.r) { found = true; break; }
+      if (cc === gc && rr === gr) { found = true; break; }
       var nb = [[cc + 1, rr], [cc - 1, rr], [cc, rr + 1], [cc, rr - 1]];
       for (var i = 0; i < 4; i++) {
         var nc = nb[i][0], nr = nb[i][1], k = nc + ',' + nr;
@@ -5099,16 +5129,20 @@ function init(container) {
     var out = [], k2 = goal;
     while (k2) { var bits = k2.split(','); out.push([+bits[0], +bits[1]]); k2 = prev[k2]; }
     out.reverse();
-    cecilRoute = out;
+    routeCache[d.id] = out;
     return out;
   }
   function drawCecilThread(x, cx, cy) {
-    if (!doors.cecil || doors.cecil.status !== 'open') return;
-    var d = doorById('cecil');
+    for (var ti = 0; ti < THREADS.length; ti++) drawOneThread(x, cx, cy, THREADS[ti]);
+  }
+  function drawOneThread(x, cx, cy, spec) {
+    if (hubFlag(spec.flag) !== 'on') return;
+    if (!doors[spec.id] || doors[spec.id].status !== 'open') return;
+    var d = doorById(spec.id);
     if (!d) return;
     var path = routeToCecil(d);
     if (!path || path.length < 4) return;
-    var n = path.length, col = d.col;
+    var n = path.length, col = spec.col;
     // the pulse travels away from the player, then rests before setting off again
     var head = (S.t * 0.5) % (n + 30);
     x.save();
@@ -5608,6 +5642,75 @@ window.venueHintPopup = function() {
 // container and shown in the popup rather than being lost behind the curtain.
 window.DSS_KEY_ART = {cocaine:'<svg class="nb-inv-keyobj" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pkWrapP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4ecd8"/><stop offset="1" stop-color="#cdc1a2"/></linearGradient></defs><ellipse cx="50" cy="69" rx="27" ry="3" fill="rgba(0,0,0,0.3)"/><g transform="rotate(-7 50 42)"><path d="M26,22 L74,22 L78,58 L22,58 Z" fill="url(#pkWrapP)" stroke="rgba(120,100,70,0.6)" stroke-width="1" stroke-linejoin="round"/><path d="M26,22 L50,41 L74,22" fill="none" stroke="rgba(120,100,70,0.5)" stroke-width="0.9"/><path d="M22,58 L50,41 L78,58" fill="none" stroke="rgba(120,100,70,0.34)" stroke-width="0.7"/><g opacity="0.4"><line x1="30" y1="27" x2="44" y2="27" stroke="#6a5a3a" stroke-width="0.8"/><line x1="57" y1="27" x2="70" y2="27" stroke="#6a5a3a" stroke-width="0.8"/><line x1="28" y1="49" x2="40" y2="49" stroke="#6a5a3a" stroke-width="0.8"/><line x1="60" y1="49" x2="72" y2="49" stroke="#6a5a3a" stroke-width="0.8"/><line x1="26" y1="53" x2="37" y2="53" stroke="#6a5a3a" stroke-width="0.7"/><line x1="62" y1="53" x2="74" y2="53" stroke="#6a5a3a" stroke-width="0.7"/></g><path d="M74,22 L78,58 L69,51 Z" fill="rgba(158,138,102,0.34)"/><path d="M27,24 L31,26" stroke="rgba(255,255,255,0.4)" stroke-width="0.7"/></g></svg>',ticket:'<svg class="nb-inv-keyobj" viewBox="0 0 90 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pkTkt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fdf6e2"/><stop offset="1" stop-color="#e0d3ae"/></linearGradient></defs><ellipse cx="45" cy="91" rx="23" ry="2.6" fill="rgba(0,0,0,0.26)"/><g transform="rotate(4 45 52)"><path d="M24,14 L28,18 L24,22 L28,26 L24,30 L66,30 L66,86 L24,86 Z" fill="url(#pkTkt)" stroke="rgba(130,105,60,0.55)" stroke-width="0.8" stroke-linejoin="round"/><line x1="29" y1="36" x2="61" y2="36" stroke="rgba(60,45,20,0.28)" stroke-width="0.5"/><text x="45" y="60" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="21" fill="rgba(150,32,24,0.82)">31</text><g opacity="0.5" stroke="rgba(50,40,25,0.85)" stroke-width="1" stroke-linecap="round" fill="none"><path d="M33,70 L47,70 M40,66 L40,78 M35,76 L45,76"/><path d="M53,68 L61,68 M57,65 L57,78 M52,74 L62,74"/></g><circle cx="56" cy="82" r="7" fill="rgba(150,120,60,0.17)"/><circle cx="56" cy="82" r="3.6" fill="rgba(150,120,60,0.14)"/><circle cx="31" cy="79" r="3" fill="rgba(150,120,60,0.1)"/></g></svg>',slip:'<svg class="nb-inv-keyobj" viewBox="0 0 116 78" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pkSlip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6eccd"/><stop offset="1" stop-color="#ddcda4"/></linearGradient></defs><ellipse cx="58" cy="70" rx="33" ry="2.8" fill="rgba(0,0,0,0.25)"/><g transform="rotate(-3 58 40)"><rect x="16" y="14" width="84" height="48" rx="1.5" fill="url(#pkSlip)" stroke="rgba(128,102,58,0.6)" stroke-width="0.9"/><rect x="19" y="17" width="78" height="42" fill="none" stroke="rgba(150,40,32,0.42)" stroke-width="0.6"/><text x="58" y="28" text-anchor="middle" font-family="Georgia,serif" font-size="5.2" letter-spacing="1.2" fill="rgba(150,40,32,0.7)">TO WIN</text><line x1="24" y1="33" x2="92" y2="33" stroke="rgba(60,45,20,0.26)" stroke-width="0.5"/><text x="26" y="42" font-family="Georgia,serif" font-style="italic" font-size="8.5" fill="rgba(48,34,16,0.82)">Gallowglass</text><line x1="24" y1="47" x2="92" y2="47" stroke="rgba(60,45,20,0.22)" stroke-width="0.5"/><text x="26" y="55" font-family="Georgia,serif" font-size="5.6" fill="rgba(48,34,16,0.6)">4.30  KEMPTON</text><text x="84" y="55" text-anchor="end" font-family="Georgia,serif" font-size="5.6" fill="rgba(48,34,16,0.6)">10/1</text><circle cx="80" cy="40" r="15" fill="none" stroke="rgba(126,92,40,0.28)" stroke-width="2.4"/><circle cx="80" cy="40" r="15" fill="rgba(150,116,58,0.07)"/></g></svg>',lighter:'<svg class="nb-inv-keyobj" viewBox="0 0 70 104" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pkBrass" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7d5f1c"/><stop offset="0.22" stop-color="#d9b45c"/><stop offset="0.46" stop-color="#f4e0a4"/><stop offset="0.72" stop-color="#c49a3c"/><stop offset="1" stop-color="#684d14"/></linearGradient><linearGradient id="pkBrassLid" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8d6c22"/><stop offset="0.24" stop-color="#e6c674"/><stop offset="0.5" stop-color="#f7e6b0"/><stop offset="0.74" stop-color="#cfa646"/><stop offset="1" stop-color="#725417"/></linearGradient></defs><ellipse cx="35" cy="81" rx="16" ry="2.4" fill="rgba(0,0,0,0.34)"/><rect x="19" y="29" width="32" height="15.4" rx="2.6" fill="url(#pkBrassLid)" stroke="rgba(70,50,12,0.75)" stroke-width="0.8"/><rect x="19" y="43.6" width="32" height="35.4" rx="2.6" fill="url(#pkBrass)" stroke="rgba(70,50,12,0.75)" stroke-width="0.8"/><line x1="19.4" y1="44.4" x2="50.6" y2="44.4" stroke="rgba(52,38,8,0.75)" stroke-width="1.1"/><line x1="19.4" y1="43" x2="50.6" y2="43" stroke="rgba(255,244,206,0.28)" stroke-width="0.6"/><rect x="15.9" y="40.4" width="4.6" height="7.4" rx="2.3" fill="url(#pkBrassLid)" stroke="rgba(60,44,10,0.8)" stroke-width="0.6"/><line x1="18.2" y1="41.6" x2="18.2" y2="46.6" stroke="rgba(60,44,10,0.45)" stroke-width="0.5"/><rect x="21.6" y="46.6" width="26.8" height="29.6" rx="1.6" fill="none" stroke="rgba(255,238,190,0.2)" stroke-width="0.7"/><text x="35" y="58.5" text-anchor="middle" font-family="Georgia,serif" font-size="4.4" letter-spacing="0.15" fill="rgba(70,50,12,0.5)">Property of</text><text x="35" y="67.5" text-anchor="middle" font-family="Georgia,serif" font-size="5.2" letter-spacing="0.3" fill="rgba(70,50,12,0.5)">J. St John</text><path d="M22.6,31.6 L22.6,41.6" stroke="rgba(255,246,214,0.32)" stroke-width="1.5" stroke-linecap="round"/><path d="M22.6,47.6 L22.6,74.6" stroke="rgba(255,246,214,0.3)" stroke-width="1.5" stroke-linecap="round"/><line x1="24" y1="76.6" x2="46" y2="76.6" stroke="rgba(60,44,10,0.35)" stroke-width="0.5"/></svg>',eye:'<svg class="nb-inv-keyobj" viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="pkSclera" cx="38%" cy="32%" r="72%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.55" stop-color="#f0ece0"/><stop offset="1" stop-color="#c6bda8"/></radialGradient><radialGradient id="pkIris" cx="42%" cy="36%" r="62%"><stop offset="0" stop-color="#7fb6d8"/><stop offset="0.5" stop-color="#37709c"/><stop offset="1" stop-color="#14384f"/></radialGradient></defs><ellipse cx="48" cy="86" rx="24" ry="3" fill="rgba(0,0,0,0.32)"/><circle cx="48" cy="46" r="33" fill="url(#pkSclera)" stroke="rgba(120,108,86,0.45)" stroke-width="0.8"/><g opacity="0.4" stroke="#b4564a" stroke-width="0.7" fill="none" stroke-linecap="round"><path d="M20,54 q9,5 16,3"/><path d="M18,42 q10,-4 17,-2"/><path d="M76,52 q-9,5 -15,2"/><path d="M78,40 q-10,-3 -16,-1"/></g><circle cx="44" cy="42" r="15" fill="url(#pkIris)"/><g opacity="0.5" stroke="#9fd2ec" stroke-width="0.6"><line x1="44" y1="42" x2="44" y2="28"/><line x1="44" y1="42" x2="56" y2="35"/><line x1="44" y1="42" x2="57" y2="47"/><line x1="44" y1="42" x2="47" y2="56"/><line x1="44" y1="42" x2="33" y2="53"/><line x1="44" y1="42" x2="31" y2="37"/><line x1="44" y1="42" x2="36" y2="29"/></g><circle cx="44" cy="42" r="15" fill="none" stroke="rgba(10,28,40,0.55)" stroke-width="1.1"/><circle cx="44" cy="42" r="6" fill="#0a0f14"/><ellipse cx="37" cy="33" rx="7" ry="5" fill="rgba(255,255,255,0.72)" transform="rotate(-28 37 33)"/><ellipse cx="60" cy="60" rx="4.6" ry="3" fill="rgba(255,255,255,0.22)" transform="rotate(-28 60 60)"/></svg>'};
 window.DSS_KEY_LABEL = {cocaine:'The bag of cocaine',ticket:'The chippy order ticket',slip:'The betting slip',lighter:'The brass lighter',eye:'The glass eye'};
+
+// ====== QUEST POPUP (2026-09-14) ======
+// Sam: "The quests should be modal pop ups not just part of the page." Built as
+// a pattern rather than a one-off, because he expects to add more: park the
+// quest in the passage inside .dss-quest-offer (title, body, and optionally
+// some art) and it is raised here as a modal. The passage keeps its own visible
+// link, so dismissing the popup can never strand the player.
+window.dssQuestPopup = function() {
+  if (document.getElementById('dss-quest-overlay')) return;
+  if (window._dssQuestPopupSeenGen === window._passageGen) return;
+  var offer = document.querySelector('tw-passage .dss-quest-offer');
+  if (!offer) return;
+  if (window.dssDeferIfBusy(window.dssQuestPopup)) return;
+
+  var gen = window._passageGen;
+  var titleEl = offer.querySelector('.dss-quest-title');
+  var bodyEl  = offer.querySelector('.dss-quest-body');
+  var artEl   = offer.querySelector('.dss-quest-art');
+  var go = offer.getAttribute('data-go') || '';
+  var goLink = go ? (function() {
+    var ls = document.querySelectorAll('tw-passage tw-link');
+    for (var i = 0; i < ls.length; i++) if ((ls[i].textContent || '').trim() === go) return ls[i];
+    return null;
+  })() : null;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'dss-quest-overlay';
+  var box = document.createElement('div');
+  box.className = 'coin-overlay-box dss-quest-box';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', 'A quest');
+  box.setAttribute('tabindex', '-1');
+  box.innerHTML =
+    '<div class="dss-key-label">⟡ QUEST ⟡</div>' +
+    (artEl ? '<div class="coin-overlay-stage dss-quest-stage">' + artEl.innerHTML + '</div>' : '') +
+    (titleEl ? '<div class="dss-quest-name">' + titleEl.innerHTML + '</div>' : '') +
+    '<p class="coin-overlay-text">' + (bodyEl ? bodyEl.innerHTML : offer.innerHTML) + '</p>' +
+    '<div class="dss-key-foot"><button type="button" class="coin-overlay-btn dss-quest-go">' +
+      (goLink ? goLink.textContent.trim() : 'Good') + '</button></div>';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  var shown = false;
+  function reveal() { if (shown) return; shown = true; overlay.classList.add('dss-quest-in'); }
+  requestAnimationFrame(function() { requestAnimationFrame(reveal); });
+  setTimeout(reveal, 140);
+  try { box.focus({ preventScroll: true }); } catch(e) {}
+  if (window.dssAudio && window.dssAudio.pageRustle) { try { window.dssAudio.pageRustle(); } catch(e) {} }
+
+  function close(andGo) {
+    window._dssQuestPopupSeenGen = gen;
+    document.removeEventListener('keydown', onKey);
+    overlay.classList.add('coin-overlay-fade');
+    setTimeout(function() {
+      if (overlay.parentNode) overlay.remove();
+      if (andGo && goLink && document.contains(goLink)) goLink.click();
+    }, 420);
+  }
+  function onKey(e) { if (e.key === 'Escape') close(false); }
+  box.querySelector('.dss-quest-go').addEventListener('click', function() { close(true); });
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) close(false); });
+  document.addEventListener('keydown', onKey);
+  // If the player leaves while this is queued behind something else, go quietly.
+  var obs = new MutationObserver(function() {
+    if (window._passageGen !== gen) { try { obs.disconnect(); } catch(e) {} close(false); }
+  });
+  var story = document.querySelector('tw-story');
+  if (story) obs.observe(story, { childList: true, subtree: true });
+};
 
 window.dssKeyPopup = function() {
   if (document.getElementById('dss-key-overlay')) return;
@@ -21843,8 +21946,14 @@ var camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHei
 // Neighbouring buildings: cream/yellow to left of alley, pink/brown to right.
 // Building body extends into -Z (behind facade).
 
-camera.position.set(2.1, 3.5, 11.5);
-camera.lookAt(0, 5, 0);
+// Tilted down and stepped back a touch (2026-09-14, Sam: "now the Pillars is
+// zoomed in you don't see the flooding street"). The drain and its pool sit at
+// (2.2, 0, 6.4) — from the old framing they were ~42 degrees below the camera
+// axis, well outside a 55-degree frame, so the flood was being played out off
+// screen. Do not pull BACK to fix this: the fog is near 5 / far 40 and the
+// facade goes flat long before it helps. Tilt, don't retreat.
+camera.position.set(2.1, 3.9, 12.0);
+camera.lookAt(0, 2.6, 2.5);
 
 var renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -35607,7 +35716,7 @@ clWrap.appendChild(clLoc);
 
 // Button
 var clBtn = document.createElement('div');
-clBtn.textContent = "COPPER'S LAIR";
+clBtn.textContent = "ANNOUNCE YOURSELF IN COPPER'S LAIR";
 clBtn.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);padding:14px 36px;font:16px "Courier New",monospace;color:rgba(180,170,150,0.85);border:1px solid rgba(180,170,150,0.3);letter-spacing:4px;cursor:pointer;z-index:9004;background:transparent;opacity:0;transition:opacity 2s ease;';
 setTimeout(function() { clBtn.style.opacity = '1'; }, 2500);
 clBtn.addEventListener('mouseenter', function() {
@@ -41529,7 +41638,7 @@ You surface to Dean Street.
 <script>/* Fallback for the iframe-ready class. The iframe's own onload sets it after 400ms — but if the iframe is very slow or fails to load entirely, lightning would never fire (it's CSS-gated on .iframe-ready). 4s fallback ensures the bolts play even in degraded-network / WebGL-down scenarios. In the common case (HTTP-prefetched iframe loads in <1s) the onload handler wins and the fallback no-ops. */setTimeout(function(){var d=document.querySelector('.dawn-approach');if(d&&!d.classList.contains('iframe-ready'))d.classList.add('iframe-ready');},4000);</script>\
 <div class="dawn-approach">
 <iframe class="dawn-approach-iframe" src="oxford-street-from-centre-point-3d-static.html" frameborder="0" scrolling="no" onload="this.classList.add('loaded');var d=this.closest('.dawn-approach');if(d)setTimeout(function(){d.classList.add('iframe-ready');},400);"></iframe>
-(set: _ll to "<path d='M 0,0 C 0.5,5 0,10 0,15' fill='none' stroke='#9aa888' stroke-width='1.0' stroke-linecap='round' opacity='0.85'/><path d='M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15' fill='#8a9678' opacity='0.65' stroke='#5a6850' stroke-width='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='#f5f0e2' stroke='none' opacity='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='none' stroke='#9a8868' stroke-width='0.45' opacity='0.7'/><path d='M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z' fill='#fbfaf3' stroke='none' opacity='0.14'/><path d='M 0,17 Q 0,35 0,52' fill='none' stroke='#a08868' stroke-width='0.38' opacity='0.68' stroke-linecap='round'/><path d='M -2,17 Q -3,34 -3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M 2,17 Q 3,34 3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M -5,17 Q -7,34 -8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M 5,17 Q 7,34 8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M -7.5,18 Q -10,32 -10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><path d='M 7.5,18 Q 10,32 10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><circle cx='-1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='0' cy='50' r='0.5' fill='#7a6438' opacity='0.62'/>")(set: _pv to "<div class='centre-pent-overlay'><svg viewBox='0 0 560 700' preserveAspectRatio='xMidYMid meet'><defs><radialGradient id='cpVig' cx='50%' cy='42%' r='55%'><stop offset='0%' stop-color='rgba(8,6,4,0.55)'/><stop offset='70%' stop-color='rgba(8,6,4,0.18)'/><stop offset='100%' stop-color='rgba(8,6,4,0)'/></radialGradient></defs><rect width='560' height='700' fill='url(#cpVig)'/>")(set: _pv to _pv + "<g opacity='0.06' stroke='#d4a574' fill='none'><line x1='100' y1='140' x2='100' y2='640' stroke-width='1.5'/><line x1='230' y1='135' x2='230' y2='645' stroke-width='2'/><line x1='360' y1='140' x2='360' y2='640' stroke-width='2'/><line x1='490' y1='140' x2='490' y2='640' stroke-width='2'/><line x1='10' y1='370' x2='545' y2='370' stroke-width='2'/><line x1='80' y1='520' x2='510' y2='520' stroke-width='1.5'/><line x1='50' y1='620' x2='520' y2='620' stroke-width='1.5'/></g>")(set: _pv to _pv + "<g opacity='0.55'><circle cx='280' cy='70' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='470' cy='200' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='490' cy='460' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='230' cy='470' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='100' cy='250' r='16' fill='rgba(245,208,112,0.20)'/></g>")(set: _pv to _pv + "<polygon points='280,70 490,560 100,250 494,262 230,470' fill='none' stroke='#f5d070' stroke-width='2.2' opacity='0.95' stroke-linejoin='round'/>")(set: _pv to _pv + "<g class='pent-lilies' opacity='0.95'>")(if: $tookLily1 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-1' transform='translate(280,70) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily2 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-2' transform='translate(494,262) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily3 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-3' transform='translate(490,560) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily4 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-4' transform='translate(230,470) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily5 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-5' transform='translate(100,250) translate(0,-25)'>" + _ll + "</g>")](set: _pv to _pv + "</g>")(set: _pv to _pv + "</svg><div class='centre-pent-gawain'>And the English call it everywhere, as I hear, the endless knot.</div></div>")(print: _pv)
+(set: _ll to "<path d='M 0,0 C 0.5,5 0,10 0,15' fill='none' stroke='#9aa888' stroke-width='1.0' stroke-linecap='round' opacity='0.85'/><path d='M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15' fill='#8a9678' opacity='0.65' stroke='#5a6850' stroke-width='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='#f5f0e2' stroke='none' opacity='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='none' stroke='#9a8868' stroke-width='0.45' opacity='0.7'/><path d='M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z' fill='#fbfaf3' stroke='none' opacity='0.14'/><path d='M 0,17 Q 0,35 0,52' fill='none' stroke='#a08868' stroke-width='0.38' opacity='0.68' stroke-linecap='round'/><path d='M -2,17 Q -3,34 -3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M 2,17 Q 3,34 3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M -5,17 Q -7,34 -8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M 5,17 Q 7,34 8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M -7.5,18 Q -10,32 -10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><path d='M 7.5,18 Q 10,32 10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><circle cx='-1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='0' cy='50' r='0.5' fill='#7a6438' opacity='0.62'/>")(set: _pv to "<div class='centre-pent-overlay'><svg viewBox='0 0 560 700' preserveAspectRatio='xMidYMid meet'><defs><radialGradient id='cpVig' cx='50%' cy='42%' r='55%'><stop offset='0%' stop-color='rgba(8,6,4,0.55)'/><stop offset='70%' stop-color='rgba(8,6,4,0.18)'/><stop offset='100%' stop-color='rgba(8,6,4,0)'/></radialGradient></defs><rect width='560' height='700' fill='url(#cpVig)'/>")(set: _pv to _pv + "<g opacity='0.06' stroke='#d4a574' fill='none'><line x1='100' y1='140' x2='100' y2='640' stroke-width='1.5'/><line x1='230' y1='135' x2='230' y2='645' stroke-width='2'/><line x1='360' y1='140' x2='360' y2='640' stroke-width='2'/><line x1='490' y1='140' x2='490' y2='640' stroke-width='2'/><line x1='10' y1='370' x2='545' y2='370' stroke-width='2'/><line x1='80' y1='520' x2='510' y2='520' stroke-width='1.5'/><line x1='50' y1='620' x2='520' y2='620' stroke-width='1.5'/></g>")(set: _pv to _pv + "<g opacity='0.55'><circle cx='280' cy='70' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='470' cy='200' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='490' cy='460' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='230' cy='470' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='100' cy='250' r='16' fill='rgba(245,208,112,0.20)'/></g>")(set: _pv to _pv + "<polygon points='280,70 490,560 100,250 494,262 248,566' fill='none' stroke='#f5d070' stroke-width='2.2' opacity='0.95' stroke-linejoin='round'/>")(set: _pv to _pv + "<g class='pent-lilies' opacity='0.95'>")(if: $tookLily1 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-1' transform='translate(280,70) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily2 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-2' transform='translate(494,262) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily3 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-3' transform='translate(490,560) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily4 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-4' transform='translate(248,566) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily5 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-5' transform='translate(100,250) translate(0,-25)'>" + _ll + "</g>")](set: _pv to _pv + "</g>")(set: _pv to _pv + "</svg><div class='centre-pent-gawain'>And the English call it everywhere, as I hear, the endless knot.</div></div>")(print: _pv)
 <div class="dawn-approach-overlay dawn-approach-overlay-white"></div>
 </div>
 (after: 16s)[(go-to: "White page")]
@@ -41538,7 +41647,7 @@ You surface to Dean Street.
 <script>/* See note on Dawn Approach White. Same iframe-ready fallback. */setTimeout(function(){var d=document.querySelector('.dawn-approach');if(d&&!d.classList.contains('iframe-ready'))d.classList.add('iframe-ready');},4000);</script>\
 <div class="dawn-approach">
 <iframe class="dawn-approach-iframe" src="oxford-street-from-centre-point-3d-static.html" frameborder="0" scrolling="no" onload="this.classList.add('loaded');var d=this.closest('.dawn-approach');if(d)setTimeout(function(){d.classList.add('iframe-ready');},400);"></iframe>
-(set: _ll to "<path d='M 0,0 C 0.5,5 0,10 0,15' fill='none' stroke='#9aa888' stroke-width='1.0' stroke-linecap='round' opacity='0.85'/><path d='M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15' fill='#8a9678' opacity='0.65' stroke='#5a6850' stroke-width='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='#f5f0e2' stroke='none' opacity='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='none' stroke='#9a8868' stroke-width='0.45' opacity='0.7'/><path d='M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z' fill='#fbfaf3' stroke='none' opacity='0.14'/><path d='M 0,17 Q 0,35 0,52' fill='none' stroke='#a08868' stroke-width='0.38' opacity='0.68' stroke-linecap='round'/><path d='M -2,17 Q -3,34 -3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M 2,17 Q 3,34 3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M -5,17 Q -7,34 -8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M 5,17 Q 7,34 8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M -7.5,18 Q -10,32 -10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><path d='M 7.5,18 Q 10,32 10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><circle cx='-1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='0' cy='50' r='0.5' fill='#7a6438' opacity='0.62'/>")(set: _pv to "<div class='centre-pent-overlay'><svg viewBox='0 0 560 700' preserveAspectRatio='xMidYMid meet'><defs><radialGradient id='cpVig2' cx='50%' cy='42%' r='55%'><stop offset='0%' stop-color='rgba(8,6,4,0.55)'/><stop offset='70%' stop-color='rgba(8,6,4,0.18)'/><stop offset='100%' stop-color='rgba(8,6,4,0)'/></radialGradient></defs><rect width='560' height='700' fill='url(#cpVig2)'/>")(set: _pv to _pv + "<g opacity='0.06' stroke='#d4a574' fill='none'><line x1='100' y1='140' x2='100' y2='640' stroke-width='1.5'/><line x1='230' y1='135' x2='230' y2='645' stroke-width='2'/><line x1='360' y1='140' x2='360' y2='640' stroke-width='2'/><line x1='490' y1='140' x2='490' y2='640' stroke-width='2'/><line x1='10' y1='370' x2='545' y2='370' stroke-width='2'/><line x1='80' y1='520' x2='510' y2='520' stroke-width='1.5'/><line x1='50' y1='620' x2='520' y2='620' stroke-width='1.5'/></g>")(set: _pv to _pv + "<g opacity='0.55'><circle cx='280' cy='70' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='470' cy='200' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='490' cy='460' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='230' cy='470' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='100' cy='250' r='16' fill='rgba(245,208,112,0.20)'/></g>")(set: _pv to _pv + "<polygon points='280,70 490,560 100,250 494,262 230,470' fill='none' stroke='#f5d070' stroke-width='2.2' opacity='0.95' stroke-linejoin='round'/>")(set: _pv to _pv + "<g class='pent-lilies' opacity='0.95'>")(if: $tookLily1 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-1' transform='translate(280,70) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily2 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-2' transform='translate(494,262) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily3 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-3' transform='translate(490,560) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily4 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-4' transform='translate(230,470) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily5 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-5' transform='translate(100,250) translate(0,-25)'>" + _ll + "</g>")](set: _pv to _pv + "</g>")(set: _pv to _pv + "</svg><div class='centre-pent-gawain'>And the English call it everywhere, as I hear, the endless knot.</div></div>")(print: _pv)
+(set: _ll to "<path d='M 0,0 C 0.5,5 0,10 0,15' fill='none' stroke='#9aa888' stroke-width='1.0' stroke-linecap='round' opacity='0.85'/><path d='M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15' fill='#8a9678' opacity='0.65' stroke='#5a6850' stroke-width='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='#f5f0e2' stroke='none' opacity='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='none' stroke='#9a8868' stroke-width='0.45' opacity='0.7'/><path d='M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z' fill='#fbfaf3' stroke='none' opacity='0.14'/><path d='M 0,17 Q 0,35 0,52' fill='none' stroke='#a08868' stroke-width='0.38' opacity='0.68' stroke-linecap='round'/><path d='M -2,17 Q -3,34 -3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M 2,17 Q 3,34 3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M -5,17 Q -7,34 -8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M 5,17 Q 7,34 8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M -7.5,18 Q -10,32 -10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><path d='M 7.5,18 Q 10,32 10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><circle cx='-1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='0' cy='50' r='0.5' fill='#7a6438' opacity='0.62'/>")(set: _pv to "<div class='centre-pent-overlay'><svg viewBox='0 0 560 700' preserveAspectRatio='xMidYMid meet'><defs><radialGradient id='cpVig2' cx='50%' cy='42%' r='55%'><stop offset='0%' stop-color='rgba(8,6,4,0.55)'/><stop offset='70%' stop-color='rgba(8,6,4,0.18)'/><stop offset='100%' stop-color='rgba(8,6,4,0)'/></radialGradient></defs><rect width='560' height='700' fill='url(#cpVig2)'/>")(set: _pv to _pv + "<g opacity='0.06' stroke='#d4a574' fill='none'><line x1='100' y1='140' x2='100' y2='640' stroke-width='1.5'/><line x1='230' y1='135' x2='230' y2='645' stroke-width='2'/><line x1='360' y1='140' x2='360' y2='640' stroke-width='2'/><line x1='490' y1='140' x2='490' y2='640' stroke-width='2'/><line x1='10' y1='370' x2='545' y2='370' stroke-width='2'/><line x1='80' y1='520' x2='510' y2='520' stroke-width='1.5'/><line x1='50' y1='620' x2='520' y2='620' stroke-width='1.5'/></g>")(set: _pv to _pv + "<g opacity='0.55'><circle cx='280' cy='70' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='470' cy='200' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='490' cy='460' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='230' cy='470' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='100' cy='250' r='16' fill='rgba(245,208,112,0.20)'/></g>")(set: _pv to _pv + "<polygon points='280,70 490,560 100,250 494,262 248,566' fill='none' stroke='#f5d070' stroke-width='2.2' opacity='0.95' stroke-linejoin='round'/>")(set: _pv to _pv + "<g class='pent-lilies' opacity='0.95'>")(if: $tookLily1 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-1' transform='translate(280,70) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily2 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-2' transform='translate(494,262) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily3 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-3' transform='translate(490,560) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily4 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-4' transform='translate(248,566) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily5 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-5' transform='translate(100,250) translate(0,-25)'>" + _ll + "</g>")](set: _pv to _pv + "</g>")(set: _pv to _pv + "</svg><div class='centre-pent-gawain'>And the English call it everywhere, as I hear, the endless knot.</div></div>")(print: _pv)
 <div class="dawn-approach-overlay dawn-approach-overlay-black"></div>
 </div>
 (after: 16s)[(go-to: "Black page")]
@@ -42347,6 +42456,12 @@ You're eating at the counter when somebody passes the window: that's Lily.
 (if: $hadChippy is true)['You must be starving!'
 
 ]\
+<!-- THE MATCHBOX (moved here 2026-09-14). It was in the Pillars, but the Pillars
+     is now phased — the critic, then shut, then the portal — and a box of matches
+     has no business in any of those. A counter you eat at is the natural place for
+     it, it is early, and Trisha's matchbook stays the other, better-dressed source. -->
+(if: $hasMatches is false)[(set: $hasMatches to true)<div id="match-overlay" style="display:none"><div class="coin-overlay-box" role="dialog" aria-modal="true" aria-label="A box of matches"><div class="coin-overlay-stage"><svg class="match-svg" viewBox="0 0 130 84" width="130" height="84" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mxCard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2c56a"/><stop offset="1" stop-color="#c39a3a"/></linearGradient><linearGradient id="mxTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0d98c"/><stop offset="1" stop-color="#d4b050"/></linearGradient><linearGradient id="mxSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a87f2a"/><stop offset="1" stop-color="#7a5818"/></linearGradient><linearGradient id="mxTray" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9c48e"/><stop offset="1" stop-color="#b89a5c"/></linearGradient><pattern id="mxGrit" width="2" height="2" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="rgba(255,255,255,0.08)"/><rect x="1" y="1" width="1" height="1" fill="rgba(0,0,0,0.3)"/></pattern></defs><ellipse cx="66" cy="72" rx="52" ry="4" fill="rgba(0,0,0,0.35)"/><rect x="4" y="38" width="44" height="26" fill="url(#mxTray)" stroke="#6e4e18" stroke-width="0.8"/><path d="M4,38 L14,30 L58,30 L48,38 Z" fill="#c9b070" stroke="#6e4e18" stroke-width="0.6" stroke-linejoin="round"/><path d="M6,39.5 L46,39.5 L46,46 L6,46 Z" fill="rgba(0,0,0,0.22)"/><rect x="8.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="13.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="18.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="23.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="28.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="33.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="38.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><ellipse cx="10" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="15" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="20" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="25" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="30" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="35" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="40" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="9.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="19.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="29.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="39.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><path d="M46,30 L56,20 L124,20 L114,30 Z" fill="url(#mxTop)" stroke="#6e4e18" stroke-width="0.9" stroke-linejoin="round"/><path d="M114,30 L124,20 L124,54 L114,64 Z" fill="url(#mxSide)" stroke="#6e4e18" stroke-width="0.9" stroke-linejoin="round"/><path d="M116,31 L122,25 L122,52 L116,58 Z" fill="#3a2a22"/><path d="M116,31 L122,25 L122,52 L116,58 Z" fill="url(#mxGrit)"/><rect x="46" y="30" width="68" height="34" fill="url(#mxCard)" stroke="#6e4e18" stroke-width="0.9"/><rect x="52" y="35" width="56" height="24" fill="#1f4a34" stroke="#c89a3e" stroke-width="0.6"/><rect x="54.5" y="37.5" width="51" height="19" fill="none" stroke="#e8c478" stroke-width="0.4" opacity="0.8"/><path d="M80,38.5 q-3,3.2 0,6.4 q3,-3.2 0,-6.4z M80,40.5 q-1.4,1.6 0,3.2 q1.4,-1.6 0,-3.2z" fill="#e8c478"/><text x="80" y="51" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="6.6" letter-spacing="0.9" fill="#f2e6c4">MATCHES</text><text x="80" y="55.2" text-anchor="middle" font-family="Georgia,serif" font-size="2.4" letter-spacing="0.35" fill="#c8b070">SAFETY &#183; AVERAGE CONTENTS 50</text><g transform="rotate(-14 70 74)"><rect x="56" y="73" width="24" height="2.2" rx="0.8" fill="#efe6d0" stroke="#8a7a50" stroke-width="0.4"/><rect x="56" y="73" width="8" height="2.2" rx="0.8" fill="#2a2018"/><ellipse cx="55.5" cy="74.1" rx="2" ry="2.4" fill="#1a1410"/></g><g transform="rotate(22 104 68)"><rect x="92" y="67" width="22" height="2.2" rx="0.8" fill="#efe6d0" stroke="#8a7a50" stroke-width="0.4"/><ellipse cx="114.5" cy="68.1" rx="2" ry="2.5" fill="#b83524"/></g></svg></div><p class="coin-overlay-text">On the way out you swipe a box of matches from a newly-empty table. You&#39;ve been looking for a light. Now you can smoke again.</p><span class="inventory-note">MATCHES ACQUIRED</span><button class="coin-overlay-btn coin-overlay-dismiss" id="match-keep-btn">Pocket them</button></div></div><script>(function(){var btn=document.getElementById("match-keep-btn"),o=document.getElementById("match-overlay");if(!btn||!o)return;var gen=window._passageGen;function othersBusy(){return window._drinkPopupOpen===true||!!document.querySelector("#coin-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,#venue-hint-overlay,#word-wise-overlay,#wtw-overlay,#liver-eat-overlay,.dss-rules-overlay");}function reveal(){if(window._passageGen!==gen || window._dssMatchPopupDone){if(o.parentNode)o.parentNode.removeChild(o);return;}if(othersBusy()){setTimeout(reveal,200);return;}window._dssMatchPopupDone=true;o.style.display="flex";}function close(){var box=o.querySelector(".coin-overlay-box");if(box){for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}}btn.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);}btn.addEventListener("click",close);o.addEventListener("click",function(e){if(e.target===o)close();});reveal();})();</script>]\
+
 (link: "Eat.")[(set: $hadChippy to true)(set: $justAteChippy to true)(set: $confidence to ($statGain: $confidence, 10))(set: $sobriety to ($statGain: $sobriety, 18))(go-to: "Dean Street")]
 <svg class="chippy-tube" viewBox="0 0 300 18" width="100%" height="18" preserveAspectRatio="none"><defs><filter id="fgB" x="-20%" y="-120%" width="140%" height="400%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#dss-ink)"><rect x="14" y="1" width="272" height="16" rx="6" fill="rgba(180,210,255,0.22)" filter="url(#fgB)"/><rect x="16" y="4" width="268" height="10" rx="4" fill="rgba(215,230,255,0.96)"/><rect x="18" y="6" width="264" height="4" rx="2" fill="rgba(240,248,255,1.0)"/><rect x="12"  y="3" width="7" height="12" rx="2" fill="rgba(130,135,145,0.75)"/><rect x="281" y="3" width="7" height="12" rx="2" fill="rgba(130,135,145,0.75)"/><line x1="22" y1="9" x2="278" y2="9" stroke="rgba(200,220,255,0.4)" stroke-width="0.7"/></g></svg>
 </div>
@@ -42755,6 +42870,13 @@ Better not tomorrow.
      engine builds the canvas into this container, reads the venue links rendered below
      as its doors and parks those hooks. -->\
 <div id="soho-map-container"></div>\
+<!-- HUB FLAGS: small strings the map reads (window.dssSohoMap's hubFlag). The
+     thread-* flags light a pavement path to that door while the errand is live;
+     add a flag and a row in THREADS to add a path. -->\
+<span class="dss-hub-flag" data-k="notebook" style="display:none">(print: $notebook)</span>\
+<span class="dss-hub-flag" data-k="thread-cecil" style="display:none">(if: $knowsCecilCourt is true and $returnedPage is false)[on]</span>\
+(set: _ronSeen to false)(if: $visited is a datamap and $visited contains "Ronnies" and $visited's Ronnies is true)[(set: _ronSeen to true)]\
+<span class="dss-hub-flag" data-k="thread-ronnies" style="display:none">(if: $knowsRonnies is true and _ronSeen is false)[on]</span>\
 <div class="dss-night-choice">(if: _towerReady)[<span class="dss-night-ready">The poem is complete. Stay as long as you like.</span>]</div>\
 <!-- THE WAY OUT (2026-09-13, Sam: "there should be an exit at the edge of the map
      which is towards Centre point. That is the way out of the game and the night").
@@ -42822,9 +42944,9 @@ There is an atmosphere of the silver screen. Brando might emerge in a tight and 
      stats primer still fires on the first French entry, whenever that comes. -->
 (if: $coachUrgent is false and $hadPhoneCall is true and $metCritic is false)[[[To The Pillars|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>](if: $tookLily2 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
 ](else-if: $coachUrgent is false and $metCritic is false)[[[To The Pillars of Hercules|Maritime interlude]] (if: $metCritic is true)[<span class="pp pp-done">▲</span>](else:)[(if: $hauntExplained is true)[<span class="pp pp-pending">△</span>]](if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>](if: $tookLily2 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
-](else-if: $coachUrgent is false and $metCritic is true and $knowsAboutPage is true and (($inisToldOfPillars is true and $worldsVisited's length < 5) or not ($alba contains $alba2)))[[[The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]<span class="lp lp-done">❀</span>
-](else-if: $coachUrgent is false and $metCritic is true and $tookLily2 is false)[<span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>] <span class="lp">❁</span>
-](else-if: $coachUrgent is false and $metCritic is true and $tookLily2 is true)[<span class="greyed-out">The Pillars</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]<span class="lp lp-done">❀</span>
+](else-if: $coachUrgent is false and $metCritic is true and $inisToldOfPillars is true and (($worldsVisited's length < 5) or not ($alba contains $alba2)))[[[The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]<span class="lp lp-done">❀</span>
+](else-if: $coachUrgent is false and $metCritic is true and $inisToldOfPillars is false)[[[The Pillars|Maritime interlude]] <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>] <span class="lp">❁</span>
+](else-if: $coachUrgent is false and $metCritic is true)[<span class="greyed-out">The Pillars</span> <span class="pp pp-done">▲</span>(if: $haunts contains $haunt5)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $alba contains $alba2)[<span class="al al-done">✦</span>](else:)[(if: $hauntExplained is true)[<span class="al">✧</span>]](if: $returnedPage is true)[<span class="qp qp-done">★</span>](else-if: $hasMissingPage is true)[<span class="qp qp-done">★</span>](else-if: $knowsAboutPage is true)[<span class="qp">☆</span>]<span class="lp lp-done">❀</span>
 ]\
 (if: $coachUrgent is false and $haunts contains $haunt1 and not ($knowsRonnies is true and $knowsCopperSecret is true))[[[Try the Colony Room|Approach The Colony Room]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] (if: $tookLily4 is true)[<span class="lp lp-done">❀</span>](else-if: $lilyHintShown is true)[<span class="lp">❁</span>]
 ](else-if: $coachUrgent is false and $visited's French is true and $visited's Colony is true and $tookLily4 is false)[<div class="choice-box">[[Back to The Colony Room|Approach The Colony Room]]</div> (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]] <span class="hp hp-done">◆</span> <span class="lp">❁</span>
@@ -42895,8 +43017,13 @@ The fire must burn with you or without you.
 (unless: $knowsAboutPage is true and $hasMissingPage is false)[[[Rest here|Stay in Carthage]]]]
 
 :: Entering The Pillars of Hercules [venue-pillars] {"position":"300,1100","size":"100,100"}
-(set: _lilyRing to ($lilyCount >= 1 and $hadLilyCall1 is false and $hadPhoneCall is true and ($returns - $phoneCallReturnsAt) >= 1 and $visited contains "Pillars" and $visited's Pillars is true))\
-(set: _dualRing to ($lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and ($returns - $lilyCall1ReturnsAt) >= 2 and $visited contains "Pillars" and $visited's Pillars is true))\
+<!-- Sam, 2026-09-14: "you can return to the Pillars again soon and get three
+     phone calls very quickly". Before the critic, the pub holds the Aoife call
+     and the Ham and nothing else — the Lily rings wait for the French or the
+     Coach, so bouncing in and out cannot farm them. -->
+(set: _pillarsOpen to ($metCritic is true))\
+(set: _lilyRing to (_pillarsOpen and $lilyCount >= 1 and $hadLilyCall1 is false and $hadPhoneCall is true and ($returns - $phoneCallReturnsAt) >= 1 and $visited contains "Pillars" and $visited's Pillars is true))\
+(set: _dualRing to (_pillarsOpen and $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and ($returns - $lilyCall1ReturnsAt) >= 2 and $visited contains "Pillars" and $visited's Pillars is true))\
 <div class="pillars-scene">
 <div class="pillars-light"></div>
 <div class="pillars-smoke"></div>
@@ -42947,16 +43074,20 @@ Whatever more you choose comes out in the wash:
      The < 5 guard only
      stops the column opening onto an empty pool once every world is done;
      the portal's own fallback would otherwise dead-end there. -->
-(if: $inisToldOfPillars is true and $dreamKey is not "" and ($worldsVisited's length < 5))[
+<!-- ONE CROSSING A NIGHT (2026-09-14). The worlds are 9,000 to 15,000 words
+     apiece; one is a night's worth. The cap is also what makes the five-night
+     shape real rather than hoped for, and it is what Sam's "come back" hints
+     will be pointing at. -->
+(if: $inisToldOfPillars is true and $dreamKey is not "" and ($worldsVisited's length < 1))[
 <div class="claude-draft">
 The third pillar holds the room still. The other two say nothing about it. The (print: $keyNames's ($dreamKey)) in your pocket has gone warm, and you understand that it is the reason you can see the column at all.
 </div>
 
 <div class="choice-box">[[Step through the third pillar|Third Pillar Portal]]</div>
 ]
-(else-if: $inisToldOfPillars is true and ($worldsVisited's length >= 5))[
+(else-if: $inisToldOfPillars is true and ($worldsVisited's length >= 1))[
 <div class="claude-draft">
-The third pillar is duller tonight, or you are. You have been everywhere it goes.
+The third pillar is duller tonight, or you are. You have been through it once already, and it will not take you twice in a night.
 </div>
 ]
 (else-if: $inisToldOfPillars is true)[
@@ -42988,11 +43119,6 @@ The third pillar holds the room still, and stays shut. It wants paying, and your
   } catch(e) {}
 })();
 </script>
-
-<!-- THE MATCHBOOK (moved 2026-09-13). It used to fire on the hub, gated on having
-     visited the Pillars, so the player could pocket it walking out of the Ginger
-     Light. It now belongs to the Pillars and fires inside it. -->
-(if: $hasMatches is false)[(set: $hasMatches to true)<div id="match-overlay" style="display:none"><div class="coin-overlay-box" role="dialog" aria-modal="true" aria-label="A box of matches"><div class="coin-overlay-stage"><svg class="match-svg" viewBox="0 0 130 84" width="130" height="84" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mxCard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2c56a"/><stop offset="1" stop-color="#c39a3a"/></linearGradient><linearGradient id="mxTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0d98c"/><stop offset="1" stop-color="#d4b050"/></linearGradient><linearGradient id="mxSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a87f2a"/><stop offset="1" stop-color="#7a5818"/></linearGradient><linearGradient id="mxTray" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9c48e"/><stop offset="1" stop-color="#b89a5c"/></linearGradient><pattern id="mxGrit" width="2" height="2" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="rgba(255,255,255,0.08)"/><rect x="1" y="1" width="1" height="1" fill="rgba(0,0,0,0.3)"/></pattern></defs><ellipse cx="66" cy="72" rx="52" ry="4" fill="rgba(0,0,0,0.35)"/><rect x="4" y="38" width="44" height="26" fill="url(#mxTray)" stroke="#6e4e18" stroke-width="0.8"/><path d="M4,38 L14,30 L58,30 L48,38 Z" fill="#c9b070" stroke="#6e4e18" stroke-width="0.6" stroke-linejoin="round"/><path d="M6,39.5 L46,39.5 L46,46 L6,46 Z" fill="rgba(0,0,0,0.22)"/><rect x="8.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="13.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="18.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="23.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="28.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="33.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="38.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><ellipse cx="10" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="15" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="20" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="25" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="30" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="35" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="40" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="9.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="19.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="29.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="39.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><path d="M46,30 L56,20 L124,20 L114,30 Z" fill="url(#mxTop)" stroke="#6e4e18" stroke-width="0.9" stroke-linejoin="round"/><path d="M114,30 L124,20 L124,54 L114,64 Z" fill="url(#mxSide)" stroke="#6e4e18" stroke-width="0.9" stroke-linejoin="round"/><path d="M116,31 L122,25 L122,52 L116,58 Z" fill="#3a2a22"/><path d="M116,31 L122,25 L122,52 L116,58 Z" fill="url(#mxGrit)"/><rect x="46" y="30" width="68" height="34" fill="url(#mxCard)" stroke="#6e4e18" stroke-width="0.9"/><rect x="52" y="35" width="56" height="24" fill="#1f4a34" stroke="#c89a3e" stroke-width="0.6"/><rect x="54.5" y="37.5" width="51" height="19" fill="none" stroke="#e8c478" stroke-width="0.4" opacity="0.8"/><path d="M80,38.5 q-3,3.2 0,6.4 q3,-3.2 0,-6.4z M80,40.5 q-1.4,1.6 0,3.2 q1.4,-1.6 0,-3.2z" fill="#e8c478"/><text x="80" y="51" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="6.6" letter-spacing="0.9" fill="#f2e6c4">MATCHES</text><text x="80" y="55.2" text-anchor="middle" font-family="Georgia,serif" font-size="2.4" letter-spacing="0.35" fill="#c8b070">SAFETY &#183; AVERAGE CONTENTS 50</text><g transform="rotate(-14 70 74)"><rect x="56" y="73" width="24" height="2.2" rx="0.8" fill="#efe6d0" stroke="#8a7a50" stroke-width="0.4"/><rect x="56" y="73" width="8" height="2.2" rx="0.8" fill="#2a2018"/><ellipse cx="55.5" cy="74.1" rx="2" ry="2.4" fill="#1a1410"/></g><g transform="rotate(22 104 68)"><rect x="92" y="67" width="22" height="2.2" rx="0.8" fill="#efe6d0" stroke="#8a7a50" stroke-width="0.4"/><ellipse cx="114.5" cy="68.1" rx="2" ry="2.5" fill="#b83524"/></g></svg></div><p class="coin-overlay-text">On the way out you swipe a box of matches from a newly-empty table. You&#39;ve been looking for a light. Now you can smoke again.</p><span class="inventory-note">MATCHES ACQUIRED</span><button class="coin-overlay-btn coin-overlay-dismiss" id="match-keep-btn">Pocket them</button></div></div><script>(function(){var btn=document.getElementById("match-keep-btn"),o=document.getElementById("match-overlay");if(!btn||!o)return;var gen=window._passageGen;function othersBusy(){return window._drinkPopupOpen===true||!!document.querySelector("#coin-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,#venue-hint-overlay,#word-wise-overlay,#wtw-overlay,#liver-eat-overlay,.dss-rules-overlay");}function reveal(){if(window._passageGen!==gen || window._dssMatchPopupDone){if(o.parentNode)o.parentNode.removeChild(o);return;}if(othersBusy()){setTimeout(reveal,200);return;}window._dssMatchPopupDone=true;o.style.display="flex";}function close(){var box=o.querySelector(".coin-overlay-box");if(box){for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}}btn.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);}btn.addEventListener("click",close);o.addEventListener("click",function(e){if(e.target===o)close();});reveal();})();</script>]\
 
 (if: _lilyRing)[(set: $lilyCallReturn to "Entering The Pillars of Hercules")<div class="phone-ringing">A phone rings, the barman answers it, then looks you in the eye and mouths, 'Lily'.
 
@@ -43777,9 +43903,22 @@ Do you keep going?
      to the pub, or answer NE PLUS ULTRA and cross early. Early crossing is
      safe: Green Sea/LINE 2 is gated behind the page quest at Carthage shore,
      and The Interval self-guards. The lap is the price. -->
-[[Yes|Approach The Pillars]]
-//Somewhere out past the breakers, an older shore. //
-[[Seek the shore|The coast of Carthage]]
+<!-- NARROWED 2026-09-14 (Sam: "I was able to go straight to Carthage from my
+     first visit to the Pillars, I thought it was meant to be gated"). The gate
+     he asked for went on the in-pub "I can walk on water" link; this interlude
+     was the other way through and had none. The sea-road now opens once he has
+     been inside the pub once, which lines up with the pub link's own gate: on
+     the first trip you go to the Pillars, and both routes open from the second.
+     Delete the (if:) to put the fork back as it was. -->
+(unless: $pillarsVisits is a num)[(set: $pillarsVisits to 0)]\
+(unless: $inisToldOfPillars is a boolean)[(set: $inisToldOfPillars to false)]\
+<!-- PHASES (2026-09-14). The pub itself is only open in two of the night's three
+     Pillars phases: before the critic, and again once page 93 is back with Inis
+     and the third column has been named. In between, the door is shut and the
+     only thing out here is the sea. -->
+(if: $metCritic is false or $inisToldOfPillars is true)[[[Yes|Approach The Pillars]]]
+(if: $pillarsVisits >= 1)[//Somewhere out past the breakers, an older shore. //
+[[Seek the shore|The coast of Carthage]]]
 </div>
 
 :: Martin Lackland's Office [char-lack venue-lackland] {"position":"1200,1000","size":"100,100"}
@@ -43899,11 +44038,15 @@ He slaps the manuscript like an arse and says: 'Page 93 is missing. Find it for 
 </div>
 (if: $haunts's length is 1)[(set: $hauntExplained to true)(if: $primerShown is false)[(set: $primerShown to true)<script>setTimeout(function(){ if(window.dssShowPrimer) window.dssShowPrimer(); }, 1600);</script>]]]
 
-<div class="lore-box quest-collected">
-<strong>⟡ QUEST ⟡</strong>
-
-Inis O'Flatterly is searching for a missing page; page 93 in his manuscript. You'll need to leave Soho to find it. Return it to him.
+<!-- QUEST (modal 2026-09-14): parked off-screen and raised as a popup by
+     window.dssQuestPopup. The [[I'll look for it]] link below stays visible, so
+     dismissing the popup can never strand the player. data-go names the link
+     the popup's button should click. Any future quest: same wrapper. -->
+<div class="dss-quest-offer" data-go="I'll look for it">
+<div class="dss-quest-title">PAGE 93</div>
+<div class="dss-quest-body">Inis O'Flatterly is searching for a missing page; page 93 in his manuscript. You'll need to leave Soho to find it. Return it to him.</div>
 </div>
+<script>(function(){setTimeout(function(){if(window.dssQuestPopup)window.dssQuestPopup();},1500);})();</script>
 
 [[I'll look for it|Dean Street]]
 
@@ -45936,7 +46079,9 @@ Tonight she's not working. So you leave, via the gents, because of which detour 
 
 As you go, you remember, wholly and as a lone, remarkable thought: Ronnie Scott's. You'd forgotten it was there.
 (set: $knowsRonnies to true)
-<span class="guided-link">[[You remember that Ronnie Scott's is open and close.|Approach Ronnie Scott's]]</span>
+<!-- No teleport (2026-09-14, Sam: "atm it teleports you straight there"). You
+     leave the Colony and the street lights a path to Ronnie's, the way it does
+     for Cecil Court — see THREADS in the map engine and thread-ronnies above. -->
 [[Back to the street|Dean Street]]
 <svg class="colony-fan-bottom" viewBox="0 0 300 52" width="100%" height="52" preserveAspectRatio="none"><defs><clipPath id="cf2"><rect x="0" y="0" width="300" height="50"/></clipPath><linearGradient id="cfL2" x1="0" x2="1"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0"/><stop offset="30%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="50%" stop-color="#c8b860" stop-opacity="0.8"/><stop offset="70%" stop-color="#9a8a30" stop-opacity="0.65"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></linearGradient><radialGradient id="cfG2" cx="50%" cy="100%" r="55%"><stop offset="0%" stop-color="#7aaa60" stop-opacity="0.08"/><stop offset="100%" stop-color="#7aaa60" stop-opacity="0"/></radialGradient></defs><g filter="url(#dss-ink-fine)"><rect x="0" y="0" width="300" height="52" fill="url(#cfG2)"/><g clip-path="url(#cf2)" opacity="0.3"><line x1="150" y1="54" x2="0"   y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="20"  y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="43"  y2="0" stroke="#8a9a50" stroke-width="0.7"/><line x1="150" y1="54" x2="67"  y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="86"  y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="108" y2="0" stroke="#9a8a30" stroke-width="0.7"/><line x1="150" y1="54" x2="130" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="150" y2="0" stroke="#c8b860" stroke-width="1.0"/><line x1="150" y1="54" x2="170" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="192" y2="0" stroke="#9a8a30" stroke-width="0.7"/><line x1="150" y1="54" x2="214" y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="233" y2="0" stroke="#7aaa60" stroke-width="0.7"/><line x1="150" y1="54" x2="257" y2="0" stroke="#8a9a50" stroke-width="0.7"/><line x1="150" y1="54" x2="280" y2="0" stroke="#6a8a48" stroke-width="0.4" opacity="0.5"/><line x1="150" y1="54" x2="300" y2="0" stroke="#7aaa60" stroke-width="0.7"/></g><path d="M60,20 Q105,12 150,10 Q195,12 240,20" fill="none" stroke="#7aaa60" stroke-width="0.4" opacity="0.18"/><path d="M30,30 Q90,22 150,20 Q210,22 270,30" fill="none" stroke="#8a9a50" stroke-width="0.4" opacity="0.15"/><line x1="0" y1="43" x2="300" y2="43" stroke="url(#cfL2)" stroke-width="0.5"/><line x1="0" y1="47" x2="300" y2="47" stroke="url(#cfL2)" stroke-width="1.8"/><line x1="0" y1="50" x2="300" y2="50" stroke="url(#cfL2)" stroke-width="0.4" opacity="0.3"/><polygon points="150,40 155.5,45 150,50 144.5,45" fill="#c8b860" opacity="0.6"/><polygon points="150,42 153,45 150,48 147,45" fill="#e0d080" opacity="0.2"/><polygon points="120,44 123,47 120,50 117,47" fill="none" stroke="#7aaa60" stroke-width="0.7" opacity="0.4"/><polygon points="180,44 183,47 180,50 177,47" fill="none" stroke="#7aaa60" stroke-width="0.7" opacity="0.4"/><circle cx="95" cy="47" r="0.8" fill="#8a9a50" opacity="0.35"/><circle cx="205" cy="47" r="0.8" fill="#8a9a50" opacity="0.35"/></g></svg>
 </div>
@@ -46790,7 +46935,7 @@ You say you've not, thank him, and make to leave when he calls you back.
 (set: $knowsCopperWord to true)]
 (set: $knowsCecilCourt to true)
 
-[[Try Dean Street again|Dean Street]]
+[[Leave the pub.|Dean Street]]
 </div>
 
 <script>
@@ -47475,6 +47620,11 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 <span class="stat-label">ALBA</span>
 <span class="alba-jewels">(set: _j1 to "alba-jewel")(if: $alba contains $alba1)[(set: _j1 to _j1 + " alba-jewel-filled")](set: _j2 to "alba-jewel")(if: $alba contains $alba2)[(set: _j2 to _j2 + " alba-jewel-filled")](set: _j3 to "alba-jewel")(if: $alba contains $alba3)[(set: _j3 to _j3 + " alba-jewel-filled")](print: "<span class='" + _j1 + "'></span><span class='" + _j2 + "'></span><span class='" + _j3 + "'></span>")</span>
 <span class="alba-count">(set: _ac to 0)(if: $alba contains $alba1)[(set: _ac to _ac + 1)](if: $alba contains $alba2)[(set: _ac to _ac + 1)](if: $alba contains $alba3)[(set: _ac to _ac + 1)](print: _ac)/3</span>
+<!-- POCKET KEY (2026-09-14, Sam: "it's still not clear when you have a dream
+     pocket key"). One small cell in the header that names what is in the pocket,
+     so it is visible everywhere rather than only inside the notebook. -->\
+(unless: $dreamKey is a string)[(set: $dreamKey to "")]\
+(if: $dreamKey is not "" and $keyNames is a datamap and $keyNames contains $dreamKey)[<span class="pocket-cell" title="In your pocket. The third pillar wants paying."><span class="pocket-glyph" aria-hidden="true">&#9906;</span>(print: $keyNames's ($dreamKey))</span>]\
 <span class="night-cell" title="The night deepens through discoveries. There is no time limit.">(print: "<span class='night-phase' data-night-phase='" + (text: $nightPhase) + "'>" + ((a: "Before midnight", "After midnight", "Small hours", "Dawn awaits")'s ($nightPhase + 1)) + "</span>")</span>
 </div>
 <div class="alba-hint">(if: $notebook is "stolen")[Your notebook is gone, and the poem with it.](else-if: _ac is 1)[One line is caught. Two more still to find.](else-if: _ac is 2)[Two lines, now. The third always close.](else-if: _ac >= 3)[The Alba is complete. Centre Point waits.]</div>
@@ -47530,9 +47680,9 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 (if: _cHere)[(set: _m to _m + "<g transform='translate(232,420)'><circle r='26' fill='rgba(212,165,116,0.12)'/><circle r='14' fill='rgba(212,165,116,0.22)'/><circle class='map-here-pulse' r='12' fill='none' stroke='rgba(255,210,120,0.85)' stroke-width='1.5'/><circle r='9' fill='#f5c858' stroke='rgba(255,240,160,0.6)' stroke-width='1.2'/><text x='18' y='6' fill='#f5d070' font-family='Crimson Text,Georgia,serif' font-size='13' font-style='italic'>Colony Room</text></g>")]\
 (else-if: _cVisited)[(set: _m to _m + "<g transform='translate(232,420)'><circle r='34' fill='rgba(212,165,116,0.07)'/><circle r='18' fill='rgba(212,165,116,0.13)'/><circle r='8' fill='#c89858' stroke='rgba(212,165,116,0.5)' stroke-width='1'/><text x='18' y='6' fill='#c89858' font-family='Crimson Text,Georgia,serif' font-size='13'>Colony Room</text></g>")]\
 (else:)[(set: _m to _m + "<g transform='translate(232,420)'><circle r='7' fill='rgba(160,140,105,0.45)'/><text x='18' y='6' fill='rgba(180,160,125,0.55)' font-family='Crimson Text,Georgia,serif' font-size='12'>Colony Room</text></g>")]\
-(if: _fHere)[(set: _m to _m + "<g transform='translate(230,470)'><circle r='26' fill='rgba(212,165,116,0.12)'/><circle r='14' fill='rgba(212,165,116,0.22)'/><circle class='map-here-pulse' r='12' fill='none' stroke='rgba(255,210,120,0.85)' stroke-width='1.5'/><circle r='9' fill='#f5c858' stroke='rgba(255,240,160,0.6)' stroke-width='1.2'/><text x='18' y='6' fill='#f5d070' font-family='Crimson Text,Georgia,serif' font-size='13' font-style='italic'>The French House</text></g>")]\
-(else-if: _fVisited)[(set: _m to _m + "<g transform='translate(230,470)'><circle r='34' fill='rgba(212,165,116,0.07)'/><circle r='18' fill='rgba(212,165,116,0.13)'/><circle r='8' fill='#c89858' stroke='rgba(212,165,116,0.5)' stroke-width='1'/><text x='18' y='6' fill='#c89858' font-family='Crimson Text,Georgia,serif' font-size='13'>The French House</text></g>")]\
-(else:)[(set: _m to _m + "<g transform='translate(230,470)'><circle r='7' fill='rgba(160,140,105,0.45)'/><text x='18' y='6' fill='rgba(180,160,125,0.55)' font-family='Crimson Text,Georgia,serif' font-size='12'>The French House</text></g>")]\
+(if: _fHere)[(set: _m to _m + "<g transform='translate(248,566)'><circle r='26' fill='rgba(212,165,116,0.12)'/><circle r='14' fill='rgba(212,165,116,0.22)'/><circle class='map-here-pulse' r='12' fill='none' stroke='rgba(255,210,120,0.85)' stroke-width='1.5'/><circle r='9' fill='#f5c858' stroke='rgba(255,240,160,0.6)' stroke-width='1.2'/><text x='18' y='6' fill='#f5d070' font-family='Crimson Text,Georgia,serif' font-size='13' font-style='italic'>The French House</text></g>")]\
+(else-if: _fVisited)[(set: _m to _m + "<g transform='translate(248,566)'><circle r='34' fill='rgba(212,165,116,0.07)'/><circle r='18' fill='rgba(212,165,116,0.13)'/><circle r='8' fill='#c89858' stroke='rgba(212,165,116,0.5)' stroke-width='1'/><text x='18' y='6' fill='#c89858' font-family='Crimson Text,Georgia,serif' font-size='13'>The French House</text></g>")]\
+(else:)[(set: _m to _m + "<g transform='translate(248,566)'><circle r='7' fill='rgba(160,140,105,0.45)'/><text x='18' y='6' fill='rgba(180,160,125,0.55)' font-family='Crimson Text,Georgia,serif' font-size='12'>The French House</text></g>")]\
 (if: _lHere)[(set: _m to _m + "<g transform='translate(364,430)'><circle r='26' fill='rgba(212,165,116,0.12)'/><circle r='14' fill='rgba(212,165,116,0.22)'/><circle class='map-here-pulse' r='12' fill='none' stroke='rgba(255,210,120,0.85)' stroke-width='1.5'/><circle r='9' fill='#f5c858' stroke='rgba(255,240,160,0.6)' stroke-width='1.2'/><text x='18' y='6' fill='#f5d070' font-family='Crimson Text,Georgia,serif' font-size='13' font-style='italic'>Lackland&#39;s<tspan x='18' dy='14'>Offices</tspan></text></g>")]\
 (else-if: _lVisited)[(set: _m to _m + "<g transform='translate(364,430)'><circle r='34' fill='rgba(212,165,116,0.07)'/><circle r='18' fill='rgba(212,165,116,0.13)'/><circle r='8' fill='#c89858' stroke='rgba(212,165,116,0.5)' stroke-width='1'/><text x='18' y='6' fill='#c89858' font-family='Crimson Text,Georgia,serif' font-size='13'>Lackland&#39;s<tspan x='18' dy='14'>Offices</tspan></text></g>")]\
 (else:)[(set: _m to _m + "<g transform='translate(364,430)'><circle r='7' fill='rgba(160,140,105,0.45)'/><text x='18' y='6' fill='rgba(180,160,125,0.55)' font-family='Crimson Text,Georgia,serif' font-size='12'>Lackland&#39;s<tspan x='18' dy='14'>Offices</tspan></text></g>")]\
@@ -47549,8 +47699,8 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 (if: $tookLily2 is true)[(set: _m to _m + "<g class='map-lily' transform='translate(486,205) scale(0.58) translate(0,-58)'>" + _bell + "</g>")]\
 (if: $tookLily3 is true)[(set: _m to _m + "<g class='map-lily' transform='translate(340,450) scale(0.58) translate(0,-58)'>" + _bell + "</g>")]\
 (if: $tookLily4 is true)[(set: _m to _m + "<g class='map-lily' transform='translate(232,420) scale(0.58) translate(0,-58)'>" + _bell + "</g>")]\
-(if: $tookLily5 is true and $lilyCount < 5)[(set: _m to _m + "<g class='map-lily' transform='translate(230,470) scale(0.58) translate(0,-58)'>" + _bell + "</g>")]\
-(if: $lilyCount >= 5)[(set: _m to _m + "<polygon class='map-pentagram' points='280,70 490,560 100,250 494,262 230,470' pathLength='100' fill='none' stroke='#f5d070' stroke-width='1.6' opacity='0.20' stroke-linejoin='round' pointer-events='none'/><polygon class='map-pent-tracer' points='280,70 490,560 100,250 494,262 230,470' pathLength='100' fill='none' stroke='#ffe9b0' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round' opacity='0' pointer-events='none'/>")(set: _m to _m + "<g class='map-pent-lilies' opacity='0.85' pointer-events='none'>")(set: _m to _m + "<g transform='translate(280,70) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "<g transform='translate(494,262) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "<g transform='translate(490,560) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "<g transform='translate(230,470) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "<g transform='translate(100,250) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "</g>")(set: _m to _m + "<rect class='map-lbrp-bg' x='110' y='542' width='340' height='74' rx='5' ry='5' fill='rgba(8,6,4,0.78)' stroke='rgba(212,165,116,0.22)' stroke-width='0.5' pointer-events='none'/>")(set: _m to _m + "<g class='map-lbrp' pointer-events='none' opacity='0.65'><text x='280' y='554' text-anchor='middle' fill='#d8e0ec' font-family='Playfair Display,Georgia,serif' font-size='10' font-style='italic' letter-spacing='2' style='filter: drop-shadow(0 0 3px rgba(0,0,0,0.95));'>Before me Raphael; behind me Gabriel;</text><text x='280' y='572' text-anchor='middle' fill='#d8e0ec' font-family='Playfair Display,Georgia,serif' font-size='10' font-style='italic' letter-spacing='2' style='filter: drop-shadow(0 0 2px rgba(10,9,8,0.9));'>on my right hand Michael; on my left hand Auriel;</text><text x='280' y='590' text-anchor='middle' fill='#d8e0ec' font-family='Playfair Display,Georgia,serif' font-size='10' font-style='italic' letter-spacing='2' style='filter: drop-shadow(0 0 2px rgba(10,9,8,0.9));'>for about me flames the Pentagram,</text><text x='280' y='608' text-anchor='middle' fill='#d8e0ec' font-family='Playfair Display,Georgia,serif' font-size='10' font-style='italic' letter-spacing='2' style='filter: drop-shadow(0 0 2px rgba(10,9,8,0.9));'>and in the Column stands the six-rayed Star.</text></g>")]\
+(if: $tookLily5 is true and $lilyCount < 5)[(set: _m to _m + "<g class='map-lily' transform='translate(248,566) scale(0.58) translate(0,-58)'>" + _bell + "</g>")]\
+(if: $lilyCount >= 5)[(set: _m to _m + "<polygon class='map-pentagram' points='280,70 490,560 100,250 494,262 248,566' pathLength='100' fill='none' stroke='#f5d070' stroke-width='1.6' opacity='0.20' stroke-linejoin='round' pointer-events='none'/><polygon class='map-pent-tracer' points='280,70 490,560 100,250 494,262 248,566' pathLength='100' fill='none' stroke='#ffe9b0' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round' opacity='0' pointer-events='none'/>")(set: _m to _m + "<g class='map-pent-lilies' opacity='0.85' pointer-events='none'>")(set: _m to _m + "<g transform='translate(280,70) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "<g transform='translate(494,262) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "<g transform='translate(490,560) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "<g transform='translate(248,566) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "<g transform='translate(100,250) scale(1.0) translate(0,-25)'>" + _bell + "</g>")(set: _m to _m + "</g>")(set: _m to _m + "<rect class='map-lbrp-bg' x='110' y='542' width='340' height='74' rx='5' ry='5' fill='rgba(8,6,4,0.78)' stroke='rgba(212,165,116,0.22)' stroke-width='0.5' pointer-events='none'/>")(set: _m to _m + "<g class='map-lbrp' pointer-events='none' opacity='0.65'><text x='280' y='554' text-anchor='middle' fill='#d8e0ec' font-family='Playfair Display,Georgia,serif' font-size='10' font-style='italic' letter-spacing='2' style='filter: drop-shadow(0 0 3px rgba(0,0,0,0.95));'>Before me Raphael; behind me Gabriel;</text><text x='280' y='572' text-anchor='middle' fill='#d8e0ec' font-family='Playfair Display,Georgia,serif' font-size='10' font-style='italic' letter-spacing='2' style='filter: drop-shadow(0 0 2px rgba(10,9,8,0.9));'>on my right hand Michael; on my left hand Auriel;</text><text x='280' y='590' text-anchor='middle' fill='#d8e0ec' font-family='Playfair Display,Georgia,serif' font-size='10' font-style='italic' letter-spacing='2' style='filter: drop-shadow(0 0 2px rgba(10,9,8,0.9));'>for about me flames the Pentagram,</text><text x='280' y='608' text-anchor='middle' fill='#d8e0ec' font-family='Playfair Display,Georgia,serif' font-size='10' font-style='italic' letter-spacing='2' style='filter: drop-shadow(0 0 2px rgba(10,9,8,0.9));'>and in the Column stands the six-rayed Star.</text></g>")]\
 (set: _m to _m + "<rect width='560' height='700' fill='url(#fg)' pointer-events='none'/><rect width='560' height='700' fill='url(#fg2)' pointer-events='none'/><rect width='560' height='700' fill='none' stroke='rgba(10,9,8,0.85)' stroke-width='15' pointer-events='none'/>")(set: _m to _m + "</svg></div>")\
 (set: _lo1 to (cond: $lilyCount >= 1, 'nb-lily-gathered', 'nb-lily-empty'))\
 (set: _lo2 to (cond: $lilyCount >= 2, 'nb-lily-gathered', 'nb-lily-empty'))\
@@ -47614,7 +47764,19 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 (set: _dH to (cond: $mantraComplete, ' dream-ledger-done', ''))(set: _dN to (cond: $nazcaTracing, ' dream-ledger-done', ''))(set: _dE to (cond: $easterGlyph, ' dream-ledger-done', ''))(set: _dP to (cond: $pyramidNumber, ' dream-ledger-done', ''))(set: _dZ to (cond: $ezekielVision, ' dream-ledger-done', ''))\
 (set: _tH to (cond: $mantraComplete, 'the mantra', '—'))(set: _tN to (cond: $nazcaTracing, 'the tracing', '—'))(set: _tE to (cond: $easterGlyph, 'the glyph', '—'))(set: _tP to (cond: $pyramidNumber, 'the proportion', '—'))(set: _tZ to (cond: $ezekielVision, 'the vision', '—'))\
 (set: _eH to (cond: $critEndorsed, ' dream-echo-done', ''))(set: _eN to (cond: $lacklandRecognised, ' dream-echo-done', ''))(set: _eE to (cond: $redRecognised, ' dream-echo-done', ''))(set: _eP to (cond: $inisRecognised, ' dream-echo-done', ''))(set: _eZ to (cond: $spanishArtistRecognised, ' dream-echo-done', ''))\
-(set: _nb to _nb + '<div class="nb-panel nb-panel-dreams"><div class="dream-ledger"><div class="dream-ledger-entry' + _dH + '"><span class="dream-ledger-symbol">☸</span><span class="dream-ledger-world">HIMALAYAS</span><span class="dream-ledger-thread">' + _tH + '</span><span class="dream-ledger-echo' + _eH + '">THE CRITIC</span></div><div class="dream-ledger-entry' + _dN + '"><span class="dream-ledger-symbol">⌁</span><span class="dream-ledger-world">NAZCA</span><span class="dream-ledger-thread">' + _tN + '</span><span class="dream-ledger-echo' + _eN + '">LACKLAND</span></div><div class="dream-ledger-entry' + _dE + '"><span class="dream-ledger-symbol">☉</span><span class="dream-ledger-world">EASTER ISLAND</span><span class="dream-ledger-thread">' + _tE + '</span><span class="dream-ledger-echo' + _eE + '">RED</span></div><div class="dream-ledger-entry' + _dP + '"><span class="dream-ledger-symbol">△</span><span class="dream-ledger-world">PYRAMID</span><span class="dream-ledger-thread">' + _tP + '</span><span class="dream-ledger-echo' + _eP + '">INIS</span></div><div class="dream-ledger-entry' + _dZ + '"><span class="dream-ledger-symbol">◉</span><span class="dream-ledger-world">EZEKIEL</span><span class="dream-ledger-thread">' + _tZ + '</span><span class="dream-ledger-echo' + _eZ + '">BENITO</span></div></div>')\
+<!-- THE POCKET KEY ON ITS WORLD (2026-09-14). Sam went looking for the key
+     under DREAMS, which is the right instinct: the key IS the ticket to one
+     particular world. Only the key in hand is shown, so the other four
+     key-to-world pairings are still something to find out. -->\
+(set: _kH to '')(set: _kN to '')(set: _kE to '')(set: _kP to '')(set: _kZ to '')\
+(if: $dreamKey is not "" and $keyNames is a datamap and $keyNames contains $dreamKey)[\
+(set: _kTxt to '<span class="dream-ledger-key">&#9906; ' + ($keyNames's ($dreamKey)) + ', in your pocket</span>')\
+(if: $dreamKey is "lighter")[(set: _kH to _kTxt)]\
+(else-if: $dreamKey is "cocaine")[(set: _kN to _kTxt)]\
+(else-if: $dreamKey is "ticket")[(set: _kE to _kTxt)]\
+(else-if: $dreamKey is "slip")[(set: _kP to _kTxt)]\
+(else-if: $dreamKey is "eye")[(set: _kZ to _kTxt)]]\
+(set: _nb to _nb + '<div class="nb-panel nb-panel-dreams"><div class="dream-ledger"><div class="dream-ledger-entry' + _dH + '"><span class="dream-ledger-symbol">☸</span><span class="dream-ledger-world">HIMALAYAS</span><span class="dream-ledger-thread">' + _tH + '</span><span class="dream-ledger-echo' + _eH + '">THE CRITIC</span>' + _kH + '</div><div class="dream-ledger-entry' + _dN + '"><span class="dream-ledger-symbol">⌁</span><span class="dream-ledger-world">NAZCA</span><span class="dream-ledger-thread">' + _tN + '</span><span class="dream-ledger-echo' + _eN + '">LACKLAND</span>' + _kN + '</div><div class="dream-ledger-entry' + _dE + '"><span class="dream-ledger-symbol">☉</span><span class="dream-ledger-world">EASTER ISLAND</span><span class="dream-ledger-thread">' + _tE + '</span><span class="dream-ledger-echo' + _eE + '">RED</span>' + _kE + '</div><div class="dream-ledger-entry' + _dP + '"><span class="dream-ledger-symbol">△</span><span class="dream-ledger-world">PYRAMID</span><span class="dream-ledger-thread">' + _tP + '</span><span class="dream-ledger-echo' + _eP + '">INIS</span>' + _kP + '</div><div class="dream-ledger-entry' + _dZ + '"><span class="dream-ledger-symbol">◉</span><span class="dream-ledger-world">EZEKIEL</span><span class="dream-ledger-thread">' + _tZ + '</span><span class="dream-ledger-echo' + _eZ + '">BENITO</span>' + _kZ + '</div></div>')\
 (unless: $mantra is an array)[(set: $mantra to (a: "OM", "AH", "HUM", "VAJ", "RA", "GU", "RU", "PAD", "MA", "SID", "DHI", "HUM"))](unless: $haunts is an array)[(set: $haunts to (a:))]\
 (set: _nb to _nb + '<div class="nb-section nb-chant-section"><strong class="nb-heading">CHANT</strong><div class="nb-mantra-row">')\
 (set: _nb to _nb + (cond: $haunts's length >= 1, '<span class="nb-mantra-syl heard">' + (1 of $mantra) + '</span>', '<span class="nb-mantra-syl silent">·</span>'))\
@@ -48252,6 +48414,22 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 .stat-bars .alba-strip .stat-label { min-width: 0; }
 .stat-bars .alba-strip .alba-jewels { margin-left: 0; width: auto; }
 .night-cell { white-space: nowrap; margin-left: 18px; }
+/* The pocket key rides in the ALBA strip, warm against that row's cool marks. */
+.pocket-cell {
+  white-space: nowrap;
+  margin-left: 18px;
+  font-size: 0.62em;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(226, 186, 96, 0.92);
+  text-shadow: 0 0 10px rgba(214, 178, 92, 0.35);
+}
+.pocket-glyph {
+  margin-right: 0.45em;
+  font-size: 1.15em;
+  vertical-align: -0.06em;
+  opacity: 0.9;
+}
 /* The count wears the stat-label typography itself (no countdown). */
 .dss-night-choice { clear:both; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px 20px; margin:14px auto 20px; font-size:.85em; }
 .dss-night-choice .dss-night-ready { color:#d5c69c; font-style:italic; }
@@ -51653,6 +51831,16 @@ text-decoration-color: rgba(160, 140, 120, 0.25);
   transition: color 0.5s ease, background 0.5s ease;
 }
 .dream-ledger-entry:last-child { border-bottom: 0; }
+/* The pocket key, on the row of the world it opens. Spans the whole entry so it
+   reads as a note under that world rather than a fifth column. */
+.dream-ledger-key {
+  grid-column: 1 / -1;
+  margin: 0.1em 0 0.35em 1.9em;
+  font-size: 0.82em;
+  letter-spacing: 0.06em;
+  color: rgba(150, 104, 36, 0.95);
+  font-style: italic;
+}
 .dream-ledger-symbol {
   font-size: 1.25em;
   color: rgba(114,88,54,0.38);
@@ -54148,6 +54336,60 @@ border-right: 1px solid rgba(107,32,32,0.25);
    Harlowe drops .click() on a display:none tw-link, so it is moved out of the
    viewport rather than hidden. pointer-events:none keeps the player from ever
    reaching it by hand; the popup's buttons click it programmatically. */
+.dss-quest-offer {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+#dss-quest-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99992;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2em;
+  background: rgba(6, 4, 2, 0.86);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+#dss-quest-overlay.dss-quest-in { opacity: 1; }
+#dss-quest-overlay.coin-overlay-fade { opacity: 0; transition: opacity 0.4s ease; }
+/* ID-qualified so it wins over .coin-overlay-box, which comes later in the
+   sheet. A quest is a card moment, so it takes the primer card's dressing. */
+#dss-quest-overlay .dss-quest-box {
+  width: 100%;
+  max-width: 25em;
+  box-sizing: border-box;
+  padding: 1.8em 2em 1.6em;
+  text-align: center;
+  background: linear-gradient(180deg, #1c1408, #0c0804);
+  border: 1px solid rgba(184, 154, 96, 0.4);
+  outline: 1px solid rgba(184, 154, 96, 0.12);
+  outline-offset: 5px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6), 0 0 22px rgba(184, 154, 96, 0.08);
+  opacity: 0;
+  transform: translateY(14px) scale(0.985);
+  transition: opacity 0.62s ease 0.1s, transform 0.62s cubic-bezier(0.2, 0.7, 0.3, 1) 0.1s;
+}
+#dss-quest-overlay.dss-quest-in .dss-quest-box { opacity: 1; transform: translateY(0) scale(1); }
+.dss-quest-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.08em;
+  letter-spacing: 0.06em;
+  color: #e6d6ae;
+  margin: 0.2em 0 0.6em;
+}
+.dss-quest-stage { margin-bottom: 0.6em; }
+@media (prefers-reduced-motion: reduce) {
+  .dss-quest-box { transition: opacity 0.2s ease; transform: none; }
+  #dss-quest-overlay.dss-quest-in .dss-quest-box { transform: none; }
+}
 .dss-key-offer {
   position: absolute;
   left: -9999px;
@@ -57610,11 +57852,11 @@ There is a sweetness at the back of your mouth that is nothing you have eaten to
      link here (and the fallback link) dead to targetLink.click(). The roll
      is now parked off-screen instead: laid out, clipped, never seen. -->
 <div id="dss-portal-roll" aria-hidden="true" style="position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
-(link: "himalayas-go")[(if: $dreamKey is "lighter")[(set: $keyLighter to "spent")(set: $dreamKey to "")](go-to: "Airport Pub")]
-(link: "nazca-go")[(if: $dreamKey is "cocaine")[(set: $keyCocaine to "spent")(set: $dreamKey to "")](go-to: "Nazca Approach")]
-(link: "easter-go")[(if: $dreamKey is "ticket")[(set: $keyTicket to "spent")(set: $dreamKey to "")](go-to: "Easter Island Shore")]
-(link: "pyramid-go")[(if: $dreamKey is "slip")[(set: $keySlip to "spent")(set: $dreamKey to "")](go-to: "Pyramid Mouth")]
-(link: "ezekiel-go")[(if: $dreamKey is "eye")[(set: $keyEye to "spent")(set: $dreamKey to "")](go-to: "The Plain of Chebar")]
+(link: "himalayas-go")[(display: "Spend Held Key")(go-to: "Airport Pub")]
+(link: "nazca-go")[(display: "Spend Held Key")(go-to: "Nazca Approach")]
+(link: "easter-go")[(display: "Spend Held Key")(go-to: "Easter Island Shore")]
+(link: "pyramid-go")[(display: "Spend Held Key")(go-to: "Pyramid Mouth")]
+(link: "ezekiel-go")[(display: "Spend Held Key")(go-to: "The Plain of Chebar")]
 </div>
 
 <div class="claude-draft">
@@ -57626,6 +57868,21 @@ A door, where no door was. You don't open it. It was open already, and it has be
 </div>
 
 <div id="dss-portal-action"></div>
+
+<!-- TURN-BACKS (2026-09-14). The key names the world; these are the two ways
+     that can come to nothing. Both pink for Sam. Each carries its own way out,
+     so neither can strand the player. -->
+<div id="dss-portal-seen" style="display:none">
+<div class="claude-draft">You have been down this one. The column knows it before you do: the warmth goes out of it under your hand, and what is on the other side is a place you have already walked. Something else, then, and some other night.</div>
+
+[[Back to the Pillars|Entering The Pillars of Hercules]]
+</div>
+
+<div id="dss-portal-notyet" style="display:none">
+<div class="claude-draft">The column will not take the eye. Not yet, and not out of unkindness. There are four places to stand before you are fit to stand on the plain, and you have not stood in all of them.</div>
+
+[[Back to the Pillars|Entering The Pillars of Hercules]]
+</div>
 
 <div id="dss-portal-fallback" style="display:none">
 <div class="claude-draft">The column dims, and goes on dimming, and then it is only a pillar in a pub in Soho with a hundred years of paint on it. Nothing opens tonight. Whatever was doing the choosing has been somewhere else already and has made its arrangements without you.</div>
@@ -57643,41 +57900,51 @@ A door, where no door was. You don't open it. It was open already, and it has be
   var visited = visitedRaw.split(',').map(function(s){return s.trim();})
     .filter(function(s){return s.length > 0 && all.indexOf(s) >= 0;});
 
-  // Build the pool: exclude both lifetime and this-playthrough.
-  var pool = all.filter(function(w){
-    return visited.indexOf(w) < 0 && lifetime.indexOf(w) < 0;
+  // ── THE KEY DECIDES (2026-09-14) ─────────────────────────────────────────
+  // No roll any more. The pocket-key names the world and nothing else does, so
+  // which world you get is a thing the player chose in Soho, not a dice throw.
+  // "Already been" is measured across playthroughs, not the night: each key is
+  // good once ever, so five keys are five worlds across five nights, and the
+  // way to see a new one is to carry a different key.
+  //
+  // Ezekiel is held back until the other four are walked. It is not a site like
+  // the others — it is the vision they are evidence for — and it is the one
+  // world you cannot turn back from, so it comes last.
+  var FINAL = "ezekiel";
+  var finalReady = all.every(function(w) {
+    return w === FINAL || lifetime.indexOf(w) >= 0 || visited.indexOf(w) >= 0;
   });
-  // Graceful fallback: if lifetime exclusion empties the pool, drop it.
-  if (pool.length === 0) {
-    pool = all.filter(function(w){ return visited.indexOf(w) < 0; });
-  }
 
   var actionEl = document.getElementById('dss-portal-action');
   var fallbackEl = document.getElementById('dss-portal-fallback');
+  var seenEl = document.getElementById('dss-portal-seen');
+  var notyetEl = document.getElementById('dss-portal-notyet');
   if (!actionEl) return;
 
-  var keyElPre = document.getElementById('dss-pt-key');
-  var heldPre = keyElPre ? (keyElPre.textContent || '').trim() : '';
-  var steerPre = (heldPre && window.DSS_KEY_WORLDS) ? window.DSS_KEY_WORLDS[heldPre] : null;
-  if (pool.length === 0 && !(steerPre && visited.indexOf(steerPre) < 0)) {
-    if (fallbackEl) fallbackEl.style.display = 'block';
-    return;
-  }
-
-  // THE KEY STEERS (phase 2): a held pocket-key sends you to its world if this
-  // playthrough has not seen it (lifetime variety yields to the key). Otherwise
-  // the pure roll among unseen worlds. The hidden link for that world consumes
-  // the key; a key whose world is already seen stays in the pocket.
   var keyEl = document.getElementById('dss-pt-key');
   var held = keyEl ? (keyEl.textContent || '').trim() : '';
-  var steer = (held && window.DSS_KEY_WORLDS) ? window.DSS_KEY_WORLDS[held] : null;
-  var chosen;
-  if (steer && visited.indexOf(steer) < 0) {
-    chosen = steer;
-    var steerEl = document.getElementById('dss-pt-steer'); if (steerEl) steerEl.style.display = 'block';
-  } else {
-    chosen = pool[Math.floor(Math.random() * pool.length)];
+  var chosen = (held && window.DSS_KEY_WORLDS) ? window.DSS_KEY_WORLDS[held] : null;
+
+  function turnBack(el) {
+    if (el) el.style.display = 'block';
+    else if (fallbackEl) fallbackEl.style.display = 'block';
   }
+  // No key, or a key with no world behind it: the column has nothing to open.
+  if (!chosen) { turnBack(fallbackEl); return; }
+  // Never the same world twice in one night.
+  if (visited.indexOf(chosen) >= 0) { turnBack(seenEl); return; }
+  // A world walked on an earlier night is closed. The roads open again on their
+  // own once all five are done: dssMarkWorldSeen() empties the lifetime list the
+  // moment it reaches five ("cycle reset"), so a complete set makes every world
+  // unwalked again and a new cycle starts with Ezekiel last once more. The GIFTS
+  // list is the one that never resets, and it is what the Synthesis counts — so
+  // the one last return to the Pillars survives the reset and stays earned.
+  if (lifetime.indexOf(chosen) >= 0) { turnBack(seenEl); return; }
+  // The eye, before the other four have been walked.
+  if (chosen === FINAL && !finalReady) { turnBack(notyetEl); return; }
+
+  var steerEl = document.getElementById('dss-pt-steer');
+  if (steerEl) steerEl.style.display = 'block';
 
   // Find the hidden Harlowe link whose text matches "<world>-go".
   var hiddenLinks = document.querySelectorAll('#dss-portal-roll tw-link');
@@ -61658,6 +61925,20 @@ It does not look back. Not yet.
 (if: $keyLighter is _r)[(set: $keyLighter to "stolen")(set: _gone to $keyNames's "lighter")]\
 (if: $keyEye is _r)[(set: $keyEye to "stolen")(set: _gone to $keyNames's "eye")]\
 (if: _gone is not "")[(display: "Key Sites")<div class="claude-draft">The bin has been gone through since you were last here, and gone through properly, by somebody who does this for a living. The (print: _gone) is not in it. Whoever has it will not know what it was for.</div>]
+
+:: Spend Held Key [system]
+<!-- THE CROSSING COSTS THE KEY (2026-09-14). It used to cost the key only when
+     the world happened to match it, so a key whose world was already walked —
+     or, after the Ezekiel gate, a glass eye that no longer steers — rode along
+     for nothing and the crossing was free. That made "a night self-limits at
+     five crossings" untrue and let one key walk every world in an evening.
+     Harlowe cannot address a variable by name, hence the ladder. -->
+(if: $dreamKey is "cocaine")[(set: $keyCocaine to "spent")]\
+(else-if: $dreamKey is "ticket")[(set: $keyTicket to "spent")]\
+(else-if: $dreamKey is "slip")[(set: $keySlip to "spent")]\
+(else-if: $dreamKey is "lighter")[(set: $keyLighter to "spent")]\
+(else-if: $dreamKey is "eye")[(set: $keyEye to "spent")]\
+(set: $dreamKey to "")\
 
 :: Key Stash Here [system] {"position":"3300,2600","size":"100,100"}
 <!-- Voluntary stashing. Offered wherever Stash Point is displayed, which is the

@@ -4724,3 +4724,57 @@ reserve that leaves it usable. Three ways out if the scroll annoys:
 3. Shrink the map.
 
 Synced, commit when ready.
+
+## Addendum 97 — the intro is a first-visit thing now (2026-09-14)
+
+Sam picked option 2 from Addendum 96: hide the Dean Street intro on return
+visits rather than dimming it.
+
+The two paragraphs now render only when `$returns <= 1`, which is exactly the
+condition that used to leave them undimmed. The `(enchant: ?deanIntro, ...)` that
+greyed them to 60% from the second visit on is gone, having nothing left to grey.
+**His prose was moved programmatically, not retyped, and verified byte-identical
+(263 chars) against the pre-edit file.** The blank line that followed the hook is
+inside the conditional now, or it would have printed a gap above the bag line on
+every visit after the first.
+
+**Measured, on an 837px viewport:**
+
+| | map top | map visible |
+|---|---|---|
+| first visit (intro shown) | 777 | 60px |
+| return visit (intro hidden) | 632 | 205px |
+
+So the street is properly in view from the second visit on, which is every visit
+that matters. The first visit still reads exactly as written, with the map
+peeking 60px as a cue that there is something below.
+
+Door scanning is unaffected by the container's new position: on the return visit
+the map found both doors that exist in that state, The Ginger Light and Centre
+Point.
+
+**Two notes for whoever is next.**
+
+*I made the same mistake I had just finished fixing.* The comment documenting
+this change went in as seven lines, which in Harlowe is seven `<br>`s in the hub.
+Collapsed to one line. **Any HTML comment in a passage body must be a single
+line** unless every line ends in a backslash. Three separate multi-line comments
+have now been found doing this (the header back-fill, the Dean Street A2 note,
+and my own), so it is worth a sweep at some point.
+
+*A pre-existing typo, not touched.* `:: Start` ends
+`(set: $liverReturnTo to "Dean Street")\\` with **two** backslashes. The first is
+the line-continuation, the second renders as a literal backslash on screen. It is
+invisible in practice because `Start` immediately `(go-to:)`s to The Night Ahead,
+but it is a typo and one character fixes it. Left alone because it is outside
+what was asked for.
+
+*On measuring this kind of thing:* `getBoundingClientRect()` on the hub gives
+nonsense while Harlowe's dissolve is still running, and in the preview pane that
+transition stalls indefinitely because rAF is throttled. Two readings during this
+work looked like catastrophic regressions (a map at 943, then at 2024) and both
+were the un-settled transition, once with the outgoing passage still in the DOM.
+Use `offsetTop`, or force the transition to completion first, and sanity-check
+any number against a screenshot before believing it.
+
+Synced, commit when ready.

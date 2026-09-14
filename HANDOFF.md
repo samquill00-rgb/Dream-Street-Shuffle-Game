@@ -4518,3 +4518,100 @@ woman with her books. Those were always a later pass. The five .twee scenes are
 the place to add them now, not the standalone files, which are frozen references.
 
 Synced, commit when ready.
+
+## Addendum 93 — where the key rests, and 238 lines of dead code (2026-09-14)
+
+**1. A slip saying where a swapped-out key went.** Sam: "Do the key-resting
+slip." When you swap pocket keys, the old one rests at whichever of the fourteen
+stash sites you were standing in, and the game never said which. The drop prose
+already claims "It will keep. You know where it is", but the player had no way to.
+`Key Drop Here` now fires a hint slip naming the place: *"The brass lighter stays
+in Meard Street."* for the nine alleys, *"The brass lighter stays in the bin
+outside the French."* for the five bins.
+
+Two details that matter. The name is captured **before** the ladder clears
+`$dreamKey`, or the slip would have nothing to name. And the place comes from
+`_here`, the real site, **not** `_dest`: a raided bin still reads as the bin,
+because the raid is meant to be discovered when you come back for it, not
+announced on the way out.
+
+Verified live on both shapes: alley (Meard Street) and bin (the French), correct
+string, zero Harlowe errors, slip types and holds its eight seconds.
+
+**2. The dead code from the 2026-09-13 popup demotions, removed.** 238 lines:
+
+- `showWordToTheWise`, the old full-screen "A WORD TO THE WISE" overlay, with no
+  callers since the venue hint became a slip. Its `#word-wise-overlay` /
+  `.word-wise-*` CSS and four `@keyframes` went with it.
+- The standalone haunts explainer IIFE and `window.dssShowHauntsModal`, orphaned
+  when the haunts primer merged into the night's stats card. Its `.dss-haunts-text`
+  and `.dss-haunts-note` rules went too. **`.dss-haunts-card` stays**: the live
+  primer still wears it, alongside `dss-rules-card dss-stats-card`.
+
+`wordToTheWisePopup` is NOT dead and was left alone. It is the live one, and it
+routes to `dssInlineHint`, which is how every nudge reaches the paper slip.
+
+**3. A real bug found while clearing it.** The glass smash on "He drops it; it
+smashes" waited on a `hauntsmodal:closed` event and checked for a
+`#dss-haunts-overlay` element. Both belonged to the modal that merged away on the
+13th, so since then nothing has dispatched that event and nothing has created that
+element. The listener was unreachable and the guard could never be true, which
+meant the smash was landing on top of the primer on a first haunt, exactly what
+the comment there says it must not do. It now waits on the primer's own
+`#dss-stats-overlay` and **retries** rather than giving up, so the smash can be
+delayed by the primer but never lost.
+
+**Still open, if you want it.** The night's primer is the last purely
+informational modal that could become a slip. Not done, because it is two subjects
+in one card and it wears the gold Art Nouveau shell, which is the reveal
+aesthetic. Your call.
+
+Synced, commit when ready.
+
+## Addendum 94 — the primer moves to paper (2026-09-14)
+
+Sam: "Do the primer as a slip too. But it needs to hang about long enough to be
+read." The night's primer, MORALE, SOBRIETY & HAUNTS, was the last purely
+informational modal. It is now one long paper slip. **His six paragraphs were
+lifted out of the old modal's array programmatically rather than retyped, so
+every sentence is verbatim and in his order**, with his own title as the first
+line.
+
+**The slip engine now has two lengths.** Anything over 400 characters gets a
+`long` class and three different behaviours. The one-line nudges are untouched by
+all of it, which was the constraint worth engineering around:
+
+- **Typing is bounded.** `pace = min(25, 2600 / length)`. The primer is 768
+  characters, which at the nudge pace would have crawled for twenty seconds; it
+  now types in about four and a half. At 40 characters the pace is still 25, and
+  the jitter is still `17 + random*16`, so a short hint is unchanged to the
+  millisecond.
+- **The hold is a reading time**, `length * 55ms + 2600`, floored at the original
+  8000 and capped at 45s. The primer sits for the full 45 seconds. Short nudges
+  hit the floor and keep exactly their old eight.
+- **A long slip can be clicked away** once read. Short ones stay
+  `pointer-events: none` so they cannot swallow a click meant for a link
+  underneath, which is why this is gated on length rather than applied to all.
+
+Also: the typewriter tick is throttled by elapsed time (45ms) rather than every
+second letter, or the primer's pace would have fired 170 ticks a second;
+`.dss-hint-type` takes `white-space: pre-wrap` so the paragraph breaks survive;
+the long card follows its own caret down when it has to scroll; and on a phone it
+takes the full width instead of sitting inset with a dead gutter.
+
+**Consequences handled.** The glass smash's wait is gone. It existed only because
+the primer used to be a full-screen modal the smash would have gone off behind;
+a slip blocks nothing, so there is nothing left to wait for. And with the modal
+gone, `.dss-modal-x`, `.dss-stats-text` and `.dss-haunts-card` lost their last
+users: 34 more lines of CSS removed. `.dss-rules-card` stays, the minigame rules
+modal still wears it.
+
+Verified live: 768 characters typed, paragraph breaks intact, still on screen well
+past the old eight seconds, dismissed on click with the queue left clean, short
+nudges unchanged in pace and still click-through, and the whole thing fitting at
+375px. Zero Harlowe errors.
+
+That is every informational modal now on paper. What is left in a box all needs an
+answer from the player or is an illustrated reveal.
+
+Synced, commit when ready.

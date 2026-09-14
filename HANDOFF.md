@@ -4152,3 +4152,89 @@ with "Perform the synthesis", zero errors.
 So the full shape is now: five nights, one world each, Ezekiel last; then the
 Pillars one final time for the ritual; and afterwards the worlds are open again
 for another lifetime, with the ritual already earned.
+
+---
+
+## Addendum 86 — why the third pillar stayed shut (2026-09-14)
+
+Sam returned page 93, pocketed the lighter, went to the Pillars and got no
+crossing. The column's condition is
+`$inisToldOfPillars is true and $dreamKey is not "" and $worldsVisited's length < 1`,
+and the failing term was **`$inisToldOfPillars`**.
+
+`Return the page` is tagged `venue-cecilcourt`, so it carries the header's
+"← Exit to the street". Its only body link is
+`[['You don't know the good that you've done'|O'Flatterly's Gift]]`, and
+**`O'Flatterly's Gift` is where everything actually happens**: Shelley's liver,
+THE DELIVERY, `$returnedPage`, and `(set: $inisToldOfPillars to true)` — the
+third-pillar tip-off. Take the header exit instead and the page is gone and none
+of it is set. Irrecoverably: you cannot hand the page over twice.
+
+Added `"Return the page"` to `_backHide`. Verified: the passage now renders with
+NOTEBOOK only in the header and the single way on in the body.
+
+**This is a class, not a one-off, and I widened it.** The header exit went onto
+every venue-tagged passage in Addendum 47. Audited: **30** venue passages have a
+single body link and no `_backHide` entry. Most are harmless — their one link
+*is* "Back to the street", so the header does the same thing. The ones where the
+single link goes *deeper*, so leaving costs the payoff:
+
+| passage | its one way on | what bailing costs |
+|---|---|---|
+| **Return the page** | O'Flatterly's Gift | **FIXED** — liver, haunt, third pillar |
+| Give him the painting | After the painter | the painting is already handed over |
+| Bar Canvas Win / Lose | The Set | THE HEAD (haunt 7) |
+| Shana's Verdict | After Shana | the reading is spent |
+| Copper Word Accepted | Fight starts | committed to the fight |
+| Stand your ground | Fight starts | committed to the fight |
+| Benito's Hour | The Painter's Gaze | mid-scene |
+| Approach the novelist | The novelist | THE REFUSAL — and Cecil Court with it |
+| Talk to the Artists | The Spanish Artist | recoverable (he is still there) |
+| Cecil Court | Watkins | leaving the court is legitimate |
+| Martin Lackland's Office | Back Door | leaving after the verdict is legitimate |
+| O'Flatterly's shop | introduction | recoverable |
+| Lackland's Back Room | Watch the decider | recoverable |
+
+**Not fixed unilaterally**, because suppressing an exit removes a player choice
+and that is Sam's call (see `feedback_preserve_choices`). My recommendation is to
+close the top six — the ones where something has already been handed over or
+played and only the payoff is outstanding — and leave the rest, where walking out
+is a legitimate thing to do.
+
+---
+
+## Addendum 87 — the mid-beat exits closed (2026-09-14)
+
+Sam's ruling: close the six. Added to `_backHide` alongside `Return the page`:
+
+| passage | its way on | what bailing used to cost |
+|---|---|---|
+| Give him the painting | Step out. | the painting is already handed over |
+| Bar Canvas Win | Listen | THE HEAD (haunt 7) |
+| Bar Canvas Lose | Listen | THE HEAD (haunt 7) |
+| Shana's Verdict | Take the manuscript | the reading is spent |
+| Copper Word Accepted | Brace yourself | committed to the fight |
+| Stand your ground | All right, then. | committed to the fight |
+| Approach the novelist | Nothing / Everything | THE REFUSAL, and Cecil Court with it |
+
+Checked before writing that every one still has its own way on in the body, so
+suppressing the header exit cannot strand anyone. `_backHide` removes only the
+exit; NOTEBOOK stays. Spot-verified live on `Give him the painting` (header:
+NOTEBOOK only; body: "Step out.") and `Approach the novelist` (header: NOTEBOOK
+only; body: "Nothing", "Everything" — it has two, the second inside a hook, which
+the static scan had missed).
+
+**Left open deliberately**, because walking out of them is a fair thing to want:
+`Cecil Court` (→ Watkins), `Martin Lackland's Office` (→ Back Door, after the
+verdict), `O'Flatterly's shop`, `Lackland's Back Room`, `Talk to the Artists`.
+
+**The borderline one I did not close: `Benito's Hour` → `The Painter's Gaze`.**
+It was sixth in the handoff table but not in the list Sam saw in chat, so I left
+it rather than quietly widen the ruling. You are sitting for a portrait and the
+next beat is him looking at you — arguably committed, arguably fine to leave.
+One word adds it.
+
+**Addendum 87a.** `Benito's Hour` added too, on Sam's word. Checked it keeps its
+way on ("Let him look" → `The Painter's Gaze`) before suppressing the exit;
+verified live — header NOTEBOOK only, body link intact, no errors. `_backHide`
+now holds 34 names: the original 25, `Return the page`, the six, and this.

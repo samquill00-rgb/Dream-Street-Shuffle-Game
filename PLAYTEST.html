@@ -12010,27 +12010,128 @@ window.dssAudio = (function() {
   }
   // Distant bell — a single far-off church bell. Inharmonic partials and
   // a long decay give it that "across the city" quality.
+  // ====== BIRDSONG (2026-09-14) ======
+  // Sam: "add more and more birdsong noises as the night goes on but as you
+  // approach the dawn really ramp it up." One chirp is a short run of syllables
+  // — a sine swept up and back, two to four times, each a little different — and
+  // the chorus is built by how OFTEN they come and how many voices overlap, not
+  // by making any one of them louder. Silence at dusk, a lone bird in the small
+  // hours, a wall of them at first light.
+  function chirp(level, far) {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var bright = Math.max(0.25, Math.min(1, level));
+      var o = ac.createOscillator(); o.type = 'sine';
+      var g = ac.createGain();
+      var lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+      lp.frequency.value = far ? 3200 : 7000;   // distance takes the top off
+      var base = 2100 + Math.random() * 1900;
+      var syll = 2 + Math.floor(Math.random() * 3);
+      var t = now;
+      g.gain.setValueAtTime(0.0001, now);
+      for (var i = 0; i < syll; i++) {
+        var d  = 0.042 + Math.random() * 0.05;
+        var f1 = base * (0.82 + Math.random() * 0.45);
+        var f2 = f1 * (1.28 + Math.random() * 0.55);
+        o.frequency.setValueAtTime(f1, t);
+        o.frequency.exponentialRampToValueAtTime(f2, t + d * 0.45);
+        o.frequency.exponentialRampToValueAtTime(f1 * 0.88, t + d);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime((far ? 0.006 : 0.013) * bright, t + 0.007);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+        t += d + 0.012 + Math.random() * 0.035;
+      }
+      o.connect(lp); lp.connect(g); g.connect(ac.destination);
+      o.start(now); o.stop(t + 0.06);
+    });
+  }
+  // The scheduler reads the night's depth every time it fires and re-times
+  // itself, so the chorus thickens on its own as the night deepens. It only
+  // sings where you could hear it: outdoors, on the street, or at the dawn.
+  var _birdTimer = null, _birdBoost = 0, _birdBoostGen = -1;
+  // The boost belongs to the passage that asked for it. Without this it would
+  // stick, and the dawn chorus would follow you back into Soho for ever.
+  function setBirdLevel(x) {
+    _birdBoost = Math.max(0, Math.min(1, x || 0));
+    _birdBoostGen = (window._passageGen || 0);
+  }
+  function _outdoors() {
+    var st = document.querySelector('tw-story');
+    var tags = st ? (st.getAttribute('tags') || '') : '';
+    return /(^|\s)(hub|outdoor|street-night|dawn-approach|dawn)(\s|$)/.test(tags);
+  }
+  function _birdTick() {
+    if (_birdBoost > 0 && (window._passageGen || 0) !== _birdBoostGen) _birdBoost = 0;
+    var depth = Math.max(0, Math.min(1, window.__dssNightDepth || 0));
+    var level = Math.max(depth, _birdBoost);
+    var wait;
+    if (!_outdoors() || level <= 0.02) {
+      wait = 4000;                                   // indoors, or too early: listen again later
+    } else {
+      // Steeply weighted to the end, because that is how it actually goes: one
+      // far bird every twenty seconds or so after midnight, a chorus building
+      // through the small hours, and the sky full of them at first light. A
+      // gentler curve put a bird a second into 1am, which is nobody's Soho.
+      var rate = 6.5 * Math.pow(level, 4.2);         // chirps per second
+      wait = Math.max(90, (1000 / rate) * (0.55 + Math.random() * 0.9));
+      var far = Math.random() > (0.25 + level * 0.6);
+      chirp(0.35 + level * 0.65, far);
+      // at the top end they overlap, which is what makes a chorus a chorus
+      if (level > 0.6 && Math.random() < (level - 0.6) * 2.2) {
+        setTimeout(function() { chirp(0.3 + level * 0.6, Math.random() > 0.5); },
+                   40 + Math.random() * 200);
+      }
+    }
+    _birdTimer = setTimeout(_birdTick, wait);
+  }
+  if (typeof document !== 'undefined') { _birdTimer = setTimeout(_birdTick, 2500); }
+
   function distantBell() {
     _play(function(ac) {
       var now = ac.currentTime;
-      var dur = 3.6; // shorter tail — a single morning dong, not a continuous peal
+      // A BELL, NOT A GONG (2026-09-14, Sam: "can be improved. More of a bell?").
+      // The old version was four near-harmonic sines with a 20ms fade-in, which
+      // is the recipe for a hum. What makes the ear say "bell" is three things,
+      // all of them here now: partials at INHARMONIC ratios — above all the
+      // tierce, a minor third over the prime, which is the sound's signature;
+      // a different decay rate for each, the hum ringing on long after the top
+      // has gone; and a strike, because a bell is hit rather than faded up.
+      var f = 440;
       var partials = [
-        { freq: 440,  amp: 0.035 },  // fundamental (A4) — subtle, not loud
-        { freq: 880,  amp: 0.022 },  // octave
-        { freq: 1180, amp: 0.014 },  // inharmonic — gives bell quality
-        { freq: 220,  amp: 0.020 }   // sub-hum
-        // sparkle partial dropped — too bright for a far-off morning bell
+        { r: 0.50, amp: 0.030, dur: 5.6, det:  0.0 },  // hum
+        { r: 1.00, amp: 0.034, dur: 4.4, det:  0.4 },  // prime
+        { r: 1.20, amp: 0.024, dur: 3.2, det: -0.6 },  // tierce — the minor third
+        { r: 1.50, amp: 0.014, dur: 2.4, det:  0.5 },  // quint
+        { r: 2.00, amp: 0.020, dur: 2.0, det:  0.0 },  // nominal
+        { r: 2.55, amp: 0.010, dur: 1.1, det:  0.8 },
+        { r: 3.10, amp: 0.007, dur: 0.8, det: -0.7 },
+        { r: 4.25, amp: 0.004, dur: 0.5, det:  0.0 }
       ];
+      var dur = 5.6;
       partials.forEach(function(p) {
         var o = ac.createOscillator(); o.type = 'sine';
-        o.frequency.value = p.freq;
+        o.frequency.value = f * p.r + p.det;   // the detune sets the partials beating
         var g = ac.createGain();
         g.gain.setValueAtTime(0, now);
-        g.gain.linearRampToValueAtTime(p.amp, now + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        g.gain.linearRampToValueAtTime(p.amp, now + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0008, now + p.dur);
         o.connect(g); g.connect(ac.destination);
-        o.start(now); o.stop(now + dur + 0.05);
+        o.start(now); o.stop(now + p.dur + 0.05);
       });
+      // the clapper
+      try {
+        var nb = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.06), ac.sampleRate);
+        var chd = nb.getChannelData(0);
+        for (var ni = 0; ni < chd.length; ni++) chd[ni] = (Math.random() * 2 - 1) * (1 - ni / chd.length);
+        var nsrc = ac.createBufferSource(); nsrc.buffer = nb;
+        var nbp = ac.createBiquadFilter(); nbp.type = 'bandpass';
+        nbp.frequency.value = f * 2.6; nbp.Q.value = 1.1;
+        var ng = ac.createGain();
+        ng.gain.setValueAtTime(0.016, now);
+        ng.gain.exponentialRampToValueAtTime(0.0004, now + 0.12);
+        nsrc.connect(nbp); nbp.connect(ng); ng.connect(ac.destination);
+        nsrc.start(now); nsrc.stop(now + 0.09);
+      } catch(e) {}
     });
   }
   // Phone line — a faint, looping carrier hum/crackle for under call dialogue.
@@ -12596,6 +12697,7 @@ window.dssAudio = (function() {
     glassClink: glassClink, swallow: swallow,
     dodgeWhoosh: dodgeWhoosh, muffledThud: muffledThud, punchImpact: punchImpact,
     vialClink: vialClink, uncork: uncork, cameraShutter: cameraShutter,
+    chirp: chirp, setBirdLevel: setBirdLevel,
     uncannyBreath: uncannyBreath, distantBell: distantBell, doorKnock: doorKnock,
     thunderClap: thunderClap, hoofBeat: hoofBeat, cowMoo: cowMoo, cowMooShort: cowMooShort,
     distantTraffic: distantTraffic, stopDistantTraffic: stopDistantTraffic,
@@ -24024,6 +24126,24 @@ var SENTENCE_PAUSE = 500; // a clear breath after . ! ? mid-paragraph (between s
                           // every typewriter page so the reflective passages breathe like the opening.
                           // tw-fast paragraphs skip it (see curFast check below).
 var START_DELAY = 320;   // settle beat before the first character
+// THE FIRST ONE TAKES ITS TIME (2026-09-14, Sam: "a bit quicker on all but the
+// first time it happens"). The opening earns its slowness; every typewriter
+// page after it in the same sitting runs at about two-thirds the pace. The flag
+// lives in sessionStorage, so Play Again (which clears it) gets the slow one
+// back, and a page reload mid-night does not.
+var _twSeen = false;
+try { _twSeen = sessionStorage.getItem('dssTypewriterSeen') === '1'; } catch(e) { _twSeen = !!window.__dssTypewriterSeen; }
+if (_twSeen) {
+  TARGET_MS   = Math.round(TARGET_MS   * 0.64);
+  MIN_CHAR_MS = Math.round(MIN_CHAR_MS * 0.64);
+  MAX_CHAR_MS = Math.round(MAX_CHAR_MS * 0.64);
+  PARA_PAUSE  = Math.round(PARA_PAUSE  * 0.60);
+  PARA_JITTER = Math.round(PARA_JITTER * 0.60);
+  SENTENCE_PAUSE = Math.round(SENTENCE_PAUSE * 0.62);
+  START_DELAY = Math.round(START_DELAY * 0.60);
+}
+window.__dssTypewriterSeen = true;
+try { sessionStorage.setItem('dssTypewriterSeen', '1'); } catch(e) {}
 var silent = container.classList.contains('typewriter-silent');
 var myGen = (window._passageGen || 0);
 var curCharMs = MIN_CHAR_MS; // recomputed per paragraph from its length
@@ -362630,6 +362750,906 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <tw-passagedata pid="1" name="StoryInit" tags="startup" position="0,0" size="100,100">&lt;!-- ═══════════════════════════════════════════════════════════════════
      DREAM STREET SHUFFLE — v1 FIRST DRAFT MILESTONE
      Snapshot: 2026-05-14
@@ -363479,14 +364499,18 @@ You surface to Dean Street.
 (after: 6.2s)[EXPLICIT. LIBER. EST.]
 
 &lt;span class=&quot;plus-ultra-fade&quot;&gt;(link-goto: &quot;PLUS. ULTRA.&quot;, &quot;Dawn&quot;)&lt;/span&gt;</tw-passagedata>
-<tw-passagedata pid="28" name="Dawn Approach White" tags="dawn-approach dawn-approach-white piano-bed" position="1850,150" size="100,100">&lt;script&gt;/* Fallback for the iframe-ready class. The iframe&#x27;s own onload sets it after 400ms — but if the iframe is very slow or fails to load entirely, lightning would never fire (it&#x27;s CSS-gated on .iframe-ready). 4s fallback ensures the bolts play even in degraded-network / WebGL-down scenarios. In the common case (HTTP-prefetched iframe loads in &lt;1s) the onload handler wins and the fallback no-ops. */setTimeout(function(){var d=document.querySelector(&#x27;.dawn-approach&#x27;);if(d&amp;&amp;!d.classList.contains(&#x27;iframe-ready&#x27;))d.classList.add(&#x27;iframe-ready&#x27;);},4000);&lt;/script&gt;\
+<tw-passagedata pid="28" name="Dawn Approach White" tags="dawn-approach dawn-approach-white piano-bed" position="1850,150" size="100,100">&lt;!-- BIRDSONG: the approach — hold the chorus at 0.85 here, whatever the night phase says. --&gt;\
+&lt;script&gt;if(window.dssAudio&amp;&amp;window.dssAudio.setBirdLevel)window.dssAudio.setBirdLevel(0.85);&lt;/script&gt;\
+&lt;script&gt;/* Fallback for the iframe-ready class. The iframe&#x27;s own onload sets it after 400ms — but if the iframe is very slow or fails to load entirely, lightning would never fire (it&#x27;s CSS-gated on .iframe-ready). 4s fallback ensures the bolts play even in degraded-network / WebGL-down scenarios. In the common case (HTTP-prefetched iframe loads in &lt;1s) the onload handler wins and the fallback no-ops. */setTimeout(function(){var d=document.querySelector(&#x27;.dawn-approach&#x27;);if(d&amp;&amp;!d.classList.contains(&#x27;iframe-ready&#x27;))d.classList.add(&#x27;iframe-ready&#x27;);},4000);&lt;/script&gt;\
 &lt;div class=&quot;dawn-approach&quot;&gt;
 &lt;iframe class=&quot;dawn-approach-iframe&quot; src=&quot;oxford-street-from-centre-point-3d-static.html&quot; frameborder=&quot;0&quot; scrolling=&quot;no&quot; onload=&quot;this.classList.add(&#x27;loaded&#x27;);var d=this.closest(&#x27;.dawn-approach&#x27;);if(d)setTimeout(function(){d.classList.add(&#x27;iframe-ready&#x27;);},400);&quot;&gt;&lt;/iframe&gt;
 (set: _ll to &quot;&lt;path d=&#x27;M 0,0 C 0.5,5 0,10 0,15&#x27; fill=&#x27;none&#x27; stroke=&#x27;#9aa888&#x27; stroke-width=&#x27;1.0&#x27; stroke-linecap=&#x27;round&#x27; opacity=&#x27;0.85&#x27;/&gt;&lt;path d=&#x27;M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15&#x27; fill=&#x27;#8a9678&#x27; opacity=&#x27;0.65&#x27; stroke=&#x27;#5a6850&#x27; stroke-width=&#x27;0.35&#x27;/&gt;&lt;path d=&#x27;M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z&#x27; fill=&#x27;#f5f0e2&#x27; stroke=&#x27;none&#x27; opacity=&#x27;0.35&#x27;/&gt;&lt;path d=&#x27;M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z&#x27; fill=&#x27;none&#x27; stroke=&#x27;#9a8868&#x27; stroke-width=&#x27;0.45&#x27; opacity=&#x27;0.7&#x27;/&gt;&lt;path d=&#x27;M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z&#x27; fill=&#x27;#fbfaf3&#x27; stroke=&#x27;none&#x27; opacity=&#x27;0.14&#x27;/&gt;&lt;path d=&#x27;M 0,17 Q 0,35 0,52&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.38&#x27; opacity=&#x27;0.68&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M -2,17 Q -3,34 -3.5,52&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.34&#x27; opacity=&#x27;0.62&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M 2,17 Q 3,34 3.5,52&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.34&#x27; opacity=&#x27;0.62&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M -5,17 Q -7,34 -8,51&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.34&#x27; opacity=&#x27;0.6&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M 5,17 Q 7,34 8,51&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.34&#x27; opacity=&#x27;0.6&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M -7.5,18 Q -10,32 -10.5,49&#x27; fill=&#x27;none&#x27; stroke=&#x27;#b09878&#x27; stroke-width=&#x27;0.3&#x27; opacity=&#x27;0.5&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M 7.5,18 Q 10,32 10.5,49&#x27; fill=&#x27;none&#x27; stroke=&#x27;#b09878&#x27; stroke-width=&#x27;0.3&#x27; opacity=&#x27;0.5&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;circle cx=&#x27;-1.5&#x27; cy=&#x27;49&#x27; r=&#x27;0.6&#x27; fill=&#x27;#7a6438&#x27; opacity=&#x27;0.65&#x27;/&gt;&lt;circle cx=&#x27;1.5&#x27; cy=&#x27;49&#x27; r=&#x27;0.6&#x27; fill=&#x27;#7a6438&#x27; opacity=&#x27;0.65&#x27;/&gt;&lt;circle cx=&#x27;0&#x27; cy=&#x27;50&#x27; r=&#x27;0.5&#x27; fill=&#x27;#7a6438&#x27; opacity=&#x27;0.62&#x27;/&gt;&quot;)(set: _pv to &quot;&lt;div class=&#x27;centre-pent-overlay&#x27;&gt;&lt;svg viewBox=&#x27;0 0 560 700&#x27; preserveAspectRatio=&#x27;xMidYMid meet&#x27;&gt;&lt;defs&gt;&lt;radialGradient id=&#x27;cpVig&#x27; cx=&#x27;50%&#x27; cy=&#x27;42%&#x27; r=&#x27;55%&#x27;&gt;&lt;stop offset=&#x27;0%&#x27; stop-color=&#x27;rgba(8,6,4,0.55)&#x27;/&gt;&lt;stop offset=&#x27;70%&#x27; stop-color=&#x27;rgba(8,6,4,0.18)&#x27;/&gt;&lt;stop offset=&#x27;100%&#x27; stop-color=&#x27;rgba(8,6,4,0)&#x27;/&gt;&lt;/radialGradient&gt;&lt;/defs&gt;&lt;rect width=&#x27;560&#x27; height=&#x27;700&#x27; fill=&#x27;url(#cpVig)&#x27;/&gt;&quot;)(set: _pv to _pv + &quot;&lt;g opacity=&#x27;0.06&#x27; stroke=&#x27;#d4a574&#x27; fill=&#x27;none&#x27;&gt;&lt;line x1=&#x27;100&#x27; y1=&#x27;140&#x27; x2=&#x27;100&#x27; y2=&#x27;640&#x27; stroke-width=&#x27;1.5&#x27;/&gt;&lt;line x1=&#x27;230&#x27; y1=&#x27;135&#x27; x2=&#x27;230&#x27; y2=&#x27;645&#x27; stroke-width=&#x27;2&#x27;/&gt;&lt;line x1=&#x27;360&#x27; y1=&#x27;140&#x27; x2=&#x27;360&#x27; y2=&#x27;640&#x27; stroke-width=&#x27;2&#x27;/&gt;&lt;line x1=&#x27;490&#x27; y1=&#x27;140&#x27; x2=&#x27;490&#x27; y2=&#x27;640&#x27; stroke-width=&#x27;2&#x27;/&gt;&lt;line x1=&#x27;10&#x27; y1=&#x27;370&#x27; x2=&#x27;545&#x27; y2=&#x27;370&#x27; stroke-width=&#x27;2&#x27;/&gt;&lt;line x1=&#x27;80&#x27; y1=&#x27;520&#x27; x2=&#x27;510&#x27; y2=&#x27;520&#x27; stroke-width=&#x27;1.5&#x27;/&gt;&lt;line x1=&#x27;50&#x27; y1=&#x27;620&#x27; x2=&#x27;520&#x27; y2=&#x27;620&#x27; stroke-width=&#x27;1.5&#x27;/&gt;&lt;/g&gt;&quot;)(set: _pv to _pv + &quot;&lt;g opacity=&#x27;0.55&#x27;&gt;&lt;circle cx=&#x27;280&#x27; cy=&#x27;70&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;circle cx=&#x27;470&#x27; cy=&#x27;200&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;circle cx=&#x27;490&#x27; cy=&#x27;460&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;circle cx=&#x27;230&#x27; cy=&#x27;470&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;circle cx=&#x27;100&#x27; cy=&#x27;250&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;/g&gt;&quot;)(set: _pv to _pv + &quot;&lt;polygon points=&#x27;280,70 490,560 100,250 494,262 248,566&#x27; fill=&#x27;none&#x27; stroke=&#x27;#f5d070&#x27; stroke-width=&#x27;2.2&#x27; opacity=&#x27;0.95&#x27; stroke-linejoin=&#x27;round&#x27;/&gt;&quot;)(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lilies&#x27; opacity=&#x27;0.95&#x27;&gt;&quot;)(if: $tookLily1 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-1&#x27; transform=&#x27;translate(280,70) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](if: $tookLily2 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-2&#x27; transform=&#x27;translate(494,262) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](if: $tookLily3 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-3&#x27; transform=&#x27;translate(490,560) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](if: $tookLily4 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-4&#x27; transform=&#x27;translate(248,566) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](if: $tookLily5 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-5&#x27; transform=&#x27;translate(100,250) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](set: _pv to _pv + &quot;&lt;/g&gt;&quot;)(set: _pv to _pv + &quot;&lt;/svg&gt;&lt;div class=&#x27;centre-pent-gawain&#x27;&gt;And the English call it everywhere, as I hear, the endless knot.&lt;/div&gt;&lt;/div&gt;&quot;)(print: _pv)
 &lt;div class=&quot;dawn-approach-overlay dawn-approach-overlay-white&quot;&gt;&lt;/div&gt;
 &lt;/div&gt;
 (after: 16s)[(go-to: &quot;White page&quot;)]</tw-passagedata>
-<tw-passagedata pid="29" name="Dawn Approach Black" tags="dawn-approach dawn-approach-black piano-bed" position="1850,200" size="100,100">&lt;script&gt;/* See note on Dawn Approach White. Same iframe-ready fallback. */setTimeout(function(){var d=document.querySelector(&#x27;.dawn-approach&#x27;);if(d&amp;&amp;!d.classList.contains(&#x27;iframe-ready&#x27;))d.classList.add(&#x27;iframe-ready&#x27;);},4000);&lt;/script&gt;\
+<tw-passagedata pid="29" name="Dawn Approach Black" tags="dawn-approach dawn-approach-black piano-bed" position="1850,200" size="100,100">&lt;!-- BIRDSONG: the approach — hold the chorus at 0.85 here, whatever the night phase says. --&gt;\
+&lt;script&gt;if(window.dssAudio&amp;&amp;window.dssAudio.setBirdLevel)window.dssAudio.setBirdLevel(0.85);&lt;/script&gt;\
+&lt;script&gt;/* See note on Dawn Approach White. Same iframe-ready fallback. */setTimeout(function(){var d=document.querySelector(&#x27;.dawn-approach&#x27;);if(d&amp;&amp;!d.classList.contains(&#x27;iframe-ready&#x27;))d.classList.add(&#x27;iframe-ready&#x27;);},4000);&lt;/script&gt;\
 &lt;div class=&quot;dawn-approach&quot;&gt;
 &lt;iframe class=&quot;dawn-approach-iframe&quot; src=&quot;oxford-street-from-centre-point-3d-static.html&quot; frameborder=&quot;0&quot; scrolling=&quot;no&quot; onload=&quot;this.classList.add(&#x27;loaded&#x27;);var d=this.closest(&#x27;.dawn-approach&#x27;);if(d)setTimeout(function(){d.classList.add(&#x27;iframe-ready&#x27;);},400);&quot;&gt;&lt;/iframe&gt;
 (set: _ll to &quot;&lt;path d=&#x27;M 0,0 C 0.5,5 0,10 0,15&#x27; fill=&#x27;none&#x27; stroke=&#x27;#9aa888&#x27; stroke-width=&#x27;1.0&#x27; stroke-linecap=&#x27;round&#x27; opacity=&#x27;0.85&#x27;/&gt;&lt;path d=&#x27;M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15&#x27; fill=&#x27;#8a9678&#x27; opacity=&#x27;0.65&#x27; stroke=&#x27;#5a6850&#x27; stroke-width=&#x27;0.35&#x27;/&gt;&lt;path d=&#x27;M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z&#x27; fill=&#x27;#f5f0e2&#x27; stroke=&#x27;none&#x27; opacity=&#x27;0.35&#x27;/&gt;&lt;path d=&#x27;M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z&#x27; fill=&#x27;none&#x27; stroke=&#x27;#9a8868&#x27; stroke-width=&#x27;0.45&#x27; opacity=&#x27;0.7&#x27;/&gt;&lt;path d=&#x27;M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z&#x27; fill=&#x27;#fbfaf3&#x27; stroke=&#x27;none&#x27; opacity=&#x27;0.14&#x27;/&gt;&lt;path d=&#x27;M 0,17 Q 0,35 0,52&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.38&#x27; opacity=&#x27;0.68&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M -2,17 Q -3,34 -3.5,52&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.34&#x27; opacity=&#x27;0.62&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M 2,17 Q 3,34 3.5,52&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.34&#x27; opacity=&#x27;0.62&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M -5,17 Q -7,34 -8,51&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.34&#x27; opacity=&#x27;0.6&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M 5,17 Q 7,34 8,51&#x27; fill=&#x27;none&#x27; stroke=&#x27;#a08868&#x27; stroke-width=&#x27;0.34&#x27; opacity=&#x27;0.6&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M -7.5,18 Q -10,32 -10.5,49&#x27; fill=&#x27;none&#x27; stroke=&#x27;#b09878&#x27; stroke-width=&#x27;0.3&#x27; opacity=&#x27;0.5&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;path d=&#x27;M 7.5,18 Q 10,32 10.5,49&#x27; fill=&#x27;none&#x27; stroke=&#x27;#b09878&#x27; stroke-width=&#x27;0.3&#x27; opacity=&#x27;0.5&#x27; stroke-linecap=&#x27;round&#x27;/&gt;&lt;circle cx=&#x27;-1.5&#x27; cy=&#x27;49&#x27; r=&#x27;0.6&#x27; fill=&#x27;#7a6438&#x27; opacity=&#x27;0.65&#x27;/&gt;&lt;circle cx=&#x27;1.5&#x27; cy=&#x27;49&#x27; r=&#x27;0.6&#x27; fill=&#x27;#7a6438&#x27; opacity=&#x27;0.65&#x27;/&gt;&lt;circle cx=&#x27;0&#x27; cy=&#x27;50&#x27; r=&#x27;0.5&#x27; fill=&#x27;#7a6438&#x27; opacity=&#x27;0.62&#x27;/&gt;&quot;)(set: _pv to &quot;&lt;div class=&#x27;centre-pent-overlay&#x27;&gt;&lt;svg viewBox=&#x27;0 0 560 700&#x27; preserveAspectRatio=&#x27;xMidYMid meet&#x27;&gt;&lt;defs&gt;&lt;radialGradient id=&#x27;cpVig2&#x27; cx=&#x27;50%&#x27; cy=&#x27;42%&#x27; r=&#x27;55%&#x27;&gt;&lt;stop offset=&#x27;0%&#x27; stop-color=&#x27;rgba(8,6,4,0.55)&#x27;/&gt;&lt;stop offset=&#x27;70%&#x27; stop-color=&#x27;rgba(8,6,4,0.18)&#x27;/&gt;&lt;stop offset=&#x27;100%&#x27; stop-color=&#x27;rgba(8,6,4,0)&#x27;/&gt;&lt;/radialGradient&gt;&lt;/defs&gt;&lt;rect width=&#x27;560&#x27; height=&#x27;700&#x27; fill=&#x27;url(#cpVig2)&#x27;/&gt;&quot;)(set: _pv to _pv + &quot;&lt;g opacity=&#x27;0.06&#x27; stroke=&#x27;#d4a574&#x27; fill=&#x27;none&#x27;&gt;&lt;line x1=&#x27;100&#x27; y1=&#x27;140&#x27; x2=&#x27;100&#x27; y2=&#x27;640&#x27; stroke-width=&#x27;1.5&#x27;/&gt;&lt;line x1=&#x27;230&#x27; y1=&#x27;135&#x27; x2=&#x27;230&#x27; y2=&#x27;645&#x27; stroke-width=&#x27;2&#x27;/&gt;&lt;line x1=&#x27;360&#x27; y1=&#x27;140&#x27; x2=&#x27;360&#x27; y2=&#x27;640&#x27; stroke-width=&#x27;2&#x27;/&gt;&lt;line x1=&#x27;490&#x27; y1=&#x27;140&#x27; x2=&#x27;490&#x27; y2=&#x27;640&#x27; stroke-width=&#x27;2&#x27;/&gt;&lt;line x1=&#x27;10&#x27; y1=&#x27;370&#x27; x2=&#x27;545&#x27; y2=&#x27;370&#x27; stroke-width=&#x27;2&#x27;/&gt;&lt;line x1=&#x27;80&#x27; y1=&#x27;520&#x27; x2=&#x27;510&#x27; y2=&#x27;520&#x27; stroke-width=&#x27;1.5&#x27;/&gt;&lt;line x1=&#x27;50&#x27; y1=&#x27;620&#x27; x2=&#x27;520&#x27; y2=&#x27;620&#x27; stroke-width=&#x27;1.5&#x27;/&gt;&lt;/g&gt;&quot;)(set: _pv to _pv + &quot;&lt;g opacity=&#x27;0.55&#x27;&gt;&lt;circle cx=&#x27;280&#x27; cy=&#x27;70&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;circle cx=&#x27;470&#x27; cy=&#x27;200&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;circle cx=&#x27;490&#x27; cy=&#x27;460&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;circle cx=&#x27;230&#x27; cy=&#x27;470&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;circle cx=&#x27;100&#x27; cy=&#x27;250&#x27; r=&#x27;16&#x27; fill=&#x27;rgba(245,208,112,0.20)&#x27;/&gt;&lt;/g&gt;&quot;)(set: _pv to _pv + &quot;&lt;polygon points=&#x27;280,70 490,560 100,250 494,262 248,566&#x27; fill=&#x27;none&#x27; stroke=&#x27;#f5d070&#x27; stroke-width=&#x27;2.2&#x27; opacity=&#x27;0.95&#x27; stroke-linejoin=&#x27;round&#x27;/&gt;&quot;)(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lilies&#x27; opacity=&#x27;0.95&#x27;&gt;&quot;)(if: $tookLily1 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-1&#x27; transform=&#x27;translate(280,70) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](if: $tookLily2 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-2&#x27; transform=&#x27;translate(494,262) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](if: $tookLily3 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-3&#x27; transform=&#x27;translate(490,560) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](if: $tookLily4 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-4&#x27; transform=&#x27;translate(248,566) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](if: $tookLily5 is true)[(set: _pv to _pv + &quot;&lt;g class=&#x27;pent-lily pent-lily-5&#x27; transform=&#x27;translate(100,250) translate(0,-25)&#x27;&gt;&quot; + _ll + &quot;&lt;/g&gt;&quot;)](set: _pv to _pv + &quot;&lt;/g&gt;&quot;)(set: _pv to _pv + &quot;&lt;/svg&gt;&lt;div class=&#x27;centre-pent-gawain&#x27;&gt;And the English call it everywhere, as I hear, the endless knot.&lt;/div&gt;&lt;/div&gt;&quot;)(print: _pv)
@@ -364521,7 +365545,9 @@ You can leave now, perhaps it&#x27;s wise to get out. But there are still flower
 You did not find the poem. Sometimes the night is its own work, and the dawn will come regardless.
 
 [[Traveller, sleep!|Dawn Approach Black]]&lt;/div&gt;</tw-passagedata>
-<tw-passagedata pid="51" name="Dawn" tags="dawn-end piano-bed" position="1700,100" size="100,100">(set: _albaComplete to ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))\
+<tw-passagedata pid="51" name="Dawn" tags="dawn-end piano-bed" position="1700,100" size="100,100">&lt;!-- BIRDSONG: first light — hold the chorus at 1.0 here, whatever the night phase says. --&gt;\
+&lt;script&gt;if(window.dssAudio&amp;&amp;window.dssAudio.setBirdLevel)window.dssAudio.setBirdLevel(1.0);&lt;/script&gt;\
+(set: _albaComplete to ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))\
 &lt;!-- Expose the caught haunts to dssOpusReveal via the DOM: window.Harlowe is NOT exposed in this build, so the wheel reads the names from this hidden element instead of Harlowe&#x27;s (unavailable) JS API. Pipe-delimited; names contain no pipe. --&gt;\
 (set: _hauntData to &quot;&quot;)(if: $haunts is an array and $haunts&#x27;s length &gt; 0)[(for: each _h, ...$haunts)[(set: _hauntData to _hauntData + _h + &quot;|&quot;)]]&lt;span id=&quot;dss-haunt-data&quot; style=&quot;display:none&quot;&gt;(print: _hauntData)&lt;/span&gt;\
 &lt;script&gt;
@@ -374484,7 +375510,9 @@ It does not look back. Not yet.
 (if: $nightAlbaCount &gt;= 3)[(set: $nightPhase to 3)]
 (if: $nightPhase &gt;= 1 and $afterMidnight is false)[(set: $afterMidnight to true)(set: $midnightJustPassed to true)]
 }</tw-passagedata>
-<tw-passagedata pid="225" name="Towards Dawn" tags="street-night" position="0,0" size="100,100">(display: &quot;Night Progress&quot;)\
+<tw-passagedata pid="225" name="Towards Dawn" tags="street-night" position="0,0" size="100,100">&lt;!-- BIRDSONG: the street turning towards morning — hold the chorus at 0.55 here, whatever the night phase says. --&gt;\
+&lt;script&gt;if(window.dssAudio&amp;&amp;window.dssAudio.setBirdLevel)window.dssAudio.setBirdLevel(0.55);&lt;/script&gt;\
+(display: &quot;Night Progress&quot;)\
 &lt;div class=&quot;dss-dawn-choice&quot;&gt;
 &lt;h2&gt;Head towards dawn&lt;/h2&gt;
 &lt;p&gt;The night ends when you choose. You can keep exploring, or go to Centre Point with what you have found.&lt;/p&gt;

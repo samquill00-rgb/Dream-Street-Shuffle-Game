@@ -4308,3 +4308,57 @@ screenshot; a click test will lie to you.**
 Both changes stay, and they do different jobs: the isolation lift puts the call
 above the blur where it belongs, and the click-through blocker means no future
 failure of any kind can strand the player again.
+
+---
+
+## Addendum 89 — a bell, a quicker typewriter, and the dawn chorus (2026-09-14)
+
+**1. The alba sound is a bell now, not a gong.** The old `distantBell` was four
+sine partials at near-harmonic ratios (440 / 880 / 1180 / 220) faded in over
+20ms, which is the recipe for a hum. Three things make the ear say "bell", and
+all three are in now: partials at **inharmonic** ratios — above all the tierce at
+1.2×, a minor third over the prime, which is the sound's signature; a **separate
+decay per partial**, the hum ringing 5.6s while the top ones are gone in half a
+second; and a **strike** — a 60ms filtered noise burst for the clapper, because a
+bell is hit, not faded up. Small detunes set the partials beating. Verified: 8
+oscillators, all sine, plus the clapper buffer.
+
+**2. The typewriter hurries after the first page.** The opening earns its
+slowness; every typewriter page after it in the same sitting runs at ~0.62 of the
+pace (chars, paragraph pauses, sentence pauses and the lead-in all scaled). The
+flag is in `sessionStorage`, so Play Again — which clears it — gets the slow
+opening back, while a mid-night reload does not. Measured on the same passage
+twice: **13.7 chars/sec first, 17.1 second**, 121 characters against 161 in the
+same six seconds.
+
+**3. Birdsong that thickens toward dawn.** New `chirp()` — a sine swept up and
+back over two to four syllables, each randomised, lowpassed harder when "far" —
+and a scheduler that re-times itself from `window.__dssNightDepth` (which the hub
+map derives from `$nightPhase`). It only sings outdoors: hub, outdoor,
+street-night, dawn-approach, dawn.
+
+The rate curve is `6.5 * level^4.2`, steeply weighted to the end, because a
+gentler curve put a bird a second into one in the morning. Measured chirps/sec:
+
+| night | level | measured |
+|---|---|---|
+| before midnight | 0 | silence |
+| after midnight | 0.33 | 0.13 |
+| small hours | 0.67 | 0.40 |
+| the approach | 0.85 | 5.4 |
+| dawn | 1.0 | 11.4 |
+
+Above 0.6 chirps start overlapping, which is what turns birds into a chorus.
+`setBirdLevel()` forces it regardless of phase, and is called at **Towards Dawn
+(0.55)**, **both Dawn Approaches (0.85)** and **Dawn (1.0)**. The boost is tied to
+the `_passageGen` that set it, so the chorus does not follow you back into Soho.
+
+**Two testing notes worth keeping.** The pane was **muted** (left over from the
+worm-game test, persisted in localStorage) — every audio measurement read zero
+until I noticed. And patching `AudioContext.prototype` across several separate
+tool calls **stacks the wrappers** until the stack blows: the console filled with
+`Maximum call stack size exceeded` from `createBiquadFilter`, and `_play` was
+swallowing them, so it looked like the code was broken when it was the probe.
+Patch once, restore in the same call. Also: the hub map rewrites
+`window.__dssNightDepth` every frame, so injecting a test value there is useless
+— drive it through `setBirdLevel()` instead. Pane left muted.

@@ -2963,27 +2963,128 @@ window.dssAudio = (function() {
   }
   // Distant bell — a single far-off church bell. Inharmonic partials and
   // a long decay give it that "across the city" quality.
+  // ====== BIRDSONG (2026-09-14) ======
+  // Sam: "add more and more birdsong noises as the night goes on but as you
+  // approach the dawn really ramp it up." One chirp is a short run of syllables
+  // — a sine swept up and back, two to four times, each a little different — and
+  // the chorus is built by how OFTEN they come and how many voices overlap, not
+  // by making any one of them louder. Silence at dusk, a lone bird in the small
+  // hours, a wall of them at first light.
+  function chirp(level, far) {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      var bright = Math.max(0.25, Math.min(1, level));
+      var o = ac.createOscillator(); o.type = 'sine';
+      var g = ac.createGain();
+      var lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+      lp.frequency.value = far ? 3200 : 7000;   // distance takes the top off
+      var base = 2100 + Math.random() * 1900;
+      var syll = 2 + Math.floor(Math.random() * 3);
+      var t = now;
+      g.gain.setValueAtTime(0.0001, now);
+      for (var i = 0; i < syll; i++) {
+        var d  = 0.042 + Math.random() * 0.05;
+        var f1 = base * (0.82 + Math.random() * 0.45);
+        var f2 = f1 * (1.28 + Math.random() * 0.55);
+        o.frequency.setValueAtTime(f1, t);
+        o.frequency.exponentialRampToValueAtTime(f2, t + d * 0.45);
+        o.frequency.exponentialRampToValueAtTime(f1 * 0.88, t + d);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime((far ? 0.006 : 0.013) * bright, t + 0.007);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+        t += d + 0.012 + Math.random() * 0.035;
+      }
+      o.connect(lp); lp.connect(g); g.connect(ac.destination);
+      o.start(now); o.stop(t + 0.06);
+    });
+  }
+  // The scheduler reads the night's depth every time it fires and re-times
+  // itself, so the chorus thickens on its own as the night deepens. It only
+  // sings where you could hear it: outdoors, on the street, or at the dawn.
+  var _birdTimer = null, _birdBoost = 0, _birdBoostGen = -1;
+  // The boost belongs to the passage that asked for it. Without this it would
+  // stick, and the dawn chorus would follow you back into Soho for ever.
+  function setBirdLevel(x) {
+    _birdBoost = Math.max(0, Math.min(1, x || 0));
+    _birdBoostGen = (window._passageGen || 0);
+  }
+  function _outdoors() {
+    var st = document.querySelector('tw-story');
+    var tags = st ? (st.getAttribute('tags') || '') : '';
+    return /(^|\s)(hub|outdoor|street-night|dawn-approach|dawn)(\s|$)/.test(tags);
+  }
+  function _birdTick() {
+    if (_birdBoost > 0 && (window._passageGen || 0) !== _birdBoostGen) _birdBoost = 0;
+    var depth = Math.max(0, Math.min(1, window.__dssNightDepth || 0));
+    var level = Math.max(depth, _birdBoost);
+    var wait;
+    if (!_outdoors() || level <= 0.02) {
+      wait = 4000;                                   // indoors, or too early: listen again later
+    } else {
+      // Steeply weighted to the end, because that is how it actually goes: one
+      // far bird every twenty seconds or so after midnight, a chorus building
+      // through the small hours, and the sky full of them at first light. A
+      // gentler curve put a bird a second into 1am, which is nobody's Soho.
+      var rate = 6.5 * Math.pow(level, 4.2);         // chirps per second
+      wait = Math.max(90, (1000 / rate) * (0.55 + Math.random() * 0.9));
+      var far = Math.random() > (0.25 + level * 0.6);
+      chirp(0.35 + level * 0.65, far);
+      // at the top end they overlap, which is what makes a chorus a chorus
+      if (level > 0.6 && Math.random() < (level - 0.6) * 2.2) {
+        setTimeout(function() { chirp(0.3 + level * 0.6, Math.random() > 0.5); },
+                   40 + Math.random() * 200);
+      }
+    }
+    _birdTimer = setTimeout(_birdTick, wait);
+  }
+  if (typeof document !== 'undefined') { _birdTimer = setTimeout(_birdTick, 2500); }
+
   function distantBell() {
     _play(function(ac) {
       var now = ac.currentTime;
-      var dur = 3.6; // shorter tail — a single morning dong, not a continuous peal
+      // A BELL, NOT A GONG (2026-09-14, Sam: "can be improved. More of a bell?").
+      // The old version was four near-harmonic sines with a 20ms fade-in, which
+      // is the recipe for a hum. What makes the ear say "bell" is three things,
+      // all of them here now: partials at INHARMONIC ratios — above all the
+      // tierce, a minor third over the prime, which is the sound's signature;
+      // a different decay rate for each, the hum ringing on long after the top
+      // has gone; and a strike, because a bell is hit rather than faded up.
+      var f = 440;
       var partials = [
-        { freq: 440,  amp: 0.035 },  // fundamental (A4) — subtle, not loud
-        { freq: 880,  amp: 0.022 },  // octave
-        { freq: 1180, amp: 0.014 },  // inharmonic — gives bell quality
-        { freq: 220,  amp: 0.020 }   // sub-hum
-        // sparkle partial dropped — too bright for a far-off morning bell
+        { r: 0.50, amp: 0.030, dur: 5.6, det:  0.0 },  // hum
+        { r: 1.00, amp: 0.034, dur: 4.4, det:  0.4 },  // prime
+        { r: 1.20, amp: 0.024, dur: 3.2, det: -0.6 },  // tierce — the minor third
+        { r: 1.50, amp: 0.014, dur: 2.4, det:  0.5 },  // quint
+        { r: 2.00, amp: 0.020, dur: 2.0, det:  0.0 },  // nominal
+        { r: 2.55, amp: 0.010, dur: 1.1, det:  0.8 },
+        { r: 3.10, amp: 0.007, dur: 0.8, det: -0.7 },
+        { r: 4.25, amp: 0.004, dur: 0.5, det:  0.0 }
       ];
+      var dur = 5.6;
       partials.forEach(function(p) {
         var o = ac.createOscillator(); o.type = 'sine';
-        o.frequency.value = p.freq;
+        o.frequency.value = f * p.r + p.det;   // the detune sets the partials beating
         var g = ac.createGain();
         g.gain.setValueAtTime(0, now);
-        g.gain.linearRampToValueAtTime(p.amp, now + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        g.gain.linearRampToValueAtTime(p.amp, now + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0008, now + p.dur);
         o.connect(g); g.connect(ac.destination);
-        o.start(now); o.stop(now + dur + 0.05);
+        o.start(now); o.stop(now + p.dur + 0.05);
       });
+      // the clapper
+      try {
+        var nb = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.06), ac.sampleRate);
+        var chd = nb.getChannelData(0);
+        for (var ni = 0; ni < chd.length; ni++) chd[ni] = (Math.random() * 2 - 1) * (1 - ni / chd.length);
+        var nsrc = ac.createBufferSource(); nsrc.buffer = nb;
+        var nbp = ac.createBiquadFilter(); nbp.type = 'bandpass';
+        nbp.frequency.value = f * 2.6; nbp.Q.value = 1.1;
+        var ng = ac.createGain();
+        ng.gain.setValueAtTime(0.016, now);
+        ng.gain.exponentialRampToValueAtTime(0.0004, now + 0.12);
+        nsrc.connect(nbp); nbp.connect(ng); ng.connect(ac.destination);
+        nsrc.start(now); nsrc.stop(now + 0.09);
+      } catch(e) {}
     });
   }
   // Phone line — a faint, looping carrier hum/crackle for under call dialogue.
@@ -3549,6 +3650,7 @@ window.dssAudio = (function() {
     glassClink: glassClink, swallow: swallow,
     dodgeWhoosh: dodgeWhoosh, muffledThud: muffledThud, punchImpact: punchImpact,
     vialClink: vialClink, uncork: uncork, cameraShutter: cameraShutter,
+    chirp: chirp, setBirdLevel: setBirdLevel,
     uncannyBreath: uncannyBreath, distantBell: distantBell, doorKnock: doorKnock,
     thunderClap: thunderClap, hoofBeat: hoofBeat, cowMoo: cowMoo, cowMooShort: cowMooShort,
     distantTraffic: distantTraffic, stopDistantTraffic: stopDistantTraffic,
@@ -14977,6 +15079,24 @@ var SENTENCE_PAUSE = 500; // a clear breath after . ! ? mid-paragraph (between s
                           // every typewriter page so the reflective passages breathe like the opening.
                           // tw-fast paragraphs skip it (see curFast check below).
 var START_DELAY = 320;   // settle beat before the first character
+// THE FIRST ONE TAKES ITS TIME (2026-09-14, Sam: "a bit quicker on all but the
+// first time it happens"). The opening earns its slowness; every typewriter
+// page after it in the same sitting runs at about two-thirds the pace. The flag
+// lives in sessionStorage, so Play Again (which clears it) gets the slow one
+// back, and a page reload mid-night does not.
+var _twSeen = false;
+try { _twSeen = sessionStorage.getItem('dssTypewriterSeen') === '1'; } catch(e) { _twSeen = !!window.__dssTypewriterSeen; }
+if (_twSeen) {
+  TARGET_MS   = Math.round(TARGET_MS   * 0.64);
+  MIN_CHAR_MS = Math.round(MIN_CHAR_MS * 0.64);
+  MAX_CHAR_MS = Math.round(MAX_CHAR_MS * 0.64);
+  PARA_PAUSE  = Math.round(PARA_PAUSE  * 0.60);
+  PARA_JITTER = Math.round(PARA_JITTER * 0.60);
+  SENTENCE_PAUSE = Math.round(SENTENCE_PAUSE * 0.62);
+  START_DELAY = Math.round(START_DELAY * 0.60);
+}
+window.__dssTypewriterSeen = true;
+try { sessionStorage.setItem('dssTypewriterSeen', '1'); } catch(e) {}
 var silent = container.classList.contains('typewriter-silent');
 var myGen = (window._passageGen || 0);
 var curCharMs = MIN_CHAR_MS; // recomputed per paragraph from its length
@@ -41635,6 +41755,8 @@ You surface to Dean Street.
 <span class="plus-ultra-fade">(link-goto: "PLUS. ULTRA.", "Dawn")</span>
 
 :: Dawn Approach White [dawn-approach dawn-approach-white piano-bed] {"position":"1850,150","size":"100,100"}
+<!-- BIRDSONG: the approach — hold the chorus at 0.85 here, whatever the night phase says. -->\
+<script>if(window.dssAudio&&window.dssAudio.setBirdLevel)window.dssAudio.setBirdLevel(0.85);</script>\
 <script>/* Fallback for the iframe-ready class. The iframe's own onload sets it after 400ms — but if the iframe is very slow or fails to load entirely, lightning would never fire (it's CSS-gated on .iframe-ready). 4s fallback ensures the bolts play even in degraded-network / WebGL-down scenarios. In the common case (HTTP-prefetched iframe loads in <1s) the onload handler wins and the fallback no-ops. */setTimeout(function(){var d=document.querySelector('.dawn-approach');if(d&&!d.classList.contains('iframe-ready'))d.classList.add('iframe-ready');},4000);</script>\
 <div class="dawn-approach">
 <iframe class="dawn-approach-iframe" src="oxford-street-from-centre-point-3d-static.html" frameborder="0" scrolling="no" onload="this.classList.add('loaded');var d=this.closest('.dawn-approach');if(d)setTimeout(function(){d.classList.add('iframe-ready');},400);"></iframe>
@@ -41644,6 +41766,8 @@ You surface to Dean Street.
 (after: 16s)[(go-to: "White page")]
 
 :: Dawn Approach Black [dawn-approach dawn-approach-black piano-bed] {"position":"1850,200","size":"100,100"}
+<!-- BIRDSONG: the approach — hold the chorus at 0.85 here, whatever the night phase says. -->\
+<script>if(window.dssAudio&&window.dssAudio.setBirdLevel)window.dssAudio.setBirdLevel(0.85);</script>\
 <script>/* See note on Dawn Approach White. Same iframe-ready fallback. */setTimeout(function(){var d=document.querySelector('.dawn-approach');if(d&&!d.classList.contains('iframe-ready'))d.classList.add('iframe-ready');},4000);</script>\
 <div class="dawn-approach">
 <iframe class="dawn-approach-iframe" src="oxford-street-from-centre-point-3d-static.html" frameborder="0" scrolling="no" onload="this.classList.add('loaded');var d=this.closest('.dawn-approach');if(d)setTimeout(function(){d.classList.add('iframe-ready');},400);"></iframe>
@@ -42724,6 +42848,8 @@ You did not find the poem. Sometimes the night is its own work, and the dawn wil
 [[Traveller, sleep!|Dawn Approach Black]]</div>
 
 :: Dawn [dawn-end piano-bed] {"position":"1700,100","size":"100,100"}
+<!-- BIRDSONG: first light — hold the chorus at 1.0 here, whatever the night phase says. -->\
+<script>if(window.dssAudio&&window.dssAudio.setBirdLevel)window.dssAudio.setBirdLevel(1.0);</script>\
 (set: _albaComplete to ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3))\
 <!-- Expose the caught haunts to dssOpusReveal via the DOM: window.Harlowe is NOT exposed in this build, so the wheel reads the names from this hidden element instead of Harlowe's (unavailable) JS API. Pipe-delimited; names contain no pipe. -->\
 (set: _hauntData to "")(if: $haunts is an array and $haunts's length > 0)[(for: each _h, ...$haunts)[(set: _hauntData to _hauntData + _h + "|")]]<span id="dss-haunt-data" style="display:none">(print: _hauntData)</span>\
@@ -62272,6 +62398,8 @@ It does not look back. Not yet.
 }
 
 :: Towards Dawn [street-night]
+<!-- BIRDSONG: the street turning towards morning — hold the chorus at 0.55 here, whatever the night phase says. -->\
+<script>if(window.dssAudio&&window.dssAudio.setBirdLevel)window.dssAudio.setBirdLevel(0.55);</script>\
 (display: "Night Progress")\
 <div class="dss-dawn-choice">
 <h2>Head towards dawn</h2>

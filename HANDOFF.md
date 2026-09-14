@@ -4778,3 +4778,103 @@ Use `offsetTop`, or force the transition to completion first, and sanity-check
 any number against a screenshot before believing it.
 
 Synced, commit when ready.
+
+## Addendum 98 — why the third pillar always turned him back (2026-09-14)
+
+Sam: "I can never walk through the third pillar into the dream." My first answer
+blamed the Inis chain. **That was wrong** — he had returned the page, and the
+chain is sound: verified live that `O'Flatterly's Gift` fires the tip-off, that
+the key popup at the French hands over the brass lighter and the header pocket
+cell fills, and that `O'Flatterly's Gift`'s brackets close correctly (line 24
+carries the third `]`, so the tip-off is NOT nested inside the haunt-6 block).
+
+**The cause is the lifetime worlds list.** `Third Pillar Portal` turns you back
+for any world already in it:
+
+```js
+if (lifetime.indexOf(chosen) >= 0) { turnBack(seenEl); return; }
+```
+
+That list lives in `localStorage` under `dssWorldsSeenCycle` and, until now,
+**nothing cleared it**. "Play again" removes only keys matching `/Saved Game/`,
+and so does the debug autosave wipe. So it accumulates across every playthrough
+on that browser and only empties when it reaches five.
+
+After days of testing, the worlds Sam has already walked are banked, and each one
+closes its key **for good**. The brass lighter at the French is the easiest key in
+the game to pick up and it maps to `himalayas`, almost certainly the first world
+he ever walked, so the likeliest loop is: take the lighter, walk into the Pillars,
+get sent straight to the column, and be turned back every single time with *"You
+have been down this one."* Which reads exactly like a broken pillar.
+
+This is the rule he asked for on the lifetime axis ("you didn't complete all in a
+night... variation in replays"). It is not a code bug. It is a trap with no way
+out, because there was no reset.
+
+**Added:** a Crossings readout and its own wipe in the debug panel (backtick),
+next to the autosave wipe.
+
+- `Worlds walked (lifetime): himalayas, nazca` — so the state is visible at last.
+- `⌫ Reopen all five worlds (clear lifetime list)` — names what it will clear,
+  leaves the night in progress alone, and **keeps the Synthesis gifts**
+  (`dssLifetimeGifts` is a separate key and must never be cleared with it, or the
+  earned ending is lost).
+
+Verified: readout shows a seeded list, the wipe empties it, `dssLoadLifetimeWorlds()`
+returns `[]` afterwards.
+
+**Worth a decision.** For a real player the same thing happens more slowly: finish
+a world, and that key is dead until all five are done, with a turn-back that does
+not say which key would work. Three options, none taken:
+
+1. Leave it. The player is meant to work out that a different key means a
+   different world.
+2. Have the turn-back name a key that is still live, or say where one is.
+3. Have the Pillars itself refuse the crossing before you walk in, so you are not
+   sent to the column only to be turned round at it.
+
+Synced, commit when ready.
+
+## Addendum 99 — the line is cut: a key opens its world, every time (2026-09-14)
+
+Sam, on being shown the lifetime rule: "I don't get why it's complicated though:
+you have a key, you have given page 93, the pillar is open to the dream world that
+matches the key?" Then: "Cut the line."
+
+**Cut.** `Third Pillar Portal` no longer turns you back for a world walked on an
+earlier night. One line and its comment:
+
+```js
+if (lifetime.indexOf(chosen) >= 0) { turnBack(seenEl); return; }
+```
+
+The rule bought replay variety and cost far more than it bought. The brass
+lighter is the easiest key in the game to reach and it maps to `himalayas`, so
+after a few nights the commonest thing a player could do was carry a spent key to
+a column that turned them round, with no readout and no reset to tell them why.
+
+**What the crossing is now**, which is exactly what he described:
+
+- A key in the pocket and page 93 returned to Inis opens that key's world.
+- One crossing a night, so you still cannot see everything in one go.
+- The eye still waits until the other four are walked. `finalReady` is untouched:
+  Ezekiel being last is a real idea, not bookkeeping, and it is the one part of
+  the lifetime list that still gates anything.
+- The Synthesis is untouched. It counts `dssLifetimeGifts`, a separate key that
+  never resets.
+
+The lifetime list is still written and still read, for `finalReady` and for the
+cycle reset in `dssMarkWorldSeen()` which empties it at five so the eye goes last
+again next cycle. It just no longer closes doors.
+
+**Verified live end to end** on the state that used to fail: lifetime seeded with
+`["himalayas","nazca"]`, brass lighter in the pocket, hub → The Pillars → Yes →
+into the pub → straight to the column. No turn-back; the steer text and "Step
+through" both present; stepping through landed in the Airport Pub with The
+Enlightenment rendering and the key spent. Zero errors.
+
+The Crossings readout and its wipe from Addendum 98 stay. They are still the way
+to see what is banked, and the wipe is still the way to put Ezekiel back behind
+the other four for testing.
+
+Synced, commit when ready.

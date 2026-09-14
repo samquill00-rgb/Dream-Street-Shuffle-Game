@@ -4615,3 +4615,56 @@ That is every informational modal now on paper. What is left in a box all needs 
 answer from the player or is an illustrated reveal.
 
 Synced, commit when ready.
+
+## Addendum 95 — birds, a green quest, and a shorter way out of the pyre (2026-09-14)
+
+**1. The birds now wait for the last phase.** Sam: "The birds start chirping much
+too early. No chirping till the final part of the night then much more as you
+approach the end." The level came off `__dssNightDepth`, which is `phase / 3`, so
+After midnight already carried a bird every sixteen seconds and the Small hours
+were most of the way to a chorus. It is silent now until **Dawn awaits**, which is
+the phase the header itself calls the end of the night.
+
+The phase is read off the header's `.night-phase[data-night-phase]` rather than
+`__dssNightDepth`, because that window value only updates while the Soho map is
+being drawn; the old value stays as the fallback. The last phase opens at level
+0.35, about one far bird every twelve seconds, and the existing dawn boosts take
+it from there: 0.55 Towards Dawn, 0.85 at either Dawn Approach, 1.0 at the Dawn.
+
+Measured on the hub with the outdoor gate satisfied: **0 chirps in 22s at After
+midnight, 5 in 32s at Dawn awaits, 55 in 8s at the dawn boost.** Nothing, then
+occasional, then a sky full of them.
+
+**2. The quest is green, and has its own call.** Sam: "Make the quest a different
+colour so it's really obvious that you have got it. Maybe add a sound too. It's
+important." Everything the night hands you was gold or amber, quests included,
+so a quest read as one more item popup. The quest card is now **absinthe green**:
+card ground, border, outline, glow, the QUEST label, the title, the button and its
+hover, and the motes that rise off an accepted quest, which were filed under
+"QUEST MOTES (brass-gold)" and are now green with the rest. Green was the one
+colour the palette had not already spent. Gold is general, silver-blue is items,
+blue-lavender is revelations, orange-ember is page 93, violet and blue are the two
+pavement threads.
+
+It also had no sound of its own, only the `pageRustle` that every other popup
+uses. New `questCall()` in `dssAudio`: three struck notes rising a fifth then an
+octave, each with a hollow twelfth over it, and a band of air opening behind.
+Verified it builds 6 oscillators and 1 noise source.
+
+**3. The pyre goes straight to the wake.** Sam: "After you find page 93 in the
+pyre it should go straight to the wake option, without having to go through the
+Carthage hub again." `Rescue the page` linked back to `Carthage shore`, which at
+that exact moment offers **one** link and nothing else: with the page in hand and
+`$visitedPyre` true, the Green Sea branch needs `$returnedPage` (a later night)
+and the pyre branch is spent. So the shore was a click to reach a single link.
+That link is now on the page itself. Verified: one link out, landing in
+`The Interval`.
+
+**A note on method.** A `javascript_tool` call timed out mid-measurement with an
+`AudioContext.prototype` patch still installed. That is the failure that once made
+working audio look broken by stacking patches until the call stack blew. Cleared
+it by reloading the page, confirmed the prototype was native again before
+re-instrumenting, kept the counter on `window` so each probe could be short, and
+restored it at the end. **Check the prototype is native before patching it.**
+
+Synced, commit when ready.

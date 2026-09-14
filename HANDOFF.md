@@ -4238,3 +4238,73 @@ One word adds it.
 way on ("Let him look" → `The Painter's Gaze`) before suppressing the exit;
 verified live — header NOTEBOOK only, body link intact, no errors. `_backHide`
 now holds 34 names: the original 25, `Return the page`, the six, and this.
+
+---
+
+## Addendum 88 — the ringing phone can no longer trap you (2026-09-14)
+
+Sam, at the Coach after taking/rejecting the betting slip: "another phonecall
+rang and the screen went all blurry and I couldn't move from there."
+
+**I did not reproduce the trigger, and my first diagnosis was wrong.** I thought
+the venue tint's `isolation: isolate` was trapping `.phone-ringing` (z 99000)
+inside the passage while the blur layer on `tw-story` (z 98999) painted over it.
+Every reading that seemed to confirm it was confounded — first by the
+betting-slip popup (z 9999998), then by the stats primer (z 99990) sitting over
+my probe point. With those cleared the call's own link was topmost either way,
+and the A/B I ran to check was invalid because my own `!important` rule stopped
+the inline style doing anything. The isolation rule is kept as a cheap
+precaution, not as the fix.
+
+**What is fixed is the thing that turned it into a dead end.**
+`tw-story:has(.phone-ringing)::before` is a full-screen layer that blurred the
+page *and* swallowed every click, so nothing below z 98999 was reachable while a
+phone was on screen — including the header and the notebook. Any failure inside
+the call, from any cause, was therefore an unrecoverable lock. It is now
+`pointer-events: none`.
+
+**A/B, with a call on screen, clicking the NOTEBOOK link:**
+
+| blocker | topmost element at that point |
+|---|---|
+| `pointer-events: auto` (old) | `TW-STORY` — the blocker. Dead. |
+| `pointer-events: none` (now) | `TW-LINK` — reachable. |
+
+The blur survives (`backdrop-filter: blur(6px)` confirmed still applied) and the
+call's own panel still paints its 9999px box-shadow veil, so the look and the
+focus are unchanged. The cost is that a determined player can now click past a
+ringing phone — the better failure of the two.
+
+**Still unknown: what started it.** Worth asking Sam whether the call came in the
+bar or the gents (the Lily call at the Coach sets `$lilyCallReturn` to
+`Coach and Horses lock`, which is the gents), and whether the blurred box had any
+text in it or the screen was simply blurred with no panel at all.
+
+**Addendum 88a — CONFIRMED, and the first diagnosis was right after all.**
+
+Sam added the detail that decided it: "it was blurred, the whole thing was
+blurred" — the call panel itself, not just the page behind it. A panel that gets
+blurred by the backdrop layer is a panel painting *behind* it, which is the
+stacking trap exactly.
+
+Proven with two screenshots at the Coach, a call panel on screen:
+
+- **`isolation: isolate` restored (the old behaviour):** the panel's own text and
+  both buttons are blurred and unreadable.
+- **isolation lifted (the fix):** the panel is crisp, the page behind still blurred.
+
+So `tw-passage:has(.phone-ringing) { isolation: auto !important; }` IS the fix,
+and the venues it rescues are the ones carrying a tint context: the Coach
+(where Sam hit it), Lackland's, the back room, Cecil Court, the Interval and
+street-night.
+
+**Why three hit-tests missed it.** `elementsFromPoint` answers a different
+question from "what paints on top". Run one had the betting-slip popup over the
+probe point, run two had the stats primer, and by run three the blocker was
+already `pointer-events: none`, so hit-testing ignored it entirely and reported
+the call as topmost while it was still being painted over. **A paint bug needs a
+screenshot; a click test will lie to you.**
+
+Both changes stay, and they do different jobs: the isolation lift puts the call
+above the blur where it belongs, and the click-through blocker means no future
+failure of any kind can strand the player again.

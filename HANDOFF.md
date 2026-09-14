@@ -4464,3 +4464,57 @@ were carrying. Caught by checking which passage the line had landed in, reverted
 and redone by locating `DBG Complete`'s own block and appending after its last
 `(set:)`. **Anchor edits by passage, never by the first match of a common
 string** — several passages share these lines.
+
+## Addendum 92 — the five dream worlds get their renders (2026-09-14)
+
+**The renders were never missing.** They were built on 2026-09-12 in a 90-minute
+autonomous run whose brief said, in Sam's own words, *"do not edit the .twee…
+These are standalone render prototypes for me to review."* So they were written
+as five self-contained HTML files and left in the project root, reviewed, tweaked
+(the Chebar boulder, the foreground haze, the exaggerated movement), committed as
+`Renderings` / `New render` — and never wired into the game. That is why the
+Airport Pub passage had a `.airport-pub-scene` div with nothing behind it.
+
+The prototypes, all still rendering:
+
+- `airport-pub-3d-static.html` — The Enlightenment
+- `nazca-approach-3d-static.html` — dusk coast road
+- `easter-island-shore-3d-static.html` — moonlit basalt
+- `pyramid-mouth-3d-static.html` — the lit mouth
+- `plain-of-chebar-3d-static.html` — the bleached plain
+
+**What was done.** All five ported into the UserScript on the venue pattern
+(`XX-container` sentinel / `XX-wrap` overlay / `_dssBindScene` / `_dssDisposeWrap`),
+prefixes `ap` / `nz` / `ei` / `py` / `pc`. The port was scripted, not hand-edited
+(`scratchpad/port_worlds.py`), so every scene got the same six transformations:
+canvas into the overlay, the prototype's own resize listener dropped in favour of
+the one `_dssBindScene` can remove again, the tooltip re-homed inside the wrap,
+pointer handlers bound to the wrap so they die with it, the `alert()` stub
+replaced by the enter action, and the rAF loop made cancellable and gated on the
+active flag.
+
+**Difference from the venue scenes:** these dismiss *in place* rather than
+clicking a `·` link to a separate passage. Each world is entered exactly once,
+from the Third Pillar Portal (`(display: "Spend Held Key")(go-to: …)`), so there
+was no approach passage to add and no inbound links to rewire. The overlay fades
+over 1.6s and the passage prose is underneath. The sentinel div stays in the DOM
+after dismissal, which is what stops the 300ms poll re-firing the scene.
+
+Buttons: ENTER THE ENLIGHTENMENT / STEP DOWN FROM THE BUS / WADE ASHORE /
+CLIMB TO THE MOUTH / WALK OUT ONTO THE PLAIN.
+
+Chebar is the one light-ground scene, so its chrome is dark ink with a pale
+backing panel on the button; at the prototype's original alphas the label was
+illegible against the cracked plates.
+
+**Verified** on all five: scene appears, animates, button dismisses, wrap removed,
+`_dssThreeRegistry` empty, zero orphan canvases (WebGL context released), passage
+prose revealed underneath.
+
+**Left to do.** The prototypes' brief deliberately excluded the narrative props —
+the man with the orange paperback, the napkin, the bootprint and the spent
+cartridge, the guide at the foot of the pyramid, the prophet on his stone and the
+woman with her books. Those were always a later pass. The five .twee scenes are
+the place to add them now, not the standalone files, which are frozen references.
+
+Synced, commit when ready.

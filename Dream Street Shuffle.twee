@@ -15665,33 +15665,49 @@ var sizeTimer = null;
 
 function findContentBottom(passage, lamp) {
 var passageTop = passage.getBoundingClientRect().top;
-var maxBottom = passageTop; // start at top
 var els = passage.getElementsByTagName('*');
+
+// PASS A: find the first block that CLEARS the float. Everything from there
+// down sits below the lamp by definition and is none of its business —
+// measuring to it feeds the lamp's own height back into the measurement.
+var clearEl = null;
 for (var i = 0; i < els.length; i++) {
 var el = els[i];
-// Skip the lamp SVG and anything inside it
 if (el === lamp || lamp.contains(el)) continue;
-// Skip hidden elements
 var cs = window.getComputedStyle(el);
 if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-// Anything that CLEARS the float sits below the lamp by definition, so
-// measuring to it feeds the lamp's own height back into the measurement:
-// the lamp grows, the cleared block is pushed further down, the lamp grows
-// again. That left a dead column of empty page under the map with only the
-// lamp beside it (Sam, 2026-09-13). The list is in document order, so stop
-// at the first cleared block — it, and everything after it, is below the
-// float and none of it is the lamp's business.
-var rect = el.getBoundingClientRect();
-// Skip zero-size elements (empty hooks, collapsed whitespace). This test now
-// runs BEFORE the clear test on purpose: an EMPTY block that happens to clear
-// is not really sitting below the float, and breaking on one stopped the whole
-// measurement at the date strap. The lamp came out ~250px — the head and the
-// bracket, cut off just above where the pole starts — and every line under it
-// flowed full width across the lamp's gutter (Sam, 2026-09-15: "the streetlamp
-// cuts off before there is any pole ... the text goes too far to the right").
-if (rect.height === 0 || rect.width === 0) continue;
-if (cs.clear && cs.clear !== 'none') break;
-if (rect.bottom > maxBottom) maxBottom = rect.bottom;
+var r = el.getBoundingClientRect();
+// Zero-size first, deliberately: an EMPTY block that happens to clear is not
+// really below the float, and halting on one stopped the whole measurement at
+// the date strap — the pole came out ~250px, cut off above where it starts,
+// and every line under it ran across the lamp's gutter (Sam, 2026-09-15).
+if (r.height === 0 || r.width === 0) continue;
+if (cs.clear && cs.clear !== 'none') { clearEl = el; break; }
+}
+
+// PASS B: the bottom of the last real content ABOVE that block.
+var maxBottom = passageTop;
+for (var k = 0; k < els.length; k++) {
+var e = els[k];
+if (e === lamp || lamp.contains(e)) continue;
+if (clearEl) {
+  if (e === clearEl) break;
+  // ...AND SKIP ANY WRAPPER THAT CONTAINS IT. This is the one that bit:
+  // Harlowe wraps passage content in nested tw-hooks, and one of them encloses
+  // both the prose AND the map container. Its own box therefore includes the
+  // map — the very thing the clear was pushing out of range — so the "content
+  // bottom" tracked the lamp's height one-for-one. Measured: with the lamp at
+  // 20000px this returned 20592. Two passes landed short of it (a dead strip
+  // at 600px wide) and iterating chased it off the page. Excluding wrappers
+  // that straddle the clear makes the measurement a fixed point, which is what
+  // it was always supposed to be.
+  if (e.contains(clearEl)) continue;
+}
+var cs2 = window.getComputedStyle(e);
+if (cs2.display === 'none' || cs2.visibility === 'hidden') continue;
+var r2 = e.getBoundingClientRect();
+if (r2.height === 0 || r2.width === 0) continue;
+if (r2.bottom > maxBottom) maxBottom = r2.bottom;
 }
 return maxBottom - passageTop;
 }
@@ -51562,6 +51578,27 @@ You don't understand and smiling and then retreating, you strike, in the nifty, 
 
 /* ===== BASE ATMOSPHERE ===== */
 tw-story {
+/* CAP THE SIDE GUTTERS. Harlowe's own default is `padding: 5% 20%`, which is
+   generous on a wide window and punishing on a narrow one, because 20% of a
+   small number is still 20%. At a 600px viewport it took 240px and left a
+   360px column — NARROWER than the 504px the same page gets at 560px, where
+   Harlowe's small-screen rule drops to a flat 5%. So the column reached its
+   minimum in the middle of the range rather than at the bottom of it.
+   The hub floats a 145px lamp into that column, and at 600-660px there was
+   not room left for a line of the title beside it. A line box that cannot fit
+   beside a float drops BELOW it — so the title fell past the foot of the pole
+   and dragged the date, the prose and the map down with it, leaving the lamp
+   standing alone above an ~800px strip of nothing (Sam, 2026-09-15: "the dead
+   strip at 600px"). Measured: with the lamp forced to 4000px the h1's own box
+   ran to 4222, i.e. it was spanning the entire float.
+   The gutter is 5% now, capped at 96px — 5% being exactly what Harlowe itself
+   falls back to on a small screen, so the narrow end is unchanged (28px each
+   side at 560px, as before). A first attempt used min(20%, 96px) and made the
+   phone case WORSE, taking 560px from a 504px column to 368; measured, caught,
+   corrected. tw-passage's own max-width still sets the measure, so on desktop
+   the column moves by 12px and nothing else does. */
+padding-left: min(5%, 96px);
+padding-right: min(5%, 96px);
 background: linear-gradient(180deg, #0a0908 0%, #141110 50%, #0a0908 100%);
 background-attachment: fixed;
 color: #d4c4b0;

@@ -8546,41 +8546,23 @@ tw-story[tags~="dawn-end"] .alba-final .alba-line {
   z-index: 2;
   overflow: hidden;
 }
-.dawn-petal {
-  position: absolute;
-  bottom: -30px;
-  border-radius: 50% 40% 60% 50% / 60% 50% 50% 40%;
-  background: rgba(255, 248, 235, 0.82);
-  box-shadow: 0 0 8px rgba(255, 220, 160, 0.5), 0 0 2px rgba(255, 255, 255, 0.7);
-  animation: dawnPetalRise var(--dur, 4s) ease-in-out forwards;
+/* Petals are painted into one bounded, transparent canvas. */
+.dawn-petal-wrap canvas { display: block; }
+.dawn-petal-finis {
+  position: fixed; bottom: 7vh; left: 50%; z-index: 20;
+  white-space: nowrap; pointer-events: none;
+  color: #c4ae88; font: 1.7em 'Playfair Display', Georgia, serif;
+  letter-spacing: 0.55em; margin: 0; padding-top: 1.2em;
+  text-shadow: 0 0 24px rgba(196,158,108,0.6), 0 0 8px rgba(220,196,160,0.4);
+  opacity: 0; transform: translateX(-50%) scale(0.92);
+  animation: dawnPetalFinis 3s 1.8s ease-out forwards;
 }
-/* The post-"THE END" flood: pure white, no warm glow — a wash of white petals. */
-.dawn-petal.flood {
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.6), 0 0 3px rgba(255, 255, 255, 0.9);
+@keyframes dawnPetalFinis {
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
 }
-@keyframes dawnPetalRise {
-  0%   { transform: translateY(0)                               translateX(0)          rotate(var(--r0)); opacity: 0; }
-  6%   { opacity: 0.85; }
-  30%  { transform: translateY(calc(var(--rise,110vh) * -0.26)) translateX(var(--sx))  rotate(var(--r1)); opacity: 0.85; }
-  60%  { transform: translateY(calc(var(--rise,110vh) * -0.55)) translateX(0px)        rotate(var(--r2)); opacity: 0.7; }
-  85%  { transform: translateY(calc(var(--rise,110vh) * -0.80)) translateX(var(--sx2)) rotate(var(--r3)); opacity: 0.35; }
-  100% { transform: translateY(calc(var(--rise,110vh) * -1))    translateX(var(--sx3)) rotate(var(--r4)); opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .dawn-petal-finis { animation: none; opacity: 1; transform: translateX(-50%); }
 }
-@keyframes dawnPetalSettle {
-  0%   { transform: translateY(0)                                translateX(0)          rotate(var(--r0)); opacity: 0; }
-  8%   { opacity: 0.72; }
-  55%  { transform: translateY(var(--peak,-35vh))                translateX(var(--sx))  rotate(var(--r2)); opacity: 0.68; }
-  78%  { transform: translateY(calc(var(--peak,-35vh) + 10px))   translateX(var(--sx2)) rotate(var(--r3)); opacity: 0.62; }
-  100% { transform: translateY(calc(var(--peak,-35vh) - 5px))    translateX(var(--sx3)) rotate(var(--r4)); opacity: 0.55; }
-}
-.dawn-petal.settles {
-  animation-name: dawnPetalSettle;
-  animation-timing-function: ease-out;
-}
-/* Depth planes: out-of-focus foreground, receding background. */
-.dawn-petal.near { filter: blur(1.3px) brightness(1.06); z-index: 3; }
-.dawn-petal.far  { filter: blur(0.4px) brightness(0.72) saturate(0.9); z-index: 1; }
 
 /* ===== ENDING GLASS VINES ===== */
 .ending-vines {
@@ -50022,189 +50004,168 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ===== DAWN PETALS =====
+// One bounded canvas: pearl-white petals lift on a shared thermal, turn
+// edge-on, gather into a flood, then leave a quiet drift behind the ending.
 (function() {
-  var petalObserver = null;
-  var stormStarted = false;   // the storm must run EXACTLY once — the dawn
-                              // trigger + MutationObserver can otherwise re-fire
-                              // it on every petal-add, cascading into a runaway
-                              // (tens of thousands of petals, browser-choking).
-
+  var trigger = null, observer = null, fallback = 0, delay = 0, dispose = null;
+  function clearWatch() {
+    if (observer) observer.disconnect();
+    observer = null;
+    clearTimeout(fallback); clearTimeout(delay);
+  }
   function startPetalStorm() {
-    if (stormStarted) return;
-    stormStarted = true;
-    // Stop anything that could launch a second storm (the mutation + intersection
-    // observers fire constantly once petals start churning the DOM).
-    if (petalObserver) { try { petalObserver.disconnect(); } catch (e) {} petalObserver = null; }
-    if (typeof dawnMO !== 'undefined' && dawnMO) { try { dawnMO.disconnect(); } catch (e) {} }
-    // Let the piano theme play out to its real coda — disable looping
-    // on the source so the current pass finishes naturally and then
-    // stops, instead of being cut by a fade in the middle of a phrase.
+    if (dispose || !trigger || !trigger.isConnected) return;
+    clearWatch();
     if (window.dssAudio && window.dssAudio.letBedFinish) {
       try { window.dssAudio.letBedFinish('piano-eoin'); } catch(e) {}
     }
     var wrap = document.createElement('div');
     wrap.className = 'dawn-petal-wrap';
+    wrap.setAttribute('aria-hidden', 'true');
+    var canvas = document.createElement('canvas');
+    wrap.appendChild(canvas);
     document.body.appendChild(wrap);
+    var ctx = canvas.getContext('2d');
+    var finis = document.createElement('div');
+    finis.className = 'ending-finis dawn-petal-finis';
+    finis.textContent = 'THE END';
+    document.body.appendChild(finis);
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var width = 0, height = 0, ratio = 1, frame = 0, last = 0, elapsed = 0, carry = 0;
+    var particles = [], sprites = [], stopped = false;
+    var TAU = Math.PI * 2;
 
-    // Create THE END directly on body (root stacking context) so z-index beats petals
-    var finisEl = document.createElement('div');
-    finisEl.className = 'ending-finis';
-    finisEl.textContent = 'THE END';
-    finisEl.style.cssText = [
-      // D3: bloom in — scale 0.7 -> 1 with the fade (ease-out) instead of a flat appear.
-      'position:fixed', 'bottom:7vh', 'left:50%', 'transform:translateX(-50%) scale(0.7)',
-      'z-index:20', 'white-space:nowrap', 'color:#c4ae88', 'font-size:1.7em',
-      'letter-spacing:0.55em', 'font-family:Playfair Display,Georgia,serif',
-      'text-shadow:0 0 24px rgba(196,158,108,0.6),0 0 8px rgba(220,196,160,0.4)',
-      'margin:0', 'padding-top:1.2em',
-      'opacity:0', 'transition:opacity 2.8s 1.8s ease-out, transform 3s 1.8s cubic-bezier(0.18,0.7,0.24,1)'
-    ].join(';');
-    document.body.appendChild(finisEl);
-    setTimeout(function() { finisEl.style.opacity = '1'; finisEl.style.transform = 'translateX(-50%) scale(1)'; }, 50);
-
-    var elapsed    = 0;    // seconds since storm began
-    var spawnRate  = 150;  // ms between batches — brisk from the very start, decreases further
-    var active     = 0;
-    var maxPetals  = 800;  // dense storm — petals near-fill the viewport
-    var FLOOD_AT   = 8;    // seconds: once THE END has had time to be read...
-    var FLOOD_MAX  = 1600; // ...flood the screen with many more (white) petals
-    var RECEDE_AT  = 22;   // seconds: the flood has crested — the storm eases off
-    var RECEDE_FLOOR = 110; // ...down to a sparse lasting drift, so the poem surfaces
-
-    function spawnOne() {
-      if (active >= maxPetals) return;
-      active++;
-
-      // Probability of settling (accumulating) grows from 0 to 70% over ~55s
-      var settlePct = Math.min(0.70, elapsed / 55);
-      var settles   = Math.random() < settlePct;
-
-      var p = document.createElement('div');
-      p.className = 'dawn-petal' + (settles ? ' settles' : '') + (elapsed >= FLOOD_AT ? ' flood' : '') + (depth ? ' ' + depth : '');
-
-      var w   = settles ? (9 + Math.random() * 13) : (7 + Math.random() * 9);
-      var h   = w * (1.4 + Math.random() * 0.5);
-      var dur = settles
-        ? (7 + Math.random() * 7)      // 7–14s to settle
-        : (3 + Math.random() * 2.5);   // 3–5.5s to rise off-screen
-      // Depth of field, the bokeh of the 3D scenes in CSS: near petals are
-      // big, soft-focused and quick; far petals small, dim and slow.
-      var depthRoll = Math.random();
-      var depth = depthRoll < 0.22 ? 'near' : (depthRoll < 0.78 ? '' : 'far');
-      if (depth === 'near')     { w *= 1.7;  h *= 1.7;  dur *= 0.8;  }
-      else if (depth === 'far') { w *= 0.55; h *= 0.55; dur *= 1.35; }
-      var spinDir = Math.random() > 0.5 ? 1 : -1;
-      var spin    = spinDir * (60 + Math.random() * 220);
-      var r0      = (Math.random() * 360).toFixed(0);
-      var sx      = ((Math.random() - 0.5) * 120).toFixed(1) + 'px';
-      var sx2     = ((Math.random() - 0.5) * 80).toFixed(1)  + 'px';
-      var sx3     = ((Math.random() - 0.5) * 50).toFixed(1)  + 'px';
-
-      var styles = [
-        'width:'  + w.toFixed(1) + 'px',
-        'height:' + h.toFixed(1) + 'px',
-        'left:'   + (Math.random() * 100).toFixed(1) + '%',
-        '--dur:'  + dur.toFixed(2) + 's',
-        '--r0:'   + r0 + 'deg',
-        '--r1:'   + (parseFloat(r0) + spin * 0.25).toFixed(0) + 'deg',
-        '--r2:'   + (parseFloat(r0) + spin * 0.50).toFixed(0) + 'deg',
-        '--r3:'   + (parseFloat(r0) + spin * 0.75).toFixed(0) + 'deg',
-        '--r4:'   + (parseFloat(r0) + spin).toFixed(0)        + 'deg',
-        '--sx:'   + sx, '--sx2:' + sx2, '--sx3:' + sx3
-      ];
-
-      if (settles) {
-        // Peak height: anywhere from just off the ground to the top of the
-        // sky, so the storm fills the whole screen rather than a mid band.
-        var peakVh = (8 + Math.random() * 86).toFixed(1);
-        styles.push('--peak:-' + peakVh + 'vh');
-        // Settlers linger then slowly fade
-        var lifeMs = (dur + 18 + Math.random() * 20) * 1000;
-        setTimeout(function() {
-          if (!p.parentNode) { active--; return; }
-          p.style.transition = 'opacity 4s ease-out';
-          p.style.opacity    = '0';
-          setTimeout(function() {
-            if (p.parentNode) p.parentNode.removeChild(p);
-            active--;
-          }, 4000);
-        }, lifeMs);
+    // Painted once: irregular cupped silhouettes, a shaded fold and a fine
+    // translucent edge. Reuse the little paintings rather than filtering
+    // hundreds of DOM elements or rebuilding gradients every frame.
+    for (var variant = 0; variant < 3; variant++) {
+      var tile = document.createElement('canvas'); tile.width = 80; tile.height = 100;
+      var g = tile.getContext('2d');
+      var pearl = g.createLinearGradient(17, 10, 61, 78);
+      pearl.addColorStop(0, '#fffdf2'); pearl.addColorStop(0.38, '#ffffff');
+      pearl.addColorStop(0.72, '#e0e7ed'); pearl.addColorStop(1, '#aebbbd');
+      g.beginPath();
+      if (variant === 0) {
+        g.moveTo(40, 87); g.bezierCurveTo(12, 68, 6, 39, 23, 18);
+        g.bezierCurveTo(31, 9, 43, 17, 47, 12);
+        g.bezierCurveTo(75, 24, 68, 65, 40, 87);
+      } else if (variant === 1) {
+        g.moveTo(36, 88); g.bezierCurveTo(6, 56, 18, 14, 43, 13);
+        g.bezierCurveTo(66, 11, 71, 28, 58, 46);
+        g.bezierCurveTo(49, 59, 46, 79, 36, 88);
       } else {
-        styles.push('--rise:' + (105 + Math.random() * 15).toFixed(0) + 'vh');
-        setTimeout(function() {
-          if (p.parentNode) p.parentNode.removeChild(p);
-          active--;
-        }, (dur + 0.5) * 1000);
+        g.moveTo(43, 87); g.bezierCurveTo(11, 72, 8, 28, 29, 15);
+        g.bezierCurveTo(39, 28, 51, 6, 61, 23);
+        g.bezierCurveTo(71, 49, 51, 65, 43, 87);
       }
-
-      p.style.cssText = styles.join(';');
-      wrap.appendChild(p);
+      g.closePath(); g.fillStyle = pearl; g.fill();
+      g.strokeStyle = 'rgba(255,255,245,0.65)'; g.lineWidth = 1; g.stroke();
+      g.beginPath(); g.moveTo(41, 80); g.bezierCurveTo(32, 61, 43, 40, 38, 23);
+      g.strokeStyle = 'rgba(145,160,149,0.27)'; g.lineWidth = 1.1; g.stroke();
+      sprites.push(tile);
     }
-
-    function spawnBatch() {
-      elapsed += spawnRate / 1000;
-      // Two phases: a dense storm while THE END blooms and is read, then — once
-      // FLOOD_AT seconds pass — a true flood: the cap and batch sizes jump and
-      // the spawn-rate floor drops, so the screen fills with white petals.
-      // Three phases now: dense storm → true flood → RECESSION. The flood
-      // crests at RECEDE_AT and the storm eases to a sparse lasting drift,
-      // so the aubade, the record, and THE END surface into readability —
-      // drama, then fade.
-      var receding = elapsed >= RECEDE_AT;
-      var flooding = elapsed >= FLOOD_AT && !receding;
-      if (flooding) maxPetals = FLOOD_MAX;
-      if (receding) maxPetals = Math.max(RECEDE_FLOOR, Math.round(FLOOD_MAX * Math.pow(0.80, elapsed - RECEDE_AT)));
-      var batch = receding
-        ? 2                                                        // a petal or two at a time — the drift
-        : flooding
-        ? Math.min(55, Math.ceil(22 + (elapsed - FLOOD_AT) * 6))   // ramps into a flood
-        : Math.min(22, Math.ceil(7 + elapsed / 3));                // denser from the off
-      for (var i = 0; i < batch; i++) {
-        (function(ii) {
-          setTimeout(spawnOne, ii * (spawnRate / batch) + Math.random() * 60);
-        })(i);
-      }
-      if (receding) spawnRate = Math.min(650, spawnRate + 45);     // relaxes back out
-      else spawnRate = Math.max(flooding ? 22 : 60, spawnRate - 12); // accelerates fast, faster in the flood
-      setTimeout(spawnBatch, spawnRate);
+    function resize() {
+      width = window.innerWidth; height = window.innerHeight;
+      ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
+      canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      if (reduced) paint();
     }
-
-    spawnBatch();
+    function spawn(scattered) {
+      var depth = Math.random();
+      var near = depth > 0.82, far = depth < 0.28;
+      var size = near ? 32 + Math.random() * 29 : far ? 7 + Math.random() * 8 : 16 + Math.random() * 18;
+      var speed = (near ? 105 : far ? 53 : 78) * Math.max(0.65, height / 800);
+      particles.push({
+        x: Math.random() * (width + 120) - 60,
+        y: scattered ? Math.random() * height : height + size,
+        age: 0, speed: speed * (0.8 + Math.random() * 0.5), size: size,
+        phase: Math.random() * TAU, spin: (Math.random() - 0.5) * 1.8,
+        lean: Math.random() * TAU, flutter: 0.9 + Math.random() * 1.6,
+        alpha: near ? 0.86 : far ? 0.34 : 0.72,
+        sprite: sprites[Math.floor(Math.random() * sprites.length)],
+        depth: depth
+      });
+    }
+    function paint() {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, width, height);
+      // Far-to-near rendering makes overlapping translucent petals read as depth.
+      particles.sort(function(a,b){ return a.depth - b.depth; });
+      particles.forEach(function(p) {
+        var sway = Math.sin(p.age * 0.75 + p.phase) * (18 + p.depth * 42);
+        var thermal = Math.sin(elapsed * 0.34 + p.y / height * 2.3) * (28 + p.depth * 48);
+        var x = p.x + sway + thermal;
+        var fade = Math.min(1, p.age / 0.9, Math.max(0, (p.y + p.size) / 90));
+        ctx.save();
+        ctx.translate(x, p.y);
+        ctx.rotate(p.lean + p.age * p.spin + Math.sin(p.age * 1.1 + p.phase) * 0.28);
+        // A thin profile between two broad faces: the petal turns in the air.
+        var face = Math.cos(p.age * p.flutter + p.phase);
+        ctx.scale(0.18 + Math.abs(face) * 0.82, 1);
+        ctx.globalAlpha = p.alpha * (reduced ? 0.6 : fade);
+        ctx.drawImage(p.sprite, -p.size * 0.4, -p.size * 0.5, p.size * 0.8, p.size);
+        ctx.restore();
+      });
+    }
+    function tick(now) {
+      if (stopped) return;
+      if (!trigger || !trigger.isConnected) { dispose(); return; }
+      var dt = last ? Math.min((now - last) / 1000, 0.05) : 0; last = now;
+      elapsed += dt;
+      var rate = elapsed < 8 ? 15 + elapsed * 5 :
+        elapsed < 22 ? 115 : 4 + 105 * Math.exp(-(elapsed - 22) / 2);
+      var cap = Math.min(1000, Math.max(320, Math.round(width * height / 1000)));
+      carry += rate * dt;
+      while (carry >= 1) { if (particles.length < cap) spawn(false); carry--; }
+      particles.forEach(function(p){ p.age += dt; p.y -= p.speed * dt; });
+      particles = particles.filter(function(p){ return p.y > -p.size; });
+      paint();
+      frame = requestAnimationFrame(tick);
+    }
+    function visibility() {
+      cancelAnimationFrame(frame); last = 0;
+      if (!document.hidden && !reduced && !stopped) frame = requestAnimationFrame(tick);
+    }
+    dispose = function() {
+      if (stopped) return;
+      stopped = true; cancelAnimationFrame(frame);
+      window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', visibility);
+      wrap.remove(); finis.remove(); particles = []; sprites = []; dispose = null;
+    };
+    window.addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', visibility);
+    resize();
+    if (reduced) {
+      for (var j = 0; j < 45; j++) spawn(true);
+      paint();
+    } else frame = requestAnimationFrame(tick);
   }
-
-  function setupPetalObserver() {
-    if (petalObserver) { petalObserver.disconnect(); petalObserver = null; }
-    var trigger = document.getElementById('dawn-petal-trigger');
+  function watchDawn() {
+    var next = document.getElementById('dawn-petal-trigger');
+    if (next === trigger) return;
+    clearWatch();
+    if (dispose) dispose();
+    trigger = next;
     if (!trigger) return;
     var fired = false;
-    var fallbackTimer = null;
-    var fireOnce = function(delayMs) {
+    function fire(wait) {
       if (fired) return;
-      fired = true;
-      setTimeout(startPetalStorm, delayMs);
-      if (petalObserver) { petalObserver.disconnect(); petalObserver = null; }
-      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
-    };
-    petalObserver = new IntersectionObserver(function(entries) {
-      // Scrolled-in path: hold 3s so the player can read the alba poem
-      // and the petal-trigger line before the storm starts rising.
-      if (entries[0].isIntersecting) fireOnce(3000);
-    }, { threshold: 0.3 });
-    petalObserver.observe(trigger);
-    // Fallback: if the player never scrolls to the trigger (slow read of
-    // the dawn text, paused mid-page, etc.), fire petals automatically
-    // 36s after the Dawn passage loads. This guarantees the petal-storm
-    // begins — and with it, letBedFinish on the piano — before the
-    // looping piano-eoin bed has played past its natural coda too many
-    // times. The ending always plays out, no matter how slow the
-    // click-through to Dawn was.
-    fallbackTimer = setTimeout(function() { fireOnce(0); }, 36000);
+      fired = true; clearWatch();
+      delay = setTimeout(startPetalStorm, wait);
+    }
+    observer = new IntersectionObserver(function(entries){
+      if (entries.some(function(e){return e.isIntersecting;})) fire(3000);
+    }, {threshold:0.3});
+    observer.observe(trigger);
+    fallback = setTimeout(function(){fire(0);},36000);
   }
-
-  var dawnMO = new MutationObserver(function() {
-    if (document.getElementById('dawn-petal-trigger')) setupPetalObserver();
-  });
-  dawnMO.observe(document.body, { childList: true, subtree: true });
+  // Only a changed passage trigger starts a new lifecycle. Canvas frames do
+  // not mutate the DOM, and leaving Dawn cancels every pending timer/animation.
+  new MutationObserver(watchDawn).observe(document.body,{childList:true,subtree:true});
+  watchDawn();
 })();
 
 
@@ -53021,6 +52982,232 @@ window._dssDisposeWrap('pc-wrap');
 }
 }, 300);
 })();</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

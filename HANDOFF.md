@@ -4964,3 +4964,8 @@ Validation: 18 original regression fixtures; 12 new dream/access fixtures; drawi
 Evidence and test scripts: scratchpad/agreed-mechanics-fixes-2026-09-15/. The two obsolete timing sentences were retired in HTML comments, preserving their wording in source; no replacement creative prose was written. Harlowe's documented script variable access is used for the persistent progress and sketch bridge, not private engine APIs (https://twine2.neocities.org/#markup_script).
 
 ---
+## Dawn petal improvement — 2026-09-15
+
+Sam asked to improve the final Dawn petal flood while keeping the work focused. Replaced 1,600 glowing oval DOM particles and many independent timers with one bounded canvas. Three painted, irregular pearl-white petal silhouettes have shaded folds, translucent edges and veins; depth-dependent sizes/speeds, shared thermal drift and edge-on tumbling give the flood movement and depth. It builds for eight seconds, floods until 22 seconds, then recedes to a sparse drift. THE END and the piano's natural finish remain. No story prose changed.
+
+Lifecycle is tied to the actual Dawn trigger: one storm per passage, cancels when leaving, pauses when the tab is hidden, resizes for mobile and limits pixel density. Reduced-motion preference gets a still scattered-petal composition. Desktop flood/recession and mobile reduced-motion screenshots inspected; verified one canvas and one ending overlay, removal on leaving, and no Harlowe/JS errors. All 122 executable script blocks parse; all 302 literal links resolve. Source and HTML synced. Evidence: scratchpad/dawn-petals-2026-09-15/. No git commands run.

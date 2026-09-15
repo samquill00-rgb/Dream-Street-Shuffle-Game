@@ -1,3 +1,16 @@
+**STATE 2026-09-15 (later) — SECOND PLAYTHROUGH ROUND, three notes. Committed on branch `claude/serene-johnson-cyc68y`; .html synced; all code verified in a real browser (recipe in 18e).**
+
+### 19a — KEYS WAIT FOR THE PAGE QUEST
+Sam (second pass): keys gated on "returned the page and completed the quest", and they come from the venues, not from Inis. All FIVE seed offers are `(if: $inisToldOfPillars is true and $keyX is "seed")` — French lighter, chippy ticket, Coach slip, Lackland eye, Trisha's cocaine. `$inisToldOfPillars` is set in `O'Flatterly's Gift`, reachable only from `Return the page`, so it IS "quest complete". Key Guards now guards that flag for old saves. A first-pass `$metInis` (gate on the introduction) was tried and removed the same day; nothing references it. Verified: fresh jump to The French → 0 `.dss-key-offer`; with the flag true → the lighter offer prints.
+
+### 19b — STASH SLIP ONLY WHEN CARRYING
+Sam saw "You can leave what you are carrying here" on the French 3D approach with nothing to leave. `Key Stash Here` prints its link only when `$dreamKey` is set, so the one-time slip in `Stash Point` is now `(if: $shownStashTip is not true and $dreamKey is not "")`. Verified: empty-handed approach → no `#wtw-stash-msg`; carrying the lighter → slip + "Leave the brass lighter here" together, 0 tw-errors.
+
+### 19c — PHONE BOX (question answered, NO code; Sam accepts the trade)
+When you can ring: `$hasCoin` (Donkey, hub visit 2) AND `$refusedCalls > 0` AND not `$refusedDualRing`. Otherwise the box gives one of three dead-end lines. Cost: the coin, so no coin-flip at the Colony two doors (`coinGate` reads `.dss-coin-flag`). Gain: `$refusedCalls − 1`, which nothing reads except the `(if: $refusedCalls is 2)` Fetch-window omen at the moment of a refusal — so mechanically the call buys almost nothing, and Aoife's answer is still a PLACEHOLDER. Sam: not attached to the Colony flip — coin in pocket flips, no coin just click, which is already what `coinGate` does (returns before installing when `.dss-coin-flag` is not 1). No change. The map tile `phonebox` is `label:''`/event (smudge) and the hub dock link is gated on `$hasCoin` only.
+
+---
+
 **STATE 2026-09-15 — PLAYTHROUGH NOTES ROUND. Everything below is COMMITTED AND PUSHED to `main` (head `80c462b`); the working tree is clean and the .html is synced. Eight commits this session.** Sam gave eleven notes from a playthrough; ten were code, one was a question. All ten are done and, unlike previous sessions, MOST ARE VERIFIED IN A REAL BROWSER — see "Running the game from the chair" below, which is the single most useful thing to carry forward.
 
 ### 18a — THE ELEVEN NOTES (`41902ac`, plus follow-ups)

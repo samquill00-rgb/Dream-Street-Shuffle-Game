@@ -4951,3 +4951,16 @@ to see what is banked, and the wipe is still the way to put Ezekiel back behind
 the other four for testing.
 
 Synced, commit when ready.
+## CURRENT RULES — Codex fixes, 2026-09-15
+
+Sam explicitly approved multiple DIFFERENT unfinished dream worlds in the same night. This supersedes Addenda 84 and 99 and the earlier verification report's assumption that one crossing per night was intended. Page 93 still unlocks the pillar; the key chooses the world; COMPLETING a world earns its permanent gift and closes that world across future nights. Entering alone does not count. Ezekiel still requires the other four gifts; all five unlock the synthesis. Never reinstate the one-crossing cap or reset completion at five.
+
+Implemented and synced: permanent gifts drive a new Dream Progress system passage, displayed before each passage by the header. It restores dream knowledge across nights, suppresses completed worlds' keys, and makes an unfinished spent key available again when returning to Dean Street. Relevant venues stay accessible while a useful seed key remains; Pillars stays reachable for synthesis after all five. Old per-night completed-world arrays migrate into permanent gifts. The obsolete debug button promising to reopen worlds by clearing only the cycle list was removed.
+
+Also fixed the three outstanding route issues: Red/Inis/critic/Lackland reopen for unacknowledged dream discoveries (including the critic's Maritime interlude approach); recovery above zero clears the collapse funnel on returning to Dean Street; the French offers an unfinished sketch again. Sketch strokes live in the save-compatible napkinDraft string, survive leaving and returning, and clear on completion/new night. Ordinary recognition flags still prevent repeatedly awarding the same recognition during a night.
+
+Validation: 18 original regression fixtures; 12 new dream/access fixtures; drawing, gift-boundary and actual replay checks; normal fresh opening. No Harlowe or JavaScript errors in tested scenarios. Second different dream entered that night; early eye blocked and eye after four admitted; page quest enforced; completed key absent; incomplete spent key restored; all-five synthesis link visible; all four recognition routes reached from hub. Drawing strokes survived leaving and enabled Done on return; finishing reached Give him the painting. Entering The Glyph awarded nothing until Pocket the rubbing; all five gifts and legacy completion records survived Play again. Static check: 230 source headers, 122 executable script blocks parse, 302 literal links resolve, no duplicate passage names. Build: 226 playable/system passages synced. No git commands run.
+
+Evidence and test scripts: scratchpad/agreed-mechanics-fixes-2026-09-15/. The two obsolete timing sentences were retired in HTML comments, preserving their wording in source; no replacement creative prose was written. Harlowe's documented script variable access is used for the persistent progress and sketch bridge, not private engine APIs (https://twine2.neocities.org/#markup_script).
+
+---

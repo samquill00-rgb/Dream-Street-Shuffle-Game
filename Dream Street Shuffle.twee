@@ -15707,11 +15707,26 @@ if (!lamp || !passage || !lamp.parentNode) return;
 // until the map is ~2000px down a black column. On the narrow layout the lamp
 // only keeps the title block company: measure to the top of the map instead.
 function measure() {
-  var narrow = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+  // Below the stylesheet's breakpoint the map CLEARS this float and sits under
+  // it, so the lamp's business ends at the top of the map, not at the bottom of
+  // the passage -- measuring to the passage bottom there would include the map
+  // the lamp has itself pushed down, and the page grows a dead column.
+  //
+  // Which side of the breakpoint we are on is a CSS decision. This used to
+  // repeat it as a matchMedia('(max-width: 640px)') string: two copies of one
+  // number, kept in step by hand, and when the breakpoint moved to 1100 they
+  // would have silently disagreed across the whole new band. Read the computed
+  // `clear` off the container instead and the number lives in one place.
   var mapC = document.getElementById('soho-map-container');
-  if (narrow && mapC) {
-    var t = mapC.getBoundingClientRect().top - passage.getBoundingClientRect().top - 8;
-    return t;
+  var cleared = false;
+  try {
+    if (mapC && window.getComputedStyle) {
+      var cs = window.getComputedStyle(mapC);
+      cleared = !!cs.clear && cs.clear !== 'none';
+    }
+  } catch (e) {}
+  if (cleared && mapC) {
+    return mapC.getBoundingClientRect().top - passage.getBoundingClientRect().top - 8;
   }
   return findContentBottom(passage, lamp);
 }
@@ -15723,14 +15738,20 @@ function measure() {
 function lampOffset() {
 return lamp.getBoundingClientRect().top - passage.getBoundingClientRect().top;
 }
-// Pass 1: shrink float, measure natural content bottom
+// TWO PASSES, DELIBERATELY BOUNDED. Pass 1 collapses the float and measures the
+// natural content bottom; pass 2 re-measures once, because with the float active
+// the text has reflowed narrower and grown. It is tempting to iterate to
+// convergence instead, and it does not work: below the breakpoint the target is
+// the top of a block that CLEARS this float, so every pixel added to the lamp
+// moves the target by a pixel and the loop chases its own tail. Tried, measured,
+// reverted -- it reached 5254px on a 600px-wide window. Two passes cannot run
+// away, which matters more here than landing exactly.
 lamp.setAttribute('height', '1');
 var h = measure() - lampOffset();
 if (h < 50) h = 50;
 lamp.setAttribute('height', Math.ceil(h));
 
-// Pass 2: with float active text reflows — re-measure. rAF stalls in a
-// backgrounded tab, so a timeout backs it up.
+// rAF stalls in a backgrounded tab, so a timeout backs it up.
 var repassed = false;
 function pass2() {
 if (repassed) return; repassed = true;
@@ -60017,7 +60038,31 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 .soho-map-stage, .soho-map-bar { width: calc(100% - 178px); max-width: min(920px, calc((100vh - 200px) * 26 / 29)); margin-left: auto; margin-right: 178px; }
 .soho-map-stage, .soho-map-bar { max-width: min(920px, calc((100svh - 200px) * 26 / 29)); }
 .soho-map-stage { position: relative; container-type: inline-size; overflow: hidden; }
-@media (max-width: 640px) { .soho-map-wrap { clear: both; margin-left: 0; } .soho-map-stage, .soho-map-bar { width: 100%; max-width: none; margin-right: 0; } }
+/* THE LAMP GUTTER, AND WHEN TO STOP PAYING IT. Above the breakpoint the map
+   sits BESIDE the lamp and gives up a fixed 178px to it. Fixed is the problem:
+   as the column narrows the map is what pays, every pixel of it. Measured in
+   Chromium — 544px wide at a 1440 viewport, 424 at 1100, 379 at 1024, 304 at
+   900, 256 at 820 (an iPad held upright) and 184 at 700. A 26-tile Soho drawn
+   256px across is not a map (Sam, 2026-09-15: "the map collapsing on tablet
+   widths").
+   The breakpoint was 640px, which is far below the width at which it stops
+   working — it only ever caught phones. It is 1100px now: the narrowest
+   viewport that still leaves the map its 416px native size (26 tiles x 16px)
+   with the lamp beside it. Below that the map CLEARS the lamp and takes the
+   whole column instead, which at 1024 is 614px — wider than the 379 it used
+   to be given, and at 820 it is 492 rather than 256.
+   The height cap stays on in this band so the whole map still fits the window;
+   only the phone tier drops it, where scrolling is the norm anyway.
+   NB sizeLamp() in the UserScript HAS to agree about which side of this line
+   we are on. If it thinks the map is beside the lamp when the CSS has cleared
+   it, it measures to content the clear has pushed below the float, the lamp
+   grows to meet it, and the page opens a dead column. It now reads the
+   computed `clear` off the container rather than repeating 1100 in JS. */
+@media (max-width: 1100px) {
+  #soho-map-container, .soho-map-wrap { clear: both; margin-left: 0; }
+  .soho-map-stage, .soho-map-bar { width: 100%; margin-left: auto; margin-right: auto; }
+}
+@media (max-width: 640px) { .soho-map-stage, .soho-map-bar { max-width: none; } }
 .soho-map-wrap canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid rgba(200,168,106,0.45); box-shadow: 0 0 0 4px #08070a, 0 0 0 5px rgba(200,168,106,0.3), 0 12px 44px rgba(0,0,0,0.65); background: #0b0b10; outline: none; }
 .soho-map-wrap canvas:focus-visible { border-color: rgba(200,168,106,0.7); }
 /* where the venue meets the street: a fan of the door's light across the pavement, and a

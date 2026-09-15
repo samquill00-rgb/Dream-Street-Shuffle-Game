@@ -69,6 +69,9 @@ Launch with an EXPLICIT path — the pip playwright wants a newer build than the
 - Sam works from GitHub Desktop on his Mac. Remote sessions must commit and push or the work is lost with the container; he authorised git for that reason this session. **He does not want a PR unless he asks.**
 - A two-part zip backup (44MB total, split for a 30MB upload limit) was sent to him on 2026-09-15: source + build + 27 audio + 5 char PNGs + docs. `licensed-originals/` (~66MB, replaced by generated beds) deliberately excluded.
 
+### 19d — PLACEHOLDER TRIM (rebuilt on top of main after another session's "New changes"/"petals update")
+Sam: the pink draft "babbles on a bit"; reduce slightly, keep the fun, bullets if better. Fifteen `claude-draft` blocks over ~200 words (all in the five dream worlds: Airport Pub, The Cave, Centre Nazca, Easter Shore, Among the Moai, Listening Moai, Glyph, Pyramid Mouth, Descending Corridor, Grand Gallery, King's Chamber, Chebar, Storm, Four Living Creatures, Wheel) cut 10–15% each, no detail or dialogue dropped. One bullet list: the Airport Pub departures board (`<ul>` inside the draft div). The other ~134 pink blocks untouched. Longest remaining: Among the Moai (~370) and Chebar (~355) if he wants a second pass. LESSON: Sam runs other AIs on main between turns — fetch main and rebuild the branch on it before pushing, or the merge conflicts.
+
 ---
 
 **CURRENT OVERRIDE — 2026-09-12: OPEN NIGHT SHIPPED.** Sam has removed the turn-limit design. Exploration no longer drains condition; no visit budget or forced dawn. Discovery-based night phases and a voluntary Head towards dawn choice replace the clock. Earlier turn-budget/refund/penalty notes below are historical and superseded. See the final “Open night overhaul” addendum for implementation and verification.

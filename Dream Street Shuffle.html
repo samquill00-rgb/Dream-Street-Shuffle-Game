@@ -60623,7 +60623,18 @@ Behind you, high up in the shaft, something heavy shifts its weight and begins t
      the camera, GUSTS telegraphed by the flurry angle and the wind ~1.4s before
      they push (counter by leaning into them; ladders, the bridge and the
      ending are exempt), and night turning to dawn with height. Dev only:
-     window._hcDev.warp(s) and .gust() for testing. --&gt;
+     window._hcDev.warp(s) and .gust() for testing.
+     PASS 3 (2026-09-16, Sam&#x27;s notes after playing: &quot;mostly really easy, you
+     just hold forward&quot;): the WIND is the fight now, a constant crosswind that
+     wanders in strength and direction, grows with height, and gusts on top
+     of it every few seconds, so holding forward alone drifts you off;
+     chanting plants you (shelter, at the cost of breath time). A FALL is no
+     longer a teleport: a whirlwind lifts you, spins you and carries you back
+     to the last flags (still one slip). FOUR avalanche couloirs instead of
+     one, each with a 4s warning during which the front is visible far up the
+     slope and creeping, then a JUMP cue when it is close. PLATEAUS: stretches
+     two to three times as wide where the wind is far stronger; harder to
+     resist, harder to be blown off. Dev: _hcDev.shove(du). --&gt;
 (set: $himalayaClimbWon to false)\
 &lt;div class=&quot;claude-draft&quot;&gt;
 Above the foothills the snow begins in earnest and the path stops pretending to be a path. Something big is climbing ahead of you, unhurried, in the way of a thing that knows the mountain and has nowhere else to be on it. It leaves its prints burning faint and blue in the fresh fall, and the snow starts filling them in the moment they are made, so that the line of them is only ever eight or nine long behind it.
@@ -60665,18 +60676,30 @@ It does not look back. Not yet.
   // same height/width functions as the rendered mesh. No invisible bridges.
   var GAPS=[[30,31.25],[74,75.5],[118,119.25],[151,152.5],[204,205.5],[267,268.5],[322,323.5],[410,411.5]];
   var STEPS=[46,98,143,194,242,310,380], FLAGS=[24,65,108,132,176,218,258,296,344,394,428];
-  var LADDERS=[{a:124,b:126,rise:7},{a:286,b:288,rise:9}], BRIDGE=[164,176], CORNICE=[226,229], COULOIR=[352,365];
+  var LADDERS=[{a:124,b:126,rise:7},{a:286,b:288,rise:9}], BRIDGE=[164,176], CORNICE=[226,229];
+  // Four couloirs. Each fires once; a sweep-back re-arms the one you were in.
+  var COULOIRS=[[84,96],[248,262],[352,365],[396,408]];
+  // Plateaus: [from, to, width multiplier, wind multiplier]. Wide open snowfields where the wind has nothing to break it.
+  var PLATEAUS=[[52,62,2.8,1.7],[231,240,2.6,1.6],[299,308,3.0,1.9],[368,378,2.6,1.7]];
+  var windLock=false; // dev: _hcDev.calm(true) stills the wind for testing
+  function plateau(at){for(var i=0;i&lt;PLATEAUS.length;i++){var p=PLATEAUS[i];if(at&gt;=p[0]&amp;&amp;at&lt;=p[1])return p;}return null;}
+  // The wind: a crosswind that wanders, plus gusts on top. Sam: the wind should be what you are mostly fighting.
+  var wind={strength:0,target:0,timer:0};
+  // The whirlwind that carries a fallen climber back to the flags.
+  var whirl={active:false,t:0,dur:1.7,fs:0,fu:0,fy:0,ts:0,ty:0}, whirlMesh=null;
   var climbing=false, corniceTimer=-1, corniceBroken=false, corniceMesh=null;
   // PASS 2 state: post stack, snowfall, gusts, dawn.
   var composer=null, bloomPass=null, gradeEls=[], snowPoints=null, snowPos=null, snowVel=null, SNOW_N=1300;
   var gust={phase:&#x27;idle&#x27;,t:0,dir:1,next:14}, dawn=0, hemi=null, sun=null;
   var NIGHT={bg:0x1c3048,sky:0xc8e6ff,ground:0x31303b,sun:0xdbeaff,hemiI:.72,sunI:.65}, DAWN={bg:0x6d6178,sky:0xffd0a8,ground:0x4a3d44,sun:0xffae72,hemiI:.72,sunI:.65}; // intensities held: brighter lights plus bloom blew the shelf out to white mid-route; only the colours turn
   var cBg=null, cSky=null, cGround=null, cSun=null;
-  var avalanche={phase:&#x27;idle&#x27;,t:0,front:372}, avalancheMesh=null;
+  var avalanche={phase:&#x27;idle&#x27;,t:0,front:372,index:-1,done:[],cued:false}, avalancheMesh=null;
   function height(at){return .19*at+STEPS.reduce(function(n,edge){return n+(at&gt;=edge?.85:0);},0)+LADDERS.reduce(function(n,l){return n+l.rise*Math.max(0,Math.min(1,(at-l.a)/(l.b-l.a)));},0);}
   function center(at){return 5*Math.sin(at/17)+2*Math.sin(at/8);}
   function tangent(at){return 5/17*Math.cos(at/17)+.25*Math.cos(at/8);}
-  function width(at){if(at&gt; LENGTH-13)return 8;if(at&gt;=BRIDGE[0]&amp;&amp;at&lt;=BRIDGE[1])return 2;return 5.6+.7*Math.sin(at/14);}
+  function width(at){if(at&gt; LENGTH-13)return 8;if(at&gt;=BRIDGE[0]&amp;&amp;at&lt;=BRIDGE[1])return 2;var w=5.6+.7*Math.sin(at/14);
+    for(var i=0;i&lt;PLATEAUS.length;i++){var p=PLATEAUS[i];if(at&gt;=p[0]-3&amp;&amp;at&lt;=p[1]+3){var ramp=Math.min(1,Math.max(0,Math.min(at-(p[0]-3),(p[1]+3)-at)/3));return w*(1+(p[2]-1)*ramp);}}
+    return w;}
   function gap(at){return GAPS.some(function(g){return at&gt;g[0] &amp;&amp; at&lt;g[1];}) || corniceBroken &amp;&amp; at&gt;CORNICE[0] &amp;&amp; at&lt;CORNICE[1];}
   function support(at,across){return at&gt;=-3 &amp;&amp; at&lt;=LENGTH+10 &amp;&amp; !gap(at) &amp;&amp; Math.abs(across)&lt;=width(at)/2;}
   function position(at,across,up){return new THREE.Vector3(center(at)+across,up,-at);}
@@ -60828,6 +60851,7 @@ It does not look back. Not yet.
     corniceMesh=mesh(cube,snow,center(227.5),height(227.5)-.08,-227.5,width(227.5),.25,3);
     corniceMesh.rotation.x=Math.atan(.19);
     avalancheMesh=new THREE.InstancedMesh(sphere,snow,28);avalancheMesh.visible=false;scene.add(avalancheMesh);
+    whirlMesh=new THREE.InstancedMesh(sphere,snow,44);whirlMesh.visible=false;scene.add(whirlMesh);
     // Rounded, weathered ridge geometry, shared by every distant peak.
     var ridge=new THREE.SphereGeometry(1,20,14),rp=ridge.attributes.position;
     for(var ri=0;ri&lt;rp.count;ri++){var rx=rp.getX(ri),ry=rp.getY(ri),rz=rp.getZ(ri);var erosion=1+.13*Math.sin(rx*9+ry*5)*Math.cos(rz*8-ry*3);rp.setXYZ(ri,rx*erosion+ry*ry*.13,ry,rz*erosion);}
@@ -60910,10 +60934,13 @@ It does not look back. Not yet.
     if(window.dssFilmGrade){var frame=canvas.parentElement,before=frame.children.length;window.dssFilmGrade(frame);for(var gi=before;gi&lt;frame.children.length;gi++)gradeEls.push(frame.children[gi]);cover.style.zIndex=&#x27;6&#x27;;banner.style.zIndex=&#x27;5&#x27;;}
     y=height(s);beginButton.disabled=false;resize();resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvas.parentElement);
     listen(window,&#x27;resize&#x27;,resize);
-    if(window.DSS_DEV)window._hcDev={canvas:canvas,snapshot:function(){return {s:s,u:u,y:y,ground:height(s),vy:vy,grounded:grounded,breath:breath,prints:prints,slips:slips,checkpoint:checkpoint,yetiS:yetiS,ending:ending,paused:paused,finished:finished,coyote:coyoteT,buffer:bufferT,activePrints:printList.filter(function(p){return p.mesh.visible;}).length,drawCalls:renderer.info.render.calls,climbing:climbing,corniceBroken:corniceBroken,avalanche:avalanche.phase,avalancheFront:avalanche.front,gust:gust.phase,gustDir:gust.dir,dawn:dawn,bloom:!!composer};},
+    if(window.DSS_DEV)window._hcDev={canvas:canvas,snapshot:function(){return {s:s,u:u,y:y,ground:height(s),vy:vy,grounded:grounded,breath:breath,prints:prints,slips:slips,checkpoint:checkpoint,yetiS:yetiS,ending:ending,paused:paused,finished:finished,coyote:coyoteT,buffer:bufferT,activePrints:printList.filter(function(p){return p.mesh.visible;}).length,drawCalls:renderer.info.render.calls,climbing:climbing,corniceBroken:corniceBroken,avalanche:avalanche.phase,avalancheFront:avalanche.front,gust:gust.phase,gustDir:gust.dir,dawn:dawn,bloom:!!composer,wind:wind.strength,whirl:whirl.active,width:width(s),plateau:!!plateau(s)};},
       // Testing only: put the climber at any point on the route, or force a gust.
       warp:function(at){if(!started||ending&gt;=0)return;s=Math.max(0,Math.min(LENGTH-1,at));u=0;y=height(s);vy=0;grounded=true;yetiS=Math.min(LENGTH,s+13);nextPrint=Math.max(nextPrint,s+3);cameraReady=false;},
-      gust:function(dir){gust.phase=&#x27;warning&#x27;;gust.t=0;gust.dir=dir||1;}};
+      gust:function(dir){gust.phase=&#x27;warning&#x27;;gust.t=0;gust.dir=dir||1;},
+      shove:function(du){u+=du;},
+      calm:function(on){windLock=!!on;if(on){wind.target=0;wind.strength=0;gust.phase=&#x27;idle&#x27;;gust.next=99;}else{wind.timer=0;gust.next=4;}},
+      avalanche:function(){var ci=0;for(var i=0;i&lt;COULOIRS.length;i++)if(s&lt;COULOIRS[i][1])ci=i,i=99;avalanche.phase=&#x27;warning&#x27;;avalanche.index=ci;avalanche.t=0;avalanche.front=COULOIRS[ci][1]+42;avalanche.cued=false;if(avalanche.done.indexOf(ci)&lt;0)avalanche.done.push(ci);announce(&#x27;THE SLOPE IS GOING · BE READY TO JUMP&#x27;);}};
     loop(performance.now());
   }
   function makePrint(at){
@@ -60924,7 +60951,14 @@ It does not look back. Not yet.
     g.position.copy(position(at,0,height(at)+.045));g.rotation.y=-Math.atan(tangent(at));scene.add(g);
     printList.push({s:at,born:time,mesh:g,material:material,geometry:geo,id:Math.round(at*100)});
   }
-  function respawn(){slips++;corniceTimer=-1;corniceBroken=false;if(corniceMesh){corniceMesh.visible=true;corniceMesh.position.y=height(227.5)-.08;}avalanche.phase=&#x27;idle&#x27;;avalanche.t=0;if(avalancheMesh)avalancheMesh.visible=false;s=checkpoint;u=0;y=height(s);vy=0;grounded=true;coyoteT=COYOTE;bufferT=0;breath=Math.max(.65,breath);cameraReady=false;announce(&#x27;SLIP · BACK AT THE FLAGS&#x27;);}
+  // A fall is a whirlwind, not a teleport (Sam: &quot;swept back onto the course
+  // in a whirlwind like you did in the old version&quot;). The climber is lifted,
+  // spun and carried back to the last flags; the slip is counted at once and
+  // the hazards reset when he is set down. Input is dead while airborne.
+  function respawn(){if(whirl.active)return;slips++;whirl.active=true;whirl.t=0;whirl.fs=s;whirl.fu=u;whirl.fy=Math.max(y,height(s)-2);whirl.ts=checkpoint;whirl.ty=height(checkpoint);whirl.dur=Math.min(2.8,1.3+Math.abs(s-checkpoint)*.022);clearInput();vy=0;grounded=false;if(whirlMesh)whirlMesh.visible=true;announce(&#x27;SWEPT BACK · THE WIND KEEPS YOU&#x27;);}
+  function setDown(){whirl.active=false;if(whirlMesh)whirlMesh.visible=false;corniceTimer=-1;corniceBroken=false;if(corniceMesh){corniceMesh.visible=true;corniceMesh.position.y=height(227.5)-.08;}
+    if(avalanche.index&gt;=0){var di=avalanche.done.indexOf(avalanche.index);if(di&gt;=0)avalanche.done.splice(di,1);}avalanche.phase=&#x27;idle&#x27;;avalanche.t=0;avalanche.index=-1;if(avalancheMesh)avalancheMesh.visible=false;
+    s=whirl.ts;u=0;y=height(s);vy=0;grounded=true;coyoteT=COYOTE;bufferT=0;breath=Math.max(.65,breath);climber.rotation.z=0;}
   function update(dt){
     if(!started||paused||finished)return;time+=dt;
     if(ending&gt;=0){
@@ -60938,6 +60972,11 @@ It does not look back. Not yet.
       }
       return;
     }
+    if(whirl.active){whirl.t+=dt;var we=Math.min(1,whirl.t/whirl.dur),wk=we*we*(3-2*we);
+      s=whirl.fs+(whirl.ts-whirl.fs)*wk;u=whirl.fu*(1-wk);y=whirl.fy+(whirl.ty-whirl.fy)*wk+Math.sin(we*Math.PI)*5.5;
+      if(we&gt;=1)setDown();
+      if(eng)eng.update(true,false,false);
+      return;}
     var chant=(held(&#x27;ArrowDown&#x27;)||held(&#x27;s&#x27;))&amp;&amp;grounded;
     var forward=held(&#x27;ArrowUp&#x27;)||held(&#x27;w&#x27;), lateral=(held(&#x27;ArrowRight&#x27;)||held(&#x27;d&#x27;)?1:0)-(held(&#x27;ArrowLeft&#x27;)||held(&#x27;a&#x27;)?1:0);
     climbing=LADDERS.some(function(l){return s&gt;=l.a-.1 &amp;&amp; s&lt;l.b &amp;&amp; Math.abs(u)&lt;1.15 &amp;&amp; Math.abs(y-height(s))&lt;.25;});
@@ -60976,24 +61015,43 @@ It does not look back. Not yet.
     // only if you were already near that edge) → idle. Never on a ladder, the bridge
     // (its rails already clamp), during the avalanche or the ending, and not
     // before the first flag so the opening teaches the controls first.
-    var exempt=climbing || (s&gt;=BRIDGE[0]&amp;&amp;s&lt;=BRIDGE[1]) || avalanche.phase===&#x27;running&#x27; || s&lt;FLAGS[0];
-    if(gust.phase===&#x27;idle&#x27;){gust.next-=dt;if(gust.next&lt;=0 &amp;&amp; !exempt){gust.phase=&#x27;warning&#x27;;gust.t=0;gust.dir=Math.random()&lt;.5?-1:1;if(reducedMotion)announce(&#x27;GUST FROM THE &#x27;+(gust.dir&lt;0?&#x27;RIGHT&#x27;:&#x27;LEFT&#x27;));}}
+    var exempt=climbing || (s&gt;=BRIDGE[0]&amp;&amp;s&lt;=BRIDGE[1]);
+    // THE WIND. A crosswind that picks a new target strength and side every
+    // few seconds and eases toward it; it grows with height and is multiplied
+    // on the plateaus. Gusts (warned by the flurries and the wind bed for
+    // 1.4s) come every 4 to 9s on top of it. Together they are what you fight:
+    // hold forward alone and you drift off. Chanting plants you and the wind
+    // cannot move you, which is what chanting costs you in breath-time.
+    wind.timer-=dt;if(wind.timer&lt;=0){wind.timer=2.4+Math.random()*3.6;wind.target=windLock?0:(Math.random()&lt;.2?0:(.6+Math.random()))*(Math.random()&lt;.5?-1:1);}
+    wind.strength+=(wind.target-wind.strength)*Math.min(1,dt*1.1);
+    var pl=plateau(s),windMul=(s&lt;FLAGS[0]?.45:1)*(1+dawn*.35)*(pl?pl[3]:1);
+    if(gust.phase===&#x27;idle&#x27;){gust.next-=dt;if(gust.next&lt;=0 &amp;&amp; !exempt &amp;&amp; s&gt;=FLAGS[0]){gust.phase=&#x27;warning&#x27;;gust.t=0;gust.dir=Math.random()&lt;.5?-1:1;if(reducedMotion)announce(&#x27;GUST FROM THE &#x27;+(gust.dir&lt;0?&#x27;RIGHT&#x27;:&#x27;LEFT&#x27;));}}
     else{gust.t+=dt;
       if(gust.phase===&#x27;warning&#x27; &amp;&amp; gust.t&gt;1.4){gust.phase=&#x27;blowing&#x27;;gust.t=0;}
-      else if(gust.phase===&#x27;blowing&#x27;){if(!exempt &amp;&amp; !chant)u+=gust.dir*(grounded?2.4:3.2)*dt;if(gust.t&gt;1.2){gust.phase=&#x27;idle&#x27;;gust.t=0;gust.next=9+Math.random()*8;}}
-      if(exempt &amp;&amp; gust.phase===&#x27;blowing&#x27;){gust.phase=&#x27;idle&#x27;;gust.next=6+Math.random()*6;}
+      else if(gust.phase===&#x27;blowing&#x27; &amp;&amp; gust.t&gt;1.5){gust.phase=&#x27;idle&#x27;;gust.t=0;gust.next=4+Math.random()*5;}
+      if(exempt &amp;&amp; gust.phase===&#x27;blowing&#x27;){gust.phase=&#x27;idle&#x27;;gust.next=4+Math.random()*4;}
     }
+    var push=(wind.strength+(gust.phase===&#x27;blowing&#x27;?gust.dir*2:0))*windMul;
+    if(!exempt &amp;&amp; !chant)u+=push*(grounded?1:1.3)*dt;
     dawn=Math.max(0,Math.min(1,(s-30)/(LENGTH-60)));
     if(corniceTimer&lt;0 &amp;&amp; s&gt;=CORNICE[0]-5 &amp;&amp; s&lt;CORNICE[1]){corniceTimer=0;announce(&#x27;CORNICE CRACKING · JUMP&#x27;);}
     if(corniceTimer&gt;=0 &amp;&amp; !corniceBroken){corniceTimer+=dt;if(corniceTimer&gt;.75){corniceBroken=true;if(corniceMesh)corniceMesh.visible=false;}}
-    if(avalanche.phase===&#x27;idle&#x27; &amp;&amp; s&gt;=COULOIR[0]-3 &amp;&amp; s&lt;COULOIR[1]){avalanche.phase=&#x27;warning&#x27;;avalanche.t=0;announce(&#x27;THE SLOPE LETS GO · JUMP THE SNOW FRONT&#x27;);}
-    if(avalanche.phase===&#x27;warning&#x27;){avalanche.t+=dt;if(avalanche.t&gt;1.4){avalanche.phase=&#x27;running&#x27;;avalanche.front=COULOIR[1]+7;avalanche.t=0;}}
+    // AVALANCHES (Sam: more of them, much more warning). The warning starts
+    // 30 units before the couloir and lasts 4s: the front appears 42 units up
+    // the slope, visibly creeping, the camera trembles and the wind bed rises.
+    // Then it runs at 18/s and a JUMP cue fires about 0.55s before the front
+    // reaches the climber (measured against their closing speed, so walking
+    // into it and standing still get the same reaction window).
+    // Clearing it is a timed jump; being under it is a sweep-back.
+    if(avalanche.phase===&#x27;idle&#x27;){for(var ci=0;ci&lt;COULOIRS.length;ci++){var C=COULOIRS[ci];if(avalanche.done.indexOf(ci)&lt;0 &amp;&amp; s&gt;=C[0]-30 &amp;&amp; s&lt;C[1]){avalanche.phase=&#x27;warning&#x27;;avalanche.index=ci;avalanche.t=0;avalanche.front=C[1]+42;avalanche.cued=false;avalanche.done.push(ci);announce(&#x27;THE SLOPE IS GOING · BE READY TO JUMP&#x27;);break;}}}
+    if(avalanche.phase===&#x27;warning&#x27;){avalanche.t+=dt;avalanche.front-=5*dt;if(avalanche.t&gt;4){avalanche.phase=&#x27;running&#x27;;avalanche.t=0;}}
     if(avalanche.phase===&#x27;running&#x27;){
-      var oldFront=avalanche.front;avalanche.front-=18*dt;avalanche.t+=dt;
-      if(oldS&lt;=oldFront &amp;&amp; s&gt;=avalanche.front &amp;&amp; Math.abs(u)&lt;width(s)/2 &amp;&amp; y-height(s)&lt;.6){respawn();announce(&#x27;AVALANCHE · BACK AT THE FLAGS&#x27;);}
-      else if(avalanche.front&lt;COULOIR[0]-8)avalanche.phase=&#x27;done&#x27;;
+      var oldFront=avalanche.front;avalanche.front-=18*dt;avalanche.t+=dt;var C2=COULOIRS[avalanche.index];
+      if(!avalanche.cued &amp;&amp; avalanche.front&gt;s &amp;&amp; (avalanche.front-s)/(18+(forward?speed:0))&lt;.55){avalanche.cued=true;announce(&#x27;JUMP&#x27;);}
+      if(oldS&lt;=oldFront &amp;&amp; s&gt;=avalanche.front &amp;&amp; Math.abs(u)&lt;width(s)/2 &amp;&amp; y-height(s)&lt;.6){respawn();announce(&#x27;AVALANCHE · SWEPT BACK&#x27;);}
+      else if(avalanche.front&lt;s-6 || avalanche.front&lt;4){avalanche.phase=&#x27;idle&#x27;;avalanche.index=-1;}
     }
-    if(y&lt;height(s)-4.8 || Math.abs(u)&gt;10)respawn();
+    if((!supported &amp;&amp; y&lt;height(s)-1.6) || Math.abs(u)&gt;width(s)/2+3)respawn();
     breath=Math.max(0,Math.min(1,breath+(chant?.48:(moving?-(.021+.023*s/LENGTH):.025))*dt));
     if(moving &amp;&amp; grounded)running+=dt*11;
     flagObjects.forEach(function(flag){if(grounded &amp;&amp; Math.abs(s-flag.s)&lt;1 &amp;&amp; checkpoint&lt;flag.s){checkpoint=flag.s;flag.marker.material.color.setHex(0xd8c38d);breath=Math.max(breath,.65);announce(&#x27;CHECKPOINT · PRAYER FLAGS&#x27;);}});
@@ -61005,14 +61063,23 @@ It does not look back. Not yet.
     });
     while(printList.length&gt;9){var old=printList.shift();scene.remove(old.mesh);old.geometry.dispose();old.material.dispose();}
     if(s&gt;=LENGTH-8 &amp;&amp; grounded){ending=0;yetiS=LENGTH;clearInput();banner.textContent=&#x27;&#x27;;banner.style.opacity=&#x27;0&#x27;;hud.textContent=&#x27;&#x27;;}
-    else{var label=&#x27;PRINTS &#x27;+prints+&#x27; / 10   ·   SLIPS &#x27;+slips+&#x27; / 3   ·   BREATH &#x27;+Math.round(breath*100)+&#x27;%&#x27;+(climbing?&#x27;   ·   LADDER · HOLD ↑&#x27;:chant?&#x27;   ·   &#x27;+[&#x27;OM&#x27;,&#x27;AH&#x27;,&#x27;HUM&#x27;,&#x27;VAJ&#x27;,&#x27;RA&#x27;,&#x27;GU&#x27;][Math.floor(time*1.7)%6]:breath&lt;.25?&#x27;   ·   Hold ↓ to chant&#x27;:&#x27;&#x27;);if(label!==lastHUD){hud.textContent=label;lastHUD=label;}}
-    if(eng)eng.update(gust.phase!==&#x27;idle&#x27;,chant,false);
+    else{var wa=Math.min(4,Math.round(Math.abs(push)/.9)),windTxt=gust.phase===&#x27;warning&#x27;?&#x27;GUST COMING&#x27;:wa===0?&#x27;WIND · calm&#x27;:&#x27;WIND &#x27;+(push&lt;0?&#x27;◀&#x27;.repeat(wa):&#x27;▶&#x27;.repeat(wa));
+      var label=&#x27;PRINTS &#x27;+prints+&#x27; / 10   ·   SLIPS &#x27;+slips+&#x27; / 3   ·   BREATH &#x27;+Math.round(breath*100)+&#x27;%   ·   &#x27;+windTxt+(climbing?&#x27;   ·   LADDER · HOLD ↑&#x27;:chant?&#x27;   ·   &#x27;+[&#x27;OM&#x27;,&#x27;AH&#x27;,&#x27;HUM&#x27;,&#x27;VAJ&#x27;,&#x27;RA&#x27;,&#x27;GU&#x27;][Math.floor(time*1.7)%6]:breath&lt;.25?&#x27;   ·   Hold ↓ to chant&#x27;:&#x27;&#x27;);if(label!==lastHUD){hud.textContent=label;lastHUD=label;}}
+    if(eng)eng.update(gust.phase!==&#x27;idle&#x27; || avalanche.phase!==&#x27;idle&#x27; || Math.abs(push)&gt;1.4,chant,false);
   }
   function draw(dt){
-    if(avalancheMesh){avalancheMesh.visible=avalanche.phase===&#x27;running&#x27;;if(avalancheMesh.visible){var block=new THREE.Object3D();for(var n=0;n&lt;28;n++){var at=avalanche.front+(n%4)*.7;block.position.copy(position(at,(Math.floor(n/4)-3)*.8,height(at)+.25));block.scale.set(.6,.32,.6);if(!reducedMotion)block.rotation.set(time*2+n,n,time+n);block.updateMatrix();avalancheMesh.setMatrixAt(n,block.matrix);}avalancheMesh.instanceMatrix.needsUpdate=true;}}
+    if(avalancheMesh){avalancheMesh.visible=avalanche.phase===&#x27;running&#x27;||avalanche.phase===&#x27;warning&#x27;;if(avalancheMesh.visible){var block=new THREE.Object3D();for(var n=0;n&lt;28;n++){var at=avalanche.front+(n%4)*.7;block.position.copy(position(at,(Math.floor(n/4)-3)*.8,height(at)+.25));block.scale.set(.6,.32,.6);if(!reducedMotion)block.rotation.set(time*2+n,n,time+n);block.updateMatrix();avalancheMesh.setMatrixAt(n,block.matrix);}avalancheMesh.instanceMatrix.needsUpdate=true;}}
     if(corniceMesh &amp;&amp; !corniceBroken &amp;&amp; corniceTimer&gt;=0 &amp;&amp; !reducedMotion)corniceMesh.position.y=height(227.5)-.08+Math.sin(time*35)*.035;
     climber.position.copy(position(s,u,y));climber.rotation.y=-Math.atan(tangent(s));
-    climber.userData.limbs.forEach(function(l,i){l.rotation.x=reducedMotion?0:Math.sin(running+(Math.floor(i/2)+i%2)*Math.PI)*.24;});
+    if(whirl.active){
+      // Spun, limbs flailing, and a helix of snow climbing round him.
+      if(!reducedMotion){climber.rotation.y+=dt*15;climber.rotation.z=Math.sin(time*9)*.35;}
+      climber.userData.limbs.forEach(function(l,i){l.rotation.x=reducedMotion?0:Math.sin(time*26+i*1.7)*.9;});
+      if(whirlMesh){var wb=new THREE.Object3D();for(var wn=0;wn&lt;44;wn++){var wa2=wn*.72+time*8,wr=.7+(wn%6)*.22;wb.position.set(climber.position.x+Math.cos(wa2)*wr,climber.position.y+.2+(wn/44)*3.4,climber.position.z+Math.sin(wa2)*wr);wb.scale.setScalar(.09+(wn%3)*.04);wb.updateMatrix();whirlMesh.setMatrixAt(wn,wb.matrix);}whirlMesh.instanceMatrix.needsUpdate=true;}
+    }else{
+      climber.rotation.z=Math.max(-.22,Math.min(.22,-(wind.strength*(plateau(s)?plateau(s)[3]:1))*.12)); // leans into a strong wind
+      climber.userData.limbs.forEach(function(l,i){l.rotation.x=reducedMotion?0:Math.sin(running+(Math.floor(i/2)+i%2)*Math.PI)*.24;});
+    }
     yeti.position.copy(position(yetiS,0,height(yetiS)));yeti.visible=yetiS&lt;LENGTH+7.3;
     yeti.rotation.y=ending&gt;1.2 &amp;&amp; ending&lt;3.8?Math.PI:-Math.atan(tangent(yetiS));
     yeti.userData.limbs.forEach(function(l,i){l.rotation.x=reducedMotion || ending&gt;=0 &amp;&amp; ending&lt;3.8?0:Math.sin(time*7+(Math.floor(i/2)+i%2)*Math.PI)*.25;});
@@ -61020,6 +61087,7 @@ It does not look back. Not yet.
     look.y=Math.min(look.y,baseY+3); // Keep the climber in frame below steep ladders.
     // No bob, shake, FOV pulse or automatic orbit; reduced motion locks follow.
     if(!cameraReady||reducedMotion){camera.position.copy(cam);cameraReady=true;}else camera.position.lerp(cam,1-Math.exp(-dt*7));
+    if(avalanche.phase===&#x27;warning&#x27; &amp;&amp; !reducedMotion){camera.position.x+=Math.sin(time*41)*.03;camera.position.y+=Math.cos(time*37)*.025;}
     camera.lookAt(look);
     // DAWN: the sky, fog and lights slide from night at the foot to a grey
     // rose morning near the cave, keyed to height, not to time.
@@ -61030,8 +61098,9 @@ It does not look back. Not yet.
     }
     // SNOW: fall, drift with the gust, wrap inside a box centred on the camera.
     if(snowPoints){var cx=camera.position.x,cy=camera.position.y,cz=camera.position.z;
-      var lean=gust.phase===&#x27;warning&#x27;?gust.dir*(4+8*Math.min(1,gust.t/1.4)):gust.phase===&#x27;blowing&#x27;?gust.dir*13:0;
-      var drift=(gust.phase===&#x27;idle&#x27;?Math.sin(time*.4)*.9:lean);
+      var pl2=plateau(s),base=wind.strength*(pl2?pl2[3]:1)*(1+dawn*.35)*4;
+      var lean=gust.phase===&#x27;warning&#x27;?gust.dir*(4+9*Math.min(1,gust.t/1.4)):gust.phase===&#x27;blowing&#x27;?gust.dir*14:0;
+      var drift=base+lean+Math.sin(time*.4)*.6;
       if(!reducedMotion){for(var k=0;k&lt;SNOW_N;k++){var i3=k*3;snowPos[i3]+=drift*dt+Math.sin(time*1.3+k)*.35*dt;snowPos[i3+1]-=snowVel[k]*dt;snowPos[i3+2]+=Math.cos(time*.9+k*.7)*.25*dt;
         if(snowPos[i3+1]&lt;cy-13)snowPos[i3+1]+=26;if(snowPos[i3]&lt;cx-22)snowPos[i3]+=44;else if(snowPos[i3]&gt;cx+22)snowPos[i3]-=44;if(snowPos[i3+2]&lt;cz-22)snowPos[i3+2]+=44;else if(snowPos[i3+2]&gt;cz+22)snowPos[i3+2]-=44;
         // A flake right against the lens is a white blob the size of the frame: push it out.

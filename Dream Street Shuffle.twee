@@ -63930,7 +63930,14 @@ Behind you, high up in the shaft, something heavy shifts its weight and begins t
      looks back one beat (snow quiets, slate glints), goes in — the
      Cave passage does the recognition in prose. Mario dials shared
      with bar-carry/Pyramid Run. Win = slips <= 3 AND prints >= 10 →
-     $himalayaClimbWon → MORALE +8 at The Cave. -->
+     $himalayaClimbWon → MORALE +8 at The Cave.
+     3D PASS 1 (2026-09-16, Astra): three.js route, ladders, bridge, cornice,
+     avalanche, physics, exits, teardown. PASS 2 (2026-09-16, Claude): bloom +
+     film grade (canvas-sized composer, like Nazca), snowfall that rides with
+     the camera, GUSTS telegraphed by the flurry angle and the wind ~1.4s before
+     they push (counter by leaning into them; ladders, the bridge and the
+     ending are exempt), and night turning to dawn with height. Dev only:
+     window._hcDev.warp(s) and .gust() for testing. -->
 (set: $himalayaClimbWon to false)\
 <div class="claude-draft">
 Above the foothills the snow begins in earnest and the path stops pretending to be a path. Something big is climbing ahead of you, unhurried, in the way of a thing that knows the mountain and has nowhere else to be on it. It leaves its prints burning faint and blue in the fresh fall, and the snow starts filling them in the moment they are made, so that the line of them is only ever eight or nine long behind it.
@@ -63974,6 +63981,11 @@ It does not look back. Not yet.
   var STEPS=[46,98,143,194,242,310,380], FLAGS=[24,65,108,132,176,218,258,296,344,394,428];
   var LADDERS=[{a:124,b:126,rise:7},{a:286,b:288,rise:9}], BRIDGE=[164,176], CORNICE=[226,229], COULOIR=[352,365];
   var climbing=false, corniceTimer=-1, corniceBroken=false, corniceMesh=null;
+  // PASS 2 state: post stack, snowfall, gusts, dawn.
+  var composer=null, bloomPass=null, gradeEls=[], snowPoints=null, snowPos=null, snowVel=null, SNOW_N=1300;
+  var gust={phase:'idle',t:0,dir:1,next:14}, dawn=0, hemi=null, sun=null;
+  var NIGHT={bg:0x1c3048,sky:0xc8e6ff,ground:0x31303b,sun:0xdbeaff,hemiI:.72,sunI:.65}, DAWN={bg:0x6d6178,sky:0xffd0a8,ground:0x4a3d44,sun:0xffae72,hemiI:.72,sunI:.65}; // intensities held: brighter lights plus bloom blew the shelf out to white mid-route; only the colours turn
+  var cBg=null, cSky=null, cGround=null, cSun=null;
   var avalanche={phase:'idle',t:0,front:372}, avalancheMesh=null;
   function height(at){return .19*at+STEPS.reduce(function(n,edge){return n+(at>=edge?.85:0);},0)+LADDERS.reduce(function(n,l){return n+l.rise*Math.max(0,Math.min(1,(at-l.a)/(l.b-l.a)));},0);}
   function center(at){return 5*Math.sin(at/17)+2*Math.sin(at/8);}
@@ -63993,6 +64005,9 @@ It does not look back. Not yet.
     if(loader){loader.onload=null;loader.onerror=null;}
     if(eng){eng.kill();eng=null;}
     if(scene){var geometries=new Set(),materials=new Set();scene.traverse(function(o){if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(function(m){materials.add(m);});});geometries.forEach(function(g){g.dispose();});materials.forEach(function(m){m.dispose();});}
+    if(bloomPass && bloomPass.dispose){try{bloomPass.dispose();}catch(e){}}
+    if(composer){try{composer.renderTarget1.dispose();composer.renderTarget2.dispose();}catch(e){}}
+    gradeEls.forEach(function(el){if(el.parentNode)el.parentNode.removeChild(el);});gradeEls=[];
     if(renderer){renderer.dispose();renderer.forceContextLoss();}
     if(document.fullscreenElement===stage && document.exitFullscreen)document.exitFullscreen().catch(function(){});
     if(window._hcCleanup===cleanup)window._hcCleanup=null;
@@ -64076,13 +64091,16 @@ It does not look back. Not yet.
   } catch(e){ eng = null; }
 
   }
-  function resize(){if(!renderer||disposed)return;var w=canvas.parentElement.clientWidth;var h=Math.round(w*(window.innerWidth<500?.96:.75));if(document.fullscreenElement===stage || stage.classList.contains('hc-expanded'))h=Math.min(h,window.innerHeight-160);h=Math.max(200,h);renderer.setSize(w,h,false);canvas.style.height=h+'px';camera.aspect=w/h;camera.updateProjectionMatrix();}
+  function resize(){if(!renderer||disposed)return;var w=canvas.parentElement.clientWidth;var h=Math.round(w*(window.innerWidth<500?.96:.75));if(document.fullscreenElement===stage || stage.classList.contains('hc-expanded'))h=Math.min(h,window.innerHeight-160);h=Math.max(200,h);renderer.setSize(w,h,false);canvas.style.height=h+'px';camera.aspect=w/h;camera.updateProjectionMatrix();if(composer){composer.setSize(w,h);if(bloomPass)bloomPass.setSize(w,h);}}
   function boot(){
     if(disposed||!canvas.isConnected)return;
     if(typeof THREE==='undefined'){
-      loader=document.createElement('script');loader.src='vendor/three/three.min.js';loader.onload=start;loader.onerror=loadFailure;document.head.appendChild(loader);
-    }else start();
+      loader=document.createElement('script');loader.src='vendor/three/three.min.js';loader.onload=function(){withPost(start);};loader.onerror=loadFailure;document.head.appendChild(loader);
+    }else withPost(start);
   }
+  // Bloom and bokeh add-ons load once from vendor/three/ via the shared
+  // loader; if they are missing the plain renderer is used and nothing breaks.
+  function withPost(fn){if(window.dssLoadPost){window.dssLoadPost(function(){if(!disposed)fn();});}else fn();}
   function loadFailure(){if(disposed)return;beginButton.disabled=true;cover.querySelector('#hc-instructions').textContent='The 3D climb could not load. Reload to try again, or continue to the cave.';document.getElementById('hc-lose').style.display='block';}
   function start(){
     if(disposed||!canvas.isConnected)return;
@@ -64090,8 +64108,9 @@ It does not look back. Not yet.
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.outputEncoding=THREE.sRGBEncoding;
     scene=new THREE.Scene();scene.background=new THREE.Color(0x1c3048);scene.fog=new THREE.Fog(0x1c3048,32,112);
     camera=new THREE.PerspectiveCamera(57,4/3,.1,240);
-    scene.add(new THREE.HemisphereLight(0xc8e6ff,0x31303b,.72));
-    var sun=new THREE.DirectionalLight(0xdbeaff,.65);sun.position.set(-25,55,15);scene.add(sun);
+    hemi=new THREE.HemisphereLight(0xc8e6ff,0x31303b,.72);scene.add(hemi);
+    sun=new THREE.DirectionalLight(0xdbeaff,.65);sun.position.set(-25,55,15);scene.add(sun);
+    cBg=new THREE.Color();cSky=new THREE.Color();cGround=new THREE.Color();cSun=new THREE.Color();
     var rock=new THREE.MeshLambertMaterial({color:0x4c5969});
     var snow=new THREE.MeshLambertMaterial({color:0xa5bfce,side:THREE.DoubleSide});
     var dark=new THREE.MeshLambertMaterial({color:0x162030});
@@ -64178,9 +64197,37 @@ It does not look back. Not yet.
     mesh(sphere,new THREE.MeshBasicMaterial({color:0x060d17}),caveX,caveY+2.1,-caveAt-2,3.1,2.7,.3);
     var hardware=new Map();scene.updateMatrixWorld(true);scene.children.slice().forEach(function(o){if(o.isMesh && (o.material===timber || o.material===rope)){var key=o.geometry.uuid+o.material.uuid;var batch=hardware.get(key)||{geometry:o.geometry,material:o.material,matrices:[]};batch.matrices.push(o.matrixWorld.clone());hardware.set(key,batch);scene.remove(o);}});
     hardware.forEach(function(batch){var instanced=new THREE.InstancedMesh(batch.geometry,batch.material,batch.matrices.length);batch.matrices.forEach(function(m,i){instanced.setMatrixAt(i,m);});scene.add(instanced);});
+    // SNOWFALL: one Points cloud in a box that travels with the camera. Each
+    // flake falls, drifts with the wind, and wraps when it leaves the box, so
+    // the cloud is bounded whatever the route length. The flurry angle is the
+    // gust telegraph: the whole cloud leans before the push arrives.
+    {
+      snowPos=new Float32Array(SNOW_N*3);snowVel=new Float32Array(SNOW_N);
+      for(var si=0;si<SNOW_N;si++){snowPos[si*3]=(Math.random()-.5)*44;snowPos[si*3+1]=(Math.random()-.5)*26;snowPos[si*3+2]=(Math.random()-.5)*44;snowVel[si]=1.6+Math.random()*2.2;}
+      var snowGeo=new THREE.BufferGeometry();snowGeo.setAttribute('position',new THREE.BufferAttribute(snowPos,3));
+      var flakeCanvas=document.createElement('canvas');flakeCanvas.width=flakeCanvas.height=32;var fx=flakeCanvas.getContext('2d');var fg=fx.createRadialGradient(16,16,0,16,16,16);fg.addColorStop(0,'rgba(255,255,255,1)');fg.addColorStop(.35,'rgba(255,255,255,.85)');fg.addColorStop(1,'rgba(255,255,255,0)');fx.fillStyle=fg;fx.fillRect(0,0,32,32);
+      var flakeTex=new THREE.CanvasTexture(flakeCanvas);
+      var snowMat=new THREE.PointsMaterial({color:0xf2f6ff,size:.19,map:flakeTex,transparent:true,opacity:.7,depthWrite:false,sizeAttenuation:true});
+      snowPoints=new THREE.Points(snowGeo,snowMat);snowPoints.frustumCulled=false;scene.add(snowPoints);
+    }
+    // POST: bloom at canvas size (window-sized dssMakeComposer would be
+    // wrong for an in-page canvas), skipped on narrow screens for the frame
+    // rate. Threshold high so only the prints, flags and lit snow bloom.
+    if(typeof THREE.EffectComposer==='function' && typeof THREE.UnrealBloomPass==='function' && window.innerWidth>=600){
+      try{
+        composer=new THREE.EffectComposer(renderer);composer.addPass(new THREE.RenderPass(scene,camera));
+        bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(canvas.width||720,canvas.height||540),.26,.5,.95);composer.addPass(bloomPass);
+      }catch(e){composer=null;bloomPass=null;}
+    }
+    // FILM GRADE: the shared vignette + grain overlays, on the frame so the
+    // cover and banner stay above them.
+    if(window.dssFilmGrade){var frame=canvas.parentElement,before=frame.children.length;window.dssFilmGrade(frame);for(var gi=before;gi<frame.children.length;gi++)gradeEls.push(frame.children[gi]);cover.style.zIndex='6';banner.style.zIndex='5';}
     y=height(s);beginButton.disabled=false;resize();resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvas.parentElement);
     listen(window,'resize',resize);
-    if(window.DSS_DEV)window._hcDev={canvas:canvas,snapshot:function(){return {s:s,u:u,y:y,ground:height(s),vy:vy,grounded:grounded,breath:breath,prints:prints,slips:slips,checkpoint:checkpoint,yetiS:yetiS,ending:ending,paused:paused,finished:finished,coyote:coyoteT,buffer:bufferT,activePrints:printList.filter(function(p){return p.mesh.visible;}).length,drawCalls:renderer.info.render.calls,climbing:climbing,corniceBroken:corniceBroken,avalanche:avalanche.phase,avalancheFront:avalanche.front};}};
+    if(window.DSS_DEV)window._hcDev={canvas:canvas,snapshot:function(){return {s:s,u:u,y:y,ground:height(s),vy:vy,grounded:grounded,breath:breath,prints:prints,slips:slips,checkpoint:checkpoint,yetiS:yetiS,ending:ending,paused:paused,finished:finished,coyote:coyoteT,buffer:bufferT,activePrints:printList.filter(function(p){return p.mesh.visible;}).length,drawCalls:renderer.info.render.calls,climbing:climbing,corniceBroken:corniceBroken,avalanche:avalanche.phase,avalancheFront:avalanche.front,gust:gust.phase,gustDir:gust.dir,dawn:dawn,bloom:!!composer};},
+      // Testing only: put the climber at any point on the route, or force a gust.
+      warp:function(at){if(!started||ending>=0)return;s=Math.max(0,Math.min(LENGTH-1,at));u=0;y=height(s);vy=0;grounded=true;yetiS=Math.min(LENGTH,s+13);nextPrint=Math.max(nextPrint,s+3);cameraReady=false;},
+      gust:function(dir){gust.phase='warning';gust.t=0;gust.dir=dir||1;}};
     loop(performance.now());
   }
   function makePrint(at){
@@ -64237,6 +64284,20 @@ It does not look back. Not yet.
       var wasAbove=support(oldS,oldU) ? oldY>=height(oldS)-.002 : oldY>=top-.002;
       if(supported && wasAbove && y<=top){y=top;vy=0;grounded=true;}
     }
+    // GUSTS. Idle → warning (1.4s: the flurries lean and the wind rises, no
+    // push yet) → blowing (1.2s: a sideways shove of 2.4 you can lean against,
+    // lateral speed being 4.6; standing still costs about three units, a fall
+    // only if you were already near that edge) → idle. Never on a ladder, the bridge
+    // (its rails already clamp), during the avalanche or the ending, and not
+    // before the first flag so the opening teaches the controls first.
+    var exempt=climbing || (s>=BRIDGE[0]&&s<=BRIDGE[1]) || avalanche.phase==='running' || s<FLAGS[0];
+    if(gust.phase==='idle'){gust.next-=dt;if(gust.next<=0 && !exempt){gust.phase='warning';gust.t=0;gust.dir=Math.random()<.5?-1:1;if(reducedMotion)announce('GUST FROM THE '+(gust.dir<0?'RIGHT':'LEFT'));}}
+    else{gust.t+=dt;
+      if(gust.phase==='warning' && gust.t>1.4){gust.phase='blowing';gust.t=0;}
+      else if(gust.phase==='blowing'){if(!exempt && !chant)u+=gust.dir*(grounded?2.4:3.2)*dt;if(gust.t>1.2){gust.phase='idle';gust.t=0;gust.next=9+Math.random()*8;}}
+      if(exempt && gust.phase==='blowing'){gust.phase='idle';gust.next=6+Math.random()*6;}
+    }
+    dawn=Math.max(0,Math.min(1,(s-30)/(LENGTH-60)));
     if(corniceTimer<0 && s>=CORNICE[0]-5 && s<CORNICE[1]){corniceTimer=0;announce('CORNICE CRACKING · JUMP');}
     if(corniceTimer>=0 && !corniceBroken){corniceTimer+=dt;if(corniceTimer>.75){corniceBroken=true;if(corniceMesh)corniceMesh.visible=false;}}
     if(avalanche.phase==='idle' && s>=COULOIR[0]-3 && s<COULOIR[1]){avalanche.phase='warning';avalanche.t=0;announce('THE SLOPE LETS GO · JUMP THE SNOW FRONT');}
@@ -64259,7 +64320,7 @@ It does not look back. Not yet.
     while(printList.length>9){var old=printList.shift();scene.remove(old.mesh);old.geometry.dispose();old.material.dispose();}
     if(s>=LENGTH-8 && grounded){ending=0;yetiS=LENGTH;clearInput();banner.textContent='';banner.style.opacity='0';hud.textContent='';}
     else{var label='PRINTS '+prints+' / 10   ·   SLIPS '+slips+' / 3   ·   BREATH '+Math.round(breath*100)+'%'+(climbing?'   ·   LADDER · HOLD ↑':chant?'   ·   '+['OM','AH','HUM','VAJ','RA','GU'][Math.floor(time*1.7)%6]:breath<.25?'   ·   Hold ↓ to chant':'');if(label!==lastHUD){hud.textContent=label;lastHUD=label;}}
-    if(eng)eng.update(false,chant,false);
+    if(eng)eng.update(gust.phase!=='idle',chant,false);
   }
   function draw(dt){
     if(avalancheMesh){avalancheMesh.visible=avalanche.phase==='running';if(avalancheMesh.visible){var block=new THREE.Object3D();for(var n=0;n<28;n++){var at=avalanche.front+(n%4)*.7;block.position.copy(position(at,(Math.floor(n/4)-3)*.8,height(at)+.25));block.scale.set(.6,.32,.6);if(!reducedMotion)block.rotation.set(time*2+n,n,time+n);block.updateMatrix();avalancheMesh.setMatrixAt(n,block.matrix);}avalancheMesh.instanceMatrix.needsUpdate=true;}}
@@ -64273,7 +64334,26 @@ It does not look back. Not yet.
     look.y=Math.min(look.y,baseY+3); // Keep the climber in frame below steep ladders.
     // No bob, shake, FOV pulse or automatic orbit; reduced motion locks follow.
     if(!cameraReady||reducedMotion){camera.position.copy(cam);cameraReady=true;}else camera.position.lerp(cam,1-Math.exp(-dt*7));
-    camera.lookAt(look);renderer.render(scene,camera);
+    camera.lookAt(look);
+    // DAWN: the sky, fog and lights slide from night at the foot to a grey
+    // rose morning near the cave, keyed to height, not to time.
+    if(cBg){var d=dawn*dawn*(3-2*dawn);
+      cBg.setHex(NIGHT.bg).lerp(new THREE.Color(DAWN.bg),d);scene.background=cBg;scene.fog.color.copy(cBg);
+      hemi.color.setHex(NIGHT.sky).lerp(cSky.setHex(DAWN.sky),d);hemi.groundColor.setHex(NIGHT.ground).lerp(cGround.setHex(DAWN.ground),d);hemi.intensity=NIGHT.hemiI+(DAWN.hemiI-NIGHT.hemiI)*d;
+      sun.color.setHex(NIGHT.sun).lerp(cSun.setHex(DAWN.sun),d);sun.intensity=NIGHT.sunI+(DAWN.sunI-NIGHT.sunI)*d;sun.position.set(-25+70*d,55-30*d,15+30*d);
+    }
+    // SNOW: fall, drift with the gust, wrap inside a box centred on the camera.
+    if(snowPoints){var cx=camera.position.x,cy=camera.position.y,cz=camera.position.z;
+      var lean=gust.phase==='warning'?gust.dir*(4+8*Math.min(1,gust.t/1.4)):gust.phase==='blowing'?gust.dir*13:0;
+      var drift=(gust.phase==='idle'?Math.sin(time*.4)*.9:lean);
+      if(!reducedMotion){for(var k=0;k<SNOW_N;k++){var i3=k*3;snowPos[i3]+=drift*dt+Math.sin(time*1.3+k)*.35*dt;snowPos[i3+1]-=snowVel[k]*dt;snowPos[i3+2]+=Math.cos(time*.9+k*.7)*.25*dt;
+        if(snowPos[i3+1]<cy-13)snowPos[i3+1]+=26;if(snowPos[i3]<cx-22)snowPos[i3]+=44;else if(snowPos[i3]>cx+22)snowPos[i3]-=44;if(snowPos[i3+2]<cz-22)snowPos[i3+2]+=44;else if(snowPos[i3+2]>cz+22)snowPos[i3+2]-=44;
+        // A flake right against the lens is a white blob the size of the frame: push it out.
+        var ddx=snowPos[i3]-cx,ddy=snowPos[i3+1]-cy,ddz=snowPos[i3+2]-cz;if(ddx*ddx+ddy*ddy+ddz*ddz<4){snowPos[i3]=cx+(Math.random()-.5)*44;snowPos[i3+1]=cy+13;snowPos[i3+2]=cz-6-Math.random()*16;}}
+        snowPoints.geometry.attributes.position.needsUpdate=true;}
+      else{snowPoints.position.set(cx,cy,cz);}
+    }
+    if(composer)composer.render();else renderer.render(scene,camera);
   }
   function loop(now){
     if(disposed)return;if(!canvas.isConnected){cleanup();return;}

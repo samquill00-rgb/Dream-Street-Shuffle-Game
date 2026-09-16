@@ -401,6 +401,26 @@ BOOT_VEIL = (
     "},150);})();</script>"
     "<!--DSS-BOOT-VEIL-END-->"
 )
+# ── Favicon ────────────────────────────────────────────────────────────────
+# The only failed request on any load was /favicon.ico (2026-09-16). A tiny
+# inline SVG: the lamp, a gold glow on Soho dark. Marker-wrapped so each sync
+# replaces the previous copy.
+FAVICON = (
+    "<!--DSS-FAVICON-START-->"
+    '<link rel="icon" href="data:image/svg+xml,'
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    "%3Crect width='32' height='32' rx='6' fill='%230d0b09'/%3E"
+    "%3Ccircle cx='16' cy='13' r='9' fill='%23e8c060' opacity='0.18'/%3E"
+    "%3Ccircle cx='16' cy='13' r='5' fill='%23e8c060' opacity='0.45'/%3E"
+    "%3Ccircle cx='16' cy='13' r='2.4' fill='%23ffe6a0'/%3E"
+    "%3Crect x='15.2' y='18' width='1.6' height='11' fill='%23c8a86a'/%3E"
+    "%3C/svg%3E"
+    '">'
+    "<!--DSS-FAVICON-END-->"
+)
+html_content = re.sub(r"<!--DSS-FAVICON-START-->.*?<!--DSS-FAVICON-END-->", "", html_content, flags=re.S)
+html_content = html_content.replace("<title>Dream Street Shuffle</title>", "<title>Dream Street Shuffle</title>" + FAVICON, 1)
+
 html_content = re.sub(r"<!--DSS-BOOT-VEIL-START-->.*?<!--DSS-BOOT-VEIL-END-->", "", html_content, flags=re.S)
 html_content = html_content.replace("<body>", "<body>" + BOOT_VEIL, 1)
 

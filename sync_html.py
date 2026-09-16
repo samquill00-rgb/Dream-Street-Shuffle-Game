@@ -359,6 +359,9 @@ _sd_close = html_content.find('</tw-storydata>', _sd_open.end()) if _sd_open els
 if _sd_open and _sd_close >= 0:
     _sd_inner = html_content[_sd_open.end():_sd_close]
     _sd_inner = re.sub(r'<tw-passagedata[^>]*>.*?</tw-passagedata>', '', _sd_inner, flags=re.DOTALL)
+    # Collapse the blank lines the removed passages leave behind, otherwise
+    # every sync adds ~230 empty lines to the html and they accumulate forever.
+    _sd_inner = re.sub(r'\n[ \t]*\n+', '\n', _sd_inner)
     html_content = html_content[:_sd_open.end()] + _sd_inner + html_content[_sd_close:]
 else:
     print("WARNING: could not locate <tw-storydata>…</tw-storydata> block — skipping passage cleanup")

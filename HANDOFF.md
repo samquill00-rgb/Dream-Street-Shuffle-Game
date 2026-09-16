@@ -1,3 +1,27 @@
+**STATE 2026-09-16 — WHOLE-GAME AUDIT after the Opus/Codex days (Sam: "audit the whole game to make sure all the work we did with opus the past few days works and find any holes"). On branch `claude/ecstatic-allen-te50ly`; .html synced; everything below verified in a real browser (recipe in 18e, harness in `scratchpad/audit-2026-09-16/`).**
+
+### 20a — WHAT WAS CHECKED
+- **Static:** 230 passages, 0 duplicates, 0 missing link targets (every `[[ ]]`, `(go-to:)`, `(display:)`, `(link-goto:)` literal resolves), 122 script blocks pass `node --check`, stylesheet braces balance, no orphan passages, every referenced asset file (5 char PNGs, 3 standalone 3D html scenes, 27 audio beds) exists on disk. The committed .html was rebuilt from the .twee and matched byte-for-byte apart from blank lines (see 20b.3).
+- **Every-passage render sweep:** all 206 playable passages rendered under a rich late-night seed -> **0 tw-errors on all 206**, 0 game JS errors. Only three passages have no links (Dawn, Dawn Approach White/Black) and all three auto-advance or end, as designed.
+- **The Codex mechanics fixtures (12) re-run + 6 new key-routing ones:** all pass. Each of the five keys opens its own world; no key -> no portal; before the page quest -> no portal; eye alone -> turned back, eye after four -> Chebar; a second unfinished world in the same night opens; a completed world's key vanishes from its venue (French: 1 offer -> 0 with the himalayas gift); an unfinished spent key re-seeds on Dean Street; the synthesis link is display:none until five gifts and visible at five; Red/Inis/Lackland/critic reopen for unacknowledged discoveries; sobriety recovery clears $coachUrgent.
+- **Four random walkers, 480 clicks from a natural Title start:** 0 tw-errors, 0 JS errors, no dead ends, no stuck states; between them they walked 60-odd distinct passages (French cycle, Colony, Pillars, Lackland, alleys, gents, phone box, car park).
+- **Phone width (390px):** Dean Street, French, Pillars, chippy, Airport Pub: no horizontal scroll, column 351px, map 325px below the lamp.
+- **Reload mid-night:** Harlowe's session restore puts you back on the passage you were on; the `auto` save slot is written from hub visit 2 ($returns >= 1) and CONTINUE loads it.
+
+### 20b — WHAT WAS WRONG (all fixed, synced)
+1. **A stray backslash printed at the top of EVERY screen in the game, Title included.** The Codex session's new `Dream Progress` [system] passage ended with a trailing backslash, and it is (display:)-ed as the very first line of the header: exactly the 18b.2 bug, rule already in this file, reintroduced two days later. Visible on the phone screenshot as the first character above the title. Backslash removed. **Re-run the trailing-backslash scan after every batch of system passages** (`static_audit.py` in the scratchpad does it).
+2. `Start` ended its $liverReturnTo line with a DOUBLE backslash; harmless because Start (go-to:)s away at once, but the first one was literal text. Cut to one.
+3. **The .html carried 328,133 blank lines** (6.18MB -> 5.85MB). `sync_html.py` strips the old tw-passagedata elements but left the newline between each, so every sync added ~230 blank lines to the storydata block, forever. Now collapsed in the cleanup step. Content otherwise byte-identical.
+
+### 20c — NOT BUGS, BUT WORTH KNOWING
+- **three.js and its post-processing come from two CDNs** (cdnjs for the core, jsdelivr for bloom/bokeh). Blocked in this sandbox, so the 3D scenes could not be seen here; the in-passage scenes are guarded (nothing throws in the game page), but the three standalone iframe scenes (oxford-street, cecil-court, green-sea -3d-static.html) load the core with a bare script tag and throw "THREE is not defined" inside the iframe when it is unreachable. A player behind an ad-blocker or offline gets an empty canvas on Dawn Approach, Cecil Court Approach and Green Sea Approach; prose and links unaffected. If that matters, vendor three.min.js beside the html.
+- **Completed dream worlds live in localStorage (dssLifetimeGifts) and survive "Play again" by design.** There is no in-game way to clear them any more (the debug tool was removed by Codex). For a fresh run in the same browser: localStorage.removeItem('dssLifetimeGifts') in the console, or a private window.
+- **"Head towards dawn" is the first link on the very first Dean Street visit**, so a new player can reach THE END in six clicks (dawn -> confirm -> the doppelganger -> Dawn). The confirm screen guards it; whether it should be offered before any venue is a design call for Sam.
+- The only 404 on any load is favicon.ico.
+- Still Sam's from 18f: the Yeti "Into the cave" question, the venue sides on the scrolling map, the bed listen-through, the alley passages and every pink line.
+
+---
+
 **STATE 2026-09-15 (later) — SECOND PLAYTHROUGH ROUND, three notes. Committed on branch `claude/serene-johnson-cyc68y`; .html synced; all code verified in a real browser (recipe in 18e).**
 
 ### 19a — KEYS WAIT FOR THE PAGE QUEST

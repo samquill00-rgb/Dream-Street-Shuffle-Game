@@ -1,4 +1,12 @@
-**STATE 2026-09-16 — WHOLE-GAME AUDIT after the Opus/Codex days (Sam: "audit the whole game to make sure all the work we did with opus the past few days works and find any holes"). On branch `claude/ecstatic-allen-te50ly`; .html synced; everything below verified in a real browser (recipe in 18e, harness in `scratchpad/audit-2026-09-16/`).**
+**STATE 2026-09-17 — everything below 20a–20m is on `main` and pushed (last commit bbd9747, the beauty pass). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
+
+**Read in this order:** 20m (beauty pass, visual only), 20l (The Reclamation rebuilt in 3D), 20k (all dream minigames compulsory), 20j (The Climb pass 3: wind, whirlwind, avalanches, plateaus), 20i (Climb pass 2), then 20a–20h (the audit and its fixes).
+
+**Open, all Sam's call, none started:**
+1. Play and judge: The Climb's wind strength and avalanche visibility (knobs named in 20j); The Reclamation's drone range, glare and the ten-count (knobs in 20l); the beauty pass on a phone (if it stutters, drop the two screen-blend layers first, 20m).
+2. Pink placeholder prose everywhere, and the prose queries left unfixed from the 2026-09-16 read (leeching, dutchy, merly, brisket, "like time but not but", "Seeing clockwise", "of she who", Colony Rooms, Ben Ali, Billy Piper).
+3. Still from 18f: the Yeti "Into the cave" question, venue sides on the scrolling map, the bed listen-through, the alley passages.
+4. Nothing reads `$easterReclaimWon` or `$himalayaClimbWon` downstream yet; both are set on a win if Sam wants the worlds to remember.
 
 ### 20a — WHAT WAS CHECKED
 - **Static:** 230 passages, 0 duplicates, 0 missing link targets (every `[[ ]]`, `(go-to:)`, `(display:)`, `(link-goto:)` literal resolves), 122 script blocks pass `node --check`, stylesheet braces balance, no orphan passages, every referenced asset file (5 char PNGs, 3 standalone 3D html scenes, 27 audio beds) exists on disk. The committed .html was rebuilt from the .twee and matched byte-for-byte apart from blank lines (see 20b.3).

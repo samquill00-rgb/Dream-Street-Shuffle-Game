@@ -1,3 +1,9 @@
+### Climb fairness and light — 2026-09-22
+- Changed only The Climb: visible blue gap lips and persistent gap/step/avalanche HUD cues; cornice jump cue moved to its lip, collapse begins on contact; avalanche starts closer, stays ahead during warning, and cues against actual closing speed. Wind capped below steering speed, gentler airborne, sheltered during avalanches. Rescue returns no farther uphill than the fall, resets wind, provides shelter until movement plus 1.8 seconds of grace, restores the local footprint trail, and only saves supported checkpoint landings.
+- Beauty: faint moving interference on specular snow, slowly travelling sunlight, cool-to-warm coloured flakes; fewer particles (650 phone / 1100 desktop), one added draw for gap rims, no added post-processing pass; snow texture disposed at teardown.
+- Left: route tables, jump strength/gravity, breath, scoring, cave ending and all prose outside the game. HTML synced with sync_html.py.
+- Verification blocked before browser launch: requested climb_pass3_verify.py attempted with system Python, retried with bundled Python; both lack playwright. No repeated play or broader audit. Next: install/provide Playwright and run that verification, then Sam judges gap readability, cornice timing and snow light on a phone. Browser/shader behaviour is not yet verified.
+
 **STATE 2026-09-17 — everything below 20a–20m is on `main` and pushed (last commit bbd9747, the beauty pass). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
 
 **Read in this order:** 20m (beauty pass, visual only), 20l (The Reclamation rebuilt in 3D), 20k (all dream minigames compulsory), 20j (The Climb pass 3: wind, whirlwind, avalanches, plateaus), 20i (Climb pass 2), then 20a–20h (the audit and its fixes).

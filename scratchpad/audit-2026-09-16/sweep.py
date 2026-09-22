@@ -1,5 +1,13 @@
-"""Render every passage under a rich late-night seed and record errors."""
-import json, sys, traceback
+"""Render every passage under a rich late-night seed and record errors.
+
+Run from this folder (so `harness` imports): PYTHONPATH=. python3 sweep.py [passage ...]
+Results go to sweep_results.json beside this script, or to $SWEEP_OUT.
+Two known false positives in this sandbox (2026-09-22): "Unable to decode audio data"
+(headless Chromium has no AAC/MP3 codecs) and "Cannot set properties of null (setting
+'textContent') at <anonymous>:6" (the harness init script also runs inside the three
+iframe scenes, where there is no Start passage). Filter both before reading the rest.
+"""
+import json, sys, traceback, os
 from harness import *
 
 SKIP_TAGS = {"script", "stylesheet", "startup", "header", "system"}
@@ -33,6 +41,6 @@ for i, n in enumerate(names):
     results.append(r)
     flag = "!!" if (r.get("twErrors") or r.get("jsErrors") or r.get("stray") or r.get("exception")) else "ok"
     print(f"[{i+1}/{len(names)}] {flag} {n} -> {r.get('at')}", flush=True)
-json.dump(results, open("/tmp/claude-0/-home-user-Dream-Street-Shuffle-Game/ec1d130e-5625-535d-96c0-16f95b32b372/scratchpad/sweep_results.json","w"), indent=1)
+json.dump(results, open(os.environ.get("SWEEP_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "sweep_results.json")),"w"), indent=1)
 g.close()
 print("DONE")

@@ -40094,6 +40094,8 @@ document.head.appendChild(s);
 }
 }
 function buildRSScene() {
+// Reduced-motion: hold one settled frame (neon steady, sky still, grain drawn once).
+var rsStill = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 rsWrap = document.createElement('div');
 rsWrap.id = 'rs-wrap';
 rsWrap.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;background:#050508;overflow:hidden;';
@@ -40134,7 +40136,7 @@ camera.position.set(8, 1.7, 2.5);
 camera.lookAt(-6, 2.8, 1.5);
 var renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
@@ -40833,6 +40835,30 @@ var neonGlowSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: neonGlowTe
 neonGlowSprite.position.set(0.8, 4.2, 1.5);
 neonGlowSprite.scale.set(5, 4, 1);
 scene.add(neonGlowSprite);
+// The neon in the wet pavement (2026-09-22 polish loop): a smear of the sign's
+// red under it on the flags, with the green of OPEN NIGHTLY low in its tail,
+// broken by the paving joints. One additive plane; follows the neon's breath.
+var rsNeonReflTex = makeCanvasTexture(128, 96, function(cx, w, h) {
+  var g = cx.createRadialGradient(w * 0.5, h * 0.32, 0, w * 0.5, h * 0.32, w * 0.55);
+  g.addColorStop(0, 'rgba(255,96,30,0.62)');
+  g.addColorStop(0.4, 'rgba(255,70,20,0.22)');
+  g.addColorStop(1, 'rgba(255,50,10,0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+  var gg = cx.createRadialGradient(w * 0.5, h * 0.62, 0, w * 0.5, h * 0.62, w * 0.26);
+  gg.addColorStop(0, 'rgba(60,220,60,0.28)');
+  gg.addColorStop(1, 'rgba(40,200,40,0)');
+  cx.fillStyle = gg; cx.fillRect(0, 0, w, h);
+  cx.globalCompositeOperation = 'destination-out';
+  cx.fillStyle = 'rgba(0,0,0,0.65)';
+  for (var ji = 1; ji < 5; ji++) cx.fillRect(0, Math.round(ji * h / 5) - 1, w, 2);
+  for (var jj = 1; jj < 6; jj++) cx.fillRect(Math.round(jj * w / 6) - 1, 0, 2, h);
+  cx.globalCompositeOperation = 'source-over';
+});
+var rsNeonRefl = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2.6),
+  new THREE.MeshBasicMaterial({ map: rsNeonReflTex, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending, depthWrite: false }));
+rsNeonRefl.rotation.x = -Math.PI / 2;
+rsNeonRefl.position.set(0.8, 0.02, 2.7);
+scene.add(rsNeonRefl);
 // ============================================================
 // NEIGHBOURING BUILDING (left) - CHOY'S CHINESE
 // ============================================================
@@ -41746,9 +41772,9 @@ for (var i = 0; i < 12; i++) {
 var clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
-  var t = clock.getElapsedTime();
-  // Fog sprite drift (each sprite has individual drift and sway)
-  for (var i = 0; i < fogSprites.length; i++) {
+  var t = rsStill ? 6 : clock.getElapsedTime();
+  // Fog sprite drift (each sprite has individual drift and sway; held under reduced motion)
+  for (var i = 0; i < (rsStill ? 0 : fogSprites.length); i++) {
     var f = fogSprites[i];
     f.sway += f.swaySpeed;
     f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;
@@ -41766,6 +41792,7 @@ function animate() {
   // Neon light held near-steady so the brickwork above no longer strobes;
   // the flashing now lives inside the windows instead
   neonLight.intensity = 1.2 + Math.sin(t * 3.5) * 0.02;
+  rsNeonRefl.material.opacity = 0.115 + Math.sin(t * 3.5) * 0.012 + Math.sin(t * 0.7) * 0.01;
   // Lit rooms flicker from within — slow breathing plus sudden brighter flares,
   // done by dimming the painted room's brightness rather than its opacity
   for (var lgi = 0; lgi < litGlassMats.length; lgi++) {
@@ -41914,7 +41941,7 @@ function renderRS() {
   // Grain effect
   animFrame++;
   rsGrainFrame = (rsGrainFrame + 1) % 8;
-  if (rsGrainFrame === 0) {
+  if (rsGrainFrame === 0 && !(rsStill && animFrame > 8)) {
     for (var gy = 0; gy < rsGrain.height; gy++) {
       for (var gx = 0; gx < rsGrain.width; gx++) {
         var v = Math.floor(Math.random() * 256);

@@ -6,7 +6,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
-4. [pass 4: Pillars DONE; pass 5: Copper's Lair DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
+4. [pass 4: Pillars DONE; pass 5: Copper's Lair and Ronnie's DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
 
@@ -42,9 +42,15 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Colony (buildCLScene) not started:** kept this pass to one scene so it committed before pass 5.
 - **Next:** buildCLScene (Colony), then buildRSScene (Ronnie's). Tools: `scratchpad/audit-2026-09-16/scene_shot.py "<passage>" out.png [secs]` screenshots a scene canvas' parent and reports errors.
 
-### Pass 5 — 04:21–04:50 UTC — approach scenes, Copper's Lair (queue item 4, second of sixteen) — DONE, one scene
+### Pass 5 — 04:21–04:27 UTC — approach scenes, Copper's Lair (queue item 4, second of sixteen) — DONE, one scene
 - **Naming correction:** Astra's list says `buildCLScene` and its note called it "Colony". It is the **Copper's Lair cellar** (`initCoppersLair`, passage Approach Coppers Lair). The Colony Room approach is `buildCaScene` (line ~26118, `caLoadPost`), not on Astra's list at all. `ref-colony-approach-untouched.png` in the project files is what the Colony approach looks like today, unchanged.
 - **buildCLScene / Approach Coppers Lair.** Added the bare bulb's reflection in the standing puddle: one additive 0.34×0.62 plane at (−0.46, 0.012, 3.78) in `debrisGroup` with a 64×96 canvas texture (warm core, soft tail), opacity 0.16 × the bulb's breath, shivering (x-stretch, dimming) while a drip-ring crosses (`clRw` from `ripAge`). Pixel cap 2 → 1.5. Reduced-motion (`clStill`): `t` held at 0.3s (bulb steady, drip swelling at the ceiling, no rings, rat waiting, smoke still because `rdt` is 0) and the haze sprites stop drifting. Nothing else touched: rat, cigarette, drip, camera drift, labels, links, prose, teardown.
 - **Verified:** `node --check` clean; html synced (`clRefl` ×8); renders 1 canvas, 0 errors at 1280×900 and 390×780 (scrollWidth 390); under reduced motion 0 errors. The reflection mesh confirmed live through `window._dssThreeRegistry['cl-wrap'].scene` (position as set, opacity 0.151 mid-breath, additive, visible). Same caveat as pass 4 on pixel-comparing reduced-motion frames (shared grain layer). Before/after: `pass5-copperslair-before.png`, `pass5-copperslair-after.png` (the reflection is small and soft under software GL; judge on a real GPU).
 - **Changed:** `buildCLScene` only.
 - **Next:** buildRSScene (Ronnie Scott's), then buildTSScene (Trisha's). Astra's remaining list after this pass: buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene — plus buildCaScene (Colony) which Astra's list missed.
+
+### Pass 5, second scene — 04:27–04:33 UTC — Ronnie Scott's (queue item 4, third of sixteen) — DONE
+- **buildRSScene / Approach Ronnie Scott's.** Added the neon in the wet pavement: one additive 3.2×2.6 plane at (0.8, 0.02, 2.7) under the sign, canvas texture with the sign's red pooling at the top and the green of OPEN NIGHTLY low in the tail, cut by paving joints; opacity 0.115 ± 0.022 following `neonLight`'s near-steady breath. Pixel cap 2 → 1.5. Reduced-motion (`rsStill`): `t` held at 6s (neon, lamps, sky, camera breath all still), fog sprites stop drifting, and the film-grain canvas (`rsGrain`) is drawn once instead of every eighth frame. Nothing else touched.
+- **Verified:** `node --check` clean; html synced (`rsNeonRefl` ×7); 1 canvas, 0 errors at 1280×900 and 390×780; reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['rs-wrap']` (position as set, opacity 0.115, additive, visible). Before/after: `pass5b-ronnies-before.png`, `pass5b-ronnies-after.png` (the warm cast on the flags in front of the door).
+- **Changed:** `buildRSScene` only.
+- **Next:** buildTSScene (Trisha's), then buildGLScene (Ginger Light).

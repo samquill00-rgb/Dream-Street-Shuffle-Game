@@ -6,7 +6,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
-4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light, Centre Point, O'Flatterly's DONE; pass 6: Fish and Chips DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
+4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light, Centre Point, O'Flatterly's DONE; pass 6: Fish and Chips, Lackland's Office DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
 
@@ -84,3 +84,9 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Verified:** `node --check` clean; html synced (`fcSheen` ×7); 1 canvas, 0 errors at 1280×900 and 390×780 (scrollWidth 390); reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['fc-wrap']` (position as set, opacity 0.062 mid-breath, additive, visible). Before/after: `pass6-fishchips-before.png`, `pass6-fishchips-after.png`.
 - **Changed:** `buildFcScene` only.
 - **Next:** buildLOScene, then buildCRScene.
+
+### Pass 6, second scene — 04:49–04:54 UTC — Lackland's Office (queue item 4, ninth of sixteen) — DONE
+- **buildLOScene / Approach Lacklands Office.** Added the red of Lackland's first-floor window lying on the raised pavement beneath it: one additive 1.3×1.9 plane at (−2.2, 0.125, 1.4) (on top of the 0.12-high raised pavement, between the wall and the kerb), 64×128 canvas texture (tall red smear cut by flag joints), opacity 0.11 + wFlicker1F × 0.05 so it follows the working light behind that curtain, with a faint 1.7 Hz shimmer. Pixel cap 2 → 1.5. Reduced-motion (`loStill`): `t` held at 7s (lamps, door spot, sign, curtains, Lackland's breath all still; the page turn never fires because `loDt` is 0), silhouettes stop swaying, the film grain canvas is drawn twice then left. Nothing else touched. First placement (z 2.9, y 0.018) was half under the raised pavement, so it was moved up onto it.
+- **Verified:** `node --check` clean; html synced (`loRedRefl` ×7); 1 canvas, 0 errors at 1280×900 and 390×780 (scrollWidth 390); reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['lo-wrap']` (position as set, opacity 0.11, additive, visible). Before/after: `pass6-lacklands-before.png`, `pass6-lacklands-after.png`. The pavement sits at the very bottom-left of the frame at 1280×900 and the whole scene is bathed in the doorway's amber, so the red smear is small in the screenshot; judge it on a real GPU.
+- **Changed:** `buildLOScene` only.
+- **Next:** buildCRScene, then buildTPScene.

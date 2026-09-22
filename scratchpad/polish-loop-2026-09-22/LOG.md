@@ -6,7 +6,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
-4. Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
+4. [pass 4: Pillars DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
 
@@ -35,3 +35,9 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Checks:** CSS braces balance; html synced (grep confirms the new rule); re-sweep of Dean Street, The French, Nazca Race, The Climb, Towards Dawn at 390px reports 0 wide elements.
 - **Changed:** `:: UserStylesheet` phone block only (three declarations + a comment). No prose, no script.
 - **Next:** queue item 4, approach scenes: buildPHScene (Pillars) and buildCLScene (Colony).
+
+### Pass 4 — 04:00–04:22 UTC — approach scenes, Pillars (queue item 4, first of sixteen) — DONE, one scene
+- **buildPHScene / Approach The Pillars.** Added a window-light sheet on the wet pavement in front of the pub: one additive plane (4.6×2.4 at y 0.03, z 0.7→3.1, x −0.9→3.7, i.e. the three lit bays and the door) with a canvas texture that fades from the sill line to the kerb, is cut by the paving joints, and carries a darker bar under the doorway; opacity breathes with `pubGlow` in `phAnimate` (0.095 ± 0.028). Pixel-ratio cap 2 → 1.5 (as Astra did on the French and Coach). Reduced-motion (`phStill`): the loop holds `t` at 14s (flood settled, sign and lamps still) and the fog sprites stop drifting. Nothing else in the function touched: no labels, links, prose, flood logic, lightning, teardown.
+- **Verified:** `node --check` on the full UserScript clean; html synced (`phSheen` present ×7); Approach The Pillars renders 1 canvas, 0 errors, 0 failed requests at 1280×900 and at 390×780 (scrollWidth 390); under `prefers-reduced-motion: reduce` it renders with 0 errors. A pixel comparison of two frames under reduced motion still differs because the shared `dssFilmGrade` layer redraws random grain every frame (`fgVal = 118 + Math.random()*20`, line ~16773) — that layer is not this scene's, and the scene's own motion is all `t`-driven or gated. Before/after: `pass4-pillars-before.png`, `pass4-pillars-after.png` in the project files (software GL; the sheen shows as a warm wash on the flags under the windows).
+- **Colony (buildCLScene) not started:** kept this pass to one scene so it committed before pass 5.
+- **Next:** buildCLScene (Colony), then buildRSScene (Ronnie's). Tools: `scratchpad/audit-2026-09-16/scene_shot.py "<passage>" out.png [secs]` screenshots a scene canvas' parent and reports errors.

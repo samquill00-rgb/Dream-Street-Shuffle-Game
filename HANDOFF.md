@@ -1,6 +1,11 @@
 **STATE 2026-09-22 — everything below 20a–20o is on `main` and pushed (last: Astra's Nazca/Pyramid/Reclamation retunes, verified here with one syntax fix, 20o). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
 
 
+### Coach plumbing transition — 2026-09-22
+- Refined the SVG in Coach and Horses lock: larger framing, thinner verdigris/amber pipe seams, fewer spray particles and cheaper glow/grime filters, slower counter-rotation, travelling wet highlights, one bead receding against the flow, softer porcelain dissolve. Reduced-motion uses a short plain fade. Crash trigger, sound, travel timing, prose and links preserved. Synced; SVG parsing and full UserScript syntax check passed; no browser preview. Approach queue still resumes at buildPHScene.
+
+
+
 ### Approach graphics — first two scenes, 2026-09-22
 - **buildFHScene / French House:** slow doorway breath, light-catching sash glass, broken amber reflection in the existing road patch, 24 faint motes (one rises against the rest), quieter green fairy; one additional draw. Lower pixel-ratio cap; motion freezes for reduced-motion preference.
 - **buildCHScene / Coach and Horses:** gentler asynchronous lamps, glossier red paint/glass/brass, smoke without depth-writing, existing puddles catch broken window colour and an ember reflection that anticipates the smoker; no additional draws. Corrected wet-map alpha, slower local grain refresh, reduced-motion handling and lower pixel cap.

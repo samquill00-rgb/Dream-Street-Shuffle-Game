@@ -6,10 +6,15 @@ this repo's root.
 
 - **Play / share this link:**
   https://www.samquill.com/Dream-Street-Shuffle-Game/Dream%20Street%20Shuffle.html
-- **The file to edit:** `Dream Street Shuffle.html` — a self-contained Twine/Harlowe HTML
-  with the music and visuals embedded (~45 MB). Story ID (IFID) `E3F7C9E2-…`.
-- **To publish a change:** edit that file → commit → **push in GitHub Desktop**.
-  GitHub Pages serves it under the `samquill.com` domain automatically (~1 min to rebuild).
+- **The file to edit:** `Dream Street Shuffle.twee` — the Twine/Harlowe source. The html
+  is generated from it and is not edited by hand. Story ID (IFID) `E3F7C9E2-…`.
+- **The file people play:** `Dream Street Shuffle.html` (~6 MB). Since September 2026 the
+  music and ambient beds are linked as the audio files beside it rather than embedded, so it
+  needs a web server (GitHub Pages, or a local `python3 -m http.server`); opened straight
+  from disk it plays no sound.
+- **To publish a change:** edit the twee → run `python3 sync_html.py` (rebuilds the html)
+  → commit both files → **push in GitHub Desktop**. GitHub Pages serves it under the
+  `samquill.com` domain automatically (~1 min to rebuild).
 - **Saving:** the game autosaves to the browser's `localStorage` every turn (header
   passage). The title screen offers **Continue** when a save exists, and a "✓ Progress
   saved" toast flashes on returning to Dean Street. Private/incognito mode can't save —

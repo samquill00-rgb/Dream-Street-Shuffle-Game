@@ -8,7 +8,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
 4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light, Centre Point, O'Flatterly's DONE; pass 6: Fish and Chips, Lackland's Office, Colony Room DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
-6. README tidy (html size, twee is the file to edit).
+6. [pass 6, DONE] README tidy (html size, twee is the file to edit).
 
 ## Passes
 
@@ -97,3 +97,8 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Verified:** `node --check` clean; html synced (`crSheen` ×7); 2 canvases (scene + grain overlay, as before), 0 errors at 1280×900 and 390×780 (scrollWidth 390); reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['cr-wrap']` (position as set, opacity 0.103, additive, visible). Before/after: `pass6-colony-before.png`, `pass6-colony-after.png` (the camera is high, so the whole pavement is in frame; the warm cast under the windows is soft).
 - **Changed:** `buildCRScene` only.
 - **Next:** buildTPScene, then buildapScene.
+
+### Pass 6, tail — 04:58–05:03 UTC — handoff and README (queue item 6) — DONE
+- **HANDOFF.md:** new state line at the top (branch, merge advice) and entry 20q above 20p summarising the loop, the ten scenes, the naming corrections, what is left (Astra's list resumes at buildTPScene, which is a timed birth sequence and needs a different reduced-motion treatment: jump to the settled end, not a hold at the start) and how to merge.
+- **README.md:** the "file to edit" is now the twee, the html is described as generated (~6 MB, audio linked since September 2026, needs a web server), and the publish steps include `sync_html.py`. Nothing else in the README changed.
+- **buildTPScene not started** for the reason above; kept the closing pass for the summary.

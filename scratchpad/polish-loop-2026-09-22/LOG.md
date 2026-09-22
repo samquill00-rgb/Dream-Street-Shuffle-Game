@@ -5,7 +5,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 ## Queue (take the first unclaimed)
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
-3. Phone-width sweep at 390px, CSS-only fixes.
+3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
 4. Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
@@ -27,3 +27,11 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Screenshots** in `/mnt/project-files/polish-loop/`: `pass2-reclamation-wave1.png`, `pass2-reclamation-rig-glare.png`, `pass2-reclamation-phone.png`, `pass2-nazca-race.png` (car on the line, minimap, HUD), `pass2-pyramid-run.png` (torch, glyph wall, scarab). Rendered with SwiftShader, so brightness and bloom are approximate.
 - **Changed:** nothing in the game. Log only.
 - **Next:** queue item 3, phone-width sweep at 390px.
+
+### Pass 3 — 03:21–04:00 UTC — phone-width sweep at 390px (queue item 3) — DONE, one fix
+- New script `scratchpad/audit-2026-09-16/phone_sweep.py`: renders every passage at 390×780 under the rich seed and lists any element whose box passes the right edge of the viewport, ignoring elements parked off-screen on purpose (left < −1000) and those clipped by a container narrower than the viewport. `tw-story` and `html` carry `overflow-x: hidden`, so `scrollWidth` never tells you anything on this game; the element list is the signal. First run had the clip filter too broad (it treated `html`'s own clipping as intentional and hid everything); corrected and re-run: 206 passages, 0 JS errors.
+- **The one real overflow, on all 185 passages with the notebook header:** the phone override (`@media (max-width: 600px)`) gave the stat-bar grid a 124px bar column, but the bar's footprint is 176px (36px margin for the filter tip / banknote roll drawn at `left:-36px`, plus the 140px barrel), so the barrel ran under the percentage figure and 11px past the right edge of a 390px phone (bar 261→401, "70%" at 355→383). **Fix, CSS only, inside the existing phone block:** bar column 176px, column gap 5px, header lily 130→112px so the wider grid clears it. After: bar 210→350, percentage 355→383, nothing past 390. Before/after crops: `pass3-before-statbar-phone.png`, `pass3-after-statbar-phone.png` in the project files.
+- **Looked at and left alone (deliberate bleed):** the ending-vines SVG on White page / Black page / Ending Vines SVG (−19→410, a full-bleed border), the three `dawn-mist-band`s on Dawn (−117→507, drifting mist), and the tilted `memory-photo` on Alba Complete (3px each side from its rotation).
+- **Checks:** CSS braces balance; html synced (grep confirms the new rule); re-sweep of Dean Street, The French, Nazca Race, The Climb, Towards Dawn at 390px reports 0 wide elements.
+- **Changed:** `:: UserStylesheet` phone block only (three declarations + a comment). No prose, no script.
+- **Next:** queue item 4, approach scenes: buildPHScene (Pillars) and buildCLScene (Colony).

@@ -44465,6 +44465,8 @@ document.head.appendChild(s);
 }
 }
 function buildCPScene() {
+// Reduced-motion: hold one settled frame (uplights steady, ladder pulse parked, fog still).
+var cpStill = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var cpWrap = document.createElement('div');
 cpWrap.id = 'cp-wrap';
 cpWrap.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;background:#060810;';
@@ -44499,7 +44501,7 @@ var cpRenderer;
 try {
   cpRenderer = new THREE.WebGLRenderer({ antialias: true });
   cpRenderer.setSize(window.innerWidth, window.innerHeight);
-  cpRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  cpRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   cpRenderer.shadowMap.enabled = true;
   cpRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
   cpRenderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -45000,6 +45002,20 @@ cpScene.add(pulseLight);
 var ladderBaseGlow = new THREE.PointLight(0x0055cc, 0.5, 10);
 ladderBaseGlow.position.set(0, 1.5, LADDER_Z + 1);
 cpScene.add(ladderBaseGlow);
+// The neon in the night air (2026-09-22 polish loop): a soft blue haze
+// hanging at the foot of the ladder, where the tubes' light catches the
+// damp. One additive sprite; breathes with ladderBaseGlow.
+var cpHazeTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  g.addColorStop(0, 'rgba(90,170,255,0.55)');
+  g.addColorStop(0.45, 'rgba(40,110,220,0.18)');
+  g.addColorStop(1, 'rgba(20,60,160,0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+});
+var cpHaze = new THREE.Sprite(new THREE.SpriteMaterial({ map: cpHazeTex, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false }));
+cpHaze.position.set(LADDER_X, 1.6, LADDER_Z + 0.9);
+cpHaze.scale.set(3.6, 2.2, 1);
+cpScene.add(cpHaze);
 // ============================================================
 // ANIMATION
 // ============================================================
@@ -45007,14 +45023,14 @@ var cpClock = new THREE.Clock();
 var avBlinkPhase = 0;
 function cpAnimate() {
 cpAnimId = requestAnimationFrame(cpAnimate);
-var t = cpClock.getElapsedTime();
+var t = cpStill ? 3 : cpClock.getElapsedTime();
 // --- UPLIGHTING — slow breathing, like a building being dramatic ---
 var upBreath = 0.96 + Math.sin(t * 0.18) * 0.03;
 upLight1.intensity = 1.8 * upBreath;
 upLight2.intensity = 1.5 * upBreath;
 upLight3.intensity = 1.0 * upBreath;
 // --- AVIATION LIGHT — slow red blink, every ~4 seconds ---
-avBlinkPhase += 0.016;
+if (!cpStill) avBlinkPhase += 0.016;
 var avCycle = Math.sin(avBlinkPhase * 0.8);
 var avOn = avCycle > 0.85;
 avLight.intensity = avOn ? (avCycle - 0.85) * 12 : 0;
@@ -45047,8 +45063,9 @@ rightRail.material.emissiveIntensity = 1.0 * spineFlicker;
 pulseLight.intensity = 1.2 + Math.sin(t * 1.8) * 0.2;
 // Base glow breathes slowly
 ladderBaseGlow.intensity = 0.35 + Math.sin(t * 0.4) * 0.12;
-// --- FOG DRIFT ---
-for (var fdi = 0; fdi < fogSprites.length; fdi++) {
+cpHaze.material.opacity = 0.08 + (ladderBaseGlow.intensity - 0.35) * 0.3 + Math.sin(t * 1.1) * 0.01;
+// --- FOG DRIFT --- (held under reduced motion)
+for (var fdi = 0; fdi < (cpStill ? 0 : fogSprites.length); fdi++) {
 var f = fogSprites[fdi];
 f.sway += f.swaySpeed;
 f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;

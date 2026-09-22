@@ -6,7 +6,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
-4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
+4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light, Centre Point DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
 
@@ -66,3 +66,9 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Verified:** `node --check` clean; html synced (`glGlint` ×8); 1 canvas, 0 errors at 1280×900 and 390×780; reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['gl-wrap']` (position as set, opacity 0.142, additive, visible). Before/after: `pass6-gingerlight-before.png`, `pass6-gingerlight-after.png`.
 - **Changed:** `buildGLScene` only.
 - **Next:** buildCPScene (Centre Point), then buildOFScene (O'Flatterly's).
+
+### Pass 5, fifth scene — 04:38–04:46 UTC — Centre Point (queue item 4, sixth of sixteen) — DONE
+- **buildCPScene / Approach Centre Point.** The camera looks straight up the tower, so no wet ground is in frame; the touch here is the neon in the night air: one additive 3.6×2.2 sprite at the foot of the ladder (LADDER_X, 1.6, LADDER_Z + 0.9), a soft blue haze whose opacity follows `ladderBaseGlow` (0.08 + (glow − 0.35) × 0.3). Pixel cap 2 → 1.5. Reduced-motion (`cpStill`): `t` held at 3s (uplights steady, ladder pulse parked, window glow still), the aviation blink phase stops advancing, fog stops. The WebGL-unavailable fallback path is untouched.
+- **Verified:** `node --check` clean; html synced (`cpHaze` ×6); 1 canvas, 0 errors at 1280×900 and 390×780; reduced motion 0 errors; sprite confirmed live in `_dssThreeRegistry['cp-wrap']` (position (0, 1.6, 4.1), opacity 0.09, additive, visible). Before/after: `pass6-centrepoint-before.png`, `pass6-centrepoint-after.png`.
+- **Changed:** `buildCPScene` only.
+- **Next:** buildOFScene (O'Flatterly's), then buildFcScene (Chinese Fish and Chips).

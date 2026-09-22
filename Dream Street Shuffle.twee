@@ -61883,7 +61883,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
 <canvas id="nazca-race-item" width="56" height="56"></canvas>
 <div id="nazca-race-count"></div>
 </div>
-<div id="nazca-race-hud">Click the sand to start. Hold ↑ to accelerate. Steer with ← and →. Space throws what you carry. Stay on the line.</div>
+<div id="nazca-race-hud">Click the sand to start. ↑ / W / GO accelerates; ← → steers; ↓ / S / BRAKE slows. Follow the pale road. Gold diamonds carry items; Space uses yours.</div>
 </div>
 
 <span id="nz-race-win" style="display:none;">(link: "Cross the line")[(set: $nazcaRaceWon to true)(go-to: "The Centre — Nazca")]</span>
@@ -62014,7 +62014,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
   var renderer, composer, scene, camera, player, opp, sunLight;
   var playerBody, oppBody, playerWheels = [], oppWheels = [];
   var dustPool = [], wakePool = [], wakeIdx = 0, lastWakeX = 0, lastWakeY = 0;
-  var condor, devils = [];
+  var condor, devils = [], wakeMesh, wakeColor, roadRims;
   var mapCtx = document.getElementById('nazca-race-map').getContext('2d');
   var itemCtx = document.getElementById('nazca-race-item').getContext('2d');
   var hud = document.getElementById('nazca-race-hud');
@@ -62032,7 +62032,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
   var racing = false, raceStarted = false, countdownAt = null, finished = false;
   var TOTAL_LAPS = 2;
   var playerLapsT = 0, lastT = 0, oppT = -0.04, oppLapsT = -0.04;
-  var oppSpeedT = 3.35/trackLength; // physical pace, with readable braking before bends
+  var oppSpeedT = 3.05/trackLength; // physical pace, with readable braking before bends
   var spinUntil = 0, spinFrom = 0, spinning = false;
   var drifting = false, driftMs = 0, boost = 0, endFlare = 0;
   var patches = [], suckPool = [], suckIdx = 0, startLights = [];
@@ -62071,7 +62071,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     scene.fog = new THREE.Fog(0xdcc39a, 620, 1500);
     camera = new THREE.PerspectiveCamera(60, canvas.width/canvas.height, 1, 2800);
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth<600?1.25:1.5));
     renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
     renderer.toneMappingExposure = 0.86;
     renderer.shadowMap.enabled = true;
@@ -62080,7 +62080,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     // canvas-sized composer (dssMakeComposer is window-sized; this one
     // must match the 720x450 buffer or the bloom smears)
     composer = null;
-    if (typeof THREE.EffectComposer === 'function' && typeof THREE.UnrealBloomPass === 'function'){
+    if (window.innerWidth>=600 && typeof THREE.EffectComposer === 'function' && typeof THREE.UnrealBloomPass === 'function'){
       composer = new THREE.EffectComposer(renderer);
       composer.setSize(canvas.width, canvas.height);
       composer.addPass(new THREE.RenderPass(scene, camera));
@@ -62096,7 +62096,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     sunLight = new THREE.DirectionalLight(0xffdfa2, 1.35);
     sunLight.position.set(-420, 150, -300);   // LOW sun: long shadows
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.mapSize.set(1024, 1024);
     sunLight.shadow.camera.near = 50;
     sunLight.shadow.camera.far = 1400;
     sunLight.shadow.camera.left = -380; sunLight.shadow.camera.right = 380;
@@ -62275,7 +62275,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     for (var es = 0; es < N; es += 2){
       var eq = CL[es], ed = cdir(es/N);
       [-1, 1].forEach(function(sd3){
-        var exx = eq.x - ed.y*(TRACK_WIDTH/2 + 5)*sd3, eyy = eq.y + ed.x*(TRACK_WIDTH/2 + 5)*sd3;
+        var exx = eq.x - ed.y*(TRACK_WIDTH/2*WF[es] + 5)*sd3, eyy = eq.y + ed.x*(TRACK_WIDTH/2*WF[es] + 5)*sd3;
         gx.fillStyle = 'rgba(60,38,24,' + (0.35+Math.random()*0.25) + ')';
         gx.beginPath(); gx.arc(txx(exx), txy(eyy), (1.2+Math.random()*1.6)*sxScale*0.6, 0, Math.PI*2); gx.fill();
       });
@@ -62308,6 +62308,13 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     ground.position.set(GCX, 0, GCZ);
     ground.receiveShadow = true;
     scene.add(ground);
+
+    // Clear, unbroken rims follow the same widening as collision. One draw.
+    var rimVerts=[];
+    for(var ri=0;ri<N;ri++){var rt=ri/N,rn=(ri+1)/N,ra=cpt(rt),rb=cpt(rn),rd=cdir(rt),re=cdir(rn);
+      [-1,1].forEach(function(side){rimVerts.push(ra.x-rd.y*TRACK_WIDTH*.5*wfAt(rt)*side,.16,ra.y+rd.x*TRACK_WIDTH*.5*wfAt(rt)*side,rb.x-re.y*TRACK_WIDTH*.5*wfAt(rn)*side,.16,rb.y+re.x*TRACK_WIDTH*.5*wfAt(rn)*side);});}
+    var rimGeo=new THREE.BufferGeometry();rimGeo.setAttribute('position',new THREE.Float32BufferAttribute(rimVerts,3));
+    roadRims=new THREE.LineSegments(rimGeo,new THREE.LineBasicMaterial({color:0xffe8b8,transparent:true,opacity:.72}));scene.add(roadRims);
 
     // ---- distant ridge ----
     var ridgeMat = new THREE.MeshStandardMaterial({ color: 0x87705d, roughness: 1 });
@@ -62659,13 +62666,12 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     wkg.addColorStop(1, 'rgba(0,0,0,0)');
     wkx.fillStyle = wkg; wkx.fillRect(0,0,32,64);
     var wakeTex = new THREE.CanvasTexture(wakeC);
-    for (var wk2 = 0; wk2 < 340; wk2++){
-      var wkm = new THREE.Mesh(new THREE.PlaneGeometry(7, 13),
-        new THREE.MeshBasicMaterial({ map: wakeTex, blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false }));
-      wkm.rotation.x = -Math.PI/2;
-      wkm.position.y = 0.32;
-      wkm.userData = { on: false, born: 0 };
-      scene.add(wkm); wakePool.push(wkm);
+    // The whole gold trail shares a single geometry, texture and draw.
+    wakeMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(7,13),new THREE.MeshBasicMaterial({map:wakeTex,blending:THREE.AdditiveBlending,transparent:true,opacity:.65,depthWrite:false}),340);
+    wakeMesh.frustumCulled=false;wakeColor=new THREE.Color();scene.add(wakeMesh);
+    for(var wk2=0;wk2<340;wk2++){
+      var wkm=new THREE.Object3D();wkm.rotation.x=-Math.PI/2;wkm.position.y=.32;wkm.userData={on:false,born:0};
+      wkm.scale.setScalar(0);wkm.updateMatrix();wakeMesh.setMatrixAt(wk2,wkm.matrix);wakeMesh.setColorAt(wk2,wakeColor.setRGB(0,0,0));wakePool.push(wkm);
     }
 
     // ---- dust devils on the far plain ----
@@ -62741,7 +62747,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     expandButton.setAttribute('aria-pressed', 'false');
     canvas.parentElement.parentElement.appendChild(controls);
     var help = document.createElement('div'); help.className = 'nz-help';
-    help.textContent = '↑ / W accelerate · ← → / A D steer · ↓ / S brake · Space item · P pause. Hold a turn at speed to charge a drift; straighten to boost.';
+    help.textContent = '↑ / W accelerate · ← → / A D steer · ↓ / S brake · Space item · P pause. Brake before tight bends. Hold a turn at speed to charge a drift; straighten to boost. Leaf: speed; stone: ahead; slick: behind; condor: seeks the rival.';
     canvas.parentElement.parentElement.appendChild(help);
     var touch = document.createElement('div'); touch.className = 'nz-touch';
     [['◀','a','Steer left'],['▶','d','Steer right'],['BRAKE','s','Brake'],['GO','w','Accelerate']].forEach(function(spec){
@@ -62773,7 +62779,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     stones = []; slicks = []; item = null; condorAtk = null; oppStun = 0;
     patches.forEach(function(p){ p.taken = false; if(p.grp) p.grp.visible = true; });
     itemBoxes.forEach(function(b){ b.taken = false; b.mesh.visible = true; });
-    wakePool.forEach(function(w){ w.userData.on = false; w.material.opacity = 0; });
+    wakePool.forEach(function(w,i){w.userData.on=false;w.scale.setScalar(0);w.updateMatrix();wakeMesh.setMatrixAt(i,w.matrix);});wakeMesh.instanceMatrix.needsUpdate=true;
     dustPool.forEach(function(d){ d.userData.life = 0; d.material.opacity = 0; });
     suckPool.forEach(function(s){ s.userData.mode = 0; s.material.opacity = 0; });
     var p = cpt(0), d = cdir(0);
@@ -62803,6 +62809,12 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     dashboard.time.textContent = formatTime(raceElapsed);
     var cr = closestT(camX,camY), d = cdir(cr.t);
     var wrongWay = speed > 0.7 && -Math.sin(moveAngle)*d.x+Math.cos(moveAngle)*d.y < -0.35;
+    var ahead=cdir(cr.t+Math.max(100,speed*42)/trackLength), turn=d.x*ahead.y-d.y*ahead.x;
+    var bend=Math.abs(turn)>.42?'BEND '+(turn>0?'RIGHT':'LEFT')+' · BRAKE':'';
+    var slickAhead=slicks.some(function(slk){if(slk.owner!=='opponent')return false;var dx=slk.x-camX,dy=slk.y-camY,along=dx*d.x+dy*d.y;return along>0 && along<Math.max(130,speed*55) && Math.abs(dx*d.y-dy*d.x)<TRACK_WIDTH;});
+    var hint=slickAhead?'SLICK AHEAD · STEER CLEAR':bend;
+    var itemHelp=item?({leaf:'SPACE: SPEED BOOST',stone:'SPACE: THROW AHEAD AT THE BLACK CAR',slick:'SPACE: DROP BEHIND YOU',condor:'SPACE: CONDOR SEEKS THE BLACK CAR'}[item]):'GOLD DIAMONDS: COLLECT AN ITEM';
+    hud.textContent += '   ·   '+(hint?hint+'   ·   ':'')+itemHelp;
     var state = spinning ? 'RECOVERING' : wrongWay ? 'WRONG WAY' : !isOnTrack(camX,camY) ? 'OFF ROAD' : boost > 0.1 ? 'BOOST' : drifting ? (driftStage === 2 ? 'GOLD · RELEASE TURN' : driftStage === 1 ? 'BLUE · RELEASE TURN' : 'CHARGING DRIFT') : 'DRIFT / BOOST';
     dashboard.state.textContent = state;
     dashboard.charge.value = boost > 0.1 ? Math.min(1,boost/2) : Math.min(1,driftMs/1800);
@@ -62813,7 +62825,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
 
   function useItem(){
     if (!racing || paused || finished || spinning || !item) return;
-    var used = item; item = null;
+    var used = item; item = null;announce({leaf:'LEAF · SPEED BOOST',stone:'STONE · THROWN AHEAD',slick:'SLICK · LEFT BEHIND',condor:'CONDOR · SEEKING THE BLACK CAR'}[used],1100);
     if (used === 'leaf'){
       boost = Math.min(2, boost + 1.3);
       if (window._nzSpawnSpark) for (var uk = 0; uk < 14; uk++) window._nzSpawnSpark(camX + Math.sin(moveAngle)*15, camY - Math.cos(moveAngle)*15, 0x9ae08a);
@@ -62821,7 +62833,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
       stones.push({ x: camX - Math.sin(moveAngle)*18, y: camY + Math.cos(moveAngle)*18, a: moveAngle, life: 3500, mesh: null });
     } else if (used === 'slick'){
       slicks.push({ x: camX + Math.sin(moveAngle)*20, y: camY - Math.cos(moveAngle)*20, owner: 'player', armAt: raceNow() + 500, mesh: null });
-      if (slicks.length > 4){ var old2 = slicks.shift(); if (old2.mesh) old2.mesh.visible = false; }
+      if (slicks.length > 4) removeHazard(slicks.shift());
     } else if (used === 'condor'){
       condorAtk = { t0: raceNow(), x: camX, y: camY };
     }
@@ -62851,7 +62863,9 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     }
   }
 
+  function removeHazard(o){if(o.mesh){scene.remove(o.mesh);o.mesh.geometry.dispose();}}
   function triggerSpinout(){
+    announce('BACK TO THE LINE · KEEP GOING',1200);
     spinning = true;
     spinFrom = camAngle;
     spinUntil = raceNow() + 1000;
@@ -62876,7 +62890,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
         speed = 0.6;
       } else {
         var pr = 1 - left/1000;
-        camAngle = spinFrom + 3*Math.PI * (1 - Math.pow(1-pr, 2));
+        camAngle = reducedMotion?spinFrom:spinFrom + 3*Math.PI * (1 - Math.pow(1-pr, 2));
       }
     } else {
       var accelInput = keys['ArrowUp'] || keys['w'] || touching;
@@ -62887,10 +62901,10 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
       var on = isOnTrack(camX, camY);
       if (boost > 0) boost = Math.max(0, boost - 0.012*dt);
       var maxSp = (on ? maxSpeedOn : maxSpeedOff) + 1.35*Math.min(1, boost);
-      if (boost > 0.05) speed = Math.min(speed + 0.09*dt, maxSp);
-      if (accelInput) speed = Math.min(speed + accelRate*dt, Math.max(maxSp, speed));
+      if (boost > 0.05 && !brakeInput) speed = Math.min(speed + 0.09*dt, maxSp);
+      if (accelInput && !brakeInput) speed = Math.min(speed + accelRate*dt, Math.max(maxSp, speed));
       else            speed = Math.max(speed - decelRate*dt, 0);
-      if (brakeInput) speed = Math.max(speed - brakeRate*dt, 0);
+      if (brakeInput){speed = Math.max(speed - brakeRate*dt, 0);boost=Math.max(0,boost-.06*dt);}
       if (!on){
         // soft scrub, not a wall: bleed toward the off-road cap
         speed = Math.max(speed * Math.pow(0.972, dt), Math.min(speed, maxSpeedOff));
@@ -62941,7 +62955,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
       camY +=  Math.cos(moveAngle)*speed*dt;
 
       var offC = closestT(camX, camY);
-      if (on) recoveryT = offC.t;
+      if (offC.d < TRACK_WIDTH*.48*wfAt(offC.t)) recoveryT = offC.t;
       if (offC.d > TRACK_WIDTH*1.6*wfAt(offC.t)) triggerSpinout();
 
       if (speed > 0.7 && Math.random() < (drifting ? 0.95 : (on ? 0.4 : 0.9))){
@@ -62955,6 +62969,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
         var wkm2 = wakePool[wakeIdx = (wakeIdx+1) % wakePool.length];
         wkm2.position.x = camX; wkm2.position.z = camY;
         wkm2.rotation.z = -moveAngle;
+        wkm2.scale.setScalar(1);wkm2.updateMatrix();wakeMesh.setMatrixAt(wakeIdx,wkm2.matrix);wakeMesh.instanceMatrix.needsUpdate=true;
         wkm2.userData.on = true;
         wkm2.userData.born = now;
       }
@@ -62982,7 +62997,8 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
           box3.taken = true; box3.respawnAt = now + 5000;
           box3.mesh.visible = false;
           var roll2 = Math.random();
-          item = roll2 < 0.3 ? 'leaf' : (roll2 < 0.55 ? 'stone' : (roll2 < 0.8 ? 'slick' : 'condor'));
+          item = oppLapsT>playerLapsT ? (roll2<.45?'leaf':roll2<.7?'stone':'condor') : (roll2<.35?'leaf':roll2<.6?'stone':roll2<.85?'slick':'condor');
+          announce({leaf:'LEAF · SPACE TO BOOST',stone:'STONE · SPACE TO THROW AHEAD',slick:'SLICK · SPACE TO DROP BEHIND',condor:'CONDOR · SPACE TO SEEK THE RIVAL'}[item],1800);
           if (eng) eng.blip();
         }
       }
@@ -63018,18 +63034,19 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
       stn.x += -Math.sin(stn.a)*6.2*dt; stn.y += Math.cos(stn.a)*6.2*dt;
       var sdx = stn.x - opX, sdy = stn.y - opY;
       if (sdx*sdx + sdy*sdy < 420){
-        oppStun = 1300; stn.life = 0;
+        oppStun = 1600; stn.life = 0;announce('HIT · THE BLACK CAR STALLS',1100);
         if (window._nzSpawnSpark) for (var hk = 0; hk < 10; hk++) window._nzSpawnSpark(opX, opY, 0xffe096);
       }
-      if (stn.life <= 0){ if (stn.mesh) stn.mesh.visible = false; stones.splice(st3, 1); }
+      if (stn.life <= 0){ removeHazard(stn); stones.splice(st3, 1); }
     }
     for (var sl3 = slicks.length - 1; sl3 >= 0; sl3--){
       var slk = slicks[sl3];
+      if(now>slk.armAt+14000){removeHazard(slk);slicks.splice(sl3,1);continue;}
       if (now < slk.armAt) continue;
       var odx2 = slk.x - opX, ody2 = slk.y - opY;
-      if (slk.owner !== 'opponent' && odx2*odx2 + ody2*ody2 < 300){ oppStun = 1300; if (slk.mesh) slk.mesh.visible = false; slicks.splice(sl3, 1); continue; }
+      if (slk.owner !== 'opponent' && odx2*odx2 + ody2*ody2 < 300){ oppStun = 1300; removeHazard(slk); slicks.splice(sl3, 1); continue; }
       var pdx2 = slk.x - camX, pdy2 = slk.y - camY;
-      if (slk.owner !== 'player' && !spinning && racing && pdx2*pdx2 + pdy2*pdy2 < 260){ if (slk.mesh) slk.mesh.visible = false; slicks.splice(sl3, 1); triggerSpinout(); }
+      if (slk.owner !== 'player' && !spinning && racing && pdx2*pdx2 + pdy2*pdy2 < 260){ removeHazard(slk); slicks.splice(sl3, 1); triggerSpinout(); }
     }
     if (condorAtk && (now - condorAtk.t0) >= 2200){
       oppStun = 1500; condorAtk = null; condor.material.opacity = 0;
@@ -63040,9 +63057,10 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     // leaves a slick on the line behind it (your line)
     if (racing && !finished && now > oppDropAt){
       oppDropAt = now + 20000 + Math.random()*14000;
-      if (oppLapsT > playerLapsT){
-        slicks.push({ x: opX + Math.sin(Math.atan2(-opDirH.x, opDirH.y))*26, y: opY - Math.cos(Math.atan2(-opDirH.x, opDirH.y))*26, owner: 'opponent', armAt: now + 300, mesh: null });
-        if (slicks.length > 5){ var old3 = slicks.shift(); if (old3.mesh) old3.mesh.visible = false; }
+      if ((oppLapsT-playerLapsT)*trackLength>230 && (oppLapsT-playerLapsT)*trackLength<650){
+        slicks.push({ x: opX + Math.sin(Math.atan2(-opDirH.x, opDirH.y))*26, y: opY - Math.cos(Math.atan2(-opDirH.x, opDirH.y))*26, owner: 'opponent', armAt: now + 1100, mesh: null });
+        announce('THE BLACK CAR LEAVES A SLICK',1600);
+        if (slicks.length > 5) removeHazard(slicks.shift());
       }
     }
 
@@ -63051,8 +63069,8 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     var oppEase = 1 - Math.min(0.44, aheadCurve*2.8);
     // Mario rubber band: the black car hustles when behind, coasts when ahead
     var gap2 = playerLapsT - oppLapsT;
-    var band = Math.max(0.90, Math.min(1.10, 1 + gap2*0.3));
-    var od = oppSpeedT * oppEase * band * dt;
+    var band = Math.max(0.82, Math.min(1.03, 1 + gap2*0.35));
+    var od = oppSpeedT * oppEase * band * Math.min(1,raceElapsed/2000) * dt;
     if (oppStun > 0){ oppStun -= dt*16.67; od = 0; }
     oppT += od; oppLapsT += od;
 
@@ -63090,7 +63108,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
       span.style.display = 'block';
       span.classList.add('dss-mini-exit');
       setTimeout(function(){
-        if (!disposed && finished && span.style.display !== 'none' && span.scrollIntoView) span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (!disposed && finished && span.style.display !== 'none' && span.scrollIntoView) span.scrollIntoView({ behavior: reducedMotion?'auto':'smooth', block: 'center' });
       }, 900);
     }
     if (window.dssAudio && window.dssAudio.loreUnravel && won) window.dssAudio.loreUnravel();
@@ -63167,7 +63185,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     for (var sl4 = 0; sl4 < slicks.length; sl4++){
       var slk2 = slicks[sl4];
       if (!slk2.mesh){
-        slk2.mesh = new THREE.Mesh(new THREE.CircleGeometry(9, 14), slickMat);
+        slk2.mesh = new THREE.Mesh(new THREE.CircleGeometry(16, 20), slickMat);
         slk2.mesh.rotation.x = -Math.PI/2; slk2.mesh.position.set(slk2.x, 0.34, slk2.y);
         scene.add(slk2.mesh);
       }
@@ -63211,9 +63229,12 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
         var age = (now - wk3.userData.born)/1000;
         var lvl = age < 1.2 ? (0.5 - 0.28*(age/1.2)) : 0.22;
         if (endFlare){ var fa = (now - endFlare)/1000; lvl = 0.85*Math.exp(-fa/2.2) + 0.2; }
-        wk3.material.opacity = lvl * (0.85 + 0.15*Math.sin(t*1.4 + wq2));
+        var glow=lvl*(reducedMotion?1:.92+.08*Math.sin(t*.65+wq2*.35));wakeMesh.setColorAt(wq2,wakeColor.setRGB(glow,glow*.92,glow*.76));
       }
     }
+
+    wakeMesh.instanceColor.needsUpdate=true;
+    roadRims.material.opacity=reducedMotion?.72:.72+.04*Math.sin(t*.3);
 
     // dust devils wander
     for (var dv4 = 0; dv4 < devils.length; dv4++){
@@ -63397,6 +63418,7 @@ A voice from somewhere says, 'Two laps. The line is the line. Don't come off it.
     disposed = true;
     if (animId) cancelAnimationFrame(animId);
     if (cleanupInput) cleanupInput();
+    delete window._nzSpawnDust;delete window._nzSpawnSpark;delete window._nzSpawnSuck;
     if (composer && composer.dispose) composer.dispose();
     if (eng){ eng.kill(); eng = null; }
     if (renderer){

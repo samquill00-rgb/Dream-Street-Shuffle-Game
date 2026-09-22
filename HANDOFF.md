@@ -1,5 +1,14 @@
 **STATE 2026-09-22 — everything below 20a–20n is on `main` and pushed (last: Astra's Climb retune, verified and tightened here, 20n). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
 
+
+### Dream-game retunes — 2026-09-22
+- **Nazca Race:** braking now overrides boost; advance bend/slick cues, item-specific instructions and position-appropriate pickups; gentler rival pace with a standing start, no close-range slick drops; true-width road rims. Gold wake batched into one draw, bounded discarded hazard geometry, smaller shadows/pixel budget and no phone bloom.
+- **Pyramid Run:** this passage is 2D, not three.js. Fixed keyboard length typo; fixed-step physics, wider jump buffer/coyote window, surface-crossing landings, measured shorter snake hops with matching wider visible heads, brief rescue pause, persistent pit/duck/scarab/sand cues. Wider, slower torch pools, gentler darkness, light-catching motes and moving Gallery shafts.
+- **The Reclamation:** drones spawn closer, move more steadily and are easier to see; paced waves capped at five live machines, smaller spirit hit regions and greater spirit separation, dead machines excluded from shots; extinguished rig lamps stay out. Softer glare/sway, target-specific HUD and reload countdown, touch drag aims without firing. Ground mesh aligned to collision height; broken horizontal moon reflection, specular sea with fewer vertices/updates and gentler bloom.
+- **Left:** all exit links/targets, win variables, dev skip links, prose outside the games, scoring thresholds, route identities and endings. Each game synced and committed before the next.
+- **Verification / next:** system Python has no Playwright; skipped reclamation_verify.py exactly as requested. No repeated play or wider audit. Next: run that script with Playwright available, then judge Nazca bends/braking, snake-head hops and touch aiming on a phone. Gameplay and rendering remain browser-unverified.
+
+
 **Read in this order:** 20n (Astra's Climb retune + verification), 20m (beauty pass, visual only), 20l (The Reclamation rebuilt in 3D), 20k (all dream minigames compulsory), 20j (The Climb pass 3: wind, whirlwind, avalanches, plateaus), 20i (Climb pass 2), then 20a–20h (the audit and its fixes).
 
 **Open, all Sam's call, none started:**

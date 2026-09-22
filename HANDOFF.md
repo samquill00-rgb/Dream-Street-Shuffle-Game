@@ -1,4 +1,7 @@
-**STATE 2026-09-22 — everything below 20a–20o is on `main` and pushed (last: Astra's Nazca/Pyramid/Reclamation retunes, verified here with one syntax fix, 20o). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
+**STATE 2026-09-22 — everything below 20a–20p is on `main` and pushed (last: Astra's first two approach-scene retouches, verified here, 20p; sixteen scenes remain in its list). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
+
+
+**STATE 2026-09-22 — everything below 20a–20p is on `main` and pushed (last: Astra's first two approach-scene retouches, verified here, 20p; sixteen scenes remain in its list). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
 
 
 ### Approach graphics — first two scenes, 2026-09-22
@@ -9,7 +12,7 @@
 
 
 
-**STATE 2026-09-22 — everything below 20a–20o is on `main` and pushed (last: Astra's Nazca/Pyramid/Reclamation retunes, verified here with one syntax fix, 20o). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
+**STATE 2026-09-22 — everything below 20a–20p is on `main` and pushed (last: Astra's first two approach-scene retouches, verified here, 20p; sixteen scenes remain in its list). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
 
 
 ### Dream-game retunes — 2026-09-22
@@ -20,7 +23,7 @@
 - **Verification / next:** system Python has no Playwright; skipped reclamation_verify.py exactly as requested. No repeated play or wider audit. Next: run that script with Playwright available, then judge Nazca bends/braking, snake-head hops and touch aiming on a phone. Gameplay and rendering remain browser-unverified.
 
 
-**Read in this order:** 20o (Astra's three dream-game retunes + verification), 20n (Astra's Climb retune + verification), 20m (beauty pass, visual only), 20l (The Reclamation rebuilt in 3D), 20k (all dream minigames compulsory), 20j (The Climb pass 3: wind, whirlwind, avalanches, plateaus), 20i (Climb pass 2), then 20a–20h (the audit and its fixes).
+**Read in this order:** 20p (Astra's approach-scene graphics pass, two scenes done, list of the rest), 20o (Astra's three dream-game retunes + verification), 20n (Astra's Climb retune + verification), 20m (beauty pass, visual only), 20l (The Reclamation rebuilt in 3D), 20k (all dream minigames compulsory), 20j (The Climb pass 3: wind, whirlwind, avalanches, plateaus), 20i (Climb pass 2), then 20a–20h (the audit and its fixes).
 
 **Open, all Sam's call, none started:**
 1. Play and judge: The Climb's wind strength and avalanche visibility (knobs named in 20j); The Reclamation's drone range, glare and the ten-count (knobs in 20l); the beauty pass on a phone (if it stutters, drop the two screen-blend layers first, 20m).
@@ -97,6 +100,13 @@ The 2D canvas shooter in `:: The Reclamation` is replaced by a three.js first-pe
 - **Dev only:** `_rcDev.snapshot()/win()/lose()/spawn(kind)/aimAt(mesh)/fire()/machines()/spirits()`; E silences every live machine; "(skip reclamation — testing)" link.
 - **Watch for (Sam to judge by playing):** drones are small at 130 units and only really shootable from ~60; the crawler is slow on purpose (3.4/s from -104); the glare wedge is deliberately rude. Tuning knobs are the `WAVES` table, `speed` per kind in `spawn()`, `swayAmp` in `draw()`.
 Verified in Chromium (software GL): boot, cover, wave banner, dev-aimed shot silences a drone, clip empties into RELOADING and refills, spirit hit counts and banners, spawned rig lights (glare 1, HUD GLARE, overlay .55), lamp out then rig down, crawler at the wall, dev E to 10 → win → link → The Listening Moai with 0 canvases and `_rcDev` gone; three spirit hits → lose ending; phone 390px no bloom, no horizontal scroll; 0 JS errors; script parses. Verify script: `scratchpad/audit-2026-09-16/reclamation_verify.py`.
+
+### 20p — ASTRA'S APPROACH-SCENE GRAPHICS PASS, TWO SCENES, VERIFIED HERE (2026-09-22)
+Prompt: the eighteen three.js approach scenes in `:: UserScript`, one per commit, Soho first, with a `node --check` before every commit (the rule added after 20o's missing quote). Astra did two and stopped on budget. Its note, verbatim:
+
+- **Verified live (software GL):** `Approach The French` and `Approach The Coach` both render after BEGIN, one/two canvases, wrap present, 0 JS errors, 0 console errors; phone 390 no overflow; static audit clean; html in sync. Screenshots at 7s and 11s: the French has lit sash windows, breathing lamp and a wet-street reflection; the Coach has glossy red paint, two asynchronous lamps, smoke and puddles carrying window colour. Not judged on a real GPU here.
+- **Its syntax check worked:** both commits passed `node --check` on its side and here.
+- **Remaining, in Astra's order (give it the same prompt with the table trimmed to these):** buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene. Line numbers in the 20p prompt shift by roughly +50 after these two commits; tell it to search the function name rather than trust a line.
 
 ### 20o — ASTRA'S NAZCA / PYRAMID / RECLAMATION RETUNES, VERIFIED HERE (2026-09-22)
 Four commits from Astra (one per game plus a note), 289 changed twee lines, browser-unverified on its side. Its note, verbatim:

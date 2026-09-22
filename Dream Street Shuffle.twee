@@ -35094,6 +35094,8 @@ document.head.appendChild(s);
 }
 
 function buildCLScene() {
+// Reduced-motion: hold one settled frame (bulb steady, drip swelling at the ceiling).
+var clStill = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var clWrap = document.createElement('div');
 clWrap.id = 'cl-wrap';
 clWrap.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;background:#06060a;';
@@ -35111,7 +35113,7 @@ camera.lookAt(0, 1.4, -6);
 
 var renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
@@ -35736,6 +35738,26 @@ puddle.rotation.x = -Math.PI / 2;
 puddle.position.set(-0.6, 0.006, 4.0);
 puddle.receiveShadow = true;
 debrisGroup.add(puddle);
+// The bulb in the puddle (2026-09-22 polish loop): a soft warm smear of the
+// bare bulb on the standing water, drawn where the reflection would sit for
+// this camera. One additive plane; breathes with the bulb and shivers while
+// a drip-ring is crossing it.
+var clReflTex = makeCanvasTexture(64, 96, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h*0.42, 0, w/2, h*0.42, w*0.5);
+  g.addColorStop(0, 'rgba(232,214,180,0.85)');
+  g.addColorStop(0.35, 'rgba(210,190,150,0.35)');
+  g.addColorStop(1, 'rgba(180,160,120,0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+  var tail = cx.createLinearGradient(0, h*0.4, 0, h);
+  tail.addColorStop(0, 'rgba(210,190,150,0.28)');
+  tail.addColorStop(1, 'rgba(180,160,120,0)');
+  cx.fillStyle = tail; cx.fillRect(w*0.36, h*0.4, w*0.28, h*0.6);
+});
+var clRefl = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.62),
+  new THREE.MeshBasicMaterial({ map: clReflTex, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+clRefl.rotation.x = -Math.PI / 2;
+clRefl.position.set(-0.46, 0.012, 3.78);
+debrisGroup.add(clRefl);
 
 // ============================================================
 // WIRES
@@ -35886,14 +35908,14 @@ var baseGlowOpacity = 0.1;
 
 function clAnimate() {
 clAnimId = requestAnimationFrame(clAnimate);
-var t = clock.getElapsedTime();
+var t = clStill ? 0.3 : clock.getElapsedTime();
 
 // Breathing light instead of pulsing/flickering
 var breath = 0.97 + Math.sin(t * 0.4) * 0.03;
 bulbLight.intensity = baseBulbIntensity * breath;
 bulbGlass.emissiveIntensity = baseBulbEmissive * breath;
 // Haze drifts like still air disturbed
-for (var hzi = 0; hzi < clHaze.length; hzi++) {
+for (var hzi = 0; hzi < (clStill ? 0 : clHaze.length); hzi++) {
   var hzs = clHaze[hzi];
   hzs.position.x += Math.sin(Date.now() * hzs.userData.sp + hzs.userData.ph) * 0.0022;
   hzs.material.rotation += 0.00035;
@@ -35937,6 +35959,10 @@ var rs2 = 0.14 + rip2Age*0.8;
 ripRing2.scale.set(rs2, rs2, 1);
 ripMat2.opacity = 0.38*(1 - rip2Age/1.1);
 } else { ripMat2.opacity = 0; }
+// The bulb's reflection: steady with the bulb's breath, shivering while a ring crosses it
+var clRw = (ripAge > 0 && ripAge < 1.3) ? Math.sin(ripAge * 15) * 0.22 * (1 - ripAge / 1.3) : 0;
+clRefl.material.opacity = 0.16 * breath * (1 - Math.abs(clRw) * 0.8);
+clRefl.scale.set(1 + clRw, 1 - clRw * 0.5, 1);
 
 // The rat: wait → run a waypoint route (with 1-2 sniff-pauses) → gone.
 // If the last route ended under the sofa, the next one starts from it.

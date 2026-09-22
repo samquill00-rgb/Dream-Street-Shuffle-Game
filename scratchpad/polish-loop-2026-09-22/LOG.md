@@ -6,7 +6,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
-4. [pass 4: Pillars DONE; pass 5: Copper's Lair and Ronnie's DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
+4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's and Trisha's DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
 
@@ -54,3 +54,9 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Verified:** `node --check` clean; html synced (`rsNeonRefl` ×7); 1 canvas, 0 errors at 1280×900 and 390×780; reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['rs-wrap']` (position as set, opacity 0.115, additive, visible). Before/after: `pass5b-ronnies-before.png`, `pass5b-ronnies-after.png` (the warm cast on the flags in front of the door).
 - **Changed:** `buildRSScene` only.
 - **Next:** buildTSScene (Trisha's), then buildGLScene (Ginger Light).
+
+### Pass 5, third scene — 04:34–04:43 UTC — Trisha's (queue item 4, fourth of sixteen) — DONE
+- **buildTSScene / Approach Trisha's.** Added the gas lantern's reflection in the standing water by the step: one additive 0.42×0.66 plane at (−1.0, 0.362, 1.8), warm canvas smear with a tail, opacity 0.2 × the lantern flicker squared so it flickers with the lamp. Pixel cap 2 → 1.5. Reduced-motion (`tsStill`): the awning drips stop, the lantern holds steady, and the cat's clock (`catNow`) is frozen at build time so it settles into one pose within a couple of seconds (its head/blink/ear/tail timers never fire again). Nothing else touched.
+- **Verified:** `node --check` clean; html synced (`tsRefl` ×4); 1 canvas, 0 errors at 1280×900 and 390×780; reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['ts-wrap']` (position as set, opacity 0.195, additive, visible). Before/after: `pass5c-trishas-before.png`, `pass5c-trishas-after.png` (the puddle is at the bottom-left edge of the frame by the cat; small).
+- **Changed:** `buildTSScene` only.
+- **Next:** buildGLScene (Ginger Light), then buildCPScene (Centre Point).

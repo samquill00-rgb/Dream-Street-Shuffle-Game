@@ -1,4 +1,7 @@
-**STATE 2026-09-22 — everything below 20a–20n is on `main` and pushed (last: Astra's Climb retune, verified and tightened here, 20n). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
+**STATE 2026-09-22 — everything below 20a–20o is on `main` and pushed (last: Astra's Nazca/Pyramid/Reclamation retunes, verified here with one syntax fix, 20o). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
+
+
+**STATE 2026-09-22 — everything below 20a–20o is on `main` and pushed (last: Astra's Nazca/Pyramid/Reclamation retunes, verified here with one syntax fix, 20o). No feature branches in use: commit to main, pull first because Sam runs other assistants on main between turns. .html synced; every code change verified in a real browser (recipe in 18e, harness and verify scripts in `scratchpad/audit-2026-09-16/`).**
 
 
 ### Dream-game retunes — 2026-09-22
@@ -9,7 +12,7 @@
 - **Verification / next:** system Python has no Playwright; skipped reclamation_verify.py exactly as requested. No repeated play or wider audit. Next: run that script with Playwright available, then judge Nazca bends/braking, snake-head hops and touch aiming on a phone. Gameplay and rendering remain browser-unverified.
 
 
-**Read in this order:** 20n (Astra's Climb retune + verification), 20m (beauty pass, visual only), 20l (The Reclamation rebuilt in 3D), 20k (all dream minigames compulsory), 20j (The Climb pass 3: wind, whirlwind, avalanches, plateaus), 20i (Climb pass 2), then 20a–20h (the audit and its fixes).
+**Read in this order:** 20o (Astra's three dream-game retunes + verification), 20n (Astra's Climb retune + verification), 20m (beauty pass, visual only), 20l (The Reclamation rebuilt in 3D), 20k (all dream minigames compulsory), 20j (The Climb pass 3: wind, whirlwind, avalanches, plateaus), 20i (Climb pass 2), then 20a–20h (the audit and its fixes).
 
 **Open, all Sam's call, none started:**
 1. Play and judge: The Climb's wind strength and avalanche visibility (knobs named in 20j); The Reclamation's drone range, glare and the ten-count (knobs in 20l); the beauty pass on a phone (if it stutters, drop the two screen-blend layers first, 20m).
@@ -86,6 +89,16 @@ The 2D canvas shooter in `:: The Reclamation` is replaced by a three.js first-pe
 - **Dev only:** `_rcDev.snapshot()/win()/lose()/spawn(kind)/aimAt(mesh)/fire()/machines()/spirits()`; E silences every live machine; "(skip reclamation — testing)" link.
 - **Watch for (Sam to judge by playing):** drones are small at 130 units and only really shootable from ~60; the crawler is slow on purpose (3.4/s from -104); the glare wedge is deliberately rude. Tuning knobs are the `WAVES` table, `speed` per kind in `spawn()`, `swayAmp` in `draw()`.
 Verified in Chromium (software GL): boot, cover, wave banner, dev-aimed shot silences a drone, clip empties into RELOADING and refills, spirit hit counts and banners, spawned rig lights (glare 1, HUD GLARE, overlay .55), lamp out then rig down, crawler at the wall, dev E to 10 → win → link → The Listening Moai with 0 canvases and `_rcDev` gone; three spirit hits → lose ending; phone 390px no bloom, no horizontal scroll; 0 JS errors; script parses. Verify script: `scratchpad/audit-2026-09-16/reclamation_verify.py`.
+
+### 20o — ASTRA'S NAZCA / PYRAMID / RECLAMATION RETUNES, VERIFIED HERE (2026-09-22)
+Four commits from Astra (one per game plus a note), 289 changed twee lines, browser-unverified on its side. Its note, verbatim:
+
+- **BROKEN ON ARRIVAL, fixed here:** Astra's Reclamation HUD line had a missing quote (`'SILENCED +silenced+'`), so the whole game script failed to parse. The rifle screen would have shown its cover and done nothing, with no exit for a player (the skip link is dev-only). One character fixed; `node --check` and the static audit are clean again. Lesson for the next Astra prompt: tell it to run `node --check` on the script it edited, since it cannot run a browser.
+- **Reclamation, verified live after the fix:** boot, wave banner, drones now spawn at about -100 and are shootable sooner, spirit hit and banners, rig glare (softer: overlay .2, HUD "GLARE · SHOOT THE LAMP"), lamp out then rig down ("LAMP OUT · ONE MORE HIT TO THE HEAD"), crawler at the wall, dev E to 10 → win → "Stand before the sixth" → The Listening Moai with 0 canvases; three spirit hits → lose; target hint in the HUD ("SPIRIT · DO NOT FIRE"); phone 390 clean; 0 JS errors. Note for the verify script: Astra's shot buffer drops a queued shot while the bolt is cycling, so rapid dev `fire()` calls no longer empty a clip in five calls; the script's reload step reads 1 round left, which is the new behaviour, not a bug.
+- **Nazca Race, smoke-tested live:** loads, "Start race", accelerate/steer/space for 10s with no errors, HUD reads speed/lap/recovery, skip link and teardown to The Centre — Nazca clean (0 canvases), phone 390 no overflow, no bloom under 600px. Not driven to a finish here.
+- **Pyramid Run, smoke-tested live:** loads, "Enter the dark", nine jumps over 8s with no errors, HUD MARKS/STUMBLES, teardown clean, phone 390 no overflow. Not run to the Gallery here.
+- **Scripts:** `scratchpad/audit-2026-09-16/nazca_pyramid_smoke.py` (the smoke above), `reclamation_verify.py` (full Reclamation run).
+- **Sam to judge by playing:** Nazca bends and braking against the rival; Pyramid snake-head hops and torch pools; Reclamation drone range, glare and the five-live-machine cap.
 
 ### 20n — ASTRA'S CLIMB RETUNE, VERIFIED HERE (2026-09-22)
 Sam gave Astra (ChatGPT) a lean prompt to make the jumps fair and the climb beautiful. It committed two changes to `:: The Climb` (85 changed lines) but could not run a browser (no Playwright there), so this session pulled, verified and tightened one thing. Astra's own note, verbatim:

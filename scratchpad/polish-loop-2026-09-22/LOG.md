@@ -6,7 +6,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
-4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light, Centre Point DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
+4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light, Centre Point, O'Flatterly's DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
 
@@ -72,3 +72,9 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Verified:** `node --check` clean; html synced (`cpHaze` ×6); 1 canvas, 0 errors at 1280×900 and 390×780; reduced motion 0 errors; sprite confirmed live in `_dssThreeRegistry['cp-wrap']` (position (0, 1.6, 4.1), opacity 0.09, additive, visible). Before/after: `pass6-centrepoint-before.png`, `pass6-centrepoint-after.png`.
 - **Changed:** `buildCPScene` only.
 - **Next:** buildOFScene (O'Flatterly's), then buildFcScene (Chinese Fish and Chips).
+
+### Pass 5, sixth scene — 04:40–04:46 UTC — O'Flatterly's (queue item 4, seventh of sixteen) — DONE
+- **buildOFScene / Approach O'Flatterly's.** Added the shop's amber on the wet court: one additive 4.4×2.2 plane at (−0.4, 0.012, 1.55) with a 256×128 canvas texture (a large warm pool under the window, a smaller one under the door, cut by paving joints), opacity 0.07 + winPulse × 0.03 + doorPulse × 0.012 so it breathes with the window and door light. Pixel cap 2 → 1.5. Reduced-motion (`ofStill`): `t` held at 4s (window and door pulses steady, camera still), the haze and the dust motes stop moving. Nothing else touched.
+- **Verified:** `node --check` clean; html synced (`ofSheen` ×7); 1 canvas, 0 errors at 1280×900 and 390×780 (scrollWidth 390); reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['of-wrap']` (position as set, opacity 0.106, additive, visible). Before/after: `pass6-oflatterly-before.png`, `pass6-oflatterly-after.png`.
+- **Changed:** `buildOFScene` only.
+- **Next:** buildFcScene (Chinese Fish and Chips), then buildLOScene.

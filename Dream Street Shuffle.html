@@ -26681,6 +26681,8 @@ document.head.appendChild(s);
 }
 }
 function buildFHScene() {
+var fhStill = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var fhWindowMats = [];
 // Full-screen overlay
 var fhWrap = document.createElement('div');
 fhWrap.id = 'fh-wrap';
@@ -26726,7 +26728,7 @@ camera.position.set(4.0, 4.2, 16);
 camera.lookAt(-0.5, 5.2, 0);
 var renderer = new THREE.WebGLRenderer({ canvas: fhCanvas, antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 600 ? 1.25 : 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
@@ -26837,7 +26839,7 @@ road.receiveShadow = true;
 scene.add(road);
 // Wet road surface (reflective sheen)
 var wetMat = new THREE.MeshStandardMaterial({
-color: 0x1a1a1a, roughness: 0.15, metalness: 0.5, transparent: true, opacity: 0.25
+color: 0x1a1a1a, roughness: 0.15, metalness: 0.5, transparent: true, opacity: 0.18, depthWrite:false
 });
 var wetRoad = new THREE.Mesh(new THREE.PlaneGeometry(8, 60), wetMat);
 wetRoad.rotation.x = -Math.PI / 2;
@@ -27066,7 +27068,9 @@ placeMesh(pub, new THREE.BoxGeometry(ww + 0.08, wh + 0.08, 0.04), windowFrame, x
 // Glass — painted room behind it: lamp glow, curtains or blind or nets
 var winStyle = Math.floor(Math.abs(x * 7.3 + y * 3.1)) % 3;
 var winCol = Math.floor(Math.abs(x * 5.1 + y * 1.7)) % fhCurtainCols.length;
-var glassMat = new THREE.MeshBasicMaterial({ map: makeUpperWindowTex(isLit, winStyle, winCol) });
+var fhRoomTex = makeUpperWindowTex(isLit, winStyle, winCol);
+var glassMat = new THREE.MeshStandardMaterial({map:fhRoomTex,emissiveMap:fhRoomTex,emissive:0xffffff,emissiveIntensity:.82,roughness:.23,metalness:.03});
+if(isLit)fhWindowMats.push(glassMat);
 placeMesh(pub, new THREE.PlaneGeometry(ww, wh), glassMat, x, y, 0.14);
 // Sash bar (horizontal divider — the distinctive sash window split)
 placeMesh(pub, new THREE.BoxGeometry(ww + 0.1, 0.06, 0.06), windowFrame, x, y + 0.1, 0.14);
@@ -28473,10 +28477,18 @@ grainEl.style.backgroundImage = 'url(' + grainCanvas.toDataURL() + ')';
 // ENHANCED WET REFLECTIONS
 // ============================================================
 // Add more prominent puddle reflections near the pub
-var reflectMat = new THREE.MeshStandardMaterial({
-color: 0x0a0a15, roughness: 0.05, metalness: 0.8,
-transparent: true, opacity: 0.18
+// Broken window colours in the existing wet patch, not another reflection pass.
+var fhReflectionTex=makeCanvasTexture(128,256,function(cx,w,h){
+  for(var r=0;r<64;r++){
+    var v=r/64,envelope=Math.sin(v*Math.PI);
+    for(var col=0;col<3;col++){
+      var xx=18+col*38+Math.sin(r*.71+col)*3,ww=10+Math.sin(r*1.9+col)*4;
+      cx.fillStyle='rgba(232,173,91,'+(envelope*(.12+(r%5)*.035))+')';
+      cx.fillRect(xx,v*h,ww,1+(r%3));
+    }
+  }
 });
+var reflectMat = new THREE.MeshBasicMaterial({map:fhReflectionTex,color:0xe6c494,transparent:true,opacity:.25,depthWrite:false,blending:THREE.AdditiveBlending});
 var bigReflect = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), reflectMat);
 bigReflect.rotation.x = -Math.PI / 2;
 bigReflect.position.set(0.5, 0.015, 5);
@@ -28484,12 +28496,18 @@ scene.add(bigReflect);
 // ============================================================
 // ANIMATION LOOP
 // ============================================================
+// Twenty-four grains of damp air; all but one settle. One returns to the light.
+var fhMoteTex=makeCanvasTexture(16,16,function(cx,w,h){var g=cx.createRadialGradient(8,8,0,8,8,8);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.25,'rgba(255,255,255,.65)');g.addColorStop(1,'rgba(255,255,255,0)');cx.fillStyle=g;cx.fillRect(0,0,w,h);});
+var fhMotePos=new Float32Array(24*3),fhMoteBase=new Float32Array(24*3);
+for(var mi=0;mi<24;mi++){fhMoteBase[mi*3]=-2.5+Math.random()*6;fhMoteBase[mi*3+1]=.5+Math.random()*4;fhMoteBase[mi*3+2]=2+Math.random()*4;fhMotePos.set(fhMoteBase.subarray(mi*3,mi*3+3),mi*3);}
+var fhMoteGeo=new THREE.BufferGeometry();fhMoteGeo.setAttribute('position',new THREE.BufferAttribute(fhMotePos,3));
+var fhMotes=new THREE.Points(fhMoteGeo,new THREE.PointsMaterial({map:fhMoteTex,color:0xe3c69b,size:.045,transparent:true,opacity:.3,depthWrite:false}));scene.add(fhMotes);
 var clock = new THREE.Clock();
 var cameraBase = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
 // Camera base already set above
 function fhAnimate() {
 fhAnimId = requestAnimationFrame(fhAnimate);
-var t = clock.getElapsedTime();
+var t = fhStill ? 0 : clock.getElapsedTime();
 // Film grain — update very infrequently to avoid flashing
 if (Math.floor(t * 2) !== Math.floor((t - 0.016) * 2)) {
 updateGrain();
@@ -28498,23 +28516,27 @@ updateGrain();
 // (Camera movement was causing light angle changes that looked like flashing)
 // Fog — completely static (drift was causing flashing as fog crossed windows)
 // Fog sprites stay in their initial positions for atmosphere without movement
-// ALL LIGHTS COMPLETELY STATIC — no oscillation, no flicker, no breathing
-// (The original oscillations were causing visible flashing in the windows)
+// Only non-shadow doorway lights breathe, by a few percent over many seconds.
+// Keep the camera, fog and shadow lights fixed: no full-scene flashing.
+pubGlow.intensity=.9+Math.sin(t*.43)*.018;
+doorLight.intensity=.5+Math.sin(t*.43-.8)*.012;
+for(var gi=0;gi<fhWindowMats.length;gi++)fhWindowMats[gi].emissiveIntensity=.82+Math.sin(t*.32+gi*.7)*.012;
+if(!fhStill){for(var mi=0;mi<24;mi++){var mb=mi*3;fhMotePos[mb]=fhMoteBase[mb]+Math.sin(t*.17+mi)*.09;fhMotePos[mb+1]=.45+((fhMoteBase[mb+1]+(mi===0?1:-1)*t*.065)%4.2+4.2)%4.2;}fhMoteGeo.attributes.position.needsUpdate=true;}
 // Silhouettes — completely static (movement was causing flashing)
 // They stay in their initial positions
 // The Green Fairy — erratic moth-flight around the centre lantern,
 // wings shivering, drifting near the glass then darting away
 var fairyR = 0.32 + Math.sin(t * 0.23) * 0.14;
 greenFairy.position.set(
-3 + Math.cos(t * 1.3) * fairyR + Math.sin(t * 7.9) * 0.09 + Math.sin(t * 13.7) * 0.025,
-4.5 + Math.sin(t * 2.1) * 0.26 + Math.sin(t * 8.9) * 0.08 + Math.cos(t * 15.1) * 0.02,
-12 + Math.sin(t * 1.7) * fairyR * 0.8 + Math.cos(t * 9.3) * 0.06
+3 + Math.cos(t * 1.3) * fairyR + Math.sin(t * .79) * 0.05 + Math.sin(t * 1.37) * 0.025,
+4.5 + Math.sin(t * 2.1) * 0.26 + Math.sin(t * .89) * 0.04 + Math.cos(t * 1.51) * 0.02,
+12 + Math.sin(t * 1.7) * fairyR * 0.8 + Math.cos(t * .93) * 0.04
 );
-greenFairy.scale.x = 0.17 * (0.55 + Math.abs(Math.sin(t * 26)) * 0.75);
-greenFairy.material.rotation = Math.sin(t * 5.3) * 0.35;
-greenFairy.material.opacity = 0.78 + Math.sin(t * 14) * 0.18;
+greenFairy.scale.x = 0.17 * (.8 + Math.sin(t * 6) * .15);
+greenFairy.material.rotation = Math.sin(t * 1.3) * 0.2;
+greenFairy.material.opacity = .84 + Math.sin(t * .7) * .035;
 fairyLight.position.copy(greenFairy.position);
-fairyLight.intensity = 0.28 + Math.abs(Math.sin(t * 26)) * 0.14;
+fairyLight.intensity = .28 + Math.sin(t * .7) * .018;
 // Flag flutter — gentle, post-rain calm
 for (var i = 0; i < flagMeshes.length; i++) {
 var fm = flagMeshes[i];
@@ -28530,8 +28552,9 @@ walker.position.x = 8 - ((t * 0.15) % 20);
 if (walker.position.x < -12) walker.position.x = 8;
 // Hanging sign — barely moving, damp and heavy
 hangSign.rotation.z = Math.sin(t * 0.3) * 0.01;
-// Wet road — static reflection (no shimmer that could look like flashing)
-// bigReflect stays at its initial opacity
+// A slight ripple within the wet patch; the slab edges stay completely still.
+fhReflectionTex.offset.x=Math.sin(t*.27)*.009;
+reflectMat.opacity=.25+Math.sin(t*.43-1.4)*.012;
 if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
 }
 fhAnimate();

@@ -6,7 +6,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
-4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's and Trisha's DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
+4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
 
@@ -60,3 +60,9 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Verified:** `node --check` clean; html synced (`tsRefl` ×4); 1 canvas, 0 errors at 1280×900 and 390×780; reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['ts-wrap']` (position as set, opacity 0.195, additive, visible). Before/after: `pass5c-trishas-before.png`, `pass5c-trishas-after.png` (the puddle is at the bottom-left edge of the frame by the cat; small).
 - **Changed:** `buildTSScene` only.
 - **Next:** buildGLScene (Ginger Light), then buildCPScene (Centre Point).
+
+### Pass 5, fourth scene — 04:36–04:46 UTC — the Ginger Light (queue item 4, fifth of sixteen) — DONE
+- **buildGLScene / Approach The Ginger Light.** The hero puddle already had an even emissive wash; added the lantern's own bright core on it: one additive 1.1×1.7 plane at (−3.4, 0.046, −2.2) with a ginger smear and a streak, opacity 0.14 + (flicker − 0.85) × 0.9 so it follows the gaslight flicker. Pixel cap 2 → 1.5. Reduced-motion (`glStill`): `t` held at 9s (lamp steady, camera still, cat at rest because `catDt` is 0), fog, chimney smoke and the window silhouettes stop. Nothing else touched.
+- **Verified:** `node --check` clean; html synced (`glGlint` ×8); 1 canvas, 0 errors at 1280×900 and 390×780; reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['gl-wrap']` (position as set, opacity 0.142, additive, visible). Before/after: `pass6-gingerlight-before.png`, `pass6-gingerlight-after.png`.
+- **Changed:** `buildGLScene` only.
+- **Next:** buildCPScene (Centre Point), then buildOFScene (O'Flatterly's).

@@ -17107,6 +17107,8 @@ document.head.appendChild(s);
 }
 
 function buildGLScene() {
+// Reduced-motion: hold one settled frame (lamp steady, fog and smoke still, cat at rest).
+var glStill = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Create full-screen overlay wrapper
 var glWrap = document.createElement('div');
 glWrap.id = 'gl-wrap';
@@ -17137,7 +17139,7 @@ camera.lookAt(0, 4.5, -1);
 
 var renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
@@ -18367,6 +18369,27 @@ heroPuddle.position.set(-3.5, 0.038, -2.5);
 heroPuddle.scale.set(1, 1, 0.7); // slightly oval
 heroPuddle.renderOrder = 1;
 scene.add(heroPuddle);
+// The lamp in the pool (2026-09-22 polish loop): the hero puddle's emissive
+// wash is even across its face; this puts the lantern's own bright core on
+// the water, a ginger smear with a streak down towards the camera, and
+// flickers it with the gaslight. One additive plane.
+var glGlintTex = makeCanvasTexture(64, 128, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h*0.3, 0, w/2, h*0.3, w*0.5);
+  g.addColorStop(0, 'rgba(255,190,120,0.9)');
+  g.addColorStop(0.35, 'rgba(240,140,50,0.35)');
+  g.addColorStop(1, 'rgba(232,120,24,0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+  var st = cx.createLinearGradient(0, h*0.3, 0, h);
+  st.addColorStop(0, 'rgba(240,140,50,0.3)');
+  st.addColorStop(1, 'rgba(232,120,24,0)');
+  cx.fillStyle = st; cx.fillRect(w*0.36, h*0.3, w*0.28, h*0.7);
+});
+var glGlint = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.7),
+  new THREE.MeshBasicMaterial({ map: glGlintTex, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+glGlint.rotation.x = -Math.PI / 2;
+glGlint.position.set(-3.4, 0.046, -2.2);
+glGlint.renderOrder = 2;
+scene.add(glGlint);
 
 // Second large puddle in the road near the junction
 var junctionPuddle = new THREE.Mesh(
@@ -18532,7 +18555,7 @@ var clock = new THREE.Clock();
 
 function glAnimate() {
   glAnimId = requestAnimationFrame(glAnimate);
-  var t = clock.getElapsedTime();
+  var t = glStill ? 9 : clock.getElapsedTime();
 
   // --- CAMERA BREATHING ---
   // Very subtle sway, like someone standing still on a cold night
@@ -18561,6 +18584,7 @@ function glAnimate() {
 
   // Puddle reflection emissive flicker
   heroReflect.emissiveIntensity = 0.02 + (flicker - 0.85) * 0.15;
+  glGlint.material.opacity = 0.14 + (flicker - 0.85) * 0.9;
 
   // --- SECONDARY LAMP FLICKER ---
   for (var i = 1; i < lampLights.length; i++) {
@@ -18568,8 +18592,8 @@ function glAnimate() {
     lampLights[i].intensity = 0.3 * lFlicker;
   }
 
-  // --- FOG DRIFT ---
-  for (var i = 0; i < fogSprites.length; i++) {
+  // --- FOG DRIFT --- (held under reduced motion)
+  for (var i = 0; i < (glStill ? 0 : fogSprites.length); i++) {
     var f = fogSprites[i];
     f.sway += f.swaySpeed;
     f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;
@@ -18577,8 +18601,8 @@ function glAnimate() {
     if (f.baseX > 25) f.baseX = -20;
   }
 
-  // --- CHIMNEY SMOKE ---
-  for (var i = 0; i < smokeSprites.length; i++) {
+  // --- CHIMNEY SMOKE --- (held under reduced motion)
+  for (var i = 0; i < (glStill ? 0 : smokeSprites.length); i++) {
     var sm = smokeSprites[i];
     var sprite = sm.sprite;
     // Rise upward
@@ -18631,7 +18655,7 @@ function glAnimate() {
   warmGlass.emissiveIntensity = 0.34 + Math.sin(t * 0.6) * 0.06 + Math.sin(t * 1.9) * 0.03; // was 0.10 base — the lit rooms (and their swaying drinkers) were invisible
 
   // --- SILHOUETTE SWAY ---
-  for (var i = 0; i < silhouettes.length; i++) {
+  for (var i = 0; i < (glStill ? 0 : silhouettes.length); i++) {
     var s = silhouettes[i];
     s.swayPhase += s.swaySpeed * 0.016;
     var swayOffset = Math.sin(s.swayPhase) * s.swayAmt;

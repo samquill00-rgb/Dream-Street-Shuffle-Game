@@ -38573,6 +38573,7 @@ function buildFcScene() {
   var fcWrap = document.createElement('div');
   fcWrap.id = 'fc-wrap';
   fcWrap.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;background:#040408;overflow:hidden;';
+  var fcStill = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ============================================================
   // SCENE SETUP
@@ -38593,7 +38594,7 @@ camera.position.set(-5.0, 1.7, 10.5);
 
   var renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
@@ -39390,6 +39391,30 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
   var pavementSpill = new THREE.PointLight(0xffd060, 0.6, 8);
   pavementSpill.position.set(0.5, 0.3, 3.0);
   shop.add(pavementSpill);
+  // The chippy's amber lying on the wet flags in front of the door: one
+  // additive plane, a warm pool under the windows with a blue fleck from
+  // the fly-killer, cut by paving joints. Breathes with the spill lights.
+  var fcSheenTex = makeCanvasTexture(256, 128, function(cx, w, h) {
+    cx.clearRect(0, 0, w, h);
+    function pool(x, y, rx, ry, col, a) {
+      var g = cx.createRadialGradient(x, y, 0, x, y, rx);
+      g.addColorStop(0, col.replace('A', a)); g.addColorStop(0.5, col.replace('A', a * 0.4)); g.addColorStop(1, col.replace('A', 0));
+      cx.save(); cx.translate(x, y); cx.scale(1, ry / rx); cx.translate(-x, -y);
+      cx.fillStyle = g; cx.beginPath(); cx.arc(x, y, rx, 0, Math.PI * 2); cx.fill(); cx.restore();
+    }
+    pool(w * 0.5, h * 0.3, w * 0.42, h * 0.62, 'rgba(255,208,110,A)', 0.7);
+    pool(w * 0.5, h * 0.78, w * 0.22, h * 0.3, 'rgba(255,190,90,A)', 0.4);
+    pool(w * 0.7, h * 0.25, w * 0.08, h * 0.16, 'rgba(90,120,255,A)', 0.35);
+    cx.strokeStyle = 'rgba(0,0,0,0.5)'; cx.lineWidth = 2;
+    for (var j = 0; j <= w; j += 43) { cx.beginPath(); cx.moveTo(j, 0); cx.lineTo(j, h); cx.stroke(); }
+    for (var k = 0; k <= h; k += 34) { cx.beginPath(); cx.moveTo(0, k); cx.lineTo(w, k); cx.stroke(); }
+  });
+  var fcSheen = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 2.6), new THREE.MeshBasicMaterial({
+    map: fcSheenTex, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+  }));
+  fcSheen.rotation.x = -Math.PI / 2;
+  fcSheen.position.set(0.5, 0.015, 2.7);
+  shop.add(fcSheen);
   // Upward glow on fascia from windows
   var fasciaGlow = new THREE.PointLight(0xffe8c0, 0.4, 4);
   fasciaGlow.position.set(0.5, 3.5, 0.8);
@@ -40857,10 +40882,10 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
 
   function fcAnimate() {
     fcAnimId = requestAnimationFrame(fcAnimate);
-    var t = clock.getElapsedTime();
+    var t = fcStill ? 5 : clock.getElapsedTime();
 
     // Fog drift
-    for (var i = 0; i < fogSprites.length; i++) {
+    for (var i = 0; i < (fcStill ? 0 : fogSprites.length); i++) {
       var f = fogSprites[i];
       f.sway += f.swaySpeed;
       f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt;
@@ -40885,12 +40910,13 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
     interiorLight3.intensity = 1.0 + Math.sin(t * 1.8 + 1.0) * 0.08;
     doorSpill.intensity = 0.8 + Math.sin(t * 1.3) * 0.1;
     pavementSpill.intensity = 0.6 + Math.sin(t * 1.0) * 0.08;
+    fcSheen.material.opacity = 0.075 + (pavementSpill.intensity - 0.6) * 0.3 + (doorSpill.intensity - 0.8) * 0.12;
 
     // Neon flicker (the "FISH & CHIPS" neon and fish shapes)
     neonFlickerPhase += 0.05;
     var neonPulse = 0.85 + Math.sin(t * 6) * 0.1 + Math.sin(t * 13) * 0.05;
     // Occasional random flicker
-    if (Math.random() > 0.995) neonPulse *= 0.4;
+    if (!fcStill && Math.random() > 0.995) neonPulse *= 0.4;
     neonFish.material.opacity = neonPulse;
     neonBlueLight.intensity = 0.3 * neonPulse;
     neonFishL.material.opacity = neonPulse * 0.9;
@@ -40908,7 +40934,7 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
     }
 
     // Steam rise and drift
-    for (var i = 0; i < steamSprites.length; i++) {
+    for (var i = 0; i < (fcStill ? 0 : steamSprites.length); i++) {
       var st = steamSprites[i];
       st.sprite.position.y += st.rise;
       st.sprite.position.x += st.drift + Math.sin(t * 0.5 + i) * 0.001;
@@ -40925,7 +40951,7 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
     hangSign.rotation.z = Math.sin(t * 0.9) * 0.04;
 
     // Fluorescent light very subtle flicker
-    fluoro.material.color.setHex(Math.random() > 0.998 ? 0xe0e0d0 : 0xf0f0e8);
+    if (!fcStill) fluoro.material.color.setHex(Math.random() > 0.998 ? 0xe0e0d0 : 0xf0f0e8);
 
     // The fly-killer crackle: a flash (sometimes a double-crack) on a
     // random cycle

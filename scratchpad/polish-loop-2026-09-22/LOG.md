@@ -6,7 +6,7 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 1. [pass 1, DONE] Set up the chair and sweep: static audit + every-passage render sweep; fix real JS/Harlowe/link errors.
 2. [pass 2, DONE] Verify Astra's three dream-game retunes in a browser (reclamation_verify.py, nazca_pyramid_smoke.py); fix anything that throws.
 3. [pass 3, DONE] Phone-width sweep at 390px, CSS-only fixes.
-4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light, Centre Point, O'Flatterly's DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
+4. [pass 4: Pillars DONE; pass 5: Copper's Lair, Ronnie's, Trisha's, Ginger Light, Centre Point, O'Flatterly's DONE; pass 6: Fish and Chips DONE] Approach scenes, Astra's remaining sixteen, two per pass, in order: buildPHScene, buildCLScene, buildRSScene, buildTSScene, buildGLScene, buildCPScene, buildOFScene, buildFcScene, buildLOScene, buildCRScene, buildTPScene, buildapScene, buildnzScene, buildeiScene, buildpyScene, buildpcScene.
 5. Beauty-pass leftovers (20m): Ronnie's bar arena halo; spindrift light on The Climb; heat shimmer on the Nazca road.
 6. README tidy (html size, twee is the file to edit).
 
@@ -78,3 +78,9 @@ Plan: /mnt/project-files/"Polish loop plan.md" (project files). Branch: `claude/
 - **Verified:** `node --check` clean; html synced (`ofSheen` ×7); 1 canvas, 0 errors at 1280×900 and 390×780 (scrollWidth 390); reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['of-wrap']` (position as set, opacity 0.106, additive, visible). Before/after: `pass6-oflatterly-before.png`, `pass6-oflatterly-after.png`.
 - **Changed:** `buildOFScene` only.
 - **Next:** buildFcScene (Chinese Fish and Chips), then buildLOScene.
+
+### Pass 6, first scene — 04:46–04:53 UTC — Chinese Fish and Chips (queue item 4, eighth of sixteen) — DONE
+- **buildFcScene / Approach Chinese Fish and Chips.** Added the chippy's amber lying on the wet flags in front of the door: one additive 4.6×2.6 plane at (0.5, 0.015, 2.7) in the `shop` group, 256×128 canvas texture (a wide warm pool under the windows, a smaller one nearer the kerb, a blue fleck from the fly-killer, cut by paving joints), opacity 0.075 + (pavementSpill − 0.6) × 0.3 + (doorSpill − 0.8) × 0.12 so it breathes with the spill lights (roughly 0.04–0.11). Pixel cap 2 → 1.5. Reduced-motion (`fcStill`): `t` held at 5s (lights, neon, OPEN sign, silhouettes, hanging sign, the woman in the window all still), fog and steam stop, the random neon drop-out and the fluorescent tube's random flicker are skipped. Nothing else touched.
+- **Verified:** `node --check` clean; html synced (`fcSheen` ×7); 1 canvas, 0 errors at 1280×900 and 390×780 (scrollWidth 390); reduced motion 0 errors; mesh confirmed live in `_dssThreeRegistry['fc-wrap']` (position as set, opacity 0.062 mid-breath, additive, visible). Before/after: `pass6-fishchips-before.png`, `pass6-fishchips-after.png`.
+- **Changed:** `buildFcScene` only.
+- **Next:** buildLOScene, then buildCRScene.

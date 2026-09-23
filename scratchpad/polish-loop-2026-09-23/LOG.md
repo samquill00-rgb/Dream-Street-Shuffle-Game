@@ -89,3 +89,13 @@ Rule from Sam: beauty in this world is spectral, the trace, the ghost, the memor
 
 ## Follow-up (16:45 UTC) — pentangle through the lily venues
 Sam: the pentangle was joining the wrong spots. The lilies are gathered at the Chippy (1), the Pillars (2), Ronnie Scott's (3), the Colony Room (4) and the French (5); the star had been drawn through Centre Point, the Coach, the Chippy, Trisha's and the French, and at five the blooming ring moved the lilies onto those star points. Now the star (both the faint line and the tracer) runs Chippy → Ronnie's → Colony → Pillars → French, the ring redraws the five lilies at those doors, and the single markers stand down at five so nothing doubles. Lopsided, as he accepted. The French lily sits behind the LBRP verse box at the foot of the map, as the French marker always has. Before/after `pentangle-through-lily-venues-{before,after}.png`.
+
+### Follow-up (18:20 UTC) — reshaping the pentangle
+
+Sam: Trisha's should sit much higher, next to the Pillars on the other side of the road, and the star should read a bit more like a pentangle. Notebook map only:
+- Trisha's marker moved from (476,404) to (476,188): west side of Greek Street, just above the Pillars. Label now anchored to the left of the pin so it clears the Pillars label.
+- Ronnie Scott's moved from (340,450) to (376,480), Frith's east side and a touch lower, which opens the star. Ring bell and the single lily moved with it.
+- Star and tracer points now 216,228 376,480 221,420 499,205 248,548.
+- Shot: `pentangle-shaped-after.png`.
+- Not touched: the Dean Street tile map still places Trisha's below Bateman (its DOORS table), so the two maps now disagree on Trisha's. The French bell still sits under the LBRP verse box.
+

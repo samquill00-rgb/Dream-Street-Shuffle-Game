@@ -108,3 +108,10 @@ Sam: Ronnie's back on the correct side of Frith; the Colony dot ever so slightly
 - Star and tracer points now 216,228 340,450 208,420 499,205 248,548.
 - Shot: `pentangle-ronnies-back-after.png` (tracer finished; `nbmap_shot.py` now takes a `WAIT` ms env for that).
 
+
+### Follow-up (19:20 UTC) — Trisha's on the tile map, French clear of the verse box
+
+Sam (via the project chat): fix the two parked items.
+- Dean Street tile map: Trisha's door moved from c39,r19 (below Bateman) to c39,r13, fc40,r13: the strip of building on the west side of Greek Street between the Soho Square road and Bateman, opposite the Pillars and a row or two below it. It cannot go higher on that side because the square's perimeter road occupies rows 4–11. Halo and frontage follow the DOORS entry; nothing else keyed to the old tile. Shots: `trishas-tilemap-before.png`, `trishas-tilemap-after.png` (walker teleported to c40,r15 with `tilemap_shot.py out.png 40 15`).
+- Notebook map: the LBRP verse box (`map-lbrp-bg` and its four lines) moved down 34 units, rect y 542→576, lines 554/572/590/608 → 588/606/624/642. The French bell, dot and label now read above it, the star's bottom point too. While the verse shows (five lilies) the box covers the SHAFTESBURY AVENUE label; it clears the Cecil Court marker. Shot: `french-versebox-after.png` (before is `pentangle-ronnies-back-after.png`).
+

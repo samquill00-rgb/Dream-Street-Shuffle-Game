@@ -15505,6 +15505,78 @@ soloDebounce = setTimeout(checkSoloLink, 350);
   setTimeout(decorate, 300);
 })();
 
+// ====== THE AFTER-IMAGE (polish loop 2026-09-23) ======
+// When a passage is left, a faint copy of it stays on the retina for under a
+// second, fading and lifting a few pixels while the new passage waits its
+// 0.55s before fading in. Nothing in the copy is live: links become spans,
+// ids are dropped, scripts, frames, canvases and the stat bars are cut.
+// Off entirely under prefers-reduced-motion. Set window.DSS_AFTERIMAGE = false
+// (before the story starts) to switch it off.
+(function() {
+  if (window.DSS_AFTERIMAGE === false) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var STRIP = 'script, style, iframe, canvas, video, audio, .stat-bars, .header-links, #dss-notebook, ' +
+    '.soho-map-wrap, .soho-map-stage, tw-dialog, .dss-ghost, [id$="-wrap"], .stat-bars-spacer, .dss-key-offer';
+  var last = null, ghost = null, ticking = false;
+  function sample() {
+    ticking = false;
+    var tp = document.querySelector('tw-story > tw-passage');
+    if (!tp) return;
+    var r = tp.getBoundingClientRect();
+    if (r.width === 0) return;
+    var cs = getComputedStyle(tp);
+    last = { el: tp, top: r.top, left: r.left, width: r.width, height: r.height, padTop: cs.paddingTop, maxW: cs.maxWidth, when: Date.now() };
+  }
+  function queue() { if (!ticking) { ticking = true; requestAnimationFrame(sample); } }
+  ['click', 'pointerdown', 'keydown', 'scroll', 'resize'].forEach(function(ev) {
+    window.addEventListener(ev, queue, { capture: true, passive: true });
+  });
+  setInterval(queue, 400);
+  function show(old) {
+    if (!last || last.el !== old || Date.now() - last.when > 4000) return;
+    if (last.top > window.innerHeight || last.top + last.height < 0) return;
+    if (ghost) { ghost.remove(); ghost = null; }
+    var g = document.createElement('div');
+    g.className = 'dss-ghost';
+    g.setAttribute('aria-hidden', 'true');
+    var inner = old.cloneNode(true);
+    inner.querySelectorAll(STRIP).forEach(function(n) { n.remove(); });
+    inner.querySelectorAll('[id]').forEach(function(n) { n.removeAttribute('id'); });
+    inner.querySelectorAll('tw-link, .enchantment-link, button, a').forEach(function(n) {
+      var sp = document.createElement('span');
+      sp.className = 'dss-ghost-link ' + (n.className || '');
+      sp.innerHTML = n.innerHTML;
+      n.parentNode.replaceChild(sp, n);
+    });
+    inner.style.cssText = 'padding-top:' + last.padTop + ';max-width:' + last.maxW + ';width:' + last.width + 'px;animation:none;opacity:1;margin:0;';
+    var top = Math.max(0, last.top), bottom = Math.min(window.innerHeight, last.top + last.height);
+    g.style.cssText = 'top:' + last.top + 'px;left:' + last.left + 'px;width:' + last.width + 'px;height:' + last.height + 'px;' +
+      'clip-path: inset(' + (top - last.top) + 'px 0 ' + (last.top + last.height - bottom) + 'px 0);';
+    g.appendChild(inner);
+    (document.querySelector('tw-story') || document.body).appendChild(g);
+    // anything the passage pinned to the viewport (margin notes, badges) is not part of the page's after-image
+    var pinned = [];
+    inner.querySelectorAll('*').forEach(function(n) { var ps = getComputedStyle(n).position; if (ps === 'fixed' || ps === 'sticky') pinned.push(n); });
+    pinned.forEach(function(n) { if (n.parentNode) n.remove(); });
+    ghost = g;
+    setTimeout(function() { if (g.parentNode) g.remove(); if (ghost === g) ghost = null; }, 1100);
+  }
+  function watch() {
+    var story = document.querySelector('tw-story');
+    if (!story) { setTimeout(watch, 200); return; }
+    new MutationObserver(function(muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var rm = muts[i].removedNodes;
+        for (var j = 0; j < rm.length; j++) {
+          if (rm[j].nodeType === 1 && rm[j].tagName === 'TW-PASSAGE') { try { show(rm[j]); } catch (e) {} return; }
+        }
+      }
+    }).observe(story, { childList: true });
+    queue();
+  }
+  watch();
+})();
+
 // ====== SIGNPOSTED CHOICES (2026-09-23) ======
 // Every plain navigation link at the end of a passage is marked by where it
 // leads, so the eye can tell an onward step from a retreat to the street or
@@ -61359,6 +61431,37 @@ tw-passage { animation-duration: .01s; animation-delay: 0s; }
 tw-story[tags*="venue-"]::before, tw-story[tags~="dream"]::before, .pp-arena::after,
 #waltz-canvas, #cow-canvas, #fight-canvas, #pong-canvas, .dss-shimmer { animation: none !important; }
 tw-story[tags~="hub"] tw-passage::before { display: none; }
+}
+
+/* ===== THE AFTER-IMAGE (polish loop 2026-09-23) =====
+   A faint copy of the passage just left, lifting and fading in under a
+   second while the next passage waits to arrive. Built by the script of
+   the same name; never interactive; absent under reduced motion. */
+.dss-ghost {
+position: fixed;
+z-index: 3;
+pointer-events: none;
+user-select: none;
+overflow: hidden;
+opacity: 0.42;
+transform: translateY(0);
+animation: dssGhostFade 0.95s ease-out forwards;
+text-shadow: 0 0 40px rgba(0,0,0,0.5);
+}
+.dss-ghost tw-passage {
+animation: none !important;
+opacity: 1;
+}
+.dss-ghost .dss-ghost-link {
+color: var(--gold-warm);
+text-shadow: 0 0 8px rgba(212, 165, 116, 0.3);
+}
+@keyframes dssGhostFade {
+from { opacity: 0.42; transform: translateY(0); }
+to { opacity: 0; transform: translateY(-7px); }
+}
+@media (prefers-reduced-motion: reduce) {
+.dss-ghost { display: none; }
 }
 
 /* ===== SIGNPOSTED CHOICES (2026-09-23) =====

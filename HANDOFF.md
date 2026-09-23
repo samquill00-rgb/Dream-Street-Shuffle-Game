@@ -1,3 +1,11 @@
+## Centre Point ending chain — review pass, 2026-09-23
+
+Sam asked to look at the final scene (follow the fetch to Centre Point) as a player sees it. Chain: Towards Dawn → The Fetch → Approach Centre Point → Alba Complete/Incomplete → Dawn Approach White/Black → White/Black page → Dawn. Played end to end in headless Chromium at 1280 and 390 wide, with reduced motion, on both routes: 0 tw-errors, 0 game JS errors, no horizontal overflow. Screenshots in project files `centre-point-review/`.
+
+Fixed on branch `claude/centre-point-scene-9jo9fx`: (1) Fetch Street SVG — the caption group `<g ... text-anchor="middle">` was closed immediately, so the three timed captions lost their centring, italic, size and colour and ran off the right edge; the `</g>` now sits after the captions. (2) Centre Point `CLIMB IT` button wrapped to two lines on phones (fixed element at left:50% shrinks to half the viewport) — `white-space:nowrap` on both the real and the WebGL-fallback button. (3) The "Every man and every woman is a star." caps line was wider than a 390px screen — under 480px it drops to 11px / 0.1em spacing. Words untouched.
+
+Not changed, for Sam's call: the Fetch SVG's SMIL animation and the 15s link gate ignore prefers-reduced-motion (the approach scenes hold still); the astral reveal likewise; the tower scene has none of the polish-loop ground light; the chain's links sit in containers tonight's signposted-choice restyle skips (`.glass-pane`, `.ending-pane`, white/black/dawn-approach tags). Dawn Approach's Oxford Street iframe is the heaviest moment in the game (a full three.js scene inside an iframe); under software GL here it blocked the page for ~15s, so its timings were not measurable in this sandbox.
+
 ## House of Cards — remove card chooser, 2026-09-23
 
 Removed the Choose a card dropdown and its option-building/listener code at Sam's request. Players grab cards directly on the canvas; movable bases, tilt controls and Cancel adjustment remain. Rules no longer mention a menu. Existing base/revision browser checks now select cards by clicking their drawn bodies. Source synced; no git commands.

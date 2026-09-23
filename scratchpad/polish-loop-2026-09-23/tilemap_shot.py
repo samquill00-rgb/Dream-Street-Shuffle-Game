@@ -12,6 +12,10 @@ for _ in range(3):
     Game.clear_overlays(p)
 if tc is not None:
     print("teleport", p.evaluate("([c,r]) => window.__dssSohoTeleport(c,r)", [tc, tr]))
+p.wait_for_timeout(600)
+if tc is not None:
+    # walk a few tiles so the camera moves and settles: the door labels are only re-placed on camera movement
+    p.keyboard.down("ArrowUp"); p.wait_for_timeout(1600); p.keyboard.up("ArrowUp")
 p.wait_for_timeout(2500)
 print("at", Game.name(p))
 el = p.query_selector('.soho-map-stage')

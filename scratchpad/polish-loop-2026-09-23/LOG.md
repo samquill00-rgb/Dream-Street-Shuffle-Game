@@ -99,3 +99,12 @@ Sam: Trisha's should sit much higher, next to the Pillars on the other side of t
 - Shot: `pentangle-shaped-after.png`.
 - Not touched: the Dean Street tile map still places Trisha's below Bateman (its DOORS table), so the two maps now disagree on Trisha's. The French bell still sits under the LBRP verse box.
 
+
+### Follow-up (18:35 UTC) — Ronnie's back, Colony set back
+
+Sam: Ronnie's back on the correct side of Frith; the Colony dot ever so slightly back from the street.
+- Ronnie Scott's returned to (340,450), west kerb of Frith Street, label to the left of the pin as before. Ring bell and single lily with it.
+- Colony Room from (221,420), which sat on the road, to (208,420), just inside the block on Dean Street's west side. Ring bell and single lily with it.
+- Star and tracer points now 216,228 340,450 208,420 499,205 248,548.
+- Shot: `pentangle-ronnies-back-after.png` (tracer finished; `nbmap_shot.py` now takes a `WAIT` ms env for that).
+

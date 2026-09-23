@@ -1,6 +1,6 @@
-## Polish loop 2026-09-23 — pass 7, spectral touches (in progress)
+## Polish loop 2026-09-23 — pass 7, spectral touches
 
-Sam's rule: beauty here is spectral, the trace, the ghost, the memory. Done so far, each its own commit with before/after in the project files `polish-loop/`: the Dean Street title carries two faint offset after-images of itself inside the `dssTitleBreath` keyframes (shadow counts must match in both keyframes or the copies blur); the memory-photo prose has a ghost-ink double; the tile-map walker leaves pale 2×2 footprints that fade over ~7s (`S.trail` in the map scene, drawn just before the walker's light). More to come while the loop runs.
+Sam's rule: beauty here is spectral, the trace, the ghost, the memory. Five touches, each its own commit with before/after in the project files `polish-loop/`: the Dean Street title and the title screen carry two faint offset after-images of themselves inside their glow keyframes (shadow counts must match in both keyframes or the copies blur); the memory-photo prose has a ghost-ink double; the tile-map walker leaves pale 2×2 footprints that fade over ~7s (`S.trail`, drawn just before the walker's light); and **the after-image of the passage just left** (UserScript "THE AFTER-IMAGE": a clone of the departing `tw-passage` inside `tw-story`, inert, animations frozen, 0.95s fade and 7px lift, off under reduced motion, `window.DSS_AFTERIMAGE = false` switches it off). Tried and dropped as invisible: a lingering link hover glow, a warm afterglow at the map doorway just left, a walker reflection. Regression after all of it: every route and the phone sweep re-run, nothing new broken.
 
 ## Polish loop 2026-09-23 — pass 4, every route played
 

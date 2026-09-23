@@ -1,3 +1,31 @@
+## Polish loop 2026-09-23 — pass 7, spectral touches (in progress)
+
+Sam's rule: beauty here is spectral, the trace, the ghost, the memory. Done so far, each its own commit with before/after in the project files `polish-loop/`: the Dean Street title carries two faint offset after-images of itself inside the `dssTitleBreath` keyframes (shadow counts must match in both keyframes or the copies blur); the memory-photo prose has a ghost-ink double; the tile-map walker leaves pale 2×2 footprints that fade over ~7s (`S.trail` in the map scene, drawn just before the walker's light). More to come while the loop runs.
+
+## Polish loop 2026-09-23 — pass 4, every route played
+
+`scratchpad/polish-loop-2026-09-23/routes.py` walks the five dream worlds (win / lose / turn back), the complete and incomplete nights, Alt-Dawn and every minigame outcome, at 1212 and at 390 with reduced motion: no broken links, dead state, tw-errors or JS errors anywhere. Fight, waltz, cards and worm exits use their own ids (`go-fight-*`, `waltz-up/down`, `.cards-payment [data-outcome]`, `.worm-payment`) so the walker's generic `-win/-lose` forcing does not reach them; those were walked by hand and are clean.
+
+## Polish loop 2026-09-23 — pass 6, consistency
+
+`html` now carries the night colour (#0a0908; white on the white-page ending via `:has()`) so Safari's overscroll bounce is not white. `buildCaScene` (the coast of Carthage; not the Colony approach as last night's log said) got the reduced-motion hold every other scene already had.
+
+## Polish loop 2026-09-23 — pass 1, overlapping text
+
+Full overlap/spill/clip sweep at 1212 and 390 (`scratchpad/polish-loop-2026-09-23/overlap_sweep.py`). Three fixes: the Fetch Window SVG caption group closed too early (lines ran off the pane, same fault as Fetch Street last night); the ten one-line-cssText scene ENTER buttons now nowrap with `min()`-eased padding/spacing so they stop wrapping on phones; Lackland's approach caption on one line so it clears the button. Everything else flagged was a modal or scene covering content by design.
+
+## Polish loop 2026-09-23 — pass 5, signposts inside the panes
+
+`.glass-pane`, `.ending-pane` and `.back-to-night-glow` came off the signpost script's SKIP list, so The Fetch's "Follow him" / "Not yet. Back to the night." and the Alba pages' "Traveller, wake!" / "Traveller, sleep!" now match the other passage links. White page and Black page ("PLUS. ULTRA.") deliberately still skipped: bare typographic endings.
+
+## Polish loop 2026-09-23 — pass 3, the pink placeholders cut to the docs' versions
+
+The short pink placeholders from the six second-edition dream-loop documents (cuts.py in the project files) are now in the game in place of the long ones, 50 groups across 38 passages, pink class kept. Script `scratchpad/polish-loop-2026-09-23/apply_cuts.py`. The Mountain, The Cave and Himalayan Return already had Sam's prose; Nazca Race, Pyramid Run and The Climb have no pink prose on screen (the docs show intro paragraphs the game never had; not added).
+
+## Polish loop 2026-09-23 — pass 2, notebook map positions
+
+Branch `claude/polish-loop-2026-09-23-dkhohi` (four-hour loop Sam approved 04:31 UTC; log in the project files, `polish-loop/Polish loop log 2026-09-23.md`, copy in `scratchpad/polish-loop-2026-09-23/LOG.md`). Eight notebook-map markers moved to match the Dean Street tile map's DOORS table: Chippy to Dean Street north (was Wardour), Trisha's to the west side of Greek below Bateman (was east side above it), the Ginger Light to the Dean/Old Compton corner (was the Bateman crossing), and small pavement-side nudges for Colony, Lackland's, the French, the Coach and the Pillars. The five-lily pentangle follows the venues and is no longer a symmetrical star: Sam's call (before/after in `polish-loop/pass2-nbmap-*-pentangle.png`; revert recipe in the log). The Lackland's approach caption says Wardour Street while both maps say Frith: not changed.
+
 ## Centre Point ending chain — review pass, 2026-09-23
 
 Sam asked to look at the final scene (follow the fetch to Centre Point) as a player sees it. Chain: Towards Dawn → The Fetch → Approach Centre Point → Alba Complete/Incomplete → Dawn Approach White/Black → White/Black page → Dawn. Played end to end in headless Chromium at 1280 and 390 wide, with reduced motion, on both routes: 0 tw-errors, 0 game JS errors, no horizontal overflow. Screenshots in project files `centre-point-review/`.

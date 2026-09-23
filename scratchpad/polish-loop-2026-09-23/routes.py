@@ -23,6 +23,10 @@ NIGHTS = {
   "night-incomplete": ("Towards Dawn", '(set: $lilyCount to 2)(set: $haunts to (a: $haunt1,$haunt2))'),
   "alt-dawn": ("Alt-Dawn", '(set: $lilyCount to 5)'),
 }
+MINIS = {
+  "pong": ("PP Pong", ""), "cow": ("Ride Jeffrey Bernard's cow", ""), "bar": ("Ronnie Scott's", "(set: $visited's Ronnies to false)"),
+  "fight": ("Fight starts", ""), "waltz": ("Cecil Court Waltz", ""), "cards": ("Green Sea House of Cards", ""), "worm": ("Soho Square Gents", ""),
+}
 AVOID = {"NOTEBOOK", "AUDIT READ", "CONTINUE WHERE I LEFT OFF"}
 RETREAT = re.compile(r"^(not yet|back\b|turn back|turn around|walk on past|wake\b|leave\b|give up|stay\b|sleep|← )", re.I)
 STOP = {"Dean Street", "Dawn", "Alt-Dawn", "White page", "Black page"}
@@ -32,7 +36,7 @@ def errs(p):
             "console": [c[1][:160] for c in p._cons if c[0]=='error' and 'udio' not in c[1] and 'textContent' not in c[1] and 'net::' not in c[1]][:4]}
 LINKS_JS = """() => [...document.querySelectorAll('tw-link')].filter(e=>{let el=e;while(el&&el!==document.body){const cs=getComputedStyle(el);if(cs.display==='none'||cs.visibility==='hidden'||cs.pointerEvents==='none'&&el===e)return false;el=el.parentElement;}return true;}).map(e=>e.textContent.trim())"""
 OUTCOME_JS = """(want) => { const ids=[...document.querySelectorAll('[id$="-win"],[id$="-lose"],[id$="-win-link"],[id$="-lose-link"]')].map(e=>e.id); const el=[...document.querySelectorAll('[id$="-win"],[id$="-lose"],[id$="-win-link"],[id$="-lose-link"]')].find(e=>e.id.includes('-'+want)); if(!el) return {ids}; el.style.display=''; const l=el.querySelector('tw-link')||(el.tagName==='TW-LINK'?el:null)||el.closest('tw-link'); if(!l) return {ids, nolink:true}; const t=l.textContent.trim(); l.click(); return {ids, clicked:t}; }"""
-def walk(g, route, start, seed, outcome, maxsteps=45):
+def walk(g, route, start, seed, outcome, maxsteps=14):
     p = g.page(start, BASE_SEED + seed)
     if reduced: p.emulate_media(reduced_motion='reduce')
     Game.click(p, "BEGIN", 1500); p.wait_for_timeout(1500); Game.clear_overlays(p)
@@ -74,6 +78,8 @@ routes = []
 for k, (s, seed) in WORLDS.items():
     for o in ("win", "lose", "turnback"): routes.append((f"{k}/{o}", s, seed, o))
 for k, (s, seed) in NIGHTS.items(): routes.append((k, s, seed, "win"))
+for k, (s, seed) in MINIS.items():
+    for o in ("win", "lose"): routes.append((f"mini-{k}/{o}", s, seed, o))
 if args: routes = [r for r in routes if any(a in r[0] for a in args)]
 g = Game(width=width, height=780 if width < 600 else 900)
 out = []

@@ -424,6 +424,67 @@ html_content = html_content.replace("<title>Dream Street Shuffle</title>", "<tit
 html_content = re.sub(r"<!--DSS-BOOT-VEIL-START-->.*?<!--DSS-BOOT-VEIL-END-->", "", html_content, flags=re.S)
 html_content = html_content.replace("<body>", "<body>" + BOOT_VEIL, 1)
 
+# ── Preview / jump boot hook ───────────────────────────────────────────────
+# Reads the URL before Harlowe boots and, once the first passage has rendered,
+# navigates to a target passage through Harlowe's own link handler.
+#   ?start=nazca          (himalayas, nazca, easter, pyramid, ezekiel) opens the
+#                         matching "Preview <World>" passage in the twee, which
+#                         seeds the story state and steps into that world. Any
+#                         other value is taken as a passage name. The query
+#                         string is left in the URL, so a refresh starts the
+#                         same world again instead of returning to the title.
+#   #dss-debug-jump=Name  the older testing form: jumps to that passage, then
+#                         strips the hash (a refresh returns to the title).
+# The hook used to be hand-edited in the html; since 2026-09-23 it lives here
+# and is marker-wrapped so each sync replaces the previous copy.
+PREVIEW_BOOT = (
+    "<!--DSS-PREVIEW-BOOT-START-->"
+    '<script id="dss-debug-boot">\n'
+    "(function(){\n"
+    "  var target = null;\n"
+    "  var h = window.location.hash.match(/dss-debug-jump=([^&]*)/);\n"
+    "  if (h) {\n"
+    "    target = decodeURIComponent(h[1]);\n"
+    "    window.history.replaceState(null, '', window.location.pathname + window.location.search);\n"
+    "  }\n"
+    "  var q = window.location.search.match(/[?&]start=([^&]*)/);\n"
+    "  if (!target && q) {\n"
+    "    var s = decodeURIComponent(q[1].replace(/\\+/g, ' ')).trim();\n"
+    "    var WORLDS = { himalayas: 'Preview Himalayas', nazca: 'Preview Nazca', easter: 'Preview Easter Island',\n"
+    "                   pyramid: 'Preview Pyramid', ezekiel: 'Preview Ezekiel' };\n"
+    "    target = WORLDS[s.toLowerCase()] || s;\n"
+    "  }\n"
+    "  if (!target) return;\n"
+    "  window.__dssDebugJumpTarget = target;\n"
+    "  var tries = 0;\n"
+    "  var iv = setInterval(function(){\n"
+    "    if (++tries > 200) { clearInterval(iv); return; }\n"
+    "    if (!window.__dssDebugJumpTarget || typeof jQuery === 'undefined') return;\n"
+    "    var story = jQuery('tw-story');\n"
+    "    if (!story.length || !story.find('tw-passage').length) return;\n"
+    "    clearInterval(iv);\n"
+    "    var t = window.__dssDebugJumpTarget; delete window.__dssDebugJumpTarget;\n"
+    "    /* Harlowe reads linkPassageName from the tw-expression around a tw-link. */\n"
+    "    var expr = jQuery('<tw-expression style=\"display:none\"></tw-expression>');\n"
+    "    var link = jQuery('<tw-link tabindex=\"0\">JUMP</tw-link>');\n"
+    "    expr.append(link); story.find('tw-passage').first().append(expr);\n"
+    "    expr.data('linkPassageName', t);\n"
+    "    link.trigger('click');\n"
+    "  }, 50);\n"
+    "})();\n"
+    "</script>"
+    "<!--DSS-PREVIEW-BOOT-END-->"
+)
+html_content = re.sub(r"<!--DSS-PREVIEW-BOOT-START-->.*?<!--DSS-PREVIEW-BOOT-END-->\n?", "", html_content, flags=re.S)
+# the pre-2026-09-23 hand-edited copy, if this html still carries it
+html_content = re.sub(r'<script id="dss-debug-boot">.*?</script>\n?', "", html_content, count=1, flags=re.S)
+_engine = '<script title="Twine engine code"'
+if html_content.count(_engine) == 1:
+    html_content = html_content.replace(_engine, PREVIEW_BOOT + "\n\n" + _engine, 1)
+    print("Placed the preview boot hook before the Twine engine")
+else:
+    print("WARNING: could not find the Twine engine script tag — preview boot hook not placed")
+
 # Write the updated HTML
 with open(html_path, "w", encoding="utf-8") as f:
     f.write(html_content)

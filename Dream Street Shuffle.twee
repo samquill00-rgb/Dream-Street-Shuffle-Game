@@ -283,7 +283,7 @@ window.dssStatLoss = function(v, n) {
 // the pentagram + lily-of-the-valley animation drawn over the Soho map.
 window.dssRevealPentangleOnMap = function() {
   function openMap() {
-    var page = document.querySelector('.nb-page');
+    var page = document.querySelector('tw-dialog .nb-page');
     if (!page) return false;
     // Make sure the queue includes 'map' so nbSwitchTab will fire the animation
     var queue = page.dataset.pentangleQueue || '';
@@ -6612,7 +6612,7 @@ if (target === 'map')  {
 // Harlowe wraps dialog content in elements that break CSS layout.
 // This polls for the dialog and forces layout with inline styles.
 setInterval(function() {
-var nbPage = document.querySelector('.nb-page');
+var nbPage = document.querySelector('tw-dialog .nb-page');
 if (!nbPage) return;
 
 // Always find tw-dialog and force it full-screen
@@ -15520,9 +15520,11 @@ soloDebounce = setTimeout(checkSoloLink, 350);
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   var STRIP = 'script, style, iframe, canvas, video, audio, .stat-bars, .header-links, #dss-notebook, ' +
     '.soho-map-wrap, .soho-map-stage, tw-dialog, .dss-ghost, [id$="-wrap"], .stat-bars-spacer, .dss-key-offer';
-  var last = null, ghost = null, ticking = false;
+  var last = null, lastNb = null, ghost = null, ticking = false;
   function sample() {
     ticking = false;
+    var nb = document.querySelector('tw-dialog .nb-page');
+    if (nb) { var nr = nb.getBoundingClientRect(); if (nr.width) lastNb = { el: nb, top: nr.top, left: nr.left, width: nr.width, height: nr.height, when: Date.now() }; }
     var tp = document.querySelector('tw-story > tw-passage');
     if (!tp) return;
     var r = tp.getBoundingClientRect();
@@ -15557,12 +15559,41 @@ soloDebounce = setTimeout(checkSoloLink, 350);
       'clip-path: inset(' + (top - last.top) + 'px 0 ' + (last.top + last.height - bottom) + 'px 0);';
     g.appendChild(inner);
     (document.querySelector('tw-story') || document.body).appendChild(g);
+    settle(g, last);
     // anything the passage pinned to the viewport (margin notes, badges) is not part of the page's after-image
     var pinned = [];
     inner.querySelectorAll('*').forEach(function(n) { var ps = getComputedStyle(n).position; if (ps === 'fixed' || ps === 'sticky') pinned.push(n); });
     pinned.forEach(function(n) { if (n.parentNode) n.remove(); });
     ghost = g;
     setTimeout(function() { if (g.parentNode) g.remove(); if (ghost === g) ghost = null; }, 1100);
+  }
+  // a fixed box inside tw-story sits relative to tw-story where a backdrop-filter makes it the containing block (WebKit); measure and nudge
+  function settle(g, r) {
+    var gr = g.getBoundingClientRect();
+    if (Math.abs(gr.top - r.top) > 0.5 || Math.abs(gr.left - r.left) > 0.5) { g.style.top = (parseFloat(g.style.top) + (r.top - gr.top)) + 'px'; g.style.left = (parseFloat(g.style.left) + (r.left - gr.left)) + 'px'; }
+  }
+  // the notebook, closed: the page stays on the eye a moment
+  function showNb(page) {
+    if (!lastNb || lastNb.el !== page || Date.now() - lastNb.when > 4000) return;
+    var g = document.createElement('div');
+    g.className = 'dss-ghost dss-ghost-nb';
+    g.setAttribute('aria-hidden', 'true');
+    var inner = page.cloneNode(true);
+    inner.querySelectorAll(STRIP).forEach(function(n) { n.remove(); });
+    inner.querySelectorAll('[id]').forEach(function(n) { n.removeAttribute('id'); });
+    inner.querySelectorAll('[onclick]').forEach(function(n) { n.removeAttribute('onclick'); });
+    [].slice.call(inner.attributes).forEach(function(a) { if (/^data-/.test(a.name)) inner.removeAttribute(a.name); });
+    inner.querySelectorAll('tw-link, .enchantment-link, button, a').forEach(function(n) {
+      var sp = document.createElement('span');
+      sp.className = 'dss-ghost-link ' + (n.className || '');
+      sp.innerHTML = n.innerHTML;
+      n.parentNode.replaceChild(sp, n);
+    });
+    g.style.cssText = 'top:' + lastNb.top + 'px;left:' + lastNb.left + 'px;width:' + lastNb.width + 'px;height:' + lastNb.height + 'px;';
+    g.appendChild(inner);
+    (document.querySelector('tw-story') || document.body).appendChild(g);
+    settle(g, lastNb);
+    setTimeout(function() { if (g.parentNode) g.remove(); }, 1100);
   }
   function watch() {
     var story = document.querySelector('tw-story');
@@ -15572,6 +15603,7 @@ soloDebounce = setTimeout(checkSoloLink, 350);
         var rm = muts[i].removedNodes;
         for (var j = 0; j < rm.length; j++) {
           if (rm[j].nodeType === 1 && rm[j].tagName === 'TW-PASSAGE') { try { show(rm[j]); } catch (e) {} return; }
+          if (rm[j].nodeType === 1 && (rm[j].tagName === 'TW-BACKDROP' || rm[j].tagName === 'TW-DIALOG')) { var nbp = rm[j].querySelector('.nb-page'); if (nbp) { try { showNb(nbp); } catch (e) {} return; } }
         }
       }
     }).observe(story, { childList: true });
@@ -61454,6 +61486,16 @@ text-shadow: 0 0 40px rgba(0,0,0,0.5);
 .dss-ghost tw-passage {
 animation: none !important;
 opacity: 1;
+}
+.dss-ghost-nb {
+z-index: 20000;
+}
+.dss-ghost-nb .nb-page {
+animation: none !important;
+}
+.dss-ghost-nb * {
+animation: none !important;
+transition: none !important;
 }
 .dss-ghost tw-passage * {
 animation: none !important;

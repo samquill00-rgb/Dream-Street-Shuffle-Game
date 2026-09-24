@@ -5265,3 +5265,16 @@ Sam explicitly clarified “make it much longer.” Route length 148 → 440, pr
 
 Full browser route completed with 301 prints/one intentional side fall. Both cave outcomes, The Mountain, phone/reduced motion, touch cancellation and teardown pass with no Harlowe or JS errors. Separate final-build fixtures passed both ladders, cornice jump + collapse recovery, avalanche jump + hit recovery. Source synced. No git. Focused, self-contained handoff requested for Claude is HANDOFF_CLAUDE.md — give Claude that file first. It contains exact route/physics/hazard settings, the critical landing-fix explanation, testing recipes and remaining atmospheric pass 2 work. Evidence: /tmp/dss-climb-pass1/expansion-results.json and hazards-results.json.
 Final camera check: cap look-target height at baseY+3 to keep the climber visible on steep ladders. No physics change; both ladders retested after this visual correction.
+
+## 20u — Strangers at the edges: Helvellyn Gooch (2026-09-24, Sam's idea)
+
+Sam did not want the Critic (or any regular) carrying the lines that echo a dream world when the player returns to Dean Street. His solution: strangers on the edges of the map, one per world, drawn only once that world is done and gone once spoken to. First one built on the polish-loop branch: **Helvellyn Gooch**, trombone, on the Charing Cross Road corner of Old Compton Street (tile c48,r26).
+
+How it is wired (mirrors the phone box):
+- `DOORS` entry `gooch` with `spot:true, event:true, stranger:true`; `drawStranger()` draws a small hatted figure on the base canvas only while the door is open; the glow pass gives strangers a warm pool like the phone box's.
+- Hidden hub link in the Dean Street dock, gated on `$mantraComplete is true and $goochMet is false`; the passage `Helvellyn Gooch [outdoor]` sets `$goochMet`, +10 confidence, pink placeholder line (Sam's to write), `[[Walk on|Dean Street]]`.
+- `$goochMet` initialised in StoryInit and the second-night reset. Notebook dream-echo tick for the Himalayas now follows `$goochMet`.
+- The Critic is unhooked: the jump to "The Critic Hears the Mantra" is removed from "Talk to the critic", and the two Pillars gates that re-opened the pub for the mantra (`Entering The Pillars` prose branch, `Approach The Pillars` Yes link) no longer test the mantra. The Critic passage stays in the file unused. The `dss-dream-residue` line in the critic's room (the ☸ glyph) is untouched: ask Sam if that counts as an echo too.
+- Test: `scratchpad/strangers-2026-09-24/gooch_test.py` walks onto the corner, into the passage and back; shots in project files `strangers/`.
+
+Next: four more strangers for the other worlds; Sam will name them. Corners left: Wardour/Old Compton, Wardour/Bateman, Oxford Street at Dean, Shaftesbury at Frith. Each needs the same five pieces plus unhooking that world's recognises scene (Red c. 45302, Inis 46176, Lackland 48118, Benito 50368) and its notebook echo variable.

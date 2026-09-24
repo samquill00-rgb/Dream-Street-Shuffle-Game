@@ -115,3 +115,8 @@ Sam (via the project chat): fix the two parked items.
 - Dean Street tile map: Trisha's door moved from c39,r19 (below Bateman) to c39,r13, fc40,r13: the strip of building on the west side of Greek Street between the Soho Square road and Bateman, opposite the Pillars and a row or two below it. It cannot go higher on that side because the square's perimeter road occupies rows 4–11. Halo and frontage follow the DOORS entry; nothing else keyed to the old tile. Shots: `trishas-tilemap-before.png`, `trishas-tilemap-after.png` (walker teleported to c40,r15 with `tilemap_shot.py out.png 40 15`).
 - Notebook map: the LBRP verse box (`map-lbrp-bg` and its four lines) moved down 34 units, rect y 542→576, lines 554/572/590/608 → 588/606/624/642. The French bell, dot and label now read above it, the star's bottom point too. While the verse shows (five lilies) the box covers the SHAFTESBURY AVENUE label; it clears the Cecil Court marker. Shot: `french-versebox-after.png` (before is `pentangle-ronnies-back-after.png`).
 
+
+### 2026-09-24 23:20 UTC — Helvellyn Gooch, first stranger at the edge
+
+Sam: strangers on the map edges replace the regulars' recognises scenes; they appear only after their dream world, vanish once met. Built Gooch at the Charing Cross Road corner of Old Compton Street (c48,r26): map spot + figure + pool while open, hidden hub link on the Himalayas flag, passage with pink placeholder and "Walk on" back, Critic unhooked (jump removed, the two Pillars mantra re-open gates dropped, notebook tick follows $goochMet). Walk test clean at 1212, no tw-error. Shots in `strangers/`. Safari not run.
+

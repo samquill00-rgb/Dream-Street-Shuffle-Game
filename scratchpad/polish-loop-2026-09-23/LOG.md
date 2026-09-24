@@ -120,3 +120,8 @@ Sam (via the project chat): fix the two parked items.
 
 Sam: strangers on the map edges replace the regulars' recognises scenes; they appear only after their dream world, vanish once met. Built Gooch at the Charing Cross Road corner of Old Compton Street (c48,r26): map spot + figure + pool while open, hidden hub link on the Himalayas flag, passage with pink placeholder and "Walk on" back, Critic unhooked (jump removed, the two Pillars mantra re-open gates dropped, notebook tick follows $goochMet). Walk test clean at 1212, no tw-error. Shots in `strangers/`. Safari not run.
 
+
+### 2026-09-24 23:45 UTC — The Fetch, the Ezekiel stranger
+
+Sam: for Ezekiel the stranger is the Fetch, just below the way to Centre Point. Built at c17,r8 in the road: the player's own sprite drawn each frame with a pale cast, thinning with distance and gone before you reach the tile, which still fires the scene. Benito's wheel jump unhooked, notebook tick follows $fetchSeen. Two placements rejected (r4, r7: under the Chippy sign / beside its door). Walk test clean, no tw-error. Shots `strangers/fetch-*`. Safari not run.
+

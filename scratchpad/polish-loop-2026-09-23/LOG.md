@@ -125,3 +125,8 @@ Sam: strangers on the map edges replace the regulars' recognises scenes; they ap
 
 Sam: for Ezekiel the stranger is the Fetch, just below the way to Centre Point. Built at c17,r8 in the road: the player's own sprite drawn each frame with a pale cast, thinning with distance and gone before you reach the tile, which still fires the scene. Benito's wheel jump unhooked, notebook tick follows $fetchSeen. Two placements rejected (r4, r7: under the Chippy sign / beside its door). Walk test clean, no tw-error. Shots `strangers/fetch-*`. Safari not run.
 
+
+### 2026-09-24 23:50 UTC — Misty "Morris" Minor, the Nazca stranger
+
+Sam: another poet, met (you think) with his family in Carthage. Built at c7,r17, Wardour corner of Bateman, paper in hand, green pool. Lackland's tracing jump and the Dean Street office re-open gate unhooked; notebook tick follows $morrisMet. Walk test clean, no tw-error. Shots `strangers/morris-*`. Safari not run.
+

@@ -1,3 +1,9 @@
+**STATE 2026-09-25, ~03:25 UTC — Inside the French (the first close-up scene) lives on branch `claude/scene-closeups-pe93vp`, one commit on top of `claude/strangers-loop-2026-09-25-iuew5q` (not merged; that branch already holds main 3aae110). Log: project files `scene-closeups/Inside the French log 2026-09-25.md`, copy in `scratchpad/scene-closeups-2026-09-25/LOG.md`. If the html conflicts on merge, take either side and re-run `python3 sync_html.py`; the twee is the truth.**
+
+## Inside the French — close-ups, 2026-09-25
+
+Carried over from the Fagin's Den "MYST LAYER" in his Oliver Twist files: hotspots, hover halo, camera push-in (1.5s time-based smoothstep), caption card, click anywhere to step back. New passage `Inside the French` [venue-french] (`#fi-container`, hidden `[[·|The French]]`); the approach's `·` now targets it, so the flow is Approach The French → Inside the French → The French, one extra click (the bar or TO THE BAR). Scene IIFE "INSIDE THE FRENCH" in the UserScript before the Coach block. Five hotspots: photographs, telephone, glass on the bar, blue door (line of light when looked at), the bar (fade to black, then on). Card words are pink placeholders for Sam. Verified headless at 1280, 390 and reduced motion (`scratchpad/scene-closeups-2026-09-25/fi_shot.py`); Safari not run. Faint: hover halo, lamp glow sprites.
+
 **STATE 2026-09-24, ~20:00 UTC — the beauty loop (unified aesthetic) lives on branch `claude/beauty-loop-2026-09-24-va9o7y`, four commits on top of `claude/polish-loop-2026-09-23-dkhohi` (which was still NOT merged; main at 293f8ee). Merging the new branch brings both. Log with the visual-language statement: project files `polish-loop/Beauty loop log 2026-09-24.md`, copy in `scratchpad/beauty-loop-2026-09-24/LOG.md`. If the html conflicts on merge, take either side and re-run `python3 sync_html.py`; the twee is the truth.**
 
 ## Beauty loop 2026-09-24 — unified aesthetic, four touches

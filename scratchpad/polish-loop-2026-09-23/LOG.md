@@ -130,3 +130,8 @@ Sam: for Ezekiel the stranger is the Fetch, just below the way to Centre Point. 
 
 Sam: another poet, met (you think) with his family in Carthage. Built at c7,r17, Wardour corner of Bateman, paper in hand, green pool. Lackland's tracing jump and the Dean Street office re-open gate unhooked; notebook tick follows $morrisMet. Walk test clean, no tw-error. Shots `strangers/morris-*`. Safari not run.
 
+
+### 2026-09-25 00:40 UTC — Tom Longshanks and Guilliam Songstrong, the last two strangers
+
+Sam: Easter Island gets Tom Longshanks (contemporary classical composer); the Pyramid gets Guilliam Songstrong (Welsh singer; renamed from Metsong within the minute). Longshanks at c7,r29 with a score in hand, lilac pool; Songstrong at c31,r40, empty hands, warm pool. Red's and Inis's scenes unhooked along with their Dean Street re-open gates; notebook ticks follow $longshanksMet and $songstrongMet. Both walk tests clean, no tw-error. Shots `strangers/longshanks-*`, `strangers/songstrong-*`. All five strangers done. Safari not run.
+

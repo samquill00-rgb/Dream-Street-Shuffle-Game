@@ -13559,7 +13559,7 @@ function buildBase(doors) {
   LAMPS.forEach(function(l){ x.save(); x.translate(l.c*T, l.r*T); drawLampPost(x, l); x.restore(); });
   var pb = doorById('phonebox');
   if (pb) { x.save(); x.translate(pb.c*T, pb.r*T); drawPhoneBox(x, doors.phonebox && doors.phonebox.status === 'open'); x.restore(); }
-  DOORS.forEach(function(d){ if (d.stranger && doors[d.id] && doors[d.id].status === 'open') { x.save(); x.translate(d.c*T, d.r*T); drawStranger(x, d); x.restore(); } });
+  // strangers are drawn in the frame loop (2026-09-25), so they can carry an after-image
   x.setTransform(1, 0, 0, 1, 0, 0);
   return cv;
 }
@@ -13782,6 +13782,18 @@ function init(container) {
   var openIds = Object.keys(doors).filter(function(id){ return doors[id].status === 'open' && labels[id]; });
   if (openIds.length === 1) labels[openIds[0]].classList.add('soho-door-beckon');
   var base = buildBase(doors), glow = buildGlow(doors);
+  // A stranger's after-image (2026-09-25): like the titles, the figure is printed three times,
+  // a cold copy up-left and a copy in the world's own colour down-right, both faint, the true
+  // figure on top. A print looked at too long; someone not quite there.
+  var STRANGER_COLD = [150,170,210];
+  function strangerCard(d, tint) {
+    var c = document.createElement('canvas'); c.width = T; c.height = T; var g = c.getContext('2d');
+    drawStranger(g, d);
+    if (tint) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = rgba(tint, 1); g.fillRect(0, 0, T, T); }
+    return c;
+  }
+  var strangerCards = {};
+  DOORS.forEach(function(d){ if (d.stranger) strangerCards[d.id] = { cold: strangerCard(d, STRANGER_COLD), warm: strangerCard(d, d.col), self: strangerCard(d, null) }; });
   var sprites = buildSprites(null);
   var walkerSprites = buildSprites({ c:'#221c1e', l:'#332a2c' });
   // street life (2026-09-12): a constable on the beat and a drunk who wants a light
@@ -14214,6 +14226,15 @@ function init(container) {
         x.globalCompositeOperation = 'lighter'; x.fillStyle = 'rgba(120,140,180,0.55)'; x.fillRect(fd.c*T + 4, fd.r*T - 2, 8, 14); x.globalCompositeOperation = 'source-over';
         x.restore();
       }
+    }
+    for (var si = 0; si < DOORS.length; si++) {
+      var sd = DOORS[si]; if (!sd.stranger || !doors[sd.id] || doors[sd.id].status !== 'open') continue;
+      var scd = strangerCards[sd.id], sofs = 1;
+      x.save();
+      x.globalAlpha = 0.30; x.drawImage(scd.cold, sd.c*T - sofs, sd.r*T - sofs);
+      x.globalAlpha = 0.24; x.drawImage(scd.warm, sd.c*T + sofs, sd.r*T + sofs);
+      x.globalAlpha = 1; x.drawImage(scd.self, sd.c*T, sd.r*T);
+      x.restore();
     }
     if (doors.square && doors.square.status === 'open') { var sc2 = S.sqcat; drawCat(x, { x: sc2.x, row: Math.floor(sc2.y / T), moveTo: null, t: sc2.t, blink: (S.t % 200) < 6 }); }
     if (doors.foyles && doors.foyles.status === 'open') {

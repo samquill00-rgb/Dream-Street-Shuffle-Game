@@ -27,3 +27,8 @@ Dean Street carries five hidden hub flags (`met-gooch` and so on, following `$go
 
 ## Play size and phone
 `playsize-gooch-1212.png` (the whole stage at 1x: Gooch a figure on the Charing Cross Road corner, brass glint, warm pool, drips beneath) and `playsize-morris-phone-390.png` (Morris beside the walker on Wardour Street at phone width, small but present).
+
+## Regression and close (02:35 UTC)
+Sam cut the loop short at 01:38 UTC (no further passes), so it closes after the six touches. Every desktop route re-walked at 1212 with all six live (`regress/routes1212.log`): 28 clean, the same four walker blind spots as the last two loops (the waltz and the worm use their own exit ids; hand-walked clean on 2026-09-23, untouched here). No JS errors and no tw-errors on any stranger walk. Branch `claude/strangers-loop-2026-09-25-iuew5q`, eight commits on main, pushed, not merged.
+
+Safari was not run. For him to judge there: whether the after-image on a 16px figure reads as a print or as a blur (it is the titles' motif at sprite scale); whether the residue on a met corner is too faint or too much (`0.18`/`0.10` in the glow layer, the line marked "what the corner keeps"); and whether the fade to the world's colour on stepping onto a stranger is welcome or one effect too many (the `S.entering.stranger` branch in `draw()`). All six can be reverted one commit at a time.

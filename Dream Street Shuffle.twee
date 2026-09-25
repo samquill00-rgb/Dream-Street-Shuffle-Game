@@ -4645,7 +4645,7 @@ function buildBase(doors) {
   LAMPS.forEach(function(l){ x.save(); x.translate(l.c*T, l.r*T); drawLampPost(x, l); x.restore(); });
   var pb = doorById('phonebox');
   if (pb) { x.save(); x.translate(pb.c*T, pb.r*T); drawPhoneBox(x, doors.phonebox && doors.phonebox.status === 'open'); x.restore(); }
-  DOORS.forEach(function(d){ if (d.stranger && doors[d.id] && doors[d.id].status === 'open') { x.save(); x.translate(d.c*T, d.r*T); drawStranger(x, d); x.restore(); } });
+  // strangers are drawn in the frame loop (2026-09-25), so they can carry an after-image
   x.setTransform(1, 0, 0, 1, 0, 0);
   return cv;
 }
@@ -4663,6 +4663,13 @@ function buildGlow(doors) {
   function halo(px, py, rad, col, a) { var g = x.createRadialGradient(px, py, 1, px, py, rad); g.addColorStop(0, rgba(col, a)); g.addColorStop(0.55, rgba(col, a*0.35)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(px - rad, py - rad, rad*2, rad*2); }
   function pool(px, py, rx, ry, col, a) { x.save(); x.translate(px, py); x.scale(rx/ry, 1); var g = x.createRadialGradient(0, 0, 1, 0, 0, ry); g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(-ry, -ry, ry*2, ry*2); x.restore(); }
   LAMPS.forEach(function(l){ halo(l.c*T + 8, l.r*T + 3, 30, l.ginger ? [232,134,42] : [217,164,65], l.ginger ? 0.28 : 0.18); [[-1,0],[1,0],[0,1],[0,-1]].forEach(function(d){ if (inBounds(l.c + d[0], l.r + d[1]) && isRoad(l.c + d[0], l.r + d[1])) smear((l.c + d[0])*T + 8, (l.r + d[1])*T - 2, l.ginger ? [232,134,42] : [217,164,65], 0.5); }); });
+  // what the corner keeps (2026-09-25): once a stranger is met their pool is gone, and a trace of
+  // it stays on the pavement, cold now, a fraction of what it was, the way the rooms leave a colour
+  DOORS.forEach(function(d){
+    if (!(d.stranger || d.fetch) || doors[d.id].status === 'open') return;
+    var el = document.querySelector('.dss-hub-flag[data-k="met-' + d.id + '"]'); if (!el || el.textContent.trim() !== 'on') return;
+    pool(d.c*T + 8, d.r*T + 12, 20, 10, d.col, 0.18); halo(d.c*T + 8, d.r*T + 12, 12, [150,170,210], 0.10);
+  });
   DOORS.forEach(function(d){
     var st = doors[d.id].status; if (st === 'shut') return;
     var a = st === 'open' ? 0.82 : 0.18;
@@ -4670,7 +4677,7 @@ function buildGlow(doors) {
     if (d.event) {
       if (d.hidden || st !== 'open') return;
       if (d.id === 'phonebox') { halo(d.c*T + 8, d.r*T + 6, 22, d.col, 0.34); pool(d.c*T + 8, d.r*T + 12, 24, 13, d.col, 0.40); return; }
-      if (d.stranger) { halo(d.c*T + 8, d.r*T + 6, 20, d.col, 0.26); pool(d.c*T + 8, d.r*T + 12, 22, 12, d.col, 0.32); return; }
+      if (d.stranger) { halo(d.c*T + 8, d.r*T + 6, 20, d.col, 0.26); pool(d.c*T + 8, d.r*T + 12, 22, 12, d.col, 0.32); [[0,1],[-1,0],[1,0]].forEach(function(o){ if (inBounds(d.c + o[0], d.r + o[1]) && isRoad(d.c + o[0], d.r + o[1])) smear((d.c + o[0])*T + 8, (d.r + o[1])*T - 2, d.col, 0.45); }); return; }
       if (d.fetch) return;
       // A signed doorway is a place you go on purpose, so it carries a doorway's
       // worth of light rather than an alley's hint of one. Unsigned alleys keep
@@ -4874,6 +4881,18 @@ function init(container) {
   if (openIds.length === 1) labels[openIds[0]].classList.add('soho-door-beckon');
 
   var base = buildBase(doors), glow = buildGlow(doors);
+  // A stranger's after-image (2026-09-25): like the titles, the figure is printed three times,
+  // a cold copy up-left and a copy in the world's own colour down-right, both faint, the true
+  // figure on top. A print looked at too long; someone not quite there.
+  var STRANGER_COLD = [150,170,210];
+  function strangerCard(d, tint) {
+    var c = document.createElement('canvas'); c.width = T; c.height = T; var g = c.getContext('2d');
+    drawStranger(g, d);
+    if (tint) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = rgba(tint, 1); g.fillRect(0, 0, T, T); }
+    return c;
+  }
+  var strangerCards = {};
+  DOORS.forEach(function(d){ if (d.stranger) strangerCards[d.id] = { cold: strangerCard(d, STRANGER_COLD), warm: strangerCard(d, d.col), self: strangerCard(d, null) }; });
   var sprites = buildSprites(null);
   var walkerSprites = buildSprites({ c:'#221c1e', l:'#332a2c' });
   // street life (2026-09-12): a constable on the beat and a drunk who wants a light
@@ -5314,6 +5333,23 @@ function init(container) {
         x.restore();
       }
     }
+    for (var si = 0; si < DOORS.length; si++) {
+      var sd = DOORS[si]; if (!sd.stranger || !doors[sd.id] || doors[sd.id].status !== 'open') continue;
+      // the walk towards them (2026-09-25): the closer you come, the further the copies part,
+      // one tile apart they are three pixels out; the figure itself never moves
+      var sdist = Math.abs(S.c - sd.c) + Math.abs(S.r - sd.r);
+      var scd = strangerCards[sd.id], sofs = 1 + 2 * Math.max(0, Math.min(1, (7 - sdist) / 6));
+      // the pool of light breathes (2026-09-25), slow, in the world's own colour, the way the walker's does
+      var sbr = 0.05 + 0.06 * Math.sin(S.t / 95 + si * 1.7);
+      x.save(); x.translate(sd.c*T + 8, sd.r*T + 13); x.scale(1, 0.5);
+      var spg = x.createRadialGradient(0, 0, 1, 0, 0, 22); spg.addColorStop(0, rgba(sd.col, sbr)); spg.addColorStop(1, rgba(sd.col, 0)); x.fillStyle = spg; x.fillRect(-22, -22, 44, 44);
+      x.restore();
+      x.save();
+      x.globalAlpha = 0.30; x.drawImage(scd.cold, sd.c*T - sofs, sd.r*T - sofs);
+      x.globalAlpha = 0.24; x.drawImage(scd.warm, sd.c*T + sofs, sd.r*T + sofs);
+      x.globalAlpha = 1; x.drawImage(scd.self, sd.c*T, sd.r*T);
+      x.restore();
+    }
     if (doors.square && doors.square.status === 'open') { var sc2 = S.sqcat; drawCat(x, { x: sc2.x, row: Math.floor(sc2.y / T), moveTo: null, t: sc2.t, blink: (S.t % 200) < 6 }); }
     if (doors.foyles && doors.foyles.status === 'open') {
       var nb = hubFlag('notebook');
@@ -5344,7 +5380,12 @@ function init(container) {
     x.restore();
     var vg = x.createRadialGradient(W/2, H/2, H*0.45, W/2, H/2, W*0.72); vg.addColorStop(0, 'rgba(4,3,8,0)'); vg.addColorStop(1, 'rgba(4,3,8,0.45)');
     x.fillStyle = vg; x.fillRect(0, 0, W, H);
-    if (S.entering) { x.fillStyle = 'rgba(4,3,8,' + Math.min(1, S.enterT / 14) + ')'; x.fillRect(0, 0, W, H); }
+    if (S.entering) {
+      var ek = Math.min(1, S.enterT / 14);
+      // stepping onto a stranger (2026-09-25): the street goes to their colour before it goes dark
+      if (S.entering.stranger || S.entering.fetch) { x.fillStyle = rgba(S.entering.col, 0.7 * Math.sin(ek * Math.PI)); x.fillRect(0, 0, W, H); x.fillStyle = 'rgba(4,3,8,' + (ek * ek) + ')'; x.fillRect(0, 0, W, H); }
+      else { x.fillStyle = 'rgba(4,3,8,' + ek + ')'; x.fillRect(0, 0, W, H); }
+    }
   }
   S.dispose = function() {
     S.alive = false;
@@ -15670,7 +15711,10 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     'venue-coach': '200,160,100', 'venue-lackland': '190,150,90', 'venue-lackland-back': '190,150,90',
     'himalayan': '150,196,245', 'nazca': '236,168,96', 'easter': '96,214,200', 'pyramid': '226,186,96',
     'ezekiel': '196,128,230', 'sanctum': '214,204,170', 'synthesis': '214,204,170', 'dream': '150,160,210',
-    'pyre': '226,140,70', 'green-sea': '96,190,190'
+    'pyre': '226,140,70', 'green-sea': '96,190,190',
+    // the strangers at the edges (2026-09-25): their pool's colour comes back to Dean Street with you
+    'stranger-gooch': '232,190,96', 'stranger-fetch': '170,190,220', 'stranger-morris': '168,196,150',
+    'stranger-longshanks': '180,160,220', 'stranger-songstrong': '220,150,120'
   };
   var ORDER = Object.keys(TINTS);
   function keyOf(tags) {
@@ -46723,6 +46767,8 @@ Better not tomorrow.
 <span class="dss-hub-flag" data-k="thread-cecil" style="display:none">(if: $knowsCecilCourt is true and $returnedPage is false)[on]</span>\
 (set: _ronSeen to false)(if: $visited is a datamap and $visited contains "Ronnies" and $visited's Ronnies is true)[(set: _ronSeen to true)]\
 <span class="dss-hub-flag" data-k="thread-ronnies" style="display:none">(if: $knowsRonnies is true and _ronSeen is false)[on]</span>\
+<!-- 2026-09-25: the corners the strangers stood on keep a trace of their light once they are met -->\
+<span class="dss-hub-flag" data-k="met-gooch" style="display:none">(if: $goochMet is true)[on]</span><span class="dss-hub-flag" data-k="met-fetch" style="display:none">(if: $fetchSeen is true)[on]</span><span class="dss-hub-flag" data-k="met-morris" style="display:none">(if: $morrisMet is true)[on]</span><span class="dss-hub-flag" data-k="met-longshanks" style="display:none">(if: $longshanksMet is true)[on]</span><span class="dss-hub-flag" data-k="met-songstrong" style="display:none">(if: $songstrongMet is true)[on]</span>\
 (if: _towerReady)[<div class="dss-night-choice"><span class="dss-night-ready">The poem is complete. Stay as long as you like.</span></div>]\
 <!-- THE WAY OUT (2026-09-13, Sam: "there should be an exit at the edge of the map
      which is towards Centre point. That is the way out of the game and the night").
@@ -63069,7 +63115,7 @@ The Great Ham is at his table. The words arrive before you have decided whether 
 [[Leave him to his papers|Entering The Pillars of Hercules]]
 </div>
 
-:: Helvellyn Gooch [outdoor] {"position":"2500,1250","size":"100,100"}
+:: Helvellyn Gooch [outdoor stranger-gooch] {"position":"2500,1250","size":"100,100"}
 <!-- 2026-09-24, Sam: strangers at the edges of the map replace the regulars' recognises scenes.
      Helvellyn Gooch plays trombone on the Charing Cross Road corner of Old Compton Street once
      the Himalayas are done. He is met once and gone; the Critic no longer hears the mantra
@@ -63082,7 +63128,7 @@ Helvellyn Gooch is playing trombone on the corner.
 
 [[Walk on|Dean Street]]
 
-:: The Fetch on Dean Street [outdoor] {"position":"2500,1275","size":"100,100"}
+:: The Fetch on Dean Street [outdoor stranger-fetch] {"position":"2500,1275","size":"100,100"}
 <!-- 2026-09-24, Sam: the Ezekiel stranger is the Fetch, the player's own double, standing in
      the road just below the way to Centre Point. It thins as you approach and is gone when you
      reach the tile; the scene fires anyway. Replaces Benito recognising the wheel (that passage
@@ -63095,7 +63141,7 @@ The Fetch was standing in the road. It is not there now.
 
 [[Walk on|Dean Street]]
 
-:: Misty Morris Minor [outdoor] {"position":"2500,1287","size":"100,100"}
+:: Misty Morris Minor [outdoor stranger-morris] {"position":"2500,1287","size":"100,100"}
 <!-- 2026-09-24, Sam: the Nazca stranger. Misty "Morris" Minor, another poet, whom you think you
      met with his family in Carthage. Stands on the Wardour Street corner of Bateman Street once
      the Nazca lines are traced; met once and gone. Replaces Lackland recognising the tracing
@@ -63108,7 +63154,7 @@ Misty &#39;Morris&#39; Minor is on the corner. You think you met him, and his fa
 
 [[Walk on|Dean Street]]
 
-:: Tom Longshanks [outdoor] {"position":"2500,1300","size":"100,100"}
+:: Tom Longshanks [outdoor stranger-longshanks] {"position":"2500,1300","size":"100,100"}
 <!-- 2026-09-25, Sam: the Easter Island stranger. Tom Longshanks, a contemporary classical
      composer, on the Wardour Street corner of Old Compton Street once the glyph is rubbed;
      met once and gone. Replaces Red recognising the name (that passage stays in the file,
@@ -63121,7 +63167,7 @@ Tom Longshanks, the composer, is on the corner.
 
 [[Walk on|Dean Street]]
 
-:: Guilliam Songstrong [outdoor] {"position":"2500,1312","size":"100,100"}
+:: Guilliam Songstrong [outdoor stranger-songstrong] {"position":"2500,1312","size":"100,100"}
 <!-- 2026-09-25, Sam: the Pyramid stranger. Guilliam Songstrong, a Welshman, a singer, on the
      Shaftesbury Avenue corner of Frith Street once the number is found; met once and gone.
      Replaces Inis recognising the proportion (that passage stays in the file, unhooked).

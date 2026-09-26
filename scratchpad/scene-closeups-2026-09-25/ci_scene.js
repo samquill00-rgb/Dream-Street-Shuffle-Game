@@ -56,7 +56,7 @@ var ciGrain = document.createElement('div');
 ciGrain.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9002;opacity:0.06;mix-blend-mode:overlay;background:url(' + (window.dssGetGrainURL ? window.dssGetGrainURL() : '') + ');';
 ciWrap.appendChild(ciGrain);
 var ciLoc = document.createElement('div');
-ciLoc.textContent = 'THE COLONY ROOM, 41 DEAN STREET, FIRST FLOOR';
+ciLoc.textContent = 'THE COLONY ROOM, DEAN STREET';
 ciLoc.style.cssText = 'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font:12px \'Courier New\',monospace;color:rgba(190,200,140,0.25);letter-spacing:3px;white-space:nowrap;z-index:9003;pointer-events:none;';
 ciWrap.appendChild(ciLoc);
 ciHost.appendChild(ciWrap);
@@ -337,7 +337,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = ciHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !ciWrap.contains(l); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !ciWrap.contains(l) && l.getClientRects().length > 0; });
 }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
 var HOTSPOTS = [
@@ -385,7 +385,7 @@ card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translate
 'background:rgba(6,10,4,0.8);border:1px solid rgba(170,200,110,0.3);padding:14px 22px 12px;border-radius:2px;' +
 'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
 ciWrap.appendChild(card);
-var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:rgba(220,235,160,0.95);padding:9px 18px;border:1px solid rgba(180,200,110,0.45);background:rgba(0,0,0,0.35);cursor:pointer;white-space:nowrap;';
+var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:rgba(220,235,160,0.95);padding:9px 18px;border:1px solid rgba(180,200,110,0.45);background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
 function showCard(spot) {
 var acts = spotActions(spot);
 var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:rgba(190,200,150,0.5);margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';

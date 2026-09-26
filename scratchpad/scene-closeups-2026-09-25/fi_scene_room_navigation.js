@@ -569,7 +569,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = fiHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !fiWrap.contains(l); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !fiWrap.contains(l) && l.getClientRects().length > 0; });
 }
 // Harlowe 3 keeps a link's target out of the DOM, so the passage's links are known by their own wording (as the signpost script does).
 function byText(texts) {
@@ -627,7 +627,7 @@ card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translate
 'background:rgba(10,7,4,0.78);border:1px solid rgba(200,168,106,0.32);padding:14px 22px 12px;border-radius:2px;' +
 'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
 fiWrap.appendChild(card);
-var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:rgba(230,200,120,0.95);padding:9px 18px;border:1px solid rgba(200,170,100,0.45);background:rgba(0,0,0,0.35);cursor:pointer;white-space:nowrap;';
+var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:rgba(230,200,120,0.95);padding:9px 18px;border:1px solid rgba(200,170,100,0.45);background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
 function showCard(spot) {
 var acts = spotActions(spot);
 var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:rgba(200,180,140,0.5);margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';

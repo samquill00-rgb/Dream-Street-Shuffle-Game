@@ -78,7 +78,7 @@ print('== inspections; the lily and the key guards below the room; the exterior 
 p = boot(BASE.replace('$tookLily2 to true', '$tookLily2 to false') + '(set: $hadPhoneCall to true)(set: $metCritic to true)(set: $pillarsVisits to 2)', P)
 for k in ('window', 'phone'):
     vis, ok, c = open_at(p, W[k])
-    if vis: check(ok and c is not None and 'Sam:' in c['text'], k + ' inspection opens'); shot(p, '8-' + k); back(p)
+    if vis: check(ok and c is not None and (('Back to the street' in c['buttons']) if k == 'window' else ('Sam:' in c['text'])), k + (' offers Back to the street: %s' % (c and c['buttons']) if k == 'window' else ' inspection opens')); shot(p, '8-' + k); back(p)
     else: print('  note ' + k + ' is off frame at this size (inspection only)')
 check(p.evaluate("() => !!document.querySelector('tw-passage tw-hook[name=\"lily2\"]')"), 'lily hook rendered below the room')
 p.screenshot(path=os.path.join(out, tag + '9-full-passage.png'), full_page=True)

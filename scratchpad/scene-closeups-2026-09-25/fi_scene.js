@@ -438,6 +438,7 @@ var winMat = new THREE.MeshStandardMaterial({ map: winTex, emissive: 0xffffff, e
 var win = mesh(new THREE.PlaneGeometry(1.1, 1.7), winMat, W / 2 - 0.03, 1.95, -2.4); win.rotation.y = -Math.PI / 2;
 var winFrame = mesh(new THREE.BoxGeometry(0.06, 1.85, 1.25), new THREE.MeshStandardMaterial({ color: 0xe8e0c8, roughness: 0.7 }), W / 2 - 0.02, 1.95, -2.4);
 win.position.x = W / 2 - 0.06;
+var winG = new THREE.Group(); scene.add(winG); winG.add(win); winG.add(winFrame);
 // a plant on the sill
 var leafMat = new THREE.MeshStandardMaterial({ color: 0x2a5a24, roughness: 0.8, side: THREE.DoubleSide });
 for (var lf = 0; lf < 9; lf++) {
@@ -680,6 +681,8 @@ if (!pass) return [];
 return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !fiWrap.contains(l) && l.getClientRects().length > 0; });
 }
 // Harlowe 3 keeps a link's target out of the DOM, so the passage's links are known by their own wording (as the signpost script does).
+// the lily, when it is still there to take: the hook's own click-replace does the work
+function lilyHook(n) { var pass = fiHost.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
 function byText(texts) {
 return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; });
 }
@@ -691,6 +694,7 @@ actions: function() { return passageLinks('.phone-ringing tw-link'); },
 prose: function() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link, tw-hook[name="lilyring"] tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); },
 line: 'The phone behind the bar, black, off duty, the handset lying in its cradle like something asleep with one eye open. [Sam: the phone that rings]' },
 { root: glassG, name: 'the glass on the bar', pos: [-0.9, 1.5, 0.35], tgt: [gp.x, 1.16, gp.z],
+actions: function() { return byText(['Get a drink at the bar']); },
 line: 'Half a drink left on the counter and the ring beside it where the last one stood; whoever it was has stepped out, or never came back. [Sam: the glass someone left]' },
 { root: doorG, name: 'the blue door', pos: [1.9, 1.5, -2.3], tgt: [2.45, 1.3, -4.5],
 line: 'The blue door at the back, the one to the stairs, with a line of light under it that was not there a moment ago. [Sam: the door to upstairs]' },
@@ -698,7 +702,12 @@ line: 'The blue door at the back, the one to the stairs, with a line of light un
 actions: function() { return byText(['Get a drink at the bar']); },
 line: 'The counter, wiped and wet again, the pumps standing to attention and nobody serving for the moment. [Sam: the bar when there is no drink to be had]' },
 { root: ghosts[0].hit, name: 'the man at the bar', pos: [-0.6, 1.45, 1.9], tgt: [-1.55, 1.15, 0.9], figure: true,
-actions: function() { return byText(['Approach', 'Approach the artists']); } },
+actions: function() { return byText(['Approach the artists']).concat(passageLinks('.guided-link tw-link').filter(function(l) { return l.textContent.trim() === 'Approach'; })); } },
+{ root: ghosts[2].hit, name: 'the novelist', pos: [1.2, 1.45, -0.6], tgt: [0.37, 1.15, -2.0], figure: true,
+actions: function() { return byText(['Approach']).filter(function(l) { return !l.closest('.guided-link'); }); } },
+{ root: winG, name: 'the window', pos: [2.2, 1.7, -1.5], tgt: [3.7, 1.9, -2.4],
+actions: function() { return byText(['Leave the French', 'The Colony Room is just round the corner.']).concat(lilyHook(5)); },
+line: 'Dean Street through the net, the lamp on and the pavement wet, and no one out there who is looking for you. [Sam: the window onto Dean Street]' },
 { root: ghosts[1].hit, name: 'the painter', pos: [-0.35, 1.45, 0.75], tgt: [-1.25, 1.15, -0.3], figure: true,
 actions: function() { return byText(['Sketch him on a napkin']); } }
 ];
@@ -722,10 +731,11 @@ var wp = new THREE.Vector3();
 if (spot.root === photoG) wp.set(0.4, 2.0, -4.4);
 else if (spot.root === barG) wp.set(-1.5, 1.2, -0.3);
 else if (spot.root === doorG) wp.set(2.45, 1.3, -4.4);
+else if (spot.root === winG) wp.set(3.6, 1.95, -2.4);
 else spot.root.getWorldPosition(wp);
 if (spot.figure) wp.y += 0.45;
 halo.position.copy(wp);
-var sc = spot.root === barG || spot.root === photoG ? 1.4 : spot.root === doorG ? 1.1 : spot.figure ? 0.9 : 0.52;
+var sc = spot.root === barG || spot.root === photoG ? 1.4 : spot.root === doorG || spot.root === winG ? 1.1 : spot.figure ? 0.9 : 0.52;
 halo.scale.set(sc, sc, 1);
 }
 // the card: a caption, then either the passage's own links as buttons (their own words) or the pink line
@@ -753,6 +763,7 @@ if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
 b.className = 'fi-action';
 b.textContent = link.textContent.trim();
+if (link.tagName === 'TW-HOOK') { b.textContent = '[Sam: the lily]'; b.style.color = '#ff3aa8'; }
 b.style.cssText = BTN;
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
 b.addEventListener('click', function(ev) {

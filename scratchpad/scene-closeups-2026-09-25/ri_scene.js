@@ -483,9 +483,12 @@ var pass = riHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
 return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !riWrap.contains(l); });
 }
+// the lily, when it is still there to take: the hook's own click-replace does the work
+function lilyHook(n) { var pass = riHost.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
 var HOTSPOTS = [
 { root: stageG, name: 'the stage', pos: [0.2, 1.4, -0.6], tgt: [0.1, 1.1, SZ], haloAt: [0.1, 1.2, SZ + 0.3], haloSc: 2.2,
+actions: function() { return passageLinks('#bar-start-btn'); },
 line: 'Three of them in the light and the light is all there is: the horn, the heron at the piano, the boy with the guitar; and the tune going round the head again. [Sam: the stage]' },
 { root: barG, name: 'the bar', pos: [-1.0, 1.5, 2.0], tgt: [barX, 1.2, 0.4], haloAt: [barX, 1.2, 0.6], haloSc: 1.6,
 actions: function() { return passageLinks('#bar-start-btn'); },
@@ -498,8 +501,10 @@ actions: function() { return passageLinks('.phone-ringing tw-link'); },
 prose: function() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); },
 line: 'The telephone at the end of the bar, with a cloth over it during the set. It has your name somewhere in it. [Sam: the phone when it is quiet]' },
 { root: picG, name: 'the photographs', pos: [2.0, 1.6, 0.2], tgt: [W / 2, 1.7, -1.5], haloAt: [W / 2 - 0.1, 1.7, -1.5], haloSc: 1.6,
+actions: function() { return byText(["⟡ LORE: Ronnie Scott's ⟡"]); },
 line: 'The wall of them, every one lit from the side and grinning or not, everyone who has stood in that light and gone home. [Sam: the photographs]' },
 { root: nearTable, name: 'the empty table', pos: [-0.9, 1.3, 1.2], tgt: [-1.7, 0.9, -0.2], haloAt: [-1.7, 1.0, -0.2], haloSc: 1.0,
+actions: function() { return lilyHook(3); },
 line: 'A red lamp, a glass with a lipstick mark, a chair pushed back a little; whoever sat there is sitting there still, and will not look. [Sam: the empty table]' }
 ];
 var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
@@ -544,7 +549,7 @@ card.innerHTML = html;
 var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN;
+b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; if (link.tagName === 'TW-HOOK') { b.textContent = '[Sam: the lily]'; b.style.color = '#ff3aa8'; }
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
 b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); if (link.tagName !== 'TW-LINK') setTimeout(function() { try { var ar = document.getElementById('bar-arena') || link; ar.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} }, 250); });
 row.appendChild(b);

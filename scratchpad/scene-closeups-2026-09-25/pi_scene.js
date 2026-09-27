@@ -612,25 +612,28 @@ var pass = piHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
 return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !piWrap.contains(l) && l.getClientRects().length > 0; });
 }
+// the lily, when it is still there to take: the hook's own click-replace does the work
+function lilyHook(n) { var pass = piHost.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
 var HOTSPOTS = [
 { root: barG, name: 'the bar', pos: [-0.5, 1.4, 0.9], tgt: [barX, 1.15, -0.9], haloAt: [barX, 1.15, -0.5], haloSc: 1.4,
 actions: function() { return byText(['Get a drink at the bar']); },
 line: 'Copper on the counter, worn to the colour of a penny where the elbows go; nobody is serving, and the pumps have nothing to say to you tonight. [Sam: the bar when no drink is offered]' },
 { root: ham.hit, name: 'the man through the fumes', pos: [0.75, 1.45, 1.0], tgt: [W / 2 - 0.55, 1.25, -1.0], figure: true,
-actions: function() { return byText(['Talk to the Great Ham']); } },
+actions: function() { return byText(['Talk to the Great Ham', '⟡ LORE: The Great Ham ⟡']); } },
 { root: pillarHit, name: 'the third pillar', pos: [0.15, 1.5, 0.4], tgt: [0, 1.45, PZ], haloAt: [0, 1.5, PZ + 0.36], haloSc: 1.3,
 actions: function() { return byText(['Step through the third pillar', 'Perform the synthesis']); },
 onLook: function(on) { pillarLight.intensity = on ? 0.9 : 0; },
 line: 'Between the two broken ones a third, whole, that the room arranges itself around and nobody mentions. It stays shut. [Sam: the pillar with nothing in your pocket]' },
 { root: doorHit, name: 'the threshold', pos: [0.6, 1.35, 1.9], tgt: [W / 2 - 0.4, 0.9, 0.6], haloAt: [W / 2 - 0.3, 1.0, 0.6], haloSc: 1.3,
-actions: function() { return byText(["'I can walk on water'"]); },
+actions: function() { return byText(["'I can walk on water'"]).concat(lilyHook(2)); },
 line: 'The door to Greek Street, and under it the water, which has topped the kerb and is finding its level across the boards. [Sam: the threshold and the flood]' },
 { root: phoneHit, name: 'the telephone', pos: [-0.9, 1.55, 1.2], tgt: [-W / 2 + 0.2, 1.45, barZ1 - 0.3], haloSc: 0.5,
 actions: function() { return passageLinks('.phone-ringing tw-link'); },
 prose: function() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); },
 line: 'The telephone on the back bar, under the bottles, the one that gets answered and then looked over at you. Quiet for now. [Sam: the phone when it is quiet]' },
 { root: winG, name: 'the lattice window', pos: [-0.9, 1.9, -1.6], tgt: [-1.35, 2.3, -D / 2], haloAt: [-1.35, 2.3, -D / 2 + 0.1], haloSc: 1.6,
+actions: function() { return byText(['Back to the street', 'Not tonight.']); },
 line: 'Rain on the diamond panes and the street lamp broken up by them; out there the runoff is a river now, and the river is coming in. [Sam: the lattice window]' }
 ];
 var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
@@ -675,7 +678,7 @@ card.innerHTML = html;
 var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN;
+b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; if (link.tagName === 'TW-HOOK') { b.textContent = '[Sam: the lily]'; b.style.color = '#ff3aa8'; }
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
 b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); });
 row.appendChild(b);

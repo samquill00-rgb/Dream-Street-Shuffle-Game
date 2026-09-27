@@ -547,9 +547,12 @@ var pass = ciHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
 return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !ciWrap.contains(l) && l.getClientRects().length > 0; });
 }
+// the lily, when it is still there to take: the hook's own click-replace does the work
+function lilyHook(n) { var pass = ciHost.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
 var HOTSPOTS = [
 { root: picG, name: 'the pictures', pos: [-0.3, 1.6, -1.2], tgt: [0.4, 1.75, -2.2], haloAt: [0.2, 1.7, -D / 2 + 0.05], haloSc: 1.6,
+actions: function() { return lilyHook(4); },
 line: 'Every inch of the green is hung with something, a nude, a racehorse, a face the room has stopped naming; none of them straight, all of them staying. [Sam: the pictures on the wall]' },
 { root: phoneHit, name: 'the telephone', pos: [-0.2, 1.5, -0.2], tgt: [barX1 - 0.12, 1.2, barZ - 0.1], haloSc: 0.5,
 actions: function() { return passageLinks('.phone-ringing tw-link'); },
@@ -609,7 +612,7 @@ card.innerHTML = html;
 var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN;
+b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; if (link.tagName === 'TW-HOOK') { b.textContent = '[Sam: the lily]'; b.style.color = '#ff3aa8'; }
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
 b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); });
 row.appendChild(b);

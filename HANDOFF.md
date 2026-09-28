@@ -1,3 +1,7 @@
+# Latest: John St John betrayal review — 2026-09-28
+
+Focused narrative and logic review completed after the hut/windows/Coach work. Read `HANDOFF_JOHN_BETRAYAL_REVIEW.md` for the findings, fixes and verification. Existing prose preserved; source rebuilt. The strongest remaining writing needs are Copper’s reason to value the name, how John learns of the betrayal, and Ashton’s motive for intervening. Earlier handoffs follow unchanged.
+
 # Hut fire, smashable windows and Coach ending — handoff for Claude
 
 **2026-09-28. Implemented, visually polished, rebuilt, desktop-tested.**

@@ -1,3 +1,126 @@
+# Soho Square hut fire — handoff for Claude
+
+**2026-09-28. Implemented, visually polished, rebuilt, desktop-tested.**
+
+Sam asked Astra to implement the attached hut-fire brief, then spend a further pass making it more beautiful, dramatic and cinematic, and leave this handoff. This file is self-contained: give Claude this file rather than the very large historical `HANDOFF.md`.
+
+## Read first
+
+- Source: `Dream Street Shuffle.twee`. Never read or hand-edit `Dream Street Shuffle.html`; `python3 sync_html.py` generates it.
+- No git commands were run. Current branch/commit status has not been checked. Sam handles branches, merges and commits in GitHub Desktop.
+- All new player-facing words are pink placeholders for Sam. Do not rewrite his existing prose.
+- The brief's drinking route already exists in this working copy: `$drinksTonight`, `$blackouts`, `$lostToDrink`, and `The Blackout` were all found. No temporary `$blackouts` initialization guard was needed.
+- **Synced with `python3 sync_html.py` after the final changes.**
+- **Safari not run. Phone and reduced-motion walks deliberately deferred**, as the brief requested. Code includes reduced-motion handling, but that is not a claim of browser verification.
+
+## What happens
+
+The new option appears in **Alley: Soho Square** when `$sobriety < 30`, `$blackouts >= 1`, and `$hutBurnt is false`. The player crosses the garden into **Soho Square: the hut**, a full-screen 3D square with three inspectable objects. The hut door offers ignition only if the player has matches and still meets the fork conditions. The king is inspection only. The gate allows walking away.
+
+Ignition enters **Soho Hut Burns**. Once only, it spends one match, sets `$hutBurnt`, applies `($statLoss: $confidence, 12)` and `($statGain: $sobriety, 10)`, and appends `"hut"` to `$lostToDrink` if that variable is an array and does not already contain it. These are proportional-helper inputs, not necessarily twelve and ten absolute percentage points: the test state 66 morale / 25 sobriety became 50 / 40. An empty or malformed match count follows the existing refill convention: refill to five before consuming one.
+
+The fire is a ruined, hollow timber structure with coals, a few dying embers, smoke over the lamps, and a faint remembered gable that disappears. It leads to **Soho Square: after**, then Dean Street. The night continues. Returning to the fire cannot charge stats or matches twice. An invalid direct visit cannot ignite it.
+
+## Exact changed passages
+
+| Passage | Change |
+|---|---|
+| StoryInit | Initializes the sole new story variable, `$hutBurnt`, to false. |
+| UserScript | Adds the square scene; charred map frontage, smoke and cold pools; stations the existing constable near the square after the fire; adds an opt-in composer cleanup method. |
+| Alley: Soho Square | Conditional pink approach link; after burning, substitutes a pink trace for `Soho Hut Art` and hides the gents link. Existing paragraph, one-time bench reward, stash and street exit are retained. |
+| Soho Square: the hut — new, `outdoor` | Scene container, inspection copy, real light/walk-away links. |
+| Soho Hut Burns — new, `outdoor` | Guarded payment and loss record; fire scene and aftermath link. |
+| Soho Square: after — new, `street-night` | Pink aftermath paragraph and return to Dean Street. |
+| Dean Street | Hidden `data-k="hut"` flag prints `burnt`. |
+| Build Notebook | Adds the hut to the lost-to-drink name mapping and a pink struck `[Sam: burnt]` beneath the existing Soho Square map label. |
+| Dawn | Adds just one conditional pink item inside `#dawn-record`, alongside its counts. Closing prose and ending logic are unchanged. |
+
+A source comparison confirmed that **only those six existing passages changed**, plus the three new ones. Drinking passages, the cellar fork and other endings remain byte-identical. Dawn differs solely by the requested record item.
+
+`$hutBurnt` is not reset by the second-night reset. It persists through that continuation; StoryInit clears it on a fresh game. This follows the brief's single initialization and persistent world trace. Do not add a second-night reset casually.
+
+## Visual implementation and where to find it
+
+Search UserScript for:
+
+`// ====== SOHO SQUARE — THE HUT, ITS FIRE AND AFTERIMAGE ======`
+
+It is immediately before `FRENCH HOUSE SCENE — INLINE`. IDs are `sq-container`, `sq-wrap`, and `sq-card`. The same builder handles approach and fire, selected by the container's `data-state`. No new external assets, libraries or audio were added.
+
+The cinematic pass added:
+
+- A lower three-quarter camera, a seven-second gentle arrival, tiny idle drift, a short fade from black, and the existing film-grade/bloom treatment.
+- Cream plaster and dark half-timbering, side braces, tiled roof detail, gutter/downpipe, planked door, leaded windows; after the fire, open walls and a broken roof rather than a recoloured solid box.
+- Framed lantern glass, iron lantern caps, ornamental gate rings, railings, the bench, a more articulated weathered king, bare plane branches and sparse crowns.
+- Distant Georgian sashes, cornices and chimneys; blue-grey mist, warm local light and soft directional shadows. The street remains recognizably night.
+- A small planar reflection target for irregular wet patches: the hut and lights break up in the path. This is a real reflected render, not a painted duplicate.
+- Fading coal light, drifting smoke and sparse embers; a transient line afterimage of the intact gable. There is no wall of orange flame, explosion or fireworks.
+
+The camera and environmental random seed match across the two scene states. Inspection pushes toward the chosen object over 1.25 seconds. Escape, the pink step-back button, or blank-canvas clicks return to the wide view. The lower pink object buttons also expose the inspections to keyboard/button navigation. Actions click the passage's own `tw-link` via `data-sq-action`, so story gates and payment stay in Harlowe. The fire exit is available immediately; there is no forced cut-scene wait.
+
+For future tuning: `layout()` owns the wide camera; `spot(...)` owns close-up camera positions and hit boxes; `frame()` owns mist, smoke, embers and fade timings. `inspect()` builds cards from `data-sq-copy` elements in the passage. The audio insertion point is a comment inside the burnt-scene branch; sound is still Sam's department.
+
+Static meshes sharing a material are combined to reduce draw calls. Reflection targets, composer targets/passes, scene geometry/materials/textures, listeners and the animation loop are released on exit. The shared `dssMakeComposer` now exposes `composer.dssDispose()` using a named resize listener; only this new scene calls it. Existing scene behaviour is unchanged.
+
+## Map and notebook details
+
+The hut still uses tile `(36,7)` in `drawFronts`. It reads the hidden `hut` flag and draws charred ribs instead of the cream facade. The frame loop adds a thin moving smoke smear and faint grey pools around the square. The existing constable is held at tile `(38,10)` for the burnt state, using the existing `STREET_LINES.copMove` when approached. No new constable prose was introduced.
+
+The notebook's existing Soho Square entry is its SVG map label, rather than a separate finds-list entry. The trace sits below that label at SVG `(408,142)`, and the hut also appears in the existing lost-to-drink list. Dawn shows both the ordinary loss count and the specific hut trace.
+
+**Twine bracket gotcha:** the brief's literal `[[[Sam: text]|Passage]]` is parsed as hooks rather than the intended link. New links therefore use `[[&#91;Sam: text&#93;|Passage]]`. The notebook SVG label also needs entity-encoded brackets; raw brackets create a `tw-hook` inside SVG `<text>` and make it disappear. Preserve this encoding when Sam supplies replacements.
+
+## Every pink slot for Sam
+
+All are in `.claude-draft` containers; scene cards read their corresponding passage slots.
+
+- **Alley:** `cross the garden to the hut`; the burnt-hut/closed-gents trace.
+- **Approach:** the paragraph about crossing the locked garden; `light it`; `walk away`; door inspection with matches; door inspection without matches; king inspection; gate inspection.
+- **Fire:** the paragraph about the black shape, embers, smoke and fading light; `turn your back on it`; the fallback `back to the square` for an invalid direct visit.
+- **Aftermath:** the paragraph about what is gone and what follows you; `back to the street`.
+- **Notebook:** `the hut in Soho Square` in the loss list; `burnt` under the map label.
+- **Dawn:** `the hut in Soho Square, burnt.`
+- **Scene controls:** `door`, `king`, `gate`, `step back`, and the location label `Soho Square`.
+
+Each slot is currently framed as `[Sam: …]`. No existing creative wording was replaced. New passage/variable names follow the brief exactly; no missing drinking-route name was guessed. Internal scene IDs and action keys were new implementation choices.
+
+## Verification
+
+Headless Chromium, local HTTP server on port 8777, 1280 × 900. Tests use the project's existing audit harness, adapted for this Mac's Chrome and Python, with source-derived test fixtures injected before Harlowe boots. They do not read the compiled HTML file as source. Native Harlowe links and actual canvas coordinates were exercised.
+
+**43 gameplay checks passed**, covering:
+
+- Closed/open fork, zero blackouts, sobriety exactly 30 and 29, already-burnt state.
+- No-matches door inspection, king inspection, real gate/door clicks, walking away without payment.
+- One match spent, loss added once, repeat-entry protection, invalid direct entry, empty-matchbox refill.
+- Fire → aftermath → Dean Street; burnt alley hides hut art and gents.
+- Notebook loss entry and rendered map trace; Dawn record; scene cleanup.
+- No Harlowe errors or JavaScript errors in the tested cases.
+
+**15 additional checks passed after the cinematic pass**, including all three canvas hotspots remaining inside the desktop frame below the top 150 pixels, actual ignition and exit, resource release, burnt map flag, valid visible notebook SVG text, and no Harlowe/JS errors across that final route.
+
+Screenshots were captured and inspected for approach, door, king, gate, fire, aftermath, burnt map, notebook and Dawn. No phone or reduced-motion walk was run. **Safari not run.**
+
+Evidence and rerunnable test scripts are saved locally in:
+
+`/Users/samquill/.codex/visualizations/2026/09/28/01a0e5ba-87c6-7833-a9cc-deab7d12ad6b/hut-fire/`
+
+Start with `final-approach.png`, `final-fire.png`, `final-map-detail.png`, `final-notebook.png`, `checks.json`, `cinematic-checks.json`, and `source-checks.json`. `test.py` is the gameplay suite; `cinematic_verify.py` is the final visual/navigation walk. These are local evidence files, not committed project assets. A remote Claude session would need them attached separately; adapt the browser/project paths if rerunning on another machine.
+
+## What remains
+
+1. Sam should play the square and supply the pink wording. The scene is now an implemented visual draft for his judgment, not a claim that every artistic choice is final.
+2. Batch the phone and reduced-motion route walks later, including hotspot framing, long pink copy, notebook overlay behaviour, and cleanup. Safari remains untested.
+3. Add sound only when Sam supplies or requests it.
+4. Sam commits using GitHub Desktop. No further implementation is required to make the desktop fork playable.
+
+**Synced, commit when ready.**
+
+
+---
+
+# Earlier session history (preserved)
+
 **STATE 2026-09-28, ~00:10 UTC — Sam's next ask (23:00 UTC): the rooms' objects tied to the plot. Done (fifth commit; log `scene-closeups/Objects tied to the plot log 2026-09-27.md`): every link a venue passage offers is reachable from an object (French window = Leave/Colony/lily, new novelist figure, glass = drink; Colony pictures = lily; Pillars window = Back to the street/Not tonight, threshold + lily, the Ham + lore; Ronnie's stage = setlist, photographs = lore, empty table = lily). `lilyHook(n)` presses the lily hook's own click-replace; its button is a pink placeholder for him to name. Route tests updated to match (fi novelist = ghost 2, pi window buttons, ri stage buttons). Before that: All four rooms lifted. The French (fourth commit; log `scene-closeups/French room lift log 2026-09-27.md`, screenshots `french-lift-2026-09-27/`; desktop walk only, 40 ok twice): bloom pass, wall lamps, gilt on the mirror, house rules board, Ricard plate, tricolore, chalkboard, PRIVÉ notice, half pints, pewter, jug, mats, coat; photo row moved off the blue door. OWED: the phone (390) and reduced-motion walks for Pillars, Colony, Ronnie's and the French as one batch (`xx_routes.py OUT 390` and `OUT 1280 reduced` from scratchpad/audit-2026-09-16, ~10 min each). Before that: Ronnie Scott's lifted (third commit; log `scene-closeups/Ronnies room lift log 2026-09-27.md`, screenshots `ronnies-lift-2026-09-27/`; desktop walk only, 30 ok). Sam asked at 22:33 UTC to park the phone and reduced-motion walks (ten minutes each) until all four rooms are lifted, then run them as one batch. Next the French. Before that: The Colony Room was lifted (second commit; log `scene-closeups/Colony room lift log 2026-09-27.md`, screenshots `colony-lift-2026-09-27/`). Next Ronnie Scott's, then the French. Earlier the same evening: The Pillars room was lifted to the outside Soho scenes' level (Sam's bar: "any of the outside Soho scenes are the strongest"; the French is "still pretty rubbish" too). Same branch `claude/scene-closeups-pe93vp`, one more commit: layered grain, hammered copper, a real mirror and a real flood reflection, fluted broken columns, leaded rose glass, gilt lettering, pump clips, chalkboard, Piranesi prints, clock, coats, the game's bloom pass at the room's size. Navigation untouched; route walks rerun, 0 fails. Log: project files `scene-closeups/Pillars room lift log 2026-09-27.md` (copy `scratchpad/scene-closeups-2026-09-25/LOG-pillars-lift-2026-09-27.md`), screenshots `scene-closeups/pillars-lift-2026-09-27/`. Next, venue by venue: the Colony Room, Ronnie Scott's, then the French, copying the Pillars scene's materials block (`woodTex`, `paintTex`, `roomEnv`, `makeMirror`, the composer) into each. Sam may send photographs.
 
 **STATE 2026-09-26, ~07:30 UTC — Four venues now have a 3D room with close-ups as the passage's own navigation (the French, the Colony Room, the Pillars of Hercules, Ronnie Scott's), all on branch `claude/scene-closeups-pe93vp`, built on Astra's graphics lift d244293 which main does not have. Logs: project files `scene-closeups/The French room as navigation log 2026-09-26.md` and `scene-closeups/Other venues rooms log 2026-09-26.md`, copies in `scratchpad/scene-closeups-2026-09-25/`. If the html conflicts on merge, take either side and re-run `python3 sync_html.py`; the twee is the truth.**

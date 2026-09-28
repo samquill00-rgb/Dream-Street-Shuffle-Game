@@ -1,8 +1,8 @@
-# Soho Square hut fire — handoff for Claude
+# Hut fire, smashable windows and Coach ending — handoff for Claude
 
 **2026-09-28. Implemented, visually polished, rebuilt, desktop-tested.**
 
-Sam asked Astra to implement the attached hut-fire brief, then spend a further pass making it more beautiful, dramatic and cinematic, and leave this handoff. This file is self-contained: give Claude this file rather than the very large historical `HANDOFF.md`.
+Sam asked Astra to implement the attached hut-fire brief, then spend a further pass making it more beautiful, dramatic and cinematic, and leave this handoff. He then added smashable map windows and a Coach and Horses fire ending, explicitly setting its chance to **one in five**. This file is self-contained: give Claude this file rather than the very large historical `HANDOFF.md`.
 
 ## Read first
 
@@ -21,11 +21,11 @@ Ignition enters **Soho Hut Burns**. Once only, it spends one match, sets `$hutBu
 
 The fire is a ruined, hollow timber structure with coals, a few dying embers, smoke over the lamps, and a faint remembered gable that disappears. It leads to **Soho Square: after**, then Dean Street. The night continues. Returning to the fire cannot charge stats or matches twice. An invalid direct visit cannot ignite it.
 
-## Exact changed passages
+## Hut implementation: changed passages
 
 | Passage | Change |
 |---|---|
-| StoryInit | Initializes the sole new story variable, `$hutBurnt`, to false. |
+| StoryInit | Initializes `$hutBurnt` to false (later additions also initialize the three variables below). |
 | UserScript | Adds the square scene; charred map frontage, smoke and cold pools; stations the existing constable near the square after the fire; adds an opt-in composer cleanup method. |
 | Alley: Soho Square | Conditional pink approach link; after burning, substitutes a pink trace for `Soho Hut Art` and hides the gents link. Existing paragraph, one-time bench reward, stash and street exit are retained. |
 | Soho Square: the hut — new, `outdoor` | Scene container, inspection copy, real light/walk-away links. |
@@ -35,7 +35,7 @@ The fire is a ruined, hollow timber structure with coals, a few dying embers, sm
 | Build Notebook | Adds the hut to the lost-to-drink name mapping and a pink struck `[Sam: burnt]` beneath the existing Soho Square map label. |
 | Dawn | Adds just one conditional pink item inside `#dawn-record`, alongside its counts. Closing prose and ending logic are unchanged. |
 
-A source comparison confirmed that **only those six existing passages changed**, plus the three new ones. Drinking passages, the cellar fork and other endings remain byte-identical. Dawn differs solely by the requested record item.
+Before the later window/Coach additions, a source comparison confirmed that only those six existing passages changed, plus the three new ones. Drinking passages, the cellar fork and other endings remain byte-identical. Dawn differs solely by the requested record item.
 
 `$hutBurnt` is not reset by the second-night reset. It persists through that continuation; StoryInit clears it on a fresh game. This follows the brief's single initialization and persistent world trace. Do not add a second-night reset casually.
 
@@ -60,7 +60,7 @@ The camera and environmental random seed match across the two scene states. Insp
 
 For future tuning: `layout()` owns the wide camera; `spot(...)` owns close-up camera positions and hit boxes; `frame()` owns mist, smoke, embers and fade timings. `inspect()` builds cards from `data-sq-copy` elements in the passage. The audio insertion point is a comment inside the burnt-scene branch; sound is still Sam's department.
 
-Static meshes sharing a material are combined to reduce draw calls. Reflection targets, composer targets/passes, scene geometry/materials/textures, listeners and the animation loop are released on exit. The shared `dssMakeComposer` now exposes `composer.dssDispose()` using a named resize listener; only this new scene calls it. Existing scene behaviour is unchanged.
+Static meshes sharing a material are combined to reduce draw calls. Reflection targets, composer targets/passes, scene geometry/materials/textures, listeners and the animation loop are released on exit. The shared `dssMakeComposer` now exposes `composer.dssDispose()` using a named resize listener; the square and the updated Coach scene call it. The Coach also tracks container identity so approach-to-fire replaces the old scene cleanly.
 
 ## Map and notebook details
 
@@ -107,6 +107,39 @@ Evidence and rerunnable test scripts are saved locally in:
 
 Start with `final-approach.png`, `final-fire.png`, `final-map-detail.png`, `final-notebook.png`, `checks.json`, `cinematic-checks.json`, and `source-checks.json`. `test.py` is the gameplay suite; `cinematic_verify.py` is the final visual/navigation walk. These are local evidence files, not committed project assets. A remote Claude session would need them attached separately; adapt the browser/project paths if rerunning on another machine.
 
+## Later additions: smashable windows and one-in-five Coach ending
+
+These are implemented in the same source and rebuilt HTML. Sam explicitly changed the proposed rarity to **1 in 5**.
+
+### Windows
+
+Six reachable panes on Dean Street, Frith Street, Greek Street and Romilly Street become smashable when sobriety is below 30 and at least one blackout has happened. Walk near a pane and press **E**, click the pane, or use the pink smash button. The player stays on the map. Each pane can break once; its dark opening and glass fragments persist when leaving and returning. A brief shard animation accompanies the break. The notebook records the number broken. No invented stat bonus or penalty was added.
+
+`$brokenWindows` is an array of stable IDs: `dean-north`, `dean-west`, `dean-east`, `frith`, `greek`, `romilly`. Search UserScript for `BREAKABLE_WINDOWS`, `nearWindow`, and `smashWindow`; the new `Drunken Street Actions [system]` passage supplies native Harlowe actions and state markers to Dean Street. Canvas actions click these native links, which recheck eligibility and duplication. Window targets are separate from venue door hit boxes.
+
+### Coach and Horses
+
+`$coachFireChance` is set with `(random: 1, 5) is 1`. This is one draw at initialization/reset, retained through hub revisits and saves; it does not reroll whenever the player visits the pub. `$coachBurnt` starts false. Together with `$brokenWindows`, both variables initialize in StoryInit and reset in Start's existing night reset. Header provides type guards for older saves, rolling only when the chance value is absent/not boolean.
+
+The offer requires all of: chance true, Coach not burnt, sobriety below 30, one or more blackouts, matches owned, and `$visitedCentrePoint is false`. Eligible Dean Street includes a Coach approach link even when ordinary quest availability has run out. Existing `Approach The Coach` gains pink **burn down** and **walk away** choices, while ordinary pub entry remains available.
+
+The deliberate fire choice enters `The Coach Burns [outdoor coach-fire-end]`. It rechecks all conditions, spends one match using the existing empty-box refill convention, sets `$coachBurnt`, and records `"coach"` once in `$lostToDrink`. No additional morale/sobriety adjustment was requested or added. Invalid direct entry is harmless. Repeat entry cannot spend again.
+
+The existing detailed Coach exterior becomes blackened, with smoke and dying embers. Normal drinker silhouettes and cigarette effects are hidden. The scene uses the same native-link bridge as the square. Its watcher now checks container identity, disposes the old scene/composer and builds the fire scene on approach-to-fire transitions. Search `makeCoachFire` and `data-coach-action` in UserScript. The exit leads to `Coach Fire Ending [coach-fire-end]`, a terminal pink draft card with restart. It has no Centre Point continuation. The two new passages hide stats. Notebook loss mapping recognizes `coach`.
+
+All new wording remains pink `[Sam: …]` placeholders. Existing creative prose was preserved. The ending deliberately uses its own card rather than `typewriter-page`: that global animation delayed the restart caption and overrode pink text. The restart follows the existing Dawn restart pattern. No new audio was added.
+
+Additional changed passages beyond the hut work: Start, Header, Approach The Coach, plus the three new passages `Drunken Street Actions`, `The Coach Burns`, and `Coach Fire Ending`. UserScript, StoryInit, Dean Street and Build Notebook have further additions. Final build contains **244 passages**.
+
+### Additional verification
+
+- **36 window checks passed:** all six reachable; key/button activation; once-only state; stays on map; damage survives passage changes; sober/no-blackout rejection; no Harlowe or JavaScript errors.
+- **34 Coach checks passed:** one-in-five eligibility is supplied deterministically in fixtures; revisits retain the draw; deliberate ignition; one match/loss; no double charge; normal pub entry retained for ineligible states; blocked after Centre Point; overlay cleanup; terminal ending and visible restart; no Harlowe or JavaScript errors. The exact 1-in-5 expression was inspected rather than estimated from a small random sample.
+- The **15-check cinematic hut route passed again after these additions**.
+- **6 follow-up checks passed:** actual canvas pane click, Coach walk-away with no cost/reroll, overlay cleanup, restart reloads the document, and no errors. See `extra-checks.json`. The harness reinjects its fixture after reload, so restart is verified by navigation rather than by the fixture’s passage name.
+
+Evidence adds `windows_test.py`, `coach_test.py`, `final_extra.py`, their JSON reports, and `windows-before.png`, `windows-after.png`, `coach-choice.png`, `coach-fire.png`, `coach-ending.png`. Fixture audit links visible in some screenshots are test-only and do not exist in the game.
+
 ## What remains
 
 1. Sam should play the square and supply the pink wording. The scene is now an implemented visual draft for his judgment, not a claim that every artistic choice is final.
@@ -116,8 +149,6 @@ Start with `final-approach.png`, `final-fire.png`, `final-map-detail.png`, `fina
 
 **Synced, commit when ready.**
 
-
----
 
 # Earlier session history (preserved)
 

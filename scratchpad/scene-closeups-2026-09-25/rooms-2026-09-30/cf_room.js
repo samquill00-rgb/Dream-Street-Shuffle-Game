@@ -63,11 +63,11 @@ mesh(new THREE.CylinderGeometry(0.22, 0.14, 0.14, 16, 1, true), new THREE.MeshSt
 var cook = k.ghost(-W / 2 + 1.3, 0, 0.4, 41, 0.3, false, false, 1.0);
 var steamTex = tex(128, 128, function(cx, w, h) { var g = cx.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(240,244,255,0.25)'); g.addColorStop(0.4, 'rgba(200,210,230,0.1)'); g.addColorStop(1, 'rgba(160,170,190,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
 var steam = []; for (var s = 0; s < 4; s++) { var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: steamTex, transparent: true, opacity: 0.16, depthWrite: false })); sp.position.set(-W / 2 + 0.55, 1.3 + rnd(s) * 0.4, -1.1 + s * 0.35); sp.scale.set(0.8, 0.8, 1); sp.userData = { ph: s * 1.7, y0: sp.position.y }; scene.add(sp); steam.push(sp); }
-var rangeHit = mesh(new THREE.BoxGeometry(3.6, 1.7, 1.1), M.hidden, 0, 0.85, 0, rangeG);
+var rangeHit = mesh(new THREE.BoxGeometry(3.6, 1.5, 1.1), M.hidden, 0, 0.75, 0, rangeG);
 // ---------- THE MENU BOARD over the range, the prices in plastic letters ----------
 var menuTex = tex(768, 256, function(cx, w, h) { cx.fillStyle = '#1a1a1a'; cx.fillRect(0, 0, w, h); cx.strokeStyle = '#8a8a80'; cx.lineWidth = 4; cx.strokeRect(6, 6, w - 12, h - 12); cx.fillStyle = '#f0f0e8'; cx.font = 'bold 26px Arial,sans-serif'; cx.textAlign = 'left'; var L = [['COD & CHIPS', '38p'], ['HADDOCK & CHIPS', '40p'], ['ROCK & CHIPS', '35p'], ['CHIPS', '10p'], ['SAVELOY', '8p'], ['CHICKEN CHOW MEIN', '45p'], ['SPECIAL FRIED RICE', '40p'], ['CURRY SAUCE', '5p']]; for (var i = 0; i < L.length; i++) { var col = i < 4 ? 0 : 1, row = i % 4; cx.fillStyle = i % 2 ? '#f0f0e8' : '#ffd040'; cx.fillText(L[i][0], 30 + col * 380, 60 + row * 46); cx.textAlign = 'right'; cx.fillText(L[i][1], 350 + col * 380, 60 + row * 46); cx.textAlign = 'left'; } for (var g = 0; g < 700; g++) { cx.fillStyle = 'rgba(0,0,0,0.25)'; cx.fillRect(rnd(g) * w, rnd(g * 3) * h, 2, 1); } });
-var menu = mesh(new THREE.PlaneGeometry(3.0, 1.0), new THREE.MeshStandardMaterial({ map: menuTex, roughness: 0.6 }), -W / 2 + 0.03, 1.75, 0.0); menu.rotation.y = Math.PI / 2;
-var menuLight = new THREE.PointLight(0xfff0d0, 0.5, 3, 2); menuLight.position.set(-W / 2 + 0.8, 2.3, 0.0); scene.add(menuLight);
+var menu = mesh(new THREE.PlaneGeometry(3.0, 1.0), new THREE.MeshStandardMaterial({ map: menuTex, roughness: 0.6 }), -W / 2 + 0.03, 2.05, 0.0); menu.rotation.y = Math.PI / 2;
+var menuLight = new THREE.PointLight(0xfff0d0, 0.5, 3, 2); menuLight.position.set(-W / 2 + 0.8, 2.5, 0.0); scene.add(menuLight);
 // ---------- THE COUNTER you eat at, along the right wall, your plate on it ----------
 var counterG = new THREE.Group(); counterG.position.set(W / 2 - 0.35, 0, 0.2); scene.add(counterG);
 var formica = new THREE.MeshStandardMaterial({ color: 0xe8b8a0, roughness: 0.3, envMap: k.roomEnv, envMapIntensity: 0.5 });
@@ -127,7 +127,7 @@ actions: function() { return k.lilyHook(1); },
 line: 'The street goes past it, and everybody in the street goes past it, and none of them is her. [Sam: the window once she has passed]' },
 { root: rangeHit, name: 'the range', pos: [0.5, 1.5, 0.0], tgt: [-W / 2 + 0.55, 1.2, 0.0], haloAt: [-W / 2 + 0.7, 1.3, 0.0], haloSc: 2.4,
 line: 'Two fryers going, the oil dark and talking to itself, the cabinet lamp keeping the fish the colour of a good idea. He has his back to you. [Sam: the range]' },
-{ root: menu, name: 'the menu', pos: [0.3, 1.8, 0.0], tgt: [-W / 2, 1.75, 0.0], haloAt: [-W / 2 + 0.15, 1.75, 0.0], haloSc: 2.6,
+{ root: menu, name: 'the menu', pos: [0.3, 1.9, 0.0], tgt: [-W / 2, 2.05, 0.0], haloAt: [-W / 2 + 0.15, 2.05, 0.0], haloSc: 2.6,
 line: 'Plastic letters pushed into the felt, some of them upside down, the prices in the old money crossed out and the new ones beside them. [Sam: the menu]' },
 { root: ticketHit, name: 'the ticket', pos: [1.0, 1.5, 1.4], tgt: [W / 2 - 0.45, 1.0, 0.75], haloAt: [W / 2 - 0.45, 1.06, 0.75], haloSc: 0.45,
 line: 'Your order ticket, a number, a scrap of characters, a thumbprint in grease. Everybody else has dropped theirs on the floor. [Sam: the ticket]' },

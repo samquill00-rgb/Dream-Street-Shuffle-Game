@@ -17132,6 +17132,70 @@ window.dssScene = (function() {
 // each scene a one-line bind (registers the resize + tracks the trio)
 // and a one-line dispose (called from the setInterval !container branch).
 window._dssThreeRegistry = window._dssThreeRegistry || {};
+// ====== LOST WEBGL CONTEXT GUARD (2026-10-03) ======
+// Safari drops a page's WebGL context under GPU pressure (and sometimes on
+// the very first frame of a scene). Three r128 then passes a null shader to
+// gl.shaderSource, the TypeError escapes the animation frame, and Harlowe's
+// global error screen replaces the whole game. Three things stop that:
+//  1. every 'webglcontextlost' is preventDefault-ed, which is what lets the
+//     browser fire 'webglcontextrestored' (three re-initialises on it);
+//  2. WebGLRenderer.render skips a frame while its context is lost, and a
+//     throw that happens because the context is lost is logged, not raised;
+//  3. the same wrap goes on every EffectComposer dssMakeComposer builds.
+// Genuine bugs still throw: only lost-context errors are swallowed.
+window.addEventListener('webglcontextlost', function(ev) {
+  ev.preventDefault();
+  if (!window._dssGLLostNoted) { window._dssGLLostNoted = true; try { console.warn('DSS: WebGL context lost; waiting for the browser to restore it'); } catch(e) {} }
+}, true);
+window.dssGuardThree = function(T) {
+  if (!T || !T.WebGLRenderer || !T.WebGLRenderer.prototype || T.WebGLRenderer.prototype._dssGuarded) return;
+  var proto = T.WebGLRenderer.prototype;
+  proto._dssGuarded = true;
+  var render = proto.render;
+  proto.render = function() {
+    var gl = null;
+    try { gl = this.getContext(); } catch(e) {}
+    if (gl && gl.isContextLost && gl.isContextLost()) return;
+    try { return render.apply(this, arguments); }
+    catch(err) {
+      if (gl && gl.isContextLost && gl.isContextLost()) { try { console.warn('DSS: frame skipped, WebGL context lost mid-render', err); } catch(e) {} return; }
+      throw err;
+    }
+  };
+};
+window.dssGuardComposerRender = function(composer, renderer) {
+  if (!composer || composer._dssGuarded) return composer;
+  composer._dssGuarded = true;
+  var render = composer.render;
+  composer.render = function() {
+    var gl = null;
+    try { gl = renderer.getContext(); } catch(e) {}
+    if (gl && gl.isContextLost && gl.isContextLost()) return;
+    try { return render.apply(this, arguments); }
+    catch(err) {
+      if (gl && gl.isContextLost && gl.isContextLost()) { try { console.warn('DSS: composer frame skipped, WebGL context lost', err); } catch(e) {} return; }
+      throw err;
+    }
+  };
+  return composer;
+};
+// Scenes load three.min.js lazily from 32 places, so catch THREE as it lands
+// rather than editing each loader: three assigns globalThis.THREE = {} and
+// then fills it, so the guard runs on the microtask after that script ends.
+(function() {
+  if (typeof THREE !== 'undefined') { window.dssGuardThree(THREE); return; }
+  var held;
+  try {
+    Object.defineProperty(window, 'THREE', {
+      configurable: true, enumerable: true,
+      get: function() { return held; },
+      set: function(v) {
+        held = v;
+        Promise.resolve().then(function() { window.dssGuardThree(held); });
+      }
+    });
+  } catch(e) {}
+})();
 // ============================================================
 // CINEMATIC POST-PROCESSING (shared) — the Fagin's-den pipeline for every
 // 3D scene: UnrealBloom + Bokeh depth-of-field via EffectComposer, plus a
@@ -17152,6 +17216,7 @@ window.dssPostScriptURLs = [
   'vendor/three/postprocessing/BokehPass.js'
 ];
 window.dssLoadPost = function(done) {
+  if (typeof THREE !== 'undefined') window.dssGuardThree(THREE);
   if (typeof THREE !== 'undefined' && THREE.EffectComposer && THREE.BokehPass) { done(); return; }
   var urls = window.dssPostScriptURLs;
   (function next(i) {
@@ -17167,7 +17232,8 @@ window.dssMakeComposer = function(scene, camera, renderer, opts) {
   opts = opts || {};
   if (typeof THREE === 'undefined' || typeof THREE.EffectComposer !== 'function' ||
       typeof THREE.UnrealBloomPass !== 'function' || typeof THREE.BokehPass !== 'function') return null;
-  var composer = new THREE.EffectComposer(renderer);
+  window.dssGuardThree(THREE);
+  var composer = window.dssGuardComposerRender(new THREE.EffectComposer(renderer), renderer);
   composer.addPass(new THREE.RenderPass(scene, camera));
   // Bokeh re-renders the whole scene for depth each frame — affordable only
   // in the small interior scenes, so it is opt-in via opts.bokeh

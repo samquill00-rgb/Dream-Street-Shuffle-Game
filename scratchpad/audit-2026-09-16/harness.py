@@ -5,7 +5,7 @@ rewritten so that after its own (set:) defaults it applies BASE + seeds and
 (go-to:)s target; then clicks each action link text in order; returns a dict
 with passage name, tw-errors, JS errors, link texts and a state readout.
 """
-import re, json, sys, time
+import re, json, sys, time, os
 from playwright.sync_api import sync_playwright
 
 TWEE = "/home/user/Dream-Street-Shuffle-Game/Dream Street Shuffle.twee"
@@ -76,6 +76,9 @@ class Game:
             start = None
         header = BODIES["header header"] + AUDIT_HEADER if audit_header else None
         p.add_init_script("(" + INIT_JS + ")(" + json.dumps({"start": start, "header": header}) + ")")
+        if os.environ.get("DSS_FAST"):
+            # functional walks only: keep the plain renderer (no bloom composer), which is several times faster under software GL
+            p.add_init_script("Object.defineProperty(window, 'dssMakeComposer', { configurable: true, get: function() { return null; }, set: function() {} });")
         p.goto(URL, wait_until="domcontentloaded")
         p.wait_for_timeout(1300)
         return p

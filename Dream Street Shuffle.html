@@ -2185,6 +2185,9 @@ border-left: 2px solid rgba(140, 120, 180, 0.3);
 .dss-room-prose .lily-icon-svg { width: 74px; height: 82px; }
 .dss-room-prose .lore-box { max-height: none; }
 .dss-room-card { bottom: 40px !important; }
+.dss-room-card .fi-wayon-btn { opacity: 0.72; background: transparent !important; }
+.dss-room-hovername { position: absolute; z-index: 9005; pointer-events: none; font: 10px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: rgba(225,215,190,0.6); text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1); white-space: nowrap; opacity: 0; transition: opacity 0.35s ease; }
+.dss-room-prose-lost { border-color: rgba(200,168,106,0.45); }
 @media (max-width: 600px) {
   .dss-room-prose { bottom: 64px; max-height: 40%; padding: 10px 14px 8px; width: 94%; font-size: 0.86em; }
   .dss-room-card { bottom: 64px !important; }
@@ -29682,6 +29685,14 @@ function blankLine(n) { return n.nodeType === 1 && /^(BR|TW-CONSECUTIVE-BR)$/.te
 var i, j;
 for (i = 0; i < all.length && !solid(all[i]); i++) if (blankLine(all[i])) all[i].classList.add('dss-trim');
 for (j = all.length - 1; j > i && !solid(all[j]); j--) if (blankLine(all[j])) all[j].classList.add('dss-trim');
+// between the words, a run of blank lines left by silent hooks (the ringing phone's (if:), a (set:) on its
+// own line) keeps one paragraph's gap and no more
+function gap(n) { return !solid(n); }
+var breaks = 0;
+for (var q = i; q < j; q++) {
+if (!gap(all[q])) { breaks = 0; continue; }
+if (blankLine(all[q]) && ++breaks > 2) all[q].classList.add('dss-trim');
+}
 }
 trim();
 function hasContent(el) {
@@ -29696,7 +29707,25 @@ if (hasContent(n)) return true;
 return false;
 }
 var full = false;
+// If the browser takes the room's WebGL context and does not give it back (Safari does this
+// across tabs of the same site), the objects that hold the passage's choices cannot be drawn,
+// so after a few seconds without it the panel shows those links itself; they are claimed
+// again the moment the context is restored.
+var lostAt = 0, lostLong = false;
+if (canvas) {
+canvas.addEventListener('webglcontextlost', function() { lostAt = Date.now(); }, true);
+canvas.addEventListener('webglcontextrestored', function() { lostAt = 0; }, true);
+}
 function refresh(claimed) {
+var lostNow = !!lostAt && (Date.now() - lostAt > 2500);
+if (lostNow !== lostLong) {
+lostLong = lostNow;
+box.classList.toggle('dss-room-prose-lost', lostLong);
+var c = wrap.querySelector('.dss-room-card');
+if (c) { c.style.opacity = lostLong ? '0' : c.style.opacity; if (lostLong) c.style.pointerEvents = 'none'; }
+if (lostLong) { box.classList.remove('dss-room-prose-away'); try { console.warn('DSS: room context lost; the panel offers the passage\'s links itself'); } catch (e) {} }
+}
+if (lostLong) claimed = [];
 claimed = (claimed || []).filter(function(e) { return e && e.nodeType === 1 && e.tagName !== 'TW-HOOK' && box.contains(e) && !e.closest('.phone-ringing'); });
 Array.prototype.forEach.call(box.querySelectorAll('.dss-claimed'), function(e) { if (claimed.indexOf(e) < 0) e.classList.remove('dss-claimed'); });
 Array.prototype.forEach.call(box.querySelectorAll('.dss-claimed-wrap'), function(e) { e.classList.remove('dss-claimed-wrap'); });
@@ -29715,7 +29744,7 @@ trim();
 // as the round begins the panel scrolls to the arena, so the game is in view and not the words above it
 if (full && !wasFull) { var arena = box.querySelector('#bar-arena'); if (arena) box.scrollTop += arena.getBoundingClientRect().top - box.getBoundingClientRect().top - 6; }
 }
-function setMode(m) { box.classList.toggle('dss-room-prose-away', m !== 'idle'); }
+function setMode(m) { box.classList.toggle('dss-room-prose-away', m !== 'idle' && !lostLong); }
 function inBox(ev) { var r = box.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom && getComputedStyle(box).visibility !== 'hidden'; }
 // what the passage would have taken the press on: its link, the lily hook, a button
 function under(ev) {
@@ -29759,6 +29788,22 @@ canvas.addEventListener('pointerup', up);
 canvas.addEventListener('pointercancel', function() { drag = null; });
 }
 return { box: box, refresh: refresh, setMode: setMode, down: down };
+};
+// The object's name, faint, beside the pointer while it rests on something that can be looked at.
+// A trace rather than a label: Courier, letterspaced, low alpha, gone the moment the pointer leaves.
+window.dssRoomHoverName = function(wrap) {
+var el = document.createElement('div');
+el.className = 'dss-room-hovername';
+wrap.appendChild(el);
+var shown = null;
+wrap.addEventListener('pointerdown', function() { if (shown !== null) { shown = null; el.style.opacity = '0'; } }, true);
+return function(name, ev) {
+if (!name || !ev) { if (shown !== null) { shown = null; el.style.opacity = '0'; } return; }
+var r = wrap.getBoundingClientRect();
+el.style.left = (ev.clientX - r.left + 16) + 'px';
+el.style.top = (ev.clientY - r.top + 20) + 'px';
+if (shown !== name) { shown = name; el.textContent = name; el.style.opacity = '1'; }
+};
 };
 // >>>> DSS ROOM KIT BEGIN
 // ====== THE ROOM KIT — what the six later rooms share (2026-09-30) ======
@@ -30131,12 +30176,14 @@ var hits = ray.intersectObjects(hotspotRoots, true);
 for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
 return null;
 }
+var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(wrap) : function() {};
 canvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; return; }
+if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
 var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; }
-else { halo.visible = false; canvas.style.cursor = 'default'; }
+if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
+else { halo.visible = false; canvas.style.cursor = 'default'; hoverName(null); }
 });
+canvas.addEventListener('pointerleave', function() { hoverName(null); });
 canvas.addEventListener('pointerdown', function(ev) {
 if (camMode === 'tween') return;
 if (camMode === 'inspect') { stepBack(); return; }
@@ -30156,6 +30203,7 @@ setTimeout(function() { hint.style.opacity = '0'; }, 9000);
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry[WRAP].camera = camera;
+window._dssThreeRegistry[WRAP].hotspots = HOTSPOTS;
 window._dssThreeRegistry[WRAP].state = function() { return { camMode: camMode, camK: camK, active: active, animId: animId, frames: frameCount }; };
 window._dssThreeRegistry[WRAP].spots = HOTSPOTS.map(function(h) { return { name: h.name, tgt: h.tgt, haloAt: h.haloAt, figure: !!h.figure }; });
 var frameCount = 0;
@@ -31036,12 +31084,14 @@ var hits = ray.intersectObjects(hotspotRoots, true);
 for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
 return null;
 }
+var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(fiWrap) : function() {};
 fiCanvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; return; }
+if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
 var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; fiCanvas.style.cursor = 'pointer'; }
-else { halo.visible = false; fiCanvas.style.cursor = 'default'; }
+if (spot) { haloAt(spot); halo.visible = true; fiCanvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
+else { halo.visible = false; fiCanvas.style.cursor = 'default'; hoverName(null); }
 });
+fiCanvas.addEventListener('pointerleave', function() { hoverName(null); });
 fiCanvas.addEventListener('pointerdown', function(ev) {
 if (camMode === 'tween') return;
 if (camMode === 'inspect') { stepBack(); return; }
@@ -31063,6 +31113,7 @@ setTimeout(function() { fiHint.style.opacity = '0'; }, 9000);
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry['fi-wrap'].camera = camera;
+window._dssThreeRegistry['fi-wrap'].hotspots = HOTSPOTS;
 function fiAnimate() {
 fiAnimId = requestAnimationFrame(fiAnimate);
 var dt = Math.min(0.1, clock.getDelta());
@@ -31787,12 +31838,14 @@ var hits = ray.intersectObjects(hotspotRoots, true);
 for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
 return null;
 }
+var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(ciWrap) : function() {};
 ciCanvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; return; }
+if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
 var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; ciCanvas.style.cursor = 'pointer'; }
-else { halo.visible = false; ciCanvas.style.cursor = 'default'; }
+if (spot) { haloAt(spot); halo.visible = true; ciCanvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
+else { halo.visible = false; ciCanvas.style.cursor = 'default'; hoverName(null); }
 });
+ciCanvas.addEventListener('pointerleave', function() { hoverName(null); });
 ciCanvas.addEventListener('pointerdown', function(ev) {
 if (camMode === 'tween') return;
 if (camMode === 'inspect') { stepBack(); return; }
@@ -31812,6 +31865,7 @@ setTimeout(function() { ciHint.style.opacity = '0'; }, 9000);
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry['ci-wrap'].camera = camera;
+window._dssThreeRegistry['ci-wrap'].hotspots = HOTSPOTS;
 function ciAnimate() {
 ciAnimId = requestAnimationFrame(ciAnimate);
 var dt = Math.min(0.1, clock.getDelta());
@@ -32468,7 +32522,7 @@ var HOTSPOTS = [
 actions: function() { return byText(['Get a drink at the bar']); },
 line: 'Copper on the counter, worn to the colour of a penny where the elbows go; nobody is serving, and the pumps have nothing to say to you tonight. [Sam: the bar when no drink is offered]' },
 { root: ham.hit, name: 'the man through the fumes', pos: [0.75, 1.45, 1.0], tgt: [W / 2 - 0.55, 1.25, -1.0], figure: true,
-actions: function() { return byText(['Talk to the Great Ham', '⟡ LORE: The Great Ham ⟡']); } },
+actions: function() { return byText(['Talk to the Great Ham', '⟡ LORE: The Great Ham ⟡', 'LORE: The Great Ham']); } },
 { root: pillarHit, name: 'the third pillar', pos: [0.15, 1.5, 0.4], tgt: [0, 1.45, PZ], haloAt: [0, 1.5, PZ + 0.36], haloSc: 1.3,
 actions: function() { return byText(['Step through the third pillar', 'Perform the synthesis']); },
 onLook: function(on) { pillarLight.intensity = on ? 0.9 : 0; },
@@ -32602,12 +32656,14 @@ var hits = ray.intersectObjects(hotspotRoots, true);
 for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
 return null;
 }
+var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(piWrap) : function() {};
 piCanvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; return; }
+if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
 var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; piCanvas.style.cursor = 'pointer'; }
-else { halo.visible = false; piCanvas.style.cursor = 'default'; }
+if (spot) { haloAt(spot); halo.visible = true; piCanvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
+else { halo.visible = false; piCanvas.style.cursor = 'default'; hoverName(null); }
 });
+piCanvas.addEventListener('pointerleave', function() { hoverName(null); });
 piCanvas.addEventListener('pointerdown', function(ev) {
 if (camMode === 'tween') return;
 if (camMode === 'inspect') { stepBack(); return; }
@@ -32628,6 +32684,7 @@ setTimeout(function() { piHint.style.opacity = '0'; }, 9000);
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry['pi-wrap'].camera = camera;
+window._dssThreeRegistry['pi-wrap'].hotspots = HOTSPOTS;
 function piAnimate() {
 piAnimId = requestAnimationFrame(piAnimate);
 var dt = Math.min(0.1, clock.getDelta());
@@ -33090,7 +33147,7 @@ var exitTex = tex(128, 48, function(cx, w, h) { cx.fillStyle = '#0a2a10'; cx.fil
 mesh(new THREE.PlaneGeometry(0.4, 0.14), new THREE.MeshBasicMaterial({ map: exitTex, toneMapped: false }), 0, 2.36, 0.052, doorG);
 var exitLight = new THREE.PointLight(0x40e060, 0.3, 2.5, 1.6); exitLight.position.set(W / 2 - 0.4, 2.3, -0.6); scene.add(exitLight);
 var exitGlow = glow(W / 2 - 0.1, 2.36, -0.6, 0.6, 0.35, 0x60ff80);
-var doorHit = mesh(new THREE.BoxGeometry(1.1, 2.5, 0.5), new THREE.MeshBasicMaterial({ visible: false }), 0, 1.2, 0.15, doorG);
+var doorHit = mesh(new THREE.BoxGeometry(1.1, 2.5, 0.2), new THREE.MeshBasicMaterial({ visible: false }), 0, 1.2, 0.05, doorG); // thin, so it does not stand between the camera and the photographs beside it
 // ---------- THE FIGURES: the three on stage, in the light, and the room in the dark ----------
 function ghostTex(seed, seated, bright) {
 return tex(96, 192, function(cx, w, h) {
@@ -33166,7 +33223,7 @@ actions: function() { return passageLinks('.phone-ringing tw-link'); },
 prose: function() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); },
 line: 'The telephone at the end of the bar, with a cloth over it during the set. It has your name somewhere in it. [Sam: the phone when it is quiet]' },
 { root: picG, name: 'the photographs', pos: [2.0, 1.6, 0.2], tgt: [W / 2, 1.7, -1.5], haloAt: [W / 2 - 0.1, 1.7, -1.5], haloSc: 1.6,
-actions: function() { return byText(["⟡ LORE: Ronnie Scott's ⟡"]); },
+actions: function() { return byText(["⟡ LORE: Ronnie Scott's ⟡", "LORE: Ronnie Scott's"]); },
 line: 'The wall of them, every one lit from the side and grinning or not, everyone who has stood in that light and gone home. [Sam: the photographs]' },
 { root: nearTable, name: 'the empty table', pos: [-0.9, 1.3, 1.2], tgt: [-1.7, 0.9, -0.2], haloAt: [-1.7, 1.0, -0.2], haloSc: 1.0,
 actions: function() { return lilyHook(3); },
@@ -33289,12 +33346,14 @@ var hits = ray.intersectObjects(hotspotRoots, true);
 for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
 return null;
 }
+var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(riWrap) : function() {};
 riCanvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; return; }
+if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
 var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; riCanvas.style.cursor = 'pointer'; }
-else { halo.visible = false; riCanvas.style.cursor = 'default'; }
+if (spot) { haloAt(spot); halo.visible = true; riCanvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
+else { halo.visible = false; riCanvas.style.cursor = 'default'; hoverName(null); }
 });
+riCanvas.addEventListener('pointerleave', function() { hoverName(null); });
 riCanvas.addEventListener('pointerdown', function(ev) {
 if (camMode === 'tween') return;
 if (camMode === 'inspect') { stepBack(); return; }
@@ -33314,6 +33373,7 @@ setTimeout(function() { riHint.style.opacity = '0'; }, 9000);
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry['ri-wrap'].camera = camera;
+window._dssThreeRegistry['ri-wrap'].hotspots = HOTSPOTS;
 function riAnimate() {
 riAnimId = requestAnimationFrame(riAnimate);
 var dt = Math.min(0.1, clock.getDelta());
@@ -33592,8 +33652,8 @@ var cornice = new THREE.MeshStandardMaterial({ color: 0x8a7a50, roughness: 0.9 }
 [[W, 0, -D / 2 + 0.06, 0], [W, 0, D / 2 - 0.06, 0], [D, -W / 2 + 0.06, 0, Math.PI / 2], [D, W / 2 - 0.06, 0, Math.PI / 2]].forEach(function(c) { var m = mesh(new THREE.BoxGeometry(c[0], 0.12, 0.12), cornice, c[1], H - 0.06, c[2]); m.rotation.y = c[3]; });
 // ---------- THE WINDOWS onto Greek Street: frosted, etched, the lamps outside ----------
 var winG = new THREE.Group(); scene.add(winG);
-function frostTex(seed, word) { return tex(256, 384, function(cx, w, h) { cx.fillStyle = '#c8d0c0'; cx.fillRect(0, 0, w, h); for (var i = 0; i < 9000; i++) { cx.fillStyle = i % 2 ? 'rgba(255,255,255,0.08)' : 'rgba(120,130,110,0.08)'; cx.fillRect(rnd(seed + i) * w, rnd(seed + i * 3) * h, 1.5, 1.5); } cx.strokeStyle = 'rgba(255,255,255,0.55)'; cx.lineWidth = 2; cx.strokeRect(14, 14, w - 28, h - 28); cx.beginPath(); cx.arc(w / 2, h / 2, 60, 0, 6.3); cx.stroke(); for (var a = 0; a < 8; a++) { cx.beginPath(); cx.moveTo(w / 2 + Math.cos(a) * 60, h / 2 + Math.sin(a) * 60); cx.lineTo(w / 2 + Math.cos(a) * 82, h / 2 + Math.sin(a) * 82); cx.stroke(); } cx.font = 'bold 30px Georgia,serif'; cx.textAlign = 'center'; cx.fillStyle = 'rgba(255,255,255,0.7)'; cx.save(); cx.translate(w / 2, h / 2); cx.scale(-1, 1); cx.fillText(word, 0, 11); cx.restore(); }); }
-var frostMat = function(seed, word) { return new THREE.MeshStandardMaterial({ map: frostTex(seed, word), emissive: 0x9ab0a0, emissiveMap: frostTex(seed, word), emissiveIntensity: 0.28, roughness: 0.6, transparent: true, opacity: 0.92 }); };
+function frostTex(seed, word) { return tex(256, 384, function(cx, w, h) { cx.fillStyle = '#7e8a7c'; cx.fillRect(0, 0, w, h); for (var i = 0; i < 9000; i++) { cx.fillStyle = i % 2 ? 'rgba(255,255,255,0.08)' : 'rgba(120,130,110,0.08)'; cx.fillRect(rnd(seed + i) * w, rnd(seed + i * 3) * h, 1.5, 1.5); } cx.strokeStyle = 'rgba(255,255,255,0.55)'; cx.lineWidth = 2; cx.strokeRect(14, 14, w - 28, h - 28); cx.beginPath(); cx.arc(w / 2, h / 2, 60, 0, 6.3); cx.stroke(); for (var a = 0; a < 8; a++) { cx.beginPath(); cx.moveTo(w / 2 + Math.cos(a) * 60, h / 2 + Math.sin(a) * 60); cx.lineTo(w / 2 + Math.cos(a) * 82, h / 2 + Math.sin(a) * 82); cx.stroke(); } cx.font = 'bold 30px Georgia,serif'; cx.textAlign = 'center'; cx.fillStyle = 'rgba(255,255,255,0.7)'; cx.save(); cx.translate(w / 2, h / 2); cx.scale(-1, 1); cx.fillText(word, 0, 11); cx.restore(); }); }
+var frostMat = function(seed, word) { return new THREE.MeshStandardMaterial({ map: frostTex(seed, word), emissive: 0x9ab0a0, emissiveMap: frostTex(seed, word), emissiveIntensity: 0.22, roughness: 0.6, transparent: true, opacity: 0.92 }); };
 var winLights = [];
 mesh(new THREE.BoxGeometry(0.2, 2.2, 1.6), M.hidden, -W / 2 + 0.05, 1.95, -2.2, winG); mesh(new THREE.BoxGeometry(0.2, 2.2, 1.6), M.hidden, -W / 2 + 0.05, 1.95, 0.6, winG);
 [[-2.2, 'ALES'], [0.6, 'STOUT']].forEach(function(wn, i) {
@@ -33602,8 +33662,8 @@ mesh(new THREE.BoxGeometry(1.5, 2.0, 0.1), M.darkWood, 0, 0, 0, g);
 mesh(new THREE.PlaneGeometry(0.62, 0.86), frostMat(i * 7, wn[1]), -0.36, 0.45, 0.06, g); mesh(new THREE.PlaneGeometry(0.62, 0.86), frostMat(i * 7 + 1, ''), 0.36, 0.45, 0.06, g);
 mesh(new THREE.PlaneGeometry(0.62, 0.86), frostMat(i * 7 + 2, ''), -0.36, -0.47, 0.06, g); mesh(new THREE.PlaneGeometry(0.62, 0.86), frostMat(i * 7 + 3, wn[1] === 'ALES' ? 'WINES' : 'SPIRITS'), 0.36, -0.47, 0.06, g);
 mesh(new THREE.BoxGeometry(1.6, 0.08, 0.16), M.darkWood, 0, -1.02, 0.02, g);
-var wl = new THREE.PointLight(0xd8e8c0, 0.55, 4.5, 1.7); wl.position.set(0, 0.2, 0.5); g.add(wl); winLights.push(wl);
-k.glow(0, 0.3, 0.12, 2.2, 0.22, 0xc0d8b0, g);
+var wl = new THREE.PointLight(0xd8e8c0, 0.42, 4.5, 1.7); wl.position.set(0, 0.2, 0.5); g.add(wl); winLights.push(wl);
+k.glow(0, 0.3, 0.12, 2.2, 0.14, 0xc0d8b0, g);
 });
 // ---------- THE BAR along the back wall: mahogany, a brass rail, the optics, the mirror ----------
 var barG = new THREE.Group(); scene.add(barG);
@@ -33673,7 +33733,7 @@ mesh(new THREE.TorusGeometry(0.032, 0.004, 6, 20), new THREE.MeshStandardMateria
 var glassHit = mesh(new THREE.BoxGeometry(0.24, 0.2, 0.2), M.hidden, 0, 0.08, 0, glassG);
 // the cow: Friesian, tall, standing behind the bar under the optics, breathing
 var cowG = new THREE.Group(); cowG.position.set(1.2, 0, -D / 2 + 0.75); cowG.rotation.y = -0.35; scene.add(cowG);
-var hideTex = tex(256, 256, function(cx, w, h) { cx.fillStyle = '#e8e4dc'; cx.fillRect(0, 0, w, h); cx.fillStyle = '#141210'; for (var i = 0; i < 9; i++) { cx.beginPath(); var x = rnd(i * 3) * w, y = rnd(i * 5) * h; cx.moveTo(x, y); for (var a = 0; a < 7; a++) { var r = 22 + rnd(i * 7 + a) * 34; cx.lineTo(x + Math.cos(a * 0.9) * r, y + Math.sin(a * 0.9) * r); } cx.closePath(); cx.fill(); } for (var i = 0; i < 4000; i++) { cx.fillStyle = 'rgba(0,0,0,0.06)'; cx.fillRect(rnd(i) * w, rnd(i * 3) * h, 1, 2); } });
+var hideTex = tex(256, 256, function(cx, w, h) { cx.fillStyle = '#b9b2a4'; cx.fillRect(0, 0, w, h); cx.fillStyle = '#141210'; for (var i = 0; i < 9; i++) { cx.beginPath(); var x = rnd(i * 3) * w, y = rnd(i * 5) * h; cx.moveTo(x, y); for (var a = 0; a < 7; a++) { var r = 22 + rnd(i * 7 + a) * 34; cx.lineTo(x + Math.cos(a * 0.9) * r, y + Math.sin(a * 0.9) * r); } cx.closePath(); cx.fill(); } for (var i = 0; i < 4000; i++) { cx.fillStyle = 'rgba(0,0,0,0.06)'; cx.fillRect(rnd(i) * w, rnd(i * 3) * h, 1, 2); } });
 var hide = new THREE.MeshStandardMaterial({ map: hideTex, roughness: 0.9 });
 var cowBody = mesh(new THREE.BoxGeometry(0.7, 0.75, 1.5), hide, 0, 1.25, 0, cowG); cowBody.castShadow = true;
 mesh(new THREE.BoxGeometry(0.62, 0.3, 0.9), hide, 0, 0.75, -0.1, cowG);
@@ -33728,7 +33788,7 @@ actions: function() { return k.byText(['Ride the beast']); },
 line: 'Tall under the optics, black and white, and breathing, which the optics are not. She has a bridle on, and a bell, and no opinion of you at all. [Sam: the cow when she is not for riding]' },
 { root: bernard.hit, name: 'Jeffrey Bernard', pos: [0.4, 1.5, 0.3], tgt: [-0.3, 0.7, barZ + 0.9], haloAt: [-0.3, 1.2, barZ + 0.9], haloSc: 1.0,
 line: 'On his stool, which is his the way the pub is his, with his eyes hefted up at the optics and nothing else moving. Unwell, as the paper says. [Sam: Jeffrey Bernard]' },
-{ root: glassHit, name: 'his glass', pos: [0.6, 1.55, barZ + 1.2], tgt: [0.45, 1.18, barZ + 0.2], haloAt: [0.45, 1.25, barZ + 0.2], haloSc: 0.5,
+{ root: glassHit, name: 'his glass', pos: [-0.15, 1.5, barZ + 1.2], tgt: [0.45, 1.18, barZ + 0.2], haloAt: [0.45, 1.25, barZ + 0.2], haloSc: 0.5,
 line: 'A large vodka with a lime in it, and a wet ring, and under the wet ring a betting slip with a horse\'s name half gone. [Sam: the glass and the slip]' },
 { root: optics, name: 'the optics', pos: [0.2, 1.7, -0.5], tgt: [0.2, 2.2, -D / 2 + 0.2], haloAt: [0.2, 2.2, -D / 2 + 0.3], haloSc: 2.4,
 line: 'Upside down in a row and lit from beneath, every one a quarter gill from you and every one of them the same colour as the wallpaper by now. [Sam: the optics]' },
@@ -33738,6 +33798,7 @@ line: 'The telephone behind the bar, at the end where the barman can pretend not
 { root: winG, name: 'the windows', pos: [-1.6, 1.7, -0.6], tgt: [-W / 2, 1.9, -2.2], haloAt: [-W / 2 + 0.15, 1.9, -2.2], haloSc: 2.2,
 line: 'Frosted and etched, ALES and STOUT and WINES backwards, and the lamp on Greek Street coming through them like the day never does. [Sam: the windows]' },
 { root: doorHit, name: 'the door', pos: [-2.2, 1.5, 0.3], tgt: [-W / 2, 1.3, -0.75], haloAt: [-W / 2 + 0.15, 1.3, -0.75], haloSc: 1.3,
+actions: function() { var l = document.querySelector('.header-links .back-one-link tw-link'); return (l && l.getClientRects().length > 0) ? [l] : []; }, // Bernard said find your own way out: the door offers the page's own exit (it stays in the header too)
 line: 'The door to Greek Street. He said to find your own way out, and this is a way, and it is out. [Sam: the door]' },
 { root: gentsHit, name: 'the gents', pos: [2.2, 1.5, -0.4], tgt: [W / 2, 1.2, -1.6], haloAt: [W / 2 - 0.15, 1.2, -1.6], haloSc: 1.3,
 line: 'The door you came out of, with the smell coming out of it after you. GENTS. You know the tiles in there better than you know most people. [Sam: the gents]' }
@@ -33771,7 +33832,7 @@ optGlow.material.opacity = 0.3 + 0.02 * Math.sin(t * 0.8);
 // decided in JS.
 window.dssRoomKit({
 id: 'ti', caption: "TRISHA'S, GREEK STREET", captionColor: 'rgba(255,120,180,0.28)',
-bg: 0x0a0306, fog: [0x140408, 0.05], exposure: 0.7, bloom: { bloomStrength: 0.5, bloomRadius: 0.7, bloomThreshold: 0.6 },
+bg: 0x0a0306, fog: [0x140408, 0.05], exposure: 0.78, bloom: { bloomStrength: 0.5, bloomRadius: 0.7, bloomThreshold: 0.6 },
 env: ['#7a2040', '#3a1020', '#0a0306', '#ff80b0'],
 wash: 'linear-gradient(180deg,rgba(40,6,20,0.35) 0%,rgba(20,4,10,0.06) 35%,rgba(20,4,10,0.06) 60%,rgba(8,2,4,0.5) 100%)',
 vignette: 'radial-gradient(ellipse at 50% 44%,transparent 22%,rgba(10,0,4,0.76) 100%)',
@@ -33892,7 +33953,9 @@ var backHit = mesh(new THREE.BoxGeometry(1.0, 2.3, 0.5), M.hidden, 0, 1.1, 0.15,
 // ---------- LIGHT: red, low, incarnadine ----------
 scene.add(new THREE.AmbientLight(0x4a1020, 0.9));
 scene.add(new THREE.HemisphereLight(0x8a2040, 0x100408, 0.5));
-var barLamp = new THREE.PointLight(0xffb080, 0.8, 3.5, 1.6); barLamp.position.set(barX - 0.3, 2.0, barZ); scene.add(barLamp);
+var barLamp = new THREE.PointLight(0xffb080, 1.1, 3.5, 1.6); barLamp.position.set(barX - 0.3, 2.0, barZ); scene.add(barLamp);
+// the photographs' wall keeps a little of the afternoon: a low warm light so the frames read in their close-up
+var picLight = new THREE.PointLight(0xffc090, 0.55, 2.6, 1.8); picLight.position.set(-W / 2 + 0.5, 1.9, 0.6); scene.add(picLight);
 var hazeTex = tex(128, 128, function(cx, w, h) { var g = cx.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,140,180,0.2)'); g.addColorStop(0.4, 'rgba(200,80,120,0.1)'); g.addColorStop(1, 'rgba(120,30,60,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
 var haze = [[-0.3, 1.4, -D / 2 + 1.2, 3.6, 2.0], [1.9, 1.6, D / 2 - 0.6, 2.2, 2.2]].map(function(p) { var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: hazeTex, transparent: true, opacity: 0.14, depthWrite: false, blending: THREE.AdditiveBlending })); sp.position.set(p[0], p[1], p[2]); sp.scale.set(p[3], p[4], 1); scene.add(sp); return sp; });
 k.ghost(-W / 2 + 0.5, 0.05, 1.2, 27, 0.16, true, false); k.ghost(barX - 0.6, 0, 0.6, 29, 0.14, false, false);

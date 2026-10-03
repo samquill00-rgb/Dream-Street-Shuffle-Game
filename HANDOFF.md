@@ -1,3 +1,80 @@
+# Fire visual lift — 2026-10-03
+
+## Scope and source
+
+Only the two exterior scene sections inside `Dream Street Shuffle.twee` → `UserScript [script]` changed. A saved before/after comparison proves everything outside those sections byte-identical, including all ten rooms, `dssRoomKit`, `dssRoomProse`, the shared registry/context-guard/composer/grade/audio helpers, every Harlowe passage, every authored or pink line, gates, stat helpers, random roll, links, notebook, maps and endings. No git commands used. HANDOFF.md is the requested gitignored report. HTML is generated only.
+
+## Moments and sections
+
+- **Soho Square — the missing gable.** In `SOHO SQUARE — THE HUT, ITS FIRE AND AFTERIMAGE`, the burnt branch loses its remaining opaque wall, roof, door and glazing fills; the broad horizontal timber boxes become narrow edge beams. This reveals the original cracked ribs and the space through them. A faint gable trace fades over fourteen seconds instead of disappearing almost immediately. The 32 coal chips cool, embers die close to the ground, and layered smoke spreads and settles without respawning. Its warmer colour and greater visibility follow proximity to the square's lamps. Existing planar puddle reflections capture the changing scene. No heat haze. Approach geometry, lighting, camera, controls and prose stay as before.
+- **Coach — the windows leaving the street.** In `COACH AND HORSES SCENE — INLINE`, six ground-floor panes and three lit upper rooms now fail in sequence. Dressed upper panes retain their textures in a fire-only standard material; the normal approach is untouched. Pub materials are isolated before darkening so shared materials cannot darken the distant street. The hanging sign becomes a silhouette. Smoke settles around the corner lamp; small low embers expire without recycling. Existing puddle reflections lose warm colour and settle to cold traces. Camera, card, exit button and native-link bridge stay in place.
+- **The joins.** `window.dssFireTrace`, defined in the square section and used by both exits, captures the just-rendered canvas into a temporary, inert 2D canvas (`#dss-fire-trace`) before clicking the real Harlowe link. The WebGL scene still disposes normally through the existing registry. The captured image dissolves over the arriving text and removes itself; it adds no renderer, context-loss handler, composer or audio. It does not delay the choice or lock input.
+- **Coach Fire Ending stays plain HTML.** No persistent backdrop, new scene, changed paragraphs, button or restart behaviour. Its existing fade remains; the incoming street frame provides the quiet transition. Soho Square: after remains text only.
+
+## Pink slots
+
+**None added. None rewritten.** There are no new captions, labels, hotspots or buttons. `#dss-fire-trace` is aria-hidden and contains no text.
+
+## Knobs
+
+Settings live at `sqFire` and `chFireTune` near the starts of the respective scene sections. `pace: 1` is the default; a larger value slows all fire-state decay and window failures. Times below are at pace 1. No hard cutoff: the comfortable half-minute settle remains, with a faint smoke tail.
+
+| Knob | Hut | Coach |
+|---|---|---|
+| Smoke count | 15 (plus existing 10 ambient mist layers) | 18 (existing street mist retained) |
+| Ember count | 18 soft glows, plus 32 coal chips | 16 small points |
+| Smoke base colour | `0x8798a5` | `0x87939f` |
+| Smoke opacity setting | `.27 × (.25 + .75 × lamp proximity) × exp(-t/27)` | `.25 × (.3 + .7 × lamp proximity) × exp(-t/28)` |
+| Smoke lamplight tint | `0xd7c6a7` | `0xd5c09d` |
+| Smoke settling time constant | 18 s, bounded displacement | 20 s, bounded displacement |
+| Ember light colour / peak | `0xa46549` / 1.45 | `0xa46549` / .65 |
+| Ember light decay | `1.45 × exp(-t/12) + .015` | `.65 × exp(-t/12)` |
+| Ember opacity decay | `.42 × exp(-(t+i×.31)/(3+i%5))`; individual 3–7 s decay | `.35 × exp(-t/5)` |
+| Maximum ember height | about 1.09 scene units | about .85 scene units |
+| Coal opacity | `.5 × exp(-t/12)` | n/a |
+| Gable memory opacity | `.065 × exp(-t/14)` | n/a |
+| Reduced-motion still time | 8 s | 12 s |
+| Exit dissolve | `exitFade: 2.4` s | `exitFade: 2.4` s |
+
+Reduced motion uses a 0.12 s exit dissolve and a fixed fire image. No added movement loop, wind cycle, heat haze or sound. Both original audio insertion comments remain.
+
+Coach window failure starts (`fireFailure = 2 + i × 1.65`), each with a smooth 2.8 s fade from emissive intensity .32 to zero:
+
+1. Greek ground, z=-1.5: 2.00 s.
+2. Greek ground, z=-3.5: 3.65 s.
+3. Romilly ground, x=-2: 5.30 s.
+4. Romilly ground, x=-4: 6.95 s.
+5. Romilly ground, x=-6: 8.60 s.
+6. Romilly ground, x=-8: 10.25 s.
+7. Greek upper, y=6 / z=-2.5: 11.90 s.
+8. Romilly upper, y=6 / x=-3.5: 13.55 s.
+9. Romilly upper, y=10 / x=-7.5: 15.20 s; dark by 18 s.
+
+Coach puddles: warmth falls with a 9 s time constant; opacity falls to .025 from .215 with 8 s and 11 s time constants. Pub glow lights keep their 20 s time constant; door light remains .08. All are scaled by `chFireTune.pace`.
+
+## Verification
+
+- `node --check` passed on separately extracted square and Coach scene scripts after final edits.
+- **132/132 route checks passed** in headless Google Chrome over `http://localhost:8777`, served from the repo with `python3 -m http.server 8777`.
+- Four configurations: desktop 1280×900; phone 390×844; reduced motion at both sizes. Each walked the actual rendered approach/fire/exit buttons. Screenshots cover both approaches, fires at approximately 2, 10 and 25 seconds, the hut aftermath, the Coach ending after its fade, and restart. Phone controls inspected clear of the top 150 px and the bottom-right mute bell.
+- Hut in every configuration: morale **60 → 48**, sobriety **20 → 30**, matches **5 → 4**, loss contains `hut`. Returned through aftermath to Dean Street; hub flag reads burnt. Returned alley has no hut fork or gents. Notebook loss and map trace remain, and the carried state still appears in the Dawn record.
+- Coach in every configuration: morale **60 → 60**, sobriety **20 → 20**, matches **5 → 4**, loss contains `coach`; ending reached and restart reload verified. The ending passage is byte-identical and has no Dawn route.
+- Both exit traces appear on the join and disappear afterwards; both old WebGL wraps disappear. Existing `_dssBindScene` / `_dssDisposeWrap`, `dssLoadPost`, `dssMakeComposer` and `dssFilmGrade` paths are retained. No new WebGL scene or private guard/composer implementation.
+- **Zero JavaScript page errors, console errors, `tw-error` elements or visible Harlowe fatal-error pages** in the completed eight routes. The first development run caught an upper-window material mismatch; it was fixed before the complete passing run.
+- Reduced-motion image comparison between 10 s and 25 s: **zero changed RGB channels** in the scene band (y=180–559) for both fires at both widths. Still times remain hut 8 s / Coach 12 s.
+- Source comparison proves the mechanics, one-in-five roll, every gate, every passage and the ten rooms are unchanged. Existing pink strings in both edited sections also compare identically.
+- Test setup uses the requested `?dev=1#dss-debug-jump=…` routes. This checkout's debug menu has no arbitrary variable editor, so browser-only preboot Harlowe `(set:)` fixtures supply sobriety 20, blackout 1, matches, chance and Centre Point state. Temporary native audit links read fresh state and reach the carried-state alley/Dawn checks; they are not source changes. Route screenshots of text pages may show those audit links. `*-clean-after.png` files show the unmodified cards without them.
+- Evidence and rerunnable scripts: [/Users/samquill/.codex/visualizations/2026/10/03/01a102f9-269d-7853-8cd3-94cb19117657/fire-lift](/Users/samquill/.codex/visualizations/2026/10/03/01a102f9-269d-7853-8cd3-94cb19117657/fire-lift). Start with `checks.json`, `source-checks.json`, `still-image-checks.json`, `fire-walk.cjs`, and the desktop/phone fire PNGs. The clean-card script separately captures the plain text pages after four seconds; it does not substitute for the route walk.
+
+
+**Safari not run.**
+
+**Rebuilt with `python3 sync_html.py` in the repo root.** Confirmed the new markers in generated HTML with a bounded grep; HTML was never read as source or hand-edited. Synced, commit when ready.
+
+---
+
+# Earlier handoff (preserved)
+
 # Latest: John St John betrayal review — 2026-09-28
 
 Focused narrative and logic review completed after the hut/windows/Coach work. Read `HANDOFF_JOHN_BETRAYAL_REVIEW.md` for the findings, fixes and verification. Existing prose preserved; source rebuilt. The strongest remaining writing needs are Copper’s reason to value the name, how John learns of the betrayal, and Ashton’s motive for intervening. Earlier handoffs follow unchanged.

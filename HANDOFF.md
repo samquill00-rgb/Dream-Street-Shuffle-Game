@@ -1,3 +1,34 @@
+# Title page lift — 2026-10-04
+
+## Fixed
+
+The opening briefly displayed as a 650 px-wide miniature because `passageFadeIn` transforms `tw-passage`. A transformed ancestor becomes the containing block for its fixed children. When the animation ended, the title jumped to the viewport. Measured before: 650×783 at x=395/y=80 on a 1440×900 laptop; after the entrance it became 1440×900.
+
+The Title passage now identifies its root as `#dss-title` and gives only its own containing passage an opacity-only entrance (`dst-arrive`, 1.4 s), with no transform. All sampled first frames now fill the viewport. This leaves other passage entrances untouched.
+
+## Graphics
+
+The three hard-edged SVG light ribbons are replaced by feathered, widening cones with a second inner volume, distance falloff, soft source glows and faint elliptical reflected pools. Existing fog is blurred into layers. The shared `dssFilmGrade` supplies grain and grading. This is lightweight SVG depth, not a new WebGL scene: no new renderer, assets, audio, composer or context-handling code.
+
+Existing lilies remain, with opacity reduced to .52. Title typography uses `clamp(32px,4.15vw,60px)`; the content has a bounded phone width. Existing title, credit, save notice, BEGIN and CONTINUE wording are unchanged. No new pink slots. The Continue detection/load script is byte-identical.
+
+Tuning: outer cone peak opacity .22; inner volume multiplier .35; feather blur 5 SVG units; light breathing periods 23/29/31 s with narrower opacity ranges (.74–1, .70–1, .76–1). Reduced motion removes title, fog, petal and shimmer animations and holds the light at t=6 s. The animation loop exits when the title leaves the DOM.
+
+## Checked
+
+- Headless Chrome over the local HTTP server, 1440×900 laptop, 390×844 phone, and reduced motion.
+- 121 laptop, 163 phone and 206 reduced-motion opening-frame samples: all exactly at viewport origin and full viewport size; no intermediate small title.
+- BEGIN works in all three configurations; no JavaScript errors. Screenshots inspected at laptop and phone sizes.
+- Real Harlowe autosave: both BEGIN and CONTINUE appear and fit on laptop and phone; Continue resumes the saved night. Its normal arrival interlude is allowed, rather than assuming the hub is the first visible restored passage.
+- Spotlight SVG children confirmed in the SVG namespace; reduced-motion beam stays fixed, no title animations run, and resizing fills the new viewport.
+- `node --check` passed on both Title script bodies. Title wording/native links compare identically to the before snapshot; the previous fire sections are unchanged.
+- Concurrent Easter Island edits were observed in the shared twee and preserved. This title work only edited the Title passage; an entire-file comparison against the earlier snapshot would also include those independent changes.
+- Evidence: `/Users/samquill/.codex/visualizations/2026/10/03/01a102f9-269d-7853-8cd3-94cb19117657/title-lift/` — before/after screenshots, frame samples, saved-game screenshots, final-checks.json and rerunnable scripts.
+
+**Rebuilt with `python3 sync_html.py` in the repo root**, then confirmed title markers with a bounded grep of the generated HTML. HTML never hand-edited or read as source. No git commands. **Safari not run.** Synced, commit when ready.
+
+---
+
 # Fire visual lift — 2026-10-03
 
 ## Scope and source

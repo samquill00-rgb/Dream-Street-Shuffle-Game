@@ -2,7 +2,7 @@
 PYTHONPATH=. python3 ../strangers-loop-2026-09-25/enter_shot.py <slug> <outdir>"""
 import sys, os
 from harness import *
-STR = {'gooch': ("(set: $mantraComplete to true)", 47, 26, 'ArrowRight'), 'morris': ("(set: $nazcaTracing to true)", 8, 17, 'ArrowLeft'),
+STR = {'gooch': ("(set: $mantraComplete to true)", 47, 26, 'ArrowRight'), 'troose': ("(set: $nazcaTracing to true)", 8, 17, 'ArrowLeft'),
        'longshanks': ("(set: $easterGlyph to true)", 8, 29, 'ArrowLeft'), 'songstrong': ("(set: $pyramidNumber to true)", 31, 39, 'ArrowDown'), 'fetch': ("(set: $ezekielVision to true)", 17, 9, 'ArrowUp')}
 slug, out = sys.argv[1], sys.argv[2]; flag, c, r, key = STR[slug]
 g = Game(width=1212, height=900)

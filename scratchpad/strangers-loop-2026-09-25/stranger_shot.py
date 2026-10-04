@@ -10,6 +10,7 @@ STR = {
   'fetch':      ("(set: $ezekielVision to true)",   17, 8,  'up',    6),
   'truze':     ("(set: $nazcaTracing to true)",    7,  17, 'left',  5),
   'longshanks': ("(set: $easterGlyph to true)",     7,  29, 'left',  5),
+  'line':       ("(set: $afterMidnight to true)",   7,  3,  'up',    5),
   'songstrong': ("(set: $pyramidNumber to true)",   31, 40, 'down',  5),
 }
 slug, out = sys.argv[1], sys.argv[2]; walk = 'walk' in sys.argv; reduced = 'reduced' in sys.argv

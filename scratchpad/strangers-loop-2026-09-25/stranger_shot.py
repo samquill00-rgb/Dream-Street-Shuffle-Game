@@ -8,7 +8,7 @@ from harness import *
 STR = {
   'gooch':      ("(set: $mantraComplete to true)", 48, 26, 'right', 5),
   'fetch':      ("(set: $ezekielVision to true)",   17, 8,  'up',    6),
-  'troose':     ("(set: $nazcaTracing to true)",    7,  17, 'left',  5),
+  'truze':     ("(set: $nazcaTracing to true)",    7,  17, 'left',  5),
   'longshanks': ("(set: $easterGlyph to true)",     7,  29, 'left',  5),
   'songstrong': ("(set: $pyramidNumber to true)",   31, 40, 'down',  5),
 }

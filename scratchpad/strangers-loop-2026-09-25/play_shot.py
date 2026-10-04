@@ -2,7 +2,7 @@
 PYTHONPATH=. python3 ../strangers-loop-2026-09-25/play_shot.py <slug> <width> <outdir>"""
 import sys, os
 from harness import *
-STR = {'gooch': ("(set: $mantraComplete to true)", 46, 26), 'troose': ("(set: $nazcaTracing to true)", 9, 17),
+STR = {'gooch': ("(set: $mantraComplete to true)", 46, 26), 'truze': ("(set: $nazcaTracing to true)", 9, 17),
        'longshanks': ("(set: $easterGlyph to true)", 9, 29), 'songstrong': ("(set: $pyramidNumber to true)", 31, 38), 'fetch': ("(set: $ezekielVision to true)", 17, 12)}
 slug, width, out = sys.argv[1], int(sys.argv[2]), sys.argv[3]; flag, c, r = STR[slug]
 g = Game(width=width, height=900 if width > 600 else 844)

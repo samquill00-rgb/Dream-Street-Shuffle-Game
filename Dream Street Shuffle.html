@@ -2203,6 +2203,14 @@ border-left: 2px solid rgba(140, 120, 180, 0.3);
 .dss-room-card .fi-wayon-btn { opacity: 0.72; background: transparent !important; }
 .dss-room-hovername { position: absolute; z-index: 9005; pointer-events: none; font: 10px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: rgba(225,215,190,0.6); text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1); white-space: nowrap; opacity: 0; transition: opacity 0.35s ease; }
 .dss-room-prose-lost { border-color: rgba(200,168,106,0.45); }
+/* 2026-10-05: the room's veil covers the whole viewport (it sits in tw-story, under the fixed header),
+   so the words have the screen rather than the room's box and a short window reads the whole passage;
+   long words scroll the veil as a page. The darker wash also covers the room while it warms up. */
+.dss-room-fixed { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 900; background: rgba(4,2,1,0.86); padding: 164px 0 36px; justify-content: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.dss-room-fixed.dss-room-veil-full { background: rgba(4,2,1,0.72); padding: 164px 0 20px; }
+.dss-room-sheet { display: flex; flex-direction: column; align-items: center; width: 100%; margin: auto; flex: none; }
+.dss-room-fixed .dss-room-prose { flex: none; max-height: none; overflow: visible; }
+@media (max-width: 600px) { .dss-room-fixed { padding: 196px 0 20px; } }
 @media (max-width: 600px) {
   .dss-room-veil { padding: 48px 0 68px; }
   .dss-room-prose { padding: 10px 14px 8px; width: 94%; font-size: 0.86em; }
@@ -29779,7 +29787,14 @@ window._dssDisposeWrap('fh-wrap');
 // modal lives inside the panel and must stay pinned to the viewport.
 window.dssRoomProse = function(host, wrap, canvas) {
 var root = host.parentNode; if (!root) return null;
-var veil = document.createElement('div'); veil.className = 'dss-room-veil';
+// 2026-10-05 (the tighten pass's first recommendation, Sam: "The entry modal is short. In an 800 px
+// window it shows about three lines in a box over the room ... let it cover the whole screen, which
+// also hides any flicker as the room warms up"): the veil is fixed to the viewport, not the room's
+// box, and lives beside the passage in tw-story like the plain pages' panel (a passage can carry a
+// transform, and a fixed veil inside a transformed box is drawn at the box's size). It is taken away
+// with the room (see the watcher at the end).
+var veil = document.createElement('div'); veil.className = 'dss-room-veil dss-room-fixed';
+var sheet = document.createElement('div'); sheet.className = 'dss-room-sheet';
 var box = document.createElement('div'); box.className = 'dss-room-prose';
 Array.prototype.slice.call(root.childNodes).forEach(function(n) {
 if (n === host || n === wrap) return;
@@ -29788,11 +29803,20 @@ if (n.nodeType === 1 && /^(TW-SIDEBAR|SCRIPT|STYLE)$/.test(n.tagName)) return;
 if (n.nodeType === 1 && n.tagName === 'TW-INCLUDE' && /^(header|footer|startup|debug)/.test(n.getAttribute('type') || '')) return;
 box.appendChild(n);
 });
-veil.appendChild(box);
+sheet.appendChild(box);
 var dismiss = document.createElement('div'); dismiss.className = 'dss-room-dismiss claude-draft';
 dismiss.textContent = '[Sam: into the room]';
-veil.appendChild(dismiss);
-wrap.appendChild(veil);
+sheet.appendChild(dismiss);
+veil.appendChild(sheet);
+var story = wrap.closest('tw-story') || wrap;
+story.appendChild(veil);
+var gone = setInterval(function() { if (wrap.isConnected) return; clearInterval(gone); if (veil.parentNode) veil.parentNode.removeChild(veil); }, 300);
+// the panel starts below whatever the fixed header shows (its exit link hangs under the stat bar)
+function clearHeader() {
+var under = 0;
+Array.prototype.forEach.call(document.querySelectorAll('.stat-bars tw-link, #stat-bars-lifted tw-link'), function(l) { var r = l.getBoundingClientRect(); if (r.height) under = Math.max(under, r.bottom); });
+veil.style.paddingTop = under ? Math.max(parseFloat(getComputedStyle(veil).paddingTop) || 0, under + 12) + 'px' : '';
+}
 var strip = document.createElement('div'); strip.className = 'dss-room-strip';
 wrap.appendChild(strip);
 // Harlowe's line breaks around the passage's silent hooks leave a run of blank
@@ -29863,9 +29887,9 @@ var stripOn = !full && mode === 'room' && (camMode === 'idle' || lostLong);
 strip.classList.toggle('dss-room-strip-on', stripOn);
 wrap.dataset.words = full ? 'full' : (modal ? 'modal' : 'room');
 }
-function open() { mode = 'modal'; box.scrollTop = 0; render(); }
+function open() { mode = 'modal'; veil.scrollTop = 0; clearHeader(); render(); }
 function close() { mode = 'room'; shownProse = prose(); render(); try { wrap.dispatchEvent(new CustomEvent('dss-room-words-away')); } catch (e) {} }
-veil.addEventListener('pointerdown', function(ev) { if (ev.target === veil || ev.target === dismiss) { ev.stopPropagation(); if (!full) close(); } });
+veil.addEventListener('pointerdown', function(ev) { if (ev.target === veil || ev.target === sheet || ev.target === dismiss) { ev.stopPropagation(); if (!full) close(); } });
 dismiss.addEventListener('click', function(ev) { ev.stopPropagation(); if (!full) close(); });
 // the strip: a button for each link the room's objects leave to the passage, pressing the real one
 var stripKey = null;
@@ -29927,11 +29951,11 @@ trim();
 offer(claimed);
 // the words come up on arrival, and again whenever the passage has put new ones in the panel
 var now = prose();
-if (shownProse === null) { if (now) mode = 'modal'; shownProse = now; }
+if (shownProse === null) { if (now) { mode = 'modal'; clearHeader(); } shownProse = now; }
 else if (mode === 'room' && now !== shownProse && !full) { shownProse = now; open(); }
 render();
 // as the round begins the panel scrolls to the arena, so the game is in view and not the words above it
-if (full && !wasFull) { var arena = box.querySelector('#bar-arena'); if (arena) box.scrollTop += arena.getBoundingClientRect().top - box.getBoundingClientRect().top - 6; }
+if (full && !wasFull) { var arena = box.querySelector('#bar-arena'); if (arena) veil.scrollTop += arena.getBoundingClientRect().top - veil.getBoundingClientRect().top - 6; }
 }
 function setMode(m) { camMode = m; render(); }
 function down() { try { wrap.dispatchEvent(new CustomEvent('dss-room-emptytap')); } catch (e) {} }
@@ -30017,6 +30041,20 @@ return { mount: mount, wants: wants };
 // obvious. I want it more like that." So when the words are sent away, and again on a tap on empty room,
 // every object with a choice or a look shows a small ring with its name beside it (the name its card
 // already carries), holds, then fades back to the resting glow. Names only while the reveal lasts.
+// 2026-10-05: the hint used to come up 2.6 s after the room was built, behind the entry modal where
+// nobody saw it (the tighten pass's second recommendation). Now it waits for the words to be sent away
+// and shows a moment after the reveal's rings; a room that opens without words shows it as before.
+window.dssRoomHint = function(wrap, hint, peak) {
+var shown = false, t1 = null, t2 = null;
+function show() {
+if (shown) return; shown = true;
+t1 = setTimeout(function() { hint.style.opacity = String(peak == null ? 0.6 : peak); }, 900);
+t2 = setTimeout(function() { hint.style.opacity = '0'; }, 7300);
+}
+wrap.addEventListener('dss-room-words-away', show);
+setTimeout(function() { if (wrap.dataset.words !== 'modal') show(); }, 2600);
+return { show: show };
+};
 window.dssRoomReveal = function(wrap, camera, glows, idle) {
 var layer = document.createElement('div'); layer.className = 'dss-room-reveal'; wrap.appendChild(layer);
 var marks = glows.map(function(g) {
@@ -30465,8 +30503,7 @@ var hint = document.createElement('div');
 hint.textContent = spec.hint || 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 hint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:' + cDim + ';opacity:0;letter-spacing:3px;z-index:9003;pointer-events:none;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
 wrap.appendChild(hint);
-setTimeout(function() { hint.style.opacity = '0.6'; }, 2600);
-setTimeout(function() { hint.style.opacity = '0'; }, 9000);
+if (window.dssRoomHint) window.dssRoomHint(wrap, hint, 0.6); else { setTimeout(function() { hint.style.opacity = '0.6'; }, 2600); setTimeout(function() { hint.style.opacity = '0'; }, 9000); }
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry[WRAP].camera = camera;
@@ -31377,8 +31414,7 @@ var fiHint = document.createElement('div');
 fiHint.textContent = 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 fiHint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:rgba(200,180,140,0.3);letter-spacing:3px;z-index:9003;pointer-events:none;opacity:0;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
 fiWrap.appendChild(fiHint);
-setTimeout(function() { fiHint.style.opacity = '1'; }, 2600);
-setTimeout(function() { fiHint.style.opacity = '0'; }, 9000);
+if (window.dssRoomHint) window.dssRoomHint(fiWrap, fiHint, 1); else { setTimeout(function() { fiHint.style.opacity = '1'; }, 2600); setTimeout(function() { fiHint.style.opacity = '0'; }, 9000); }
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry['fi-wrap'].camera = camera;
@@ -32131,8 +32167,7 @@ var ciHint = document.createElement('div');
 ciHint.textContent = 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 ciHint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:rgba(190,200,150,0.3);letter-spacing:3px;z-index:9003;pointer-events:none;opacity:0;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
 ciWrap.appendChild(ciHint);
-setTimeout(function() { ciHint.style.opacity = '1'; }, 2600);
-setTimeout(function() { ciHint.style.opacity = '0'; }, 9000);
+if (window.dssRoomHint) window.dssRoomHint(ciWrap, ciHint, 1); else { setTimeout(function() { ciHint.style.opacity = '1'; }, 2600); setTimeout(function() { ciHint.style.opacity = '0'; }, 9000); }
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry['ci-wrap'].camera = camera;
@@ -32952,8 +32987,7 @@ var piHint = document.createElement('div');
 piHint.textContent = 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 piHint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:rgba(190,200,150,0.3);letter-spacing:3px;z-index:9003;pointer-events:none;opacity:0;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
 piWrap.appendChild(piHint);
-setTimeout(function() { piHint.style.opacity = '1'; }, 2600);
-setTimeout(function() { piHint.style.opacity = '0'; }, 9000);
+if (window.dssRoomHint) window.dssRoomHint(piWrap, piHint, 1); else { setTimeout(function() { piHint.style.opacity = '1'; }, 2600); setTimeout(function() { piHint.style.opacity = '0'; }, 9000); }
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry['pi-wrap'].camera = camera;
@@ -33645,8 +33679,7 @@ var riHint = document.createElement('div');
 riHint.textContent = 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 riHint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:rgba(190,200,150,0.3);letter-spacing:3px;z-index:9003;pointer-events:none;opacity:0;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
 riWrap.appendChild(riHint);
-setTimeout(function() { riHint.style.opacity = '1'; }, 2600);
-setTimeout(function() { riHint.style.opacity = '0'; }, 9000);
+if (window.dssRoomHint) window.dssRoomHint(riWrap, riHint, 1); else { setTimeout(function() { riHint.style.opacity = '1'; }, 2600); setTimeout(function() { riHint.style.opacity = '0'; }, 9000); }
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
 window._dssThreeRegistry['ri-wrap'].camera = camera;

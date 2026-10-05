@@ -72,7 +72,7 @@ var scene = new THREE.Scene();
 scene.background = new THREE.Color(spec.bg || 0x050304);
 if (spec.fog) scene.fog = new THREE.FogExp2(spec.fog[0], spec.fog[1]);
 var aspect = sz.w / sz.h;
-var portrait = aspect < 1;
+var portrait = aspect < 1.4;
 var FOV = spec.fov || [92, 70];
 var camera = new THREE.PerspectiveCamera(portrait ? FOV[0] : FOV[1], aspect, 0.05, 40);
 var CAM = spec.cam(portrait);
@@ -90,7 +90,7 @@ var origResize = window._dssThreeRegistry[WRAP].resize;
 window._dssThreeRegistry[WRAP].resize = function() {
 sz = size(); wrap.style.height = sz.h + 'px';
 camera.aspect = sz.w / sz.h;
-camera.fov = camera.aspect < 1 ? FOV[0] : FOV[1];
+camera.fov = camera.aspect < 1.4 ? FOV[0] : FOV[1];
 camera.updateProjectionMatrix();
 renderer.setSize(sz.w, sz.h);
 };
@@ -205,9 +205,9 @@ var pm = mcam.projectionMatrix.elements, cq = new THREE.Vector4((Math.sign(cp.x)
 cp.multiplyScalar(2 / cp.dot(cq)); pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1; pm[14] = cp.w;
 mat4.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mcam.projectionMatrix).multiply(mcam.matrixWorldInverse);
 var oldTarget = renderer.getRenderTarget(), oldTone = renderer.toneMapping;
-mirrors.forEach(function(q) { q.mesh.visible = false; }); var haloWas = halo.visible; if (haloWas) halo.visible = false; restGroup.visible = false;
+mirrors.forEach(function(q) { q.mesh.visible = false; });
 renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(target); renderer.render(scene, mcam);
-renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(q) { q.mesh.visible = true; }); if (haloWas) halo.visible = true; restGroup.visible = true;
+renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(q) { q.mesh.visible = true; });
 } };
 mirrors.push(o); return o;
 }
@@ -239,11 +239,11 @@ var g = { sp: sp, hit: hit, base: base, ph: seed * 2.1 }; ghosts.push(g); return
 }
 
 // ---------- THE PASSAGE'S OWN LINKS ----------
-var card = null;
+var play = null;
 function passageLinks(sel) {
 var pass = host.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(card && card.contains(l)) && !l.closest('.dss-key-offer') && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && !l.closest('.dss-key-offer') && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 function lilyHook(n) { var pass = host.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
@@ -258,172 +258,25 @@ var HOTSPOTS = built.hotspots || [];
 renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
 
 // ---------- THE CLOSE-UPS, AND THE PATHS ----------
-var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
-var C = spec.card || {};
-var cFg = C.fg || 'rgba(225,215,190,0.92)', cBg = C.bg || 'rgba(8,5,3,0.8)', cBorder = C.border || 'rgba(200,168,106,0.3)', cDim = C.dim || 'rgba(200,190,160,0.5)', cBtn = C.btn || 'rgba(235,220,180,0.95)', cBtnBorder = C.btnBorder || 'rgba(200,170,110,0.45)';
-var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
-function hotspotFor(obj) { while (obj) { var i = hotspotRoots.indexOf(obj); if (i >= 0) return HOTSPOTS[i]; obj = obj.parent; } return null; }
-function spotActions(spot) { try { return spot.actions ? spot.actions() : []; } catch (e) { return []; } }
-function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
-var haloTex = tex(128, 128, function(cx, w, h) {
-cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
-var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
-g.addColorStop(0, 'rgba(235,255,190,0.75)'); g.addColorStop(0.16, 'rgba(215,240,160,0.45)'); g.addColorStop(0.44, 'rgba(180,210,110,0.18)'); g.addColorStop(0.78, 'rgba(140,170,70,0.045)'); g.addColorStop(1, 'rgba(120,150,40,0)');
-cx.fillStyle = g; cx.fillRect(-64, -82, 128, 164); cx.restore();
-});
-var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
-function haloAt(spot) {
-var wp = new THREE.Vector3();
-if (spot.haloAt) wp.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else spot.root.getWorldPosition(wp);
-if (spot.figure && !spot.haloAt) wp.y += 0.45;
-halo.position.copy(wp);
-var sc = spot.haloSc || (spot.figure ? 0.9 : 0.5);
-halo.scale.set(sc, sc, 1);
-}
-// resting glow: every clickable object breathes faintly at rest, so the eye finds it before the pointer does.
-// Set window.DSS_RESTGLOW = false to switch it off, or to a number (0..1) to change how loud it sits.
-var restLevel = window.DSS_RESTGLOW === false ? 0 : (typeof window.DSS_RESTGLOW === 'number' ? window.DSS_RESTGLOW : 0.5);
-var restGroup = new THREE.Group(); restGroup.name = 'restGlow'; scene.add(restGroup);
-var restGlows = HOTSPOTS.map(function(spot, i) {
-var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-sp.visible = false; restGroup.add(sp);
-return { spot: spot, sp: sp, ph: i * 1.9, on: false };
-});
-var restNext = -1;
-function restRefresh() {
-var keepP = halo.position.clone(), keepS = halo.scale.clone();
-restGlows.forEach(function(g) {
-g.on = restLevel > 0 && available(g.spot);
-if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
-});
-halo.position.copy(keepP); halo.scale.copy(keepS);
-}
-function restTick(t) {
-if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
-var idle = camMode === 'idle';
-restGlows.forEach(function(g) {
-var vis = idle && g.on && g.spot !== hoverSpot;
-g.sp.visible = vis;
-if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
-});
-}
-card = document.createElement('div');
-card.className = 'dss-room-card';
-card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,86%);' +
-'font:15px/1.5 \'Crimson Text\',Georgia,serif;color:' + cFg + ';text-align:center;' +
-'background:' + cBg + ';border:1px solid ' + cBorder + ';padding:14px 22px 12px;border-radius:2px;' +
-'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
-wrap.appendChild(card);
-// the passage's words come into the room; links the close-ups claim are hidden there (window.dssRoomProse)
-var words = window.dssRoomProse ? window.dssRoomProse(host, wrap, canvas) : null;
-var wordsNext = 0;
-function claimedLinks() { return HOTSPOTS.reduce(function(a, sp) { return a.concat(spotActions(sp)); }, []); }
-var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:' + cBtn + ';padding:9px 18px;border:1px solid ' + cBtnBorder + ';background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
-function showCard(spot) {
-if (words) words.setMode('inspect');
-var acts = spotActions(spot);
-var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:' + cDim + ';margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
-if (acts.length) {
-var prose = spot.prose ? spot.prose() : '';
-if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
-html += '<div class="fi-actions"></div>';
-} else {
-html += '<div style="' + PINK + '">' + spot.line + '</div>';
-}
-html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:' + cDim + ';opacity:0.7;margin-top:8px;">' + (acts.length ? 'OR CLICK ANYWHERE ELSE TO STEP BACK' : 'CLICK ANYWHERE TO STEP BACK') + '</div>';
-card.innerHTML = html;
-var row = card.querySelector('.fi-actions');
-if (row) acts.forEach(function(link) {
-var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN;
-if (link.tagName === 'TW-HOOK') { b.textContent = '[Sam: the lily]'; b.style.color = '#ff3aa8'; }
-if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); });
-row.appendChild(b);
-});
-card.style.pointerEvents = acts.length ? 'auto' : 'none';
-card.style.opacity = '1';
-}
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null;
-var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
-var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
-function beginTween(toP, toT, next) {
-camFromP.copy(camera.position); camFromT.copy(curTarget);
-camToP.set(toP[0], toP[1], toP[2]); camToT.set(toT[0], toT[1], toT[2]);
-camK = still ? 1 : 0; camNext = next; camMode = 'tween';
-}
-function stepBack() {
-if (words) words.setMode('idle');
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none';
-beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
-}
-var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
-function pick(ev) {
-var r = canvas.getBoundingClientRect();
-mouseN.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
-ray.setFromCamera(mouseN, camera);
-var hits = ray.intersectObjects(hotspotRoots, true);
-for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
-return null;
-}
-canvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; return; }
-var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; }
-else { halo.visible = false; canvas.style.cursor = 'default'; }
-});
-canvas.addEventListener('pointerdown', function(ev) {
-if (camMode === 'tween') return;
-if (camMode === 'inspect') { stepBack(); return; }
-var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
-if (!spot) { if (words) words.down(ev); return; }
-activeSpot = spot; halo.visible = false; canvas.style.cursor = 'default';
-showCard(spot);
-beginTween(spot.pos, spot.tgt, 'inspect');
-});
-card.addEventListener('pointerdown', function(ev) { if (camMode === 'inspect' && !ev.target.classList.contains('fi-action')) stepBack(); });
-var hint = document.createElement('div');
-hint.textContent = spec.hint || 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
-hint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:' + cDim + ';opacity:0;letter-spacing:3px;z-index:9003;pointer-events:none;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
-wrap.appendChild(hint);
-setTimeout(function() { hint.style.opacity = '0.6'; }, 2600);
-setTimeout(function() { hint.style.opacity = '0'; }, 9000);
+// ---------- THE CLOSE-UPS, AND THE PATHS: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: wrap, canvas: canvas, host: host, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: still,
+card: spec.card, hint: spec.hint, state: function() { return { active: active, animId: animId }; } });
+var words = play.words, curTarget = play.curTarget;
 
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
-window._dssThreeRegistry[WRAP].camera = camera;
-window._dssThreeRegistry[WRAP].state = function() { return { camMode: camMode, camK: camK, active: active, animId: animId, frames: frameCount }; };
-window._dssThreeRegistry[WRAP].spots = HOTSPOTS.map(function(h) { return { name: h.name, tgt: h.tgt, haloAt: h.haloAt, figure: !!h.figure }; });
-var frameCount = 0;
 function animate() {
-animId = requestAnimationFrame(animate); frameCount++;
+animId = requestAnimationFrame(animate);
 var dt = Math.min(0.1, clock.getDelta());
 var t = still ? 0 : clock.getElapsedTime();
-if (camMode === 'idle') {
-camera.position.set(CAM.x + Math.sin(t * 0.11) * 0.04, CAM.y + Math.sin(t * 0.17) * 0.02, CAM.z);
-curTarget.set(CAM.tx, CAM.ty, CAM.tz);
-} else if (camMode === 'tween') {
-camK = Math.min(1, camK + dt / 1.5);
-var e = camK * camK * (3 - 2 * camK);
-camera.position.lerpVectors(camFromP, camToP, e);
-curTarget.lerpVectors(camFromT, camToT, e);
-if (camK >= 1) camMode = camNext;
-}
-camera.lookAt(curTarget);
-if (wrap.dataset.cam !== camMode) wrap.dataset.cam = camMode;
+play.frame(t, dt);
 if (!still) {
 for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
-if (halo.visible) halo.material.opacity = 0.8 + Math.sin(t * 0.9) * 0.08;
 }
 if (built.frame) built.frame(t, dt, still);
-for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t);
-if (words && clock.getElapsedTime() >= wordsNext) { wordsNext = clock.getElapsedTime() + 0.5; words.refresh(claimedLinks()); }
-restTick(t);
+play.withGlowsHidden(function() { for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t); });
 if (composer) composer.render(); else renderer.render(scene, camera);
 }
-if (still) { camera.lookAt(curTarget); wrap.dataset.cam = 'idle'; }
 animate();
 }
 
@@ -438,4 +291,3 @@ window._dssDisposeWrap(WRAP);
 }
 }, 300);
 };
-

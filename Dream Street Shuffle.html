@@ -11164,11 +11164,29 @@ window.dssAudio = (function() {
       musicStarted = true;
     });
   }
+  // 2026-10-05 afternoon loop: a bed or the music used to stop dead on the first frame of the
+  // next passage, the one hard edge in a system that fades everything in. The leaving source is
+  // moved onto its own gain, taken to silence over half a second and stopped there; the bed's
+  // own gain is free at once for a restart.
+  var LEAVE_S = 0.5;
+  function _letGo(src, fromGain) {
+    var ac = getCtx();
+    if (!ac || !src) { try { src.stop(); } catch(e) {} return; }
+    try {
+      src.disconnect();
+      var fg = ac.createGain(), t = ac.currentTime, v = Math.max(0.0001, fromGain || 0);
+      fg.gain.setValueAtTime(v, t);
+      fg.gain.linearRampToValueAtTime(0.0001, t + LEAVE_S * 0.9);
+      fg.connect(ac.destination);
+      src.connect(fg);
+      src.onended = function() { try { fg.disconnect(); } catch(e) {} };
+      src.stop(t + LEAVE_S);
+    } catch(e) { try { src.stop(); } catch(e2) {} }
+  }
   function stopMusic() {
     if (!musicStarted) return;
     if (musicSource) {
-      try { musicSource.stop(); } catch(e) {}
-      try { musicSource.disconnect(); } catch(e) {}
+      _letGo(musicSource, musicGain ? musicGain.gain.value : 0);
       musicSource = null;
     }
     musicStarted = false;
@@ -11350,8 +11368,8 @@ window.dssAudio = (function() {
       }
     }
     if (bed.source) {
-      try { bed.source.stop(); } catch(e) {}
-      try { bed.source.disconnect(); } catch(e) {}
+      bed.source.onended = null; // a gapMs bed must not reschedule from the fading source
+      _letGo(bed.source, bed.gain ? bed.gain.gain.value : 0);
       bed.source = null;
     }
     bed.started = false;

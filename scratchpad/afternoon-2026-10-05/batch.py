@@ -8,7 +8,7 @@ CASES = [("towards-dawn","Towards Dawn",""),("colony-member","Colony Member","")
 g = Game(width=W, height=H)
 for key, pas, seeds in CASES:
     p = g.page(pas, seeds, audit_header=False)
-    if REDUCED: p.emulate_media(reduced_motion="reduce")
+    if REDUCED: p.emulate_media(reduced_motion="reduce"); p.reload(); p.wait_for_timeout(1500)  # before boot, or the script never sees it
     Game.click(p, "BEGIN", 1200); Game.clear_overlays(p)
     for _ in range(3):
         if not Game.click(p, "On.", 900): break

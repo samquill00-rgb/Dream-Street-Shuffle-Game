@@ -4,7 +4,7 @@ import sys, wave, numpy as np
 SR = 44100
 seed = int(sys.argv[2]) if len(sys.argv) > 2 else 7
 r = np.random.default_rng(seed)
-BODY, TAIL = 8.0, 2.5
+BODY, TAIL, LEAD = 8.0, 3.0, 0.5   # (Sam: fade in a little at the start, out a little at the end) the file is LEAD (fade-in) + BODY (loops) + TAIL
 N = int(SR * (BODY + TAIL)); nb = int(SR * BODY)
 t = np.arange(N) / SR
 
@@ -68,21 +68,22 @@ pour = shaped_noise(N, lambda f: np.where(f < 40, 0, 1 / (1 + (f / 350) ** 2)), 
 
 # 6. envelope: a stutter as it starts, steady body, then the stream fails and dribbles
 env = np.ones(N)
-onset = np.array([0, .6, .25, .9, .4, 1.0, .8, 1.0]); on_t = np.array([0, .05, .12, .2, .28, .4, .5, .65])
-env[:int(0.65 * SR)] = np.interp(t[:int(0.65 * SR)], on_t, onset)
 tt = t[nb:] - BODY
-env[nb:] = np.clip(1 - tt / 1.1, 0, None) ** 1.5 + np.where(tt > 1.1, 0.0, 0)
+env[nb:] = np.clip(1 - tt / 2.2, 0, None) ** 1.3
 # the pats after the stream fails stay audible on their own as drips
-out = (mix + 0.6 * pour + 0.3 * spray) * env + spat[:] * np.where(t > BODY + 0.9, 0.5, 0) * np.clip(1 - (t - BODY) / TAIL, 0, 1)
+out = (mix + 0.6 * pour + 0.3 * spray) * env + spat[:] * np.where(t > BODY + 1.2, 0.4, 0) * np.clip(1 - (t - BODY) / TAIL, 0, 1) ** 1.5
 out /= np.abs(out).max() + 1e-9; out *= 0.7
 # the loop seam: cross-fade the body's last 60 ms into its first 60 ms
 xf = int(0.06 * SR); w = np.linspace(0, 1, xf)
 body = out[:nb].copy(); body[-xf:] = body[-xf:] * (1 - w) + out[:xf] * w
 out[:nb] = body
+# the lead-in: the body's last half second (which runs seamlessly into its start) under a fade-in
+nl = int(LEAD * SR); lead = body[-nl:] * (np.linspace(0, 1, nl) ** 1.5)
+out = np.concatenate([lead, out]); N = len(out); t = np.arange(N) / SR
 with wave.open(sys.argv[1], "wb") as wv:
     wv.setnchannels(1); wv.setsampwidth(2); wv.setframerate(SR)
     wv.writeframes((np.clip(out, -1, 1) * 32767).astype("<i2").tobytes())
-seg = out[int(1*SR):int(7*SR)]
+seg = out[int(1.5*SR):int(7.5*SR)]
 spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2; f = np.fft.rfftfreq(len(seg), 1/SR)
 print("centroid %.0f Hz" % ((f*spec).sum()/spec.sum()))
 for lo, hi in [(0,300),(300,1000),(1000,3000),(3000,6000),(6000,22050)]:

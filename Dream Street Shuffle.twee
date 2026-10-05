@@ -21836,6 +21836,74 @@ function down() { try { wrap.dispatchEvent(new CustomEvent('dss-room-emptytap'))
 return { box: box, veil: veil, strip: strip, refresh: refresh, setMode: setMode, down: down, open: open, close: close };
 };
 
+// ====== PLAIN PAGES AS PANELS — the words of a plain passage show in the rooms' dark panel (2026-10-05) ======
+// Sam: "any parts that are on the 'main basic backgound' of the game passages now look a bit lame and
+// old fashioned. Can you lift all that text onto a modal that you read before you see the internal 3d
+// render and its choices?" and then "Any text which is sort of on the back basic level of the passages
+// now looks a bit old fashioned and underworked. Could it be in a modal too?" So every passage that is
+// plain words (no 3D scene, no minigame canvas or stage, no iframe, not the hub or the title) keeps every
+// gate, (set:) and link exactly where it is, but its rendered nodes move into the same dark panel the
+// rooms use, over the dimmed page, with its links inside the panel. A passage tagged `threshold` always
+// gets the panel; one tagged `flat` never does. Nothing is decided here.
+window.dssThreshold = (function() {
+var SKIP_TAGS = /(^|\s)(hub|header|footer|startup|debug|flat|system|dawn-end|dawn-approach)(\s|$)/;
+var SKIP_IN = '[id$="-container"], canvas, iframe, #dss-title, .hc-stage, .soho-map-stage, [class*="-stage"], [class*="-arena"], .dawn-approach';
+function wants(pass) {
+var tags = pass.getAttribute('tags') || '';
+if (/(^|\s)threshold(\s|$)/.test(tags)) return true;
+if (SKIP_TAGS.test(tags)) return false;
+if (pass.querySelector(SKIP_IN)) return false;
+return true;
+}
+function blankLine(n) { return n.nodeType === 1 && /^(BR|TW-CONSECUTIVE-BR)$/.test(n.tagName); }
+function solid(n) {
+if (n.nodeType === 3) return !!n.nodeValue.trim() && !n.parentNode.closest('script, style');
+return /^(svg|canvas|img|button|input|select|textarea|video|iframe)$/i.test(n.tagName);
+}
+function trim(box) {
+var all = [], w = document.createTreeWalker(box, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+while (w.nextNode()) all.push(w.currentNode);
+var i, j;
+for (i = 0; i < all.length && !solid(all[i]); i++) if (blankLine(all[i])) all[i].classList.add('dss-trim');
+for (j = all.length - 1; j > i && !solid(all[j]); j--) if (blankLine(all[j])) all[j].classList.add('dss-trim');
+}
+function mount(pass) {
+pass.setAttribute('data-dss-threshold', '1');
+var veil = document.createElement('div'); veil.className = 'dss-room-veil dss-room-veil-on dss-threshold';
+var box = document.createElement('div'); box.className = 'dss-room-prose';
+Array.prototype.slice.call(pass.childNodes).forEach(function(n) {
+if (n.nodeType === 1 && /^(TW-SIDEBAR|SCRIPT|STYLE)$/.test(n.tagName)) return;
+if (n.nodeType === 1 && n.tagName === 'TW-INCLUDE' && /^(header|footer|startup|debug)/.test(n.getAttribute('type') || '')) return;
+if (n.nodeType === 1 && (n.classList.contains('stat-bars') || n.id === 'stat-bars-lifted')) return;
+box.appendChild(n);
+});
+veil.appendChild(box);
+// the veil lives beside the passage in tw-story, not inside it: a passage can carry a transform (the
+// entrance slide, the drunk sway on the Maritime interlude), and a fixed veil inside a transformed box
+// would be drawn at the box's size. The watcher below removes the veil when its passage has gone.
+veil._pass = pass; (pass.closest('tw-story') || pass.parentElement || pass).appendChild(veil);
+trim(box);
+// a (link:) or (replace:) that adds words later keeps the panel tidy too
+var again = null;
+new MutationObserver(function() { if (again) return; again = setTimeout(function() { again = null; Array.prototype.forEach.call(box.querySelectorAll('.dss-trim'), function(e) { e.classList.remove('dss-trim'); }); trim(box); }, 60); }).observe(box, { childList: true, subtree: true });
+}
+// the header strip is lifted out of the passage by the cleanup passes in the first half second; wait for that,
+// or the exit link and the stat bar would come into the panel with the words
+// The cleanup passes (30, 200, 450 ms: the header lift, the ornament pass, the lamp) look inside
+// tw-passage, so the words move only after half a second; the passage's own entrance fade is still
+// in its delay then, so nothing shows twice.
+var seen = null, seenAt = 0;
+setInterval(function() {
+Array.prototype.forEach.call(document.querySelectorAll('.dss-threshold'), function(v) { if (v._pass && !v._pass.isConnected) v.parentNode.removeChild(v); });
+var p = document.querySelector('tw-passage:not([data-dss-threshold])');
+if (!p) { seen = null; return; }
+if (p !== seen) { seen = p; seenAt = Date.now(); }
+if (!wants(p)) { p.setAttribute('data-dss-threshold', '0'); return; }
+if (Date.now() - seenAt > 520 && (!p.querySelector('.stat-bars') || Date.now() - seenAt > 900)) mount(p);
+}, 100);
+return { mount: mount, wants: wants };
+})();
+
 // ====== THE REVEAL — every clickable shows itself, named, for a few seconds (2026-10-05) ======
 // Sam: "the clickable things in the 3d renders aren't very obvious. In Disco Elysium they are much more
 // obvious. I want it more like that." So when the words are sent away, and again on a tap on empty room,
@@ -52748,7 +52816,7 @@ It seems, almost, like Red wants to speak to John, who doesn’t want to speak t
 })();
 </script>
 
-:: Failure: Trisha's [street-night] {"position":"700,1400","size":"100,100"}
+:: Failure: Trisha's [street-night threshold] {"position":"700,1400","size":"100,100"}
 (if: $hasTrishaMatchbook is true)[The doorman’s saying no tonight. You’re about to fuck off, politely, when you think of the matchbook.
 
 (link: "Give him the matchbook")[(if: $opponent is "Jack Curtis")[‘Jack Curtis,’](else:)[‘Percy Ritson,’] he says. ‘You should have said. Come in.’
@@ -53734,7 +53802,7 @@ Two men, play: Percy Ritson, bookseller and poet; in his thirties, looks like a 
 
 [[Watch the decider|Watch the decider]]
 
-:: Maltese Gangsters {"position":"1400,550","size":"100,100"}
+:: Maltese Gangsters [threshold] {"position":"1400,550","size":"100,100"}
 (set: $metSalvu to true)\
 (set: $sobriety to ($statGain: $sobriety, 30))\
 <div class="copper-door">
@@ -53942,7 +54010,7 @@ Standing here you can see London, Carthage, Liverpool and everything else.
 <span class="guided-link">(link-goto: "Put //" + (text: $bookTitle) + "// on the table", "The critic's judgement")</span>
 </div>
 
-:: O'Flatterly introduction [venue-cecilcourt char-inis] {"position":"300,1700","size":"100,100"}
+:: O'Flatterly introduction [venue-cecilcourt char-inis threshold] {"position":"300,1700","size":"100,100"}
 <span class="shop-bell-marker" style="display:none">(if: $returnedPage is true)[post](else-if: $hasMissingPage is true)[has-page](else:)[pre]</span>(display: "Cecil Rule SVG")
 Inis O’Flatterly clocks you, first with his eyes still downcast, then eventually as he looks up. ‘You’re a novelist and that wasn’t a question,’ he steams; with the gentle steaming of the kettle, not that of the railway.
 
@@ -53951,7 +54019,7 @@ Inis O’Flatterly clocks you, first with his eyes still downcast, then eventual
 [[Show him the page|Return the page]]]\
 (else:)[[[Speak to him|O'Flatterly's quest]]]
 
-:: O'Flatterly's quest [venue-cecilcourt char-inis] {"position":"300,1850","size":"100,100"}
+:: O'Flatterly's quest [venue-cecilcourt char-inis threshold] {"position":"300,1850","size":"100,100"}
 ‘Dear boy,’ he burrs, ‘I don’t know who you are, and don’t care who you are, and I don’t know that I don’t like what you’ve written; but do me a kindness, kid, and let’s just assume I won’t need it. Besides, there is something that you must do for me, that we must do together.’
 
 O’Flatterly coughs, disturbing the dust on the cover before him, agitating its thousand motes into flight, which hang over his desk like the clouds over Willesden Junction.
@@ -54142,7 +54210,7 @@ You pause, for a whole long minute, and think of yourself, so as to become, Trel
      single link that could be here instead. -->\
 <span class="guided-link">[[Wake from this dream|The Interval]]</span>
 
-:: Return the page [venue-cecilcourt char-inis] {"position":"500,1850","size":"100,100"}
+:: Return the page [venue-cecilcourt char-inis threshold] {"position":"500,1850","size":"100,100"}
 You show him 93. O’Flatterly takes it, firmly and gently, then lays it into his papers, where it should be. He would shelve you, if he could, among his best books.
 
 [['You don't know the good that you've done'|O'Flatterly's Gift]]
@@ -56074,7 +56142,7 @@ At a table is an agent. There is an impulse among those who work in the book tra
 [[Talk to the famous agent|Talk to the intimidating agent]]]]
 </div>
 
-:: The Colony Room Door [outdoor] {"position":"1200,550","size":"100,100"}
+:: The Colony Room Door [outdoor threshold] {"position":"1200,550","size":"100,100"}
 (if: $visited is a datamap and $visited contains "Colony" and $visited's Colony is true)[(go-to: "The Colony Room")]\
 (if: $metDavy is true)[(go-to: "The Colony Room")]\
 (if: $metSalvu is true)[(go-to: "Colony Member")]\
@@ -56097,7 +56165,7 @@ document.querySelectorAll('tw-link, .enchantment-link').forEach(function(l){ var
   l.addEventListener('focus',function(){ plate.classList.add(cls); }); l.addEventListener('blur',function(){ plate.classList.remove(cls); }); });
 })();</script>
 
-:: Colony Member [outdoor street-night] {"position":"1300,550","size":"100,100"}
+:: Colony Member [outdoor street-night threshold] {"position":"1300,550","size":"100,100"}
 Outside, leaning upon Dean Street, with a glass in his hand gone stray from another establishment, is the famous Davy Merkin.
 
 ‘Are you looking for me?’ he says. You know you can’t get past the door alone. ‘Come upstairs. We’ll drink.’
@@ -60468,6 +60536,14 @@ tw-passage:has(#oi-container):not(:has(#oi-wrap))::after { content: '[Sam: the r
 .dss-room-mark span { font: 10px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: rgba(238,230,200,0.92); text-shadow: 0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,1), 0 0 12px rgba(0,0,0,0.8); }
 @keyframes dss-mark-breathe { 50% { box-shadow: 0 0 18px rgba(225,240,170,0.9), inset 0 0 8px rgba(225,240,170,0.55); } }
 @media (prefers-reduced-motion: reduce) { .dss-room-reveal { transition: none; } .dss-room-mark i { animation: none; } }
+/* 2026-10-05: plain pages as panels (window.dssThreshold): a passage of plain words shows
+   as the rooms' dark panel over the dimmed page, links inside; `threshold` forces it,
+   `flat` keeps a passage as it was. The veil is fixed inside tw-passage, whose entrance
+   is an opacity fade with no transform, so it fills the viewport from the first frame. */
+.dss-threshold { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 900; background: rgba(4,2,1,0.93); padding: 164px 0 36px; }
+.dss-threshold .dss-room-prose { pointer-events: auto; }
+tw-passage[data-dss-threshold="1"] { min-height: 60vh; }
+@media (max-width: 600px) { .dss-threshold { padding: 196px 0 20px; } }
 /* >>>> DSS ROOMS 2026-09-30 BEGIN */
 /* 2026-09-30: six more venue passages carry a room (Coach and Horses bar,
    Trisha's, Lackland's office, the Chippy, Copper's cellar, O'Flatterly's).

@@ -21944,7 +21944,16 @@ t1 = setTimeout(function() { hint.style.opacity = String(peak == null ? 0.6 : pe
 t2 = setTimeout(function() { hint.style.opacity = '0'; }, 7300);
 }
 wrap.addEventListener('dss-room-words-away', show);
-setTimeout(function() { if (wrap.dataset.words !== 'modal') show(); }, 2600);
+// a room that opens without words (nothing to send away) shows the hint 2.6 s after its first frame;
+// the first frame itself can be seconds away on a night's first room, so the wait starts from it
+var born = null, poll = setInterval(function() {
+var st = wrap.dataset.words;
+if (!wrap.isConnected) { clearInterval(poll); return; }
+if (!st) return;
+if (born === null) born = Date.now();
+if (st === 'modal') { clearInterval(poll); return; }
+if (Date.now() - born > 2600) { clearInterval(poll); show(); }
+}, 300);
 return { show: show };
 };
 
@@ -22003,6 +22012,212 @@ el.style.top = (ev.clientY - r.top + 20) + 'px';
 if (shown !== name) { shown = name; el.textContent = name; el.style.opacity = '1'; }
 };
 };
+
+// >>>> DSS ROOM PLAY BEGIN
+// ====== THE ROOM'S PLAY — what a player touches in any venue room, once (2026-10-05) ======
+// Sam (2026-10-05): "Two visual systems. The first four rooms have their own machinery and the six
+// later ones share one kit, so hover, cards and glow differ slightly room to room. A pass to make
+// them match." The hover halo and its name, the close-up card and its paths, the resting glow, the
+// reveal, the words panel and the camera's idle sway and tweens live here, once; the kit's six rooms
+// and the four early rooms (French, Colony, Pillars, Ronnie's) all call it, each keeping its own
+// scene, objects and plot clickables. Nothing about the game is decided here: a room only finds the
+// passage's own links by their wording and presses them from the card.
+// o: { wrap, canvas, host, scene, camera, CAM, HOTSPOTS, tex, still, card { fg, bg, border, dim, btn, btnBorder },
+//      hint, onPress(spot, link), state() }
+// a hotspot: { root, name, pos, tgt, actions(), prose(), line, figure, haloAt [x,y,z], haloSc, onLook(on) }
+// returns { halo, restGroup, curTarget, words, card, frame(t, dt), withGlowsHidden(fn), stepBack, showCard, claimedLinks }
+window.dssRoomPlay = function(o) {
+var wrap = o.wrap, canvas = o.canvas, host = o.host, scene = o.scene, camera = o.camera, CAM = o.CAM, HOTSPOTS = o.HOTSPOTS, tex = o.tex, still = !!o.still;
+var WRAP = wrap.id;
+var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
+var C = o.card || {};
+var cFg = C.fg || 'rgba(225,215,190,0.92)', cBg = C.bg || 'rgba(8,5,3,0.8)', cBorder = C.border || 'rgba(200,168,106,0.3)', cDim = C.dim || 'rgba(200,190,160,0.5)', cBtn = C.btn || 'rgba(235,220,180,0.95)', cBtnBorder = C.btnBorder || 'rgba(200,170,110,0.45)';
+var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
+function hotspotFor(obj) { while (obj) { var i = hotspotRoots.indexOf(obj); if (i >= 0) return HOTSPOTS[i]; obj = obj.parent; } return null; }
+function spotActions(spot) { try { return spot.actions ? spot.actions() : []; } catch (e) { return []; } }
+function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
+var haloTex = tex(128, 128, function(cx, w, h) {
+cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
+var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
+g.addColorStop(0, 'rgba(235,255,190,0.75)'); g.addColorStop(0.16, 'rgba(215,240,160,0.45)'); g.addColorStop(0.44, 'rgba(180,210,110,0.18)'); g.addColorStop(0.78, 'rgba(140,170,70,0.045)'); g.addColorStop(1, 'rgba(120,150,40,0)');
+cx.fillStyle = g; cx.fillRect(-64, -82, 128, 164); cx.restore();
+});
+var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
+function haloAt(spot) {
+var wp = new THREE.Vector3();
+if (spot.haloAt) wp.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else spot.root.getWorldPosition(wp);
+if (spot.figure && !spot.haloAt) wp.y += 0.45;
+halo.position.copy(wp);
+var sc = spot.haloSc || (spot.figure ? 0.9 : 0.5);
+halo.scale.set(sc, sc, 1);
+}
+// resting glow: every clickable object breathes faintly at rest, so the eye finds it before the pointer does.
+// Set window.DSS_RESTGLOW = false to switch it off, or to a number (0..1) to change how loud it sits.
+var restLevel = window.DSS_RESTGLOW === false ? 0 : (typeof window.DSS_RESTGLOW === 'number' ? window.DSS_RESTGLOW : 0.7);
+var restGroup = new THREE.Group(); restGroup.name = 'restGlow'; scene.add(restGroup);
+var restGlows = HOTSPOTS.map(function(spot, i) {
+var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+sp.visible = false; restGroup.add(sp);
+return { spot: spot, sp: sp, ph: i * 1.9, on: false };
+});
+var restNext = -1;
+var reveal = window.dssRoomReveal ? window.dssRoomReveal(wrap, camera, restGlows, function() { return camMode === 'idle'; }) : null;
+function restRefresh() {
+var keepP = halo.position.clone(), keepS = halo.scale.clone();
+restGlows.forEach(function(g) {
+g.on = restLevel > 0 && available(g.spot);
+if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
+});
+halo.position.copy(keepP); halo.scale.copy(keepS);
+}
+function restTick(t) {
+if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
+var idle = camMode === 'idle';
+restGlows.forEach(function(g) {
+var vis = idle && g.on && g.spot !== hoverSpot;
+g.sp.visible = vis;
+if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
+});
+}
+var card = document.createElement('div');
+card.className = 'dss-room-card';
+card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,86%);' +
+'font:15px/1.5 \'Crimson Text\',Georgia,serif;color:' + cFg + ';text-align:center;' +
+'background:' + cBg + ';border:1px solid ' + cBorder + ';padding:14px 22px 12px;border-radius:2px;' +
+'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
+wrap.appendChild(card);
+// the passage's words come into the room; links the close-ups claim are hidden there (window.dssRoomProse)
+var words = window.dssRoomProse ? window.dssRoomProse(host, wrap, canvas) : null;
+var wordsNext = 0;
+function claimedLinks() { return HOTSPOTS.reduce(function(a, sp) { return a.concat(spotActions(sp)); }, []); }
+var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:' + cBtn + ';padding:9px 18px;border:1px solid ' + cBtnBorder + ';background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
+function showCard(spot) {
+if (words) words.setMode('inspect');
+var acts = spotActions(spot);
+var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:' + cDim + ';margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
+if (acts.length) {
+var prose = spot.prose ? spot.prose() : '';
+if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
+html += '<div class="fi-actions"></div>';
+} else {
+html += '<div style="' + PINK + '">' + spot.line + '</div>';
+}
+// when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
+var wayOn = acts.length ? [] : HOTSPOTS.filter(function(sp) { return sp !== spot && spotActions(sp).length > 0; });
+if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
+html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:' + cDim + ';opacity:0.7;margin-top:8px;">' + ((acts.length || wayOn.length) ? 'OR CLICK ANYWHERE ELSE TO STEP BACK' : 'CLICK ANYWHERE TO STEP BACK') + '</div>';
+card.innerHTML = html;
+var row = card.querySelector('.fi-actions');
+if (row) acts.forEach(function(link) {
+var b = document.createElement('span');
+b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN;
+if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
+if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
+b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
+b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); if (o.onPress) o.onPress(spot, link); });
+row.appendChild(b);
+});
+var wrow = card.querySelector('.fi-wayon');
+if (wrow) wayOn.forEach(function(sp) {
+var b = document.createElement('span');
+b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN;
+b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
+b.addEventListener('click', function(ev) { ev.stopPropagation(); if (activeSpot && activeSpot.onLook) activeSpot.onLook(false); activeSpot = sp; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(true); });
+wrow.appendChild(b);
+});
+card.style.pointerEvents = (acts.length || wayOn.length) ? 'auto' : 'none';
+card.style.opacity = '1';
+}
+var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null;
+var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
+var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
+function beginTween(toP, toT, next) {
+camFromP.copy(camera.position); camFromT.copy(curTarget);
+camToP.set(toP[0], toP[1], toP[2]); camToT.set(toT[0], toT[1], toT[2]);
+camK = still ? 1 : 0; camNext = next; camMode = 'tween';
+}
+function stepBack() {
+if (words) words.setMode('idle');
+if (activeSpot && activeSpot.onLook) activeSpot.onLook(false);
+activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none';
+beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
+}
+var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
+function pick(ev) {
+var r = canvas.getBoundingClientRect();
+mouseN.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+ray.setFromCamera(mouseN, camera);
+var hits = ray.intersectObjects(hotspotRoots, true);
+for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
+return null;
+}
+var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(wrap) : function() {};
+canvas.addEventListener('pointermove', function(ev) {
+if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
+var spot = pick(ev); hoverSpot = spot;
+if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
+else { halo.visible = false; canvas.style.cursor = 'default'; hoverName(null); }
+});
+canvas.addEventListener('pointerleave', function() { hoverName(null); });
+canvas.addEventListener('pointerdown', function(ev) {
+if (camMode === 'tween') return;
+if (camMode === 'inspect') { stepBack(); return; }
+var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
+if (!spot) { if (words) words.down(ev); return; }
+activeSpot = spot; halo.visible = false; canvas.style.cursor = 'default';
+showCard(spot);
+beginTween(spot.pos, spot.tgt, 'inspect');
+if (spot.onLook) spot.onLook(true);
+});
+card.addEventListener('pointerdown', function(ev) { if (camMode === 'inspect' && !ev.target.classList.contains('fi-action')) stepBack(); });
+var hint = document.createElement('div');
+hint.textContent = o.hint || 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
+hint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:' + cDim + ';opacity:0;letter-spacing:3px;z-index:9003;pointer-events:none;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
+wrap.appendChild(hint);
+if (window.dssRoomHint) window.dssRoomHint(wrap, hint, 0.6); else { setTimeout(function() { hint.style.opacity = '0.6'; }, 2600); setTimeout(function() { hint.style.opacity = '0'; }, 9000); }
+
+// ---------- THE FRAME: the camera, the halo's breath, the words, the glow, the reveal ----------
+var reg = window._dssThreeRegistry && window._dssThreeRegistry[WRAP];
+var frames = 0;
+if (reg) {
+reg.camera = camera;
+reg.hotspots = HOTSPOTS;
+reg.state = function() { var st = { camMode: camMode, camK: camK, frames: frames }; if (o.state) { var x = o.state(); for (var key in x) st[key] = x[key]; } return st; };
+reg.spots = HOTSPOTS.map(function(h) { return { name: h.name, tgt: h.tgt, haloAt: h.haloAt, figure: !!h.figure }; });
+}
+function frame(t, dt) {
+frames++;
+if (camMode === 'idle') {
+camera.position.set(CAM.x + Math.sin(t * 0.11) * 0.04, CAM.y + Math.sin(t * 0.17) * 0.02, CAM.z);
+curTarget.set(CAM.tx, CAM.ty, CAM.tz);
+} else if (camMode === 'tween') {
+camK = Math.min(1, camK + dt / 1.5);
+var e = camK * camK * (3 - 2 * camK);
+camera.position.lerpVectors(camFromP, camToP, e);
+curTarget.lerpVectors(camFromT, camToT, e);
+if (camK >= 1) camMode = camNext;
+} else if (!still) {
+// at a close-up the camera is held, not fixed: the French's small breath, now in every room
+camera.position.x = camToP.x + Math.sin(t * 0.3) * 0.008; camera.position.y = camToP.y + Math.sin(t * 0.45) * 0.005;
+}
+camera.lookAt(curTarget);
+if (wrap.dataset.cam !== camMode) wrap.dataset.cam = camMode;
+if (!still && halo.visible) halo.material.opacity = 0.8 + Math.sin(t * 0.9) * 0.08;
+if (words && Date.now() >= wordsNext) { wordsNext = Date.now() + 500; words.refresh(claimedLinks()); }
+restTick(t);
+if (reveal) reveal.tick();
+}
+// a mirror's render leaves the halo and the resting glow out of the glass
+function withGlowsHidden(fn) {
+var hw = halo.visible, rw = restGroup.visible;
+halo.visible = false; restGroup.visible = false;
+try { fn(); } finally { halo.visible = hw; restGroup.visible = rw; }
+}
+if (still) { camera.lookAt(curTarget); wrap.dataset.cam = 'idle'; }
+return { halo: halo, restGroup: restGroup, curTarget: curTarget, words: words, card: card, frame: frame, withGlowsHidden: withGlowsHidden, stepBack: stepBack, showCard: showCard, claimedLinks: claimedLinks };
+};
+// <<<< DSS ROOM PLAY END
 
 // >>>> DSS ROOM KIT BEGIN
 // ====== THE ROOM KIT — what the six later rooms share (2026-09-30) ======
@@ -22212,9 +22427,9 @@ var pm = mcam.projectionMatrix.elements, cq = new THREE.Vector4((Math.sign(cp.x)
 cp.multiplyScalar(2 / cp.dot(cq)); pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1; pm[14] = cp.w;
 mat4.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mcam.projectionMatrix).multiply(mcam.matrixWorldInverse);
 var oldTarget = renderer.getRenderTarget(), oldTone = renderer.toneMapping;
-mirrors.forEach(function(q) { q.mesh.visible = false; }); var haloWas = halo.visible; if (haloWas) halo.visible = false; restGroup.visible = false;
+mirrors.forEach(function(q) { q.mesh.visible = false; });
 renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(target); renderer.render(scene, mcam);
-renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(q) { q.mesh.visible = true; }); if (haloWas) halo.visible = true; restGroup.visible = true;
+renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(q) { q.mesh.visible = true; });
 } };
 mirrors.push(o); return o;
 }
@@ -22246,11 +22461,11 @@ var g = { sp: sp, hit: hit, base: base, ph: seed * 2.1 }; ghosts.push(g); return
 }
 
 // ---------- THE PASSAGE'S OWN LINKS ----------
-var card = null;
+var play = null;
 function passageLinks(sel) {
 var pass = host.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(card && card.contains(l)) && !l.closest('.dss-key-offer') && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && !l.closest('.dss-key-offer') && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 function lilyHook(n) { var pass = host.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
@@ -22265,187 +22480,25 @@ var HOTSPOTS = built.hotspots || [];
 renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
 
 // ---------- THE CLOSE-UPS, AND THE PATHS ----------
-var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
-var C = spec.card || {};
-var cFg = C.fg || 'rgba(225,215,190,0.92)', cBg = C.bg || 'rgba(8,5,3,0.8)', cBorder = C.border || 'rgba(200,168,106,0.3)', cDim = C.dim || 'rgba(200,190,160,0.5)', cBtn = C.btn || 'rgba(235,220,180,0.95)', cBtnBorder = C.btnBorder || 'rgba(200,170,110,0.45)';
-var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
-function hotspotFor(obj) { while (obj) { var i = hotspotRoots.indexOf(obj); if (i >= 0) return HOTSPOTS[i]; obj = obj.parent; } return null; }
-function spotActions(spot) { try { return spot.actions ? spot.actions() : []; } catch (e) { return []; } }
-function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
-var haloTex = tex(128, 128, function(cx, w, h) {
-cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
-var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
-g.addColorStop(0, 'rgba(235,255,190,0.75)'); g.addColorStop(0.16, 'rgba(215,240,160,0.45)'); g.addColorStop(0.44, 'rgba(180,210,110,0.18)'); g.addColorStop(0.78, 'rgba(140,170,70,0.045)'); g.addColorStop(1, 'rgba(120,150,40,0)');
-cx.fillStyle = g; cx.fillRect(-64, -82, 128, 164); cx.restore();
-});
-var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
-function haloAt(spot) {
-var wp = new THREE.Vector3();
-if (spot.haloAt) wp.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else spot.root.getWorldPosition(wp);
-if (spot.figure && !spot.haloAt) wp.y += 0.45;
-halo.position.copy(wp);
-var sc = spot.haloSc || (spot.figure ? 0.9 : 0.5);
-halo.scale.set(sc, sc, 1);
-}
-// resting glow: every clickable object breathes faintly at rest, so the eye finds it before the pointer does.
-// Set window.DSS_RESTGLOW = false to switch it off, or to a number (0..1) to change how loud it sits.
-var restLevel = window.DSS_RESTGLOW === false ? 0 : (typeof window.DSS_RESTGLOW === 'number' ? window.DSS_RESTGLOW : 0.7);
-var restGroup = new THREE.Group(); restGroup.name = 'restGlow'; scene.add(restGroup);
-var restGlows = HOTSPOTS.map(function(spot, i) {
-var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-sp.visible = false; restGroup.add(sp);
-return { spot: spot, sp: sp, ph: i * 1.9, on: false };
-});
-var restNext = -1;
-var reveal = window.dssRoomReveal ? window.dssRoomReveal(wrap, camera, restGlows, function() { return camMode === 'idle'; }) : null;
-function restRefresh() {
-var keepP = halo.position.clone(), keepS = halo.scale.clone();
-restGlows.forEach(function(g) {
-g.on = restLevel > 0 && available(g.spot);
-if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
-});
-halo.position.copy(keepP); halo.scale.copy(keepS);
-}
-function restTick(t) {
-if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
-var idle = camMode === 'idle';
-restGlows.forEach(function(g) {
-var vis = idle && g.on && g.spot !== hoverSpot;
-g.sp.visible = vis;
-if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
-});
-}
-card = document.createElement('div');
-card.className = 'dss-room-card';
-card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,86%);' +
-'font:15px/1.5 \'Crimson Text\',Georgia,serif;color:' + cFg + ';text-align:center;' +
-'background:' + cBg + ';border:1px solid ' + cBorder + ';padding:14px 22px 12px;border-radius:2px;' +
-'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
-wrap.appendChild(card);
-// the passage's words come into the room; links the close-ups claim are hidden there (window.dssRoomProse)
-var words = window.dssRoomProse ? window.dssRoomProse(host, wrap, canvas) : null;
-var wordsNext = 0;
-function claimedLinks() { return HOTSPOTS.reduce(function(a, sp) { return a.concat(spotActions(sp)); }, []); }
-var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:' + cBtn + ';padding:9px 18px;border:1px solid ' + cBtnBorder + ';background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
-function showCard(spot) {
-if (words) words.setMode('inspect');
-var acts = spotActions(spot);
-var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:' + cDim + ';margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
-if (acts.length) {
-var prose = spot.prose ? spot.prose() : '';
-if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
-html += '<div class="fi-actions"></div>';
-} else {
-html += '<div style="' + PINK + '">' + spot.line + '</div>';
-}
-// when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
-var wayOn = acts.length ? [] : HOTSPOTS.filter(function(sp) { return sp !== spot && spotActions(sp).length > 0; });
-if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
-html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:' + cDim + ';opacity:0.7;margin-top:8px;">' + ((acts.length || wayOn.length) ? 'OR CLICK ANYWHERE ELSE TO STEP BACK' : 'CLICK ANYWHERE TO STEP BACK') + '</div>';
-card.innerHTML = html;
-var row = card.querySelector('.fi-actions');
-if (row) acts.forEach(function(link) {
-var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN;
-if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
-if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); });
-row.appendChild(b);
-});
-var wrow = card.querySelector('.fi-wayon');
-if (wrow) wayOn.forEach(function(sp) {
-var b = document.createElement('span');
-b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN;
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); activeSpot = sp; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); });
-wrow.appendChild(b);
-});
-card.style.pointerEvents = (acts.length || wayOn.length) ? 'auto' : 'none';
-card.style.opacity = '1';
-}
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null;
-var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
-var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
-function beginTween(toP, toT, next) {
-camFromP.copy(camera.position); camFromT.copy(curTarget);
-camToP.set(toP[0], toP[1], toP[2]); camToT.set(toT[0], toT[1], toT[2]);
-camK = still ? 1 : 0; camNext = next; camMode = 'tween';
-}
-function stepBack() {
-if (words) words.setMode('idle');
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none';
-beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
-}
-var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
-function pick(ev) {
-var r = canvas.getBoundingClientRect();
-mouseN.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
-ray.setFromCamera(mouseN, camera);
-var hits = ray.intersectObjects(hotspotRoots, true);
-for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
-return null;
-}
-var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(wrap) : function() {};
-canvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
-var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
-else { halo.visible = false; canvas.style.cursor = 'default'; hoverName(null); }
-});
-canvas.addEventListener('pointerleave', function() { hoverName(null); });
-canvas.addEventListener('pointerdown', function(ev) {
-if (camMode === 'tween') return;
-if (camMode === 'inspect') { stepBack(); return; }
-var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
-if (!spot) { if (words) words.down(ev); return; }
-activeSpot = spot; halo.visible = false; canvas.style.cursor = 'default';
-showCard(spot);
-beginTween(spot.pos, spot.tgt, 'inspect');
-});
-card.addEventListener('pointerdown', function(ev) { if (camMode === 'inspect' && !ev.target.classList.contains('fi-action')) stepBack(); });
-var hint = document.createElement('div');
-hint.textContent = spec.hint || 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
-hint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:' + cDim + ';opacity:0;letter-spacing:3px;z-index:9003;pointer-events:none;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
-wrap.appendChild(hint);
-if (window.dssRoomHint) window.dssRoomHint(wrap, hint, 0.6); else { setTimeout(function() { hint.style.opacity = '0.6'; }, 2600); setTimeout(function() { hint.style.opacity = '0'; }, 9000); }
+// ---------- THE CLOSE-UPS, AND THE PATHS: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: wrap, canvas: canvas, host: host, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: still,
+card: spec.card, hint: spec.hint, state: function() { return { active: active, animId: animId }; } });
+var words = play.words, curTarget = play.curTarget;
 
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
-window._dssThreeRegistry[WRAP].camera = camera;
-window._dssThreeRegistry[WRAP].hotspots = HOTSPOTS;
-window._dssThreeRegistry[WRAP].state = function() { return { camMode: camMode, camK: camK, active: active, animId: animId, frames: frameCount }; };
-window._dssThreeRegistry[WRAP].spots = HOTSPOTS.map(function(h) { return { name: h.name, tgt: h.tgt, haloAt: h.haloAt, figure: !!h.figure }; });
-var frameCount = 0;
 function animate() {
-animId = requestAnimationFrame(animate); frameCount++;
+animId = requestAnimationFrame(animate);
 var dt = Math.min(0.1, clock.getDelta());
 var t = still ? 0 : clock.getElapsedTime();
-if (camMode === 'idle') {
-camera.position.set(CAM.x + Math.sin(t * 0.11) * 0.04, CAM.y + Math.sin(t * 0.17) * 0.02, CAM.z);
-curTarget.set(CAM.tx, CAM.ty, CAM.tz);
-} else if (camMode === 'tween') {
-camK = Math.min(1, camK + dt / 1.5);
-var e = camK * camK * (3 - 2 * camK);
-camera.position.lerpVectors(camFromP, camToP, e);
-curTarget.lerpVectors(camFromT, camToT, e);
-if (camK >= 1) camMode = camNext;
-}
-camera.lookAt(curTarget);
-if (wrap.dataset.cam !== camMode) wrap.dataset.cam = camMode;
+play.frame(t, dt);
 if (!still) {
 for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
-if (halo.visible) halo.material.opacity = 0.8 + Math.sin(t * 0.9) * 0.08;
 }
 if (built.frame) built.frame(t, dt, still);
-for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t);
-if (words && clock.getElapsedTime() >= wordsNext) { wordsNext = clock.getElapsedTime() + 0.5; words.refresh(claimedLinks()); }
-restTick(t);
-if (reveal) reveal.tick();
+play.withGlowsHidden(function() { for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t); });
 if (composer) composer.render(); else renderer.render(scene, camera);
 }
-if (still) { camera.lookAt(curTarget); wrap.dataset.cam = 'idle'; }
 animate();
 }
 
@@ -23148,7 +23201,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = fiHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(card && card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 // Harlowe 3 keeps a link's target out of the DOM, so the passage's links are known by their own wording (as the signpost script does).
 // the lily, when it is still there to take: the hook's own click-replace does the work
@@ -23157,7 +23210,7 @@ function byText(texts) {
 return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; });
 }
 var HOTSPOTS = [
-{ root: photoG, name: 'the photographs', pos: [0.2, 1.95, -2.4], tgt: [0.9, 2.0, -4.5],
+{ root: photoG, name: 'the photographs', pos: [0.2, 1.95, -2.4], tgt: [0.9, 2.0, -4.5], haloAt: [0.4, 2.0, -4.4], haloSc: 1.4,
 line: 'Eight frames on the back wall, seven of them faces the bar still drinks to, and one gone pale where the sun has had it. [Sam: the photo wall]' },
 { root: phoneG, name: 'the telephone', pos: [-2.2, 1.6, 0.6], tgt: [-3.45, 1.32, -0.35],
 actions: function() { return passageLinks('.phone-ringing tw-link'); },
@@ -23166,204 +23219,34 @@ line: 'The phone behind the bar, black, off duty, the handset lying in its cradl
 { root: glassG, name: 'the glass on the bar', pos: [-0.9, 1.5, 0.35], tgt: [gp.x, 1.16, gp.z],
 actions: function() { return byText(['Get a drink at the bar']); },
 line: 'Half a drink left on the counter and the ring beside it where the last one stood; whoever it was has stepped out, or never came back. [Sam: the glass someone left]' },
-{ root: doorG, name: 'the blue door', pos: [1.9, 1.5, -2.3], tgt: [2.45, 1.3, -4.5],
+{ root: doorG, name: 'the blue door', pos: [1.9, 1.5, -2.3], tgt: [2.45, 1.3, -4.5], haloAt: [2.45, 1.3, -4.4], haloSc: 1.1,
+onLook: function(on) { doorLight.intensity = on ? 0.9 : 0; doorGlow.material.opacity = on ? 0.55 : 0; },
 line: 'The blue door at the back, the one to the stairs, with a line of light under it that was not there a moment ago. [Sam: the door to upstairs]' },
-{ root: barG, name: 'the bar', pos: [-1.05, 1.45, 1.55], tgt: [-2.55, 1.25, -0.4],
+{ root: barG, name: 'the bar', pos: [-1.05, 1.45, 1.55], tgt: [-2.55, 1.25, -0.4], haloAt: [-1.5, 1.2, -0.3], haloSc: 1.4,
 actions: function() { return byText(['Get a drink at the bar']); },
 line: 'The counter, wiped and wet again, the pumps standing to attention and nobody serving for the moment. [Sam: the bar when there is no drink to be had]' },
 { root: ghosts[0].hit, name: 'the man at the bar', pos: [-0.6, 1.45, 1.9], tgt: [-1.55, 1.15, 0.9], figure: true,
 actions: function() { return passageLinks('.guided-link tw-link').filter(function(l) { return l.textContent.trim() === 'Approach'; }); } },
 { root: ghosts[2].hit, name: 'the novelist', pos: [1.2, 1.45, -0.6], tgt: [0.37, 1.15, -2.0], figure: true,
 actions: function() { return byText(['Approach']).filter(function(l) { return !l.closest('.guided-link'); }); } },
-{ root: winG, name: 'the window', pos: [2.2, 1.7, -1.5], tgt: [3.7, 1.9, -2.4],
+{ root: winG, name: 'the window', pos: [2.2, 1.7, -1.5], tgt: [3.7, 1.9, -2.4], haloAt: [3.6, 1.95, -2.4], haloSc: 1.1,
 actions: function() { return byText(['Leave the French', 'The Colony Room is just round the corner.']).concat(lilyHook(5)); },
 line: 'Dean Street through the net, the lamp on and the pavement wet, and no one out there who is looking for you. [Sam: the window onto Dean Street]' },
 { root: ghosts[1].hit, name: 'the painter', pos: [-0.35, 1.45, 0.75], tgt: [-1.25, 1.15, -0.3], figure: true,
 actions: function() { return byText(['Approach the artists', 'Sketch him on a napkin']); } }
 ];
-var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
-function hotspotFor(obj) { while (obj) { var i = hotspotRoots.indexOf(obj); if (i >= 0) return HOTSPOTS[i]; obj = obj.parent; } return null; }
-function spotActions(spot) { try { return spot.actions ? spot.actions() : []; } catch (e) { return []; } }
-// a figure is only there to click when the passage offers its path; the others always take a closer look
-function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
-// hover halo, the warm colour of the room
-var haloTex = tex(128, 128, function(cx, w, h) {
-// An uneven reflection on the object, with no outlined circumference.
-cx.save(); cx.translate(64,64); cx.scale(1,0.78);
-var g=cx.createRadialGradient(-5,-7,0,0,0,64);
-g.addColorStop(0,'rgba(255,232,181,0.78)'); g.addColorStop(0.16,'rgba(251,216,151,0.48)'); g.addColorStop(0.44,'rgba(230,177,98,0.19)'); g.addColorStop(0.78,'rgba(196,140,62,0.045)'); g.addColorStop(1,'rgba(180,120,30,0)');
-cx.fillStyle=g; cx.fillRect(-64,-82,128,164); cx.restore();
-});
-var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
-function haloAt(spot) {
-var wp = new THREE.Vector3();
-if (spot.root === photoG) wp.set(0.4, 2.0, -4.4);
-else if (spot.root === barG) wp.set(-1.5, 1.2, -0.3);
-else if (spot.root === doorG) wp.set(2.45, 1.3, -4.4);
-else if (spot.root === winG) wp.set(3.6, 1.95, -2.4);
-else spot.root.getWorldPosition(wp);
-if (spot.figure) wp.y += 0.45;
-halo.position.copy(wp);
-var sc = spot.root === barG || spot.root === photoG ? 1.4 : spot.root === doorG || spot.root === winG ? 1.1 : spot.figure ? 0.9 : 0.52;
-halo.scale.set(sc, sc, 1);
-}
-// resting glow: every clickable object breathes faintly at rest, so the eye finds it before the pointer does.
-// The hover halo above takes over (brighter, a little wider) when the pointer reaches it, so the two never stack.
-// Set window.DSS_RESTGLOW = false to switch it off, or to a number (0..1) to change how loud it sits.
-var restLevel = window.DSS_RESTGLOW === false ? 0 : (typeof window.DSS_RESTGLOW === 'number' ? window.DSS_RESTGLOW : 0.7);
-var restGroup = new THREE.Group(); restGroup.name = 'restGlow'; scene.add(restGroup);
-var restGlows = HOTSPOTS.map(function(spot, i) {
-var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-sp.visible = false; restGroup.add(sp);
-return { spot: spot, sp: sp, ph: i * 1.9, on: false };
-});
-var restNext = -1;
-var reveal = window.dssRoomReveal ? window.dssRoomReveal(fiWrap, camera, restGlows, function() { return camMode === 'idle'; }) : null;
-function restRefresh() {
-var keepP = halo.position.clone(), keepS = halo.scale.clone();
-restGlows.forEach(function(g) {
-g.on = restLevel > 0 && available(g.spot);
-if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
-});
-halo.position.copy(keepP); halo.scale.copy(keepS);
-}
-function restTick(t, still) {
-if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
-var idle = camMode === 'idle';
-restGlows.forEach(function(g) {
-var vis = idle && g.on && g.spot !== hoverSpot;
-g.sp.visible = vis;
-if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
-});
-}
-// the card: a caption, then either the passage's own links as buttons (their own words) or the pink line
-var card = document.createElement('div');
-card.className = 'dss-room-card';
-card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,86%);' +
-'font:15px/1.5 \'Crimson Text\',Georgia,serif;color:rgba(220,198,150,0.92);text-align:center;' +
-'background:rgba(10,7,4,0.78);border:1px solid rgba(200,168,106,0.32);padding:14px 22px 12px;border-radius:2px;' +
-'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
-fiWrap.appendChild(card);
-// the passage's words come into the room; links the close-ups claim are hidden there (window.dssRoomProse)
-var words = window.dssRoomProse ? window.dssRoomProse(fiHost, fiWrap, fiCanvas) : null;
-var wordsNext = 0;
-function claimedLinks() { return HOTSPOTS.reduce(function(a, sp) { return a.concat(spotActions(sp)); }, []); }
-var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:rgba(230,200,120,0.95);padding:9px 18px;border:1px solid rgba(200,170,100,0.45);background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
-function showCard(spot) {
-if (words) words.setMode('inspect');
-var acts = spotActions(spot);
-var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:rgba(200,180,140,0.5);margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
-if (acts.length) {
-var prose = spot.prose ? spot.prose() : '';
-if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
-html += '<div class="fi-actions"></div>';
-} else {
-html += '<div style="' + PINK + '">' + spot.line + '</div>';
-}
-// when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
-var wayOn = acts.length ? [] : HOTSPOTS.filter(function(sp) { return sp !== spot && spotActions(sp).length > 0; });
-if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
-html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.32);margin-top:8px;">' + ((acts.length || wayOn.length) ? 'OR CLICK ANYWHERE ELSE TO STEP BACK' : 'CLICK ANYWHERE TO STEP BACK') + '</div>';
-card.innerHTML = html;
-var row = card.querySelector('.fi-actions');
-if (row) acts.forEach(function(link) {
-var b = document.createElement('span');
-b.className = 'fi-action';
-b.textContent = link.textContent.trim();
-if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
-b.style.cssText = BTN;
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) {
-ev.stopPropagation();
-if (!link.isConnected) { stepBack(); return; }
-// the passage's own link does the work: its (set:)s, its go-to, its replace
-link.click();
-stepBack();
-});
-row.appendChild(b);
-});
-var wrow = card.querySelector('.fi-wayon');
-if (wrow) wayOn.forEach(function(sp) {
-var b = document.createElement('span');
-b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN;
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); activeSpot = sp; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); });
-wrow.appendChild(b);
-});
-card.style.pointerEvents = (acts.length || wayOn.length) ? 'auto' : 'none';
-card.style.opacity = '1';
-}
-// the camera
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null;
-var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
-var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
-function beginTween(toP, toT, next) {
-camFromP.copy(camera.position); camFromT.copy(curTarget);
-camToP.set(toP[0], toP[1], toP[2]); camToT.set(toT[0], toT[1], toT[2]);
-camK = fiStill ? 1 : 0; camNext = next; camMode = 'tween';
-}
-function stepBack() {
-if (words) words.setMode('idle');
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; doorLight.intensity = 0; doorGlow.material.opacity = 0;
-beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
-}
-var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
-function pick(ev) {
-var r = fiCanvas.getBoundingClientRect();
-mouseN.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
-ray.setFromCamera(mouseN, camera);
-var hits = ray.intersectObjects(hotspotRoots, true);
-for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
-return null;
-}
-var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(fiWrap) : function() {};
-fiCanvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
-var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; fiCanvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
-else { halo.visible = false; fiCanvas.style.cursor = 'default'; hoverName(null); }
-});
-fiCanvas.addEventListener('pointerleave', function() { hoverName(null); });
-fiCanvas.addEventListener('pointerdown', function(ev) {
-if (camMode === 'tween') return;
-if (camMode === 'inspect') { stepBack(); return; }
-var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
-if (!spot) { if (words) words.down(ev); return; }
-activeSpot = spot; halo.visible = false; fiCanvas.style.cursor = 'default';
-showCard(spot);
-beginTween(spot.pos, spot.tgt, 'inspect');
-if (spot.root === doorG) { doorLight.intensity = 0.9; doorGlow.material.opacity = 0.55; }
-});
-// a click on the dark of the card (not a button) steps back too
-card.addEventListener('pointerdown', function(ev) { if (camMode === 'inspect' && !ev.target.classList.contains('fi-action')) stepBack(); });
-var fiHint = document.createElement('div');
-fiHint.textContent = 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
-fiHint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:rgba(200,180,140,0.3);letter-spacing:3px;z-index:9003;pointer-events:none;opacity:0;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
-fiWrap.appendChild(fiHint);
-if (window.dssRoomHint) window.dssRoomHint(fiWrap, fiHint, 1); else { setTimeout(function() { fiHint.style.opacity = '1'; }, 2600); setTimeout(function() { fiHint.style.opacity = '0'; }, 9000); }
+// ---------- the hover, the card, the resting glow, the reveal and the words: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: fiWrap, canvas: fiCanvas, host: fiHost, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: fiStill,
+card: { fg: 'rgba(220,198,150,0.92)', bg: 'rgba(10,7,4,0.78)', border: 'rgba(200,168,106,0.32)', dim: 'rgba(200,180,140,0.5)', btn: 'rgba(230,200,120,0.95)', btnBorder: 'rgba(200,170,100,0.45)' }, hint: 'LOOK CLOSER AT WHAT CATCHES YOUR EYE', state: function() { return { active: fiActive, animId: fiAnimId }; } });
+var words = play.words, halo = play.halo, curTarget = play.curTarget;
 
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
-window._dssThreeRegistry['fi-wrap'].camera = camera;
-window._dssThreeRegistry['fi-wrap'].hotspots = HOTSPOTS;
 function fiAnimate() {
 fiAnimId = requestAnimationFrame(fiAnimate);
 var dt = Math.min(0.1, clock.getDelta());
 var t = fiStill ? 0 : clock.getElapsedTime();
-if (camMode === 'idle') {
-camera.position.set(CAM.x + Math.sin(t * 0.11) * 0.05, CAM.y + Math.sin(t * 0.17) * 0.02, CAM.z);
-curTarget.set(CAM.tx, CAM.ty, CAM.tz);
-} else if (camMode === 'tween') {
-camK = Math.min(1, camK + dt / 1.5);
-var e = camK * camK * (3 - 2 * camK);
-camera.position.lerpVectors(camFromP, camToP, e); curTarget.lerpVectors(camFromT, camToT, e);
-if (camK >= 1) camMode = camNext;
-} else {
-camera.position.x = camToP.x + Math.sin(t * 0.3) * 0.008; camera.position.y = camToP.y + Math.sin(t * 0.45) * 0.005;
-}
-camera.lookAt(curTarget);
-fiWrap.dataset.cam = camMode;
+play.frame(t, dt);
 if (!fiStill) {
 var breath = Math.sin(t * 0.43) * 0.035 + Math.sin(t * 0.19) * 0.018;
 lampMain.intensity = 2.25 + breath;
@@ -23373,12 +23256,8 @@ haze[0].material.opacity = 0.14 + breath * 0.18; haze[1].material.opacity = 0.14
 for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
 for (var m = 0; m < moteN; m++) { motePos[m * 3] = moteBase[m * 3] + Math.sin(t * 0.15 + m) * 0.08; motePos[m * 3 + 1] = 0.6 + ((moteBase[m * 3 + 1] - 0.6 + (m % 2 ? 1 : -1) * t * 0.04) % 2.4 + 2.4) % 2.4; }
 moteGeo.attributes.position.needsUpdate = true;
-if (halo.visible) { halo.material.opacity = 0.8 + Math.sin(t * 0.9) * 0.08; }
 }
-reflectRoom(curTarget);
-if (words && clock.getElapsedTime() >= wordsNext) { wordsNext = clock.getElapsedTime() + 0.5; words.refresh(claimedLinks()); }
-restTick(t, fiStill);
-if (reveal) reveal.tick();
+play.withGlowsHidden(function() { reflectRoom(curTarget); });
 if (composer) composer.render(); else renderer.render(scene, camera);
 }
 fiAnimate();
@@ -23590,9 +23469,9 @@ var pm = mcam.projectionMatrix.elements, cq = new THREE.Vector4((Math.sign(cp.x)
 cp.multiplyScalar(2 / cp.dot(cq)); pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1; pm[14] = cp.w;
 mat4.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mcam.projectionMatrix).multiply(mcam.matrixWorldInverse);
 var oldTarget = renderer.getRenderTarget(), oldTone = renderer.toneMapping;
-mirrors.forEach(function(o) { o.mesh.visible = false; }); var haloWas = typeof halo !== 'undefined' && halo.visible; if (haloWas) halo.visible = false;
+mirrors.forEach(function(o) { o.mesh.visible = false; });
 renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(target); renderer.render(scene, mcam);
-renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(o) { o.mesh.visible = true; }); if (haloWas) halo.visible = true;
+renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(o) { o.mesh.visible = true; });
 } };
 }
 var mirrors = [];
@@ -23949,7 +23828,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = ciHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(card && card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
 function lilyHook(n) { var pass = ciHost.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
@@ -23974,168 +23853,18 @@ line: 'An upright nobody has tuned since the war, a candle in a bottle on its li
 { root: winG, name: 'the window', pos: [1.2, 1.5, 1.4], tgt: [W / 2, 1.55, 1.15], haloAt: [W / 2 - 0.1, 1.55, 1.15], haloSc: 1.2,
 line: 'Dean Street through a net curtain, one floor down and a whole life away; the lamps are on, the pavement wet, and nobody is looking up. [Sam: the window onto Dean Street]' }
 ];
-var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
-function hotspotFor(obj) { while (obj) { var i = hotspotRoots.indexOf(obj); if (i >= 0) return HOTSPOTS[i]; obj = obj.parent; } return null; }
-function spotActions(spot) { try { return spot.actions ? spot.actions() : []; } catch (e) { return []; } }
-function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
-var haloTex = tex(128, 128, function(cx, w, h) {
-cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
-var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
-g.addColorStop(0, 'rgba(235,255,190,0.75)'); g.addColorStop(0.16, 'rgba(215,240,160,0.45)'); g.addColorStop(0.44, 'rgba(180,210,110,0.18)'); g.addColorStop(0.78, 'rgba(140,170,70,0.045)'); g.addColorStop(1, 'rgba(120,150,40,0)');
-cx.fillStyle = g; cx.fillRect(-64, -82, 128, 164); cx.restore();
-});
-var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
-function haloAt(spot) {
-var wp = new THREE.Vector3();
-if (spot.haloAt) wp.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else spot.root.getWorldPosition(wp);
-if (spot.figure) wp.y += 0.45;
-halo.position.copy(wp);
-var sc = spot.haloSc || (spot.figure ? 0.9 : 0.5);
-halo.scale.set(sc, sc, 1);
-}
-// resting glow: every clickable object breathes faintly at rest, so the eye finds it before the pointer does.
-// The hover halo above takes over (brighter, a little wider) when the pointer reaches it, so the two never stack.
-// Set window.DSS_RESTGLOW = false to switch it off, or to a number (0..1) to change how loud it sits.
-var restLevel = window.DSS_RESTGLOW === false ? 0 : (typeof window.DSS_RESTGLOW === 'number' ? window.DSS_RESTGLOW : 0.7);
-var restGroup = new THREE.Group(); restGroup.name = 'restGlow'; scene.add(restGroup);
-var restGlows = HOTSPOTS.map(function(spot, i) {
-var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-sp.visible = false; restGroup.add(sp);
-return { spot: spot, sp: sp, ph: i * 1.9, on: false };
-});
-var restNext = -1;
-var reveal = window.dssRoomReveal ? window.dssRoomReveal(ciWrap, camera, restGlows, function() { return camMode === 'idle'; }) : null;
-function restRefresh() {
-var keepP = halo.position.clone(), keepS = halo.scale.clone();
-restGlows.forEach(function(g) {
-g.on = restLevel > 0 && available(g.spot);
-if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
-});
-halo.position.copy(keepP); halo.scale.copy(keepS);
-}
-function restTick(t, still) {
-if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
-var idle = camMode === 'idle';
-restGlows.forEach(function(g) {
-var vis = idle && g.on && g.spot !== hoverSpot;
-g.sp.visible = vis;
-if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
-});
-}
-var card = document.createElement('div');
-card.className = 'dss-room-card';
-card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,86%);' +
-'font:15px/1.5 \'Crimson Text\',Georgia,serif;color:rgba(215,225,180,0.92);text-align:center;' +
-'background:rgba(6,10,4,0.8);border:1px solid rgba(170,200,110,0.3);padding:14px 22px 12px;border-radius:2px;' +
-'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
-ciWrap.appendChild(card);
-// the passage's words come into the room; links the close-ups claim are hidden there (window.dssRoomProse)
-var words = window.dssRoomProse ? window.dssRoomProse(ciHost, ciWrap, ciCanvas) : null;
-var wordsNext = 0;
-function claimedLinks() { return HOTSPOTS.reduce(function(a, sp) { return a.concat(spotActions(sp)); }, []); }
-var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:rgba(220,235,160,0.95);padding:9px 18px;border:1px solid rgba(180,200,110,0.45);background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
-function showCard(spot) {
-if (words) words.setMode('inspect');
-var acts = spotActions(spot);
-var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:rgba(190,200,150,0.5);margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
-if (acts.length) {
-var prose = spot.prose ? spot.prose() : '';
-if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
-html += '<div class="fi-actions"></div>';
-} else {
-html += '<div style="' + PINK + '">' + spot.line + '</div>';
-}
-// when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
-var wayOn = acts.length ? [] : HOTSPOTS.filter(function(sp) { return sp !== spot && spotActions(sp).length > 0; });
-if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
-html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(190,200,150,0.32);margin-top:8px;">' + ((acts.length || wayOn.length) ? 'OR CLICK ANYWHERE ELSE TO STEP BACK' : 'CLICK ANYWHERE TO STEP BACK') + '</div>';
-card.innerHTML = html;
-var row = card.querySelector('.fi-actions');
-if (row) acts.forEach(function(link) {
-var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); });
-row.appendChild(b);
-});
-var wrow = card.querySelector('.fi-wayon');
-if (wrow) wayOn.forEach(function(sp) {
-var b = document.createElement('span');
-b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN;
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); activeSpot = sp; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); });
-wrow.appendChild(b);
-});
-card.style.pointerEvents = (acts.length || wayOn.length) ? 'auto' : 'none';
-card.style.opacity = '1';
-}
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null;
-var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
-var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
-function beginTween(toP, toT, next) {
-camFromP.copy(camera.position); camFromT.copy(curTarget);
-camToP.set(toP[0], toP[1], toP[2]); camToT.set(toT[0], toT[1], toT[2]);
-camK = ciStill ? 1 : 0; camNext = next; camMode = 'tween';
-}
-function stepBack() {
-if (words) words.setMode('idle');
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none';
-beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
-}
-var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
-function pick(ev) {
-var r = ciCanvas.getBoundingClientRect();
-mouseN.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
-ray.setFromCamera(mouseN, camera);
-var hits = ray.intersectObjects(hotspotRoots, true);
-for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
-return null;
-}
-var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(ciWrap) : function() {};
-ciCanvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
-var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; ciCanvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
-else { halo.visible = false; ciCanvas.style.cursor = 'default'; hoverName(null); }
-});
-ciCanvas.addEventListener('pointerleave', function() { hoverName(null); });
-ciCanvas.addEventListener('pointerdown', function(ev) {
-if (camMode === 'tween') return;
-if (camMode === 'inspect') { stepBack(); return; }
-var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
-if (!spot) { if (words) words.down(ev); return; }
-activeSpot = spot; halo.visible = false; ciCanvas.style.cursor = 'default';
-showCard(spot);
-beginTween(spot.pos, spot.tgt, 'inspect');
-});
-card.addEventListener('pointerdown', function(ev) { if (camMode === 'inspect' && !ev.target.classList.contains('fi-action')) stepBack(); });
-var ciHint = document.createElement('div');
-ciHint.textContent = 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
-ciHint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:rgba(190,200,150,0.3);letter-spacing:3px;z-index:9003;pointer-events:none;opacity:0;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
-ciWrap.appendChild(ciHint);
-if (window.dssRoomHint) window.dssRoomHint(ciWrap, ciHint, 1); else { setTimeout(function() { ciHint.style.opacity = '1'; }, 2600); setTimeout(function() { ciHint.style.opacity = '0'; }, 9000); }
+// ---------- the hover, the card, the resting glow, the reveal and the words: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: ciWrap, canvas: ciCanvas, host: ciHost, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: ciStill,
+card: { fg: 'rgba(215,225,180,0.92)', bg: 'rgba(6,10,4,0.8)', border: 'rgba(170,200,110,0.3)', dim: 'rgba(190,200,150,0.5)', btn: 'rgba(220,235,160,0.95)', btnBorder: 'rgba(180,200,110,0.45)' }, hint: 'LOOK CLOSER AT WHAT CATCHES YOUR EYE', state: function() { return { active: ciActive, animId: ciAnimId }; } });
+var words = play.words, halo = play.halo, curTarget = play.curTarget;
 
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
-window._dssThreeRegistry['ci-wrap'].camera = camera;
-window._dssThreeRegistry['ci-wrap'].hotspots = HOTSPOTS;
 function ciAnimate() {
 ciAnimId = requestAnimationFrame(ciAnimate);
 var dt = Math.min(0.1, clock.getDelta());
 var t = ciStill ? 0 : clock.getElapsedTime();
-if (camMode === 'idle') {
-camera.position.set(CAM.x + Math.sin(t * 0.11) * 0.04, CAM.y + Math.sin(t * 0.17) * 0.02, CAM.z);
-curTarget.set(CAM.tx, CAM.ty, CAM.tz);
-} else if (camMode === 'tween') {
-camK = Math.min(1, camK + dt / 1.5);
-var e = camK * camK * (3 - 2 * camK);
-camera.position.lerpVectors(camFromP, camToP, e);
-curTarget.lerpVectors(camFromT, camToT, e);
-if (camK >= 1) camMode = camNext;
-}
-camera.lookAt(curTarget);
-if (ciWrap.dataset.cam !== camMode) ciWrap.dataset.cam = camMode;
+play.frame(t, dt);
 if (!ciStill) {
 for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
 flame.material.opacity = 0.75 + 0.25 * Math.sin(t * 9.1) * Math.sin(t * 3.7); candle.intensity = 0.45 + 0.1 * Math.sin(t * 7.3);
@@ -24143,15 +23872,10 @@ var br = 0.03 * Math.sin(t * 0.7) + 0.015 * Math.sin(t * 0.19); pend.intensity =
 barLamp.intensity = 0.7 + 0.02 * Math.sin(t * 0.53 + 1); barGlow.material.opacity = 0.45 + 0.02 * Math.sin(t * 0.53 + 1); candleGlow.material.opacity = 0.3 + 0.12 * Math.sin(t * 9.1) * Math.sin(t * 3.7);
 for (var m = 0; m < moteN; m++) { motePos[m * 3] = moteBase[m * 3] + Math.sin(t * 0.15 + m) * 0.06; motePos[m * 3 + 1] = 0.6 + ((moteBase[m * 3 + 1] - 0.6 + (m % 2 ? 1 : -1) * t * 0.03) % 1.7 + 1.7) % 1.7; }
 moteGeo.attributes.position.needsUpdate = true;
-if (halo.visible) halo.material.opacity = 0.8 + Math.sin(t * 0.9) * 0.08;
 }
-for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t);
-if (words && clock.getElapsedTime() >= wordsNext) { wordsNext = clock.getElapsedTime() + 0.5; words.refresh(claimedLinks()); }
-restTick(t, ciStill);
-if (reveal) reveal.tick();
+play.withGlowsHidden(function() { for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t); });
 if (composer) composer.render(); else renderer.render(scene, camera);
 }
-if (ciStill) { camera.lookAt(curTarget); ciWrap.dataset.cam = 'idle'; }
 ciAnimate();
 }
 
@@ -24400,9 +24124,9 @@ var pm = mcam.projectionMatrix.elements, cq = new THREE.Vector4((Math.sign(cp.x)
 cp.multiplyScalar(2 / cp.dot(cq)); pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1; pm[14] = cp.w;
 mat4.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mcam.projectionMatrix).multiply(mcam.matrixWorldInverse);
 var oldTarget = renderer.getRenderTarget(), oldTone = renderer.toneMapping;
-mirrors.forEach(function(o) { o.mesh.visible = false; }); var haloWas = typeof halo !== 'undefined' && halo.visible; if (haloWas) halo.visible = false;
+mirrors.forEach(function(o) { o.mesh.visible = false; });
 renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(target); renderer.render(scene, mcam);
-renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(o) { o.mesh.visible = true; }); if (haloWas) halo.visible = true;
+renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(o) { o.mesh.visible = true; });
 } };
 }
 var mirrors = [];
@@ -24785,7 +24509,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = piHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(card && card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
 function lilyHook(n) { var pass = piHost.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
@@ -24811,170 +24535,18 @@ line: 'The telephone on the back bar, under the bottles, the one that gets answe
 actions: function() { return byText(['Back to the street', 'Not tonight.']); },
 line: 'Rain on the diamond panes and the street lamp broken up by them; out there the runoff is a river now, and the river is coming in. [Sam: the lattice window]' }
 ];
-var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
-function hotspotFor(obj) { while (obj) { var i = hotspotRoots.indexOf(obj); if (i >= 0) return HOTSPOTS[i]; obj = obj.parent; } return null; }
-function spotActions(spot) { try { return spot.actions ? spot.actions() : []; } catch (e) { return []; } }
-function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
-var haloTex = tex(128, 128, function(cx, w, h) {
-cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
-var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
-g.addColorStop(0, 'rgba(235,255,190,0.75)'); g.addColorStop(0.16, 'rgba(215,240,160,0.45)'); g.addColorStop(0.44, 'rgba(180,210,110,0.18)'); g.addColorStop(0.78, 'rgba(140,170,70,0.045)'); g.addColorStop(1, 'rgba(120,150,40,0)');
-cx.fillStyle = g; cx.fillRect(-64, -82, 128, 164); cx.restore();
-});
-var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
-function haloAt(spot) {
-var wp = new THREE.Vector3();
-if (spot.haloAt) wp.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else spot.root.getWorldPosition(wp);
-if (spot.figure) wp.y += 0.45;
-halo.position.copy(wp);
-var sc = spot.haloSc || (spot.figure ? 0.9 : 0.5);
-halo.scale.set(sc, sc, 1);
-}
-// resting glow: every clickable object breathes faintly at rest, so the eye finds it before the pointer does.
-// The hover halo above takes over (brighter, a little wider) when the pointer reaches it, so the two never stack.
-// Set window.DSS_RESTGLOW = false to switch it off, or to a number (0..1) to change how loud it sits.
-var restLevel = window.DSS_RESTGLOW === false ? 0 : (typeof window.DSS_RESTGLOW === 'number' ? window.DSS_RESTGLOW : 0.7);
-var restGroup = new THREE.Group(); restGroup.name = 'restGlow'; scene.add(restGroup);
-var restGlows = HOTSPOTS.map(function(spot, i) {
-var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-sp.visible = false; restGroup.add(sp);
-return { spot: spot, sp: sp, ph: i * 1.9, on: false };
-});
-var restNext = -1;
-var reveal = window.dssRoomReveal ? window.dssRoomReveal(piWrap, camera, restGlows, function() { return camMode === 'idle'; }) : null;
-function restRefresh() {
-var keepP = halo.position.clone(), keepS = halo.scale.clone();
-restGlows.forEach(function(g) {
-g.on = restLevel > 0 && available(g.spot);
-if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
-});
-halo.position.copy(keepP); halo.scale.copy(keepS);
-}
-function restTick(t, still) {
-if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
-var idle = camMode === 'idle';
-restGlows.forEach(function(g) {
-var vis = idle && g.on && g.spot !== hoverSpot;
-g.sp.visible = vis;
-if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
-});
-}
-var card = document.createElement('div');
-card.className = 'dss-room-card';
-card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,86%);' +
-'font:15px/1.5 \'Crimson Text\',Georgia,serif;color:rgba(215,225,180,0.92);text-align:center;' +
-'background:rgba(6,10,4,0.8);border:1px solid rgba(170,200,110,0.3);padding:14px 22px 12px;border-radius:2px;' +
-'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
-piWrap.appendChild(card);
-// the passage's words come into the room; links the close-ups claim are hidden there (window.dssRoomProse)
-var words = window.dssRoomProse ? window.dssRoomProse(piHost, piWrap, piCanvas) : null;
-var wordsNext = 0;
-function claimedLinks() { return HOTSPOTS.reduce(function(a, sp) { return a.concat(spotActions(sp)); }, []); }
-var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:rgba(220,235,160,0.95);padding:9px 18px;border:1px solid rgba(180,200,110,0.45);background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
-function showCard(spot) {
-if (words) words.setMode('inspect');
-var acts = spotActions(spot);
-var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:rgba(190,200,150,0.5);margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
-if (acts.length) {
-var prose = spot.prose ? spot.prose() : '';
-if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
-html += '<div class="fi-actions"></div>';
-} else {
-html += '<div style="' + PINK + '">' + spot.line + '</div>';
-}
-// when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
-var wayOn = acts.length ? [] : HOTSPOTS.filter(function(sp) { return sp !== spot && spotActions(sp).length > 0; });
-if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
-html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(190,200,150,0.32);margin-top:8px;">' + ((acts.length || wayOn.length) ? 'OR CLICK ANYWHERE ELSE TO STEP BACK' : 'CLICK ANYWHERE TO STEP BACK') + '</div>';
-card.innerHTML = html;
-var row = card.querySelector('.fi-actions');
-if (row) acts.forEach(function(link) {
-var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); });
-row.appendChild(b);
-});
-var wrow = card.querySelector('.fi-wayon');
-if (wrow) wayOn.forEach(function(sp) {
-var b = document.createElement('span');
-b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN;
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); activeSpot = sp; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); });
-wrow.appendChild(b);
-});
-card.style.pointerEvents = (acts.length || wayOn.length) ? 'auto' : 'none';
-card.style.opacity = '1';
-}
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null;
-var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
-var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
-function beginTween(toP, toT, next) {
-camFromP.copy(camera.position); camFromT.copy(curTarget);
-camToP.set(toP[0], toP[1], toP[2]); camToT.set(toT[0], toT[1], toT[2]);
-camK = piStill ? 1 : 0; camNext = next; camMode = 'tween';
-}
-function stepBack() {
-if (words) words.setMode('idle');
-if (activeSpot && activeSpot.onLook) activeSpot.onLook(false);
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none';
-beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
-}
-var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
-function pick(ev) {
-var r = piCanvas.getBoundingClientRect();
-mouseN.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
-ray.setFromCamera(mouseN, camera);
-var hits = ray.intersectObjects(hotspotRoots, true);
-for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
-return null;
-}
-var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(piWrap) : function() {};
-piCanvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
-var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; piCanvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
-else { halo.visible = false; piCanvas.style.cursor = 'default'; hoverName(null); }
-});
-piCanvas.addEventListener('pointerleave', function() { hoverName(null); });
-piCanvas.addEventListener('pointerdown', function(ev) {
-if (camMode === 'tween') return;
-if (camMode === 'inspect') { stepBack(); return; }
-var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
-if (!spot) { if (words) words.down(ev); return; }
-activeSpot = spot; halo.visible = false; piCanvas.style.cursor = 'default';
-showCard(spot);
-beginTween(spot.pos, spot.tgt, 'inspect');
-if (spot.onLook) spot.onLook(true);
-});
-card.addEventListener('pointerdown', function(ev) { if (camMode === 'inspect' && !ev.target.classList.contains('fi-action')) stepBack(); });
-var piHint = document.createElement('div');
-piHint.textContent = 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
-piHint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:rgba(190,200,150,0.3);letter-spacing:3px;z-index:9003;pointer-events:none;opacity:0;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
-piWrap.appendChild(piHint);
-if (window.dssRoomHint) window.dssRoomHint(piWrap, piHint, 1); else { setTimeout(function() { piHint.style.opacity = '1'; }, 2600); setTimeout(function() { piHint.style.opacity = '0'; }, 9000); }
+// ---------- the hover, the card, the resting glow, the reveal and the words: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: piWrap, canvas: piCanvas, host: piHost, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: piStill,
+card: { fg: 'rgba(215,225,180,0.92)', bg: 'rgba(6,10,4,0.8)', border: 'rgba(170,200,110,0.3)', dim: 'rgba(190,200,150,0.5)', btn: 'rgba(220,235,160,0.95)', btnBorder: 'rgba(180,200,110,0.45)' }, hint: 'LOOK CLOSER AT WHAT CATCHES YOUR EYE', state: function() { return { active: piActive, animId: piAnimId }; } });
+var words = play.words, halo = play.halo, curTarget = play.curTarget;
 
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
-window._dssThreeRegistry['pi-wrap'].camera = camera;
-window._dssThreeRegistry['pi-wrap'].hotspots = HOTSPOTS;
 function piAnimate() {
 piAnimId = requestAnimationFrame(piAnimate);
 var dt = Math.min(0.1, clock.getDelta());
 var t = piStill ? 0 : clock.getElapsedTime();
-if (camMode === 'idle') {
-camera.position.set(CAM.x + Math.sin(t * 0.11) * 0.04, CAM.y + Math.sin(t * 0.17) * 0.02, CAM.z);
-curTarget.set(CAM.tx, CAM.ty, CAM.tz);
-} else if (camMode === 'tween') {
-camK = Math.min(1, camK + dt / 1.5);
-var e = camK * camK * (3 - 2 * camK);
-camera.position.lerpVectors(camFromP, camToP, e);
-curTarget.lerpVectors(camFromT, camToT, e);
-if (camK >= 1) camMode = camNext;
-}
-camera.lookAt(curTarget);
-if (piWrap.dataset.cam !== camMode) piWrap.dataset.cam = camMode;
+play.frame(t, dt);
 if (!piStill) {
 for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
 for (var li = 0; li < lamps.length; li++) { var br = 0.035 * Math.sin(t * (0.6 + li * 0.13) + li) + 0.018 * Math.sin(t * 0.19 + li * 2); lamps[li].intensity = 1.0 + br; glows[li].material.opacity = 0.55 + br * 0.6; haze[li].material.opacity = 0.12 + br * 0.2; }
@@ -24982,15 +24554,10 @@ smokes[0].position.x = Math.sin(t * 0.07) * 0.4; smokes[1].position.x = Math.cos
 rainTex.offset.y = -(t * 0.55) % 1; streetLamp.intensity = 0.5 + 0.03 * Math.sin(t * 2.3) + 0.02 * Math.sin(t * 5.1);
 for (var m = 0; m < moteN; m++) { motePos[m * 3] = moteBase[m * 3] + Math.sin(t * 0.15 + m) * 0.06; motePos[m * 3 + 1] = 0.6 + ((moteBase[m * 3 + 1] - 0.6 + (m % 2 ? 1 : -1) * t * 0.035) % 2.0 + 2.0) % 2.0; }
 moteGeo.attributes.position.needsUpdate = true;
-if (halo.visible) halo.material.opacity = 0.8 + Math.sin(t * 0.9) * 0.08;
 }
-for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t);
-if (words && clock.getElapsedTime() >= wordsNext) { wordsNext = clock.getElapsedTime() + 0.5; words.refresh(claimedLinks()); }
-restTick(t, piStill);
-if (reveal) reveal.tick();
+play.withGlowsHidden(function() { for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t); });
 if (composer) composer.render(); else renderer.render(scene, camera);
 }
-if (piStill) { camera.lookAt(curTarget); piWrap.dataset.cam = 'idle'; }
 piAnimate();
 }
 
@@ -25211,9 +24778,9 @@ var pm = mcam.projectionMatrix.elements, cq = new THREE.Vector4((Math.sign(cp.x)
 cp.multiplyScalar(2 / cp.dot(cq)); pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1; pm[14] = cp.w;
 mat4.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mcam.projectionMatrix).multiply(mcam.matrixWorldInverse);
 var oldTarget = renderer.getRenderTarget(), oldTone = renderer.toneMapping;
-mirrors.forEach(function(o) { o.mesh.visible = false; }); var haloWas = typeof halo !== 'undefined' && halo.visible; if (haloWas) halo.visible = false;
+mirrors.forEach(function(o) { o.mesh.visible = false; });
 renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(target); renderer.render(scene, mcam);
-renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(o) { o.mesh.visible = true; }); if (haloWas) halo.visible = true;
+renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(o) { o.mesh.visible = true; });
 } };
 }
 var mirrors = [];
@@ -25497,7 +25064,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = riHost.closest('tw-passage') || document.querySelector('tw-passage');
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(card && card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
 function lilyHook(n) { var pass = riHost.closest('tw-passage') || document.querySelector('tw-passage'); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
@@ -25523,168 +25090,19 @@ line: 'The wall of them, every one lit from the side and grinning or not, everyo
 actions: function() { return lilyHook(3); },
 line: 'A red lamp, a glass with a lipstick mark, a chair pushed back a little; whoever sat there is sitting there still, and will not look. [Sam: the empty table]' }
 ];
-var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
-function hotspotFor(obj) { while (obj) { var i = hotspotRoots.indexOf(obj); if (i >= 0) return HOTSPOTS[i]; obj = obj.parent; } return null; }
-function spotActions(spot) { try { return spot.actions ? spot.actions() : []; } catch (e) { return []; } }
-function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
-var haloTex = tex(128, 128, function(cx, w, h) {
-cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
-var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
-g.addColorStop(0, 'rgba(235,255,190,0.75)'); g.addColorStop(0.16, 'rgba(215,240,160,0.45)'); g.addColorStop(0.44, 'rgba(180,210,110,0.18)'); g.addColorStop(0.78, 'rgba(140,170,70,0.045)'); g.addColorStop(1, 'rgba(120,150,40,0)');
-cx.fillStyle = g; cx.fillRect(-64, -82, 128, 164); cx.restore();
-});
-var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
-function haloAt(spot) {
-var wp = new THREE.Vector3();
-if (spot.haloAt) wp.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else spot.root.getWorldPosition(wp);
-if (spot.figure) wp.y += 0.45;
-halo.position.copy(wp);
-var sc = spot.haloSc || (spot.figure ? 0.9 : 0.5);
-halo.scale.set(sc, sc, 1);
-}
-// resting glow: every clickable object breathes faintly at rest, so the eye finds it before the pointer does.
-// The hover halo above takes over (brighter, a little wider) when the pointer reaches it, so the two never stack.
-// Set window.DSS_RESTGLOW = false to switch it off, or to a number (0..1) to change how loud it sits.
-var restLevel = window.DSS_RESTGLOW === false ? 0 : (typeof window.DSS_RESTGLOW === 'number' ? window.DSS_RESTGLOW : 0.7);
-var restGroup = new THREE.Group(); restGroup.name = 'restGlow'; scene.add(restGroup);
-var restGlows = HOTSPOTS.map(function(spot, i) {
-var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-sp.visible = false; restGroup.add(sp);
-return { spot: spot, sp: sp, ph: i * 1.9, on: false };
-});
-var restNext = -1;
-var reveal = window.dssRoomReveal ? window.dssRoomReveal(riWrap, camera, restGlows, function() { return camMode === 'idle'; }) : null;
-function restRefresh() {
-var keepP = halo.position.clone(), keepS = halo.scale.clone();
-restGlows.forEach(function(g) {
-g.on = restLevel > 0 && available(g.spot);
-if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
-});
-halo.position.copy(keepP); halo.scale.copy(keepS);
-}
-function restTick(t, still) {
-if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
-var idle = camMode === 'idle';
-restGlows.forEach(function(g) {
-var vis = idle && g.on && g.spot !== hoverSpot;
-g.sp.visible = vis;
-if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
-});
-}
-var card = document.createElement('div');
-card.className = 'dss-room-card';
-card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,86%);' +
-'font:15px/1.5 \'Crimson Text\',Georgia,serif;color:rgba(215,225,180,0.92);text-align:center;' +
-'background:rgba(6,10,4,0.8);border:1px solid rgba(170,200,110,0.3);padding:14px 22px 12px;border-radius:2px;' +
-'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease;';
-riWrap.appendChild(card);
-// the passage's words come into the room; links the close-ups claim are hidden there (window.dssRoomProse)
-var words = window.dssRoomProse ? window.dssRoomProse(riHost, riWrap, riCanvas) : null;
-var wordsNext = 0;
-function claimedLinks() { return HOTSPOTS.reduce(function(a, sp) { return a.concat(spotActions(sp)); }, []); }
-var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:rgba(220,235,160,0.95);padding:9px 18px;border:1px solid rgba(180,200,110,0.45);background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
-function showCard(spot) {
-if (words) words.setMode('inspect');
-var acts = spotActions(spot);
-var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:rgba(190,200,150,0.5);margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
-if (acts.length) {
-var prose = spot.prose ? spot.prose() : '';
-if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
-html += '<div class="fi-actions"></div>';
-} else {
-html += '<div style="' + PINK + '">' + spot.line + '</div>';
-}
-// when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
-var wayOn = acts.length ? [] : HOTSPOTS.filter(function(sp) { return sp !== spot && spotActions(sp).length > 0; });
-if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
-html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(190,200,150,0.32);margin-top:8px;">' + ((acts.length || wayOn.length) ? 'OR CLICK ANYWHERE ELSE TO STEP BACK' : 'CLICK ANYWHERE TO STEP BACK') + '</div>';
-card.innerHTML = html;
-var row = card.querySelector('.fi-actions');
-if (row) acts.forEach(function(link) {
-var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); if (link.tagName !== 'TW-LINK') setTimeout(function() { try { var ar = document.getElementById('bar-arena') || link; ar.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} }, 250); });
-row.appendChild(b);
-});
-var wrow = card.querySelector('.fi-wayon');
-if (wrow) wayOn.forEach(function(sp) {
-var b = document.createElement('span');
-b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN;
-b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); activeSpot = sp; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); });
-wrow.appendChild(b);
-});
-card.style.pointerEvents = (acts.length || wayOn.length) ? 'auto' : 'none';
-card.style.opacity = '1';
-}
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null;
-var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
-var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
-function beginTween(toP, toT, next) {
-camFromP.copy(camera.position); camFromT.copy(curTarget);
-camToP.set(toP[0], toP[1], toP[2]); camToT.set(toT[0], toT[1], toT[2]);
-camK = riStill ? 1 : 0; camNext = next; camMode = 'tween';
-}
-function stepBack() {
-if (words) words.setMode('idle');
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none';
-beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
-}
-var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
-function pick(ev) {
-var r = riCanvas.getBoundingClientRect();
-mouseN.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
-ray.setFromCamera(mouseN, camera);
-var hits = ray.intersectObjects(hotspotRoots, true);
-for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
-return null;
-}
-var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(riWrap) : function() {};
-riCanvas.addEventListener('pointermove', function(ev) {
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
-var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; riCanvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
-else { halo.visible = false; riCanvas.style.cursor = 'default'; hoverName(null); }
-});
-riCanvas.addEventListener('pointerleave', function() { hoverName(null); });
-riCanvas.addEventListener('pointerdown', function(ev) {
-if (camMode === 'tween') return;
-if (camMode === 'inspect') { stepBack(); return; }
-var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
-if (!spot) { if (words) words.down(ev); return; }
-activeSpot = spot; halo.visible = false; riCanvas.style.cursor = 'default';
-showCard(spot);
-beginTween(spot.pos, spot.tgt, 'inspect');
-});
-card.addEventListener('pointerdown', function(ev) { if (camMode === 'inspect' && !ev.target.classList.contains('fi-action')) stepBack(); });
-var riHint = document.createElement('div');
-riHint.textContent = 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
-riHint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:rgba(190,200,150,0.3);letter-spacing:3px;z-index:9003;pointer-events:none;opacity:0;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
-riWrap.appendChild(riHint);
-if (window.dssRoomHint) window.dssRoomHint(riWrap, riHint, 1); else { setTimeout(function() { riHint.style.opacity = '1'; }, 2600); setTimeout(function() { riHint.style.opacity = '0'; }, 9000); }
+// ---------- the hover, the card, the resting glow, the reveal and the words: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: riWrap, canvas: riCanvas, host: riHost, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: riStill,
+card: { fg: 'rgba(215,225,180,0.92)', bg: 'rgba(6,10,4,0.8)', border: 'rgba(170,200,110,0.3)', dim: 'rgba(190,200,150,0.5)', btn: 'rgba(220,235,160,0.95)', btnBorder: 'rgba(180,200,110,0.45)' }, hint: 'LOOK CLOSER AT WHAT CATCHES YOUR EYE', state: function() { return { active: riActive, animId: riAnimId }; },
+onPress: function(spot, link) { if (link.tagName !== 'TW-LINK') setTimeout(function() { try { var ar = document.getElementById('bar-arena') || link; ar.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} }, 250); } });
+var words = play.words, halo = play.halo, curTarget = play.curTarget;
 
 // ---------- FRAMES ----------
 var clock = new THREE.Clock();
-window._dssThreeRegistry['ri-wrap'].camera = camera;
-window._dssThreeRegistry['ri-wrap'].hotspots = HOTSPOTS;
 function riAnimate() {
 riAnimId = requestAnimationFrame(riAnimate);
 var dt = Math.min(0.1, clock.getDelta());
 var t = riStill ? 0 : clock.getElapsedTime();
-if (camMode === 'idle') {
-camera.position.set(CAM.x + Math.sin(t * 0.11) * 0.04, CAM.y + Math.sin(t * 0.17) * 0.02, CAM.z);
-curTarget.set(CAM.tx, CAM.ty, CAM.tz);
-} else if (camMode === 'tween') {
-camK = Math.min(1, camK + dt / 1.5);
-var e = camK * camK * (3 - 2 * camK);
-camera.position.lerpVectors(camFromP, camToP, e);
-curTarget.lerpVectors(camFromT, camToT, e);
-if (camK >= 1) camMode = camNext;
-}
-camera.lookAt(curTarget);
-if (riWrap.dataset.cam !== camMode) riWrap.dataset.cam = camMode;
+play.frame(t, dt);
 if (!riStill) {
 for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
 spot.intensity = 3.2 + 0.12 * Math.sin(t * 0.5); cone.material.opacity = 0.46 + 0.05 * Math.sin(t * 0.37); spotGlow.material.opacity = 0.5 + 0.03 * Math.sin(t * 0.5); haze[0].material.opacity = 0.14 + 0.03 * Math.sin(t * 0.29);
@@ -25692,15 +25110,10 @@ for (var li = 0; li < lampLights.length; li++) { var lb = 0.08 * Math.sin(t * (1
 signGlow.material.opacity = 0.35 + 0.02 * Math.sin(t * 7.1) + 0.02 * Math.sin(t * 2.3); signLight.intensity = 0.6 + 0.03 * Math.sin(t * 7.1);
 for (var m = 0; m < moteN; m++) { motePos[m * 3] = moteBase[m * 3] + Math.sin(t * 0.15 + m) * 0.06; motePos[m * 3 + 1] = 0.5 + ((moteBase[m * 3 + 1] - 0.5 + (m % 2 ? 1 : -1) * t * 0.03) % 2.4 + 2.4) % 2.4; }
 moteGeo.attributes.position.needsUpdate = true;
-if (halo.visible) halo.material.opacity = 0.8 + Math.sin(t * 0.9) * 0.08;
 }
-for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t);
-if (words && clock.getElapsedTime() >= wordsNext) { wordsNext = clock.getElapsedTime() + 0.5; words.refresh(claimedLinks()); }
-restTick(t, riStill);
-if (reveal) reveal.tick();
+play.withGlowsHidden(function() { for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t); });
 if (composer) composer.render(); else renderer.render(scene, camera);
 }
-if (riStill) { camera.lookAt(curTarget); riWrap.dataset.cam = 'idle'; }
 riAnimate();
 }
 

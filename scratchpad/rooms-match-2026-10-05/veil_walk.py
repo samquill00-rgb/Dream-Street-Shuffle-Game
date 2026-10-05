@@ -81,12 +81,18 @@ for rid in want:
     check(strip_vis(p, w) and '[Sam: the words]' in labels, "%s: strip visible with the read-again control" % rid)
     unclaimed = p.evaluate("() => [...document.querySelectorAll('tw-passage .dss-room-prose tw-link')].filter(e=>e.getClientRects().length && !e.closest('.dss-claimed,.dss-claimed-wrap,.phone-ringing')).map(e=>e.textContent.trim()).filter(t=>t!=='AUDIT READ')")
     check(all(u in labels for u in unclaimed), "%s: every unclaimed link is on the strip (%s vs %s)" % (rid, unclaimed, labels))
-    p.wait_for_timeout(1400); h1 = hint_op(p, w); check(h1 not in (None, '0'), "%s: hint shows once the words are away (%s)" % (rid, h1))
+    # the hint comes up 0.9 s after the words go and fades in over 2 s; under software GL the timers lag, so wait for it
+    h1 = None
+    for _ in range(40):
+        p.wait_for_timeout(300); h1 = hint_op(p, w)
+        if h1 not in (None, '0'): break
+    check(h1 not in (None, '0'), "%s: hint shows once the words are away (%s)" % (rid, h1))
     shot(p, "%s-2-room" % rid)
     # the read-again control reopens, the veil click dismisses
     p.click('#%s .dss-room-strip-again' % w); p.wait_for_timeout(700)
     check(words(p, w) == 'modal', "%s: the words come back on the pink control" % rid)
-    r = p.evaluate("(w) => { const v=document.querySelector('tw-story > .dss-room-fixed').getBoundingClientRect(); return [v.left+20, v.top+v.height-8]; }", w)
+    # a tap on the dimmed room beside the sheet: the gutter is 4% of the width at most, so tap at x = 4
+    r = p.evaluate("(w) => { const v=document.querySelector('tw-story > .dss-room-fixed').getBoundingClientRect(); return [v.left+4, v.top+v.height-8]; }", w)
     p.mouse.click(r[0], r[1]); p.wait_for_timeout(800)
     check(words(p, w) == 'room', "%s: a click on the dimmed room dismisses" % rid)
     # a close-up and back

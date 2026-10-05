@@ -9767,15 +9767,99 @@ window.dssAudio = (function() {
     };
   }
   function startPissStream() {
-    // Higher splatter (stream hitting pavement/door), light thud body
-    return _startStream({
-      bpFreq: 1100, bpQ: 1.4,
-      wobbleHz: 3.2, wobbleAmt: 240,
-      peakGain: 0.20,
-      bodyFreq: 110, bodyType: 'sine', bodyGain: 0.06,
-      bodyWobbleHz: 2.4, bodyWobbleAmt: 18,
-      onset: false
-    });
+    // 2026-10-05 (Sam: "it doesn't sound like pissing, more of a hiss"): its own
+    // graph instead of the shared hiss. A stream is not steady noise: it sits low
+    // (the body of water on stone, 250 Hz to 1.5 kHz), it sputters (slow random
+    // turbulence, bursts every 40 to 120 ms), it burbles (a resonance that
+    // wanders), it splatters only faintly up high, it starts in a stutter and
+    // ends in dribbles rather than through a gate.
+    if (_muted) return { stop: function(){} };
+    var ac = getCtx(); if (!ac) return { stop: function(){} };
+    if (ac.state === 'suspended') { try { ac.resume(); } catch(e) {} }
+    var now = ac.currentTime, sr = ac.sampleRate;
+    // Sputtering source: lowpassed noise under a slow random turbulence envelope, six seconds on loop
+    var len = Math.floor(sr * 6);
+    var buf = ac.createBuffer(1, len, sr);
+    var d = buf.getChannelData(0);
+    var env = 0.6, target = 0.6, next = 0, lp = 0;
+    for (var i = 0; i < len; i++) {
+      if (i >= next) {
+        target = 0.3 + Math.random() * 0.7;
+        next = i + Math.floor(sr * (0.04 + Math.random() * 0.08));
+      }
+      env += (target - env) * 0.0008;
+      var w = Math.random() * 2 - 1;
+      lp += (w - lp) * 0.3;
+      d[i] = lp * env;
+    }
+    var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    var master = ac.createGain();
+    // The core: a wide low band, then a sharp wandering resonance (the burble), then a lid on the hiss
+    var core = ac.createBiquadFilter(); core.type = 'bandpass'; core.frequency.value = 560; core.Q.value = 0.6;
+    var burble = ac.createBiquadFilter(); burble.type = 'peaking'; burble.frequency.value = 640; burble.Q.value = 5; burble.gain.value = 10;
+    var lid = ac.createBiquadFilter(); lid.type = 'lowpass'; lid.frequency.value = 2000; lid.Q.value = 0.5;
+    var coreGain = ac.createGain(); coreGain.gain.value = 1.0;
+    src.connect(core); core.connect(burble); burble.connect(lid); lid.connect(coreGain); coreGain.connect(master);
+    var w1 = ac.createOscillator(); w1.type = 'sine'; w1.frequency.value = 0.37;
+    var w1g = ac.createGain(); w1g.gain.value = 140; w1.connect(w1g); w1g.connect(burble.frequency);
+    var w2 = ac.createOscillator(); w2.type = 'sine'; w2.frequency.value = 2.3;
+    var w2g = ac.createGain(); w2g.gain.value = 60; w2.connect(w2g); w2g.connect(burble.frequency);
+    // The splatter: what little goes high, fluttering on its own
+    var hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2600; hp.Q.value = 0.7;
+    var splash = ac.createGain(); splash.gain.value = 0.11;
+    var fl = ac.createOscillator(); fl.type = 'sine'; fl.frequency.value = 9;
+    var flg = ac.createGain(); flg.gain.value = 0.06; fl.connect(flg); flg.connect(splash.gain);
+    src.connect(hp); hp.connect(splash); splash.connect(master);
+    // The body: a low weight under it, swaying a little
+    var body = ac.createOscillator(); body.type = 'sine'; body.frequency.value = 92;
+    var bodyGain = ac.createGain(); bodyGain.gain.value = 0.035;
+    var bl = ac.createOscillator(); bl.type = 'sine'; bl.frequency.value = 1.3;
+    var blg = ac.createGain(); blg.gain.value = 7; bl.connect(blg); blg.connect(body.frequency);
+    body.connect(bodyGain); bodyGain.connect(master);
+    master.connect(ac.destination);
+    // Start: a stutter, then it finds its stream
+    var peak = 0.3;
+    master.gain.setValueAtTime(0, now);
+    master.gain.linearRampToValueAtTime(peak * 0.55, now + 0.07);
+    master.gain.linearRampToValueAtTime(peak * 0.15, now + 0.16);
+    master.gain.linearRampToValueAtTime(peak * 0.8, now + 0.28);
+    master.gain.linearRampToValueAtTime(peak * 0.4, now + 0.38);
+    master.gain.linearRampToValueAtTime(peak, now + 0.65);
+    src.start(now); w1.start(now); w2.start(now); fl.start(now); body.start(now); bl.start(now);
+    var stopped = false;
+    return {
+      stop: function() {
+        if (stopped) return; stopped = true;
+        var t = ac.currentTime;
+        try {
+          // The stream falls away: weaker, lower, then three dribbles
+          master.gain.cancelScheduledValues(t);
+          master.gain.setValueAtTime(master.gain.value, t);
+          master.gain.linearRampToValueAtTime(peak * 0.5, t + 0.25);
+          master.gain.linearRampToValueAtTime(0.0001, t + 0.6);
+          burble.frequency.cancelScheduledValues(t);
+          burble.frequency.setValueAtTime(burble.frequency.value, t);
+          burble.frequency.exponentialRampToValueAtTime(300, t + 0.6);
+          core.frequency.setValueAtTime(560, t);
+          core.frequency.exponentialRampToValueAtTime(360, t + 0.6);
+          [0.62, 0.86, 1.18].forEach(function(off, n) {
+            var dLen = Math.floor(sr * 0.09);
+            var dBuf = ac.createBuffer(1, dLen, sr);
+            var dd = dBuf.getChannelData(0);
+            for (var k = 0; k < dLen; k++) dd[k] = (Math.random()*2-1) * Math.exp(-k / (sr * 0.02));
+            var dSrc = ac.createBufferSource(); dSrc.buffer = dBuf;
+            var dBp = ac.createBiquadFilter(); dBp.type = 'bandpass'; dBp.frequency.value = 900 - n * 120; dBp.Q.value = 3;
+            var dG = ac.createGain(); dG.gain.value = 0.16 - n * 0.04;
+            dSrc.connect(dBp); dBp.connect(dG); dG.connect(ac.destination);
+            dSrc.start(t + off);
+          });
+        } catch(e) {}
+        setTimeout(function() {
+          [src, w1, w2, fl, body, bl].forEach(function(n) { try { n.stop(); } catch(e) {} });
+          try { master.disconnect(); } catch(e) {}
+        }, 1500);
+      }
+    };
   }
   function startRetchStream() {
     // Wetter, lower-pitched splash (liquid into water), with a gut gurgle

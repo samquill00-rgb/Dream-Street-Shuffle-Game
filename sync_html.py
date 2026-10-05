@@ -65,6 +65,7 @@ AUDIO_EMBEDS = [
     ("__DSS_WALTZ_DATA_URI__",       "the-cecil-court-waltz.m4a",                      "audio/mp4"),
     ("__DSS_INTERVAL_RADIO_DATA_URI__", "the-interval-radio.m4a",                       "audio/mp4"),
     ("__DSS_LACKLAND_DATA_URI__",    "lacklands-office-music.m4a",                     "audio/mp4"),
+    ("__DSS_DOORWAY_STREAM_DATA_URI__", "the-doorway-stream.mp3",                       "audio/mpeg"),
 ]
 
 # ============================================================

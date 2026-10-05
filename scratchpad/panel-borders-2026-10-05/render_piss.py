@@ -14,6 +14,11 @@ window.webkitAudioContext = window.AudioContext;
 p.goto("http://localhost:8777/Dream%20Street%20Shuffle.html", wait_until="domcontentloaded")
 p.wait_for_timeout(1500)
 data = p.evaluate("""async () => {
+  if (window.dssAudio.primePissStream) {
+    window.dssAudio.primePissStream();
+    for (let i = 0; i < 100; i++) { await new Promise(r => setTimeout(r, 100)); if (window.__off && window.__off.state === 'suspended' && window.dssAudio._pissReady && window.dssAudio._pissReady()) break; }
+    await new Promise(r => setTimeout(r, 1500));
+  }
   const c = window.dssAudio.startPissStream();
   const ac = window.__off;
   if (!ac) return null;

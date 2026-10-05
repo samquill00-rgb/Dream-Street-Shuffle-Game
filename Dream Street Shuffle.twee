@@ -660,111 +660,61 @@ window.dssAudio = (function() {
       }
     };
   }
+  // 2026-10-05 (Sam: the synthesised stream sounded like wind, then a shaker, then a
+  // hiss; "water on concrete"): the doorway plays a file instead, the-doorway-stream.mp3,
+  // made from noise in Python (scratchpad/panel-borders-2026-10-05/make_stream.py): eight
+  // seconds of stream that loop while the player holds, then the stream failing and
+  // dribbling, played once on release. The retch below keeps its synthesis.
+  var PISS_URL = '__DSS_DOORWAY_STREAM_DATA_URI__', PISS_BODY = 8.0, PISS_LEVEL = 0.8;
+  var _pissBuf = null, _pissOff = 0, _pissLoading = false, _pissWaiters = [];
+  function primePissStream() {
+    if (_pissBuf || _pissLoading) return;
+    var ac = getCtx(); if (!ac) return;
+    _pissLoading = true;
+    try {
+      fetch(PISS_URL).then(function(r) { return r.arrayBuffer(); }).then(function(ab) {
+        ac.decodeAudioData(ab, function(buf) {
+          // the encoder pads the start with silence; the loop and the tail count from the first sound
+          var d = buf.getChannelData(0), off = 0;
+          while (off < d.length && Math.abs(d[off]) < 0.01) off++;
+          _pissOff = off / buf.sampleRate; _pissBuf = buf; _pissLoading = false;
+          var w = _pissWaiters; _pissWaiters = []; w.forEach(function(fn) { fn(buf); });
+        }, function() { _pissLoading = false; });
+      }).catch(function() { _pissLoading = false; });
+    } catch(e) { _pissLoading = false; }
+  }
   function startPissStream() {
-    // 2026-10-05 (Sam: "it doesn't sound like pissing, more of a hiss"; then "still a
-    // bit like wind, it needs to be more pitter patter, a fast dripping tap"): the
-    // sound is built from drops, not from noise. A dense random train of small
-    // impacts (each a millisecond of noise ringing a resonance between 700 Hz and
-    // 3.5 kHz for a few ms), clustering and thinning the way a stream does on
-    // stone, over a quiet low bed for the mass of the water. It starts with a few
-    // drops finding their rate and ends with the drops thinning out.
     if (_muted) return { stop: function(){} };
     var ac = getCtx(); if (!ac) return { stop: function(){} };
     if (ac.state === 'suspended') { try { ac.resume(); } catch(e) {} }
-    var now = ac.currentTime, sr = ac.sampleRate;
-    // one drop: a short noise burst through a two-pole resonator, written into d at pos
-    function addDrop(d, pos, amp) {
-      // 2026-10-05 (Sam: "more tinny, it still sounds quite melodic"): the ring is
-      // too short to make a pitch (under 2.5 ms), sits higher (1.5 to 6 kHz), and
-      // is two inharmonic resonances at once, the clatter of a drop on tin
-      var f1 = 1500 + Math.random() * 4500, f2 = f1 * (1.9 + Math.random() * 0.8);
-      var decay = 0.0006 + Math.random() * 0.0019;
-      var r = Math.exp(-1 / (sr * decay));
-      var w1 = 2 * Math.PI * f1 / sr, w2 = 2 * Math.PI * Math.min(f2, sr * 0.45) / sr;
-      var a1 = 2 * r * Math.cos(w1), b1 = 2 * r * Math.cos(w2), a2 = r * r;
-      var burst = Math.floor(sr * 0.0008), n = Math.floor(sr * decay * 6);
-      var y1 = 0, y2 = 0, z1 = 0, z2 = 0;
-      for (var k = 0; k < n && pos + k < d.length; k++) {
-        var x = k < burst ? (Math.random() * 2 - 1) * amp : 0;
-        var y = x + a1 * y1 - a2 * y2; y2 = y1; y1 = y;
-        var z = x + b1 * z1 - a2 * z2; z2 = z1; z1 = z;
-        d[pos + k] += (y + 0.7 * z) * (1 - r) * 6;
-      }
+    var g = ac.createGain(); g.gain.value = 0; g.connect(ac.destination);
+    var src = null, stopped = false;
+    function begin(buf) {
+      if (stopped) return;
+      var now = ac.currentTime;
+      src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+      src.loopStart = _pissOff; src.loopEnd = Math.min(_pissOff + PISS_BODY, buf.duration);
+      src.connect(g); src.start(now, _pissOff);
+      g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(PISS_LEVEL, now + 0.04);
     }
-    // the stream: six seconds of drops on loop, 12 to 55 ms apart, with gaps now and then
-    var len = Math.floor(sr * 6);
-    var buf = ac.createBuffer(1, len, sr);
-    var d = buf.getChannelData(0);
-    var t = 0;
-    while (t < len) {
-      addDrop(d, Math.floor(t), 0.35 + Math.random() * 0.65);
-      var gap = 0.012 + Math.random() * 0.043;
-      if (Math.random() < 0.12) gap *= 2.5;
-      t += sr * gap;
-    }
-    var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
-    var master = ac.createGain();
-    var hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1100; hp.Q.value = 0.7;
-    var dropGain = ac.createGain(); dropGain.gain.value = 1.0;
-    src.connect(hp); hp.connect(dropGain); dropGain.connect(master);
-    // the bed: the mass of the water, low and quiet, under the drops
-    var bLen = Math.floor(sr * 3);
-    var bBuf = ac.createBuffer(1, bLen, sr);
-    var bd = bBuf.getChannelData(0);
-    var lp = 0;
-    for (var i = 0; i < bLen; i++) { var wn = Math.random() * 2 - 1; lp += (wn - lp) * 0.08; bd[i] = lp; }
-    var bed = ac.createBufferSource(); bed.buffer = bBuf; bed.loop = true;
-    var bedLp = ac.createBiquadFilter(); bedLp.type = 'lowpass'; bedLp.frequency.value = 600; bedLp.Q.value = 0.6;
-    var bedGain = ac.createGain(); bedGain.gain.value = 0.08;
-    bed.connect(bedLp); bedLp.connect(bedGain); bedGain.connect(master);
-    // the hiss (Sam: "almost like a hiss noise"): a thin bright hiss over the drops, fluttering with them
-    var hLen = Math.floor(sr * 2);
-    var hBuf = ac.createBuffer(1, hLen, sr);
-    var hd = hBuf.getChannelData(0);
-    for (var j = 0; j < hLen; j++) hd[j] = Math.random() * 2 - 1;
-    var hiss = ac.createBufferSource(); hiss.buffer = hBuf; hiss.loop = true;
-    var hissHp = ac.createBiquadFilter(); hissHp.type = 'highpass'; hissHp.frequency.value = 3200; hissHp.Q.value = 0.7;
-    var hissGain = ac.createGain(); hissGain.gain.value = 0.05;
-    var fl = ac.createOscillator(); fl.type = 'sine'; fl.frequency.value = 11;
-    var flg = ac.createGain(); flg.gain.value = 0.025; fl.connect(flg); flg.connect(hissGain.gain);
-    hiss.connect(hissHp); hissHp.connect(hissGain); hissGain.connect(master);
-    var body = ac.createOscillator(); body.type = 'sine'; body.frequency.value = 92;
-    var bodyGain = ac.createGain(); bodyGain.gain.value = 0.015;
-    body.connect(bodyGain); bodyGain.connect(master);
-    master.connect(ac.destination);
-    // start: a few drops, then the rate
-    var peak = 0.5;
-    master.gain.setValueAtTime(0, now);
-    master.gain.linearRampToValueAtTime(peak * 0.5, now + 0.06);
-    master.gain.linearRampToValueAtTime(peak * 0.2, now + 0.15);
-    master.gain.linearRampToValueAtTime(peak * 0.85, now + 0.3);
-    master.gain.linearRampToValueAtTime(peak, now + 0.55);
-    src.start(now); bed.start(now); hiss.start(now); fl.start(now); body.start(now);
-    var stopped = false;
+    if (_pissBuf) begin(_pissBuf); else { _pissWaiters.push(begin); primePissStream(); }
     return {
       stop: function() {
         if (stopped) return; stopped = true;
-        var t0 = ac.currentTime;
+        var t = ac.currentTime;
         try {
-          master.gain.cancelScheduledValues(t0);
-          master.gain.setValueAtTime(master.gain.value, t0);
-          master.gain.linearRampToValueAtTime(peak * 0.45, t0 + 0.2);
-          master.gain.linearRampToValueAtTime(0.0001, t0 + 0.45);
-          // the drops thin out: seven on their own, further and further apart
-          [0.42, 0.52, 0.66, 0.84, 1.08, 1.4, 1.82].forEach(function(off, n) {
-            var dLen = Math.floor(sr * 0.08);
-            var dBuf = ac.createBuffer(1, dLen, sr);
-            addDrop(dBuf.getChannelData(0), 0, 0.9 - n * 0.08);
-            var dSrc = ac.createBufferSource(); dSrc.buffer = dBuf;
-            var dG = ac.createGain(); dG.gain.value = peak * (0.9 - n * 0.09);
-            dSrc.connect(dG); dG.connect(ac.destination);
-            dSrc.start(t0 + off);
-          });
+          g.gain.cancelScheduledValues(t);
+          g.gain.setValueAtTime(g.gain.value, t);
+          g.gain.linearRampToValueAtTime(0.0001, t + 0.1);
         } catch(e) {}
-        setTimeout(function() {
-          [src, bed, hiss, fl, body].forEach(function(n) { try { n.stop(); } catch(e) {} });
-          try { master.disconnect(); } catch(e) {}
-        }, 1200);
+        if (src && _pissBuf && _pissBuf.duration > _pissOff + PISS_BODY + 0.5) {
+          try {
+            var tail = ac.createBufferSource(); tail.buffer = _pissBuf;
+            var tg = ac.createGain(); tg.gain.value = PISS_LEVEL; tail.connect(tg); tg.connect(ac.destination);
+            tail.start(t + 0.02, _pissOff + PISS_BODY);
+          } catch(e) {}
+        }
+        setTimeout(function() { try { if (src) src.stop(); } catch(e) {} try { g.disconnect(); } catch(e) {} }, 250);
       }
     };
   }
@@ -3803,7 +3753,7 @@ window.dssAudio = (function() {
   }
   return {
     pour: pour, sip: sip, phoneRing: phoneRing, pageRustle: pageRustle, pageShuffle: pageShuffle,
-    startPissStream: startPissStream, startRetchStream: startRetchStream,
+    startPissStream: startPissStream, primePissStream: primePissStream, startRetchStream: startRetchStream,
     typewriterTick: typewriterTick, typewriterClack: typewriterClack,
     itemFound: itemFound,
     penScratch: penScratch, heartbeat: heartbeat,
@@ -12517,6 +12467,8 @@ window.showDrinkPopupSafe = function(typeOrFn, delay) {
 window.SpewPopup = class SpewPopup {
 constructor(mode) {
   this.mode = (mode === 'doorway') ? 'doorway' : 'gents';
+  // the doorway's stream is a file: fetch and decode it as the popup opens, so the hold plays at once
+  if (this.mode === 'doorway' && window.dssAudio && window.dssAudio.primePissStream) { try { window.dssAudio.primePissStream(); } catch(e) {} }
   this.done = false;
   this.closing = false;
   this.retching = false;

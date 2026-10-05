@@ -674,16 +674,21 @@ window.dssAudio = (function() {
     var now = ac.currentTime, sr = ac.sampleRate;
     // one drop: a short noise burst through a two-pole resonator, written into d at pos
     function addDrop(d, pos, amp) {
-      var f = 700 + Math.random() * 2800, decay = 0.003 + Math.random() * 0.009;
-      var r = Math.exp(-1 / (sr * decay)), w = 2 * Math.PI * f / sr;
-      var a1 = 2 * r * Math.cos(w), a2 = r * r;
-      var burst = Math.floor(sr * 0.0012), n = Math.floor(sr * decay * 6);
-      var y1 = 0, y2 = 0;
+      // 2026-10-05 (Sam: "more tinny, it still sounds quite melodic"): the ring is
+      // too short to make a pitch (under 2.5 ms), sits higher (1.5 to 6 kHz), and
+      // is two inharmonic resonances at once, the clatter of a drop on tin
+      var f1 = 1500 + Math.random() * 4500, f2 = f1 * (1.9 + Math.random() * 0.8);
+      var decay = 0.0006 + Math.random() * 0.0019;
+      var r = Math.exp(-1 / (sr * decay));
+      var w1 = 2 * Math.PI * f1 / sr, w2 = 2 * Math.PI * Math.min(f2, sr * 0.45) / sr;
+      var a1 = 2 * r * Math.cos(w1), b1 = 2 * r * Math.cos(w2), a2 = r * r;
+      var burst = Math.floor(sr * 0.0008), n = Math.floor(sr * decay * 6);
+      var y1 = 0, y2 = 0, z1 = 0, z2 = 0;
       for (var k = 0; k < n && pos + k < d.length; k++) {
         var x = k < burst ? (Math.random() * 2 - 1) * amp : 0;
-        var y = x + a1 * y1 - a2 * y2;
-        y2 = y1; y1 = y;
-        d[pos + k] += y * (1 - r) * 6;
+        var y = x + a1 * y1 - a2 * y2; y2 = y1; y1 = y;
+        var z = x + b1 * z1 - a2 * z2; z2 = z1; z1 = z;
+        d[pos + k] += (y + 0.7 * z) * (1 - r) * 6;
       }
     }
     // the stream: six seconds of drops on loop, 12 to 55 ms apart, with gaps now and then
@@ -699,7 +704,7 @@ window.dssAudio = (function() {
     }
     var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
     var master = ac.createGain();
-    var hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500; hp.Q.value = 0.7;
+    var hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1100; hp.Q.value = 0.7;
     var dropGain = ac.createGain(); dropGain.gain.value = 1.0;
     src.connect(hp); hp.connect(dropGain); dropGain.connect(master);
     // the bed: the mass of the water, low and quiet, under the drops
@@ -710,8 +715,19 @@ window.dssAudio = (function() {
     for (var i = 0; i < bLen; i++) { var wn = Math.random() * 2 - 1; lp += (wn - lp) * 0.08; bd[i] = lp; }
     var bed = ac.createBufferSource(); bed.buffer = bBuf; bed.loop = true;
     var bedLp = ac.createBiquadFilter(); bedLp.type = 'lowpass'; bedLp.frequency.value = 600; bedLp.Q.value = 0.6;
-    var bedGain = ac.createGain(); bedGain.gain.value = 0.12;
+    var bedGain = ac.createGain(); bedGain.gain.value = 0.08;
     bed.connect(bedLp); bedLp.connect(bedGain); bedGain.connect(master);
+    // the hiss (Sam: "almost like a hiss noise"): a thin bright hiss over the drops, fluttering with them
+    var hLen = Math.floor(sr * 2);
+    var hBuf = ac.createBuffer(1, hLen, sr);
+    var hd = hBuf.getChannelData(0);
+    for (var j = 0; j < hLen; j++) hd[j] = Math.random() * 2 - 1;
+    var hiss = ac.createBufferSource(); hiss.buffer = hBuf; hiss.loop = true;
+    var hissHp = ac.createBiquadFilter(); hissHp.type = 'highpass'; hissHp.frequency.value = 3200; hissHp.Q.value = 0.7;
+    var hissGain = ac.createGain(); hissGain.gain.value = 0.05;
+    var fl = ac.createOscillator(); fl.type = 'sine'; fl.frequency.value = 11;
+    var flg = ac.createGain(); flg.gain.value = 0.025; fl.connect(flg); flg.connect(hissGain.gain);
+    hiss.connect(hissHp); hissHp.connect(hissGain); hissGain.connect(master);
     var body = ac.createOscillator(); body.type = 'sine'; body.frequency.value = 92;
     var bodyGain = ac.createGain(); bodyGain.gain.value = 0.015;
     body.connect(bodyGain); bodyGain.connect(master);
@@ -723,7 +739,7 @@ window.dssAudio = (function() {
     master.gain.linearRampToValueAtTime(peak * 0.2, now + 0.15);
     master.gain.linearRampToValueAtTime(peak * 0.85, now + 0.3);
     master.gain.linearRampToValueAtTime(peak, now + 0.55);
-    src.start(now); bed.start(now); body.start(now);
+    src.start(now); bed.start(now); hiss.start(now); fl.start(now); body.start(now);
     var stopped = false;
     return {
       stop: function() {
@@ -746,7 +762,7 @@ window.dssAudio = (function() {
           });
         } catch(e) {}
         setTimeout(function() {
-          [src, bed, body].forEach(function(n) { try { n.stop(); } catch(e) {} });
+          [src, bed, hiss, fl, body].forEach(function(n) { try { n.stop(); } catch(e) {} });
           try { master.disconnect(); } catch(e) {}
         }, 1200);
       }

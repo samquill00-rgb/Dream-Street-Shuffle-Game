@@ -9779,97 +9779,94 @@ window.dssAudio = (function() {
     };
   }
   function startPissStream() {
-    // 2026-10-05 (Sam: "it doesn't sound like pissing, more of a hiss"): its own
-    // graph instead of the shared hiss. A stream is not steady noise: it sits low
-    // (the body of water on stone, 250 Hz to 1.5 kHz), it sputters (slow random
-    // turbulence, bursts every 40 to 120 ms), it burbles (a resonance that
-    // wanders), it splatters only faintly up high, it starts in a stutter and
-    // ends in dribbles rather than through a gate.
+    // 2026-10-05 (Sam: "it doesn't sound like pissing, more of a hiss"; then "still a
+    // bit like wind, it needs to be more pitter patter, a fast dripping tap"): the
+    // sound is built from drops, not from noise. A dense random train of small
+    // impacts (each a millisecond of noise ringing a resonance between 700 Hz and
+    // 3.5 kHz for a few ms), clustering and thinning the way a stream does on
+    // stone, over a quiet low bed for the mass of the water. It starts with a few
+    // drops finding their rate and ends with the drops thinning out.
     if (_muted) return { stop: function(){} };
     var ac = getCtx(); if (!ac) return { stop: function(){} };
     if (ac.state === 'suspended') { try { ac.resume(); } catch(e) {} }
     var now = ac.currentTime, sr = ac.sampleRate;
-    // Sputtering source: lowpassed noise under a slow random turbulence envelope, six seconds on loop
+    // one drop: a short noise burst through a two-pole resonator, written into d at pos
+    function addDrop(d, pos, amp) {
+      var f = 700 + Math.random() * 2800, decay = 0.003 + Math.random() * 0.009;
+      var r = Math.exp(-1 / (sr * decay)), w = 2 * Math.PI * f / sr;
+      var a1 = 2 * r * Math.cos(w), a2 = r * r;
+      var burst = Math.floor(sr * 0.0012), n = Math.floor(sr * decay * 6);
+      var y1 = 0, y2 = 0;
+      for (var k = 0; k < n && pos + k < d.length; k++) {
+        var x = k < burst ? (Math.random() * 2 - 1) * amp : 0;
+        var y = x + a1 * y1 - a2 * y2;
+        y2 = y1; y1 = y;
+        d[pos + k] += y * (1 - r) * 6;
+      }
+    }
+    // the stream: six seconds of drops on loop, 12 to 55 ms apart, with gaps now and then
     var len = Math.floor(sr * 6);
     var buf = ac.createBuffer(1, len, sr);
     var d = buf.getChannelData(0);
-    var env = 0.6, target = 0.6, next = 0, lp = 0;
-    for (var i = 0; i < len; i++) {
-      if (i >= next) {
-        target = 0.3 + Math.random() * 0.7;
-        next = i + Math.floor(sr * (0.04 + Math.random() * 0.08));
-      }
-      env += (target - env) * 0.0008;
-      var w = Math.random() * 2 - 1;
-      lp += (w - lp) * 0.3;
-      d[i] = lp * env;
+    var t = 0;
+    while (t < len) {
+      addDrop(d, Math.floor(t), 0.35 + Math.random() * 0.65);
+      var gap = 0.012 + Math.random() * 0.043;
+      if (Math.random() < 0.12) gap *= 2.5;
+      t += sr * gap;
     }
     var src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
     var master = ac.createGain();
-    // The core: a wide low band, then a sharp wandering resonance (the burble), then a lid on the hiss
-    var core = ac.createBiquadFilter(); core.type = 'bandpass'; core.frequency.value = 560; core.Q.value = 0.6;
-    var burble = ac.createBiquadFilter(); burble.type = 'peaking'; burble.frequency.value = 640; burble.Q.value = 5; burble.gain.value = 10;
-    var lid = ac.createBiquadFilter(); lid.type = 'lowpass'; lid.frequency.value = 2000; lid.Q.value = 0.5;
-    var coreGain = ac.createGain(); coreGain.gain.value = 1.0;
-    src.connect(core); core.connect(burble); burble.connect(lid); lid.connect(coreGain); coreGain.connect(master);
-    var w1 = ac.createOscillator(); w1.type = 'sine'; w1.frequency.value = 0.37;
-    var w1g = ac.createGain(); w1g.gain.value = 140; w1.connect(w1g); w1g.connect(burble.frequency);
-    var w2 = ac.createOscillator(); w2.type = 'sine'; w2.frequency.value = 2.3;
-    var w2g = ac.createGain(); w2g.gain.value = 60; w2.connect(w2g); w2g.connect(burble.frequency);
-    // The splatter: what little goes high, fluttering on its own
-    var hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2600; hp.Q.value = 0.7;
-    var splash = ac.createGain(); splash.gain.value = 0.11;
-    var fl = ac.createOscillator(); fl.type = 'sine'; fl.frequency.value = 9;
-    var flg = ac.createGain(); flg.gain.value = 0.06; fl.connect(flg); flg.connect(splash.gain);
-    src.connect(hp); hp.connect(splash); splash.connect(master);
-    // The body: a low weight under it, swaying a little
+    var hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500; hp.Q.value = 0.7;
+    var dropGain = ac.createGain(); dropGain.gain.value = 1.0;
+    src.connect(hp); hp.connect(dropGain); dropGain.connect(master);
+    // the bed: the mass of the water, low and quiet, under the drops
+    var bLen = Math.floor(sr * 3);
+    var bBuf = ac.createBuffer(1, bLen, sr);
+    var bd = bBuf.getChannelData(0);
+    var lp = 0;
+    for (var i = 0; i < bLen; i++) { var wn = Math.random() * 2 - 1; lp += (wn - lp) * 0.08; bd[i] = lp; }
+    var bed = ac.createBufferSource(); bed.buffer = bBuf; bed.loop = true;
+    var bedLp = ac.createBiquadFilter(); bedLp.type = 'lowpass'; bedLp.frequency.value = 600; bedLp.Q.value = 0.6;
+    var bedGain = ac.createGain(); bedGain.gain.value = 0.12;
+    bed.connect(bedLp); bedLp.connect(bedGain); bedGain.connect(master);
     var body = ac.createOscillator(); body.type = 'sine'; body.frequency.value = 92;
-    var bodyGain = ac.createGain(); bodyGain.gain.value = 0.035;
-    var bl = ac.createOscillator(); bl.type = 'sine'; bl.frequency.value = 1.3;
-    var blg = ac.createGain(); blg.gain.value = 7; bl.connect(blg); blg.connect(body.frequency);
+    var bodyGain = ac.createGain(); bodyGain.gain.value = 0.015;
     body.connect(bodyGain); bodyGain.connect(master);
     master.connect(ac.destination);
-    // Start: a stutter, then it finds its stream
-    var peak = 0.3;
+    // start: a few drops, then the rate
+    var peak = 0.5;
     master.gain.setValueAtTime(0, now);
-    master.gain.linearRampToValueAtTime(peak * 0.55, now + 0.07);
-    master.gain.linearRampToValueAtTime(peak * 0.15, now + 0.16);
-    master.gain.linearRampToValueAtTime(peak * 0.8, now + 0.28);
-    master.gain.linearRampToValueAtTime(peak * 0.4, now + 0.38);
-    master.gain.linearRampToValueAtTime(peak, now + 0.65);
-    src.start(now); w1.start(now); w2.start(now); fl.start(now); body.start(now); bl.start(now);
+    master.gain.linearRampToValueAtTime(peak * 0.5, now + 0.06);
+    master.gain.linearRampToValueAtTime(peak * 0.2, now + 0.15);
+    master.gain.linearRampToValueAtTime(peak * 0.85, now + 0.3);
+    master.gain.linearRampToValueAtTime(peak, now + 0.55);
+    src.start(now); bed.start(now); body.start(now);
     var stopped = false;
     return {
       stop: function() {
         if (stopped) return; stopped = true;
-        var t = ac.currentTime;
+        var t0 = ac.currentTime;
         try {
-          // The stream falls away: weaker, lower, then three dribbles
-          master.gain.cancelScheduledValues(t);
-          master.gain.setValueAtTime(master.gain.value, t);
-          master.gain.linearRampToValueAtTime(peak * 0.5, t + 0.25);
-          master.gain.linearRampToValueAtTime(0.0001, t + 0.6);
-          burble.frequency.cancelScheduledValues(t);
-          burble.frequency.setValueAtTime(burble.frequency.value, t);
-          burble.frequency.exponentialRampToValueAtTime(300, t + 0.6);
-          core.frequency.setValueAtTime(560, t);
-          core.frequency.exponentialRampToValueAtTime(360, t + 0.6);
-          [0.62, 0.86, 1.18].forEach(function(off, n) {
-            var dLen = Math.floor(sr * 0.09);
+          master.gain.cancelScheduledValues(t0);
+          master.gain.setValueAtTime(master.gain.value, t0);
+          master.gain.linearRampToValueAtTime(peak * 0.45, t0 + 0.2);
+          master.gain.linearRampToValueAtTime(0.0001, t0 + 0.45);
+          // the drops thin out: seven on their own, further and further apart
+          [0.42, 0.52, 0.66, 0.84, 1.08, 1.4, 1.82].forEach(function(off, n) {
+            var dLen = Math.floor(sr * 0.08);
             var dBuf = ac.createBuffer(1, dLen, sr);
-            var dd = dBuf.getChannelData(0);
-            for (var k = 0; k < dLen; k++) dd[k] = (Math.random()*2-1) * Math.exp(-k / (sr * 0.02));
+            addDrop(dBuf.getChannelData(0), 0, 0.9 - n * 0.08);
             var dSrc = ac.createBufferSource(); dSrc.buffer = dBuf;
-            var dBp = ac.createBiquadFilter(); dBp.type = 'bandpass'; dBp.frequency.value = 900 - n * 120; dBp.Q.value = 3;
-            var dG = ac.createGain(); dG.gain.value = 0.16 - n * 0.04;
-            dSrc.connect(dBp); dBp.connect(dG); dG.connect(ac.destination);
-            dSrc.start(t + off);
+            var dG = ac.createGain(); dG.gain.value = peak * (0.9 - n * 0.09);
+            dSrc.connect(dG); dG.connect(ac.destination);
+            dSrc.start(t0 + off);
           });
         } catch(e) {}
         setTimeout(function() {
-          [src, w1, w2, fl, body, bl].forEach(function(n) { try { n.stop(); } catch(e) {} });
+          [src, bed, body].forEach(function(n) { try { n.stop(); } catch(e) {} });
           try { master.disconnect(); } catch(e) {}
-        }, 1500);
+        }, 1200);
       }
     };
   }

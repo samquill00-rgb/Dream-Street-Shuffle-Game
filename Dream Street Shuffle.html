@@ -2242,6 +2242,14 @@ tw-passage:has(#lk-container):not(:has(#lk-wrap))::after,
 tw-passage:has(#cf-container):not(:has(#cf-wrap))::after,
 tw-passage:has(#cu-container):not(:has(#cu-wrap))::after,
 tw-passage:has(#oi-container):not(:has(#oi-wrap))::after { content: '[Sam: the room is on its way]'; position: fixed; left: 0; right: 0; top: 46%; text-align: center; font: 11px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: #ff3aa8; text-shadow: 0 0 4px rgba(255, 58, 168, 0.45); pointer-events: none; opacity: 0; animation: dss-room-wait 1.2s ease 1.1s forwards; }
+/* First-load line (2026-10-05): shown by window.dssLoadLine while three.js and the effect scripts fetch for the first 3D scene of a night */
+#dss-load-line { position: fixed; left: 0; right: 0; bottom: 11%; z-index: 9600; text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.9s ease; }
+#dss-load-line.on { opacity: 1; }
+#dss-load-line .dss-load-text { font: 11px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: #ff3aa8; text-shadow: 0 0 4px rgba(255, 58, 168, 0.45); margin-bottom: 10px; }
+#dss-load-line.dss-load-bar-only .dss-load-text { display: none; }
+#dss-load-line .dss-load-bar { width: 168px; height: 1px; margin: 0 auto; background: rgba(255, 58, 168, 0.22); }
+#dss-load-line .dss-load-bar i { display: block; height: 100%; width: 0; background: #ff3aa8; box-shadow: 0 0 6px rgba(255, 58, 168, 0.6); transition: width 0.4s ease; }
+@media (prefers-reduced-motion: reduce) { #dss-load-line, #dss-load-line .dss-load-bar i { transition: none; } }
 @keyframes dss-room-wait { to { opacity: 0.8; } }
 @media (prefers-reduced-motion: reduce) { tw-passage:has(#fi-container):not(:has(#fi-wrap))::after { animation-duration: 0.01s; } }
 /* 2026-10-05 (Sam: the clickables should be as obvious as Disco Elysium's): the reveal.
@@ -25660,6 +25668,61 @@ window.dssGuardComposerRender = function(composer, renderer) {
       }
     });
   } catch(e) {}
+})();
+// ---------- FIRST-LOAD LINE (2026-10-05) ----------
+// The first 3D scene of a night fetches three.min.js and ten effect scripts
+// uncached; on a slow line that is seconds of dark page, which reads as broken.
+// Watches for those script tags as any of the 32 loaders appends them and
+// shows one pink line with a thin hairline that fills as the scripts land.
+// Cached loads finish inside the 350 ms grace and never show it.
+(function() {
+  var ROOM_IDS = ['fi','ci','pi','ri','cu','cb','ti','lk','cf','oi'];
+  var pending = 0, seen = 0, ahead = 0, el = null, showTimer = null;
+  function build() {
+    if (el) return el;
+    el = document.createElement('div'); el.id = 'dss-load-line'; el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<div class="dss-load-text">[Sam: the street is on its way]</div><div class="dss-load-bar"><i></i></div>';
+    document.body.appendChild(el); return el;
+  }
+  function paint() {
+    if (!el) return;
+    var total = seen + pending + ahead, i = el.querySelector('.dss-load-bar i');
+    if (i) i.style.width = (total ? Math.round(100 * seen / total) : 0) + '%';
+    // a venue room carries its own pink cue; keep only the hairline there
+    var room = ROOM_IDS.some(function(id) { return document.querySelector('tw-passage #' + id + '-container') && !document.getElementById(id + '-wrap'); });
+    el.classList.toggle('dss-load-bar-only', !!room);
+  }
+  function show() {
+    if (showTimer || (el && el.classList.contains('on'))) return;
+    showTimer = setTimeout(function() { showTimer = null; if (!pending) return; build(); paint(); el.classList.add('on'); }, 350);
+  }
+  function hide() {
+    if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+    if (!el) return; paint(); el.classList.remove('on');
+  }
+  function track(s) {
+    if (s.__dssLoadLine) return; s.__dssLoadLine = true;
+    var isThree = /three\.min\.js/.test(s.src);
+    pending++;
+    if (isThree) ahead = (window.dssPostScriptURLs || []).length || 10; else if (ahead > 0) ahead--;
+    show(); paint();
+    var did = false;
+    var done = function() { if (did) return; did = true; pending--; seen++; if (pending <= 0) { pending = 0; ahead = 0; hide(); } else paint(); };
+    s.addEventListener('load', done); s.addEventListener('error', done);
+    setTimeout(function() { if (!did && !s.isConnected) done(); }, 30000);
+  }
+  function scan(nodes) {
+    for (var k = 0; k < nodes.length; k++) {
+      var n = nodes[k];
+      if (n.nodeType !== 1) continue;
+      if (n.tagName === 'SCRIPT' && /vendor\/three\//.test(n.getAttribute('src') || '')) track(n);
+    }
+  }
+  try {
+    new MutationObserver(function(ms) { for (var j = 0; j < ms.length; j++) scan(ms[j].addedNodes); })
+      .observe(document.documentElement, { childList: true, subtree: true });
+  } catch(e) {}
+  window.dssLoadLine = { state: function() { return { pending: pending, seen: seen, ahead: ahead, on: !!(el && el.classList.contains('on')) }; } };
 })();
 // ============================================================
 // CINEMATIC POST-PROCESSING (shared) — the Fagin's-den pipeline for every

@@ -39,10 +39,10 @@ while pos < BODY + TAIL:
 sheet = shaped_noise(N, lambda f: np.where(f < 50, 0, (1 / (1 + (600 / (f + 1)) ** 2)) * (1 / (1 + (f / 4500) ** 2)) * (1 / np.sqrt(f / 600 + 1))), r)
 
 # 3. the turbulence: how a stream pulses. slow wander x pulse (9 to 15 Hz, smooth) x fast sputter
-wander = 1 + 0.25 * smooth_noise(N, 0.4, r)
+wander = 1 + 0.08 * smooth_noise(N, 0.4, r)   # (Sam: less fluctuating) a faint swell only
 pulse_f = 9 + 6 * (smooth_noise(N, 0.2, r) * 0.5 + 0.5)
-pulse = 1 + 0.28 * np.sin(2 * np.pi * np.cumsum(pulse_f) / SR)
-sputter = np.clip(1 + 0.5 * smooth_noise(N, 35, r), 0.1, None)
+pulse = 1 + 0.1 * np.sin(2 * np.pi * np.cumsum(pulse_f) / SR)
+sputter = np.clip(1 + 0.3 * smooth_noise(N, 35, r), 0.1, None)
 turb = np.clip(wander * pulse * sputter, 0, None)
 
 # 4. the ground: concrete gives the splash a hard slap, a very short early reflection, and a dry resonance near 3 kHz

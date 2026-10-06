@@ -1,0 +1,3 @@
+const rx={batemans:/^Bateman['’]s Buildings$/i, stannes:/^St Anne['’]s Court$/i, walkers:/^Walker['’]s Court$/i, cecil:/Cecil Court|O['’]Flatterly|antiquarian/i, ginger:/See who|Ginger Light/i, lack:/Lackland/i, trish:/Trisha/i, ron:/Ronnie Scott/i};
+const labels={batemans:"Bateman’s Buildings", stannes:"St Anne’s Court", walkers:"Walker’s Court", cecil:"Return the page to O’Flatterly", ginger:"See who’s there", lack:"Go to Lackland’s Office", trish:"Try Trisha’s", ron:"Hear the jazz at Ronnie Scott’s"};
+for (const k in rx) console.log(k, rx[k].test(labels[k]), "| straight too:", rx[k].test(labels[k].replace(/’/g,"'")));

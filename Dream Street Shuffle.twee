@@ -4207,6 +4207,21 @@ window.dssDeferIfBusy = function(retry) {
 // south and east edges let you walk off the map for a beat and come back.
 var T = 16, COLS = 52, ROWS = 44, VC = 26, VR = 26, SKY = 3;
 var W = VC*T, H = (VR+SKY)*T;         // the canvas: the view plus the sky band
+// THE VIEW LOSES ROWS, NEVER COLUMNS (Sam, 2026-10-06: "on laptop the walkable map
+// loses a bit of height if that's what it needs, but no width"). On a 1440x900
+// laptop the hub's title block puts the top of the map 555px down, and a 26x29
+// view drawn 544px wide runs 607px tall: its foot, the Shaftesbury Avenue side,
+// sat 260px below the window's edge. Shrinking it would cost width, and a
+// 26-tile Soho is the one thing the map must keep (see the lamp gutter note in
+// the stylesheet). So the view stays 26 columns at the same tile size and shows
+// FEWER ROWS when the window is short: fitRows() measures the height left under
+// the top of the map, keeps the sky band, and clamps at VR_MIN rows of street,
+// which at 544px wide is 14 rows in all and lands the foot and its bar just
+// inside 900. The world is unchanged; the camera already scrolls with the
+// figure, so a shorter view simply shows less of Soho at once. Phones (640px
+// and under) keep the full 26 rows: scrolling is the norm there and the d-pad
+// sits under the map anyway.
+var VR_FULL = 26, VR_MIN = 11;
 var WW = COLS*T, WH = ROWS*T;         // the world in pixels
 var WIN_BLINK = [], CHIMNEYS = [], WARM_WINS = []; // WARM_WINS (2026-09-12): lit windows that go dark as the night runs down
 
@@ -4903,6 +4918,27 @@ function init(container) {
   container.appendChild(wrap);
   passage.classList.add('soho-map-on');
   var x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
+  // how many rows of street fit under the top of the map (see VR_MIN above).
+  // Measured against the document, not the scroll, so it is the same answer
+  // whether the hub arrives at the top of the page or part-way down it.
+  function fitRows() {
+    if (!(window.innerWidth > 640)) return VR_FULL;
+    var sw = stage.clientWidth; if (!sw) return VR_FULL;
+    var tile = sw / VC;
+    var top = stage.getBoundingClientRect().top + (window.pageYOffset || 0);
+    var barH = bar.offsetHeight || 0;
+    var spare = window.innerHeight - top - barH - 24;
+    var rows = Math.floor(spare / tile) - SKY;
+    return Math.max(VR_MIN, Math.min(VR_FULL, rows));
+  }
+  function applyRows() {
+    var rows = fitRows();
+    if (rows === VR && cv.height === H) return false;
+    VR = rows; H = (VR + SKY) * T;
+    cv.height = H; x.imageSmoothingEnabled = false; // a resized canvas forgets its smoothing flag
+    return true;
+  }
+  applyRows();
 
   // ---- overlays (labels, doorway marks, light spill, chevrons) keep WORLD px in data-wx/wy
   // and are placed against the camera every frame the camera moves ----
@@ -5064,7 +5100,7 @@ function init(container) {
     }
   }
   placeOverlays(); settleLabels(); setTimeout(settleLabels, 700);
-  var onResize = function(){ settleLabels(); };
+  var onResize = function(){ applyRows(); settleLabels(); };
   window.addEventListener('resize', onResize);
 
   // The player's explicit action calls a real Harlowe link; damage is story state.
@@ -5160,6 +5196,7 @@ function init(container) {
   function tick() {
     if (!S.alive) return;
     S.t++;
+    if (S.t <= 90 && applyRows()) settleLabels(); // the header lifts and the title block settles under us in the first frames: at init the map's top reads ~150px low
     if(S.t%10===0)smashButton.style.display=nearWindow()&&!busy()?'block':'none';
     if (S.lockY != null && S.t < S.lockT && Math.abs(window.scrollY - S.lockY) > 2) { try { window.scrollTo(0, S.lockY); } catch(e) {} }
     if (S.noteFlash && S.noteFlash.t > 0) { S.noteFlash.t--; if (S.noteFlash.t === 0) { S.noteFlash = null; refreshBar(); } }
@@ -67309,12 +67346,14 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
    never showed here. The wrap is an ordinary block that ignores floats, so the
    gutter goes on it and the stage fills the wrap with nothing left to swing. */
 .soho-map-wrap { display: block; position: relative; z-index: 2; margin: 0.2em 178px 0.8em 0; }
-/* 100vh changes under you in Safari when the toolbar collapses, which resized
-   the map mid-play (Sam, 2026-09-14: "the map just changed size when I left the
-   French"). svh is the SMALL viewport height — the toolbar-out measurement — and
-   it does not move. vh first as the fallback for anything that lacks svh. */
-.soho-map-stage, .soho-map-bar { width: 100%; max-width: min(920px, calc((100vh - 200px) * 26 / 29)); margin-left: auto; margin-right: 0; }
-.soho-map-stage, .soho-map-bar { max-width: min(920px, calc((100svh - 200px) * 26 / 29)); }
+/* No height-based cap on the WIDTH any more. Until 2026-10-06 this line also
+   read max-width: min(920px, calc((100svh - 200px) * 26 / 29)), paying for a
+   short window in width; the map now pays in ROWS instead (fitRows() in the
+   UserScript, Sam: "loses a bit of height if that's what it needs, but no
+   width"). The svh lesson still stands if a viewport unit ever comes back here:
+   100vh moves under you in Safari when the toolbar collapses (Sam, 2026-09-14:
+   "the map just changed size when I left the French"); svh does not. */
+.soho-map-stage, .soho-map-bar { width: 100%; max-width: 920px; margin-left: auto; margin-right: 0; }
 .soho-map-stage { position: relative; container-type: inline-size; overflow: hidden; }
 /* THE LAMP GUTTER, AND WHEN TO STOP PAYING IT. Above the breakpoint the map
    sits BESIDE the lamp and gives up a fixed 178px to it. Fixed is the problem:
@@ -67329,8 +67368,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
    with the lamp beside it. Below that the map CLEARS the lamp and takes the
    whole column instead, which at 1024 is 614px — wider than the 379 it used
    to be given, and at 820 it is 492 rather than 256.
-   The height cap stays on in this band so the whole map still fits the window;
-   only the phone tier drops it, where scrolling is the norm anyway.
+   In this band the view still gives up rows to fit the window (fitRows());
+   only the phone tier keeps all 26, where scrolling is the norm anyway.
    NB sizeLamp() in the UserScript HAS to agree about which side of this line
    we are on. If it thinks the map is beside the lamp when the CSS has cleared
    it, it measures to content the clear has pushed below the float, the lamp

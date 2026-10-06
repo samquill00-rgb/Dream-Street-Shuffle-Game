@@ -33,7 +33,7 @@ def run(label, width, height, reduced, plan):
         marked=p.evaluate("!!document.querySelector('#hm-mark tw-hook') && !document.querySelector('#hm-mark tw-link')")
         print(label, "revealed", revealed, "flag link consumed", marked)
         p.screenshot(path=OUT+label+"-03-revealed.png")
-        p.locator("tw-link", has_text="Listen until it resolves").first.click(); time.sleep(1.5)
+        p.locator("tw-link", has_text="Keep listening").first.click(); time.sleep(1.5)
         p.screenshot(path=OUT+label+"-04-proportion.png", full_page=True)
         print(label, "tw-errors:", p.locator("tw-error").count(), "js errors:", [e for e in errs if "audio" not in e.lower() and "decod" not in e.lower()][:5])
         p.locator("tw-link", has_text="Back the way you came").first.click(); time.sleep(1.2)

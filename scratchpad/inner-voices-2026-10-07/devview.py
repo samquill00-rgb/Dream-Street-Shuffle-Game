@@ -15,4 +15,8 @@ print('menu flipped:', p.evaluate("() => window.dssVoices.has('cf/the menu')"), 
 p.evaluate("() => document.getElementById('dss-dbg-voices').scrollIntoView()")
 p.screenshot(path=os.path.join(OUT, 'dev-voices.png'))
 print(p._errs[:2])
+# "Open" jumps into the room: pick the Coach, press Open, the page reloads into the Coach
+p.click('.dss-dbg-vroom[data-room="cb"]'); p.wait_for_timeout(300)
+p.click('#dss-dbg-voices .dss-dbg-jump'); p.wait_for_timeout(6000)
+print("after Open:", p.evaluate("() => document.querySelector('#audit-name')?.textContent || location.hash"))
 g.close()

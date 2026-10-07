@@ -22793,6 +22793,7 @@ css.textContent = '.dss-room-card.dss-card-narrow{font-size:13.5px!important;lin
 (document.head || document.documentElement).appendChild(css);
 } catch (e) {}
 var V = window.DSS_VOICES, KEY = 'dssVoicesSeen', ORDER = ['now', 'then', 'id'], SW = V.switches || {};
+var SR_NAME = { now: 'you now', then: 'you then', id: 'the id' };
 var ROOM_NAME = { fi: 'The French', ci: 'The Colony Room', pi: 'The Pillars of Hercules', ri: 'Ronnie Scott’s', cf: 'the chippy', cb: 'the Coach', ti: 'Trisha’s', lk: 'Lackland’s office', oi: 'O’Flatterly’s shop', cu: 'the cellar' };
 // the Dean Street map door each room is reached by (the cellar lies through the Colony's door)
 var MAP_DOOR = { fi: 'french', ci: 'colony', cu: 'colony', pi: 'pillars', ri: 'ronnies', cf: 'chippy', cb: 'coach', ti: 'trishas', lk: 'lackland', oi: 'cecil' };
@@ -22857,7 +22858,8 @@ ls.forEach(function(l) {
 var c = V.cast[l.voice] || {}, draft = l.text.indexOf('[Sam:') >= 0;
 h += '<div class="dss-voice dss-voice-' + l.voice + '" style="margin:3px 0;' + (draft ? PINK : (c.css || '')) + '">' +
 '<span aria-hidden="true" style="display:inline-block;width:5px;height:5px;border-radius:50%;margin:0 7px 2px 0;vertical-align:middle;background:' + (c.mark || '#ccc') + ';box-shadow:0 0 5px ' + (c.mark || '#ccc') + ';"></span>' +
-(c.label ? '<span class="dss-voice-label" style="font:10px \'Courier New\',monospace;letter-spacing:2px;text-transform:uppercase;font-style:normal;color:' + (c.mark || '#ccc') + ';margin-right:7px;">' + esc(c.label) + '</span>' : '') + esc(l.text) + '</div>';
+'<span class="dss-sr" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">' + esc(c.label || SR_NAME[l.voice] || l.voice) + ': </span>' +
+(c.label ? '<span class="dss-voice-label" aria-hidden="true" style="font:10px \'Courier New\',monospace;letter-spacing:2px;text-transform:uppercase;font-style:normal;color:' + (c.mark || '#ccc') + ';margin-right:7px;">' + esc(c.label) + '</span>' : '') + esc(l.text) + '</div>';
 });
 return h + '</div>';
 }
@@ -23081,6 +23083,7 @@ card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translate
 'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.7,.2,1), border-color 1.6s ease, box-shadow 1.6s ease;' +
 // 2026-10-07: with the voices a card can outgrow a phone's room; it stops short of the room's top and scrolls
 'max-height:calc(100% - 64px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;';
+card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-hidden', 'true'); card.tabIndex = -1;
 wrap.appendChild(card);
 // 2026-10-05 overnight: the card rises a few pixels as it comes, and settles back as it goes
 card.style.transform = 'translate(-50%, 8px)';
@@ -23124,7 +23127,7 @@ Array.prototype.forEach.call(card.querySelectorAll('.dss-card-keyart svg'), func
 var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN;
+b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; keyable(b);
 if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
 if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
@@ -23134,14 +23137,16 @@ row.appendChild(b);
 var wrow = card.querySelector('.fi-wayon');
 if (wrow) wayOn.forEach(function(sp) {
 var b = document.createElement('span');
-b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN;
+b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN; keyable(b);
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
 b.addEventListener('click', function(ev) { ev.stopPropagation(); if (activeSpot && activeSpot.onLook) activeSpot.onLook(false); activeSpot = sp; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(true); });
 wrow.appendChild(b);
 });
 // 2026-10-07: always live, so a long card of words alone can be scrolled; a click on it steps back as before
-card.style.pointerEvents = 'auto'; cardShownAt = Date.now();
+card.style.pointerEvents = 'auto'; cardShownAt = Date.now(); card.setAttribute('aria-hidden', 'false');
 card.style.opacity = '1';
+// opened from the keyboard: the focus goes to the card's first choice, or the card itself
+if (byKey) { var fb = card.querySelector('.fi-action'); try { (fb || card).focus({ preventScroll: true }); } catch (e) { (fb || card).focus(); } }
 card.style.transform = 'translate(-50%, 0)';
 if (VOICE) VOICE.see(ROOM + '/' + spot.name);
 }
@@ -23153,7 +23158,12 @@ if (msg && window.dssInlineHint) window.dssInlineHint(msg);
 if (window.dssAudio && window.dssAudio.paperRustle) { try { window.dssAudio.paperRustle(); } catch (e) {} }
 }, 160);
 }
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null, cardShownAt = 0;
+var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null, cardShownAt = 0, byKey = false, lastKeyBtn = null;
+// a span that acts as a button: reachable by Tab, pressed by Enter or Space
+function keyable(b) {
+b.setAttribute('role', 'button'); b.tabIndex = 0;
+b.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); byKey = true; b.click(); } });
+}
 var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
 var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
 function beginTween(toP, toT, next) {
@@ -23164,7 +23174,9 @@ camK = still ? 1 : 0; camNext = next; camMode = 'tween';
 function stepBack() {
 if (words) words.setMode('idle');
 if (activeSpot && activeSpot.onLook) activeSpot.onLook(false);
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; card.style.transform = 'translate(-50%, 8px)';
+activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; card.style.transform = 'translate(-50%, 8px)'; card.setAttribute('aria-hidden', 'true');
+if (byKey && lastKeyBtn && lastKeyBtn.isConnected) { try { lastKeyBtn.focus({ preventScroll: true }); } catch (e) { lastKeyBtn.focus(); } }
+byKey = false;
 beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
 }
 var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
@@ -23197,6 +23209,29 @@ if (spot.onLook) spot.onLook(true);
 // a click, not a press, steps back from the card, so a finger can scroll a long card without closing it
 // (the click a tap makes just after opening the card is not a step back)
 card.addEventListener('click', function(ev) { if (camMode === 'inspect' && Date.now() - cardShownAt > 450 && !ev.target.classList.contains('fi-action')) stepBack(); });
+// 2026-10-07 THE ROOM BY KEYBOARD: Tab walks the objects (each lights as a pointer's hover would and its name
+// shows), Enter or Space looks closer, Tab reaches the card's choices, Escape steps back to the object
+var keysRow = document.createElement('div');
+keysRow.className = 'dss-room-keys'; keysRow.setAttribute('role', 'group'); keysRow.setAttribute('aria-label', 'Objects in the room');
+keysRow.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;';
+HOTSPOTS.forEach(function(sp) {
+var kb = document.createElement('button'); kb.type = 'button'; kb.textContent = sp.name;
+kb.addEventListener('focus', function() { if (camMode !== 'idle' || !available(sp)) return; hoverSpot = sp; haloAt(sp); halo.visible = true; var r = canvas.getBoundingClientRect(), v = halo.position.clone().project(camera); hoverName(sp.name, { clientX: r.left + (v.x + 1) / 2 * r.width, clientY: r.top + (1 - v.y) / 2 * r.height }); });
+kb.addEventListener('blur', function() { if (hoverSpot === sp) { hoverSpot = null; halo.visible = false; hoverName(null); } });
+kb.addEventListener('click', function() {
+if (camMode !== 'idle' || !available(sp)) return;
+byKey = true; lastKeyBtn = kb; activeSpot = sp; halo.visible = false; hoverName(null);
+showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(true);
+});
+keysRow.appendChild(kb);
+});
+wrap.appendChild(keysRow);
+// only objects that can be looked at now are in the Tab order (a ghost figure waits for its choice)
+function keysRefresh() { Array.prototype.forEach.call(keysRow.children, function(kb, i) { var ok = available(HOTSPOTS[i]); kb.tabIndex = ok ? 0 : -1; kb.setAttribute('aria-hidden', ok ? 'false' : 'true'); }); }
+function onEsc(ev) { if (ev.key === 'Escape' && (camMode === 'inspect' || (camMode === 'tween' && camNext === 'inspect')) && wrap.isConnected) { byKey = true; stepBack(); } }
+document.addEventListener('keydown', onEsc);
+keysRefresh();
+var keysTimer = setInterval(function() { if (!wrap.isConnected) { clearInterval(keysTimer); document.removeEventListener('keydown', onEsc); return; } keysRefresh(); }, 1500);
 var hint = document.createElement('div');
 hint.textContent = o.hint || 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 hint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:' + cDim + ';opacity:0;letter-spacing:3px;z-index:9003;pointer-events:none;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';

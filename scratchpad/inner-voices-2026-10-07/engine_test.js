@@ -1,0 +1,24 @@
+// run: python3 -c extract DSS VOICES block to /tmp/voices.js (see log), then node engine_test.js
+const store={}; global.localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>store[k]=v,removeItem:k=>delete store[k]};
+let st=null; global.document={createElement:()=>({}),head:{appendChild(){}},getElementById:id=>id==='dss-voice-state'?st:null};
+global.window=global; window._passageGen=1;
+eval(require('fs').readFileSync('/tmp/voices.js','utf8'));
+const v=window.dssVoices, a=require('assert');
+a.deepStrictEqual(v.lines('cf','the menu').map(l=>l.text),['[Sam: now / the menu]','[Sam: then / the menu]']);
+a.equal(v.isNext('cf','the menu'),false);
+v.see('oi/the globe');
+a.equal(v.isNext('cf','the menu'),true);
+a.equal(v.lines('cf','the menu')[1].text,'[Sam: then / ticket trail 2]');
+v.see('cf/the menu'); a.equal(v.isNext('cf','the menu'),false); a.equal(v.isNext('cf','the ticket'),true);
+a.equal(v.lines('cf','the range').length,2);
+st={getAttribute:k=>({'data-sob':'20','data-mor':'70','data-phase':'0'})[k]};
+a.equal(v.lines('cf','the range').length,3); a.equal(v.lines('cf','the range')[2].voice,'id');
+a.equal(v.lines('cf','the window')[0].text,'[Sam: now / the window]');
+v.see('fi/the window'); a.ok(v.lines('cf','the window')[0].text.includes('after'));
+a.deepStrictEqual(v.keySpots('lk'),{'the dish':'eye'});
+window.DSS_VOICES.trails.eye.gate=true; a.equal(v.keyReady('eye'),false); v.see('lk/the shelves'); a.equal(v.keyReady('eye'),true);
+st={getAttribute:k=>({'data-sob':'70','data-mor':'25','data-phase':'0'})[k]}; a.equal(v.idAwake(),true);
+st={getAttribute:k=>({'data-sob':'70','data-mor':'70','data-phase':'2'})[k]}; a.equal(v.idAwake(),true);
+st={getAttribute:k=>({'data-sob':'70','data-mor':'70','data-phase':'1'})[k]}; a.equal(v.idAwake(),false);
+v.forget(); a.equal(v.has('oi/the globe'),false);
+console.log('engine tests pass');

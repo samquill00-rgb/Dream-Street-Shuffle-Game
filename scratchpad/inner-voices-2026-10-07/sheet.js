@@ -10,7 +10,7 @@ const L=[]; const p=s=>L.push(s);
 const BLANK='\n   > \n';
 p('# Inner voices: writing sheet');
 p('');
-p('Every voice slot, by venue. Write your line after the `>`. Each shows pink in the game until written.');
+p('Every voice slot, by venue. Write your line after the `>`. Each shows pink in the game until written. When done, `sheet_apply.py` (beside sheet.js in the scratchpad) puts the lines into the table.');
 p('');
 p(`- **now**: you now. **then**: the idealised you (the child, the imagined future). **id**: speaks only at ${idNote}.`);
 p('- A trail line replaces that object\'s own **then**. A callback line replaces its **now** once the earlier object has been seen.');

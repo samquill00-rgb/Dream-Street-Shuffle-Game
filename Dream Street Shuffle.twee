@@ -6752,16 +6752,8 @@ window.__dssHintNext = function() {
       if (window.__dssHintWait < 160) { setTimeout(window.__dssHintNext, 250); return; }
     }
   } catch (e) {}
-  // BREATHING SPACE (2026-09-16). The primer is a 900-character read that can
-  // still be on screen when the player walks back to Dean Street, where the
-  // open-night slip falls due; it then typed itself out the moment the primer
-  // left. After a LONG slip (the primer is the only one) the next slip waits
-  // until 30s have passed since it went. Short slips impose no gap, so a
-  // one-line nudge tied to a place ("leave what you are carrying here") is
-  // never carried onto the wrong screen.
-  if (window.__dssHintLastLong && Date.now() - (window.__dssHintLastEnd || 0) < 30000) {
-    setTimeout(window.__dssHintNext, 500); return;
-  }
+  // (The 2026-09-16 "breathing space" after a long slip is gone: since 2026-10-07 a slip stays until it is
+  // closed, and a later slip lands above it in the stack rather than waiting for it to leave.)
   window.__dssHintWait = 0;
   var html = window.__dssHintQueue.shift();
   if (html === undefined) return;
@@ -6770,6 +6762,20 @@ window.__dssHintNext = function() {
 };
 window.__dssHintShow = function(html) {
   try {
+    // THE STACK (Sam, 2026-10-07: "don't ever fade them, just make the cross more obvious to encourage
+    // closing them"). No slip leaves on its own any more. Each one stays until its × or its paper is
+    // clicked, and a slip that falls due while another is still up lands ABOVE it, newest nearest the
+    // bottom corner, so nothing is cut short and nothing waits behind an unread slip. Three on screen at
+    // most: a fourth sends the oldest on its way.
+    var stack = document.getElementById('dss-hint-stack');
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.id = 'dss-hint-stack';
+      stack.className = 'dss-hint-stack';
+      document.body.appendChild(stack);
+    }
+    var standing = Array.prototype.filter.call(stack.querySelectorAll('.dss-hint-slip'), function(c) { return !c.__dssGoing; });
+    while (standing.length >= 3) { var oldest = standing.shift(); if (oldest.__dssFinish) oldest.__dssFinish(); }
     var card = document.createElement('div');
     card.className = 'dss-hint-slip';
     var mark = document.createElement('span');
@@ -6777,12 +6783,13 @@ window.__dssHintShow = function(html) {
     mark.textContent = '⟡';
     var body = document.createElement('span');
     body.className = 'dss-hint-type';
-    // A small, quiet × in the top-right corner (Sam, 2026-10-07): a hint that the
-    // slip can be sent away, not a button that asks to be pressed.
+    // The × in the top-right corner. It used to be faint ink, a hint; now it is the one way the slip
+    // goes, so it is a plain round button, dark on the paper, that fills under the pointer.
     var closer = document.createElement('button');
     closer.type = 'button';
     closer.className = 'dss-hint-x';
-    closer.setAttribute('aria-label', 'Close');
+    closer.setAttribute('aria-label', 'Close this note');
+    closer.setAttribute('title', 'Close');
     closer.textContent = '×';
     // The words sit in their own scrolling box so the × stays put in the
     // corner of a long slip while the primer scrolls under it.
@@ -6792,7 +6799,7 @@ window.__dssHintShow = function(html) {
     inner.appendChild(body);
     card.appendChild(closer);
     card.appendChild(inner);
-    document.body.appendChild(card);
+    stack.appendChild(card);
     requestAnimationFrame(function() { card.classList.add('in'); });
     setTimeout(function() { card.classList.add('in'); }, 120);   // backgrounded tabs stall rAF
 
@@ -6802,72 +6809,42 @@ window.__dssHintShow = function(html) {
     tmp.innerHTML = html;
     var text = (tmp.textContent || '').trim();
 
-    // Two lengths of slip now. The nudges are a sentence; the night's primer is
-    // a nine-hundred-character read (2026-09-14). So the typing is bounded, or a
-    // long card would crawl for twenty-odd seconds at the nudge pace, and the
-    // hold is a reading time scaled to the length instead of a flat eight
-    // seconds. Short hints are untouched by both: at 40 characters pace is still
-    // 25 and the hold still floors at the original 8000.
+    // Two lengths of slip. The nudges are a sentence; the night's primer is a
+    // nine-hundred-character read (2026-09-14), so the typing is bounded, or a
+    // long card would crawl for twenty-odd seconds at the nudge pace.
     var pace = Math.min(25, 2600 / Math.max(text.length, 1));
-    // FADE OF ITS OWN ACCORD (Sam, 2026-10-07: "they should fade naturally
-    // after a certain point. Maybe 10 seconds or a bit longer if it's a long
-    // one"). The hold after the typing ends is about eight and a half seconds
-    // for a one-line nudge (ten or so on screen with the typing), grows with
-    // the length, and is capped at twenty-eight for the nine-hundred-character
-    // primer. It used to run to forty-five.
-    var hold = Math.min(28000, Math.max(8500, Math.round(text.length * 24) + 3500));
     var isLong = text.length > 400;
     if (isLong) card.classList.add('long');
 
     var finish = function() {
       if (card.__dssGoing) return;
       card.__dssGoing = true;
-      clearTimeout(holdTimer);
       card.classList.add('out');
       setTimeout(function() {
         if (card.parentNode) card.parentNode.removeChild(card);
-        window.__dssHintBusy = false;
         window.__dssHintLastEnd = Date.now();
-        window.__dssHintLastLong = isLong;
-        window.__dssHintNext();
       }, 900);
     };
-    // Every slip can be waved away with a click, on the paper or on the ×
-    // (2026-10-07; until then only the long primer took clicks and the nudges
-    // were click-through). The × is a plain button so it also answers the
-    // keyboard. While the pointer rests on the paper the countdown waits, so a
-    // reader who is still on the last line is not cut off mid-sentence.
+    card.__dssFinish = finish;
+    // The slip goes on a click, on the paper or on the ×. The × is a plain
+    // button so it also answers the keyboard.
     card.addEventListener('click', finish);
     closer.addEventListener('click', function(ev) { ev.stopPropagation(); finish(); });
-    // Only a real mouse pauses it: a finger's tap leaves a sticky hover on
-    // phones, which would hold the next slip that lands in the same spot.
-    var holdTimer = null, holdLeft = 0, holdFrom = 0, holdArmed = false, mouseIn = false;
-    var armHold = function(ms) {
-      holdLeft = ms; holdFrom = Date.now();
-      clearTimeout(holdTimer);
-      holdTimer = setTimeout(finish, ms);
+
+    // The queue frees once this slip has finished typing (a second slip that
+    // fell due at the same moment then types above it, not over it).
+    var release = function() {
+      if (release.done) return; release.done = true;
+      window.__dssHintBusy = false;
+      setTimeout(window.__dssHintNext, 300);
     };
-    card.addEventListener('pointerenter', function(ev) {
-      if (ev.pointerType !== 'mouse') return;
-      mouseIn = true;
-      if (!holdArmed || card.__dssGoing) return;
-      holdLeft = Math.max(1500, holdLeft - (Date.now() - holdFrom));
-      clearTimeout(holdTimer); holdTimer = null;
-    });
-    card.addEventListener('pointerleave', function(ev) {
-      if (ev.pointerType !== 'mouse') return;
-      mouseIn = false;
-      if (!holdArmed || card.__dssGoing || holdTimer) return;
-      armHold(holdLeft);
-    });
 
     // The letters keep to the clock: if the page is busy (a room drawing
     // behind the slip) a late tick types the letters it owes at once, so the
-    // typing takes the same few seconds everywhere and the slip's whole stay
-    // stays near ten seconds rather than stretching on a slow machine.
+    // typing takes the same few seconds everywhere.
     var i = 0, lastTick = 0, typeFrom = 0;
     var step = function() {
-      if (!card.parentNode || card.__dssGoing) return;
+      if (!card.parentNode || card.__dssGoing) { body.textContent = text; release(); return; }
       if (!typeFrom) typeFrom = Date.now();
       i = Math.max(i + 1, Math.min(text.length, Math.floor((Date.now() - typeFrom) / pace)));
       body.textContent = text.slice(0, i);
@@ -6881,9 +6858,10 @@ window.__dssHintShow = function(html) {
       // A long slip can outrun its own box; keep the caret in view as it types.
       if (inner.scrollHeight > inner.clientHeight) inner.scrollTop = inner.scrollHeight;
       if (i < text.length) { setTimeout(step, pace * 0.68 + Math.random() * pace * 0.64); return; }
-      holdArmed = true;
-      if (mouseIn) { holdLeft = hold; holdFrom = Date.now(); return; }
-      armHold(hold);
+      card.classList.add('typed');
+      // the top of a long slip is what a reader starts from
+      if (isLong) inner.scrollTop = 0;
+      release();
     };
     setTimeout(step, 420);
   } catch (e) { window.__dssHintBusy = false; }
@@ -68181,12 +68159,22 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
    column (2026-09-11: no longer reaches into the page margin — Sam wants it within the
    header banner's width). Capped so it also fits the window height. On narrow screens it
    clears below the lamp at full width. */
-/* THE HINT SLIP (2026-09-14) — white paper, typed, gone after eight seconds. */
-.dss-hint-slip {
+/* THE HINT SLIP (2026-09-14) — white paper, typed. Since 2026-10-07 it STAYS until its × is pressed
+   (Sam: "don't ever fade them"); later slips stack above it, newest at the bottom. */
+.dss-hint-stack {
   position: fixed;
   right: 22px;
   bottom: 74px;
   z-index: 99400;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: min(34em, 76vw);
+  pointer-events: none;
+}
+.dss-hint-slip {
+  position: relative;
   max-width: min(30em, 68vw);
   box-sizing: border-box;
   padding: 0.95em 1.25em 1em;
@@ -68201,37 +68189,41 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
   transform: translateY(14px) rotate(-0.5deg);
   opacity: 0;
   transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.2,0.7,0.3,1);
-  /* Every slip takes a click and goes (2026-10-07); the nudges used to be
-     click-through. The right padding leaves room for the × in the corner. */
+  /* Every slip takes a click and goes (2026-10-07). The right padding leaves room for the × in the corner. */
   pointer-events: auto;
   cursor: pointer;
-  padding-right: 1.9em;
+  padding-right: 2.6em;
 }
 .dss-hint-slip.in  { opacity: 1; transform: translateY(0) rotate(-0.5deg); }
-/* The small, quiet × in the top-right corner: a suggestion that the paper can
-   be sent away. Faint ink, a touch darker under the pointer. */
+/* The × in the top-right corner: a round button in dark ink, the one way the paper goes. It fills
+   under the pointer, and once the slip has finished typing it breathes once to say "close me". */
 .dss-hint-x {
   position: absolute;
-  top: 0.22em;
+  top: 0.38em;
   right: 0.42em;
-  width: 1.5em; height: 1.5em;
+  width: 1.75em; height: 1.75em;
   padding: 0; margin: 0;
-  border: 0; background: none;
-  color: rgba(42, 33, 24, 0.34);
+  border: 1px solid rgba(42, 33, 24, 0.6);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  color: rgba(42, 33, 24, 0.85);
   font-family: 'Courier New', Courier, monospace;
-  font-size: 1.05em;
-  line-height: 1.5em;
+  font-size: 1.1em;
+  font-weight: bold;
+  line-height: 1.6em;
   text-align: center;
   cursor: pointer;
-  transition: color 0.25s ease;
+  transition: color 0.25s ease, background 0.25s ease, transform 0.25s ease;
 }
-.dss-hint-x:hover, .dss-hint-x:focus-visible { color: rgba(42, 33, 24, 0.75); outline: none; }
+.dss-hint-x:hover, .dss-hint-x:focus-visible { color: #f6f1e2; background: rgba(42, 33, 24, 0.9); outline: none; transform: scale(1.08); }
+.dss-hint-slip.typed .dss-hint-x { animation: dssHintXNudge 1.6s ease 0.4s 1; }
+@keyframes dssHintXNudge { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.22); background: rgba(42, 33, 24, 0.9); color: #f6f1e2; } 60% { transform: scale(1); } }
 /* The primer arrives as one long slip with its own paragraph breaks, so the
    typed span has to keep its newlines. */
 .dss-hint-type { white-space: pre-wrap; }
 .dss-hint-inner { display: block; }
 .dss-hint-slip.long { max-width: min(34em, 76vw); }
-.dss-hint-slip.long .dss-hint-inner { max-height: 70vh; overflow-y: auto; }
+.dss-hint-slip.long .dss-hint-inner { max-height: 50vh; overflow-y: auto; }
 .dss-hint-slip.out { opacity: 0; transform: translateY(-8px) rotate(-0.5deg); transition: opacity 0.85s ease, transform 0.85s ease; }
 .dss-hint-mark { color: #8a6a2c; margin-right: 0.5em; }
 .dss-hint-type::after {
@@ -68243,16 +68235,20 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
   background: #2a2118;
   animation: dssHintCaret 0.9s step-end infinite;
 }
-.dss-hint-slip.out .dss-hint-type::after { display: none; }
+/* the caret stops once the slip has typed itself out, so a standing slip reads as finished, not stalled */
+.dss-hint-slip.typed .dss-hint-type::after, .dss-hint-slip.out .dss-hint-type::after { display: none; }
 @keyframes dssHintCaret { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
 @media (max-width: 640px) {
-  .dss-hint-slip { right: 12px; left: 12px; bottom: 64px; max-width: none; padding-right: 2em; }
-  .dss-hint-x { width: 1.9em; height: 1.9em; line-height: 1.9em; top: 0.08em; right: 0.2em; }
+  .dss-hint-stack { right: 12px; left: 12px; bottom: 64px; max-width: none; align-items: stretch; }
+  .dss-hint-slip { max-width: none; padding-right: 2.8em; }
+  .dss-hint-x { width: 2.1em; height: 2.1em; line-height: 1.95em; top: 0.22em; right: 0.3em; }
   .dss-hint-slip.long { max-width: none; }
+  .dss-hint-slip.long .dss-hint-inner { max-height: 40vh; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dss-hint-slip { transition: opacity 0.3s ease; transform: none; }
   .dss-hint-slip.in { transform: none; }
+  .dss-hint-slip.typed .dss-hint-x { animation: none; }
 }
 /* THE LAMP GUTTER LIVES ON THE WRAP, NOT ON THE STAGE. The stage is a block
    formatting context (overflow: hidden, container-type), so it has to keep

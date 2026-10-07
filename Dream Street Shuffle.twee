@@ -22831,15 +22831,15 @@ var s = state(), w = V.idWhen || {};
 if (!s) return false;
 return (w.sobrietyBelow != null && s.sob < w.sobrietyBelow) || (w.moraleBelow != null && s.mor < w.moraleBelow) || (w.fromPhase != null && s.phase >= w.fromPhase);
 }
+// the line an earlier object speaks back (switch callbacksBothWays): the callback's own, or a pink slot
+function backLine(c, name) { return c.back != null ? c.back : '[Sam: now / ' + name + ', back after ' + c.at.split('/').slice(1).join('/') + ', ' + (ROOM_NAME[c.at.split('/')[0]] || '') + ']'; }
 // the lines an object speaks right now, in cast order: [{ voice, text }]
 function lines(room, name) {
 var p = room + '/' + name, base = (V.objects[room] || {})[name];
 if (!base) return [];
 var pick = {};
 ORDER.forEach(function(v) { if (base[v] != null) pick[v] = base[v]; });
-if (SW.callbacksBothWays) (V.callbacks || []).forEach(function(c) {
-if (c.after === p && has(c.at)) pick.now = c.back != null ? c.back : '[Sam: now / ' + name + ', back after ' + c.at.split('/').slice(1).join('/') + ', ' + (ROOM_NAME[c.at.split('/')[0]] || '') + ']';
-});
+if (SW.callbacksBothWays) (V.callbacks || []).forEach(function(c) { if (c.after === p && has(c.at)) pick.now = backLine(c, name); });
 (V.callbacks || []).forEach(function(c) { if (c.at === p && has(c.after)) ORDER.forEach(function(v) { if (c[v] != null) pick[v] = c[v]; }); });
 var s = stepAt(p), step = s && s.trail.steps[s.i];
 if (s && trailOpen(s)) ORDER.forEach(function(v) { if (step[v] != null) pick[v] = step[v]; });
@@ -22928,7 +22928,7 @@ var idOk = idAwake();
 ORDER.forEach(function(v) { if (base[v] != null) add(v, 'own', base[v], v === 'id' ? 'when the id speaks' : 'always', v !== 'id' || idOk); });
 (V.callbacks || []).forEach(function(c) {
 if (c.at === p) add('now', 'callback', c.now, 'after ' + c.after, has(c.after));
-if (SW.callbacksBothWays && c.after === p) add('now', 'back', c.back != null ? c.back : '(pink slot)', 'after ' + c.at, has(c.at));
+if (SW.callbacksBothWays && c.after === p) add('now', 'back', backLine(c, name), 'after ' + c.at, has(c.at));
 });
 var st = stepAt(p);
 if (st) add('then', 'trail', st.trail.steps[st.i].then, st.key + ' step ' + (st.i + 1) + '/' + st.trail.steps.length + (st.i ? ', after ' + st.trail.steps[st.i - 1].at : ''), trailOpen(st));
@@ -23146,7 +23146,9 @@ wrow.appendChild(b);
 card.style.pointerEvents = 'auto'; cardShownAt = Date.now(); card.setAttribute('aria-hidden', 'false');
 card.style.opacity = '1';
 // opened from the keyboard: the focus goes to the card's first choice, or the card itself
+openedByKey = byKey;
 if (byKey) { var fb = card.querySelector('.fi-action'); try { (fb || card).focus({ preventScroll: true }); } catch (e) { (fb || card).focus(); } }
+if (keysRow) keysRefresh();
 card.style.transform = 'translate(-50%, 0)';
 if (VOICE) VOICE.see(ROOM + '/' + spot.name);
 }
@@ -23158,7 +23160,7 @@ if (msg && window.dssInlineHint) window.dssInlineHint(msg);
 if (window.dssAudio && window.dssAudio.paperRustle) { try { window.dssAudio.paperRustle(); } catch (e) {} }
 }, 160);
 }
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null, cardShownAt = 0, byKey = false, lastKeyBtn = null;
+var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null, cardShownAt = 0, byKey = false, lastKeyBtn = null, openedByKey = false, keysRow = null;
 // a span that acts as a button: reachable by Tab, pressed by Enter or Space
 function keyable(b) {
 b.setAttribute('role', 'button'); b.tabIndex = 0;
@@ -23175,8 +23177,10 @@ function stepBack() {
 if (words) words.setMode('idle');
 if (activeSpot && activeSpot.onLook) activeSpot.onLook(false);
 activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; card.style.transform = 'translate(-50%, 8px)'; card.setAttribute('aria-hidden', 'true');
+Array.prototype.forEach.call(card.querySelectorAll('.fi-action'), function(b) { b.tabIndex = -1; });
 if (byKey && lastKeyBtn && lastKeyBtn.isConnected) { try { lastKeyBtn.focus({ preventScroll: true }); } catch (e) { lastKeyBtn.focus(); } }
-byKey = false;
+byKey = false; lastKeyBtn = null; openedByKey = false;
+if (keysRow) keysRefresh();
 beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
 }
 var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
@@ -23211,7 +23215,7 @@ if (spot.onLook) spot.onLook(true);
 card.addEventListener('click', function(ev) { if (camMode === 'inspect' && Date.now() - cardShownAt > 450 && !ev.target.classList.contains('fi-action')) stepBack(); });
 // 2026-10-07 THE ROOM BY KEYBOARD: Tab walks the objects (each lights as a pointer's hover would and its name
 // shows), Enter or Space looks closer, Tab reaches the card's choices, Escape steps back to the object
-var keysRow = document.createElement('div');
+keysRow = document.createElement('div');
 keysRow.className = 'dss-room-keys'; keysRow.setAttribute('role', 'group'); keysRow.setAttribute('aria-label', 'Objects in the room');
 keysRow.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;';
 HOTSPOTS.forEach(function(sp) {
@@ -23226,9 +23230,16 @@ showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(tr
 keysRow.appendChild(kb);
 });
 wrap.appendChild(keysRow);
-// only objects that can be looked at now are in the Tab order (a ghost figure waits for its choice)
-function keysRefresh() { Array.prototype.forEach.call(keysRow.children, function(kb, i) { var ok = available(HOTSPOTS[i]); kb.tabIndex = ok ? 0 : -1; kb.setAttribute('aria-hidden', ok ? 'false' : 'true'); }); }
-function onEsc(ev) { if (ev.key === 'Escape' && (camMode === 'inspect' || (camMode === 'tween' && camNext === 'inspect')) && wrap.isConnected) { byKey = true; stepBack(); } }
+// only objects that can be looked at now are in the Tab order (a ghost figure waits for its choice), and none while a card is open
+function keysRefresh() { var open = camMode !== 'idle'; Array.prototype.forEach.call(keysRow.children, function(kb, i) { var ok = !open && available(HOTSPOTS[i]); kb.tabIndex = ok ? 0 : -1; kb.setAttribute('aria-hidden', ok ? 'false' : 'true'); }); }
+// Escape steps back from a card, unless something else holds the keyboard (a modal, the dev panel, a field)
+function onEsc(ev) {
+if (ev.key !== 'Escape' || ev.defaultPrevented || !wrap.isConnected) return;
+if (!(camMode === 'inspect' || (camMode === 'tween' && camNext === 'inspect'))) return;
+var f = document.activeElement;
+if (f && f !== document.body && f !== document.documentElement && !wrap.contains(f)) return;
+byKey = openedByKey; stepBack();
+}
 document.addEventListener('keydown', onEsc);
 keysRefresh();
 var keysTimer = setInterval(function() { if (!wrap.isConnected) { clearInterval(keysTimer); document.removeEventListener('keydown', onEsc); return; } keysRefresh(); }, 1500);

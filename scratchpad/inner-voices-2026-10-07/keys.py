@@ -35,5 +35,23 @@ print("ticket focus:", p.evaluate("() => document.activeElement.textContent"))
 p.keyboard.press("Enter"); p.wait_for_timeout(2000)
 Game.click(p, "AUDIT READ", 400)
 print("pocketed:", p.evaluate("() => (document.querySelector('#audit-state')?.innerText||'').split('\\n').filter(l=>/^dreamKey|^keyTicket/.test(l))"))
+# after stepping back: the closed card's choices are out of the Tab order; while a card is open the object buttons are
+p.keyboard.press("Escape")
+for _ in range(80):
+    if p.evaluate("() => document.getElementById('cf-wrap').dataset.cam") == 'idle': break
+    p.wait_for_timeout(150)
+print("closed card choices tabbable:", p.evaluate("() => [...document.querySelectorAll('#cf-wrap .dss-room-card .fi-action')].filter(b=>b.tabIndex>=0).length"))
+p.evaluate("() => window._dssThreeRegistry['cf-wrap'].look('the menu')"); p.wait_for_timeout(600)
+print("objects tabbable while a card is open:", p.evaluate("() => [...document.querySelectorAll('#cf-wrap .dss-room-keys button')].filter(b=>b.tabIndex>=0).length"))
+# Escape with a field focused elsewhere leaves the card alone
+p.evaluate("() => { const i=document.createElement('input'); i.id='dss-test-field'; document.body.appendChild(i); i.focus(); }")
+p.keyboard.press("Escape"); p.wait_for_timeout(500)
+print("card still open with a field focused:", p.evaluate("() => document.getElementById('cf-wrap').dataset.cam") != 'idle')
+p.evaluate("() => document.getElementById('dss-test-field').remove()")
+p.keyboard.press("Escape")
+for _ in range(80):
+    if p.evaluate("() => document.getElementById('cf-wrap').dataset.cam") == 'idle': break
+    p.wait_for_timeout(150)
+print("mouse-opened card closed by Escape, focus:", p.evaluate("() => document.activeElement.tagName"))
 print("errors:", [e[:80] for e in p._errs if 'decode' not in e])
 g.close()

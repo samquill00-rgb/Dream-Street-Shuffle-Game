@@ -1,3 +1,47 @@
+# Endgame continuity pass — 2026-10-07
+
+Sam requested local-only visual improvements from The Fetch through every route to Dawn, then asked to bound remaining work because of credits. No git/GitHub commands or publishing. Earlier drink and Ezekiel-wheel changes retained.
+
+Route audit: Towards Dawn -> Fetch (optional Crown at eleven haunts; retreat allowed unless refusedDualRing/sanctumDone) -> Centre Point -> complete Alba with retained notebook, otherwise incomplete -> corresponding Dawn Approach -> White/Black page -> Dawn. Also Synthesis's five nested gift links -> Sanctum -> Sitting -> Alt-Dawn -> Fetch. Reviewed conditional family memory, blackout, sunk ship, sold name, burnt hut and lost-to-drink traces. Dawn's existing poem test depends on Alba lines even for the stolen-notebook/incomplete route; preserved.
+
+Added one shared lightweight canvas helper and scoped endgame CSS in the .twee, with marker scripts on the thirteen relevant passages. Supports both ordinary passages and the game's lifted prose panels. Complete/incomplete panes share a layered dawn skyline in distinct palettes; Sanctum/Sitting get a subdued table/book/chairs composition; Synthesis gets two exchanging stellar lobes inside the paired pentagrams, with the original SVG retained as fallback. Fetch card, climb button, aerial overlay, white/black link presentation, final Dawn typography/record and Ripley modal grading refined. CLIMB IT is now a native keyboard-accessible button in both WebGL and fallback paths, with unchanged handler/text. No extra WebGL contexts, dependencies or audio. Canvases scale at capped 2x pixel density, pause drawing offscreen/in background, use still compositions under reduced motion, and clean up on navigation.
+
+Source comparison proves that removing the bounded new helper, CSS and marker scripts and reverting the two button element declarations yields the exact pre-task .twee. Every original prose line, Harlowe condition/link, audio cue, iframe scene and petal finale preserved. Full UserScript syntax check passes.
+
+Browser evidence in scratchpad/endgame-2026-10-07/: full real-link routes reached Dawn for complete/crown/family memory, incomplete, stolen-notebook/refused ring, and losses/blackout branches. Initial fixture produced two iframe-only errors because its seed looked up a passage inside the iframe; fixed by guarding the fixture lookup. Final white/black route checks recorded separately in final-routes.json; optional-results.json covers all five Synthesis interactions through Sanctum, Sitting, Alt-Dawn and locked-retreat Fetch, with no JS/Harlowe errors and no stale decorative canvas. Desktop 1280 and phone 390 used, including reduced motion. Screenshots inspected for the settled Sanctum, Synthesis artwork, Alba and Dawn. Safari not tested. Existing all-game routes outside the requested ending sequence were not re-audited.
+
+Rebuilt with python3 sync_html.py. No compiled HTML read as source or hand editing. For all three tasks, the runtime deliverables are Dream Street Shuffle.twee and Dream Street Shuffle.html. HANDOFF files are gitignored; scratchpad evidence is optional to include in a commit. Synced, commit when ready.
+
+---
+
+# Ezekiel wheel visual lift — 2026-10-07
+
+Sam requested local-only improvement to the ending wheel animation. No git commands or GitHub actions.
+
+Changed only Ezekiel-specific reveal CSS and added a visual script to `The Wheel` passage in `Dream Street Shuffle.twee`. The original passage, including every prose line, Harlowe state/link, sound/scroll script and original SVG, remains byte-identical when the added script is removed. The drink work is preserved.
+
+New single 2D canvas projects two perpendicular bronze-gold bands with perspective, depth-sorted crossings, continuous metallic faces/bevel highlights, engraved marks and 24 open eyes per rim. Fine inner braces, a still central eye, subdued amber/violet light and sparse drifting dust. The rings form over 3.2 seconds and keep moving slowly afterwards. The original SVG remains the fallback if canvas is unavailable. Responsive 440px maximum stage, device pixel ratio capped at 2; no new WebGL context, dependency or audio. Reduced motion draws one fixed composition; preference changes are handled. Drawing pauses offscreen/in background; removal cancels the frame and disconnects observers/listener.
+
+Validation: script syntax check passed. Source comparison confines changes to the two sections above. Actual compiled-game debug route to The Wheel: Draw it down -> animated reveal -> Come back, at 1280px and 390px, plus 390px reduced motion. Animated frame changes confirmed; reduced-motion frame images identical. All fit the viewport, remove the canvas on exit, reach the return text, and have no JS or Harlowe errors. Reduced-motion return verification uses `tw-story` because Harlowe temporarily holds destination text in a transition container outside `tw-passage`. Final evidence: `scratchpad/wheel-2026-10-07/results.json` with corrected reduced-motion destination check in `return-check.json`; desktop/phone/still PNGs and rerunnable scripts alongside. Final wheel and phone composition visually inspected. Safari not tested.
+
+Rebuilt through `python3 sync_html.py`. HTML never read as source or hand-edited. Synced, commit when ready.
+
+---
+
+# Drink animation glass and liquid lift — 2026-10-07
+
+Local-folder work requested by Sam; no git commands, commits, pushes or GitHub changes.
+
+`Dream Street Shuffle.twee`: rebuilt the five DrinkPopup glass renderers through a shared `_drawVessel` helper, covering all fifteen configured drink types. Translucent colour-density gradients, rear/front glass reflections, paired elliptical rims, refractive heavy bases, fine stems/feet, faceted clear ice, textured foam, clipped bubbles/menisci and citrus garnish. Dark beers retain greater optical density. Retina backing resolution (capped at 2x) preserves 160x260 CSS dimensions. Corrected stale rim coordinates for tumbler, highball and coupe; entry stream stops when the first sip starts; sip droplets use elapsed time. Also reduced liquid opacity and sharpened glass highlights in the bar minigame's tulip and rocks glasses. Copper mug stays opaque.
+
+Outside DrinkPopup and the bar minigame `_drawGlass` method, the source compares byte-identically against the pre-edit snapshot. All authored prose, labels, mechanics, passages and audio code preserved.
+
+Validation: complete UserScript parses with node --check. Actual compiled game in headless Chrome over localhost: all 15 popup types at desktop 1280 and phone width 390 pass fill, mouse-hold/drain, release, dismissal and busy-flag reset (30 checks, no JS errors). Final touch-event hold/release checks for gin, champagne and whisky pass after the entry-stream correction (3 checks, no JS errors). Final contact sheet visually inspected; representative tilt screenshots inspected. Tests invoke the actual popup directly, not purchases or stats routes. Safari and physical-device touch not tested. Evidence/scripts: `scratchpad/drinks-2026-10-07/`; `all-drinks.png`, `results.json`, `final-results.json`.
+
+Rebuilt with `python3 sync_html.py`. Compiled HTML never read as source or hand-edited. Synced, commit when ready.
+
+---
+
 # Title page lift — 2026-10-04
 
 ## Fixed

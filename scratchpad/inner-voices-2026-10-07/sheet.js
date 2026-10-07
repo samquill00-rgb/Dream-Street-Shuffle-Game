@@ -14,19 +14,25 @@ p('Every voice slot, by venue. Write your line after the `>`. Each shows pink in
 p('');
 p(`- **now**: you now. **then**: the idealised you (the child, the imagined future). **id**: speaks only at ${idNote}.`);
 p('- A trail line replaces that object\'s own **then**. A callback line replaces its **now** once the earlier object has been seen.');
-p('- An empty line keeps that voice quiet on that object.');
 p('');
-let n=0;
+// essential: what the game needs to work (trail steps, the key objects' own lines, callbacks, the id); the rest optional
+const keyObj=new Set(Object.values(V.trails).map(t=>t.steps[t.steps.length-1].at));
+const body=[]; let n=0, ess=0;
+const slot=(text,e)=>{ n++; if(e) ess++; body.push(`${n}. ${e?'**essential**':'optional'} · ${text}`+BLANK); };
 for (const room of Object.keys(V.objects)) {
-  p(`## ${NAME[room]||room}`); p('');
+  body.push(`## ${NAME[room]||room}`); body.push('');
   for (const [obj,slots] of Object.entries(V.objects[room])) {
     const path=room+'/'+obj;
-    p(`### ${obj}`);
-    for (const v of ['now','then','id']) if (slots[v]!=null) { n++; p(`${n}. ${v}${v==='id'?' (when the id speaks)':''}`+BLANK); }
-    for (const [k,t] of Object.entries(V.trails)) t.steps.forEach((s,i)=>{ if(s.at===path){ n++; p(`${n}. then, ${k} trail step ${i+1} of ${t.steps.length} (${t.world})${i===0?', always shows here':', after you have seen '+t.steps[i-1].at.split('/').slice(1).join('/')+' in '+(NAME[t.steps[i-1].at.split('/')[0]])}${i===t.steps.length-1?'; the key lies here':''}`+BLANK); }});
-    for (const c of V.callbacks) if (c.at===path) { n++; p(`${n}. now, callback, after you have seen ${c.after.split('/').slice(1).join('/')} in ${NAME[c.after.split('/')[0]]}`+BLANK); }
-    p('');
+    body.push(`### ${obj}${keyObj.has(path)?' (a key lies here)':''}`);
+    for (const v of ['now','then','id']) if (slots[v]!=null) slot(`${v}${v==='id'?' (when the id speaks)':''}`, v==='id'||keyObj.has(path));
+    for (const [k,t] of Object.entries(V.trails)) t.steps.forEach((st,i)=>{ if(st.at===path) slot(`then, ${k} trail step ${i+1} of ${t.steps.length} (${t.world})${i===0?', always shows here':', after you have seen '+t.steps[i-1].at.split('/').slice(1).join('/')+' in '+(NAME[t.steps[i-1].at.split('/')[0]])}`, true); });
+    for (const c of V.callbacks) if (c.at===path) slot(`now, callback, after you have seen ${c.after.split('/').slice(1).join('/')} in ${NAME[c.after.split('/')[0]]}`, true);
+    body.push('');
   }
 }
-p(`_${n} slots._`);
+L.splice(2, 0, `**${ess} essential slots** (trail steps, the objects where keys lie, callbacks, the id): write these first and the game works. The other ${n-ess} are optional. ${n} in all.`, '');
+p('');
+p('To quiet an optional slot, set it to `\'\'` in the table: the player then sees nothing there, no gap. A slot not yet written still shows pink.');
+p('');
+body.forEach(x=>p(x));
 process.stdout.write(L.join('\n')+'\n');

@@ -47,6 +47,10 @@ def place(num, what, line):
     ok = False
     if what.startswith('then, ') and ' trail step ' in what:
         ok = set_in(r"(\{ at: " + re.escape(js(path)) + r", then: )'(?:[^'\\]|\\.)*'", lambda mm: mm.group(1) + js(line))
+    elif what.startswith('now, back'):
+        # the back line lives on the callback whose 'after' is this object: replace its back, or add one before the closing brace
+        pat = r"(\{ at: '[^']*', after: " + re.escape(js(path)) + r", now: '(?:[^'\\]|\\.)*')(, back: '(?:[^'\\]|\\.)*')?( \})"
+        ok = set_in(pat, lambda mm: mm.group(1) + ', back: ' + js(line) + mm.group(3))
     elif what.startswith('now, callback'):
         ok = set_in(r"(\{ at: " + re.escape(js(path)) + r", after: '[^']*', now: )'(?:[^'\\]|\\.)*'", lambda mm: mm.group(1) + js(line))
     else:

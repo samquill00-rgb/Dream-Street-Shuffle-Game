@@ -13,7 +13,7 @@ p('');
 p('Every voice slot, by venue. Write your line after the `>`. Each shows pink in the game until written. When done, `sheet_apply.py` (beside sheet.js in the scratchpad) puts the lines into the table.');
 p('');
 p(`- **now**: you now. **then**: the idealised you (the child, the imagined future). **id**: speaks only at ${idNote}.`);
-p('- A trail line replaces that object\'s own **then**. A callback line replaces its **now** once the earlier object has been seen.');
+p('- A trail line replaces that object\'s own **then**. A callback line replaces its **now** once the earlier object has been seen; a back line replaces the earlier object\'s **now** once the later one has been seen.');
 p('');
 // essential: what the game needs to work (trail steps, the key objects' own lines, callbacks, the id); the rest optional
 const keyObj=new Set(Object.values(V.trails).map(t=>t.steps[t.steps.length-1].at));
@@ -27,6 +27,7 @@ for (const room of Object.keys(V.objects)) {
     for (const v of ['now','then','id']) if (slots[v]!=null) slot(`${v}${v==='id'?' (when the id speaks)':''}`, v==='id'||keyObj.has(path));
     for (const [k,t] of Object.entries(V.trails)) t.steps.forEach((st,i)=>{ if(st.at===path) slot(`then, ${k} trail step ${i+1} of ${t.steps.length} (${t.world})${i===0?', always shows here':', after you have seen '+t.steps[i-1].at.split('/').slice(1).join('/')+' in '+(NAME[t.steps[i-1].at.split('/')[0]])}`, true); });
     for (const c of V.callbacks) if (c.at===path) slot(`now, callback, after you have seen ${c.after.split('/').slice(1).join('/')} in ${NAME[c.after.split('/')[0]]}`, true);
+    if (V.switches.callbacksBothWays) for (const c of V.callbacks) if (c.after===path) slot(`now, back, after you have seen ${c.at.split('/').slice(1).join('/')} in ${NAME[c.at.split('/')[0]]}`, true);
     body.push('');
   }
 }

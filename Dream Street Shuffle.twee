@@ -17418,6 +17418,63 @@ window.dssGuardComposerRender = function(composer, renderer) {
   };
   return composer;
 };
+// ====== SCENE FAILURE NET (2026-10-07) ======
+// Sam, on his first step into the French of the night (Safari): "the thing
+// crashes to weird code text again". That text is Harlowe's own crash page,
+// which it puts up for ANY uncaught JavaScript error on the page, with the
+// stack trace in a monospace box. The lost-context guard above covers a
+// frame that fails to draw, but not a scene that fails while it is BUILT
+// (Safari refuses a new WebGL context under pressure and three throws
+// "Error creating WebGL context", or drops the context between the
+// renderer and its first texture) nor an error in a room's own frame. So:
+//  1. every scene build (all of them run through dssLoadPost) and the ten
+//     rooms' frame loops are wrapped: a throw is logged and handed here;
+//  2. a room that fails gives the passage its words back: the words panel,
+//     if it exists, goes into its lost mode (every link offered, the card
+//     gone); if the room never got that far, the half-built room and its
+//     placeholder are removed, so the plain passage shows and the room is
+//     tried again on the next visit;
+//  3. an exterior scene that fails (an approach, a square) presses the
+//     passage's hidden door link, which is what its own button would do;
+//  4. Harlowe's crash page is kept for Harlowe's own errors (a passage's
+//     script, the engine) and no longer raised for anything else: those go
+//     to the console, where they belong, and the night goes on.
+window.dssSceneFailed = function(err, where) {
+  try { console.error('DSS: scene failed' + (where ? ' (' + where + ')' : '') + '; falling back to the words', err); } catch (e) {}
+  var ids = ['fi', 'ci', 'pi', 'ri', 'cb', 'ti', 'lk', 'cf', 'cu', 'oi'], anyRoom = false;
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i], cont = document.getElementById(id + '-container');
+    if (!cont) continue;
+    anyRoom = true;
+    var wrap = document.getElementById(id + '-wrap');
+    var reg = window._dssThreeRegistry && window._dssThreeRegistry[id + '-wrap'];
+    if (wrap && wrap.dataset.dssFailed) continue;
+    if (wrap) wrap.dataset.dssFailed = '1';
+    if (reg && reg.words && reg.words.fail) {
+      // the room drew its words panel: it carries the passage's links itself from here on
+      try { reg.words.fail(); } catch (e) {}
+      try { if (reg.renderer && reg.renderer.domElement) reg.renderer.domElement.style.visibility = 'hidden'; } catch (e) {}
+    } else {
+      // no panel yet: the words are still in the passage, under the placeholder's veil
+      try { window._dssDisposeWrap(id + '-wrap'); } catch (e) {}
+      if (cont.parentNode) cont.parentNode.removeChild(cont);
+    }
+  }
+  if (!anyRoom && where === 'build') {
+    // an exterior scene: go on through its door, as its own button would
+    var links = document.querySelectorAll('tw-passage tw-link');
+    for (var k = 0; k < links.length; k++) { if (links[k].textContent.trim() === '\u00b7') { try { links[k].click(); } catch (e) {} break; } }
+  }
+};
+(function() {
+  var harlowe = window.onerror;
+  window.onerror = function(msg, src, line, col, err) {
+    var stack = (err && err.stack) || '';
+    if (/__HarloweEval|harlowe-crash/.test(stack)) { return typeof harlowe === 'function' ? harlowe.apply(this, arguments) : false; }
+    try { console.error('DSS: uncaught error kept off the page', err || msg, src ? src + ':' + line + ':' + col : ''); } catch (e) {}
+    return true;
+  };
+})();
 // Scenes load three.min.js lazily from 32 places, so catch THREE as it lands
 // rather than editing each loader: three assigns globalThis.THREE = {} and
 // then fills it, so the guard runs on the microtask after that script ends.
@@ -17509,7 +17566,11 @@ window.dssPostScriptURLs = [
   'vendor/three/postprocessing/UnrealBloomPass.js',
   'vendor/three/postprocessing/BokehPass.js'
 ];
-window.dssLoadPost = function(done) {
+window.dssLoadPost = function(build) {
+  var done = function() {
+    try { build(); }
+    catch (err) { if (window.dssSceneFailed) window.dssSceneFailed(err, 'build'); else throw err; }
+  };
   if (typeof THREE !== 'undefined') window.dssGuardThree(THREE);
   if (typeof THREE !== 'undefined' && THREE.EffectComposer && THREE.BokehPass) { done(); return; }
   var urls = window.dssPostScriptURLs;
@@ -22044,7 +22105,7 @@ var full = false, mode = 'room', camMode = 'idle', shownProse = null;
 // across tabs of the same site), the objects that hold the passage's choices cannot be drawn,
 // so after a few seconds without it the strip offers every link itself; they are claimed
 // again the moment the context is restored.
-var lostAt = 0, lostLong = false;
+var lostAt = 0, lostLong = false, dead = false;
 if (canvas) {
 canvas.addEventListener('webglcontextlost', function() { lostAt = Date.now(); }, true);
 canvas.addEventListener('webglcontextrestored', function() { lostAt = 0; }, true);
@@ -22095,7 +22156,7 @@ again.addEventListener('click', function(ev) { ev.stopPropagation(); open(); });
 strip.appendChild(again);
 }
 function refresh(claimed) {
-var lostNow = !!lostAt && (Date.now() - lostAt > 2500), lostTurned = false;
+var lostNow = dead || (!!lostAt && (Date.now() - lostAt > 2500)), lostTurned = false;
 if (lostNow !== lostLong) {
 lostLong = lostNow; lostTurned = true;
 box.classList.toggle('dss-room-prose-lost', lostLong);
@@ -22134,7 +22195,9 @@ if (full && !wasFull) { var arena = box.querySelector('#bar-arena'); if (arena) 
 }
 function setMode(m) { camMode = m; render(); }
 function down() { try { wrap.dispatchEvent(new CustomEvent('dss-room-emptytap')); } catch (e) {} }
-return { box: box, veil: veil, strip: strip, refresh: refresh, setMode: setMode, down: down, open: open, close: close };
+// the room's frame or build has failed (see dssSceneFailed): the panel comes up with every link, for the rest of the visit
+function fail() { dead = true; camMode = 'idle'; mode = 'modal'; refresh([]); }
+return { box: box, veil: veil, strip: strip, refresh: refresh, setMode: setMode, down: down, open: open, close: close, fail: fail };
 };
 
 // ====== PLAIN PAGES AS PANELS — the words of a plain passage show in the rooms' dark panel (2026-10-05) ======
@@ -22587,6 +22650,7 @@ var reg = window._dssThreeRegistry && window._dssThreeRegistry[WRAP];
 var frames = 0;
 if (reg) {
 reg.camera = camera;
+reg.words = words;
 reg.hotspots = HOTSPOTS;
 reg.state = function() { var st = { camMode: camMode, camK: camK, frames: frames }; if (o.state) { var x = o.state(); for (var key in x) st[key] = x[key]; } return st; };
 reg.spots = HOTSPOTS.map(function(h) { return { name: h.name, tgt: h.tgt, haloAt: h.haloAt, figure: !!h.figure }; });
@@ -22883,6 +22947,10 @@ var words = play.words, curTarget = play.curTarget;
 var clock = new THREE.Clock();
 function animate() {
 animId = requestAnimationFrame(animate);
+// a throw in the frame ends the room, not the night (dssSceneFailed)
+try { frameOnce(); } catch (err) { cancelAnimationFrame(animId); animId = null; if (window.dssSceneFailed) window.dssSceneFailed(err, ID); else throw err; }
+}
+function frameOnce() {
 var dt = Math.min(0.1, clock.getDelta());
 var t = still ? 0 : clock.getElapsedTime();
 play.frame(t, dt);
@@ -23630,6 +23698,10 @@ var words = play.words, halo = play.halo, curTarget = play.curTarget;
 var clock = new THREE.Clock();
 function fiAnimate() {
 fiAnimId = requestAnimationFrame(fiAnimate);
+// a throw in the frame ends the room, not the night (dssSceneFailed)
+try { fiFrame(); } catch (err) { cancelAnimationFrame(fiAnimId); fiAnimId = null; if (window.dssSceneFailed) window.dssSceneFailed(err, 'fi'); else throw err; }
+}
+function fiFrame() {
 var dt = Math.min(0.1, clock.getDelta());
 var t = fiStill ? 0 : clock.getElapsedTime();
 play.frame(t, dt);
@@ -24237,6 +24309,10 @@ var words = play.words, halo = play.halo, curTarget = play.curTarget;
 var clock = new THREE.Clock();
 function ciAnimate() {
 ciAnimId = requestAnimationFrame(ciAnimate);
+// a throw in the frame ends the room, not the night (dssSceneFailed)
+try { ciFrame(); } catch (err) { cancelAnimationFrame(ciAnimId); ciAnimId = null; if (window.dssSceneFailed) window.dssSceneFailed(err, 'ci'); else throw err; }
+}
+function ciFrame() {
 var dt = Math.min(0.1, clock.getDelta());
 var t = ciStill ? 0 : clock.getElapsedTime();
 play.frame(t, dt);
@@ -24911,6 +24987,10 @@ var words = play.words, halo = play.halo, curTarget = play.curTarget;
 var clock = new THREE.Clock();
 function piAnimate() {
 piAnimId = requestAnimationFrame(piAnimate);
+// a throw in the frame ends the room, not the night (dssSceneFailed)
+try { piFrame(); } catch (err) { cancelAnimationFrame(piAnimId); piAnimId = null; if (window.dssSceneFailed) window.dssSceneFailed(err, 'pi'); else throw err; }
+}
+function piFrame() {
 var dt = Math.min(0.1, clock.getDelta());
 var t = piStill ? 0 : clock.getElapsedTime();
 play.frame(t, dt);
@@ -25456,6 +25536,10 @@ var words = play.words, halo = play.halo, curTarget = play.curTarget;
 var clock = new THREE.Clock();
 function riAnimate() {
 riAnimId = requestAnimationFrame(riAnimate);
+// a throw in the frame ends the room, not the night (dssSceneFailed)
+try { riFrame(); } catch (err) { cancelAnimationFrame(riAnimId); riAnimId = null; if (window.dssSceneFailed) window.dssSceneFailed(err, 'ri'); else throw err; }
+}
+function riFrame() {
 var dt = Math.min(0.1, clock.getDelta());
 var t = riStill ? 0 : clock.getElapsedTime();
 play.frame(t, dt);

@@ -12,7 +12,9 @@ src = open(TWEE, encoding='utf-8').read()
 a, b = src.index('// >>>> DSS VOICES BEGIN'), src.index('// <<<< DSS VOICES END')
 table = src[a:b]
 
-def js(s): return "'" + s.replace('\\', '\\\\').replace("'", "\\'") + "'"
+def js(s):
+    if s == "''": return "''"  # a sheet line of '' keeps that voice quiet
+    return "'" + s.replace('\\', '\\\\').replace("'", "\\'") + "'"
 
 def set_own(room, obj, voice, line):
     # the object's line inside its room block: 'obj': { ..., voice: '...', ... }

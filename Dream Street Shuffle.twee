@@ -22494,6 +22494,19 @@ cx.globalCompositeOperation = 'source-over';
 // EVERY LINE IS SAM'S TO WRITE. A line still holding '[Sam:' shows pink; once rewritten it takes its
 // voice's own colour and type (cast, below). Leave a line '' to keep that voice quiet on that object.
 // Which line wins, per voice: the trail's line, then a callback's, then the object's own.
+// WHO SPEAKS (Sam, 2026-10-07 23:22: "different voices would speak in different situations ... if the
+// boy speaks first, then on a reentry the man speaks"): ONE voice per look. THE THIRST alone when its
+// gate (idWhen) is met. Otherwise THE MAN and THE BOY take turns on each object, entry by entry,
+// remembered across nights (localStorage 'dssVoicesTurns'); re-clicking in one visit repeats the
+// voice. Who opens varies object by object: a trail step or key object opens with THE BOY, the rest
+// alternate round the room in table order (first THE MAN, second THE BOY ...). An open trail step
+// whose next step is still unseen keeps THE BOY until it is, so a clue is never skipped by the turn.
+// An object with one voice written speaks with it whatever the turn.
+// USED UP (Sam, 23:24): "once all the voices are used up if there is no reason to allow a return it
+// should just not be clickable anymore." Every line spoken is remembered (localStorage
+// 'dssVoicesSpoken'); when an object has nothing left to say (its own lines, any trail or callback
+// line it could still come to, the thirst's only while the thirst is awake) and no choice to press,
+// the room stops offering it: no halo, no glow, no card, no keyboard button. spent(room, name).
 // What has been seen is kept in this browser across nights (localStorage 'dssVoicesSeen'), like the
 // gifts. window.dssVoices.forget() clears it. ?dev=1 adds a 'Forget the voices' button to the dev panel.
 window.DSS_VOICES = {
@@ -22700,6 +22713,28 @@ lastArr.forEach(function(p) { seen[p] = true; });
 return seen;
 }
 function has(p) { return !!load()[p]; }
+// the turns: how many separate entries have looked at each object (the voice alternates on them)
+var KEYT = 'dssVoicesTurns', memTurns = null, lastGen = {};
+function turns() {
+if (memTurns) return memTurns;
+var t = {}; try { t = JSON.parse(localStorage.getItem(KEYT) || '{}') || {}; } catch (e) {}
+return t;
+}
+function countLook(p) {
+var gen = window._passageGen;
+if (lastGen[p] === gen) return;
+lastGen[p] = gen;
+var t = turns(); t[p] = (t[p] || 0) + 1;
+try { localStorage.setItem(KEYT, JSON.stringify(t)); memTurns = null; } catch (e) { memTurns = t; }
+}
+// the turn this look stands on: 0 for the first entry, 1 for the next ... (a look already counted this entry stays on its turn)
+function turnOf(p) { var n = turns()[p] || 0; return lastGen[p] === window._passageGen ? Math.max(0, n - 1) : n; }
+// the voice that opens on an object: the boy on a trail step or key object, else by its place in the room
+function opener(room, name) {
+if (stepAt(room + '/' + name)) return 'then';
+var names = Object.keys(V.objects[room] || {}), i = names.indexOf(name);
+return (i >= 0 && i % 2) ? 'then' : 'now';
+}
 function see(p) { var s = load(); if (s[p]) return; s[p] = true; try { localStorage.setItem(KEY, JSON.stringify(Object.keys(s))); } catch (e) { mem[p] = true; } }
 // the voices already met (their about line shown once): kept like the seen objects
 var KEYM = 'dssVoicesMet', memMet = {};
@@ -22740,7 +22775,55 @@ if (SW.callbacksBothWays) (V.callbacks || []).forEach(function(c) { if (c.after 
 var s = stepAt(p), step = s && s.trail.steps[s.i];
 if (s && trailOpen(s)) ORDER.forEach(function(v) { if (step[v] != null) pick[v] = step[v]; });
 if (!idAwake()) delete pick.id;
+// one voice per look
+if (pick.id) return [{ voice: 'id', text: pick.id }];
+if (pick.now && pick.then) {
+var keep;
+// a clue still needed: the boy holds the open trail step until its next step has been seen
+if (s && trailOpen(s) && s.i < s.trail.steps.length - 1 && !has(s.trail.steps[s.i + 1].at)) keep = 'then';
+else { var first = opener(room, name), other = first === 'now' ? 'then' : 'now'; keep = turnOf(p) % 2 ? other : first; }
+delete pick[keep === 'now' ? 'then' : 'now'];
+}
 return ORDER.filter(function(v) { return pick[v]; }).map(function(v) { return { voice: v, text: pick[v] }; });
+}
+// every line an object has spoken, by object (so the room knows when it has nothing left to say)
+var KEYS = 'dssVoicesSpoken', spokenRaw = null, spokenMap = {}, memSpoken = null;
+function spoken() {
+if (memSpoken) return memSpoken;
+try { var raw = localStorage.getItem(KEYS) || '{}'; if (raw !== spokenRaw) { spokenMap = JSON.parse(raw) || {}; spokenRaw = raw; } } catch (e) {}
+return spokenMap;
+}
+// the object looked at: seen, counted once per entry for the turns, and its lines marked spoken
+function look(room, name) {
+var p = room + '/' + name;
+see(p); countLook(p);
+var sp = spoken(), mine = sp[p] || (sp[p] = []), add = false;
+lines(room, name).forEach(function(l) { if (mine.indexOf(l.text) < 0) { mine.push(l.text); add = true; } });
+if (!add) return;
+try { localStorage.setItem(KEYS, JSON.stringify(sp)); spokenRaw = null; } catch (e) { memSpoken = sp; }
+}
+// has this object nothing left to say? (every line it could speak, now or later, has been spoken)
+function spent(room, name) {
+var p = room + '/' + name, base = (V.objects[room] || {})[name];
+if (!base) return false;
+var mine = spoken()[p] || [], want = [];
+if (base.now) want.push(base.now);
+if (base.then) want.push(base.then);
+if (base.id && idAwake()) want.push(base.id);
+var cs = V.callbacks || [];
+for (var i = 0; i < cs.length; i++) {
+var c = cs[i];
+if (c.at === p) { if (!has(c.after)) return false; ORDER.forEach(function(v) { if (c[v]) want.push(c[v]); }); }
+if (SW.callbacksBothWays && c.after === p) { if (!has(c.at)) return false; want.push(backLine(c, name)); }
+}
+var st = stepAt(p);
+if (st) {
+if (!trailOpen(st)) return false;
+if (st.i < st.trail.steps.length - 1 && !has(st.trail.steps[st.i + 1].at)) return false;
+if (st.trail.steps[st.i].then) want.push(st.trail.steps[st.i].then);
+}
+for (var j = 0; j < want.length; j++) if (mine.indexOf(want[j]) < 0) return false;
+return true;
 }
 function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 // the card's block of voices
@@ -22833,11 +22916,12 @@ if (c.at === p) add('now', 'callback', c.now, 'after ' + c.after, has(c.after));
 if (SW.callbacksBothWays && c.after === p) add('now', 'back', backLine(c, name), 'after ' + c.at, has(c.at));
 });
 var st = stepAt(p);
+out.turn = { opener: opener(room, name), entries: turns()[p] || 0 };
 if (st) add('then', 'trail', st.trail.steps[st.i].then, st.key + ' step ' + (st.i + 1) + '/' + st.trail.steps.length + (st.i ? ', after ' + st.trail.steps[st.i - 1].at : ''), trailOpen(st));
 return out;
 }
 function unsee(p) { delete mem[p]; var s = load(); delete s[p]; try { localStorage.setItem(KEY, JSON.stringify(Object.keys(s))); } catch (e) {} }
-function forget() { mem = {}; memMet = {}; lastRaw = null; try { localStorage.removeItem(KEY); localStorage.removeItem(KEYM); } catch (e) {} }
+function forget() { mem = {}; memMet = {}; memTurns = null; memSpoken = null; spokenRaw = null; spokenMap = {}; lastGen = {}; lastRaw = null; try { localStorage.removeItem(KEY); localStorage.removeItem(KEYM); localStorage.removeItem(KEYT); localStorage.removeItem(KEYS); } catch (e) {} }
 // a trail or callback naming an object the table does not have is a typo: say so in the console, once
 (function() {
 function known(p) { var a = String(p).split('/'); return !!(V.objects[a[0]] || {})[a.slice(1).join('/')]; }
@@ -22846,7 +22930,7 @@ for (var k in V.trails) V.trails[k].steps.forEach(function(s) { if (!known(s.at)
 (V.callbacks || []).forEach(function(c) { if (!known(c.at)) bad.push('callback at: ' + c.at); if (!known(c.after)) bad.push('callback after: ' + c.after); });
 if (bad.length) try { console.warn('DSS voices: no such object in DSS_VOICES.objects', bad); } catch (e) {}
 })();
-return { lines: lines, html: html, see: see, meet: meet, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
+return { lines: lines, html: html, see: see, look: look, spent: spent, meet: meet, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
 })();
 // <<<< DSS VOICES END
 
@@ -22884,7 +22968,8 @@ function spotActions(spot) { var a; try { a = spot.actions ? spot.actions() : []
 HOTSPOTS.forEach(function(h) { if (KEYSPOT[h.name]) VOICE.claim(KEYSPOT[h.name], WRAP); });
 // an object renamed in its room but not in the voices table goes quiet: the console names it
 if (VOICE) { var unvoiced = HOTSPOTS.filter(function(h) { return !(window.DSS_VOICES.objects[ROOM] || {})[h.name]; }).map(function(h) { return h.name; }); if (unvoiced.length) try { console.warn('DSS voices: ' + ROOM + ' objects with no entry in DSS_VOICES.objects', unvoiced); } catch (e) {} }
-function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
+// an object with nothing left to say and nothing to press is no longer offered (the voices' spent)
+function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0) && !(VOICE && spotActions(spot).length === 0 && VOICE.spent(ROOM, spot.name)); }
 var haloTex = tex(128, 128, function(cx, w, h) {
 cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
 var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
@@ -23008,7 +23093,7 @@ var side = sideLayout() && vboxOn;
 card.style.left = side ? '16px' : '50%';
 card.style.width = side ? 'min(400px,38%)' : 'min(560px,86%)';
 }
-function hideVoiceBox() { vboxOn = false; vbox.style.opacity = '0'; vtail.style.opacity = '0'; vdot.style.opacity = '0'; vbox.setAttribute('aria-hidden', 'true'); }
+function hideVoiceBox() { vboxOn = false; vbox.style.opacity = '0'; vtail.style.opacity = '0'; vdot.style.opacity = '0'; vbox.setAttribute('aria-hidden', 'true'); setTimeout(function() { if (!vboxOn) vbox.innerHTML = ''; }, 700); }
 // where the object is on the screen, in the room's own pixels
 function anchorPx(spot) {
 if (spot.haloAt) vAnchor.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else { spot.root.getWorldPosition(vAnchor); if (spot.figure) vAnchor.y += 0.45; }
@@ -23102,7 +23187,7 @@ openedByKey = byKey;
 if (byKey) { var fb = card.querySelector('.fi-action'); try { (fb || card).focus({ preventScroll: true }); } catch (e) { (fb || card).focus(); } }
 if (keysRow) keysRefresh();
 card.style.transform = 'translate(' + cardX() + ', 0)';
-if (VOICE) { VOICE.see(ROOM + '/' + spot.name); VOICE.meet(ROOM, spot.name); }
+if (VOICE) { VOICE.meet(ROOM, spot.name); VOICE.look(ROOM, spot.name); }
 }
 // the flower taken from its card (2026-10-07, Sam: "it should just show the fact that it's collected ... it
 // should take you back to the bar", then "it should be a distinct modal"): the passage's own glimpse line,

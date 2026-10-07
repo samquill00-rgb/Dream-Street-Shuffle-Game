@@ -3,7 +3,7 @@ const store={}; global.localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>st
 global.document={createElement:()=>({}),head:{appendChild(){}},getElementById:()=>null};
 global.window=global; window._passageGen=1;
 const src=require('fs').readFileSync('/tmp/voices.js','utf8'), a=require('assert');
-function boot(sw){ eval(src.replace('switches: { callbacksBothWays: false, mapMark: false }','switches: '+JSON.stringify(sw))); return window.dssVoices; }
+function boot(sw){ eval(src.replace('switches: { callbacksBothWays: false, mapMark: false, keyCardOneLine: false }','switches: '+JSON.stringify(sw))); return window.dssVoices; }
 let v=boot({callbacksBothWays:false,mapMark:false}); v.forget();
 v.see('cf/the window'); a.equal(v.lines('fi','the window')[0].text,'[Sam: now / the window]');
 a.equal(v.mapMark('chippy'),false); v.see('oi/the globe'); a.equal(v.mapMark('chippy'),false);

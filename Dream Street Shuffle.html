@@ -14839,6 +14839,8 @@ function createPanel() {
   // give it a wipe of its own.
   html += '<div style="margin:8px 0 4px;font-size:11px;color:#9a8a70;">Dreams completed: <span id="dss-dbg-worlds" style="color:#d4b050;"></span></div>';
   html += '<div style="margin:2px 0 4px;font-size:11px;color:#9a8a70;">Voice trails walked: <span id="dss-dbg-trails" style="color:#d4b050;"></span></div>';
+  // 2026-10-07 inner voices: every room's voice slots and flags, to check a line in place
+  html += '<div id="dss-dbg-voices" style="margin:2px 0 8px;font-size:11px;color:#9a8a70;"></div>';
   // 2026-09-16, Sam: "add a way to wipe completed dream worlds for testing".
   // Completion lives in localStorage (dssLifetimeGifts, plus the legacy
   // dssLifetimeWorlds list) and survives Play again by design, so a tester in
@@ -14922,11 +14924,41 @@ function createPanel() {
     trailsOut.textContent = out.join(', ');
   }
   showTrails();
+  // VOICES, ROOM BY ROOM: pick a room, see each object's slots (the one showing now is bright), what each waits on,
+  // and whether the object counts as seen (click to flip it, to try a trail or a callback); "Open" jumps to the room
+  var voicesOut = document.getElementById('dss-dbg-voices'), voicesRoom = null;
+  function escD(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+  function showVoices() {
+    if (!voicesOut || !window.DSS_VOICES || !window.dssVoices) return;
+    var DV = window.dssVoices, N = DV.roomNames, h = '<div style="margin-bottom:4px;">Voices, room by room:</div>';
+    Object.keys(window.DSS_VOICES.objects).forEach(function(r) {
+      h += '<button type="button" class="dss-dbg-vroom" data-room="' + r + '" style="margin:1px 2px;padding:2px 6px;font-size:11px;background:' + (r === voicesRoom ? 'rgba(212,176,80,0.25)' : 'rgba(255,255,255,0.04)') + ';color:#c8b89a;border:1px solid #3a2a1a;border-radius:2px;cursor:pointer;">' + escD(N[r] || r) + '</button>';
+    });
+    if (voicesRoom) {
+      h += '<div style="margin:6px 0 2px;"><span class="dss-dbg-jump" data-passage="' + escD(DV.roomPassages[voicesRoom]) + '" role="button" tabindex="0" style="color:#d4b050;cursor:pointer;text-decoration:underline;">Open ' + escD(N[voicesRoom]) + '</span>' + (DV.idAwake() ? ' · the id is awake' : ' · the id is asleep') + '</div>';
+      Object.keys(window.DSS_VOICES.objects[voicesRoom]).forEach(function(name) {
+        var path = voicesRoom + '/' + name, seen = DV.has(path);
+        h += '<div style="margin-top:5px;color:#c8b89a;">' + escD(name) + ' <button type="button" class="dss-dbg-vseen" data-path="' + escD(path) + '" title="Click to flip" style="font-size:10px;padding:0 5px;background:none;color:' + (seen ? '#9fd8ab' : '#7a6a58') + ';border:1px solid #3a2a1a;border-radius:2px;cursor:pointer;">' + (seen ? 'seen' : 'not seen') + '</button></div>';
+        DV.slots(voicesRoom, name).forEach(function(sl) {
+          h += '<div style="margin-left:10px;opacity:' + (sl.showing ? 1 : 0.5) + ';">' + (sl.showing ? '● ' : '○ ') + sl.voice + ' (' + sl.kind + ', ' + escD(sl.when) + '): <span style="color:' + (sl.text.indexOf('[Sam:') >= 0 ? '#ff3aa8' : '#e8e2d2') + ';">' + escD(sl.text || '(quiet)') + '</span></div>';
+        });
+      });
+    }
+    voicesOut.innerHTML = h;
+  }
+  if (voicesOut) voicesOut.addEventListener('click', function(e) {
+    var b = e.target.closest('.dss-dbg-vroom, .dss-dbg-vseen');
+    if (!b) return;
+    if (b.classList.contains('dss-dbg-vroom')) voicesRoom = voicesRoom === b.getAttribute('data-room') ? null : b.getAttribute('data-room');
+    else { var pth = b.getAttribute('data-path'); if (window.dssVoices.has(pth)) window.dssVoices.unsee(pth); else window.dssVoices.see(pth); showTrails(); }
+    showVoices();
+  });
+  showVoices();
   var toolVoices = document.getElementById('dss-dbg-tool-voices');
   if (toolVoices) toolVoices.addEventListener('click', function() {
     if (!confirm('Forget every object the voices have seen (trails and callbacks start again)?')) return;
     if (window.dssVoices) window.dssVoices.forget();
-    showTrails();
+    showTrails(); showVoices();
   });
   var toolDreams = document.getElementById('dss-dbg-tool-dreams');
   if (toolDreams) toolDreams.addEventListener('click', function() {
@@ -31069,6 +31101,23 @@ break;
 }
 return false;
 }
+// for the dev view (?dev=1): every slot an object has, which one shows now, and what it waits on
+var ROOM_PASSAGE = { fi: 'The French', ci: 'The Colony Room', pi: 'Entering The Pillars of Hercules', ri: 'Ronnie Scott\'s', cu: 'Turn to Copper', cb: 'Coach and Horses bar', ti: 'Trisha\'s', lk: 'Martin Lackland\'s Office', oi: 'O\'Flatterly\'s shop', cf: 'Chinese Fish and Chips' };
+function slots(room, name) {
+var p = room + '/' + name, base = (V.objects[room] || {})[name] || {}, out = [], shown = {};
+lines(room, name).forEach(function(l) { shown[l.voice] = l.text; });
+function add(voice, kind, text, when, live) { out.push({ voice: voice, kind: kind, text: text, when: when, live: !!live, showing: shown[voice] === text && !!live }); }
+var idOk = idAwake();
+ORDER.forEach(function(v) { if (base[v] != null) add(v, 'own', base[v], v === 'id' ? 'when the id speaks' : 'always', v !== 'id' || idOk); });
+(V.callbacks || []).forEach(function(c) {
+if (c.at === p) add('now', 'callback', c.now, 'after ' + c.after, has(c.after));
+if (SW.callbacksBothWays && c.after === p) add('now', 'back', c.back != null ? c.back : '(pink slot)', 'after ' + c.at, has(c.at));
+});
+var st = stepAt(p);
+if (st) add('then', 'trail', st.trail.steps[st.i].then, st.key + ' step ' + (st.i + 1) + '/' + st.trail.steps.length + (st.i ? ', after ' + st.trail.steps[st.i - 1].at : ''), trailOpen(st));
+return out;
+}
+function unsee(p) { delete mem[p]; var s = load(); delete s[p]; try { localStorage.setItem(KEY, JSON.stringify(Object.keys(s))); } catch (e) {} }
 function forget() { mem = {}; lastRaw = null; try { localStorage.removeItem(KEY); } catch (e) {} }
 // a trail or callback naming an object the table does not have is a typo: say so in the console, once
 (function() {
@@ -31078,7 +31127,7 @@ for (var k in V.trails) V.trails[k].steps.forEach(function(s) { if (!known(s.at)
 (V.callbacks || []).forEach(function(c) { if (!known(c.at)) bad.push('callback at: ' + c.at); if (!known(c.after)) bad.push('callback after: ' + c.after); });
 if (bad.length) try { console.warn('DSS voices: no such object in DSS_VOICES.objects', bad); } catch (e) {}
 })();
-return { lines: lines, html: html, see: see, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark };
+return { lines: lines, html: html, see: see, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
 })();
 // <<<< DSS VOICES END
 // >>>> DSS ROOM PLAY BEGIN

@@ -22,3 +22,10 @@ st={getAttribute:k=>({'data-sob':'70','data-mor':'70','data-phase':'2'})[k]}; a.
 st={getAttribute:k=>({'data-sob':'70','data-mor':'70','data-phase':'1'})[k]}; a.equal(v.idAwake(),false);
 v.forget(); a.equal(v.has('oi/the globe'),false);
 console.log('engine tests pass');
+// the dev view's slots, and unsee
+v.forget(); st=null;
+let sl=v.slots('cf','the menu'); a.deepStrictEqual(sl.map(x=>[x.voice,x.kind,x.showing]),[['now','own',true],['then','own',true],['then','trail',false]]);
+v.see('oi/the globe'); sl=v.slots('cf','the menu'); a.deepStrictEqual(sl.map(x=>[x.kind,x.showing]),[['own',true],['own',false],['trail',true]]);
+v.unsee('oi/the globe'); a.equal(v.has('oi/the globe'),false);
+sl=v.slots('cf','the range'); a.equal(sl.find(x=>x.voice==='id').showing,false);
+console.log('dev view tests pass');

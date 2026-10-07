@@ -14092,6 +14092,8 @@ function init(container) {
       el.appendChild(glyphEl);
     }
     if (d.quiet || d.sign) el.classList.add('soho-door-quiet');
+    // INNER VOICES (switch mapMark, off by default): a warm dot by a door whose venue holds a trail's next step
+    try { if (window.dssVoices && window.dssVoices.mapMark(d.id)) el.classList.add('soho-door-trail'); } catch (e) {}
     var side = doorSide(d), ltx = d.c + 0.5, lty = d.r - 1.35;
     // The lit door icon, its spill and the chevron are the venue signature.
     // A doorway gets none of them — just a dim name (Sam, 2026-09-13).
@@ -14836,6 +14838,9 @@ function createPanel() {
   // turns you back every time with "You have been down this one". Show it, and
   // give it a wipe of its own.
   html += '<div style="margin:8px 0 4px;font-size:11px;color:#9a8a70;">Dreams completed: <span id="dss-dbg-worlds" style="color:#d4b050;"></span></div>';
+  html += '<div style="margin:2px 0 4px;font-size:11px;color:#9a8a70;">Voice trails walked: <span id="dss-dbg-trails" style="color:#d4b050;"></span></div>';
+  // 2026-10-07 inner voices: every room's voice slots and flags, to check a line in place
+  html += '<div id="dss-dbg-voices" style="margin:2px 0 8px;font-size:11px;color:#9a8a70;"></div>';
   // 2026-09-16, Sam: "add a way to wipe completed dream worlds for testing".
   // Completion lives in localStorage (dssLifetimeGifts, plus the legacy
   // dssLifetimeWorlds list) and survives Play again by design, so a tester in
@@ -14843,6 +14848,7 @@ function createPanel() {
   // Dream Progress re-reads the store on the next passage; worlds completed
   // THIS night are re-added from $worldsVisited, so start a new game for a
   // truly clean run.
+  html += '<div id="dss-dbg-tool-voices" style="padding:6px 10px;margin:2px 0;background:rgba(234,122,122,0.10);border:1px solid rgba(234,122,122,0.3);border-radius:3px;cursor:pointer;font-size:12px;color:#ea9a9a;">\u232b Forget the voices (trails and callbacks start again)</div>';
   html += '<div id="dss-dbg-tool-dreams" style="padding:6px 10px;margin:2px 0;background:rgba(234,122,122,0.10);border:1px solid rgba(234,122,122,0.3);border-radius:3px;cursor:pointer;font-size:12px;color:#ea9a9a;">\u232b Forget completed dreams (every key opens its world again)</div>';
   html += '<div id="dss-dbg-tool-pentangle" style="padding:6px 10px;margin:2px 0;background:rgba(212,176,80,0.05);border:1px solid rgba(212,176,80,0.15);border-radius:3px;cursor:pointer;font-size:11px;color:#aa9070;">(legacy small overlay — for visual debug only)</div>';
   // Controls
@@ -14910,6 +14916,50 @@ function createPanel() {
     var lw = (window.dssLoadLifetimeGifts && window.dssLoadLifetimeGifts()) || [];
     worldsOut.textContent = lw.length ? lw.join(', ') : 'none';
   }
+  var trailsOut = document.getElementById('dss-dbg-trails');
+  function showTrails() {
+    if (!trailsOut || !window.DSS_VOICES || !window.dssVoices) return;
+    var T = window.DSS_VOICES.trails, out = [];
+    for (var k in T) out.push(k + ' ' + T[k].steps.filter(function(s) { return window.dssVoices.has(s.at); }).length + '/' + T[k].steps.length);
+    trailsOut.textContent = out.join(', ');
+  }
+  showTrails();
+  // VOICES, ROOM BY ROOM: pick a room, see each object's slots (the one showing now is bright), what each waits on,
+  // and whether the object counts as seen (click to flip it, to try a trail or a callback); "Open" jumps to the room
+  var voicesOut = document.getElementById('dss-dbg-voices'), voicesRoom = null;
+  function escD(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+  function showVoices() {
+    if (!voicesOut || !window.DSS_VOICES || !window.dssVoices) return;
+    var DV = window.dssVoices, N = DV.roomNames, h = '<div style="margin-bottom:4px;">Voices, room by room:</div>';
+    Object.keys(window.DSS_VOICES.objects).forEach(function(r) {
+      h += '<button type="button" class="dss-dbg-vroom" data-room="' + r + '" style="margin:1px 2px;padding:2px 6px;font-size:11px;background:' + (r === voicesRoom ? 'rgba(212,176,80,0.25)' : 'rgba(255,255,255,0.04)') + ';color:#c8b89a;border:1px solid #3a2a1a;border-radius:2px;cursor:pointer;">' + escD(N[r] || r) + '</button>';
+    });
+    if (voicesRoom) {
+      h += '<div style="margin:6px 0 2px;"><span class="dss-dbg-jump" data-passage="' + escD(DV.roomPassages[voicesRoom]) + '" role="button" tabindex="0" style="color:#d4b050;cursor:pointer;text-decoration:underline;">Open ' + escD(N[voicesRoom]) + '</span>' + (DV.idAwake() ? ' · the id is awake' : ' · the id is asleep') + '</div>';
+      Object.keys(window.DSS_VOICES.objects[voicesRoom]).forEach(function(name) {
+        var path = voicesRoom + '/' + name, seen = DV.has(path);
+        h += '<div style="margin-top:5px;color:#c8b89a;">' + escD(name) + ' <button type="button" class="dss-dbg-vseen" data-path="' + escD(path) + '" title="Click to flip" style="font-size:10px;padding:0 5px;background:none;color:' + (seen ? '#9fd8ab' : '#7a6a58') + ';border:1px solid #3a2a1a;border-radius:2px;cursor:pointer;">' + (seen ? 'seen' : 'not seen') + '</button></div>';
+        DV.slots(voicesRoom, name).forEach(function(sl) {
+          h += '<div style="margin-left:10px;opacity:' + (sl.showing ? 1 : 0.5) + ';">' + (sl.showing ? '● ' : '○ ') + sl.voice + ' (' + sl.kind + ', ' + escD(sl.when) + '): <span style="color:' + (sl.text.indexOf('[Sam:') >= 0 ? '#ff3aa8' : '#e8e2d2') + ';">' + escD(sl.text || '(quiet)') + '</span></div>';
+        });
+      });
+    }
+    voicesOut.innerHTML = h;
+  }
+  if (voicesOut) voicesOut.addEventListener('click', function(e) {
+    var b = e.target.closest('.dss-dbg-vroom, .dss-dbg-vseen');
+    if (!b) return;
+    if (b.classList.contains('dss-dbg-vroom')) voicesRoom = voicesRoom === b.getAttribute('data-room') ? null : b.getAttribute('data-room');
+    else { var pth = b.getAttribute('data-path'); if (window.dssVoices.has(pth)) window.dssVoices.unsee(pth); else window.dssVoices.see(pth); showTrails(); }
+    showVoices();
+  });
+  showVoices();
+  var toolVoices = document.getElementById('dss-dbg-tool-voices');
+  if (toolVoices) toolVoices.addEventListener('click', function() {
+    if (!confirm('Forget every object the voices have seen (trails and callbacks start again)?')) return;
+    if (window.dssVoices) window.dssVoices.forget();
+    showTrails(); showVoices();
+  });
   var toolDreams = document.getElementById('dss-dbg-tool-dreams');
   if (toolDreams) toolDreams.addEventListener('click', function() {
     var lw = (window.dssLoadLifetimeGifts && window.dssLoadLifetimeGifts()) || [];
@@ -15176,8 +15226,17 @@ window.dssQuestPopup = function() {
 window.dssKeyPopup = function() {
   if (document.getElementById('dss-key-overlay')) return;
   if (window._dssKeyPopupSeenGen === window._passageGen) return;
-  var offers = [].slice.call(document.querySelectorAll('tw-passage .dss-key-offer'))
+  // 2026-10-07: a venue room holds the passage's words in its own panel (dssRoomScope), so the offers
+  // are looked for there too; before this the five venue keys were never raised once rooms held words
+  var offers = [].slice.call(document.querySelectorAll('tw-passage .dss-key-offer, tw-story > .dss-room-fixed .dss-room-prose .dss-key-offer'))
     .filter(function(o) { return o.querySelector('tw-link'); });
+  // INNER VOICES (2026-10-07): a key whose room shows its object leaves the popup to that object's card;
+  // while the room is still loading, wait for it (up to ten seconds), and if the room fails, show it here
+  if (offers.length && window.dssVoices) {
+    var vo = window.dssVoices.popupOffers(offers);
+    if (vo === 'wait') { var wGen = window._passageGen; setTimeout(function() { if (window._passageGen === wGen && window.dssKeyPopup) window.dssKeyPopup(); }, 400); return; }
+    offers = vo;
+  }
   if (!offers.length) return;
   if (window.dssDeferIfBusy(window.dssKeyPopup)) return;
   var gen = window._passageGen;
@@ -25997,6 +26056,8 @@ window.dssSceneFailed = function(err, where) {
       if (cont.parentNode) cont.parentNode.removeChild(cont);
     }
   }
+  // a key that lay on one of this room's objects goes back to the popup
+  if (anyRoom && window.dssKeyPopup) setTimeout(function() { window.dssKeyPopup(); }, 300);
   if (!anyRoom && where === 'build') {
     // an exterior scene: go on through its door, as its own button would
     var links = document.querySelectorAll('tw-passage tw-link');
@@ -30314,12 +30375,15 @@ if (hasContent(n)) return true;
 return false;
 }
 // the words as the reader sees them: the text outside links, the phone's own modal and anything hidden
+// (2026-10-07: and the key offers, parked off-screen: pocketing a key from its object's card put its note
+// in the offer, which counted as new words and brought the room's opening panel back over the room;
+// the note goes on a notice slip instead)
 function prose() {
 var out = [], w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
 while (w.nextNode()) {
 var t = w.currentNode, pe = t.parentNode;
 if (!t.nodeValue.trim() || !pe || pe.nodeType !== 1) continue;
-if (pe.closest('tw-link, .phone-ringing, script, style, .dss-claimed, .dss-claimed-wrap, .dss-trim')) continue;
+if (pe.closest('tw-link, .phone-ringing, script, style, .dss-claimed, .dss-claimed-wrap, .dss-trim, .dss-key-offer')) continue;
 if (!pe.getClientRects().length) continue;
 out.push(t.nodeValue.replace(/\s+/g, ' '));
 }
@@ -30720,6 +30784,354 @@ cx.globalCompositeOperation = 'source-over';
 });
 };
 // <<<< DSS GHOST TEX END
+// >>>> DSS VOICES BEGIN
+// ====== INNER VOICES — what every room object says (2026-10-07) ======
+// Sam (2026-10-07): "in e.g. Inis's shop, most of the clickable nodes give you nothing. I want them
+// all to give something when you click." Then: "I NEED TO DO INTERNAL DIALOGUE." Two voices: you NOW,
+// and you THEN (the idealised you: the child, and the imagined future); sometimes the ID, dark and
+// destructive. Objects connect two ways: TRAILS (a short chain of objects whose voices lead to a dream
+// key, the key itself the trail's last object) and CALLBACKS (an object speaks differently once you
+// have looked at a certain other object, in any room).
+// EVERY LINE IS SAM'S TO WRITE. A line still holding '[Sam:' shows pink; once rewritten it takes its
+// voice's own colour and type (cast, below). Leave a line '' to keep that voice quiet on that object.
+// Which line wins, per voice: the trail's line, then a callback's, then the object's own.
+// What has been seen is kept in this browser across nights (localStorage 'dssVoicesSeen'), like the
+// gifts. window.dssVoices.forget() clears it. ?dev=1 adds a 'Forget the voices' button to the dev panel.
+window.DSS_VOICES = {
+// who speaks, and how each looks on the card once its words are written. label: a name shown small
+// before each of that voice's lines (as Disco Elysium names its voices); '' shows the dot alone
+cast: {
+now:  { label: '', mark: 'rgba(215,220,230,0.75)', css: 'color:rgba(232,226,210,0.95);' },
+then: { label: '', mark: 'rgba(232,196,120,0.9)',  css: 'color:rgba(236,214,160,0.95);font-style:italic;' },
+id:   { label: '', mark: 'rgba(190,40,40,0.95)',   css: 'color:rgba(222,96,84,0.96);letter-spacing:0.4px;' }
+},
+// when the id breaks in: any one of these (sobriety and morale are the stat bars, 0-100;
+// phase is the night: 0 before midnight, 1 after midnight, 2 small hours, 3 dawn awaits)
+idWhen: { sobrietyBelow: 30, moraleBelow: 30, fromPhase: 2 },
+// SWITCHES, all off until Sam says (each is one word to change):
+// callbacksBothWays: a callback also speaks back at its earlier object once the later one is seen
+//   (its line: the callback's 'back', or a pink slot until written)
+// mapMark: on the Dean Street map, a small warm dot by the door of a venue holding a trail's next step
+// keyCardOneLine: a key's card shows only the key's own line, not the object's line above it
+switches: { callbacksBothWays: false, mapMark: false, keyCardOneLine: false },
+// every object in the ten rooms, by room. now and then on each; the id on one object a room. A trail's
+// first object has no then of its own: its trail line (below) always speaks there instead.
+objects: {
+// The French
+'fi': {
+'the photographs': { now: '[Sam: now / the photographs]', then: '[Sam: then / the photographs]' },
+'the telephone': { now: '[Sam: now / the telephone]', then: '[Sam: then / the telephone]' },
+'the glass on the bar': { now: '[Sam: now / the glass on the bar]', then: '[Sam: then / the glass on the bar]', id: '[Sam: id / the glass on the bar]' },
+'the blue door': { now: '[Sam: now / the blue door]', then: '[Sam: then / the blue door]' },
+'the bar': { now: '[Sam: now / the bar]', then: '[Sam: then / the bar]' },
+'the man at the bar': { now: '[Sam: now / the man at the bar]', then: '[Sam: then / the man at the bar]' },
+'the novelist': { now: '[Sam: now / the novelist]', then: '[Sam: then / the novelist]' },
+'the window': { now: '[Sam: now / the window]', then: '[Sam: then / the window]' },
+'the painter': { now: '[Sam: now / the painter]', then: '[Sam: then / the painter]' }
+},
+// The Colony Room
+'ci': {
+'the pictures': { now: '[Sam: now / the pictures]', then: '[Sam: then / the pictures]' },
+'the telephone': { now: '[Sam: now / the telephone]', then: '[Sam: then / the telephone]' },
+'the bar': { now: '[Sam: now / the bar]', then: '[Sam: then / the bar]', id: '[Sam: id / the bar]' },
+'the man at the bar': { now: '[Sam: now / the man at the bar]', then: '[Sam: then / the man at the bar]' },
+'the agent at his table': { now: '[Sam: now / the agent at his table]', then: '[Sam: then / the agent at his table]' },
+'the piano': { now: '[Sam: now / the piano]' },
+'the window': { now: '[Sam: now / the window]', then: '[Sam: then / the window]' }
+},
+// The Pillars of Hercules
+'pi': {
+'the bar': { now: '[Sam: now / the bar]', then: '[Sam: then / the bar]' },
+'the man through the fumes': { now: '[Sam: now / the man through the fumes]', then: '[Sam: then / the man through the fumes]' },
+'the third pillar': { now: '[Sam: now / the third pillar]', then: '[Sam: then / the third pillar]' },
+'the threshold': { now: '[Sam: now / the threshold]', then: '[Sam: then / the threshold]', id: '[Sam: id / the threshold]' },
+'the telephone': { now: '[Sam: now / the telephone]', then: '[Sam: then / the telephone]' },
+'the lattice window': { now: '[Sam: now / the lattice window]', then: '[Sam: then / the lattice window]' }
+},
+// Ronnie Scott’s
+'ri': {
+'the stage': { now: '[Sam: now / the stage]', then: '[Sam: then / the stage]' },
+'the bar': { now: '[Sam: now / the bar]', then: '[Sam: then / the bar]', id: '[Sam: id / the bar]' },
+'the door': { now: '[Sam: now / the door]', then: '[Sam: then / the door]' },
+'the telephone': { now: '[Sam: now / the telephone]', then: '[Sam: then / the telephone]' },
+'the photographs': { now: '[Sam: now / the photographs]', then: '[Sam: then / the photographs]' },
+'the empty table': { now: '[Sam: now / the empty table]', then: '[Sam: then / the empty table]' }
+},
+// the cellar
+'cu': {
+'Copper': { now: '[Sam: now / Copper]', then: '[Sam: then / Copper]' },
+'Ashton Granger': { now: '[Sam: now / Ashton Granger]', then: '[Sam: then / Ashton Granger]' },
+'Quiet Frankie': { now: '[Sam: now / Quiet Frankie]', then: '[Sam: then / Quiet Frankie]' },
+'the bulb': { now: '[Sam: now / the bulb]', id: '[Sam: id / the bulb]' },
+'the stairs': { now: '[Sam: now / the stairs]', then: '[Sam: then / the stairs]' },
+'the chesterfield': { now: '[Sam: now / the chesterfield]' }
+},
+// the Coach and Horses
+'cb': {
+'the cow': { now: '[Sam: now / the cow]', then: '[Sam: then / the cow]' },
+'Jeffrey Bernard': { now: '[Sam: now / Jeffrey Bernard]', then: '[Sam: then / Jeffrey Bernard]' },
+'his glass': { now: '[Sam: now / his glass]', then: '[Sam: then / his glass]' },
+'the optics': { now: '[Sam: now / the optics]', then: '[Sam: then / the optics]', id: '[Sam: id / the optics]' },
+'the telephone': { now: '[Sam: now / the telephone]', then: '[Sam: then / the telephone]' },
+'the windows': { now: '[Sam: now / the windows]', then: '[Sam: then / the windows]' },
+'the door': { now: '[Sam: now / the door]', then: '[Sam: then / the door]' },
+'the gents': { now: '[Sam: now / the gents]', then: '[Sam: then / the gents]' }
+},
+// Trisha’s
+'ti': {
+'Shana': { now: '[Sam: now / Shana]', then: '[Sam: then / Shana]' },
+'the stairs': { now: '[Sam: now / the stairs]', then: '[Sam: then / the stairs]' },
+'the bar': { now: '[Sam: now / the bar]', then: '[Sam: then / the bar]' },
+'the jukebox': { now: '[Sam: now / the jukebox]', then: '[Sam: then / the jukebox]' },
+'the ship’s wheel': { now: '[Sam: now / the ship’s wheel]', then: '[Sam: then / the ship’s wheel]' },
+'the photographs': { now: '[Sam: now / the photographs]', then: '[Sam: then / the photographs]' },
+'the door to the back': { now: '[Sam: now / the door to the back]', then: '[Sam: then / the door to the back]', id: '[Sam: id / the door to the back]' }
+},
+// Lackland’s office
+'lk': {
+'the turntable': { now: '[Sam: now / the turntable]', then: '[Sam: then / the turntable]' },
+'the door at the back': { now: '[Sam: now / the door at the back]', then: '[Sam: then / the door at the back]' },
+'Lackland': { now: '[Sam: now / Lackland]', then: '[Sam: then / Lackland]' },
+'your book': { now: '[Sam: now / your book]', then: '[Sam: then / your book]' },
+'the glass': { now: '[Sam: now / the glass]', then: '[Sam: then / the glass]', id: '[Sam: id / the glass]' },
+'the dish': { now: '[Sam: now / the dish]', then: '[Sam: then / the dish]' },
+'the window': { now: '[Sam: now / the window]', then: '[Sam: then / the window]' },
+'the shelves': { now: '[Sam: now / the shelves]', then: '[Sam: then / the shelves]' }
+},
+// the chippy
+'cf': {
+'your plate': { now: '[Sam: now / your plate]', then: '[Sam: then / your plate]' },
+'the window': { now: '[Sam: now / the window]', then: '[Sam: then / the window]' },
+'the range': { now: '[Sam: now / the range]', then: '[Sam: then / the range]', id: '[Sam: id / the range]' },
+'the menu': { now: '[Sam: now / the menu]', then: '[Sam: then / the menu]' },
+'the ticket': { now: '[Sam: now / the ticket]', then: '[Sam: then / the ticket]' },
+'the empty table': { now: '[Sam: now / the empty table]', then: '[Sam: then / the empty table]' },
+'the door': { now: '[Sam: now / the door]', then: '[Sam: then / the door]' }
+},
+// O’Flatterly’s shop
+'oi': {
+'Inis O’Flatterly': { now: '[Sam: now / Inis O’Flatterly]', then: '[Sam: then / Inis O’Flatterly]' },
+'the counter': { now: '[Sam: now / the counter]', then: '[Sam: then / the counter]' },
+'the shelves': { now: '[Sam: now / the shelves]', then: '[Sam: then / the shelves]' },
+'the ladder': { now: '[Sam: now / the ladder]', then: '[Sam: then / the ladder]' },
+'the glass case': { now: '[Sam: now / the glass case]', id: '[Sam: id / the glass case]' },
+'the globe': { now: '[Sam: now / the globe]' },
+'the bell': { now: '[Sam: now / the bell]', then: '[Sam: then / the bell]' },
+'the window': { now: '[Sam: now / the window]', then: '[Sam: then / the window]' },
+'the door': { now: '[Sam: now / the door]', then: '[Sam: then / the door]' }
+}
+},
+// TRAILS: one a dream key. Each step's line shows once the step before it has been seen (the first
+// step's always); the last step is where the key lies, and that object's card offers it. A walked
+// step's next object breathes a little warmer at rest, wherever it is. gate: true would hold the key
+// back until the step before it has been seen (off, so a key is never harder to find than before).
+trails: {
+'lighter': { world: 'Himalayas', gate: false, steps: [
+{ at: 'ci/the piano', then: '[Sam: then / lighter trail 1]' },
+{ at: 'pi/the lattice window', then: '[Sam: then / lighter trail 2]' },
+{ at: 'fi/the bar', then: '[Sam: then / lighter trail 3]' }
+] },
+'cocaine': { world: 'Nazca', gate: false, steps: [
+{ at: 'cu/the bulb', then: '[Sam: then / cocaine trail 1]' },
+{ at: 'ti/the jukebox', then: '[Sam: then / cocaine trail 2]' },
+{ at: 'ti/the door to the back', then: '[Sam: then / cocaine trail 3]' }
+] },
+'ticket': { world: 'Easter Island', gate: false, steps: [
+{ at: 'oi/the globe', then: '[Sam: then / ticket trail 1]' },
+{ at: 'cf/the menu', then: '[Sam: then / ticket trail 2]' },
+{ at: 'cf/the ticket', then: '[Sam: then / ticket trail 3]' }
+] },
+'slip': { world: 'the Pyramid', gate: false, steps: [
+{ at: 'cu/the chesterfield', then: '[Sam: then / slip trail 1]' },
+{ at: 'cb/the gents', then: '[Sam: then / slip trail 2]' },
+{ at: 'cb/his glass', then: '[Sam: then / slip trail 3]' }
+] },
+'eye': { world: 'Ezekiel', gate: false, steps: [
+{ at: 'oi/the glass case', then: '[Sam: then / eye trail 1]' },
+{ at: 'lk/the shelves', then: '[Sam: then / eye trail 2]' },
+{ at: 'lk/the dish', then: '[Sam: then / eye trail 3]' }
+] }
+},
+// CALLBACKS: at this object, once that one has been seen, these lines replace its own
+callbacks: [
+{ at: 'cf/the window', after: 'fi/the window', now: '[Sam: now / the window, after the window, The French]' },
+{ at: 'oi/the window', after: 'cf/the window', now: '[Sam: now / the window, after the window, the chippy]' },
+{ at: 'pi/the telephone', after: 'fi/the telephone', now: '[Sam: now / the telephone, after the telephone, The French]' },
+{ at: 'ri/the telephone', after: 'ci/the telephone', now: '[Sam: now / the telephone, after the telephone, The Colony Room]' },
+{ at: 'cb/the telephone', after: 'pi/the telephone', now: '[Sam: now / the telephone, after the telephone, The Pillars of Hercules]' },
+{ at: 'ri/the photographs', after: 'fi/the photographs', now: '[Sam: now / the photographs, after the photographs, The French]' },
+{ at: 'ti/the photographs', after: 'ri/the photographs', now: '[Sam: now / the photographs, after the photographs, Ronnie Scott’s]' },
+{ at: 'lk/the shelves', after: 'oi/the shelves', now: '[Sam: now / the shelves, after the shelves, O’Flatterly’s shop]' },
+{ at: 'ti/the stairs', after: 'cu/the stairs', now: '[Sam: now / the stairs, after the stairs, the cellar]' },
+{ at: 'cf/the empty table', after: 'ri/the empty table', now: '[Sam: now / the empty table, after the empty table, Ronnie Scott’s]' }
+]
+};
+// ---------- the engine: reads the table above, keeps what has been seen ----------
+window.dssVoices = (function() {
+// a phone's card: smaller words, smaller key picture
+try {
+var css = document.createElement('style'); css.id = 'dss-voices-css';
+css.textContent = '.dss-room-card.dss-card-narrow{font-size:13.5px!important;line-height:1.4!important;padding:10px 14px 9px!important}' +
+'.dss-card-narrow .dss-voices{font-size:13px!important;margin-top:5px!important}' +
+'.dss-card-narrow .dss-card-keyart svg{height:36px!important}' +
+'.soho-door-label.soho-door-trail::after{content:"";display:inline-block;width:5px;height:5px;margin-left:6px;border-radius:50%;vertical-align:middle;background:rgba(236,196,120,0.95);box-shadow:0 0 6px rgba(236,196,120,0.9)}';
+(document.head || document.documentElement).appendChild(css);
+} catch (e) {}
+var V = window.DSS_VOICES, KEY = 'dssVoicesSeen', ORDER = ['now', 'then', 'id'], SW = V.switches || {};
+var SR_NAME = { now: 'you now', then: 'you then', id: 'the id' };
+var ROOM_NAME = { fi: 'The French', ci: 'The Colony Room', pi: 'The Pillars of Hercules', ri: 'Ronnie Scott’s', cf: 'the chippy', cb: 'the Coach', ti: 'Trisha’s', lk: 'Lackland’s office', oi: 'O’Flatterly’s shop', cu: 'the cellar' };
+// the Dean Street map door each room is reached by (the cellar lies through the Colony's door)
+var MAP_DOOR = { fi: 'french', ci: 'colony', cu: 'colony', pi: 'pillars', ri: 'ronnies', cf: 'chippy', cb: 'coach', ti: 'trishas', lk: 'lackland', oi: 'cecil' };
+var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
+// read fresh each time (a second tab, the dev panel's forget), kept in memory only when storage is refused
+var mem = {};
+var lastRaw = null, lastArr = [];
+function load() {
+var seen = {};
+for (var m in mem) seen[m] = true;
+try {
+var raw = localStorage.getItem(KEY) || '[]';
+// the room's rest glow asks every frame under reduced motion: parse only when the stored list changes
+if (raw !== lastRaw) { var a = JSON.parse(raw); lastArr = Array.isArray(a) ? a : []; lastRaw = raw; }
+lastArr.forEach(function(p) { seen[p] = true; });
+} catch (e) {}
+return seen;
+}
+function has(p) { return !!load()[p]; }
+function see(p) { var s = load(); if (s[p]) return; s[p] = true; try { localStorage.setItem(KEY, JSON.stringify(Object.keys(s))); } catch (e) { mem[p] = true; } }
+// the trail a path stands on: { key, trail, i } or null
+function stepAt(p) {
+for (var k in V.trails) { var st = V.trails[k].steps; for (var i = 0; i < st.length; i++) if (st[i].at === p) return { key: k, trail: V.trails[k], i: i }; }
+return null;
+}
+function trailOpen(s) { return s.i === 0 || has(s.trail.steps[s.i - 1].at); }
+// the stat bars and the night, from the header's hidden note (no Harlowe internals)
+function state() {
+var el = document.getElementById('dss-voice-state');
+if (!el) return null;
+return { sob: +el.getAttribute('data-sob'), mor: +el.getAttribute('data-mor'), phase: +el.getAttribute('data-phase') };
+}
+function idAwake() {
+var s = state(), w = V.idWhen || {};
+if (!s) return false;
+return (w.sobrietyBelow != null && s.sob < w.sobrietyBelow) || (w.moraleBelow != null && s.mor < w.moraleBelow) || (w.fromPhase != null && s.phase >= w.fromPhase);
+}
+// the lines an object speaks right now, in cast order: [{ voice, text }]
+function lines(room, name) {
+var p = room + '/' + name, base = (V.objects[room] || {})[name];
+if (!base) return [];
+var pick = {};
+ORDER.forEach(function(v) { if (base[v] != null) pick[v] = base[v]; });
+if (SW.callbacksBothWays) (V.callbacks || []).forEach(function(c) {
+if (c.after === p && has(c.at)) pick.now = c.back != null ? c.back : '[Sam: now / ' + name + ', back after ' + c.at.split('/').slice(1).join('/') + ', ' + (ROOM_NAME[c.at.split('/')[0]] || '') + ']';
+});
+(V.callbacks || []).forEach(function(c) { if (c.at === p && has(c.after)) ORDER.forEach(function(v) { if (c[v] != null) pick[v] = c[v]; }); });
+var s = stepAt(p), step = s && s.trail.steps[s.i];
+if (s && trailOpen(s)) ORDER.forEach(function(v) { if (step[v] != null) pick[v] = step[v]; });
+if (!idAwake()) delete pick.id;
+return ORDER.filter(function(v) { return pick[v]; }).map(function(v) { return { voice: v, text: pick[v] }; });
+}
+function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+// the card's block of voices
+function html(room, name) {
+var ls = lines(room, name);
+if (!ls.length) return '';
+// a hairline, short and faint, between what the thing is and what you make of it
+var h = '<div class="dss-voices" style="margin:9px auto 2px;max-width:30em;font:14px/1.45 \'Crimson Text\',Georgia,serif;">' +
+'<div aria-hidden="true" style="width:42px;height:1px;margin:0 auto 6px;background:linear-gradient(90deg,rgba(200,168,106,0),rgba(200,168,106,0.4),rgba(200,168,106,0));"></div>';
+ls.forEach(function(l) {
+var c = V.cast[l.voice] || {}, draft = l.text.indexOf('[Sam:') >= 0;
+h += '<div class="dss-voice dss-voice-' + l.voice + '" style="margin:3px 0;' + (draft ? PINK : (c.css || '')) + '">' +
+'<span aria-hidden="true" style="display:inline-block;width:5px;height:5px;border-radius:50%;margin:0 7px 2px 0;vertical-align:middle;background:' + (c.mark || '#ccc') + ';box-shadow:0 0 5px ' + (c.mark || '#ccc') + ';"></span>' +
+'<span class="dss-sr" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">' + esc(c.label || SR_NAME[l.voice] || l.voice) + ': </span>' +
+(c.label ? '<span class="dss-voice-label" aria-hidden="true" style="font:10px \'Courier New\',monospace;letter-spacing:2px;text-transform:uppercase;font-style:normal;color:' + (c.mark || '#ccc') + ';margin-right:7px;">' + esc(c.label) + '</span>' : '') + esc(l.text) + '</div>';
+});
+return h + '</div>';
+}
+// which object in a room holds which key: { name: key }
+function keySpots(room) {
+var out = {};
+for (var k in V.trails) { var st = V.trails[k].steps, last = st[st.length - 1].at.split('/'); if (last[0] === room) out[last.slice(1).join('/')] = k; }
+return out;
+}
+// may this key's object offer it yet (the trail's gate)
+function keyReady(key) {
+var t = V.trails[key]; if (!t || !t.gate) return true;
+var st = t.steps; return st.length < 2 || has(st[st.length - 2].at);
+}
+// is this object the next unseen step of a trail already begun
+function isNext(room, name) {
+var s = stepAt(room + '/' + name);
+return !!s && s.i > 0 && trailOpen(s) && !has(room + '/' + name);
+}
+// THE KEY ON ITS OBJECT. A room that carries a key's object claims the key for this passage, so the
+// entry popup leaves that key to the card; a failed room gives it back (dssSceneFailed calls the popup).
+var claims = {}, waitFrom = {};
+function claim(key, wrapId) { claims[key] = { gen: window._passageGen, wrap: wrapId }; }
+function claimed(key) {
+var c = claims[key];
+if (!c || c.gen !== window._passageGen) return false;
+var w = document.getElementById(c.wrap);
+return !!w && !w.dataset.dssFailed;
+}
+function roomOfKey(key) { var t = V.trails[key]; if (!t) return null; var st = t.steps; return st[st.length - 1].at.split('/')[0]; }
+// for the popup: 'wait' while a key's room is still on its way in, else the offers it should still show
+function popupOffers(offers) {
+var gen = window._passageGen, wait = false;
+var keep = offers.filter(function(o) {
+var key = o.getAttribute('data-key'), room = roomOfKey(key);
+if (o.getAttribute('data-kind') !== 'seed' || !room || !document.getElementById(room + '-container')) return true;
+if (claimed(key)) return false;
+var w = document.getElementById(room + '-wrap');
+if (w && w.dataset.dssFailed) return true;
+if (waitFrom[gen] == null) waitFrom[gen] = Date.now();
+if (Date.now() - waitFrom[gen] < 10000) wait = true;
+return true;
+});
+return wait ? 'wait' : keep;
+}
+// for the map (switch mapMark): does this door lead to a trail's next unseen step
+function mapMark(doorId) {
+if (!SW.mapMark) return false;
+for (var k in V.trails) {
+var st = V.trails[k].steps;
+for (var i = 1; i < st.length; i++) {
+if (has(st[i].at) || !has(st[i - 1].at)) continue;
+if (MAP_DOOR[st[i].at.split('/')[0]] === doorId) return true;
+break;
+}
+}
+return false;
+}
+// for the dev view (?dev=1): every slot an object has, which one shows now, and what it waits on
+var ROOM_PASSAGE = { fi: 'The French', ci: 'The Colony Room', pi: 'Entering The Pillars of Hercules', ri: 'Ronnie Scott\'s', cu: 'Turn to Copper', cb: 'Coach and Horses bar', ti: 'Trisha\'s', lk: 'Martin Lackland\'s Office', oi: 'O\'Flatterly\'s shop', cf: 'Chinese Fish and Chips' };
+function slots(room, name) {
+var p = room + '/' + name, base = (V.objects[room] || {})[name] || {}, out = [], shown = {};
+lines(room, name).forEach(function(l) { shown[l.voice] = l.text; });
+function add(voice, kind, text, when, live) { out.push({ voice: voice, kind: kind, text: text, when: when, live: !!live, showing: shown[voice] === text && !!live }); }
+var idOk = idAwake();
+ORDER.forEach(function(v) { if (base[v] != null) add(v, 'own', base[v], v === 'id' ? 'when the id speaks' : 'always', v !== 'id' || idOk); });
+(V.callbacks || []).forEach(function(c) {
+if (c.at === p) add('now', 'callback', c.now, 'after ' + c.after, has(c.after));
+if (SW.callbacksBothWays && c.after === p) add('now', 'back', c.back != null ? c.back : '(pink slot)', 'after ' + c.at, has(c.at));
+});
+var st = stepAt(p);
+if (st) add('then', 'trail', st.trail.steps[st.i].then, st.key + ' step ' + (st.i + 1) + '/' + st.trail.steps.length + (st.i ? ', after ' + st.trail.steps[st.i - 1].at : ''), trailOpen(st));
+return out;
+}
+function unsee(p) { delete mem[p]; var s = load(); delete s[p]; try { localStorage.setItem(KEY, JSON.stringify(Object.keys(s))); } catch (e) {} }
+function forget() { mem = {}; lastRaw = null; try { localStorage.removeItem(KEY); } catch (e) {} }
+// a trail or callback naming an object the table does not have is a typo: say so in the console, once
+(function() {
+function known(p) { var a = String(p).split('/'); return !!(V.objects[a[0]] || {})[a.slice(1).join('/')]; }
+var bad = [];
+for (var k in V.trails) V.trails[k].steps.forEach(function(s) { if (!known(s.at)) bad.push('trail ' + k + ': ' + s.at); });
+(V.callbacks || []).forEach(function(c) { if (!known(c.at)) bad.push('callback at: ' + c.at); if (!known(c.after)) bad.push('callback after: ' + c.after); });
+if (bad.length) try { console.warn('DSS voices: no such object in DSS_VOICES.objects', bad); } catch (e) {}
+})();
+return { lines: lines, html: html, see: see, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
+})();
+// <<<< DSS VOICES END
 // >>>> DSS ROOM PLAY BEGIN
 // ====== THE ROOM'S PLAY — what a player touches in any venue room, once (2026-10-05) ======
 // Sam (2026-10-05): "Two visual systems. The first four rooms have their own machinery and the six
@@ -30736,12 +31148,24 @@ cx.globalCompositeOperation = 'source-over';
 window.dssRoomPlay = function(o) {
 var wrap = o.wrap, canvas = o.canvas, host = o.host, scene = o.scene, camera = o.camera, CAM = o.CAM, HOTSPOTS = o.HOTSPOTS, tex = o.tex, still = !!o.still;
 var WRAP = wrap.id;
+// the inner voices (window.dssVoices): the room's id, and which of its objects holds a dream key
+var ROOM = WRAP.replace(/-wrap$/, ''), VOICE = window.dssVoices || null, KEYSPOT = VOICE ? VOICE.keySpots(ROOM) : {};
 var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 var C = o.card || {};
 var cFg = C.fg || 'rgba(225,215,190,0.92)', cBg = C.bg || 'rgba(8,5,3,0.8)', cBorder = C.border || 'rgba(200,168,106,0.3)', cDim = C.dim || 'rgba(200,190,160,0.5)', cBtn = C.btn || 'rgba(235,220,180,0.95)', cBtnBorder = C.btnBorder || 'rgba(200,170,110,0.45)';
 var hotspotRoots = HOTSPOTS.map(function(h) { return h.root; });
 function hotspotFor(obj) { while (obj) { var i = hotspotRoots.indexOf(obj); if (i >= 0) return HOTSPOTS[i]; obj = obj.parent; } return null; }
-function spotActions(spot) { try { return spot.actions ? spot.actions() : []; } catch (e) { return []; } }
+// the key's own offer (parked by the passage, Key Take <key>) is pressed from its object's card
+function keyLinks(spot) {
+var key = KEYSPOT[spot.name];
+if (!key || !VOICE.keyReady(key) || !window.dssRoomScope) return [];
+var pass = window.dssRoomScope(host), off = pass && pass.querySelector('.dss-key-offer[data-key="' + key + '"][data-kind="seed"]');
+return off ? Array.prototype.slice.call(off.querySelectorAll('tw-link')) : [];
+}
+function spotActions(spot) { var a; try { a = spot.actions ? spot.actions() : []; } catch (e) { a = []; } return a.concat(keyLinks(spot)); }
+HOTSPOTS.forEach(function(h) { if (KEYSPOT[h.name]) VOICE.claim(KEYSPOT[h.name], WRAP); });
+// an object renamed in its room but not in the voices table goes quiet: the console names it
+if (VOICE) { var unvoiced = HOTSPOTS.filter(function(h) { return !(window.DSS_VOICES.objects[ROOM] || {})[h.name]; }).map(function(h) { return h.name; }); if (unvoiced.length) try { console.warn('DSS voices: ' + ROOM + ' objects with no entry in DSS_VOICES.objects', unvoiced); } catch (e) {} }
 function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
 var haloTex = tex(128, 128, function(cx, w, h) {
 cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
@@ -30808,6 +31232,8 @@ function restRefresh() {
 var keepP = halo.position.clone(), keepS = halo.scale.clone();
 restGlows.forEach(function(g) {
 g.on = restLevel > 0 && available(g.spot);
+var nx = !!VOICE && VOICE.isNext(ROOM, g.spot.name);
+if (nx !== !!g.next) { g.next = nx; if (nx) g.sp.material.color.setRGB(1, 0.8, 0.52); else g.sp.material.color.setRGB(1, 1, 1); }
 if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
 var hook = g.on ? spotLily(g.spot) : null;
 g.lilyOn = !!hook && !!lilyTexFrom(hook);
@@ -30827,7 +31253,7 @@ var idle = camMode === 'idle';
 restGlows.forEach(function(g) {
 var vis = idle && g.on && g.spot !== hoverSpot;
 g.sp.visible = vis && !g.lilyOn;
-if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
+if (vis) g.sp.material.opacity = Math.min(1, restLevel * (g.next ? 1.2 : 1) * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * (g.next ? 0.9 : 0.5) + g.ph)));
 var lv = idle && g.on && g.lilyOn;
 g.lily.visible = lv;
 if (lv) g.lily.material.opacity = still ? 0.85 : 0.75 + 0.12 * Math.sin(t * 0.5 + g.ph);
@@ -30838,7 +31264,10 @@ card.className = 'dss-room-card';
 card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:min(560px,86%);' +
 'font:15px/1.5 \'Crimson Text\',Georgia,serif;color:' + cFg + ';text-align:center;' +
 'background:' + cBg + ';border:1px solid ' + cBorder + ';padding:14px 22px 12px;border-radius:2px;' +
-'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.7,.2,1);';
+'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.7,.2,1), border-color 1.6s ease, box-shadow 1.6s ease;' +
+// 2026-10-07: with the voices a card can outgrow a phone's room; it stops short of the room's top and scrolls
+'max-height:calc(100% - 64px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;';
+card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-hidden', 'true'); card.tabIndex = -1;
 wrap.appendChild(card);
 // 2026-10-05 overnight: the card rises a few pixels as it comes, and settles back as it goes
 card.style.transform = 'translate(-50%, 8px)';
@@ -30850,42 +31279,75 @@ var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monos
 function showCard(spot) {
 if (words) words.setMode('inspect');
 var acts = spotActions(spot);
+// a step reached by following its trail: the card's edge warms for a moment, the same warmth as its glow
+var onTrail = !!VOICE && VOICE.isNext(ROOM, spot.name);
+card.style.borderColor = onTrail ? 'rgba(236,196,120,0.75)' : cBorder;
+card.style.boxShadow = onTrail ? '0 0 18px rgba(236,190,110,0.28)' : 'none';
+if (onTrail) setTimeout(function() { if (activeSpot === spot) { card.style.borderColor = cBorder; card.style.boxShadow = 'none'; } }, 1600);
+var keyActs = keyLinks(spot), keyOffer = keyActs.length ? keyActs[0].closest('.dss-key-offer') : null;
 var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:' + cDim + ';margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
-if (acts.length) {
+if (acts.length > keyActs.length) {
 var prose = spot.prose ? spot.prose() : '';
 if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
-html += '<div class="fi-actions"></div>';
-} else {
+} else if (!(keyOffer && keyOffer.querySelector('.dss-key-blurb') && ((window.DSS_VOICES || {}).switches || {}).keyCardOneLine)) {
 html += '<div style="' + PINK + '">' + spot.line + '</div>';
 }
+// a dream key lies here: its picture and its own pink line, from the passage's offer
+if (keyOffer) {
+var kid = keyOffer.getAttribute('data-key'), kb = keyOffer.querySelector('.dss-key-blurb');
+html += '<div class="dss-card-key" style="margin-top:8px;"><div class="dss-card-keyart" aria-hidden="true">' + ((window.DSS_KEY_ART || {})[kid] || '') + '</div>' +
+(kb ? '<div style="' + PINK + '">' + kb.textContent.trim().replace(/</g, '&lt;') + '</div>' : '') + '</div>';
+}
+if (VOICE) html += VOICE.html(ROOM, spot.name);
+if (acts.length) html += '<div class="fi-actions"></div>';
 // when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
 var wayOn = acts.length ? [] : HOTSPOTS.filter(function(sp) { return sp !== spot && spotActions(sp).length > 0; });
 if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
 html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:' + cDim + ';opacity:0.7;margin-top:8px;">' + ((acts.length || wayOn.length) ? 'OR CLICK ANYWHERE ELSE TO STEP BACK' : 'CLICK ANYWHERE TO STEP BACK') + '</div>';
 card.innerHTML = html;
+// a narrow room (a phone) gets a tighter card (the rules live in dssVoices' stylesheet)
+card.classList.toggle('dss-card-narrow', wrap.clientWidth < 520);
+Array.prototype.forEach.call(card.querySelectorAll('.dss-card-keyart svg'), function(s) { s.style.cssText = 'display:block;height:54px;width:auto;margin:0 auto 4px;filter:drop-shadow(0 0 6px rgba(240,220,170,0.25));'; });
 var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN;
+b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; keyable(b);
 if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
 if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } link.click(); stepBack(); if (o.onPress) o.onPress(spot, link); });
+b.addEventListener('click', function(ev) { ev.stopPropagation(); if (!link.isConnected) { stepBack(); return; } var kOff = keyActs.indexOf(link) >= 0 ? keyOffer : null; link.click(); stepBack(); if (o.onPress) o.onPress(spot, link); if (kOff) keyTaken(kOff); });
 row.appendChild(b);
 });
 var wrow = card.querySelector('.fi-wayon');
 if (wrow) wayOn.forEach(function(sp) {
 var b = document.createElement('span');
-b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN;
+b.className = 'fi-action fi-wayon-btn'; b.textContent = sp.name; b.style.cssText = BTN; keyable(b);
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
 b.addEventListener('click', function(ev) { ev.stopPropagation(); if (activeSpot && activeSpot.onLook) activeSpot.onLook(false); activeSpot = sp; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(true); });
 wrow.appendChild(b);
 });
-card.style.pointerEvents = (acts.length || wayOn.length) ? 'auto' : 'none';
+// 2026-10-07: always live, so a long card of words alone can be scrolled; a click on it steps back as before
+card.style.pointerEvents = 'auto'; cardShownAt = Date.now(); card.setAttribute('aria-hidden', 'false');
 card.style.opacity = '1';
+// opened from the keyboard: the focus goes to the card's first choice, or the card itself
+if (byKey) { var fb = card.querySelector('.fi-action'); try { (fb || card).focus({ preventScroll: true }); } catch (e) { (fb || card).focus(); } }
 card.style.transform = 'translate(-50%, 0)';
+if (VOICE) VOICE.see(ROOM + '/' + spot.name);
 }
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null;
+// the key pocketed from its card: the passage's own line for it comes up on a notice slip, as the popup did
+function keyTaken(off) {
+setTimeout(function() {
+var notes = off.querySelectorAll('.claude-draft:not(.dss-key-blurb)'), msg = notes.length ? notes[notes.length - 1].textContent.trim() : '';
+if (msg && window.dssInlineHint) window.dssInlineHint(msg);
+if (window.dssAudio && window.dssAudio.paperRustle) { try { window.dssAudio.paperRustle(); } catch (e) {} }
+}, 160);
+}
+var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null, cardShownAt = 0, byKey = false, lastKeyBtn = null;
+// a span that acts as a button: reachable by Tab, pressed by Enter or Space
+function keyable(b) {
+b.setAttribute('role', 'button'); b.tabIndex = 0;
+b.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); byKey = true; b.click(); } });
+}
 var camFromP = new THREE.Vector3(), camFromT = new THREE.Vector3(), camToP = new THREE.Vector3(), camToT = new THREE.Vector3();
 var curTarget = new THREE.Vector3(CAM.tx, CAM.ty, CAM.tz);
 function beginTween(toP, toT, next) {
@@ -30896,7 +31358,9 @@ camK = still ? 1 : 0; camNext = next; camMode = 'tween';
 function stepBack() {
 if (words) words.setMode('idle');
 if (activeSpot && activeSpot.onLook) activeSpot.onLook(false);
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; card.style.transform = 'translate(-50%, 8px)';
+activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; card.style.transform = 'translate(-50%, 8px)'; card.setAttribute('aria-hidden', 'true');
+if (byKey && lastKeyBtn && lastKeyBtn.isConnected) { try { lastKeyBtn.focus({ preventScroll: true }); } catch (e) { lastKeyBtn.focus(); } }
+byKey = false;
 beginTween([CAM.x, CAM.y, CAM.z], [CAM.tx, CAM.ty, CAM.tz], 'idle');
 }
 var ray = new THREE.Raycaster(), mouseN = new THREE.Vector2();
@@ -30926,7 +31390,32 @@ showCard(spot);
 beginTween(spot.pos, spot.tgt, 'inspect');
 if (spot.onLook) spot.onLook(true);
 });
-card.addEventListener('pointerdown', function(ev) { if (camMode === 'inspect' && !ev.target.classList.contains('fi-action')) stepBack(); });
+// a click, not a press, steps back from the card, so a finger can scroll a long card without closing it
+// (the click a tap makes just after opening the card is not a step back)
+card.addEventListener('click', function(ev) { if (camMode === 'inspect' && Date.now() - cardShownAt > 450 && !ev.target.classList.contains('fi-action')) stepBack(); });
+// 2026-10-07 THE ROOM BY KEYBOARD: Tab walks the objects (each lights as a pointer's hover would and its name
+// shows), Enter or Space looks closer, Tab reaches the card's choices, Escape steps back to the object
+var keysRow = document.createElement('div');
+keysRow.className = 'dss-room-keys'; keysRow.setAttribute('role', 'group'); keysRow.setAttribute('aria-label', 'Objects in the room');
+keysRow.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;';
+HOTSPOTS.forEach(function(sp) {
+var kb = document.createElement('button'); kb.type = 'button'; kb.textContent = sp.name;
+kb.addEventListener('focus', function() { if (camMode !== 'idle' || !available(sp)) return; hoverSpot = sp; haloAt(sp); halo.visible = true; var r = canvas.getBoundingClientRect(), v = halo.position.clone().project(camera); hoverName(sp.name, { clientX: r.left + (v.x + 1) / 2 * r.width, clientY: r.top + (1 - v.y) / 2 * r.height }); });
+kb.addEventListener('blur', function() { if (hoverSpot === sp) { hoverSpot = null; halo.visible = false; hoverName(null); } });
+kb.addEventListener('click', function() {
+if (camMode !== 'idle' || !available(sp)) return;
+byKey = true; lastKeyBtn = kb; activeSpot = sp; halo.visible = false; hoverName(null);
+showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(true);
+});
+keysRow.appendChild(kb);
+});
+wrap.appendChild(keysRow);
+// only objects that can be looked at now are in the Tab order (a ghost figure waits for its choice)
+function keysRefresh() { Array.prototype.forEach.call(keysRow.children, function(kb, i) { var ok = available(HOTSPOTS[i]); kb.tabIndex = ok ? 0 : -1; kb.setAttribute('aria-hidden', ok ? 'false' : 'true'); }); }
+function onEsc(ev) { if (ev.key === 'Escape' && (camMode === 'inspect' || (camMode === 'tween' && camNext === 'inspect')) && wrap.isConnected) { byKey = true; stepBack(); } }
+document.addEventListener('keydown', onEsc);
+keysRefresh();
+var keysTimer = setInterval(function() { if (!wrap.isConnected) { clearInterval(keysTimer); document.removeEventListener('keydown', onEsc); return; } keysRefresh(); }, 1500);
 var hint = document.createElement('div');
 hint.textContent = o.hint || 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 hint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:' + cDim + ';opacity:0;letter-spacing:3px;z-index:9003;pointer-events:none;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
@@ -30941,6 +31430,8 @@ reg.words = words;
 reg.hotspots = HOTSPOTS;
 reg.state = function() { var st = { camMode: camMode, camK: camK, frames: frames }; if (o.state) { var x = o.state(); for (var key in x) st[key] = x[key]; } return st; };
 reg.spots = HOTSPOTS.map(function(h) { return { name: h.name, tgt: h.tgt, haloAt: h.haloAt, figure: !!h.figure }; });
+// for checks: open a close-up by the object's name, as a click on it would
+reg.look = function(name) { var sp = HOTSPOTS.filter(function(h) { return h.name === name; })[0]; if (!sp || camMode !== 'idle') return false; activeSpot = sp; halo.visible = false; showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(true); return true; };
 }
 function frame(t, dt) {
 frames++;
@@ -64526,6 +65017,8 @@ You don’t understand and smiling and then retreating, you strike, in the nifty
 (else-if: $haunts&#x27;s length &gt;= 3)[(enchant: ?page, (css: &quot;background: linear-gradient(180deg, #181412 0%, #2a221c 50%, #181412 100%); background-attachment: fixed&quot;))]
 ]\
 (if: (passage:)&#x27;s name is &quot;Maritime interlude&quot;)[(enchant: ?passage, (css: &quot;animation: dssDrunkMid 9.5s ease-in-out infinite; transform-origin: 50% 30%;&quot;))]\
+&lt;!-- INNER VOICES (2026-10-07): the stats and the night for the room cards (window.dssVoices calls up the id) --&gt;\
+(print: &quot;&lt;span id=&#x27;dss-voice-state&#x27; hidden data-sob=&#x27;&quot; + (text: $sobriety) + &quot;&#x27; data-mor=&#x27;&quot; + (text: $confidence) + &quot;&#x27; data-phase=&#x27;&quot; + (text: $nightPhase) + &quot;&#x27;&gt;&lt;/span&gt;&quot;)\
 &lt;div class=&quot;stat-bars&quot;&gt;
 &lt;svg class=&quot;header-lily&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 210 68&quot; preserveAspectRatio=&quot;xMinYMid slice&quot; aria-hidden=&quot;true&quot;&gt;&lt;defs&gt;&lt;linearGradient id=&quot;hlFade&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;1&quot; y2=&quot;0&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;white&quot;/&gt;&lt;stop offset=&quot;50%&quot; stop-color=&quot;white&quot;/&gt;&lt;stop offset=&quot;80%&quot; stop-color=&quot;white&quot; stop-opacity=&quot;0.3&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;black&quot;/&gt;&lt;/linearGradient&gt;&lt;mask id=&quot;hlMask&quot;&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;210&quot; height=&quot;68&quot; fill=&quot;url(#hlFade)&quot;/&gt;&lt;/mask&gt;&lt;/defs&gt;&lt;g mask=&quot;url(#hlMask)&quot;&gt;&lt;!-- Main stem --&gt;&lt;path d=&quot;M40,-4 Q45,8 52,20 Q60,34 72,42 Q88,52 110,56 Q135,60 165,58 Q185,54 210,48&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;3.5&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;path d=&quot;M72,42 Q68,50 62,58 Q58,64 54,72&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2.8&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- Left leaf --&gt;&lt;path d=&quot;M38,-2 Q28,6 18,18 Q10,30 8,40 Q6,50 14,56 Q24,60 36,54 Q46,46 50,34 Q52,24 48,14 Q44,6 38,-2 Z&quot; fill=&quot;#2a5c22&quot; fill-opacity=&quot;0.22&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;3.2&quot; stroke-linejoin=&quot;round&quot;/&gt;&lt;!-- Left leaf veins --&gt;&lt;path d=&quot;M38,-2 Q30,14 22,30 Q16,42 14,56&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2&quot; opacity=&quot;0.6&quot;/&gt;&lt;path d=&quot;M30,10 Q24,14 18,20&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.35&quot;/&gt;&lt;path d=&quot;M26,22 Q20,28 14,34&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.3&quot;/&gt;&lt;path d=&quot;M22,34 Q18,40 14,46&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1&quot; opacity=&quot;0.25&quot;/&gt;&lt;!-- Right leaf --&gt;&lt;path d=&quot;M44,0 Q56,8 66,20 Q74,32 76,42 Q78,52 72,58 Q62,64 50,60 Q42,54 40,44 Q38,34 40,22 Q42,12 44,0 Z&quot; fill=&quot;#1e4a18&quot; fill-opacity=&quot;0.18&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;3.2&quot; stroke-linejoin=&quot;round&quot;/&gt;&lt;!-- Right leaf veins --&gt;&lt;path d=&quot;M44,0 Q56,16 66,32 Q72,44 72,58&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2&quot; opacity=&quot;0.55&quot;/&gt;&lt;path d=&quot;M50,10 Q58,16 64,22&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.3&quot;/&gt;&lt;path d=&quot;M54,22 Q62,28 68,34&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.28&quot;/&gt;&lt;path d=&quot;M58,34 Q66,40 72,46&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1&quot; opacity=&quot;0.22&quot;/&gt;&lt;!-- Flower 1 --&gt;&lt;path d=&quot;M80,38 Q76,42 72,50 Q70,56 74,60 Q78,64 84,62 Q90,58 88,50 Q86,42 80,38 Z&quot; fill=&quot;#d4cdb8&quot; fill-opacity=&quot;0.35&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2.8&quot; stroke-linejoin=&quot;round&quot;/&gt;&lt;path d=&quot;M76,50 L80,60&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.4&quot;/&gt;&lt;path d=&quot;M84,48 L82,60&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1&quot; opacity=&quot;0.35&quot;/&gt;&lt;path d=&quot;M80,38 Q82,34 86,30 Q90,26 92,22&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2.2&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- Flower 2 --&gt;&lt;path d=&quot;M102,34 Q98,38 96,44 Q94,50 98,54 Q102,56 106,52 Q110,48 108,42 Q106,36 102,34 Z&quot; fill=&quot;#c8c0a8&quot; fill-opacity=&quot;0.3&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2.6&quot; stroke-linejoin=&quot;round&quot;/&gt;&lt;path d=&quot;M100,44 L100,54&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1&quot; opacity=&quot;0.35&quot;/&gt;&lt;path d=&quot;M102,34 Q104,30 108,26&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- Flower 3 --&gt;&lt;path d=&quot;M126,30 Q122,34 120,40 Q118,46 122,48 Q126,50 130,46 Q132,40 130,34 Q128,30 126,30 Z&quot; fill=&quot;#d0c8b0&quot; fill-opacity=&quot;0.25&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2.4&quot; stroke-linejoin=&quot;round&quot;/&gt;&lt;path d=&quot;M126,30 Q128,26 132,22&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.8&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- Flower 4 --&gt;&lt;path d=&quot;M152,26 Q148,30 148,36 Q150,40 154,38 Q158,34 156,28 Q154,26 152,26 Z&quot; fill=&quot;#c4bca4&quot; fill-opacity=&quot;0.2&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2.2&quot; stroke-linejoin=&quot;round&quot;/&gt;&lt;path d=&quot;M152,26 Q154,22 158,18&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.6&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- Flower 5 --&gt;&lt;path d=&quot;M170,22 Q168,26 168,30 Q170,34 174,30 Q176,26 172,22 Z&quot; fill=&quot;#beb6a0&quot; fill-opacity=&quot;0.18&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2&quot; stroke-linejoin=&quot;round&quot;/&gt;&lt;path d=&quot;M170,22 Q172,18 176,14&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.4&quot; stroke-linecap=&quot;round&quot;/&gt;&lt;!-- Small leaf --&gt;&lt;path d=&quot;M110,56 Q118,52 124,56 Q128,62 122,66 Q114,68 110,62 Q108,58 110,56 Z&quot; fill=&quot;#2a5c22&quot; fill-opacity=&quot;0.12&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;2&quot; stroke-linejoin=&quot;round&quot; opacity=&quot;0.6&quot;/&gt;&lt;!-- Background lead --&gt;&lt;path d=&quot;M0,20 Q10,18 20,22 Q30,26 36,30&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.5&quot; opacity=&quot;0.18&quot;/&gt;&lt;path d=&quot;M0,50 Q8,46 16,48 Q24,52 30,50&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.3&quot; opacity=&quot;0.14&quot;/&gt;&lt;path d=&quot;M160,58 Q172,54 186,56 Q200,60 210,56&quot; fill=&quot;none&quot; stroke=&quot;#0a0a0a&quot; stroke-width=&quot;1.4&quot; opacity=&quot;0.1&quot;/&gt;&lt;/g&gt;&lt;/svg&gt;
 &lt;div class=&quot;stat-group&quot;&gt;

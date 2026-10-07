@@ -27,7 +27,7 @@ BASE = ('(set: $metRed to true)(set: $returns to 8)(set: $sawAoifeReflection to 
         '(set: $primerShown to true)(set: $hasMatches to true)(set: $hasCoin to true)'
         '(set: $alba to (a: $alba1))(set: $visited\'s French to true)')
 
-STATE_VARS = ["returns","metCritic","inisToldOfPillars","dreamKey","alba","haunts","metShana",
+STATE_VARS = ["lilyCount","tookLily1","tookLily2","tookLily3","tookLily4","tookLily5","returns","metCritic","inisToldOfPillars","dreamKey","alba","haunts","metShana",
               "completedSetlist","metDavy","knowsCopperSecret","sobriety","confidence","coachUrgent",
               "hasDrawing","completedDreams","worldsVisited","keyTicket","keyLighter","keyEye",
               "keySlip","keyCocaine","nightPhase","hasCoin","hasMatches","returnedPage"]

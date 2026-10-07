@@ -30212,6 +30212,28 @@ var box = document.querySelector('tw-story > .dss-room-fixed .dss-room-prose');
 if (box) return box;
 return (host && host.closest('tw-passage')) || document.querySelector('tw-passage');
 };
+// 2026-10-07 (found while moving the lily onto the room's objects): Harlowe finds a hook a passage
+// names (the lily's (click-replace: ?lily1), the phone's (replace: ?lilyring)) by searching the passage's
+// own element, and since the words moved into the veil it found nothing there, so pressing a lily in a
+// room did nothing at all. While a room's panel holds the current passage's words, a search of the
+// passage also searches the panel. Nothing else changes: the nodes, the macros and the (set:)s are his.
+(function() {
+var jq = window.jQuery;
+if (!jq || !jq.fn || !jq.fn.findAndFilter || jq.fn.findAndFilter._dssRoom) return;
+var ff = jq.fn.findAndFilter;
+var wrapped = function(sel) {
+var r = ff.call(this, sel);
+if (this.length !== 1 || !this[0] || this[0].tagName !== 'TW-PASSAGE') return r;
+var pass = this[0];
+Array.prototype.forEach.call(document.querySelectorAll('tw-story > .dss-room-fixed'), function(veil) {
+var box = veil.querySelector('.dss-room-prose');
+if (box && veil._dssWrap && pass.contains(veil._dssWrap)) r = r.add(ff.call(jq(box), sel));
+});
+return r;
+};
+wrapped._dssRoom = true;
+jq.fn.findAndFilter = wrapped;
+})();
 window.dssRoomProse = function(host, wrap, canvas) {
 var root = host.parentNode; if (!root) return null;
 // 2026-10-05 (the tighten pass's first recommendation, Sam: "The entry modal is short. In an 800 px
@@ -30220,7 +30242,7 @@ var root = host.parentNode; if (!root) return null;
 // box, and lives beside the passage in tw-story like the plain pages' panel (a passage can carry a
 // transform, and a fixed veil inside a transformed box is drawn at the box's size). It is taken away
 // with the room (see the watcher at the end).
-var veil = document.createElement('div'); veil.className = 'dss-room-veil dss-room-fixed';
+var veil = document.createElement('div'); veil.className = 'dss-room-veil dss-room-fixed'; veil._dssWrap = wrap;
 var sheet = document.createElement('div'); sheet.className = 'dss-room-sheet';
 var box = document.createElement('div'); box.className = 'dss-room-prose';
 Array.prototype.slice.call(root.childNodes).forEach(function(n) {
@@ -30361,7 +30383,10 @@ if (lostLong) { try { console.warn('DSS: room context lost; the strip offers the
 }
 if (lostLong) claimed = [];
 claimed = (claimed || []).filter(function(e) { return e && e.nodeType === 1 && box.contains(e) && !e.closest('.phone-ringing'); });
-var claimedLinks = claimed.filter(function(e) { return e.tagName !== 'TW-HOOK'; });
+// 2026-10-07 (Sam: "I want it moved entirely to the clickable object part"): the lily the room's object offers
+// is claimed like a link, so it is gathered at the object only; once taken (or lost to drink) it leaves the
+// object's actions and its glimpse shows in the words as before
+var claimedLinks = claimed;
 Array.prototype.forEach.call(box.querySelectorAll('.dss-claimed'), function(e) { if (claimedLinks.indexOf(e) < 0) e.classList.remove('dss-claimed'); });
 Array.prototype.forEach.call(box.querySelectorAll('.dss-claimed-wrap'), function(e) { e.classList.remove('dss-claimed-wrap'); });
 claimedLinks.forEach(function(e) { e.classList.add('dss-claimed'); });
@@ -30734,6 +30759,40 @@ var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: 
 sp.visible = false; restGroup.add(sp);
 return { spot: spot, sp: sp, ph: i * 1.9, on: false };
 });
+// the lily emblem (2026-10-07, Sam: "make the clickable object show the lily emblem where it would normally
+// just have a glowing dot, if the player hasn't yet collected the lily"): an object whose actions hold the
+// passage's ungathered lily wears the game's own lily sprig (the "Lily SVG" passage, drawn whole) in place
+// of its resting dot, on a faint glow of its own; once the lily is taken the dot comes back
+var lilyTex = null;
+function spotLily(spot) { var a = spotActions(spot); for (var i = 0; i < a.length; i++) if (a[i] && a[i].tagName === 'TW-HOOK') return a[i]; return null; }
+function lilyTexFrom(hook) {
+if (lilyTex) return lilyTex;
+var svg = hook && hook.querySelector('svg'); if (!svg) return null;
+var c = svg.cloneNode(true);
+c.removeAttribute('class'); c.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); c.setAttribute('width', '412'); c.setAttribute('height', '460');
+Array.prototype.forEach.call(c.querySelectorAll('[filter]'), function(e) { e.removeAttribute('filter'); });
+Array.prototype.forEach.call(c.querySelectorAll('title'), function(e) { e.parentNode.removeChild(e); });
+var cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+var t = new THREE.CanvasTexture(cv); lilyTex = t;
+var img = new Image();
+img.onload = function() {
+var cx = cv.getContext('2d');
+var g = cx.createRadialGradient(128, 128, 0, 128, 128, 128);
+// a faint breath of the resting glow behind it, then the sprig itself, lit at its edges so stem and leaves
+// read as well as the bells; drawn as light (like the dot it replaces), so it glows on the dark rooms
+g.addColorStop(0, 'rgba(200,230,150,0.16)'); g.addColorStop(0.5, 'rgba(180,215,120,0.07)'); g.addColorStop(1, 'rgba(160,190,90,0)');
+cx.fillStyle = g; cx.fillRect(0, 0, 256, 256);
+cx.save(); cx.shadowColor = 'rgba(225,250,190,0.9)'; cx.shadowBlur = 10; cx.filter = 'brightness(1.15)'; cx.drawImage(img, 25, 13, 206, 230); cx.restore();
+cx.drawImage(img, 25, 13, 206, 230);
+t.needsUpdate = true;
+};
+img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(c));
+return t;
+}
+restGlows.forEach(function(g) {
+g.lily = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
+g.lily.visible = false; g.lily.renderOrder = 999; restGroup.add(g.lily);
+});
 var restNext = -1;
 var reveal = window.dssRoomReveal ? window.dssRoomReveal(wrap, camera, restGlows, function() { return camMode === 'idle'; }) : null;
 function restRefresh() {
@@ -30741,6 +30800,15 @@ var keepP = halo.position.clone(), keepS = halo.scale.clone();
 restGlows.forEach(function(g) {
 g.on = restLevel > 0 && available(g.spot);
 if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
+var hook = g.on ? spotLily(g.spot) : null;
+g.lilyOn = !!hook && !!lilyTexFrom(hook);
+if (g.lilyOn) {
+if (g.lily.material.map !== lilyTex) { g.lily.material.map = lilyTex; g.lily.material.needsUpdate = true; }
+// a steady size on screen, about a twelfth of the room's height, wherever the object stands
+var ld = Math.hypot(halo.position.x - CAM.x, halo.position.y - CAM.y, halo.position.z - CAM.z);
+var ls = 2 * ld * Math.tan((camera.fov || 50) * Math.PI / 360) * 0.08;
+g.lily.position.copy(halo.position); g.lily.scale.set(ls, ls, 1);
+}
 });
 halo.position.copy(keepP); halo.scale.copy(keepS);
 }
@@ -30749,8 +30817,11 @@ if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
 var idle = camMode === 'idle';
 restGlows.forEach(function(g) {
 var vis = idle && g.on && g.spot !== hoverSpot;
-g.sp.visible = vis;
+g.sp.visible = vis && !g.lilyOn;
 if (vis) g.sp.material.opacity = restLevel * (still ? 0.86 : 0.72 + 0.28 * Math.sin(t * 0.5 + g.ph));
+var lv = idle && g.on && g.lilyOn;
+g.lily.visible = lv;
+if (lv) g.lily.material.opacity = still ? 0.85 : 0.75 + 0.12 * Math.sin(t * 0.5 + g.ph);
 });
 }
 var card = document.createElement('div');
@@ -31122,7 +31193,7 @@ var pass = window.dssRoomScope(host);
 if (!pass) return [];
 return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && !l.closest('.dss-key-offer') && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
-function lilyHook(n) { var pass = window.dssRoomScope(host); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
+function lilyHook(n) { var pass = window.dssRoomScope(host); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
 function byPrefix(prefix) { return passageLinks('tw-link').filter(function(l) { return l.textContent.trim().indexOf(prefix) === 0; }); }
 function modalProse() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); }
@@ -31833,7 +31904,7 @@ return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l)
 }
 // Harlowe 3 keeps a link's target out of the DOM, so the passage's links are known by their own wording (as the signpost script does).
 // the lily, when it is still there to take: the hook's own click-replace does the work
-function lilyHook(n) { var pass = window.dssRoomScope(fiHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
+function lilyHook(n) { var pass = window.dssRoomScope(fiHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
 function byText(texts) {
 return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; });
 }
@@ -32432,7 +32503,7 @@ if (!pass) return [];
 return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
-function lilyHook(n) { var pass = window.dssRoomScope(ciHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
+function lilyHook(n) { var pass = window.dssRoomScope(ciHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
 var HOTSPOTS = [
 { root: picG, name: 'the pictures', pos: [-0.3, 1.6, -1.2], tgt: [0.4, 1.75, -2.2], haloAt: [0.2, 1.7, -D / 2 + 0.05], haloSc: 1.6,
@@ -33089,7 +33160,7 @@ if (!pass) return [];
 return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
-function lilyHook(n) { var pass = window.dssRoomScope(piHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
+function lilyHook(n) { var pass = window.dssRoomScope(piHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
 var HOTSPOTS = [
 { root: barG, name: 'the bar', pos: [-0.5, 1.4, 0.9], tgt: [barX, 1.15, -0.9], haloAt: [barX, 1.15, -0.5], haloSc: 1.4,
@@ -33620,7 +33691,7 @@ if (!pass) return [];
 return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
-function lilyHook(n) { var pass = window.dssRoomScope(riHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && h.getClientRects().length > 0) ? [h] : []; }
+function lilyHook(n) { var pass = window.dssRoomScope(riHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
 function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
 var HOTSPOTS = [
 { root: stageG, name: 'the stage', pos: [0.2, 1.4, -0.6], tgt: [0.1, 1.1, SZ], haloAt: [0.1, 1.2, SZ + 0.3], haloSc: 2.2,

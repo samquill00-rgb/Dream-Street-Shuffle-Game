@@ -6709,8 +6709,21 @@ window.__dssHintShow = function(html) {
     mark.textContent = '⟡';
     var body = document.createElement('span');
     body.className = 'dss-hint-type';
-    card.appendChild(mark);
-    card.appendChild(body);
+    // A small, quiet × in the top-right corner (Sam, 2026-10-07): a hint that the
+    // slip can be sent away, not a button that asks to be pressed.
+    var closer = document.createElement('button');
+    closer.type = 'button';
+    closer.className = 'dss-hint-x';
+    closer.setAttribute('aria-label', 'Close');
+    closer.textContent = '×';
+    // The words sit in their own scrolling box so the × stays put in the
+    // corner of a long slip while the primer scrolls under it.
+    var inner = document.createElement('span');
+    inner.className = 'dss-hint-inner';
+    inner.appendChild(mark);
+    inner.appendChild(body);
+    card.appendChild(closer);
+    card.appendChild(inner);
     document.body.appendChild(card);
     requestAnimationFrame(function() { card.classList.add('in'); });
     setTimeout(function() { card.classList.add('in'); }, 120);   // backgrounded tabs stall rAF
@@ -6728,13 +6741,20 @@ window.__dssHintShow = function(html) {
     // seconds. Short hints are untouched by both: at 40 characters pace is still
     // 25 and the hold still floors at the original 8000.
     var pace = Math.min(25, 2600 / Math.max(text.length, 1));
-    var hold = Math.min(45000, Math.max(8000, Math.round(text.length * 55) + 2600));
+    // FADE OF ITS OWN ACCORD (Sam, 2026-10-07: "they should fade naturally
+    // after a certain point. Maybe 10 seconds or a bit longer if it's a long
+    // one"). The hold after the typing ends is about eight and a half seconds
+    // for a one-line nudge (ten or so on screen with the typing), grows with
+    // the length, and is capped at twenty-eight for the nine-hundred-character
+    // primer. It used to run to forty-five.
+    var hold = Math.min(28000, Math.max(8500, Math.round(text.length * 24) + 3500));
     var isLong = text.length > 400;
     if (isLong) card.classList.add('long');
 
     var finish = function() {
       if (card.__dssGoing) return;
       card.__dssGoing = true;
+      clearTimeout(holdTimer);
       card.classList.add('out');
       setTimeout(function() {
         if (card.parentNode) card.parentNode.removeChild(card);
@@ -6744,15 +6764,45 @@ window.__dssHintShow = function(html) {
         window.__dssHintNext();
       }, 900);
     };
-    // A long slip can be waved away by a reader who has finished early. The
-    // one-line nudges stay click-through (pointer-events:none in the CSS) so
-    // they cannot swallow a click meant for a link underneath them.
-    if (isLong) card.addEventListener('click', finish);
+    // Every slip can be waved away with a click, on the paper or on the ×
+    // (2026-10-07; until then only the long primer took clicks and the nudges
+    // were click-through). The × is a plain button so it also answers the
+    // keyboard. While the pointer rests on the paper the countdown waits, so a
+    // reader who is still on the last line is not cut off mid-sentence.
+    card.addEventListener('click', finish);
+    closer.addEventListener('click', function(ev) { ev.stopPropagation(); finish(); });
+    // Only a real mouse pauses it: a finger's tap leaves a sticky hover on
+    // phones, which would hold the next slip that lands in the same spot.
+    var holdTimer = null, holdLeft = 0, holdFrom = 0, holdArmed = false, mouseIn = false;
+    var armHold = function(ms) {
+      holdLeft = ms; holdFrom = Date.now();
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(finish, ms);
+    };
+    card.addEventListener('pointerenter', function(ev) {
+      if (ev.pointerType !== 'mouse') return;
+      mouseIn = true;
+      if (!holdArmed || card.__dssGoing) return;
+      holdLeft = Math.max(1500, holdLeft - (Date.now() - holdFrom));
+      clearTimeout(holdTimer); holdTimer = null;
+    });
+    card.addEventListener('pointerleave', function(ev) {
+      if (ev.pointerType !== 'mouse') return;
+      mouseIn = false;
+      if (!holdArmed || card.__dssGoing || holdTimer) return;
+      armHold(holdLeft);
+    });
 
-    var i = 0, lastTick = 0;
+    // The letters keep to the clock: if the page is busy (a room drawing
+    // behind the slip) a late tick types the letters it owes at once, so the
+    // typing takes the same few seconds everywhere and the slip's whole stay
+    // stays near ten seconds rather than stretching on a slow machine.
+    var i = 0, lastTick = 0, typeFrom = 0;
     var step = function() {
       if (!card.parentNode || card.__dssGoing) return;
-      body.textContent = text.slice(0, ++i);
+      if (!typeFrom) typeFrom = Date.now();
+      i = Math.max(i + 1, Math.min(text.length, Math.floor((Date.now() - typeFrom) / pace)));
+      body.textContent = text.slice(0, i);
       // Throttled by time, not by letter count: at the primer's pace every
       // other letter would be a hundred and seventy ticks a second.
       var now = Date.now();
@@ -6761,9 +6811,11 @@ window.__dssHintShow = function(html) {
         try { window.dssAudio.typewriterTick(0.35); } catch (e) {}
       }
       // A long slip can outrun its own box; keep the caret in view as it types.
-      if (card.scrollHeight > card.clientHeight) card.scrollTop = card.scrollHeight;
+      if (inner.scrollHeight > inner.clientHeight) inner.scrollTop = inner.scrollHeight;
       if (i < text.length) { setTimeout(step, pace * 0.68 + Math.random() * pace * 0.64); return; }
-      setTimeout(finish, hold);
+      holdArmed = true;
+      if (mouseIn) { holdLeft = hold; holdFrom = Date.now(); return; }
+      armHold(hold);
     };
     setTimeout(step, 420);
   } catch (e) { window.__dssHintBusy = false; }
@@ -67280,19 +67332,37 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
   transform: translateY(14px) rotate(-0.5deg);
   opacity: 0;
   transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.2,0.7,0.3,1);
-  pointer-events: none;
-}
-.dss-hint-slip.in  { opacity: 1; transform: translateY(0) rotate(-0.5deg); }
-/* The primer arrives as one long slip with its own paragraph breaks, so the
-   typed span has to keep its newlines. Only the long variant takes clicks. */
-.dss-hint-type { white-space: pre-wrap; }
-.dss-hint-slip.long {
-  max-width: min(34em, 76vw);
-  max-height: 70vh;
-  overflow-y: auto;
+  /* Every slip takes a click and goes (2026-10-07); the nudges used to be
+     click-through. The right padding leaves room for the × in the corner. */
   pointer-events: auto;
   cursor: pointer;
+  padding-right: 1.9em;
 }
+.dss-hint-slip.in  { opacity: 1; transform: translateY(0) rotate(-0.5deg); }
+/* The small, quiet × in the top-right corner: a suggestion that the paper can
+   be sent away. Faint ink, a touch darker under the pointer. */
+.dss-hint-x {
+  position: absolute;
+  top: 0.22em;
+  right: 0.42em;
+  width: 1.5em; height: 1.5em;
+  padding: 0; margin: 0;
+  border: 0; background: none;
+  color: rgba(42, 33, 24, 0.34);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.05em;
+  line-height: 1.5em;
+  text-align: center;
+  cursor: pointer;
+  transition: color 0.25s ease;
+}
+.dss-hint-x:hover, .dss-hint-x:focus-visible { color: rgba(42, 33, 24, 0.75); outline: none; }
+/* The primer arrives as one long slip with its own paragraph breaks, so the
+   typed span has to keep its newlines. */
+.dss-hint-type { white-space: pre-wrap; }
+.dss-hint-inner { display: block; }
+.dss-hint-slip.long { max-width: min(34em, 76vw); }
+.dss-hint-slip.long .dss-hint-inner { max-height: 70vh; overflow-y: auto; }
 .dss-hint-slip.out { opacity: 0; transform: translateY(-8px) rotate(-0.5deg); transition: opacity 0.85s ease, transform 0.85s ease; }
 .dss-hint-mark { color: #8a6a2c; margin-right: 0.5em; }
 .dss-hint-type::after {
@@ -67307,7 +67377,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 .dss-hint-slip.out .dss-hint-type::after { display: none; }
 @keyframes dssHintCaret { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
 @media (max-width: 640px) {
-  .dss-hint-slip { right: 12px; left: 12px; bottom: 64px; max-width: none; }
+  .dss-hint-slip { right: 12px; left: 12px; bottom: 64px; max-width: none; padding-right: 2em; }
+  .dss-hint-x { width: 1.9em; height: 1.9em; line-height: 1.9em; top: 0.08em; right: 0.2em; }
   .dss-hint-slip.long { max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) {

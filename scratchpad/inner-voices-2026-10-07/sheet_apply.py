@@ -23,7 +23,8 @@ def set_own(room, obj, voice, line):
     m = re.search(r"^'" + re.escape(obj) + r"': \{(.*)\}", block, re.M)
     if not m: return False
     inner = m.group(1)
-    n = re.subn(r"\b" + voice + r": '(?:[^'\\]|\\.)*'", voice + ': ' + js(line), inner, count=1)
+    # the key sits at the start of the inner text or after ', ', never inside a value
+    n = re.subn(r"(^ *|, )" + voice + r": '(?:[^'\\]|\\.)*'", lambda mm: mm.group(1) + voice + ': ' + js(line), inner, count=1)
     if n[1] != 1: return False
     new_block = block[:m.start(1)] + n[0] + block[m.end(1):]
     globals()['table'] = table[:rb.end()] + new_block + table[end:]
@@ -34,21 +35,17 @@ def set_in(pattern, repl):
     if n[1] != 1: return False
     globals()['table'] = n[0]; return True
 
-room = obj = None; head = None; done = []; lost = []
-for raw in open(SHEET, encoding='utf-8'):
-    ln = raw.rstrip('\n')
-    if ln.startswith('## ') and not ln.startswith('### '): room = NAME.get(ln[3:].strip()); obj = None; continue
-    if ln.startswith('### '): obj = re.sub(r' \(a key lies here\)$', '', ln[4:].strip()); continue
-    m = re.match(r'^(\d+)\. (?:\*\*essential\*\*|optional) · (.*)$', ln)
-    if m: head = (m.group(1), m.group(2)); continue
-    m = re.match(r'^\s*> ?(.*)$', ln)
-    if not m or head is None: continue
-    line = m.group(1).strip(); num, what = head; head = None
-    if not line or room is None or obj is None: continue
+room = obj = None; head = None; pend = []; done = []; lost = []
+def flush():
+    global head, pend
+    if head is None: return
+    line = ' '.join(x for x in pend if x).strip(); num, what = head; head = None; pend = []
+    if not line or room is None or obj is None: return
+    place(num, what, line)
+def place(num, what, line):
     path = room + '/' + obj
     ok = False
     if what.startswith('then, ') and ' trail step ' in what:
-        key = what.split(', ')[1].split(' ')[0]
         ok = set_in(r"(\{ at: " + re.escape(js(path)) + r", then: )'(?:[^'\\]|\\.)*'", lambda mm: mm.group(1) + js(line))
     elif what.startswith('now, callback'):
         ok = set_in(r"(\{ at: " + re.escape(js(path)) + r", after: '[^']*', now: )'(?:[^'\\]|\\.)*'", lambda mm: mm.group(1) + js(line))
@@ -56,6 +53,17 @@ for raw in open(SHEET, encoding='utf-8'):
         voice = what.split(' ')[0]
         if voice in ('now', 'then', 'id'): ok = set_own(room, obj, voice, line)
     (done if ok else lost).append((num, path, what, line))
+for raw in open(SHEET, encoding='utf-8'):
+    ln = raw.rstrip('\n')
+    if ln.startswith('## ') and not ln.startswith('### '): flush(); room = NAME.get(ln[3:].strip()); obj = None; continue
+    if ln.startswith('### '): flush(); obj = re.sub(r' \(a key lies here\)$', '', ln[4:].strip()); continue
+    m = re.match(r'^(\d+)\. (?:\*\*essential\*\*|optional) · (.*)$', ln)
+    if m: flush(); head = (m.group(1), m.group(2)); continue
+    m = re.match(r'^\s*> ?(.*)$', ln)
+    if not m or head is None: continue
+    # an answer may run over several '>' lines: gather them, then place the entry when the next heading comes
+    pend.append(m.group(1).strip()); continue
+flush()
 if done:
     open(TWEE, 'w', encoding='utf-8').write(src[:a] + table + src[b:])
 for d in done: print('set', d[0], d[1], '|', d[2], '->', d[3][:60])

@@ -53,5 +53,24 @@ for _ in range(80):
     if p.evaluate("() => document.getElementById('cf-wrap').dataset.cam") == 'idle': break
     p.wait_for_timeout(150)
 print("mouse-opened card closed by Escape, focus:", p.evaluate("() => document.activeElement.tagName"))
+# a mouse-opened card, Tab onto a choice, Escape: focus must not stay inside the closed card
+p.evaluate("() => window._dssThreeRegistry['cf-wrap'].look('the menu')"); p.wait_for_timeout(1500)
+p.evaluate("() => document.querySelector('#cf-wrap .dss-room-card .fi-action').focus()")
+p.keyboard.press("Escape")
+for _ in range(80):
+    if p.evaluate("() => document.getElementById('cf-wrap').dataset.cam") == 'idle': break
+    p.wait_for_timeout(150)
+print("focus inside closed card:", p.evaluate("() => document.querySelector('#cf-wrap .dss-room-card').contains(document.activeElement)"))
+# key-open A, press a way-on button for B, Escape: focus returns to B's object button
+p.wait_for_timeout(500); i = p.evaluate("() => [...document.querySelectorAll('#cf-wrap .dss-room-keys button')].findIndex(b=>b.textContent==='the range')")
+p.focus('#cf-wrap .dss-room-keys button:nth-child(%d)' % (i + 1)); p.keyboard.press("Enter"); p.wait_for_timeout(1800)
+p.evaluate("() => [...document.querySelectorAll('#cf-wrap .dss-room-card .fi-wayon-btn')].find(b=>b.textContent==='the door').focus()")
+p.keyboard.press("Enter"); p.wait_for_timeout(1800)
+print("way-on card:", p.evaluate("() => document.querySelector('#cf-wrap .dss-room-card').firstChild.textContent"))
+p.keyboard.press("Escape")
+for _ in range(80):
+    if p.evaluate("() => document.getElementById('cf-wrap').dataset.cam") == 'idle': break
+    p.wait_for_timeout(150)
+print("focus after way-on and Escape:", p.evaluate("() => document.activeElement.textContent"))
 print("errors:", [e[:80] for e in p._errs if 'decode' not in e])
 g.close()

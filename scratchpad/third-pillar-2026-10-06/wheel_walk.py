@@ -10,7 +10,7 @@ p.wait_for_timeout(2500)
 def links(): return p.evaluate("() => [...document.querySelectorAll('tw-link')].filter(e=>e.getClientRects().length).map(e=>e.textContent.trim())")
 print("start", links())
 for _ in range(4):
-    l = [x for x in links() if x not in ("AUDIT READ","NOTEBOOK","Meet her eyes")]
+    l = [x for x in links() if x not in ("AUDIT READ","NOTEBOOK","Meet her look")]
     if not l: break
     if "Come back" in l:
         p.evaluate("() => [...document.querySelectorAll('tw-link')].find(l=>l.textContent.trim()==='Come back').click()"); p.wait_for_timeout(2500); break

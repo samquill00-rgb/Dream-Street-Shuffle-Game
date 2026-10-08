@@ -30751,10 +30751,11 @@ cx.globalCompositeOperation = 'source-over';
 // WHO SPEAKS (Sam, 2026-10-07 23:22: "different voices would speak in different situations ... if the
 // boy speaks first, then on a reentry the man speaks"): ONE voice per look. THE THIRST alone when its
 // gate (idWhen) is met. Otherwise THE MAN and THE BOY take turns on each object, entry by entry,
-// remembered across nights (localStorage 'dssVoicesTurns'); re-clicking in one visit repeats the
-// voice. Who opens varies object by object: a trail step or key object opens with THE BOY, the rest
-// alternate round the room in table order (first THE MAN, second THE BOY ...). An open trail step
-// whose next step is still unseen keeps THE BOY until it is, so a clue is never skipped by the turn.
+// remembered across nights (localStorage 'dssVoicesTurns'); looking again in the same visit (the room
+// built once) repeats the voice. Who opens is drawn at RANDOM the first time an object is looked at
+// and kept (localStorage 'dssVoicesOpen'; Sam, 2026-10-08 00:20), except a trail step or key object,
+// which opens with THE BOY. An open trail step whose next step is still unseen keeps THE BOY until it
+// is, so a clue is never skipped by the turn.
 // An object with one voice written speaks with it whatever the turn.
 // USED UP (Sam, 23:24): "once all the voices are used up if there is no reason to allow a return it
 // should just not be clickable anymore." Every line spoken is remembered (localStorage
@@ -30973,25 +30974,35 @@ return seen;
 function has(p) { return !!load()[p]; }
 // the turns: how many separate entries have looked at each object (the voice alternates on them)
 var KEYT = 'dssVoicesTurns', memTurns = null, lastGen = {};
+// the visit: each build of a room is one (dssRoomPlay calls enter()); a look counts once per visit
+var curVisit = 0;
+function enter() { curVisit++; return curVisit; }
 function turns() {
 if (memTurns) return memTurns;
 var t = {}; try { t = JSON.parse(localStorage.getItem(KEYT) || '{}') || {}; } catch (e) {}
 return t;
 }
 function countLook(p) {
-var gen = window._passageGen;
+var gen = curVisit;
 if (lastGen[p] === gen) return;
 lastGen[p] = gen;
 var t = turns(); t[p] = (t[p] || 0) + 1;
 try { localStorage.setItem(KEYT, JSON.stringify(t)); memTurns = null; } catch (e) { memTurns = t; }
 }
 // the turn this look stands on: 0 for the first entry, 1 for the next ... (a look already counted this entry stays on its turn)
-function turnOf(p) { var n = turns()[p] || 0; return lastGen[p] === window._passageGen ? Math.max(0, n - 1) : n; }
-// the voice that opens on an object: the boy on a trail step or key object, else by its place in the room
+function turnOf(p) { var n = turns()[p] || 0; return lastGen[p] === curVisit ? Math.max(0, n - 1) : n; }
+// the voice that opens on an object: the boy on a trail step or key object, else drawn at random once and kept
+var KEYO = 'dssVoicesOpen', memOpen = null;
+function openers() { if (memOpen) return memOpen; var o = {}; try { o = JSON.parse(localStorage.getItem(KEYO) || '{}') || {}; } catch (e) {} return o; }
 function opener(room, name) {
-if (stepAt(room + '/' + name)) return 'then';
-var names = Object.keys(V.objects[room] || {}), i = names.indexOf(name);
-return (i >= 0 && i % 2) ? 'then' : 'now';
+var p = room + '/' + name;
+if (stepAt(p)) return 'then';
+var o = openers();
+if (o[p] !== 'now' && o[p] !== 'then') {
+o[p] = Math.random() < 0.5 ? 'now' : 'then';
+try { localStorage.setItem(KEYO, JSON.stringify(o)); memOpen = null; } catch (e) { memOpen = o; }
+}
+return o[p];
 }
 function see(p) { var s = load(); if (s[p]) return; s[p] = true; try { localStorage.setItem(KEY, JSON.stringify(Object.keys(s))); } catch (e) { mem[p] = true; } }
 // the voices already met (their about line shown once): kept like the seen objects
@@ -31180,7 +31191,7 @@ if (st) add('then', 'trail', st.trail.steps[st.i].then, st.key + ' step ' + (st.
 return out;
 }
 function unsee(p) { delete mem[p]; var s = load(); delete s[p]; try { localStorage.setItem(KEY, JSON.stringify(Object.keys(s))); } catch (e) {} }
-function forget() { mem = {}; memMet = {}; memTurns = null; memSpoken = null; spokenRaw = null; spokenMap = {}; lastGen = {}; lastRaw = null; try { localStorage.removeItem(KEY); localStorage.removeItem(KEYM); localStorage.removeItem(KEYT); localStorage.removeItem(KEYS); } catch (e) {} }
+function forget() { mem = {}; memMet = {}; memTurns = null; memOpen = null; memSpoken = null; spokenRaw = null; spokenMap = {}; lastGen = {}; lastRaw = null; try { localStorage.removeItem(KEY); localStorage.removeItem(KEYM); localStorage.removeItem(KEYT); localStorage.removeItem(KEYO); localStorage.removeItem(KEYS); } catch (e) {} }
 // a trail or callback naming an object the table does not have is a typo: say so in the console, once
 (function() {
 function known(p) { var a = String(p).split('/'); return !!(V.objects[a[0]] || {})[a.slice(1).join('/')]; }
@@ -31189,7 +31200,7 @@ for (var k in V.trails) V.trails[k].steps.forEach(function(s) { if (!known(s.at)
 (V.callbacks || []).forEach(function(c) { if (!known(c.at)) bad.push('callback at: ' + c.at); if (!known(c.after)) bad.push('callback after: ' + c.after); });
 if (bad.length) try { console.warn('DSS voices: no such object in DSS_VOICES.objects', bad); } catch (e) {}
 })();
-return { lines: lines, html: html, see: see, look: look, spent: spent, meet: meet, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
+return { lines: lines, html: html, see: see, look: look, enter: enter, spent: spent, meet: meet, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
 })();
 // <<<< DSS VOICES END
 // >>>> DSS ROOM PLAY BEGIN
@@ -31210,6 +31221,7 @@ var wrap = o.wrap, canvas = o.canvas, host = o.host, scene = o.scene, camera = o
 var WRAP = wrap.id;
 // the inner voices (window.dssVoices): the room's id, and which of its objects holds a dream key
 var ROOM = WRAP.replace(/-wrap$/, ''), VOICE = window.dssVoices || null, KEYSPOT = VOICE ? VOICE.keySpots(ROOM) : {};
+if (VOICE) VOICE.enter();
 var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 var C = o.card || {};
 var cFg = C.fg || 'rgba(225,215,190,0.92)', cBg = C.bg || 'rgba(8,5,3,0.8)', cBorder = C.border || 'rgba(200,168,106,0.3)', cDim = C.dim || 'rgba(200,190,160,0.5)', cBtn = C.btn || 'rgba(235,220,180,0.95)', cBtnBorder = C.btnBorder || 'rgba(200,170,110,0.45)';

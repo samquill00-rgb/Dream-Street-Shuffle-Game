@@ -8,5 +8,5 @@ for _ in range(3):
     Game.clear_overlays(p)
 p.wait_for_timeout(2500)
 print("links:", p.evaluate("() => [...document.querySelectorAll('tw-link')].filter(e=>e.getClientRects().length).map(e=>e.textContent.trim())"), "errors", p.locator("tw-error").count())
-p.evaluate("() => [...document.querySelectorAll('tw-link')].find(l=>l.textContent.trim()==='Sam: the one link out').click()"); p.wait_for_timeout(25000)
+p.evaluate("() => [...document.querySelectorAll('tw-link')].find(l=>l.textContent.trim()==='Go now').click()"); p.wait_for_timeout(25000)
 print("now at:", p.evaluate("() => (document.getElementById('audit-name')||{}).textContent"), "not-yet shown:", p.evaluate("() => document.body.innerText.includes('Not yet. Back to the night.')"), "errors", p.locator("tw-error").count())

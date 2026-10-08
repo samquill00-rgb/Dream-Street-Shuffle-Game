@@ -22862,7 +22862,7 @@ var mark = inBox ? (c.inkMark || (c.ink || '').replace(/^color:([^;]+);.*$/, '$1
 h += '<div class="dss-voice dss-voice-' + l.voice + '" style="margin:' + (inBox && i ? '9px' : '3px') + ' 0 3px;' + (draft ? pink : own) + '">' +
 '<span aria-hidden="true" style="display:inline-block;width:5px;height:5px;border-radius:50%;margin:0 7px 2px 0;vertical-align:middle;background:' + mark + ';' + (inBox ? '' : 'box-shadow:0 0 5px ' + mark + ';') + '"></span>' +
 '<span class="dss-sr" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">' + esc(c.label || SR_NAME[l.voice] || l.voice) + ': </span>' +
-(c.label ? '<span class="dss-voice-label" aria-hidden="true" style="font:10px \'Courier New\',monospace;letter-spacing:2px;text-transform:uppercase;font-style:normal;color:' + mark + ';margin-right:7px;">' + esc(c.label) + (inBox ? ' —' : '') + '</span>' : '') + esc(l.text);
+(c.label ? '<span class="dss-voice-label" aria-hidden="true" style="font:10px \'Courier New\',monospace;letter-spacing:2px;text-transform:uppercase;font-style:normal;color:' + mark + ';margin-right:7px;">' + esc(c.label) + (inBox ? ' —' : '') + '</span>' : '') + '<span class="dss-voice-text">' + esc(l.text) + '</span>';
 // the first time this voice ever speaks: who it is, in its own colour, small
 if (c.about && !met[l.voice]) h += '<div class="dss-voice-about" style="font-size:12px;line-height:1.35;opacity:0.85;margin:2px 0 0 12px;font-style:italic;letter-spacing:0;' + (c.about.indexOf('[Sam:') >= 0 ? pink : '') + '">' + esc(c.about) + '</div>';
 h += '</div>';
@@ -23111,6 +23111,30 @@ vdot.className = 'dss-voice-dot'; vdot.setAttribute('aria-hidden', 'true');
 vdot.style.cssText = 'position:absolute;width:7px;height:7px;margin:-4px 0 0 -4px;border-radius:50%;background:rgba(236,196,120,0.9);box-shadow:0 0 8px rgba(236,196,120,0.8);pointer-events:none;z-index:9003;opacity:0;transition:opacity 0.6s ease;';
 wrap.appendChild(vtail); wrap.appendChild(vdot); wrap.appendChild(vbox);
 var vboxOn = false, vAnchor = new THREE.Vector3();
+// Sam (2026-10-08): the voice arrives a piece at a time (its name, then its words, then who it is the first
+// time), and fades once there has been generous time to read it. vSeq cancels a sequence when the look changes.
+var vSeq = 0, vStarted = false, vFaded = false;
+var V_FIRST = 500, V_NEXT = 1600, V_HOLD = 5000, V_PER_CHAR = 70, V_FADE = 1800;
+function voiceSequence(el, inBox) {
+if (!el) return;
+var my = ++vSeq, parts = el.querySelectorAll('.dss-voice-text, .dss-voice-about'), chars = 0, at = V_FIRST;
+Array.prototype.forEach.call(parts, function(n, i) {
+chars += n.textContent.length;
+setTimeout(function() { if (my === vSeq) n.style.opacity = '1'; }, at);
+at += V_NEXT;
+});
+setTimeout(function() {
+if (my !== vSeq) return;
+vFaded = true;
+if (inBox) { [vbox, vtail, vdot].forEach(function(n) { n.style.transition = 'opacity ' + V_FADE + 'ms ease'; n.style.opacity = '0'; }); }
+else { el.style.transition = 'opacity ' + V_FADE + 'ms ease, max-height ' + V_FADE + 'ms ease, margin ' + V_FADE + 'ms ease'; el.style.maxHeight = el.offsetHeight + 'px'; el.style.overflow = 'hidden'; requestAnimationFrame(function() { if (my !== vSeq) return; el.style.opacity = '0'; el.style.maxHeight = '0'; el.style.marginTop = '0'; el.style.marginBottom = '0'; }); }
+}, at - V_NEXT + V_HOLD + chars * V_PER_CHAR);
+}
+// the words wait, unseen, until the camera has settled on the object
+function voicePrep(el) {
+if (!el) return;
+Array.prototype.forEach.call(el.querySelectorAll('.dss-voice-text, .dss-voice-about'), function(n) { n.style.opacity = '0'; n.style.transition = 'opacity 0.9s ease'; });
+}
 function sideLayout() { return wrap.clientWidth >= 900; }
 function cardX() { return sideLayout() && vboxOn ? '0' : '-50%'; }
 function placeCard() {
@@ -23118,7 +23142,7 @@ var side = sideLayout() && vboxOn;
 card.style.left = side ? '16px' : '50%';
 card.style.width = side ? 'min(400px,38%)' : 'min(560px,86%)';
 }
-function hideVoiceBox() { vboxOn = false; vbox.style.opacity = '0'; vtail.style.opacity = '0'; vdot.style.opacity = '0'; vbox.setAttribute('aria-hidden', 'true'); setTimeout(function() { if (!vboxOn) vbox.innerHTML = ''; }, 700); }
+function hideVoiceBox() { vSeq++; vboxOn = false; vbox.style.opacity = '0'; vtail.style.opacity = '0'; vdot.style.opacity = '0'; vbox.setAttribute('aria-hidden', 'true'); setTimeout(function() { if (!vboxOn) vbox.innerHTML = ''; }, 700); }
 // where the object is on the screen, in the room's own pixels
 function anchorPx(spot) {
 if (spot.haloAt) vAnchor.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else { spot.root.getWorldPosition(vAnchor); if (spot.figure) vAnchor.y += 0.45; }
@@ -23136,7 +23160,7 @@ var edge = left > p[0] ? left : left + bw;
 vtail.style.left = Math.min(p[0], edge) + 'px'; vtail.style.width = Math.abs(edge - p[0]) + 'px'; vtail.style.top = p[1] + 'px';
 vtail.style.transform = left > p[0] ? 'none' : 'scaleX(-1)';
 vdot.style.left = p[0] + 'px'; vdot.style.top = p[1] + 'px';
-var show = settled ? '1' : '0';
+var show = settled && !vFaded ? '1' : '0';
 vbox.style.opacity = show; vtail.style.opacity = show; vdot.style.opacity = show;
 }
 // 2026-10-05 overnight: the card rises a few pixels as it comes, and settles back as it goes
@@ -23155,8 +23179,9 @@ if (spot.hideWhileKey) { var onlyKey = keyLinks(spot); if (onlyKey.length) acts 
 // the voices: beside the object in a wide room, in the card otherwise
 var vhtml = VOICE ? VOICE.html(ROOM, spot.name, true) : '';
 vboxOn = !!vhtml && sideLayout();
-if (vboxOn) { vbox.innerHTML = vhtml; vbox.setAttribute('aria-hidden', 'false'); vbox.style.opacity = '0'; vtail.style.opacity = '0'; vdot.style.opacity = '0'; }
+if (vboxOn) { vSeq++; vbox.innerHTML = vhtml; voicePrep(vbox); vbox.setAttribute('aria-hidden', 'false'); [vbox, vtail, vdot].forEach(function(n) { n.style.transition = 'opacity 0.6s ease'; n.style.opacity = '0'; }); }
 else hideVoiceBox();
+vStarted = false; vFaded = false;
 placeCard();
 // a step reached by following its trail: the card's edge warms for a moment, the same warmth as its glow
 var onTrail = !!VOICE && VOICE.isNext(ROOM, spot.name);
@@ -23189,6 +23214,7 @@ html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;colo
 // the card is live for screen readers before its words change, so the change is announced
 card.setAttribute('aria-hidden', 'false');
 card.innerHTML = html;
+voicePrep(card.querySelector('.dss-voices'));
 // a narrow room (a phone) gets a tighter card (the rules live in dssVoices' stylesheet)
 card.classList.toggle('dss-card-narrow', wrap.clientWidth < 520);
 Array.prototype.forEach.call(card.querySelectorAll('.dss-card-keyart svg'), function(s) { s.style.cssText = 'display:block;height:54px;width:auto;margin:0 auto 4px;filter:drop-shadow(0 0 6px rgba(240,220,170,0.25));'; });
@@ -23356,6 +23382,7 @@ camera.position.x = camToP.x + Math.sin(t * 0.3) * 0.008; camera.position.y = ca
 camera.lookAt(curTarget);
 if (wrap.dataset.cam !== camMode) wrap.dataset.cam = camMode;
 if (vboxOn) layoutVoiceBox(camMode !== 'tween');
+if (activeSpot && !vStarted && camMode !== 'tween') { vStarted = true; voiceSequence(vboxOn ? vbox : card.querySelector('.dss-voices'), vboxOn); }
 if (!still && halo.visible) halo.material.opacity = 0.8 + Math.sin(t * 0.9) * 0.08;
 if (words && Date.now() >= wordsNext) { wordsNext = Date.now() + 500; words.refresh(claimedLinks()); }
 restTick(t);

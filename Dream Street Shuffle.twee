@@ -6790,10 +6790,34 @@ if (typeof window !== 'undefined') {
   setInterval(function() { window.dssMeasureHeader(); }, 700);
 }
 
+// The passage a slip belongs to: the one on screen when it was asked for. Since 2026-10-09 (Sam: "when the
+// passage changes they disappear") a slip goes when its passage goes, so each one remembers which that was.
+window.__dssHintPassage = function() {
+  var all = document.querySelectorAll('tw-story > tw-passage');
+  return all.length ? all[all.length - 1] : null;
+};
 window.dssInlineHint = function(html) {
-  window.__dssHintQueue.push(html);
+  window.__dssHintQueue.push({ html: html, passage: window.__dssHintPassage() });
   if (!window.__dssHintBusy) window.__dssHintNext();
 };
+// A new passage sends the old passage's slips on their way, read or not (Sam, 2026-10-09: they stayed until
+// clicked off, "change it so that when the passage changes they disappear"). A slip the NEW passage raises
+// remembers the new passage and stays; so does a slip raised before the story has a passage at all.
+(function arm() {
+  var story = document.querySelector('tw-story');
+  if (!window.MutationObserver) return;
+  if (!story) { setTimeout(arm, 300); return; }   // the story element arrives after this script on some boots
+  new MutationObserver(function() {
+    var cur = window.__dssHintPassage();
+    var stack = document.getElementById('dss-hint-stack');
+    if (stack) {
+      Array.prototype.forEach.call(stack.querySelectorAll('.dss-hint-slip'), function(c) {
+        if (c.__dssPassage && c.__dssPassage !== cur && !c.__dssPassage.isConnected && c.__dssFinish) c.__dssFinish();
+      });
+    }
+    window.__dssHintQueue = window.__dssHintQueue.filter(function(q) { return !q.passage || q.passage.isConnected; });
+  }).observe(story, { childList: true });
+})();
 window.__dssHintNext = function() {
   if (window.__dssHintBusy) return;
   if (!window.__dssHintQueue.length) { window.__dssHintWait = 0; return; }
@@ -6814,12 +6838,12 @@ window.__dssHintNext = function() {
   // (The 2026-09-16 "breathing space" after a long slip is gone: since 2026-10-07 a slip stays until it is
   // closed, and a later slip lands above it in the stack rather than waiting for it to leave.)
   window.__dssHintWait = 0;
-  var html = window.__dssHintQueue.shift();
-  if (html === undefined) return;
+  var item = window.__dssHintQueue.shift();
+  if (item === undefined) return;
   window.__dssHintBusy = true;
-  window.__dssHintShow(html);
+  window.__dssHintShow(item.html, item.passage);
 };
-window.__dssHintShow = function(html) {
+window.__dssHintShow = function(html, passage) {
   try {
     // THE STACK (Sam, 2026-10-07: "don't ever fade them, just make the cross more obvious to encourage
     // closing them"). No slip leaves on its own any more. Each one stays until its × or its paper is
@@ -6837,6 +6861,7 @@ window.__dssHintShow = function(html) {
     while (standing.length >= 3) { var oldest = standing.shift(); if (oldest.__dssFinish) oldest.__dssFinish(); }
     var card = document.createElement('div');
     card.className = 'dss-hint-slip';
+    card.__dssPassage = passage || window.__dssHintPassage();
     var mark = document.createElement('span');
     mark.className = 'dss-hint-mark';
     mark.textContent = '⟡';

@@ -65117,6 +65117,8 @@ You know who she is, she is SHANA, destroyer of worlds.
 #dss-beer-mats &gt; br,#dss-beer-mats .mats-stage &gt; br,#dss-beer-mats .mats-meters &gt; br,#dss-beer-mats .mats-controls &gt; br,#dss-beer-mats .mats-status &gt; br{display:none}
 #dss-beer-mats .mats-stage{position:relative;width:100%;aspect-ratio:3/2;border:1px solid #887052;border-radius:8px;overflow:hidden;background:#1a0a0e;box-sizing:border-box}
 #dss-beer-mats canvas{display:block;width:100%;height:100%;touch-action:none}
+#dss-beer-mats canvas.mats-room{position:absolute;inset:0;z-index:0;pointer-events:none}
+#dss-beer-mats .mats-stage &gt; canvas:not(.mats-room){position:relative;z-index:1}
 #dss-beer-mats canvas:focus-visible{outline:2px solid #dfb978;outline-offset:3px}
 #dss-beer-mats .mats-bubble{position:absolute;top:34%;max-width:30%;padding:9px 11px;border:1px solid #bca17a55;border-radius:3px;background:#160b0eee;font:italic clamp(11px,2.2vw,14px)/1.35 Georgia,serif;text-align:left;pointer-events:none;transition:opacity .25s}
 #dss-beer-mats .mats-bubble strong{display:block;font-style:normal;font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;opacity:.8}
@@ -65164,6 +65166,7 @@ You know who she is, she is SHANA, destroyer of worlds.
     var r = canvas.getBoundingClientRect(); if (!r.width) return;
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = r.width; H = r.height; canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (room3d) room3d.fit();
   }
   function status(title, hint) { $(&#x27;.mats-title&#x27;).textContent = title; $(&#x27;.mats-hint&#x27;).textContent = hint; }
   // 2026-10-10 (Sam, bare bones): no speech bubbles; Lea&#x27;s record shows in the score row.
@@ -65264,7 +65267,7 @@ You know who she is, she is SHANA, destroyer of worlds.
     if (disposed) return;
     raf = requestAnimationFrame(draw);
     var dt = Math.min(.04, (now - last) / 1000 || .016); last = now;
-    backdrop(now);
+    if (room3d) ctx.clearRect(0, 0, W, H); else backdrop(now);
     var i, p;
     if (phase === &#x27;flying&#x27;) { progress = (now - flightStart) / duration; if (progress &gt;= 1) { progress = 1; fail(&#x27;It slipped past.&#x27;); } }
     if (phase === &#x27;ready&#x27; || phase === &#x27;ended&#x27;) { for (i = 0; i &lt; count; i++) mat(W * .5, H * EDGE, 0, i); hand(H * EDGE, false, 16); }
@@ -65272,6 +65275,124 @@ You know who she is, she is SHANA, destroyer of worlds.
     if (phase === &#x27;won&#x27;) { p = pose(catchAt / duration); for (i = 0; i &lt; count; i++) mat(W * .5, p.y, Math.PI, i); hand(p.y, true, -3); }
     if (phase === &#x27;lost&#x27;) { for (i = 0; i &lt; particles.length; i++) { p = particles[i]; p.x += p.vx * dt; p.vy += 500 * dt; p.y += p.vy * dt; p.a += dt * 4; mat(p.x, p.y, p.a, 0); } }
     var shade = ctx.createRadialGradient(W * .5, H * .5, H * .2, W * .5, H * .5, W * .65); shade.addColorStop(0, &#x27;#0000&#x27;); shade.addColorStop(1, &#x27;#0005&#x27;); ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
+  }
+  // THE ROOM IN 3D (Sam, 2026-10-10: &quot;we made a better version which included pictures in frames&quot;): Astra&#x27;s
+  // Trisha&#x27;s bar from prototypes/trishas-beer-mats/bar-room.js, built behind the mats; the six framed photos
+  // come from that folder&#x27;s atlas. Static camera, drawn once and on resize. Without WebGL the flat bar stays.
+  var room3d = null;
+  function buildRoom(stage) {
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x100407);
+    scene.fog = new THREE.FogExp2(0x18060c, .055);
+    var camera = new THREE.PerspectiveCamera(51, 1.5, .1, 30);
+    camera.position.set(0, 1.75, 3.7); camera.lookAt(0, 1.36, -1.5);
+    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.domElement.className = &#x27;mats-room&#x27;; renderer.domElement.setAttribute(&#x27;aria-hidden&#x27;, &#x27;true&#x27;);
+    stage.insertBefore(renderer.domElement, stage.firstChild);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .78;
+    function mtl(color, roughness, metalness) { return new THREE.MeshStandardMaterial({ color: color, roughness: roughness === undefined ? .75 : roughness, metalness: metalness || 0 }); }
+    var red = mtl(0x571324), dark = mtl(0x180c0e), brass = mtl(0x987144, .37, .58), cream = mtl(0xc4b393);
+    var grainSeed = 137;
+    function rnd() { grainSeed = (grainSeed * 16807) % 2147483647; return grainSeed / 2147483647; }
+    var plasterCanvas = document.createElement(&#x27;canvas&#x27;); plasterCanvas.width = plasterCanvas.height = 256;
+    var pc = plasterCanvas.getContext(&#x27;2d&#x27;); pc.fillStyle = &#x27;#b0aaa5&#x27;; pc.fillRect(0, 0, 256, 256);
+    for (var i = 0; i &lt; 5200; i++) { pc.fillStyle = i % 2 ? &#x27;rgba(255,244,230,.035)&#x27; : &#x27;rgba(24,8,12,.045)&#x27;; var pr = 1 + rnd() * 4; pc.fillRect(rnd() * 256, rnd() * 256, pr, pr); }
+    var plaster = new THREE.CanvasTexture(plasterCanvas); plaster.wrapS = plaster.wrapT = THREE.RepeatWrapping; plaster.repeat.set(3, 2);
+    red.map = plaster; red.bumpMap = plaster; red.bumpScale = .012;
+    var woodCanvas = document.createElement(&#x27;canvas&#x27;); woodCanvas.width = 256; woodCanvas.height = 128;
+    var cx = woodCanvas.getContext(&#x27;2d&#x27;); cx.fillStyle = &#x27;#402318&#x27;; cx.fillRect(0, 0, 256, 128);
+    for (i = 0; i &lt; 150; i++) { cx.strokeStyle = i % 3 ? &#x27;rgba(189,124,69,.12)&#x27; : &#x27;rgba(8,3,2,.22)&#x27;; cx.beginPath(); cx.moveTo(0, i); cx.bezierCurveTo(80, i + Math.sin(i) * 2, 190, i - 2, 256, i); cx.stroke(); }
+    for (i = 0; i &lt; 900; i++) { cx.fillStyle = i % 2 ? &#x27;rgba(222,169,105,.045)&#x27; : &#x27;rgba(10,5,3,.08)&#x27;; cx.fillRect(rnd() * 256, rnd() * 128, 1 + rnd() * 6, .5); }
+    var woodMap = new THREE.CanvasTexture(woodCanvas); woodMap.wrapS = woodMap.wrapT = THREE.RepeatWrapping; woodMap.repeat.set(3, 1);
+    var wood = new THREE.MeshStandardMaterial({ map: woodMap, bumpMap: woodMap, bumpScale: .006, roughness: .43, color: 0xa37b60 });
+    function mesh(geometry, material, x, y, z) { var o = new THREE.Mesh(geometry, material); o.position.set(x, y, z); scene.add(o); return o; }
+    function box(x, y, z, a, b, c, m) { return mesh(new THREE.BoxGeometry(a, b, c), m, x, y, z); }
+    function cyl(x, y, z, r1, r2, h, m, n) { return mesh(new THREE.CylinderGeometry(r1, r2, h, n || 10), m, x, y, z); }
+    box(0, 1.45, -2.4, 6, 2.9, .12, red); box(0, 2.9, -.5, 6, .12, 4, mtl(0x250912));
+    box(-3, 1.45, -.5, .12, 2.9, 4, red); box(3, 1.45, -.5, .12, 2.9, 4, red);
+    [-2, -.5, 1].forEach(function (z) { box(0, 2.82, z, 6, .14, .12, dark); });
+    box(0, .95, .1, 6, .13, 2.6, wood); box(0, .86, 1.43, 6, .09, .10, wood);
+    var wear = new THREE.MeshBasicMaterial({ color: 0xbaa482, transparent: true, opacity: .085, depthWrite: false, side: THREE.DoubleSide });
+    var rings = [ { x: .91, z: .69, r: .084 }, { x: -.88, z: .38, r: .10 } ];
+    rings.forEach(function (q) { var ring = mesh(new THREE.RingGeometry(q.r, q.r + .005, 40, 1, .15, Math.PI * 1.72), wear, q.x, 1.016, q.z); ring.rotation.x = -Math.PI / 2; });
+    var scratchMat = new THREE.LineBasicMaterial({ color: 0xc4a17a, transparent: true, opacity: .10 });
+    for (i = 0; i &lt; 15; i++) { var sx = (rnd() - .5) * 4.8, sz = rnd() * 1.7 - .6; scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(sx, 1.017, sz), new THREE.Vector3(sx + .03 + rnd() * .09, 1.017, sz + .008) ]), scratchMat)); }
+    box(0, .39, 1.34, 6, .85, .12, dark); box(0, .815, 1.405, 6, .018, .016, brass);
+    for (var fx = -2.7; fx &lt; 3; fx += .6) { box(fx, .4, 1.415, .022, .64, .025, wood); box(fx + .29, .075, 1.415, .57, .025, .025, wood); }
+    var mirror = mtl(0x35423d, .38, .55); mirror.roughnessMap = plaster;
+    box(0, 1.98, -2.28, 3.9, 1.53, .07, dark); box(0, 1.98, -2.23, 3.79, 1.43, .015, mirror);
+    [-1.94, 1.94].forEach(function (x) { box(x, 1.98, -2.17, .045, 1.54, .05, brass); });
+    [1.23, 2.73].forEach(function (y) { box(0, y, -2.17, 3.9, .035, .05, brass); });
+    [1.17, 1.72].forEach(function (y) { box(0, y, -1.92, 4.1, .065, .52, wood); box(0, y + .025, -1.645, 4.1, .018, .025, brass); });
+    var bottleMats = [ mtl(0x345445, .3), mtl(0x754822, .32), mtl(0x7f7660, .28), mtl(0x54212a, .4) ];
+    for (i = 0; i &lt; 8; i++) {
+      var ox = (i - 3.5) * .43, om = bottleMats[i % 4];
+      box(ox, 2.28, -2.05, .025, .77, .05, dark);
+      cyl(ox, 2.40, -1.93, .092, .082, .37, om, 8); cyl(ox, 2.18, -1.93, .038, .078, .09, om, 8);
+      cyl(ox, 2.105, -1.93, .029, .029, .07, brass); box(ox, 2.39, -1.833, .12, .17, .008, i % 2 ? cream : mtl(0x873b2d));
+      cyl(ox, 2.05, -1.93, .054, .054, .045, brass); cyl(ox, 1.985, -1.93, .034, .034, .08, mtl(0x807c66, .25, .6));
+      box(ox, 1.925, -1.89, .11, .014, .02, brass);
+    }
+    for (i = 0; i &lt; 11; i++) { var bx = (i - 5) * .30, bm = bottleMats[(i + 1) % 4]; cyl(bx, 1.39, -1.99, .06, .065, .34, bm, 8); cyl(bx, 1.60, -1.99, .024, .026, .09, bm, 8); box(bx, 1.39, -1.925, .07, .11, .006, cream); }
+    var glass = new THREE.MeshStandardMaterial({ color: 0xb9c8bf, roughness: .19, transparent: true, opacity: .30, metalness: .1 });
+    for (i = 0; i &lt; 6; i++) cyl(-1.75 + i * .14, 1.27, -1.58, .041, .03, .15, glass);
+    for (i = 0; i &lt; 4; i++) { var gx = 1.12 + i * .18; cyl(gx, 1.30, -1.61, .046, .008, .07, glass); cyl(gx, 1.235, -1.61, .004, .004, .07, glass); cyl(gx, 1.20, -1.61, .029, .029, .006, glass); }
+    var photoMaterials = [];
+    [-1, 1].forEach(function (side) { for (var k = 0; k &lt; 3; k++) {
+      var px = side * (2.23 + (k % 2) * .29), py = 1.54 + k * .39;
+      box(px, py, -2.25, .30, .36, .06, dark); box(px, py, -2.21, .25, .31, .01, mtl(0x876955));
+      var photoMat = new THREE.MeshStandardMaterial({ color: 0xcec8bb, roughness: .88, emissive: 0x24201c, emissiveIntensity: .12 });
+      photoMaterials.push(photoMat); mesh(new THREE.PlaneGeometry(.20, .25), photoMat, px, py, -2.199);
+    } });
+    var gone = false;
+    new THREE.TextureLoader().load(&#x27;prototypes/trishas-beer-mats/pub-jazz-photos.png&#x27;, function (atlas) {
+      if (gone) return;
+      photoMaterials.forEach(function (material, index) {
+        var texture = atlas.clone(); texture.encoding = THREE.sRGBEncoding;
+        texture.repeat.set(.8 / 3, .98 / 2); texture.offset.set((index % 3 + .1) / 3, (1 - Math.floor(index / 3) + .01) / 2);
+        texture.needsUpdate = true; material.map = texture; material.needsUpdate = true;
+      });
+      render();
+    });
+    scene.add(new THREE.HemisphereLight(0xb29488, 0x190306, .42));
+    var gc = document.createElement(&#x27;canvas&#x27;); gc.width = gc.height = 64; var ga = gc.getContext(&#x27;2d&#x27;), gg = ga.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gg.addColorStop(0, &#x27;rgba(255,239,199,.65)&#x27;); gg.addColorStop(.15, &#x27;rgba(255,200,130,.25)&#x27;); gg.addColorStop(1, &#x27;rgba(255,150,90,0)&#x27;); ga.fillStyle = gg; ga.fillRect(0, 0, 64, 64);
+    var glowTexture = new THREE.CanvasTexture(gc);
+    function glow(x, y, z, color, size) { var s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); s.position.set(x, y, z); s.scale.set(size, size, 1); scene.add(s); return s; }
+    [-2.12, 2.12].forEach(function (x) {
+      cyl(x, 2.07, -1.90, .09, .17, .19, mtl(0xa91c3a), 10); cyl(x, 1.9, -1.9, .012, .012, .19, brass);
+      var l = new THREE.PointLight(x &lt; 0 ? 0xff4960 : 0xff315e, x &lt; 0 ? .82 : .62, 4, 2); l.position.set(x, 1.99, -1.68); scene.add(l); glow(x, 2, -1.66, 0xff6e85, .55);
+    });
+    var wire = [], wcols = [0xffb75f, 0xc95e75, 0x759973];
+    for (i = 0; i &lt;= 28; i++) { var wx = -2.8 + i * .2, wy = 2.72 - .18 * Math.sin(i / 28 * Math.PI); wire.push(new THREE.Vector3(wx, wy, -1.7)); if (i % 2 === 0) { var wc = wcols[(i / 2) % 3]; mesh(new THREE.SphereGeometry(.015, 6, 5), new THREE.MeshBasicMaterial({ color: wc }), wx, wy - .03, -1.7); glow(wx, wy - .03, -1.7, wc, .13); } }
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(wire), new THREE.LineBasicMaterial({ color: 0x17130f })));
+    var warm = new THREE.PointLight(0xffb476, 1.2, 5, 2); warm.position.set(0, 2.6, .6); scene.add(warm);
+    var shelfGlow = new THREE.PointLight(0xffbb79, .28, 2.1, 2); shelfGlow.position.set(.55, 1.77, -1.57); scene.add(shelfGlow);
+    box(.55, 1.746, -1.78, 1.25, .009, .022, new THREE.MeshBasicMaterial({ color: 0xa06a3a }));
+    cyl(1.12, 1.14, .5, .077, .059, .26, glass, 12); cyl(1.12, 1.105, .5, .064, .052, .18, mtl(0x93612b, .25)); cyl(1.12, 1.201, .5, .065, .065, .012, mtl(0xb9a786));
+    cyl(-1.34, 1.05, .18, .075, .08, .09, mtl(0x622431, .4));
+    var flame = mesh(new THREE.SphereGeometry(.012, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffda97 }), -1.34, 1.13, .18); flame.scale.y = 2;
+    glow(-1.34, 1.13, .18, 0xffb160, .23); var candle = new THREE.PointLight(0xffb66e, .5, 1.6, 2); candle.position.set(-1.34, 1.15, .18); scene.add(candle);
+    function render() { if (!gone) renderer.render(scene, camera); }
+    function fit() {
+      var r = stage.getBoundingClientRect(); if (!r.width) return;
+      renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+      var edge = new THREE.Vector3(0, 1.025, 1.42).project(camera); EDGE = (1 - edge.y) / 2; render();
+    }
+    fit();
+    return { fit: fit, dispose: function () {
+      gone = true;
+      scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+      renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) {}
+      if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
+    } };
+  }
+  function startRoom() {
+    var stage = $(&#x27;.mats-stage&#x27;);
+    function go() { if (disposed || room3d) return; try { room3d = buildRoom(stage); } catch (e) { room3d = null; console.error(&#x27;Beer mats room:&#x27;, e); } }
+    if (typeof THREE === &#x27;undefined&#x27;) { var s = document.createElement(&#x27;script&#x27;); s.src = &#x27;vendor/three/three.min.js&#x27;; s.onload = go; document.head.appendChild(s); }
+    else go();
   }
   function key(e) {
     if (!root.isConnected) return;
@@ -65282,6 +65403,7 @@ You know who she is, she is SHANA, destroyer of worlds.
     cancelAnimationFrame(raf); clearTimeout(autoReturn);
     listeners.forEach(function (l) { l[0].removeEventListener(l[1], l[2], l[3]); });
     if (observer) observer.disconnect(); if (resizeObs) resizeObs.disconnect();
+    if (room3d) { room3d.dispose(); room3d = null; }
   }
   function boot() {
     listen(play, &#x27;pointerdown&#x27;, function (e) { if (e.button !== 0) return; e.preventDefault(); down(); });
@@ -65298,7 +65420,7 @@ You know who she is, she is SHANA, destroyer of worlds.
       window._beerMatsDev = { flick: function () { if (phase === &#x27;ready&#x27;) down(); }, catchNow: function () { if (phase !== &#x27;flying&#x27;) return; flightStart = performance.now() - catchAt; catchStack(); }, miss: function () { if (phase === &#x27;flying&#x27;) fail(&#x27;Too late.&#x27;); }, finish: finish,
         state: function () { return { phase: phase, count: count, best: best, catchAt: catchAt, windowMs: windowMs(), ended: ended }; } };
     }
-    resize(); last = performance.now(); raf = requestAnimationFrame(draw);
+    startRoom(); resize(); last = performance.now(); raf = requestAnimationFrame(draw);
   }
   (window.dssShowMinigameRules || function (o) { o.onPlay(); })({ key: &#x27;mats&#x27;, title: &#x27;THE BEER MAT GAME&#x27;, lines: [
     &#x27;&lt;div&gt;A stack of beermats on the edge of the bar. Flick them up with the back of your hand, then catch them as they turn over.&lt;/div&gt;&#x27;,

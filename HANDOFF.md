@@ -19,7 +19,7 @@ Harlowe reads `$x is not true and ...` as ambiguous in some conditions. At the P
 
 ## Open
 - Not walked live: a refused call ringing again on the next lap. Once the snooze clears, the conditions are the same as a first visit.
-- The phone box passage comment (around "Link wordings in [Sam: ...] are placeholders") is stale; the wordings are his.
+- The stale phone box comment ("Link wordings in [Sam: ...] are placeholders") is fixed: the wordings are his.
 
 ---
 

@@ -1,6 +1,6 @@
 # Room labels, back to the bar, LILY's second call, second blackout — 2026-10-11
 
-Cloud session; everything merged to main via PRs #85-#89 (Sam merges on GitHub). HANDOFF.md stopped on 2026-10-07; the 8-11 October work in between (pink cuts, capitals for characters, trails, once-a-night scenes, keyboard fixes) is in the git log, PRs #62-#84.
+Cloud session; everything merged to main via PRs #85-#90 (Sam merges on GitHub). HANDOFF.md stopped on 2026-10-07; the 8-11 October work in between (pink cuts, capitals for characters, trails, once-a-night scenes, keyboard fixes) is in the git log, PRs #62-#84.
 
 ## Done today
 1. **Pink placeholders.** None visible remain. The 65 `[Sam: ...]` lines in the 3D room tables were never shown (Sam's 7 October ruling: a room card is the object's name, the voices and the buttons). They are deleted. Only the three `keepLine` objects print a line: the orange paperback, The Gents, Trisha's back door. The remaining `[Sam:` hits in the .twee are code that tests for the marker.
@@ -10,6 +10,13 @@ Cloud session; everything merged to main via PRs #85-#89 (Sam merges on GitHub).
 5. **Dropped:** `HANDOFF_CARTHAGE_CONTOURS.patch` (no longer applied; Sam: drop the hills patch).
 6. **Second blackout** (PR #89). The map used to shut every door but Soho Square, so two blackouts ended the night by fire. Now Centre Point ("Head towards dawn") stays open too: the hub's `fire-only` rule spares both `square` and `north`. Sam's line follows his bile line in the Coach gents (second blackout only): "Now there are only two paths to the dawn. How much fire do you have left in you? Go to the dawn or else head to the Square and burn it all down."
 7. **Night-ending audit.** Every route into the Fetch and the endings was checked for any choice that ends the night with no way back. The deliberate ones stay: lighting the hut, the Sanctum's "Go now", and "Give up on the night" / "Give up. Sleep here." / "Head towards dawn" / "The dawn is coming" (the Fetch still offers "Not yet" after those). The windows bring the Coach fire only after the hut burns, and a locked Square gate climbs you in, so neither traps you.
+8. **Inner voices and labels** (PR #90). The voices are THE PRIME (`now`), THE OLDBOY (`then`) and THE THIRST (`id`); the 7 October design comment above `DSS_VOICES` still says THE MAN / THE BOY. Sam doesn't want every object voiced: only where it makes dramatic sense, and silent objects simply go dark. New lines (Sam's):
+    - **your book** (LACKLAND'S office), THE PRIME: "Not finished so much as abandoned."
+    - **The Stage** (Ronnie's), THE PRIME: "Just like I pictured it, jazz players."
+    - **a cow** (the Coach): a new `chorus: true` flag makes one look give all three in voice order, every look, THE THIRST whether awake or not. THE PRIME: "What do you call a cow with no legs? Ground beef!" THE OLDBOY: "What do you call a cow with two legs? Lean beef!" THE THIRST: "Ha! Don't milk it, son!" Spoken lines are remembered per browser, so the joke is told once.
+    - **The Third Pillar** stays silent on Sam's word: it is a door that opens when it is ready.
+    - Labels: The Third Pillar and The Stage (Sam). He may fiddle with other articles object by object.
+    - Sam fills lines in a Claude doc table ("Inner voices: four objects"), not the old .md sheet. If a THIRST line goes on an object without an `id` slot, add `id:` to that object first (`sheet_apply.py` cannot place it otherwise).
 
 ## Gotcha worth remembering
 Harlowe reads `$x is not true and ...` as ambiguous in some conditions. At the Pillars it threw an error and silently dropped LILY's ring. Always bracket it: `($x is not true)`.
@@ -22,6 +29,7 @@ Harlowe reads `$x is not true and ...` as ambiguous in some conditions. At the P
 ## Open
 - Not walked live: a refused call ringing again on the next lap. Once the snooze clears, the conditions are the same as a first visit.
 - The stale phone box comment is fixed (it shipped in #89): the wordings are his.
+- The `DSS_VOICES` design comment still names THE MAN / THE BOY; the cast labels are THE PRIME / THE OLDBOY.
 
 ---
 

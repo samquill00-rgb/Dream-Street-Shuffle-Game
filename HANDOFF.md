@@ -31,7 +31,7 @@ Harlowe reads `$x is not true and ...` as ambiguous in some conditions. At the P
 ## Open
 - **PARKED (Sam): a musical intervention at the glimpse when LILY's second call is turned away**, so the sound tells you something important has happened. A comment marks the spot in each of the five pubs (search the .twee for `PARKED (Sam)`).
 - **Phone box:** Sam's cut line "Too late to ring her now." was for the phone box after a refused second call. That state is reachable again now the refusal no longer ends the night; ask Sam whether it comes back.
-- **On hold (Sam):** the cow's joke should play every time, never used up; and how rooms behave on a replay, since spoken lines are remembered across nights and used-up objects go dark.
+- **On hold (Sam):** how rooms behave on a replay, since spoken lines are remembered across nights and used-up objects go dark. (The cow is done: a chorus object is never used up, so its joke plays every time.)
 - Not walked live: a refused call ringing again on the next lap. Once the snooze clears, the conditions are the same as a first visit.
 - The stale phone box comment is fixed (it shipped in #89): the wordings are his.
 - The `DSS_VOICES` design comment now names THE PRIME / THE OLDBOY (fixed), and notes the chorus.

@@ -30869,6 +30869,9 @@ idWhen: { sobrietyBelow: 30, moraleBelow: 30, fromPhase: 2 },
 // mapMark: on the Dean Street map, a small warm dot by the door of a venue holding a trail's next step
 // keyCardOneLine: a key's card shows only the key's own line, not the object's line above it
 switches: { callbacksBothWays: true, mapMark: false, keyCardOneLine: true },
+// DÉJÀ VU (Sam, 2026-10-11): one line per room. On a later night an object used up on an earlier night comes back
+// once and the room speaks through it with this line (on the card, no voice label); '' leaves that room's spent objects dark.
+deja: { fi: '', ci: '', pi: '', ri: '', cu: '', cb: '', ti: '', lk: '', cf: '', oi: '' },
 // every object in the ten rooms, by room. now and then on each; the id on one object a room. A trail's
 // first object has no then of its own: its trail line (below) always speaks there instead.
 objects: {
@@ -31170,12 +31173,14 @@ return spokenMap;
 }
 // the object looked at: seen, counted once per entry for the turns, and its lines marked spoken
 function look(room, name) {
-var p = room + '/' + name;
+var p = room + '/' + name, dj = deja(room, name);
 see(p); countLook(p);
 var sp = spoken(), mine = sp[p] || (sp[p] = []), add = false;
-lines(room, name).forEach(function(l) { if (mine.indexOf(l.text) < 0) { mine.push(l.text); add = true; } });
-if (!add) return;
-try { localStorage.setItem(KEYS, JSON.stringify(sp)); spokenRaw = null; } catch (e) { memSpoken = sp; }
+if (!dj) lines(room, name).forEach(function(l) { if (mine.indexOf(l.text) < 0) { mine.push(l.text); add = true; } });
+if (add) { try { localStorage.setItem(KEYS, JSON.stringify(sp)); spokenRaw = null; } catch (e) { memSpoken = sp; } }
+var m = dejaMap(), n = nightNo();
+if (dj) { m[p] = m[p] || { at: n - 1 }; m[p].shown = n; dejaSave(m); }
+else if (!m[p] && spent(room, name)) { m[p] = { at: n }; dejaSave(m); }
 }
 // has this object nothing left to say? (every line it could speak, now or later, has been spoken)
 function spent(room, name) {
@@ -31205,6 +31210,23 @@ if (!window.DSS_DEV) want = want.filter(function(t) { return !unwritten(t); });
 for (var j = 0; j < want.length; j++) if (mine.indexOf(want[j]) < 0) return false;
 return true;
 }
+// DÉJÀ VU (Sam, 2026-10-11): the night is counted at Start (localStorage 'dssNightNo'); each object records the night
+// it was used up ('dssVoicesDeja'). On a later night a used-up object that once spoke shows its room's line once (no
+// voice label), then is dark again until the next night. Within a night nothing changes.
+var KEYD = 'dssVoicesDeja', memDeja = null;
+function nightNo() { try { return +localStorage.getItem('dssNightNo') || 0; } catch (e) { return 0; } }
+function dejaMap() { if (memDeja) return memDeja; try { return JSON.parse(localStorage.getItem(KEYD) || '{}') || {}; } catch (e) { return {}; } }
+function dejaSave(m) { try { localStorage.setItem(KEYD, JSON.stringify(m)); } catch (e) { memDeja = m; } }
+function deja(room, name) {
+var line = (V.deja || {})[room], p = room + '/' + name;
+if (!line || (!window.DSS_DEV && unwritten(line)) || !(spoken()[p] || []).length || !spent(room, name)) return '';
+var m = dejaMap(), d = m[p], n = nightNo();
+// used up before this was built (no record): count it as an earlier night
+if (!d) { d = m[p] = { at: n - 1 }; dejaSave(m); }
+return d.at < n && d.shown !== n ? line : '';
+}
+// what the rooms ask: used up, and no deja line waiting for it tonight
+function spentNow(room, name) { return spent(room, name) && !deja(room, name); }
 function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 // the card's block of voices
 // inBox: the lines go in the box pinned beside the object (left-aligned, no hairline); else in the card
@@ -31216,6 +31238,8 @@ var met = metList(), st = stepAt(room + '/' + name);
 var h = inBox ? '<div class="dss-voices" style="font:14px/1.45 \'Crimson Text\',Georgia,serif;text-align:left;">' :
 '<div class="dss-voices" style="margin:9px auto 2px;max-width:30em;font:14px/1.45 \'Crimson Text\',Georgia,serif;">' +
 '<div aria-hidden="true" style="width:42px;height:1px;margin:0 auto 6px;background:linear-gradient(90deg,rgba(200,168,106,0),rgba(200,168,106,0.4),rgba(200,168,106,0));"></div>';
+var dj = deja(room, name);
+if (dj) return h + '<div class="dss-deja" style="margin:3px 0;font-style:italic;"><span class="dss-voice-text">' + esc(dj) + '</span></div></div>';
 ls.forEach(function(l, i) {
 var c = V.cast[l.voice] || {}, draft = l.text.indexOf('[Sam:') >= 0, pink = inBox ? PINK_INK : PINK, own = inBox ? (c.ink || c.css || '') : (c.css || '');
 var mark = inBox ? (c.inkMark || (c.ink || '').replace(/^color:([^;]+);.*$/, '$1') || '#2a2118') : (c.mark || '#ccc');
@@ -31306,7 +31330,7 @@ if (st) add('then', 'trail', st.trail.steps[st.i].then, st.key + ' step ' + (st.
 return out;
 }
 function unsee(p) { delete mem[p]; var s = load(); delete s[p]; try { localStorage.setItem(KEY, JSON.stringify(Object.keys(s))); } catch (e) {} }
-function forget() { mem = {}; memMet = {}; memTurns = null; memOpen = null; memSpoken = null; spokenRaw = null; spokenMap = {}; lastGen = {}; lastRaw = null; try { localStorage.removeItem(KEY); localStorage.removeItem(KEYM); localStorage.removeItem(KEYT); localStorage.removeItem(KEYO); localStorage.removeItem(KEYS); } catch (e) {} }
+function forget() { memDeja = null; try { localStorage.removeItem('dssVoicesDeja'); } catch (e) {} mem = {}; memMet = {}; memTurns = null; memOpen = null; memSpoken = null; spokenRaw = null; spokenMap = {}; lastGen = {}; lastRaw = null; try { localStorage.removeItem(KEY); localStorage.removeItem(KEYM); localStorage.removeItem(KEYT); localStorage.removeItem(KEYO); localStorage.removeItem(KEYS); } catch (e) {} }
 // a trail or callback naming an object the table does not have is a typo: say so in the console, once
 (function() {
 function known(p) { var a = String(p).split('/'); return !!(V.objects[a[0]] || {})[a.slice(1).join('/')]; }
@@ -31315,7 +31339,7 @@ for (var k in V.trails) V.trails[k].steps.forEach(function(s) { if (!known(s.at)
 (V.callbacks || []).forEach(function(c) { if (!known(c.at)) bad.push('callback at: ' + c.at); if (!known(c.after)) bad.push('callback after: ' + c.after); });
 if (bad.length) try { console.warn('DSS voices: no such object in DSS_VOICES.objects', bad); } catch (e) {}
 })();
-return { lines: lines, html: html, see: see, look: look, enter: enter, spent: spent, meet: meet, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
+return { lines: lines, html: html, see: see, look: look, enter: enter, spent: spentNow, deja: deja, meet: meet, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
 })();
 // <<<< DSS VOICES END
 // >>>> DSS ROOM PLAY BEGIN
@@ -63667,7 +63691,7 @@ comments, so never write example macro syntax in here. --&gt;\
 (set: $tookLily4 to false)\
 (set: $tookLily5 to false)\
 (set: $sawPentangle to false)\
-&lt;script&gt;window._dssSawPentangle=false;window._dssMatchPopupDone=false;try{sessionStorage.removeItem(&#x27;dssMapHintDone&#x27;);}catch(e){}&lt;/script&gt;\
+&lt;script&gt;try{localStorage.setItem(&#x27;dssNightNo&#x27;,String((+localStorage.getItem(&#x27;dssNightNo&#x27;)||0)+1))}catch(e){}window._dssSawPentangle=false;window._dssMatchPopupDone=false;try{sessionStorage.removeItem(&#x27;dssMapHintDone&#x27;);}catch(e){}&lt;/script&gt;\
 (set: $visitedCentrePoint to false)\
 (set: $sawAstralReveal to false)\
 (set: $lilyHintShown to false)\

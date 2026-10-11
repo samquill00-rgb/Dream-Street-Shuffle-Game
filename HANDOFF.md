@@ -1,3 +1,28 @@
+# Room labels, back to the bar, and LILY's second call — 2026-10-11
+
+Cloud session; everything merged to main via PRs #85, #86 and #87 (Sam merges on GitHub). HANDOFF.md stopped on 2026-10-07; the 8-11 October work in between (pink cuts, capitals for characters, trails, once-a-night scenes, keyboard fixes) is in the git log, PRs #62-#84.
+
+## Done today
+1. **Pink placeholders.** None visible remain. The 65 `[Sam: ...]` lines in the 3D room tables were never shown (Sam's 7 October ruling: a room card is the object's name, the voices and the buttons). They are deleted. Only the three `keepLine` objects print a line: the orange paperback, The Gents, Trisha's back door. The remaining `[Sam:` hits in the .twee are code that tests for the marker.
+2. **Object labels** (Sam): indefinite articles (a telephone, a bar, an orange paperback), plurals bare (photographs, shelves, stairs). Characters in capitals: COPPER, ASHTON GRANGER, QUIET FRANKIE, JEFFREY BERNARD, SHANA, LACKLAND, INIS O'FLATTERLY. Possessives with a capital S: JEFFREY BERNARD'S glass, LACKLAND'S glass. Kept: The Gents (capitalised), your book, your plate, and "a man through the fumes" (Sam: mysterious until clicked). The names are keys: `DSS_VOICES.objects`, trail `at:` paths and callbacks were renamed with them, and every room/name path resolves.
+3. **Back to the bar** (the parked 9 October patch, PR #86). "I'm not here" in the Coach, the French, the Colony, Ronnie's and the Pillars (LILY's call, and the Pillars' first call) now offers "Back to the bar" (Sam: wording fine). `$ringSnoozed` keeps that pub quiet on the return and is cleared on the Dean Street lap, so a refused call can find you later. `$resumingFromCall` spares the Colony's entry charge; the French now clears that flag, which fixes an older leak where the next venue skipped its charge. Reset in StoryInit and Start.
+4. **LILY's second call** (PR #87, Sam's option A). "Turn and leave" still goes to the Fetch, but the Fetch now offers "Not yet. Back to the night." after it. Once refused, the dual ring never rings again that night.
+5. **Dropped:** `HANDOFF_CARTHAGE_CONTOURS.patch` (no longer applied; Sam: drop the hills patch).
+
+## Gotcha worth remembering
+Harlowe reads `$x is not true and ...` as ambiguous in some conditions. At the Pillars it threw an error and silently dropped LILY's ring. Always bracket it: `($x is not true)`.
+
+## Testing notes
+- Python harness: `scratchpad/audit-2026-09-16/harness.py`. In a fresh container: `pip install playwright`, then serve the folder on port 8777 (`python3 -m http.server 8777`).
+- Add a variable to the audit readout by extending `harness.STATE_VARS` and rebuilding `AUDIT_HEADER`.
+- The French's 3D approach blocks scripted walking from Dean Street. To test a later visit, seed the state and start in the venue.
+
+## Open
+- Not walked live: a refused call ringing again on the next lap. Once the snooze clears, the conditions are the same as a first visit.
+- The phone box passage comment (around "Link wordings in [Sam: ...] are placeholders") is stale; the wordings are his.
+
+---
+
 # Endgame continuity pass — 2026-10-07
 
 Sam requested local-only visual improvements from The Fetch through every route to Dawn, then asked to bound remaining work because of credits. No git/GitHub commands or publishing. Earlier drink and Ezekiel-wheel changes retained.

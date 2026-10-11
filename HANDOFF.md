@@ -1,6 +1,6 @@
-# Room labels, back to the bar, LILY's second call, second blackout — 2026-10-11
+# Room labels, phones, the Fetch, the second blackout, voices — 2026-10-11
 
-Cloud session; everything merged to main via PRs #85-#90 (Sam merges on GitHub). HANDOFF.md stopped on 2026-10-07; the 8-11 October work in between (pink cuts, capitals for characters, trails, once-a-night scenes, keyboard fixes) is in the git log, PRs #62-#84.
+Cloud session; everything merged to main via PRs #85-#94 (Sam merges on GitHub). HANDOFF.md stopped on 2026-10-07; the 8-11 October work in between (pink cuts, capitals for characters, trails, once-a-night scenes, keyboard fixes) is in the git log, PRs #62-#84.
 
 ## Done today
 1. **Pink placeholders.** None visible remain. The 65 `[Sam: ...]` lines in the 3D room tables were never shown (Sam's 7 October ruling: a room card is the object's name, the voices and the buttons). They are deleted. Only the three `keepLine` objects print a line: the orange paperback, The Gents, Trisha's back door. The remaining `[Sam:` hits in the .twee are code that tests for the marker.
@@ -30,12 +30,10 @@ Harlowe reads `$x is not true and ...` as ambiguous in some conditions. At the P
 - The French's 3D approach blocks scripted walking from Dean Street. To test a later visit, seed the state and start in the venue.
 
 ## Open
-- **Background checks (Sam: run when convenient):** a phone-width pass over the newer room scenes and today's changes, and one natural playthrough from Start to Dawn without seeded state.
+- **Background checks, started 2026-10-11 late evening (read-only, results due back in the session):** a phone-width pass (390 and 360 px) over the newer room scenes and today's changes, and one natural playthrough from Start to Dawn without seeded state. If this session ended before they reported, rerun both from scratch (the session scratchpad does not survive), using the harness in `scratchpad/audit-2026-09-16/harness.py`.
 - **PARKED (Sam): a musical intervention at the glimpse when LILY's second call is turned away**, so the sound tells you something important has happened. A comment marks the spot in each of the five pubs (search the .twee for `PARKED (Sam)`).
 - **On hold (Sam):** how rooms behave on a replay, since spoken lines are remembered across nights and used-up objects go dark. (The cow is done: a chorus object is never used up, so its joke plays every time.)
 - Not walked live: a refused call ringing again on the next lap. Once the snooze clears, the conditions are the same as a first visit.
-- The stale phone box comment is fixed (it shipped in #89): the wordings are his.
-- The `DSS_VOICES` design comment now names THE PRIME / THE OLDBOY (fixed), and notes the chorus.
 
 ---
 

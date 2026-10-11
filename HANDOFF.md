@@ -18,6 +18,8 @@ Cloud session; everything merged to main via PRs #85-#90 (Sam merges on GitHub).
     - Labels: The Third Pillar and The Stage (Sam). He may fiddle with other articles object by object.
     - Sam fills lines in a Claude doc table ("Inner voices: four objects"), not the old .md sheet. If a THIRST line goes on an object without an `id` slot, add `id:` to that object first (`sheet_apply.py` cannot place it otherwise).
 
+9. **Labels:** every room label begins with a capital (Sam): A cow, Your book, Photographs; The Third Pillar, The Stage, The Gents keep their capitals; characters stay in full capitals.
+10. **The Fetch, at most twice a night** (Sam, option C). `$fetchMet` counts full meetings; the second offers no "Not yet. Back to the night." (final). Refusing LILY's second call ("Turn and leave") in the five pubs is now a glimpse, not a meeting: the ring gives way to the Fetch Window SVG alone, then "Back to the bar"; `$refusedDualRing` keeps her from ringing again.
 ## Gotcha worth remembering
 Harlowe reads `$x is not true and ...` as ambiguous in some conditions. At the Pillars it threw an error and silently dropped LILY's ring. Always bracket it: `($x is not true)`.
 
@@ -27,6 +29,9 @@ Harlowe reads `$x is not true and ...` as ambiguous in some conditions. At the P
 - The French's 3D approach blocks scripted walking from Dean Street. To test a later visit, seed the state and start in the venue.
 
 ## Open
+- **PARKED (Sam): a musical intervention at the glimpse when LILY's second call is turned away**, so the sound tells you something important has happened. A comment marks the spot in each of the five pubs (search the .twee for `PARKED (Sam)`).
+- **Phone box:** Sam's cut line "Too late to ring her now." was for the phone box after a refused second call. That state is reachable again now the refusal no longer ends the night; ask Sam whether it comes back.
+- **On hold (Sam):** the cow's joke should play every time, never used up; and how rooms behave on a replay, since spoken lines are remembered across nights and used-up objects go dark.
 - Not walked live: a refused call ringing again on the next lap. Once the snooze clears, the conditions are the same as a first visit.
 - The stale phone box comment is fixed (it shipped in #89): the wordings are his.
 - The `DSS_VOICES` design comment now names THE PRIME / THE OLDBOY (fixed), and notes the chorus.

@@ -1,3 +1,13 @@
+# Group B settled — 2026-10-12 (latest)
+
+Sam took my recommendations on the non-narrative ones and answered the three that were his words:
+- Kept as they are: 8 (3 flowers / 6 haunts), 9 (Towards Dawn without readout), 10 (LINE 3's promise; Sam: keep), 11 (one "Not yet" at the forced ends), 13 (the Pillars' rain line; Sam: keep), 14 ("Not tonight." on a spent door).
+- 17: "You can keep exploring with the poem complete." cut from the open-night slip (Sam). Slips now step out of sight while a hand-held card is up (coin, matches, cigarette, eat, key, lily, quest) and come back when it goes (CSS on `.dss-hint-stack`).
+- **Next (Sam):** he wants to go over the wording of every slip; some of it is mine and doesn't fit. The list of slips and their texts was put to him in chat on 12 October; nothing changed yet. History can't say who wrote which (the 11 October squash, 6df3f8d).
+- Checked: the Coach-fire ending end to end (Square → hut → three windows → "Burn it" → the Fetch, final → Centre Point → Alba Incomplete → Black page → Dawn): no errors, no dead ends. The all-passage sweep after PR #105: 209 passages, none with errors.
+
+---
+
 # Group B, the technical three (12, 15, 16) — 2026-10-12 (later still)
 
 PR #104 (group A + the map pointer) is merged. Sam: "do 12, 15 and 16". Branch `claude/eager-ptolemy-5k37rz`, restarted from main.

@@ -9,7 +9,7 @@ Sam: "go on all of A" (the seven fixes I offered from the overnight's parked lis
 6. **The red door on the map** was the French's lit arch (and its red light on the street) at full strength while NEXT named elsewhere. While NEXT names an open door, the other venues' arches, spills and chevrons get `.soho-door-dim`, and their canvas light is halved (`buildGlow`). Name plates unchanged; every door still a way in.
 7. **"The Alba is complete. Centre Point waits."** (his) now waits for $needLilies flowers and $needHaunts haunts too; before that the hint is silent and NEXT leads.
 
-Noticed, not changed: the map's edge pointer "NEXT · The Pillars ◥" can sit right on the French's arch near the start of Dean Street, which reads as if the French were NEXT.
+8. **The map's edge pointer** ("NEXT · The Pillars ◥") sat right on the French's lit arch near the start of Dean Street, reading as if the French were NEXT (Sam: fix it). `placeNextArrow` now slides it along its edge, the NEXT door's side first, to the nearest spot clear of every other door's arch and name plate; worked out again only when its edge spot changes.
 
 Gotcha: `buildGlow` and the map's other top-level draw functions can't see `hubFlag` (it lives inside the hub's closure); a ReferenceError there blanks the whole map canvas without a page error. Read `.dss-hub-flag[data-k=...]` directly.
 

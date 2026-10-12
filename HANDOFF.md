@@ -14,9 +14,12 @@ Sam played through, listed seven notes and went to sleep: "fix these methodicall
 - Ronnie's: MOE's order no longer shows beside "played out"; that line waits for the flower. The French: "[NOT NOW]" waits for the flower; entry prose once on visit 1. Trisha's: the descent and SHANA once a night. Chippy: LILY at the window only while her flower is there.
 - "Exit to the street" hidden inside conversations that could be abandoned halfway (COPPER's cellar, the French artists, Shana Looks Again, O'Flatterly introduction, Lackland's Back Room, Watch the decider).
 - The French's way out is the blue door; the Colony's drink offers "Back to the bar" (no second entry charge); Cecil Court's waltz once a night (then its own "Onward, then.").
+- Wanderer playthrough (a drinker ignoring NEXT; no soft-locks): "Give up on the night" has the north door again when on offer (the dawn link used to take it); NEXT's sober-up places mirror Dean Street's own low-state chain (never a doorway or greyed chippy the street isn't offering; the map marks only open doors); a flower clicked drunk says NOT GATHERED · TOO DRUNK TO HOLD IT · COME BACK SOBER / "Let it go".
+- The Fetch: after the first glimpse he is already there (7 s, not 15).
+- A sweep that opened all 207 story passages found no Harlowe errors.
 
 ## New words (functional signposts, for Sam to rewrite or cut)
-NEXT · PLACE (and "THE PILLARS · SEEK THE SHORE" during the page quest); "Next: place" in the map bar; "A FLOWER IS HERE · LOOK CLOSER"; "SOMETHING HERE TO TAKE · LOOK CLOSER"; LILY'S FLOWERS n OF 3 · HAUNTS n OF 6 (Fetch); FOR THE DAWN · … (notebook). The Fetch glimpse reuses his own sentence without its opening "You can leave now, perhaps it's wise to get out. But".
+NEXT · PLACE (and "THE PILLARS · SEEK THE SHORE" during the page quest); "Next: place" in the map bar; "A FLOWER IS HERE · LOOK CLOSER"; "SOMETHING HERE TO TAKE · LOOK CLOSER"; LILY'S FLOWERS n OF 3 · HAUNTS n OF 6 (Fetch); FOR THE DAWN · … (notebook); NOT GATHERED · TOO DRUNK TO HOLD IT · COME BACK SOBER and "Let it go" (drunk flower card). The Fetch glimpse reuses his own sentence without its opening "You can leave now, perhaps it's wise to get out. But".
 
 ## For Sam (parked, his call)
 - The thresholds 3 flowers / 6 haunts. Should Alba Complete also need more (e.g. all five flowers), or the Sanctum earn a higher ending? Nothing does yet.
@@ -25,6 +28,9 @@ NEXT · PLACE (and "THE PILLARS · SEEK THE SHORE" during the page quest); "Next
 - A phone ring card can sit over a room's intro box (first Pillars visit, the Coach dual ring).
 - The map's red doorway door is the loudest thing on the map even when NEXT is elsewhere.
 - "It wasn't raining till you got inside" after the storm road (his wording).
+- The forced ends ("Give up. Sleep here.", "Lose", the second blackout's dawn) still offer one "Not yet" at the first meeting (unchanged design); only the second meeting, the Coach fire and the Sanctum are final.
+- LINE 3 says "You shall get out alive" and "The dawn is coming", but with too few flowers/haunts the Fetch is a glimpse.
+- NEXT is redrawn on each passage, not after in-place links (e.g. Retch raising sobriety on the same screen).
 
 ## Gotcha (new)
 Inside a `(set:)`, `(($sawJeffrey is true) and ($ringSnoozed is not true) and ...)` evaluated TRUE with `$sawJeffrey` false. Split such guards into their own `(unless:)`. Temp variables set in a `(display:)`ed passage don't reach the caller; use story variables (`$nextId`, `$nextShown`).

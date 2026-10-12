@@ -1,3 +1,36 @@
+# Overnight pass — 2026-10-12 (Sam's playthrough notes)
+
+Sam played through, listed seven notes and went to sleep: "fix these methodically then work again and again on making the whole thing a playable and enjoyable experience (in terms of ordering)". All on PR #103 (branch `claude/fervent-albattani-tfhn90`). Every change was tested in headless Chromium; two full-night playthroughs (one following NEXT from a true Start to Alba Complete) found the night completable with no soft-locks.
+
+## His seven notes
+1. **Ordering/display around the Pillars.** Eight fixes from a Pillars playthrough: "Back to the bar" left a blank LOADING screen (also the French, Colony, Ronnie's, and the shared room kit, so the Coach); the opening verse showed after every drink/call/visit (now first entry only, `$pillarsVerseShown`); AOIFE's ring hid the Ham on visit 1 (now both, any order); "no more business" beside the third pillar; the 2D pillar showing over the header; the Ham's talk could be abandoned halfway; the 3D synthesis pillar read the lifetime store; matches owed when the key carries you straight to the portal. The sea storm is now the road only the first time and while the sea road to Carthage is open; otherwise a return goes straight to the pub's door.
+2. **The art deco leaves before PLUS ULTRA** were drawing black on black (their colours keyed off `tw-passage` tags, but the plain-page panel lifts the content out) and a dark panel covered the white page. Palette keys off `tw-story` too; `white-page`/`black-page` skip the panel.
+3/5. **Next task and things to take.** New system passage **Next Target** (first-match priority list: forced roads, Centre Point when the poem is whole and the night lived, a breather under 40 sobriety, Red, the cow, the dream world / a key / the page quest, then flowers and haunts). Shown as `NEXT · PLACE` under the header's Alba hint (redrawn by the footer passage **Next Footer**, so it is never a screen behind; hidden in dreams, Carthage's shore, endings: **Next Shown**), as a glowing NEXT label on that map door, and as "Next: place" in the caption bar. Rooms holding one of LILY's flowers say "A FLOWER IS HERE · LOOK CLOSER" (a key: "SOMETHING HERE TO TAKE · LOOK CLOSER"), brighter and kept up until taken; the flower sprig is larger.
+4/6. **The weighting.** The best ending used to check only the three Alba lines, and "Follow him" was always open. Now the Fetch opens the way on only once `$lilyCount >= $needLilies` (3) and haunts `>= $needHaunts` (6) — tune both in StoryInit and Start. Before that he is a glimpse: his Baudelaire, "There are still flowers to gather in the night, and work yet to be done.", a count (`.fetch-owed`), "Not yet. Back to the night." A glimpse is not one of his two meetings. Forced ends still go through: the Coach fire, the Sanctum, "Give up. Sleep here.", "Lose", the second blackout. The notebook shows "FOR THE DAWN · LILY'S FLOWERS n OF 3 · HAUNTS n OF 6" while owed.
+7. **Dawn petals** flood the screen: ~330 a second held to 26 s, cap 1300–3000 by screen size (was 115/s, cap 320–1000); cheaper painting (depth-ordered on arrival, one setTransform per petal).
+
+## Iteration (venues audit and playthroughs)
+- Coach: LILY waits until JEFFREY's first visit is done; JEFFREY leaves the room after his scene (his glass and the cow stay).
+- Ronnie's: MOE's order no longer shows beside "played out"; that line waits for the flower. The French: "[NOT NOW]" waits for the flower; entry prose once on visit 1. Trisha's: the descent and SHANA once a night. Chippy: LILY at the window only while her flower is there.
+- "Exit to the street" hidden inside conversations that could be abandoned halfway (COPPER's cellar, the French artists, Shana Looks Again, O'Flatterly introduction, Lackland's Back Room, Watch the decider).
+- The French's way out is the blue door; the Colony's drink offers "Back to the bar" (no second entry charge); Cecil Court's waltz once a night (then its own "Onward, then.").
+
+## New words (functional signposts, for Sam to rewrite or cut)
+NEXT · PLACE (and "THE PILLARS · SEEK THE SHORE" during the page quest); "Next: place" in the map bar; "A FLOWER IS HERE · LOOK CLOSER"; "SOMETHING HERE TO TAKE · LOOK CLOSER"; LILY'S FLOWERS n OF 3 · HAUNTS n OF 6 (Fetch); FOR THE DAWN · … (notebook). The Fetch glimpse reuses his own sentence without its opening "You can leave now, perhaps it's wise to get out. But".
+
+## For Sam (parked, his call)
+- The thresholds 3 flowers / 6 haunts. Should Alba Complete also need more (e.g. all five flowers), or the Sanctum earn a higher ending? Nothing does yet.
+- Towards Dawn: he cut its ALBA/FLOWERS/HAUNTS readout on 10 Oct; the Fetch and notebook now carry a count instead. Keep?
+- "Eat." at the Chippy goes to the street even with the flower or ticket still in the room (his 9 Oct design); a return offers Eat again (stats refill).
+- A phone ring card can sit over a room's intro box (first Pillars visit, the Coach dual ring).
+- The map's red doorway door is the loudest thing on the map even when NEXT is elsewhere.
+- "It wasn't raining till you got inside" after the storm road (his wording).
+
+## Gotcha (new)
+Inside a `(set:)`, `(($sawJeffrey is true) and ($ringSnoozed is not true) and ...)` evaluated TRUE with `$sawJeffrey` false. Split such guards into their own `(unless:)`. Temp variables set in a `(display:)`ed passage don't reach the caller; use story variables (`$nextId`, `$nextShown`).
+
+---
+
 # Room labels, phones, the Fetch, the second blackout, voices, déjà vu, chorus, caption bar — 2026-10-11/12
 
 Cloud session; everything merged to main via PRs #85-#101 (Sam merges on GitHub). HANDOFF.md stopped on 2026-10-07; the 8-11 October work in between (pink cuts, capitals for characters, trails, once-a-night scenes, keyboard fixes) is in the git log, PRs #62-#84.

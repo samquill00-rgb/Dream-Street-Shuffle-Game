@@ -48334,9 +48334,9 @@ document.addEventListener('keydown', function(e) {
     function spawn(scattered) {
       var depth = Math.random();
       var near = depth > 0.82, far = depth < 0.28;
-      var size = near ? 32 + Math.random() * 29 : far ? 7 + Math.random() * 8 : 16 + Math.random() * 18;
+      var size = near ? 34 + Math.random() * 34 : far ? 8 + Math.random() * 9 : 17 + Math.random() * 20;
       var speed = (near ? 105 : far ? 53 : 78) * Math.max(0.65, height / 800);
-      particles.push({
+      var np = {
         x: Math.random() * (width + 120) - 60,
         y: scattered ? Math.random() * height : height + size,
         age: 0, speed: speed * (0.8 + Math.random() * 0.5), size: size,
@@ -48345,37 +48345,44 @@ document.addEventListener('keydown', function(e) {
         alpha: near ? 0.86 : far ? 0.34 : 0.72,
         sprite: sprites[Math.floor(Math.random() * sprites.length)],
         depth: depth
-      });
+      };
+      // kept in depth order as they arrive (far first), so paint never re-sorts thousands of petals a frame
+      var lo = 0, hi = particles.length;
+      while (lo < hi) { var mid = (lo + hi) >> 1; if (particles[mid].depth < depth) lo = mid + 1; else hi = mid; }
+      particles.splice(lo, 0, np);
     }
     function paint() {
       if (!ctx) return;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.clearRect(0, 0, width, height);
-      // Far-to-near rendering makes overlapping translucent petals read as depth.
-      particles.sort(function(a,b){ return a.depth - b.depth; });
+      // Far-to-near rendering makes overlapping translucent petals read as depth (spawn keeps them in that order).
       particles.forEach(function(p) {
         var sway = Math.sin(p.age * 0.75 + p.phase) * (18 + p.depth * 42);
         var thermal = Math.sin(elapsed * 0.34 + p.y / height * 2.3) * (28 + p.depth * 48);
         var x = p.x + sway + thermal;
         var fade = Math.min(1, p.age / 0.9, Math.max(0, (p.y + p.size) / 90));
-        ctx.save();
-        ctx.translate(x, p.y);
-        ctx.rotate(p.lean + p.age * p.spin + Math.sin(p.age * 1.1 + p.phase) * 0.28);
+        var ang = p.lean + p.age * p.spin + Math.sin(p.age * 1.1 + p.phase) * 0.28;
         // A thin profile between two broad faces: the petal turns in the air.
         var face = Math.cos(p.age * p.flutter + p.phase);
-        ctx.scale(0.18 + Math.abs(face) * 0.82, 1);
+        var sx = 0.18 + Math.abs(face) * 0.82, co = Math.cos(ang) * ratio, si = Math.sin(ang) * ratio;
+        // one transform per petal (translate, rotate, then squash on x), in place of save/translate/rotate/scale/restore
+        ctx.setTransform(co * sx, si * sx, -si, co, x * ratio, p.y * ratio);
         ctx.globalAlpha = p.alpha * (reduced ? 0.6 : fade);
         ctx.drawImage(p.sprite, -p.size * 0.4, -p.size * 0.5, p.size * 0.8, p.size);
-        ctx.restore();
       });
+      ctx.globalAlpha = 1;
     }
     function tick(now) {
       if (stopped) return;
       if (!trigger || !trigger.isConnected) { dispose(); return; }
       var dt = last ? Math.min((now - last) / 1000, 0.05) : 0; last = now;
       elapsed += dt;
-      var rate = elapsed < 8 ? 15 + elapsed * 5 :
-        elapsed < 22 ? 115 : 4 + 105 * Math.exp(-(elapsed - 22) / 2);
-      var cap = Math.min(1000, Math.max(320, Math.round(width * height / 1000)));
+      // 2026-10-12 (Sam: "too few rising petals at the Dawn close: I want the screen flooded"). About three times
+      // the old flood (115 a second, capped at 1000; 320 on a phone): a quicker swell to ~330 a second, held to 26 s,
+      // then the same slow ebb to a quiet drift. The cap scales with the screen, never under 1300.
+      var rate = elapsed < 6 ? 30 + elapsed * 50 :
+        elapsed < 26 ? 330 : 6 + 324 * Math.exp(-(elapsed - 26) / 2.5);
+      var cap = Math.min(3000, Math.max(1300, Math.round(width * height / 400)));
       carry += rate * dt;
       while (carry >= 1) { if (particles.length < cap) spawn(false); carry--; }
       particles.forEach(function(p){ p.age += dt; p.y -= p.speed * dt; });

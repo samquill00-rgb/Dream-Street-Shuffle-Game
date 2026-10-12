@@ -1,3 +1,17 @@
+# Group B, the technical three (12, 15, 16) — 2026-10-12 (later still)
+
+PR #104 (group A + the map pointer) is merged. Sam: "do 12, 15 and 16". Branch `claude/eager-ptolemy-5k37rz`, restarted from main.
+
+- **12. The Chippy's "Eat."** While LILY's flower is there to take (sober enough to hold it) or the ticket waits, the first "Eat." puts the room's own line on a slip ("A FLOWER IS HERE · LOOK CLOSER" / "SOMETHING HERE TO TAKE · LOOK CLOSER") and you stay; a second "Eat." eats and leaves as before. `$chippyEatWarned` resets on each entry; the link is now a `(link-repeat:)`. Nothing held: unchanged. The slip waits while the room's opening box is up (as every slip does), so it lands as the box closes.
+- **15. The White page's vines on a phone.** The 1600 x 900 sheet grows at its left and right edges, and an upright phone cropped to the middle showed almost nothing. `Ending Vines SVG` now puts the drawing in one group and adds a `<use>` of it (translate -800, 900); upright (matchMedia portrait) the viewBox is 800 x 1800, so the left half sits above the right half; sideways it is the whole sheet. One SVG on purpose: clones duplicate the gradient/filter ids. Note for screenshots: at phone size the drawing needs ~25 s in the headless browser to reach full colour (14 s looked pale and fooled me).
+- **16. NEXT naming the same venue again.** The haunt places are listed in their old order (the French while it owes a haunt, Ronnie's, Trisha's, LACKLAND'S; the Colony when none); if the first is the venue you were last inside (`$lastVenueId`, set by Next Target from the passage's venue tag) and another is listed, NEXT names that one. Inside a venue it still says HERE.
+
+Testing note: the background `http.server` dies at the 2-hour background limit; start a server inside each test command instead.
+
+The rest of group B (8-11, 13, 14, 17) still waits on Sam.
+
+---
+
 # The parked list, group A — 2026-10-12 (later)
 
 Sam: "go on all of A" (the seven fixes I offered from the overnight's parked list). Branch `claude/eager-ptolemy-5k37rz`. Each tested in headless Chromium; the all-passage sweep re-run.

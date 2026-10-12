@@ -17,9 +17,11 @@ Sam played through, listed seven notes and went to sleep: "fix these methodicall
 - Wanderer playthrough (a drinker ignoring NEXT; no soft-locks): "Give up on the night" has the north door again when on offer (the dawn link used to take it); NEXT's sober-up places mirror Dean Street's own low-state chain (never a doorway or greyed chippy the street isn't offering; the map marks only open doors); a flower clicked drunk says NOT GATHERED · TOO DRUNK TO HOLD IT · COME BACK SOBER / "Let it go".
 - The Fetch: after the first glimpse he is already there (7 s, not 15).
 - A sweep that opened all 207 story passages found no Harlowe errors.
+- NEXT updates the moment a flower is taken (passage **Next Redraw**, run by the footer and the five flower hooks; a script copies the label into the lifted header).
+- New-player opening playthrough (phone and desktop, from a true Start): an edge pointer on the map ("NEXT · Place ▶") when the NEXT door is out of view; NEXT says HERE inside the place it names, is hidden through the opening and the poem's scenes, and its under-40 sobering detour leads only on Dean Street (inside a quest only under 30); the Alba hint is readable on a phone (10.5px); Name Your Book's box says "Type your title…"; touch screens read TAP; the waltz rules mention tapping.
 
 ## New words (functional signposts, for Sam to rewrite or cut)
-NEXT · PLACE (and "THE PILLARS · SEEK THE SHORE" during the page quest); "Next: place" in the map bar; "A FLOWER IS HERE · LOOK CLOSER"; "SOMETHING HERE TO TAKE · LOOK CLOSER"; LILY'S FLOWERS n OF 3 · HAUNTS n OF 6 (Fetch); FOR THE DAWN · … (notebook); NOT GATHERED · TOO DRUNK TO HOLD IT · COME BACK SOBER and "Let it go" (drunk flower card). The Fetch glimpse reuses his own sentence without its opening "You can leave now, perhaps it's wise to get out. But".
+NEXT · PLACE (and "THE PILLARS · SEEK THE SHORE" during the page quest); "Next: place" in the map bar; "A FLOWER IS HERE · LOOK CLOSER"; "SOMETHING HERE TO TAKE · LOOK CLOSER"; LILY'S FLOWERS n OF 3 · HAUNTS n OF 6 (Fetch); FOR THE DAWN · … (notebook); NOT GATHERED · TOO DRUNK TO HOLD IT · COME BACK SOBER and "Let it go" (drunk flower card); NEXT · HERE; "NEXT · Place ▶" (map edge pointer); "Type your title…"; "Tap the lanes" (waltz rules on touch). The Fetch glimpse reuses his own sentence without its opening "You can leave now, perhaps it's wise to get out. But".
 
 ## For Sam (parked, his call)
 - The thresholds 3 flowers / 6 haunts. Should Alba Complete also need more (e.g. all five flowers), or the Sanctum earn a higher ending? Nothing does yet.
@@ -30,7 +32,12 @@ NEXT · PLACE (and "THE PILLARS · SEEK THE SHORE" during the page quest); "Next
 - "It wasn't raining till you got inside" after the storm road (his wording).
 - The forced ends ("Give up. Sleep here.", "Lose", the second blackout's dawn) still offer one "Not yet" at the first meeting (unchanged design); only the second meeting, the Coach fire and the Sanctum are final.
 - LINE 3 says "You shall get out alive" and "The dawn is coming", but with too few flowers/haunts the Fetch is a glimpse.
-- NEXT is redrawn on each passage, not after in-place links (e.g. Retch raising sobriety on the same screen).
+- NEXT is redrawn on each passage and when a flower is taken, not after other in-place links (e.g. Retch raising sobriety on the same screen).
+- The stats primer first appears at the French or the first haunt; a NEXT-follower meets it late (at O'Flatterly's), after morale and sobriety have already moved. Fire it on the first stat change?
+- Hint slips stack by his 7 Oct design; the open-night slip can open alongside the coin card, and its "keep exploring with the poem complete" refers to an ending not yet seen (his text).
+- AOIFE's ring card covers the Pillars' opening verse on the first entry (hold it for a beat?).
+- A spent door (the Ginger Light after Red) says "Not tonight." in the caption bar.
+- The Night Ahead's typewriter (~40 s) can't be skipped.
 
 ## Gotcha (new)
 Inside a `(set:)`, `(($sawJeffrey is true) and ($ringSnoozed is not true) and ...)` evaluated TRUE with `$sawJeffrey` false. Split such guards into their own `(unless:)`. Temp variables set in a `(display:)`ed passage don't reach the caller; use story variables (`$nextId`, `$nextShown`).

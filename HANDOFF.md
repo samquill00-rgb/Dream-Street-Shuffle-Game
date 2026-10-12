@@ -1,3 +1,22 @@
+# The parked list, group A — 2026-10-12 (later)
+
+Sam: "go on all of A" (the seven fixes I offered from the overnight's parked list). Branch `claude/eager-ptolemy-5k37rz`. Each tested in headless Chromium; the all-passage sweep re-run.
+
+1. **AOIFE's ring over the Pillars verse** and 2. **ring cards over a room's opening box.** `window.dssRingHold` (beside `_passageGen`): a `.phone-ringing` card that arrives beside words of the room's own is held (`.ring-wait`, display none, no blur veil, no bell) for 2 s + 30 ms a character, at most 7 s, then rings; closing a 3D room's opening box rings it at once. The beat restarts when a room lifts the words into its box. A card with nothing beside it rings at once. In practice: the Pillars' first visit ~7 s, a room whose box holds only its name ~2.5 s, the phone box's scarlet line ~4.5 s. The 3D telephone stays dark until it rings.
+3. **The stats primer** now also comes the first time morale or sobriety leaves 70, on the next screen where NEXT may show (new footer passage **Primer Footer**). The French and the haunt boxes still raise it if they come first.
+4. **The typewriter pages** (The Night Ahead and the rest): a click or tap on the page (not on a button or link), or Space or Enter, sets the whole page at once and shows its links.
+5. **NEXT after in-place links.** Next Footer carries a hidden `(link-repeat: "next-poke")` that runs Next Redraw into `?nextpokeout`; a click on a link or hook that leaves the passage the same 160 ms later presses it (script beside `_passageGen`; untrusted clicks count too, since the rooms' cards and strip press links by script). The click sound and the page-turn skip it.
+6. **The red door on the map** was the French's lit arch (and its red light on the street) at full strength while NEXT named elsewhere. While NEXT names an open door, the other venues' arches, spills and chevrons get `.soho-door-dim`, and their canvas light is halved (`buildGlow`). Name plates unchanged; every door still a way in.
+7. **"The Alba is complete. Centre Point waits."** (his) now waits for $needLilies flowers and $needHaunts haunts too; before that the hint is silent and NEXT leads.
+
+Noticed, not changed: the map's edge pointer "NEXT · The Pillars ◥" can sit right on the French's arch near the start of Dean Street, which reads as if the French were NEXT.
+
+Gotcha: `buildGlow` and the map's other top-level draw functions can't see `hubFlag` (it lives inside the hub's closure); a ReferenceError there blanks the whole map canvas without a page error. Read `.dss-hub-flag[data-k=...]` directly.
+
+The rest of the overnight's "For Sam (parked)" list below (group B) still waits on his calls.
+
+---
+
 # Overnight pass — 2026-10-12 (Sam's playthrough notes)
 
 Sam played through, listed seven notes and went to sleep: "fix these methodically then work again and again on making the whole thing a playable and enjoyable experience (in terms of ordering)". All on PR #103 (branch `claude/fervent-albattani-tfhn90`). Every change was tested in headless Chromium; two full-night playthroughs (one following NEXT from a true Start to Alba Complete) found the night completable with no soft-locks.

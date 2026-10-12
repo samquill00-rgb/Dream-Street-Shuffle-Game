@@ -4856,6 +4856,8 @@ function buildGlow(doors) {
   DOORS.forEach(function(d){
     var st = doors[d.id].status; if (st === 'shut') return;
     var a = st === 'open' ? 0.82 : 0.18;
+    // 2026-10-12 (item 6): while NEXT names another open door, a venue's light on the street is turned down too
+    var nxEl = document.querySelector('.dss-hub-flag[data-k="next"]'), nxD = nxEl ? nxEl.textContent.trim() : ''; if (st === 'open' && !d.event && nxD && nxD !== d.id && doors[nxD] && doors[nxD].status === 'open') a = a * 0.5;
     if (d.id === 'north') { return; }
     if (d.event) {
       if (d.hidden || st !== 'open') return;
@@ -5027,6 +5029,11 @@ function init(container) {
   var overlays = [];
   function addOverlay(el, wx, wy) { el.dataset.wx = wx; el.dataset.wy = wy; el.dataset.dy = 0; stage.appendChild(el); overlays.push(el); return el; }
   var labels = {};
+  // 2026-10-12 (Sam, the overnight list item 6): every open venue's lit door (its arch, its spill of light, its chevron)
+  // shone at full strength, so the French's red one was the loudest thing on the map even when NEXT named somewhere
+  // else. While NEXT names an open door, the other venues' lit doors are dimmed (.soho-door-dim), and their light on
+  // the street at half strength (the canvas, above); their name plates are unchanged and every door is still a way in.
+  var nextDoor = hubFlag('next'), dimOthers = !!(nextDoor && doors[nextDoor] && doors[nextDoor].status === 'open');
   DOORS.forEach(function(d){
     var st = doors[d.id];
     if (st.status === 'shut' || (d.event && !d.sign)) return;
@@ -5069,14 +5076,17 @@ function init(container) {
         '<circle cx="15.6" cy="24.5" r="1.05" fill="#0b0a10"/>' +
         (st.status === 'open' ? '<circle cx="12" cy="9.5" r="1.6" fill="#fff8e2"/>' : '') +
         '</svg>';
+      var dimMe = dimOthers && d.id !== nextDoor && st.status === 'open';
+      if (dimMe) mk.classList.add('soho-door-dim');
       addOverlay(mk, (d.c + 0.5)*T, (d.r + 0.5)*T);
       var rot = side === 'e' ? 0 : side === 'w' ? 180 : side === 's' ? 90 : -90;
       var sp = document.createElement('div'); sp.className = 'soho-door-spill soho-door-spill-' + st.status;
       sp.style.setProperty('--door-glow', rgba(d.col, st.status === 'open' ? 0.8 : 0.22)); sp.style.setProperty('--rot', rot + 'deg');
       var mx = (d.c + d.fc) / 2 + 0.5 + (side === 'e' ? 0.45 : side === 'w' ? -0.45 : 0), my = (d.r + d.fr) / 2 + 0.5 + (side === 's' ? 0.45 : side === 'n' ? -0.45 : 0);
+      if (dimMe) sp.classList.add('soho-door-dim');
       addOverlay(sp, mx*T, my*T);
       if (st.status === 'open') {
-        var ch = document.createElement('div'); ch.className = 'soho-door-chev'; ch.textContent = '❮';
+        var ch = document.createElement('div'); ch.className = 'soho-door-chev' + (dimMe ? ' soho-door-dim' : ''); ch.textContent = '❮';
         ch.style.setProperty('--door-glow', rgba(d.col, 0.9)); ch.style.setProperty('--rot', rot + 'deg');
         addOverlay(ch, (d.fc + 0.5)*T, (d.fr + 0.5)*T);
       }
@@ -5185,6 +5195,29 @@ function init(container) {
     var ax = Math.max(4, Math.min(96, lx)), ay = Math.max(5, Math.min(95, ly));
     nextArrow.style.left = ax + '%'; nextArrow.style.top = ay + '%';
     nextArrow.style.transform = 'translate(' + (ax > 70 ? '-100%' : ax < 30 ? '0' : '-50%') + ',' + (ay > 70 ? '-100%' : ay < 30 ? '0' : '-50%') + ')';
+    // 2026-10-12 (Sam): near the start of Dean Street the pointer sat right on the French's lit door, so it read as if the
+    // French were NEXT. It now slides along its edge, a step at a time, to the nearest place clear of every other door's
+    // arch and name plate. Only worked out again when its spot on the edge changes.
+    var spotKey = Math.round(ax) + ',' + Math.round(ay) + ',' + id;
+    if (nextArrow._spot === spotKey) { if (nextArrow._slid) { nextArrow.style.left = nextArrow._slid[0] + '%'; nextArrow.style.top = nextArrow._slid[1] + '%'; } return; }
+    nextArrow._spot = spotKey; nextArrow._slid = null;
+    var alongX = (ay <= 5 || ay >= 95), sr = stage.getBoundingClientRect();
+    if (!sr.width || !sr.height) return;
+    var others = Array.prototype.filter.call(stage.querySelectorAll('.soho-door-mark, .soho-door-label'), function(e) { return e !== lab && e.style.visibility !== 'hidden' && e.getClientRects().length; })
+      .map(function(e) { return e.getBoundingClientRect(); });
+    function clear() {
+      var r = nextArrow.getBoundingClientRect(), pad = 4;
+      return !others.some(function(o) { return o.right > r.left - pad && o.left < r.right + pad && o.bottom > r.top - pad && o.top < r.bottom + pad && o.right > sr.left && o.left < sr.right && o.bottom > sr.top && o.top < sr.bottom; });
+    }
+    if (clear()) return;
+    // the side the NEXT door lies on is tried first, so the pointer stays on its way there
+    var sgn = ((alongX ? dx : dy) < 0) ? -1 : 1, steps = [6, 12, 18, 24, 32, 40].map(function(v) { return v * sgn; }).concat([6, 12, 18, 24, 32, 40].map(function(v) { return -v * sgn; }));
+    for (var si = 0; si < steps.length; si++) {
+      var nx = alongX ? Math.max(4, Math.min(96, ax + steps[si])) : ax, ny = alongX ? ay : Math.max(5, Math.min(95, ay + steps[si]));
+      nextArrow.style.left = nx + '%'; nextArrow.style.top = ny + '%';
+      if (clear()) { nextArrow._slid = [nx, ny]; return; }
+    }
+    nextArrow.style.left = ax + '%'; nextArrow.style.top = ay + '%';
   }
   // labels never overlap: the upper of any two that do steps up (never down onto its door)
   function settleLabels() {
@@ -11623,6 +11656,83 @@ if (e.target && e.target.id === 'fight-start-btn') window.startFightGame();
 
 // ====== PASSAGE GENERATION GUARD ======
 // Tracks passage navigation so scheduled popups can be cancelled if the player moves on.
+// 2026-10-12 (Sam, the overnight list items 1-2): a phone that rings the moment you walk in covered the room's
+// opening words (AOIFE's ring over the Pillars verse, LILY's second ring over the Coach's opening box). When a
+// ringing card arrives beside words of the room's own, it is held back (.ring-wait) for a reading beat, about
+// 2 s plus 30 ms a character, at most 7 s (a room's name alone, about 2.5 s), or until the room's opening box is
+// closed; then it rings as before. A card with nothing beside it rings at once.
+window.dssRingHold = (function() {
+  function roomWords(card) {
+    var root = card.closest('.dss-room-prose') || card.closest('tw-passage');
+    if (!root) return 0;
+    var n = 0, w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (w.nextNode()) {
+      var t = w.currentNode, pe = t.parentNode;
+      if (!t.nodeValue.trim() || !pe || pe.nodeType !== 1) continue;
+      if (pe.closest('.phone-ringing, tw-link, script, style, tw-include, .dss-claimed, .dss-claimed-wrap, .dss-key-offer, .prose-tilde')) continue;
+      if (!pe.getClientRects().length) continue;
+      n += t.nodeValue.replace(/\s+/g, ' ').trim().length;
+    }
+    return n;
+  }
+  function release(card) {
+    if (!card.classList.contains('ring-wait')) return;
+    card.classList.remove('ring-wait');
+    if (card._dssRingT) clearTimeout(card._dssRingT);
+    if (card.isConnected && window.dssAudio && window.dssAudio.phoneBell) window.dssAudio.phoneBell(3);
+  }
+  function hold(card) {
+    if (card._dssRingT) clearTimeout(card._dssRingT);
+    card._dssRingT = setTimeout(function() { release(card); }, Math.min(7000, 2000 + roomWords(card) * 30));
+  }
+  function scan() {
+    Array.prototype.forEach.call(document.querySelectorAll('.phone-ringing'), function(card) {
+      var root = card.closest('.dss-room-prose') || card.closest('tw-passage');
+      if (card._dssRingSeen) {
+        // a 3D room lifts the words into its opening box once it has loaded: the reading beat starts again from there
+        if (card.classList.contains('ring-wait') && root !== card._dssRoot) { card._dssRoot = root; hold(card); }
+        return;
+      }
+      card._dssRingSeen = true; card._dssRoot = root;
+      if (!roomWords(card)) return;
+      card.classList.add('ring-wait');
+      hold(card);
+      // in a 3D room, closing the opening box (its words put away) lets the phone ring straight away
+      var watchT = setInterval(function() {
+        if (!card.isConnected || !card.classList.contains('ring-wait')) { clearInterval(watchT); return; }
+        var panel = card.closest('.dss-room-prose');
+        if (!panel) return;
+        if (!panel.classList.contains('dss-room-prose-away')) { card._dssPanelSeen = true; return; }
+        if (card._dssPanelSeen) { clearInterval(watchT); release(card); }
+      }, 250);
+    });
+  }
+  var queued = false;
+  function watch() {
+    new MutationObserver(function() {
+      if (queued) return; queued = true;
+      Promise.resolve().then(function() { queued = false; scan(); });
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
+  return { scan: scan, release: release };
+})();
+// 2026-10-12 (Sam, the overnight list item 5): NEXT is redrawn after a click that stays on the same passage. A
+// click on a link or a clickable hook, and the passage still the same a moment later, presses the footer's hidden
+// "next-poke" link (Next Footer), which runs Next Redraw in place.
+(function() {
+  document.addEventListener('click', function(ev) {
+    if (!ev.target || !ev.target.closest) return; // a room's object cards and strip press the real link by script, so untrusted clicks count too
+    if (!ev.target.closest('tw-link, tw-enchantment, tw-hook, .enchantment-link, [data-raw]')) return;
+    if (ev.target.closest('.next-poke')) return;
+    var gen = window._passageGen;
+    setTimeout(function() {
+      if (window._passageGen !== gen) return;
+      var poke = document.querySelector('.next-poke tw-link');
+      if (poke) poke.click();
+    }, 160);
+  }, true);
+})();
 window._passageGen = 0;
 (function() {
   function watch() {
@@ -11699,8 +11809,11 @@ window._passageGen = 0;
                 // The bell stops as soon as we leave the ringing passage.
                 if (passageNode.querySelector('.phone-ringing')) {
                   var ringGen = window._passageGen;
+                  if (window.dssRingHold) window.dssRingHold.scan();
                   setTimeout(function(){
                     if (window._passageGen !== ringGen) return;
+                    // a card held back for the room's words rings when it is released (dssRingHold)
+                    if (document.querySelector('.phone-ringing.ring-wait')) return;
                     window.dssAudio.phoneBell(3);
                   }, 250);
                 } else {
@@ -15671,6 +15784,7 @@ if (overshoot > 0) {
 // same completion behaviour as before, so nothing that waited on "done" is
 // stranded.
 function finish() {
+unhookSkip();
 if (myGen !== (window._passageGen || 0)) return;
 cursor.classList.add('tw-cursor-fade');
 setTimeout(function() { cursor.style.display = 'none'; }, 800);
@@ -15689,8 +15803,29 @@ flashEls.forEach(function(el) { el.classList.add('flash-reveal-active'); });
 // paragraph begins (the playtest note: keep the typewriter, much faster, with
 // a breath between paragraphs). Indices walk paragraph -> node -> character.
 var pIdx = 0, nIdx = 0, cIdx = 0;
+// 2026-10-12 (Sam, the overnight list item 4): the opening page took about 40 s and could not be hurried. A click or
+// tap on the page (not on a button or link), or Space or Enter, now sets the whole page at once and shows its links.
+var skipped = false;
+function skipAll() {
+if (skipped) return;
+if (myGen !== (window._passageGen || 0) || !container.isConnected) { unhookSkip(); return; }
+skipped = true; unhookSkip();
+var last = null;
+for (var sp = 0; sp < paragraphs.length; sp++) for (var sn = 0; sn < paragraphs[sp].length; sn++) {
+var se = paragraphs[sp][sn]; if (se.node) { se.node.textContent = se.fullText; last = se.node; }
+}
+if (last && last.parentNode) last.parentNode.insertBefore(cursor, last.nextSibling);
+pIdx = paragraphs.length;
+finish();
+}
+function onSkipPointer(ev) { if (ev.target && ev.target.closest && ev.target.closest('button, a, input, textarea, select, tw-link, tw-expression, [role="button"]')) return; skipAll(); }
+function onSkipKey(ev) { if (ev.target && ev.target.closest && ev.target.closest('input, textarea, select')) return; if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); skipAll(); } }
+function unhookSkip() { document.removeEventListener('pointerdown', onSkipPointer, true); document.removeEventListener('keydown', onSkipKey, true); }
+document.addEventListener('pointerdown', onSkipPointer, true);
+document.addEventListener('keydown', onSkipKey, true);
 function typeStep() {
-if (myGen !== (window._passageGen || 0)) return; // passage swapped — abort
+if (skipped) return;
+if (myGen !== (window._passageGen || 0)) { unhookSkip(); return; } // passage swapped — abort
 if (!container.isConnected) return; // container removed from DOM
 if (pIdx >= paragraphs.length) { finish(); return; }
 var para = paragraphs[pIdx];
@@ -16236,6 +16371,7 @@ soloDebounce = setTimeout(checkSoloLink, 350);
   document.addEventListener('click', function(e) {
     var link = e.target && e.target.closest && e.target.closest('tw-link');
     if (!link) return;
+    if (link.closest('.next-poke')) return; // the footer's hidden NEXT redraw is silent
     var txt = (link.textContent || '').trim();
     if (txt === '·' || txt === '·' || txt === '') return;
     if (/^(?:←\s*)?BACK$/.test(txt)) return; // ← BACK has its own implication
@@ -16413,6 +16549,7 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     if (passing || e.defaultPrevented) return;
     var link = e.target && e.target.closest && e.target.closest('tw-link');
     if (!link || !link.closest('tw-passage, .dss-threshold, .dss-room-veil')) return; // the lifted header's NOTEBOOK stays instant
+    if (link.closest('.next-poke')) return; // the footer's hidden NEXT redraw is not a step
     var story = link.closest('tw-story'), tp = document.querySelector('tw-passage');
     if (!story || !tp) return;
     // Harlowe 3.3 puts no passage name on a link: a [[link]] sits in a link-goto expression; a
@@ -59442,7 +59579,10 @@ You don’t understand and smiling and then retreating, you strike, in the nifty
 <span class="night-cell" title="The night deepens through discoveries. There is no time limit."><!-- 2026-10-09, Sam: "get rid of the other after midnight", then "just get rid of the reader". No phase label shows at all now. The hidden span keeps the 0–3 number that the map darkening, the dawn birdsong and THE THIRST's small-hours gate still read, so that logic is parked with midnight, not cut. The old labels were "Before midnight", "After midnight", "Small hours", "Dawn awaits". -->\
 (print: "<span class='night-phase' data-night-phase='" + (text: $nightPhase) + "' hidden></span>")</span>
 </div>
-<div class="alba-hint">(if: $notebook is "stolen")[Your notebook is gone, and the poem with it.](else-if: _ac is 1)[One line is caught. Two more still to find.](else-if: _ac is 2)[Two lines, now. The third always close.](else-if: _ac >= 3)[The Alba is complete. Centre Point waits.]</div>
+<!-- 2026-10-12 (Sam, the overnight list item 7): the whole poem's line says Centre Point waits, but the Fetch only leads you
+     on once the night is lived ($needLilies flowers, $needHaunts haunts; the weighting), so until then it showed above a NEXT
+     still pointing at a flower or a haunt. It now waits for both; until then the hint is silent and NEXT leads. -->(set: _hlived to (($lilyCount is a number) and ($needLilies is not a number or $lilyCount >= $needLilies) and ($haunts is an array) and ($needHaunts is not a number or $haunts's length >= $needHaunts)))\
+<div class="alba-hint">(if: $notebook is "stolen")[Your notebook is gone, and the poem with it.](else-if: _ac is 1)[One line is caught. Two more still to find.](else-if: _ac is 2)[Two lines, now. The third always close.](else-if: _ac >= 3 and _hlived)[The Alba is complete. Centre Point waits.]</div>
 <!-- 2026-10-12 (Sam: the next task must be much clearer): the one place to go next, from Next Target; hidden on the hub's map screen's own bar, the endings and the night's opening pages -->(display: "Next Shown")(if: $nextShown)[(display: "Next Target")]|nexthint>[(if: $nextShown and ($nextLabel is not ""))[<div class="next-hint">NEXT · (print: $nextLabel)</div>]]
 (if: $hasLiver is true and ($confidence is a number and $sobriety is a number) and ($confidence < 10 or $sobriety < 10))[<div class="liver-hint">‘You’re running on fumes. Remember: Shelley’s liver in your notebook.’</div>]
 (set: _backHide to (a: "Talk to the critic", "None of us likes it!", "Turn to Copper", "Copper confronts", "Beaten", "St. John's Word", "Standing", "His round", "Talk to the Artists", "The Spanish Artist", "Sketch the Painter", "Shana Looks Again", "O'Flatterly introduction", "Lackland's Back Room", "Watch the decider", "You notice her", "You give him Red", "You give him John", "Title", "Start", "The Night Ahead", "Name Your Book", "Dawn", "White page", "Black page", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "PP Pong", "Ride Jeffrey Bernard's cow", "Fight starts", "Fight Victory", "Fight Defeat", "The phone call", "Lily phone call 1", "The dual ring", "After the call", "After Aoife", "The Painter's Gaze", "The Set", "Shana Reads", "Davy Merkin", "Return the page", "Give him the painting", "Bar Canvas Win", "Bar Canvas Lose", "Shana's Verdict", "Copper Word Accepted", "Stand your ground", "Approach the novelist", "Benito's Hour"))
@@ -67381,7 +67521,9 @@ animation: phoneRingingAppear 0.45s ease-out both, phoneRingingTremor 0.7s ease-
    Lifting the isolation only while a phone is ringing puts the popup back in
    tw-story's context, where its 99000 beats the blocker's 98999. */
 tw-passage:has(.phone-ringing) { isolation: auto !important; }
-tw-story:has(.phone-ringing)::before {
+/* 2026-10-12: a card held back for the room's opening words (dssRingHold) stays out of sight, veil and all, until it rings */
+.phone-ringing.ring-wait { display: none !important; }
+tw-story:has(.phone-ringing:not(.ring-wait))::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -69070,6 +69212,10 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 .soho-door-mark svg { display: block; width: 100%; height: auto; }
 .soho-door-mark-open { animation: sohoDoorBreathe 3.2s ease-in-out infinite; }
 .soho-door-mark-grey { opacity: 0.7; filter: none; }
+/* 2026-10-12: while NEXT names another door, an open venue's lit door is turned down: no breathing, a small glow */
+.soho-door-mark.soho-door-dim { animation: none; opacity: 0.6; filter: drop-shadow(0 0 3px var(--door-glow)); }
+.soho-door-spill.soho-door-dim { animation: none; opacity: 0.35; }
+.soho-door-chev.soho-door-dim { animation: none; opacity: 0.45; text-shadow: 0 0 2px #000; }
 @keyframes sohoDoorBreathe { 0%, 100% { filter: drop-shadow(0 0 4px var(--door-glow)) drop-shadow(0 0 12px var(--door-glow)); } 50% { filter: drop-shadow(0 0 7px var(--door-glow)) drop-shadow(0 0 22px var(--door-glow)); } }
 /* door labels: real type over the canvas, lit in the door's own colour; clicking one is the mouse way in */
 .soho-door-label { position: absolute; transform: translate(-50%, -50%); margin: 0; padding: 0.14em 0.5em 0.1em; background: rgba(6,5,10,0.86); border: 1px solid var(--door-col); border-radius: 2px; color: #efe2c4; font-family: 'Playfair Display', Georgia, serif; font-size: clamp(7.5px, 2.5cqw, 0.66em); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; line-height: 1.3; cursor: pointer; box-shadow: 0 0 10px var(--door-glow), 0 0 2px var(--door-glow); text-shadow: 0 0 6px var(--door-glow); z-index: 3; }
@@ -74802,10 +74948,22 @@ Massive earthworms are breaking through the floor!
 {<!-- 2026-10-12: the header renders before the passage's own (set:)s, so its NEXT lagged a screen behind (the overnight
      playthrough: it said CECIL COURT on O'Flatterly's Gift). The footer runs after them and redraws it. -->
 (display: "Next Redraw")
+<!-- 2026-10-12 (Sam, the overnight list item 5): a link that changes things without leaving the passage (a drink in
+     place, a talk that unfolds, a hook clicked open) left NEXT where it was until the next screen. After any such click
+     the script below presses this hidden link, which runs Next Redraw again in place. -->
+<span class="next-poke" hidden aria-hidden="true">(link-repeat: "next-poke")[(replace: ?nextpokeout)[(display: "Next Redraw")]]|nextpokeout>[]</span>
 }
 
 :: Next Redraw [system] {"position":"3350,2750","size":"100,100"}
 {<!-- recompute NEXT and redraw the header's line in place: the footer runs it after every passage, and a flower taken
      in a room runs it at once, so NEXT never lags what has just happened -->
 (display: "Next Shown")(if: $nextShown)[(display: "Next Target")(replace: ?nexthint)[(if: ($nextLabel is not ""))[<div class="next-hint">NEXT · (print: $nextLabel)</div>]]<span class="next-hint-src" hidden>(print: $nextLabel)</span><script>(function(){var s=document.querySelectorAll('.next-hint-src');var t=s.length?s[s.length-1].textContent.trim():'';if(!t)return;Array.prototype.forEach.call(document.querySelectorAll('.next-hint'),function(e){e.textContent='NEXT \u00b7 '+t;});})();</script>]
+}
+
+:: Primer Footer [footer] {"position":"3500,2600","size":"100,100"}
+{<!-- 2026-10-12 (Sam, the overnight list item 3): the primer (MORALE, SOBRIETY & HAUNTS) waited for the French or the
+     first haunt, so a player following NEXT met it late, after both bars had already moved. It now also comes the first
+     time either bar leaves its starting 70, on the next screen where NEXT may show (not the opening pages or a dream).
+     The French and the haunt boxes still raise it if they come first; $primerShown keeps it to once a night. -->
+(if: $primerShown is false and (($confidence is not 70) or ($sobriety is not 70)))[(display: "Next Shown")(if: $nextShown)[(set: $primerShown to true)<script>setTimeout(function(){ if(window.dssShowPrimer) window.dssShowPrimer(); }, 1200);</script>]]
 }

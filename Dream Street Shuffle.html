@@ -30944,7 +30944,8 @@ objects: {
 'cb': {
 'A cow': { now: 'What do you call a cow with no legs? Ground beef!', then: 'What do you call a cow with two legs? Lean beef!', id: 'Ha! Don\'t milk it, son!', chorus: true },
 'JEFFREY BERNARD': { now: '', then: '' },
-'JEFFREY BERNARD’S glass': { now: 'What\'s that beneath his glass?', then: 'To meet your heroes looks like carelessness.' },
+'JEFFREY BERNARD’S glass': { now: 'What\'s that beneath his glass?', then: 'To meet your heroes looks like carelessness.',
+  chorusOnce: { now: '[Sam: THE PRIME, the glass, chorus]', then: '[Sam: THE OLDBOY, the glass, chorus]', id: '[Sam: THE THIRST, the glass, chorus]', whenThirst: true } },
 'Optics': { now: '', then: '', id: 'The makings of a Long Island Iced Tea.' },
 'A telephone': { now: '', then: '' },
 'Windows': { now: '', then: '' },
@@ -30966,7 +30967,8 @@ objects: {
 'A turntable': { now: '', then: '' },
 'A door at the back': { now: '', then: '' },
 'LACKLAND': { now: '', then: '' },
-'Your book': { now: 'Not finished so much as abandoned.', then: '' },
+'Your book': { now: 'Not finished so much as abandoned.', then: '',
+  chorusOnce: { now: '[Sam: THE PRIME, your book, chorus]', then: '[Sam: THE OLDBOY, your book, chorus]', id: '[Sam: THE THIRST, your book, chorus]' } },
 'LACKLAND’S glass': { now: '', then: '', id: 'Which of us, shall we say, doth love it most, my Mr. LACKLAND?' },
 'A dish': { now: 'Here\'s looking at you, kid!', then: 'You\'ve seen this movie before.' },
 'A window': { now: '', then: '' },
@@ -31153,12 +31155,32 @@ return (w.sobrietyBelow != null && s.sob < w.sobrietyBelow) || (w.moraleBelow !=
 }
 // the line an earlier object speaks back (switch callbacksBothWays): the callback's own, or a pink slot
 function backLine(c, name) { return c.back != null ? c.back : '[Sam: now / ' + name + ', back after ' + c.at.split('/').slice(1).join('/') + ', ' + (ROOM_NAME[c.at.split('/')[0]] || '') + ']'; }
+// THE CHORUS ONCE A NIGHT (Sam, 2026-10-12: "1 and 2, once a night"): an object with chorusOnce speaks all three of
+// those lines in one look, THE PRIME, THE OLDBOY, THE THIRST, the first time it is looked at on a night; after that it
+// speaks as it always does. whenThirst: true holds it until THE THIRST is awake (JEFFREY BERNARD'S glass, so it does
+// not sit beside the cow's joke; Sam: "separate them in time"). It waits until all three lines are written.
+// The night it was heard is kept in localStorage 'dssVoicesChorus'.
+var KEYC = 'dssVoicesChorus', memChorus = null;
+function chorusMap() { if (memChorus) return memChorus; try { return JSON.parse(localStorage.getItem(KEYC) || '{}') || {}; } catch (e) { return {}; } }
+function chorusNow(room, name) {
+var co = ((V.objects[room] || {})[name] || {}).chorusOnce;
+if (!co) return null;
+if (!window.DSS_DEV && ORDER.some(function(v) { return !co[v] || unwritten(co[v]); })) return null;
+if (co.whenThirst && !idAwake()) return null;
+return chorusMap()[room + '/' + name] === nightNo() ? null : co;
+}
+function chorusHeard(room, name) {
+var m = chorusMap(); m[room + '/' + name] = nightNo();
+try { localStorage.setItem(KEYC, JSON.stringify(m)); } catch (e) { memChorus = m; }
+}
 // the lines an object speaks right now, in cast order: [{ voice, text }]
 function lines(room, name) {
 var p = room + '/' + name, base = (V.objects[room] || {})[name];
 if (!base) return [];
 // 2026-10-11 (Sam: the cow's joke, THE PRIME then THE OLDBOY then THE THIRST, in one look, every look): an object
 // marked chorus speaks all its own lines at once in voice order, THE THIRST whether it is awake or not
+var co = chorusNow(room, name);
+if (co) return ORDER.filter(function(v) { return co[v] && (window.DSS_DEV || !unwritten(co[v])); }).map(function(v) { return { voice: v, text: co[v] }; });
 if (base.chorus) return ORDER.filter(function(v) { return base[v] && (window.DSS_DEV || !unwritten(base[v])); }).map(function(v) { return { voice: v, text: base[v] }; });
 var pick = {};
 ORDER.forEach(function(v) { if (base[v] != null) pick[v] = base[v]; });
@@ -31189,11 +31211,12 @@ return spokenMap;
 }
 // the object looked at: seen, counted once per entry for the turns, and its lines marked spoken
 function look(room, name) {
-var p = room + '/' + name, dj = deja(room, name);
+var p = room + '/' + name, dj = deja(room, name), ch = chorusNow(room, name);
 see(p); countLook(p);
 var sp = spoken(), mine = sp[p] || (sp[p] = []), add = false;
 if (!dj) lines(room, name).forEach(function(l) { if (mine.indexOf(l.text) < 0) { mine.push(l.text); add = true; } });
 if (add) { try { localStorage.setItem(KEYS, JSON.stringify(sp)); spokenRaw = null; } catch (e) { memSpoken = sp; } }
+if (ch) chorusHeard(room, name);
 var m = dejaMap(), n = nightNo();
 if (dj) { m[p] = m[p] || { at: n - 1 }; m[p].shown = n; dejaSave(m); }
 else if (!m[p] && spent(room, name)) { m[p] = { at: n }; dejaSave(m); }
@@ -31204,6 +31227,7 @@ var p = room + '/' + name, base = (V.objects[room] || {})[name];
 if (!base) return false;
 // 2026-10-11 (Sam: "every time it tells bad jokes"): a chorus object is never used up; the cow tells its joke on every look
 if (base.chorus) return false;
+if (chorusNow(room, name)) return false;
 var mine = spoken()[p] || [], want = [];
 if (base.now) want.push(base.now);
 if (base.then) want.push(base.then);
@@ -31236,7 +31260,7 @@ function dejaSave(m) { try { localStorage.setItem(KEYD, JSON.stringify(m)); } ca
 function deja(room, name) {
 // an object may have its own line (deja: '...' on its entry in objects); every other object in the room speaks the room's
 var own = ((V.objects[room] || {})[name] || {}).deja, line = own || (V.deja || {})[room], p = room + '/' + name;
-if (!line || (!window.DSS_DEV && unwritten(line)) || !(spoken()[p] || []).length || !spent(room, name)) return '';
+if (!line || (!window.DSS_DEV && unwritten(line)) || !(spoken()[p] || []).length || !spent(room, name) || chorusNow(room, name)) return '';
 var m = dejaMap(), d = m[p], n = nightNo();
 // used up before this was built (no record): count it as an earlier night
 if (!d) { d = m[p] = { at: n - 1 }; dejaSave(m); }
@@ -31337,6 +31361,7 @@ lines(room, name).forEach(function(l) { shown[l.voice] = l.text; });
 function add(voice, kind, text, when, live) { out.push({ voice: voice, kind: kind, text: text, when: when, live: !!live, showing: shown[voice] === text && !!live }); }
 var idOk = idAwake();
 ORDER.forEach(function(v) { if (base[v] != null) add(v, 'own', base[v], v === 'id' ? 'when the id speaks' : 'always', v !== 'id' || idOk); });
+if (base.chorusOnce) ORDER.forEach(function(v) { add(v, 'chorus', base.chorusOnce[v] || '', 'once a night' + (base.chorusOnce.whenThirst ? ', THE THIRST awake' : ''), !!chorusNow(room, name)); });
 (V.callbacks || []).forEach(function(c) {
 if (c.at === p) add('now', 'callback', c.now, 'after ' + c.after, has(c.after));
 if (SW.callbacksBothWays && c.after === p) add('now', 'back', backLine(c, name), 'after ' + c.at, has(c.at));

@@ -116,7 +116,7 @@ Dream Street Shuffle
 (set: $tookLily4 to false)\
 (set: $tookLily5 to false)\
 (set: $sawPentangle to false)\
-<script>window._dssSawPentangle=false;window._dssMatchPopupDone=false;try{sessionStorage.removeItem('dssMapHintDone');}catch(e){}</script>\
+<script>window._dssSawPentangle=false;window._dssMatchPopupDone=false;window.__dssDir='';try{sessionStorage.removeItem('dssMapHintDone');sessionStorage.removeItem('dssDirections');}catch(e){}</script>\
 (set: $visitedCentrePoint to false)\
 (set: $sawAstralReveal to false)\
 (set: $lilyHintShown to false)\
@@ -5096,7 +5096,9 @@ function init(container) {
     }
     if (d.id === 'north') { ltx = 18; lty = -1.3; }
     if (d.id === 'cecil') { ltx = 49.4; lty = 36.6; }
-    if (d.id === 'ginger') { ltx = 21.6; lty = 26.5; }
+    // 2026-10-13 (Sam: the Ginger Light "as it is first shown is too big and obscures the actual bit you need to walk to"): its plate
+    // stands up and to the right of the corner, over the building, so the lamp and the corner you walk to stay in view
+    if (d.id === 'ginger') { ltx = 24.4; lty = 24.9; }
     el.style.setProperty('--door-col', rgba(d.col, 1));
     el.style.setProperty('--door-glow', rgba(d.col, st.status === 'open' ? 0.75 : 0.0));
     el.setAttribute('aria-label', d.name + (st.status === 'open' ? '' : (st.status === 'grey' ? '. ' + st.label : '. Not tonight.')));
@@ -5313,6 +5315,8 @@ function init(container) {
   refreshBar();
 
   function enter(door) {
+    // arriving where a slip directed you puts the directions away
+    if (window.dssDirections) { var dl = window.dssDirections.get(); if (dl && dl.split(',').map(function(v) { return v.trim(); }).indexOf(door.id) >= 0) window.dssDirections.set(''); }
     var st = doors[door.id];
     if (st.status !== 'open' || !st.link) { refreshBar(); return; }
     S.entering = door; S.enterT = 0;
@@ -5601,9 +5605,17 @@ function init(container) {
   }
   function drawCecilThread(x, cx, cy) {
     for (var ti = 0; ti < THREADS.length; ti++) drawOneThread(x, cx, cy, THREADS[ti]);
+    // a slip's "Get Directions" (2026-10-13): a warm thread to the nearest open door it names
+    var dirs = window.dssDirections ? window.dssDirections.get() : '';
+    if (dirs) {
+      var best = null, bestLen = 1e9;
+      dirs.split(',').forEach(function(id) { id = id.trim(); var dd = doorById(id); if (!dd || !doors[id] || doors[id].status !== 'open') return; var pth = routeToCecil(dd); if (pth && pth.length < bestLen) { best = id; bestLen = pth.length; } });
+      window.__dssDirBest = best || '';
+      if (best) drawOneThread(x, cx, cy, { id: best, col: [255, 214, 140], always: true });
+    }
   }
   function drawOneThread(x, cx, cy, spec) {
-    if (hubFlag(spec.flag) !== 'on') return;
+    if (!spec.always && hubFlag(spec.flag) !== 'on') return;
     if (!doors[spec.id] || doors[spec.id].status !== 'open') return;
     var d = doorById(spec.id);
     if (!d) return;
@@ -5619,6 +5631,7 @@ function init(container) {
       if (px < cx - T || px > cx + W + T || py < cy - T || py > cy + VR * T + T) continue;
       var lead = head - i;
       var a = 0.10 + ((lead >= 0 && lead < 10) ? (1 - lead / 10) * 0.30 : 0);
+      if (spec.always) a = Math.min(1, a * 2.2 + 0.08); // a slip's directions burn brighter than the errands' threads
       if (i < 4) a *= i / 4;                       // don't pool around the player's own feet
       if (n - i < 3) a += 0.08;                    // and gather a little at the mouth
       var g = x.createRadialGradient(px, py, 0.5, px, py, 9);
@@ -6996,7 +7009,7 @@ window.__dssHintPassage = function() {
 // when the passage changes before it can show (the primer, queued behind the Pillars' opening box, was lost for the night
 // when the player answered AOIFE's call from inside the box; $primerShown was already set).
 window.dssInlineHint = function(html, opt) {
-  window.__dssHintQueue.push({ html: html, passage: (opt && opt.sticky) ? null : window.__dssHintPassage() });
+  window.__dssHintQueue.push({ html: html, passage: (opt && opt.sticky) ? null : window.__dssHintPassage(), go: (opt && opt.go) || null });
   if (!window.__dssHintBusy) window.__dssHintNext();
 };
 // A new passage sends the old passage's slips on their way, read or not (Sam, 2026-10-09: they stayed until
@@ -7052,9 +7065,9 @@ window.__dssHintNext = function() {
   var item = window.__dssHintQueue.shift();
   if (item === undefined) return;
   window.__dssHintBusy = true;
-  window.__dssHintShow(item.html, item.passage);
+  window.__dssHintShow(item.html, item.passage, item.go);
 };
-window.__dssHintShow = function(html, passage) {
+window.__dssHintShow = function(html, passage, go) {
   try {
     // THE STACK (Sam, 2026-10-07: "don't ever fade them, just make the cross more obvious to encourage
     // closing them"). No slip leaves on its own any more. Each one stays until its × or its paper is
@@ -7094,6 +7107,14 @@ window.__dssHintShow = function(html, passage) {
     inner.appendChild(body);
     card.appendChild(closer);
     card.appendChild(inner);
+    // 2026-10-13 (Sam: "When you get a suggestion in the slips, there should be a 'Get Directions' option, which lights up a
+    // path to where you are being directed"): a slip that names a place carries go (door ids, nearest first on the map);
+    // the button lights the way on the Dean Street map until you reach it (window.dssDirections).
+    if (go && window.dssDirections) {
+      var gd = document.createElement('button'); gd.type = 'button'; gd.className = 'dss-hint-go'; gd.textContent = 'Get Directions';
+      gd.addEventListener('click', function(ev) { ev.stopPropagation(); window.dssDirections.set(go); gd.textContent = 'Directions lit'; gd.disabled = true; });
+      card.appendChild(gd);
+    }
     stack.appendChild(card);
     requestAnimationFrame(function() { card.classList.add('in'); });
     setTimeout(function() { card.classList.add('in'); }, 120);   // backgrounded tabs stall rAF
@@ -7167,7 +7188,9 @@ window.__dssHintShow = function(html, passage) {
     setTimeout(step, 420);
   } catch (e) { window.__dssHintBusy = false; }
 };
-window.wordToTheWisePopup = function(message) { window.dssInlineHint(message); };
+window.wordToTheWisePopup = function(message, go) { window.dssInlineHint(message, go ? { go: go } : null); };
+// the place a slip has directed you to: a list of map door ids ('chippy,doorway'); the map lights the way to the nearest open one
+window.dssDirections = { get: function() { try { return sessionStorage.getItem('dssDirections') || ''; } catch (e) { return window.__dssDir || ''; } }, set: function(v) { window.__dssDir = v || ''; try { if (v) sessionStorage.setItem('dssDirections', v); else sessionStorage.removeItem('dssDirections'); } catch (e) {} } };
 
 
 
@@ -11725,6 +11748,75 @@ if (e.target && e.target.id === 'fight-start-btn') window.startFightGame();
 // ringing card arrives beside words of the room's own, it is held back (.ring-wait) for a reading beat, about
 // 2 s plus 30 ms a character, at most 7 s (a room's name alone, about 2.5 s), or until the room's opening box is
 // closed; then it rings as before. A card with nothing beside it rings at once.
+// THE LORE AS FOOTNOTES (2026-10-13, Sam: the 'Lore' passages "seem like something from an older version of the game now";
+// his choice, footnotes). The passages are unchanged: each (link: "⟡ LORE: Title ⟡") is hidden and a small dagger is set at
+// the end of the sentence before it; the dagger, or a room object's button that holds the same link, presses the link,
+// and what it reveals (his words, Harlowe's own hook) is lifted into a note card headed with the title. Closing the card
+// keeps the note; the dagger opens it again.
+window.dssLore = (function() {
+  var RX = /^\s*(?:⟡\s*)?LORE:\s*/; // the links' ornament script takes the ⟡ off their text
+  function isLore(t) { return RX.test(t || ''); }
+  function titleOf(t) { return String(t || '').replace(RX, '').replace(/\s*⟡\s*$/, '').trim(); }
+  var notes = {};
+  function close() { var o = document.getElementById('dss-lore-overlay'); if (o) { o.classList.add('out'); setTimeout(function() { if (o.parentNode) o.parentNode.removeChild(o); }, 250); } }
+  function show(title) {
+    var held = notes[title]; if (!held) return;
+    close();
+    var o = document.createElement('div'); o.id = 'dss-lore-overlay';
+    var c = document.createElement('div'); c.className = 'dss-lore-card'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', title);
+    var x = document.createElement('button'); x.type = 'button'; x.className = 'dss-lore-x'; x.setAttribute('aria-label', 'Close'); x.textContent = '×';
+    var h = document.createElement('div'); h.className = 'dss-lore-title'; h.textContent = '† ' + title;
+    var b = document.createElement('div'); b.className = 'dss-lore-body'; b.appendChild(held);
+    if (held.querySelector('.lore-box > strong')) h.style.display = 'none'; // the note carries its own heading (his): no second one
+    c.appendChild(x); c.appendChild(h); c.appendChild(b); o.appendChild(c); document.body.appendChild(o);
+    function done() { if (held.parentNode === b) b.removeChild(held); close(); document.removeEventListener('keydown', onKey, true); }
+    function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); done(); } }
+    x.addEventListener('click', done);
+    o.addEventListener('click', function(ev) { if (ev.target === o) done(); });
+    document.addEventListener('keydown', onKey, true);
+    requestAnimationFrame(function() { o.classList.add('in'); try { x.focus({ preventScroll: true }); } catch (e) {} });
+  }
+  // a LORE link pressed (its dagger, or a room card's button): gather what it reveals into the note, then show the card
+  document.addEventListener('click', function(ev) {
+    var l = ev.target && ev.target.closest && ev.target.closest('tw-link');
+    if (!l || !isLore(l.textContent)) return;
+    var t = titleOf(l.textContent), hook = l.parentElement;
+    if (notes[t]) { ev.preventDefault(); ev.stopImmediatePropagation(); show(t); return; }
+    setTimeout(function() {
+      if (!hook || !hook.isConnected) return;
+      var frag = document.createElement('div'); frag.className = 'dss-lore-held';
+      Array.prototype.slice.call(hook.childNodes).forEach(function(n) { if (!(n.nodeType === 1 && n.tagName === 'TW-LINK')) frag.appendChild(n); });
+      hook.style.display = 'none';
+      notes[t] = frag; show(t);
+    }, 80);
+  }, true);
+  function placeDagger(l) {
+    if (l._dssLore) return; l._dssLore = true;
+    var t = titleOf(l.textContent), wrap = l.closest('tw-expression') || l.parentElement || l;
+    if (l.classList.contains('dss-claimed') || l.closest('.dss-claimed, .dss-claimed-wrap')) return; // a room object's card carries it
+    var fn = document.createElement('span'); fn.className = 'lore-fn'; fn.textContent = '†'; fn.title = t; fn.setAttribute('role', 'button'); fn.tabIndex = 0; fn.setAttribute('aria-label', 'Note: ' + t);
+    fn.addEventListener('click', function(ev) { ev.stopPropagation(); if (notes[t]) show(t); else if (l.isConnected) l.click(); });
+    fn.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); fn.click(); } });
+    // the end of the sentence before the link: skip line breaks and blank text back to the last words
+    // (skip line breaks, scripts and anything without words, then sit after the last words inside what is found)
+    function lastWords(el) { var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), last = null; while (w.nextNode()) { var tn = w.currentNode; if (tn.nodeValue.trim() && !tn.parentNode.closest('script, style, tw-link, svg, [hidden]')) last = tn; } return last; }
+    var prev = wrap.previousSibling, spot = null;
+    while (prev && !spot) {
+      if (prev.nodeType === 3 && prev.nodeValue.trim()) spot = prev;
+      else if (prev.nodeType === 1 && !/^(SCRIPT|STYLE|SVG|TW-LINK|BUTTON)$/i.test(prev.tagName) && !prev.classList.contains('lore-hidden-link')) spot = lastWords(prev);
+      if (!spot) prev = prev.previousSibling;
+    }
+    if (spot) spot.parentNode.insertBefore(fn, spot.nextSibling);
+    else wrap.parentNode.insertBefore(fn, wrap);
+    wrap.classList.add('lore-hidden-link');
+  }
+  function scan() { Array.prototype.forEach.call(document.querySelectorAll('tw-link'), function(l) { if (isLore(l.textContent)) placeDagger(l); }); }
+  var q = false;
+  function watch() { new MutationObserver(function() { if (q) return; q = true; setTimeout(function() { q = false; scan(); }, 60); }).observe(document.body, { childList: true, subtree: true }); }
+  if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
+  return { scan: scan, show: show };
+})();
+window.dssLoreLabel = function(t) { return /^\s*(?:⟡\s*)?LORE:/.test(t || '') ? '† ' + String(t).replace(/^\s*(?:⟡\s*)?LORE:\s*/, '').replace(/\s*⟡\s*$/, '').trim() : t; };
 window.dssRingHold = (function() {
   function roomWords(card) {
     var root = card.closest('.dss-room-prose') || card.closest('tw-passage');
@@ -16524,6 +16616,7 @@ soloDebounce = setTimeout(checkSoloLink, 350);
         tagExisting();
         try {
           var seenSet = window.dssSeenLore;
+          if (window.dssLore) return; // 2026-10-13: LORE notes are footnotes now (dssLore); a note read before is not printed inline again
           if (!seenSet || !seenSet.size) return;
           var preBoxes = new Set();
           var preDoc = document.querySelectorAll('.lore-box');
@@ -23724,7 +23817,7 @@ var keyActs = keyLinks(spot), keyOffer = keyActs.length ? keyActs[0].closest('.d
 var html = '<div style="font:11px \'Courier New\',monospace;letter-spacing:3px;color:' + cDim + ';margin-bottom:6px;text-transform:uppercase;">' + spot.name + '</div>';
 if (acts.length > keyActs.length && !spot.keepLine) {
 var prose = spot.prose ? spot.prose() : '';
-if (prose) html += '<div style="margin-bottom:4px;">' + prose.replace(/</g, '&lt;') + '</div>';
+if (prose) html += '<div style="margin-bottom:4px;white-space:pre-line;">' + prose.replace(/</g, '&lt;') + '</div>';
 } else if (spot.keepLine && !(keyOffer && keyOffer.querySelector('.dss-key-blurb') && ((window.DSS_VOICES || {}).switches || {}).keyCardOneLine)) {
 // Sam (2026-10-07 23:55): no object descriptions; a card is the name, the voices and the buttons. Only an
 // object marked keepLine (the gents door, Trisha's back door) still prints its line: Sam's own (2026-10-08)
@@ -23755,7 +23848,7 @@ Array.prototype.forEach.call(card.querySelectorAll('.dss-card-keyart svg'), func
 var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; keyable(b);
+b.className = 'fi-action'; b.textContent = window.dssLoreLabel ? window.dssLoreLabel(link.textContent.trim()) : link.textContent.trim(); b.style.cssText = BTN; keyable(b);
 if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
 if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
@@ -24944,6 +25037,8 @@ function lilyHook(n) { var pass = window.dssRoomScope(fiHost); if (!pass) return
 function byText(texts) {
 return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; });
 }
+// 2026-10-13 (Sam): a path's introduction (hidden in the passage as .fr-path-intro) is printed on its figure's card
+function frIntro(k) { var pass = window.dssRoomScope(fiHost); var e = pass && pass.querySelector('.fr-path-intro[data-for="' + k + '"]'); if (!e) return ''; return Array.prototype.map.call(e.querySelectorAll('.fr-p'), function(p) { return p.textContent.replace(/\s+/g, ' ').trim(); }).join('\n\n'); }
 var HOTSPOTS = [
 { root: photoG, name: 'Photographs', pos: [0.2, 1.95, -2.4], tgt: [0.9, 2.0, -4.5], haloAt: [0.4, 2.0, -4.4], haloSc: 1.4 },
 { root: phoneG, name: 'A telephone', pos: [-2.2, 1.6, 0.6], tgt: [-3.45, 1.32, -0.35],
@@ -24961,10 +25056,12 @@ actions: function() { return byText(['Get a drink at the bar']); } },
 { root: ghosts[0].hit, name: 'A man at the bar', pos: [-0.6, 1.45, 1.9], tgt: [-1.55, 1.15, 0.9], figure: true,
 actions: function() { return passageLinks('.guided-link tw-link').filter(function(l) { return l.textContent.trim() === 'Approach'; }); } },
 { root: ghosts[2].hit, name: 'A novelist', pos: [1.2, 1.45, -0.6], tgt: [0.37, 1.15, -2.0], figure: true,
+prose: function() { return frIntro('novelist'); },
 actions: function() { return byText(['Speak to him']); } }, // 2026-10-11, Sam: the novelist's button is "Speak to him"; the man at the bar keeps "Approach"
 { root: winG, name: 'A window', pos: [2.2, 1.7, -1.5], tgt: [3.7, 1.9, -2.4], haloAt: [3.6, 1.95, -2.4], haloSc: 1.1,
 actions: function() { return byText(['The Colony Room is just round the corner.']).concat(lilyHook(5)); } },
 { root: ghosts[1].hit, name: 'A painter', pos: [-0.35, 1.45, 0.75], tgt: [-1.25, 1.15, -0.3], figure: true,
+prose: function() { return frIntro('artists'); },
 actions: function() { return byText(['Approach the artists', 'Sketch him on a napkin']); } }
 ];
 // ---------- the hover, the card, the resting glow, the reveal and the words: shared with every room (window.dssRoomPlay) ----------
@@ -53882,7 +53979,7 @@ Better not tomorrow.
 <span class="dss-hub-flag" data-k="notebook" style="display:none">(print: $notebook)</span>\
 <!-- 2026-09-28 drink route: the stage the map can read. blackout / far / loose / empty. -->\
 <span class="dss-hub-flag" data-k="drunk" style="display:none">(cond: $sobriety < 10, "blackout", $sobriety < 30, "far", $sobriety < 60, "loose", "")</span>\
-(if: $hasMissingPage is true and $returnedPage is false and $pageReminderShown is false)[(set: $pageReminderShown to true)<script>setTimeout(function(){ if(window.dssInlineHint) window.dssInlineHint("Page 93 is in your pocket. INIS O&#39;FLATTERLY is waiting for it in Cecil Court."); }, 1100);</script>]\
+(if: $hasMissingPage is true and $returnedPage is false and $pageReminderShown is false)[(set: $pageReminderShown to true)<script>setTimeout(function(){ if(window.dssInlineHint) window.dssInlineHint("Page 93 is in your pocket. INIS O&#39;FLATTERLY is waiting for it in Cecil Court.", { go: "cecil" }); }, 1100);</script>]\
 <span class="dss-hub-flag" data-k="thread-cecil" style="display:none">(if: $knowsCecilCourt is true and $returnedPage is false)[on]</span>\
 (set: _ronSeen to false)(if: $visited is a datamap and $visited contains "Ronnies" and $visited's Ronnies is true)[(set: _ronSeen to true)]\
 <span class="dss-hub-flag" data-k="thread-ronnies" style="display:none">(if: $knowsRonnies is true and _ronSeen is false)[on]</span>\
@@ -53954,12 +54051,12 @@ Someone’s on the corner.
 
 <!-- 2026-09-16, spacing: this used to fire on hub visit 2, the same screen as the open-night slip (and the ledger tip), minutes after the 900-character primer inside the first venue. Now hub visit 4: one lesson per hub visit, open night (2), ledger (3), door marks (4). Order unchanged. -->\
 (if: $returns >= 4 and $visited's French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)<script>setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);</script>]
-(if: $hasLiver is true and ($confidence < 30 or $sobriety < 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You’re seriously flagging. You’ve still got Shelley’s liver. Now’s a good time to eat it.");},300);</script>](else-if: $returns >= 3 and $confidence < 30 and $sobriety < 30 and ($hadChippy is false or $hadBreather is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowBoth is false)[(set: $shownLowBoth to true)<span id="wtw-msg-low-both" style="display:none">(if: $hadChippy is false and $hadBreather is false)[You’re in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You’re in a bad way. Get some grub at the chippy.](else:)[You’re in a bad way. Find a doorway. Catch your breath.]</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-both');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},300);</script>]
+(if: $hasLiver is true and ($confidence < 30 or $sobriety < 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You’re seriously flagging. You’ve still got Shelley’s liver. Now’s a good time to eat it.");},300);</script>](else-if: $returns >= 3 and $confidence < 30 and $sobriety < 30 and ($hadChippy is false or $hadBreather is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowBoth is false)[(set: $shownLowBoth to true)<span id="wtw-msg-low-both" style="display:none">(if: $hadChippy is false and $hadBreather is false)[You’re in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You’re in a bad way. Get some grub at the chippy.](else:)[You’re in a bad way. Find a doorway. Catch your breath.]</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-both');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent,'chippy,doorway');},300);</script>]
 (if: $hadChippy is false)[[[The Chippy|Approach Chinese Fish and Chips]]
 ](if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]]
-](else-if: $returns >= 3 and $confidence < 40 and $hadChippy is false and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowConf is false)[(set: $shownLowConf to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You seem hungry. Get some grub at the chippy.");},300);</script>]
+](else-if: $returns >= 3 and $confidence < 40 and $hadChippy is false and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowConf is false)[(set: $shownLowConf to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You seem hungry. Get some grub at the chippy.","chippy");},300);</script>]
 [[The Chippy|Approach Chinese Fish and Chips]]
-](else-if: $returns >= 3 and $sobriety < 40 and ($hadBreather is false or $hadChippy is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowSobr is false)[(set: $shownLowSobr to true)<span id="wtw-msg-low-sob" style="display:none">Flagging again. You can fix this with a piss or some food. Find a doorway or the chippy.</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-sob');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},300);</script>]
+](else-if: $returns >= 3 and $sobriety < 40 and ($hadBreather is false or $hadChippy is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowSobr is false)[(set: $shownLowSobr to true)<span id="wtw-msg-low-sob" style="display:none">Flagging again. You can fix this with a piss or some food. Find a doorway or the chippy.</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-sob');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent,'doorway,chippy');},300);</script>]
 (if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]](else-if: $hadChippy is false)[[[The Chippy|Approach Chinese Fish and Chips]]]
 ]]
 <!-- Defensive escape valve (audit N5/S7): the coach-urgent funnel above lives
@@ -57682,8 +57779,9 @@ You move to his table and place your drink on a little vacant patch among his pa
 <p class="script-line"><span class="script-speaker">You.</span> ‘I like books…’</p>
 
 <br>
-[[‘… but I don’t like all this drinking.’|None of us likes it!]]
-[[‘… but I don’t like poetry.’|None of us likes it!]]
+<!-- 2026-10-13 (Sam): the two replies on two lines (the line break between them was being lost) -->
+<div>[[‘… but I don’t like all this drinking.’|None of us likes it!]]</div>
+<div>[[‘… but I don’t like poetry.’|None of us likes it!]]</div>
 </div>
 
 :: Talk to the intimidating agent [venue-colony] {"position":"1400,700","size":"100,100"}
@@ -57811,13 +57909,8 @@ Outside, leaning upon Dean Street, with a glass in his hand gone stray from anot
 
 (unless: $justDranked is a boolean)[(set: $justDranked to false)]\
 (if: $justDranked is true)[(set: $justDranked to false)<span id="drink-type-data-french" style="display:none">(print: $lastDrink)</span><script>if(window.showDrinkPopupSafe){window.showDrinkPopupSafe(function(){var el=document.getElementById('drink-type-data-french');return (el&&el.textContent.trim())||'wine';},250);}else{setTimeout(function(){if(window.showDrinkPopup){var el=document.getElementById('drink-type-data-french');var t=(el&&el.textContent.trim())||'wine';window.showDrinkPopup(t);}},250);}</script>]
-(else-if: _fc <= 1 and ($frenchProseShown is not true))[(set: $frenchProseShown to true)As you walk in the bar drops down to silence, as if its speech were interrupted by a quick gasp for breath, the way a doe sometimes mistakes the wind in the grass for a wolf, stiffens, then goes about its day.
-
-At one end of the bar are the artists; you know them, they are famous.
-
-Stuffed into a barstool which his arsecheeks overhang, like clouds waiting to rain, is a stout man with his back to you. His leather jacket, somehow both parched and sweating, falls short at the neck, flashing a collar of balanic pink.
-
-Opposite him is the only man who clocks you, who is thin like verdaccio and hardly there at all.]
+(else-if: _fc <= 1 and ($frenchProseShown is not true))[(set: $frenchProseShown to true)As you walk in the bar drops down to silence, as if its speech were interrupted by a quick gasp for breath, the way a doe sometimes mistakes the wind in the grass for a wolf, stiffens, then goes about its day.]
+<!-- 2026-10-13 (Sam: "the text introducing the paths should be attached to each path"): the artists' paragraphs and the novelist's line, which stood in the first visit's opening, now come on that figure's card in the room (the painter's, the novelist's), after you click the figure and before you choose to go into its story. Sam's words, unchanged; the room reads them from these hidden spans. -->(if: not ($haunts contains $haunt1))[<div class="fr-path-intro" data-for="artists" hidden><span class="fr-p">At one end of the bar are the artists; you know them, they are famous.</span><span class="fr-p">Stuffed into a barstool which his arsecheeks overhang, like clouds waiting to rain, is a stout man with his back to you. His leather jacket, somehow both parched and sweating, falls short at the neck, flashing a collar of balanic pink.</span><span class="fr-p">Opposite him is the only man who clocks you, who is thin like verdaccio and hardly there at all.</span></div>](if: not ($haunts contains $haunt2))[<div class="fr-path-intro" data-for="novelist" hidden><span class="fr-p">In the corner, you spot a familiar face — a novelist now, though you knew him when he was a poet.</span></div>]
 <!-- 2026-10-07 (Sam: "it still shows the 'reentry prose' when you come in ... fold those bits of prose into the story loop after the click on the figure"): the second- and third-visit lines that stood here now come up from "French Reentry", once a visit, at the top of whichever loop the first clicked figure opens. -->
 
 <div class="prose-tilde">~</div>
@@ -57828,8 +57921,7 @@ Opposite him is the only man who clocks you, who is thin like verdaccio and hard
 (if: not ($haunts contains $haunt4))[<span class="guided-link">[[Approach|The Stranger at the French]]</span>]\
 (if: not ($haunts contains $haunt1))[[[Approach the artists|Talk to the Artists]]]\
 (if: ($haunts contains $haunt1) and $hasDrawing is false)[[[Sketch him on a napkin|Sketch the Painter]]]
-(if: not ($haunts contains $haunt2))[In the corner, you spot a familiar face — a novelist now, though you knew him when he was a poet.
-[[Speak to him|Approach the novelist]]]\
+(if: not ($haunts contains $haunt2))[[[Speak to him|Approach the novelist]]]\
 (if: ($haunts contains $haunt1) and ($haunts contains $haunt2) and ($haunts contains $haunt4))[(if: $tookLily5 is true)[<div class="venue-exhausted">[NOT NOW]</div>]
 [[Leave the French|Dean Street]]
 [[The Colony Room is just round the corner.|The Colony Room Door]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]]]
@@ -63345,6 +63437,19 @@ text-shadow: none;
 }
 
 /* ===== LORE BOX ===== */
+/* 2026-10-13: the LORE as footnotes (dssLore): the hidden link, the dagger in the prose and the note card */
+.lore-hidden-link { display: none !important; }
+.lore-fn { display: inline-block; vertical-align: super; font-size: 0.72em; line-height: 1; margin-left: 0.18em; padding: 0 0.15em; color: #d8b870; cursor: pointer; text-shadow: 0 0 8px rgba(216,184,112,0.45); font-style: normal; transition: color 0.2s, text-shadow 0.2s; }
+.lore-fn:hover, .lore-fn:focus-visible { color: #ffe2a0; text-shadow: 0 0 12px rgba(255,220,150,0.8); outline: none; }
+#dss-lore-overlay { position: fixed; inset: 0; z-index: 9999990; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; opacity: 0; transition: opacity 0.3s ease; }
+#dss-lore-overlay.in { opacity: 1; } #dss-lore-overlay.out { opacity: 0; }
+.dss-lore-card { position: relative; box-sizing: border-box; width: min(560px, 100%); max-height: 86vh; overflow-y: auto; padding: 1.6em 1.9em 1.5em; background: linear-gradient(180deg, #1c1408, #0c0804); border: 1px solid rgba(184,154,96,0.42); outline: 1px solid rgba(184,154,96,0.13); outline-offset: 5px; box-shadow: 0 0 40px rgba(0,0,0,0.65); color: #d4c4a8; font-family: 'Crimson Text', Georgia, serif; }
+.dss-lore-title { font-family: 'Playfair Display', Georgia, serif; font-size: 0.82em; letter-spacing: 0.22em; text-transform: uppercase; color: #d8b870; margin: 0 1.6em 0.9em 0; }
+.dss-lore-x { position: absolute; top: 0.55em; right: 0.6em; width: 1.8em; height: 1.8em; border-radius: 50%; border: 1px solid rgba(216,184,112,0.45); background: transparent; color: #d8b870; font-size: 1em; line-height: 1; cursor: pointer; }
+.dss-lore-x:hover { background: rgba(216,184,112,0.15); }
+.dss-lore-body .lore-box { margin: 0; background: none; box-shadow: none; padding: 0; }
+.dss-lore-body .lore-box::before { display: none; }
+@media (max-width: 520px) { .dss-lore-card { padding: 1.3em 1.2em 1.2em; } }
 .lore-box {
 position: relative;
 background: linear-gradient(135deg, #131513 0%, #1a1c1a 50%, #131513 100%);
@@ -66753,6 +66858,21 @@ border-right: 1px solid rgba(107,32,32,0.25);
   max-width: 320px;
   padding: 2em 2.5em;
 }
+/* 2026-10-13 (Sam: the Donkey coin "should fit the aesthetic. Atm it feels like an outline from an earlier version"; the
+   frame and layout): the hand-held cards (the coin, the matches, a key, a flower, a quest note) sit on a plate like the
+   rules cards: a dark gilt-edged panel with a second hairline round it, instead of floating on the dark. */
+#coin-overlay .coin-overlay-box, #match-overlay .coin-overlay-box, #dss-key-overlay .coin-overlay-box, #dss-lily-overlay .coin-overlay-box, #dss-quest-overlay .coin-overlay-box {
+  box-sizing: border-box; max-width: min(380px, 92vw); padding: 2em 2.1em 1.7em;
+  background: linear-gradient(180deg, #1c1408, #0c0804);
+  border: 1px solid rgba(184,154,96,0.42);
+  outline: 1px solid rgba(184,154,96,0.13); outline-offset: 5px;
+  box-shadow: 0 0 40px rgba(0,0,0,0.65), 0 0 22px rgba(184,154,96,0.09);
+}
+#coin-overlay .coin-overlay-box::before, #match-overlay .coin-overlay-box::before, #dss-key-overlay .coin-overlay-box::before, #dss-lily-overlay .coin-overlay-box::before, #dss-quest-overlay .coin-overlay-box::before {
+  content: ''; position: absolute; left: 50%; top: 0; width: 46%; height: 1px; transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgba(232,200,130,0.55), transparent); pointer-events: none;
+}
+@media (max-width: 520px) { #coin-overlay .coin-overlay-box, #match-overlay .coin-overlay-box, #dss-key-overlay .coin-overlay-box, #dss-lily-overlay .coin-overlay-box, #dss-quest-overlay .coin-overlay-box { padding: 1.6em 1.3em 1.4em; } }
 .coin-overlay-stage {
   width: 156px;
   height: 156px;
@@ -67667,6 +67787,11 @@ animation: phoneRingingAppear 0.45s ease-out both, phoneRingingTremor 0.7s ease-
    Lifting the isolation only while a phone is ringing puts the popup back in
    tw-story's context, where its 99000 beats the blocker's 98999. */
 tw-passage:has(.phone-ringing) { isolation: auto !important; }
+/* 2026-10-13 (Sam: "When you get the phone call in the Pillars (and maybe elsewhere) the screen goes blurry"): in a 3D room
+   or on a plain page the ringing card lives inside the room's own fixed panel (z-index 900), a stacking context of its own,
+   so the blur veil on tw-story (98999) lay over the card too and blurred everything, buttons and all. While a phone rings
+   that panel is lifted above the veil; the card's own dark surround still hides the room behind it. */
+tw-story > .dss-room-fixed:has(.phone-ringing:not(.ring-wait)), tw-story > .dss-threshold:has(.phone-ringing:not(.ring-wait)) { z-index: 99001 !important; }
 /* 2026-10-12: a card held back for the room's opening words (dssRingHold) stays out of sight, veil and all, until it rings */
 .phone-ringing.ring-wait { display: none !important; }
 tw-story:has(.phone-ringing:not(.ring-wait))::before {
@@ -69261,6 +69386,9 @@ body:has(#coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, #dss-key-ove
 /* The primer arrives as one long slip with its own paragraph breaks, so the
    typed span has to keep its newlines. */
 .dss-hint-type { white-space: pre-wrap; }
+.dss-hint-go { display: block; margin: 0.7em 0 0.1em auto; padding: 0.35em 0.9em; font: bold 0.72em 'Courier New', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #3a2a10; background: rgba(216,170,80,0.28); border: 1px solid rgba(120,80,30,0.55); border-radius: 2px; cursor: pointer; }
+.dss-hint-go:hover { background: rgba(216,170,80,0.45); }
+.dss-hint-go:disabled { opacity: 0.6; cursor: default; }
 .dss-hint-type .dss-hint-head { display: inline-block; font-weight: bold; letter-spacing: 0.18em; border-bottom: 1px solid currentColor; padding-bottom: 1px; }
 .dss-hint-inner { display: block; }
 .dss-hint-slip.long { max-width: min(34em, 76vw); }
@@ -75112,6 +75240,9 @@ Massive earthworms are breaking through the floor!
 ]
 (if: $nextId is "")[(set: $nextId to "french")(set: $nextLabel to "THE FRENCH")]
 (if: $nextId is "doorway")[(set: $nextLabel to "A DOORWAY")](else-if: $nextId is "chippy")[(set: $nextLabel to "FISH AND CHIPS")]
+<!-- 2026-10-13 (Sam: "The 'next' shows too soon ... when I entered the French the first time it already said: 'Next The pillars'
+     before I had any idea what that is. It should change/appear when I leave"): inside a venue NEXT holds what it said as you
+     walked in (HERE, when it sent you there); it moves on when you leave. $nextHoldId/$nextHoldLabel keep the last outside answer. -->(if: _here is not "")[(if: ($nextHoldId is a string) and ($nextHoldId is not ""))[(set: $nextId to $nextHoldId)(set: $nextLabel to $nextHoldLabel)]](else:)[(set: $nextHoldId to $nextId)(set: $nextHoldLabel to $nextLabel)]
 <!-- 2026-10-12 (the opening playthrough): inside the place it names, NEXT says HERE (the map still marks the door by its id) -->(set: _vt to (dm: "pillars", "venue-pillars", "cecil", "venue-cecilcourt", "french", "venue-french", "colony", "venue-colony", "ronnies", "venue-ronnies", "coach", "venue-coach", "trishas", "venue-trishas", "lackland", "venue-lackland", "chippy", "venue-chippy"))(if: _vt contains $nextId)[(if: (passage:)'s tags contains (_vt's ($nextId)))[(set: $nextLabel to "HERE")]]
 }
 

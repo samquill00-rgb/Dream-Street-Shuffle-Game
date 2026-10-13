@@ -26658,17 +26658,30 @@ window.dssGuardThree = function(T) {
   if (!T || !T.WebGLRenderer || !T.WebGLRenderer.prototype || T.WebGLRenderer.prototype._dssGuarded) return;
   var proto = T.WebGLRenderer.prototype;
   proto._dssGuarded = true;
-  var render = proto.render;
-  proto.render = function() {
-    var gl = null;
-    try { gl = this.getContext(); } catch(e) {}
-    if (gl && gl.isContextLost && gl.isContextLost()) return;
-    try { return render.apply(this, arguments); }
-    catch(err) {
-      if (gl && gl.isContextLost && gl.isContextLost()) { try { console.warn('DSS: frame skipped, WebGL context lost mid-render', err); } catch(e) {} return; }
-      throw err;
-    }
+  function guard(render) {
+    return function() {
+      var gl = null;
+      try { gl = this.getContext(); } catch(e) {}
+      if (gl && gl.isContextLost && gl.isContextLost()) return;
+      try { return render.apply(this, arguments); }
+      catch(err) {
+        if (gl && gl.isContextLost && gl.isContextLost()) { try { console.warn('DSS: frame skipped, WebGL context lost mid-render', err); } catch(e) {} return; }
+        throw err;
+      }
+    };
+  }
+  if (typeof proto.render === 'function') proto.render = guard(proto.render);
+  // 2026-10-14: this build of three (r128) sets render on each renderer in its constructor (this.render = function),
+  // so the prototype wrap above never ran and the guard did nothing; wrap each new renderer's own render as well
+  var Orig = T.WebGLRenderer;
+  var Guarded = function(params) {
+    var r = new Orig(params);
+    if (r && typeof r.render === 'function' && !r._dssGuarded) { r._dssGuarded = true; r.render = guard(r.render); }
+    return r;
   };
+  Guarded.prototype = Orig.prototype;
+  for (var k in Orig) { if (Object.prototype.hasOwnProperty.call(Orig, k)) Guarded[k] = Orig[k]; }
+  try { T.WebGLRenderer = Guarded; } catch (e) {}
 };
 window.dssGuardComposerRender = function(composer, renderer) {
   if (!composer || composer._dssGuarded) return composer;
@@ -41429,7 +41442,7 @@ ccWrap = document.createElement('div');
 ccWrap.id = 'cc-wrap';
 ccWrap.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;background:#040408;overflow:hidden;';
 var ccFrame = document.createElement('iframe');
-ccFrame.src = 'cecil-court-3d-static.html?v=20261010b';
+ccFrame.src = 'cecil-court-3d-static.html?v=20261014b'; // 2026-10-14: version bumped for the lighter lighting
 ccFrame.title = 'Cecil Court at night';
 ccFrame.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
 ccWrap.appendChild(ccFrame);

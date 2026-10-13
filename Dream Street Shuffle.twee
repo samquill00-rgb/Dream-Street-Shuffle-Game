@@ -23456,9 +23456,21 @@ var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
 g.addColorStop(0, 'rgba(235,255,190,0.75)'); g.addColorStop(0.16, 'rgba(215,240,160,0.45)'); g.addColorStop(0.44, 'rgba(180,210,110,0.18)'); g.addColorStop(0.78, 'rgba(140,170,70,0.045)'); g.addColorStop(1, 'rgba(120,150,40,0)');
 cx.fillStyle = g; cx.fillRect(-64, -82, 128, 164); cx.restore();
 });
-var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+// 2026-10-13 (Sam: "Make the glowing sprites that signal 'clickable things' a whole rainbow of different colours in each
+// room"): the glow is drawn white and each object takes its own colour, the room's objects spread round the colour
+// wheel in order; the hover glow takes the colour of the object under the pointer. (haloTex, the old yellow-green,
+// is kept for anything else that borrows it.)
+var haloTexW = tex(128, 128, function(cx, w, h) {
+cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
+var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
+g.addColorStop(0, 'rgba(255,255,255,0.8)'); g.addColorStop(0.16, 'rgba(255,255,255,0.5)'); g.addColorStop(0.44, 'rgba(255,255,255,0.2)'); g.addColorStop(0.78, 'rgba(255,255,255,0.05)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+cx.fillStyle = g; cx.fillRect(-64, -82, 128, 164); cx.restore();
+});
+HOTSPOTS.forEach(function(h, i) { h._glowCol = new THREE.Color().setHSL(i / Math.max(1, HOTSPOTS.length), 1, 0.5); });
+var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexW, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
 halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
 function haloAt(spot) {
+if (spot._glowCol) halo.material.color.copy(spot._glowCol);
 var wp = new THREE.Vector3();
 if (spot.haloAt) wp.set(spot.haloAt[0], spot.haloAt[1], spot.haloAt[2]); else spot.root.getWorldPosition(wp);
 if (spot.figure && !spot.haloAt) wp.y += 0.45;
@@ -23471,7 +23483,8 @@ halo.scale.set(sc, sc, 1);
 var restLevel = window.DSS_RESTGLOW === false ? 0 : (typeof window.DSS_RESTGLOW === 'number' ? window.DSS_RESTGLOW : 0.7);
 var restGroup = new THREE.Group(); restGroup.name = 'restGlow'; scene.add(restGroup);
 var restGlows = HOTSPOTS.map(function(spot, i) {
-var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexW, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+if (spot._glowCol) sp.material.color.copy(spot._glowCol);
 sp.visible = false; restGroup.add(sp);
 return { spot: spot, sp: sp, ph: i * 1.9, on: false };
 });
@@ -23512,11 +23525,11 @@ g.lily.visible = false; g.lily.renderOrder = 999; restGroup.add(g.lily);
 var restNext = -1;
 var reveal = window.dssRoomReveal ? window.dssRoomReveal(wrap, camera, restGlows, function() { return camMode === 'idle'; }) : null;
 function restRefresh() {
-var keepP = halo.position.clone(), keepS = halo.scale.clone();
+var keepP = halo.position.clone(), keepS = halo.scale.clone(), keepC = halo.material.color.clone();
 restGlows.forEach(function(g) {
 g.on = restLevel > 0 && available(g.spot);
 var nx = !!VOICE && VOICE.isNext(ROOM, g.spot.name);
-if (nx !== !!g.next) { g.next = nx; if (nx) g.sp.material.color.setRGB(1, 0.8, 0.52); else g.sp.material.color.setRGB(1, 1, 1); }
+if (nx !== !!g.next) { g.next = nx; if (nx) g.sp.material.color.setRGB(1, 0.8, 0.52); else if (g.spot._glowCol) g.sp.material.color.copy(g.spot._glowCol); else g.sp.material.color.setRGB(1, 1, 1); }
 if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position); g.sp.scale.set(halo.scale.x * 0.88, halo.scale.y * 0.88, 1); }
 var hook = g.on ? spotLily(g.spot) : null;
 g.lilyOn = !!hook && !!lilyTexFrom(hook);
@@ -23528,7 +23541,7 @@ var ls = 2 * ld * Math.tan((camera.fov || 50) * Math.PI / 360) * 0.11; // 2026-1
 g.lily.position.copy(halo.position); g.lily.scale.set(ls, ls, 1);
 }
 });
-halo.position.copy(keepP); halo.scale.copy(keepS);
+halo.position.copy(keepP); halo.scale.copy(keepS); halo.material.color.copy(keepC);
 }
 function restTick(t) {
 if (t >= restNext || still) { restRefresh(); restNext = t + 1; }

@@ -10,11 +10,11 @@
   - 8: the Pillars' NaN geometry warning came from `flutedShaft` dividing by zero at each cap's centre; guarded. Warning gone.
   - 9: Ronnie's bar game: pours of 5 of 6 or better make `carryPhase.steady` = 1, and the first knock spills nothing (a short line on the carry card says so).
   - 10: Escape on a hand-held card presses its put-away button (Pocket them, On., the flower's), never an action such as Toss it.
-  - 7 and 14 (Ronnie's room frame rate, slow room loads): a read-only profiling agent is measuring; fixes to follow.
+  - 7 and 14 (speed): the cost was point lights (about 12 a scene is the budget), not pixels. Ronnie's room: the 7 picture lights replaced by a faint emissive on each photo; table-lamp lights only on 7 of 10 tables (seeds 0,1,2,4,5,6,20). French approach: each lamp's twin fill light folded into one (1.05), no point-light shadows. Pillars approach: `createVictorianGasLamp` takes `castShadow: false` (default unchanged), used there; the 7 red window lights now additive glow sprites (`piRedSpill`). Colony approach: each window one light (gSpill 0.45) instead of four; lamp shadows off (the lantern's hexagon shadow under the lamp is gone). Chippy approach: lamp shadows off; neonRedL/R, fasciaGlow, hoodLight left out of the scene. Carthage pixel ratio 2 → 1.5. Headless fps at 1280x800, vsync off, before → after: Ronnie's 95 → 221, French 37 → 122, Pillars 50 → 209, Colony 34 → 202, Chippy 51 → 109; screenshots match (scratchpad/speed/*_before/after.png). The 5-9 s first-button waits were the same cause (45-75 ms frames stretching every timer and fade).
 - **Sam's rulings:**
   - 11: the novelist's "Everything" (−9 morale, to the street, haunt still there next visit). Sam asked if it can earn a haunt; offered A (Everything also leads into the reading at a higher cost) or B (a short scene of his own with a different haunt). Sam chose A: "Everything" now costs 6 morale and goes to "The novelist" (which takes its own 9), so both answers reach THE REFUSAL.
   - 12: the doorway and gents cards' silhouette STAYS (Sam: "kinda funny that that's the only time you glimpse him").
-  - 13: card styles: undecided (arguments for consistency and for variation). Left as they are.
+  - 13: the card rule (Sam): cards you HOLD sit on the gilt plate (coin, matches, key, flower, errand, and Shelley's liver as a relic); cards for something you DO share the drink card's look, a dark card with a gold Cinzel title bar (drink, eat, and now the Gents/doorway card and the cigarette, restyled; the Gents' sage vines and separator hidden). The napkin stays its own (a drawing surface). Checked headless.
 
 ---
 

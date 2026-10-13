@@ -2118,7 +2118,7 @@ text-align: right;
 @keyframes wtwInlineIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 0.92; transform: none; } }
 .liver-hint {
   position: absolute;
-  bottom: -38px;
+  bottom: -52px; /* 2026-10-14 overnight: was -38, which sat on the line above it (.alba-hint) once both were one line */
   right: 12px;
   color: var(--gold-warm);
   font-size: 0.72em;
@@ -2133,6 +2133,10 @@ text-align: right;
   pointer-events: none;
   text-shadow: 0 0 6px rgba(212,165,116,0.35);
   animation: liver-hint-pulse 2.6s ease-in-out infinite;
+  /* 2026-10-14 overnight: its containing block is a narrow header cell, so shrink-to-fit squeezed the line into a column
+     of one or two words that ran up over ALBA and NEXT; it now takes its own width (one line on a laptop) */
+  width: max-content;
+  max-width: min(460px, calc(100vw - 40px));
 }
 @keyframes liver-hint-pulse {
   0%, 100% { opacity: 0.7; }
@@ -7029,6 +7033,9 @@ tw-passage[tags~="interval-radio"]::before {
    the call, after the painter, the corner with Red) share the same street, so
    they share the same wash; the hub keeps its own lamp. */
 tw-passage[tags~="street-night"], tw-passage[tags~="outdoor"]:not([tags~="hub"]) { position: relative; isolation: isolate; }
+/* 2026-10-14 overnight: the 3D approaches (the Ginger Light, the Colony, Ronnie's) are tagged outdoor, and the isolation above
+   trapped their fixed "← Back to Dean Street" (z 9999) under the scene's #gl-wrap (z 9000, on body): the link could not be clicked. */
+tw-passage:has(> .approach-back) { isolation: auto !important; }
 tw-passage[tags~="street-night"]::before, tw-passage[tags~="outdoor"]:not([tags~="hub"])::before {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background:
@@ -7462,6 +7469,10 @@ tw-passage:has(.phone-ringing) { isolation: auto !important; }
    so the blur veil on tw-story (98999) lay over the card too and blurred everything, buttons and all. While a phone rings
    that panel is lifted above the veil; the card's own dark surround still hides the room behind it. */
 tw-story > .dss-room-fixed:has(.phone-ringing:not(.ring-wait)), tw-story > .dss-threshold:has(.phone-ringing:not(.ring-wait)) { z-index: 99001 !important; }
+/* 2026-10-14 overnight: a room entered again has no opening box, so its panel is down (opacity 0, hidden) and a call that
+   rang there (LILY at the French on a second visit) sat inside it unseen: the room went blurred and nothing showed. The panel
+   now keeps opacity while a phone rings; it stays hidden itself, so only the card (visibility: visible) is painted. */
+tw-story > .dss-room-veil:has(.phone-ringing:not(.ring-wait)) { opacity: 1 !important; }
 /* 2026-10-12: a card held back for the room's opening words (dssRingHold) stays out of sight, veil and all, until it rings */
 .phone-ringing.ring-wait { display: none !important; }
 tw-story:has(.phone-ringing:not(.ring-wait))::before {
@@ -13379,6 +13390,10 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
       if (done) return; done = true;
       teardown();
       try { opts.onPlay(); } catch (e) {}
+      /* 2026-10-14 overnight: at 1280x800 the play area sat partly below the fold (the Cellar's gloves, Pong's paddle, the
+         waltz's hit line, the cards' and mats' buttons) and nothing brought it up. After Play the largest game surface in
+         the passage is scrolled fully into view when it is cut off. */
+      setTimeout(window.dssScrollPlayIntoView, 120);
     });
     // If the player leaves the passage before pressing Play, remove the modal
     // without starting the game. Tear down only when the passage the modal was
@@ -13396,6 +13411,34 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
       obs.observe(story, { childList: true, subtree: true });
     }
   }
+  // 2026-10-14 overnight: after a game starts, bring its play surface fully into view when the window cuts it off
+  // (rules-card games on Play; the worm hut and the dream-world games on their own start buttons, below)
+  window.dssScrollPlayIntoView = function() {
+        try {
+          var pass = document.querySelector('tw-passage'); if (!pass) return;
+          var cands = Array.prototype.slice.call(pass.querySelectorAll('canvas, #dss-beer-mats, #dss-house-cards, [class*="waltz-stage"], [id*="waltz"]'));
+          var best = null, area = 0;
+          cands.forEach(function(el) {
+            var cs = getComputedStyle(el); if (cs.position === 'fixed') return;
+            var r = el.getBoundingClientRect(), a = r.width * r.height; if (a > area) { area = a; best = el; }
+          });
+          var r = null, wm = pass.querySelector('.worm-meters'), ww = pass.querySelector('.worm-wall');
+          if (wm && ww) { var a1 = wm.getBoundingClientRect(), a2 = ww.getBoundingClientRect(); r = { top: Math.min(a1.top, a2.top), bottom: Math.max(a1.bottom, a2.bottom) }; }
+          else { if (!best || area < 20000) return; r = best.getBoundingClientRect(); }
+          // the fixed stat header covers the top of the window: fit the surface into what is left under it
+          var hb = 0;
+          Array.prototype.forEach.call(document.querySelectorAll('tw-story > *, body > *'), function(el) {
+            var cs = getComputedStyle(el); if (cs.position !== 'fixed' && cs.position !== 'sticky') return;
+            var q = el.getBoundingClientRect(); if (q.top <= 1 && q.width > 300 && q.height < window.innerHeight * 0.4 && q.bottom > hb) hb = q.bottom;
+          });
+          var avail = window.innerHeight - hb, h = r.bottom - r.top;
+          if (r.bottom > window.innerHeight + 2 || r.top < hb - 2) window.scrollBy(0, r.top - hb - Math.max(8, (avail - h) / 2)); // instant: a game's own focus() cancels a smooth scroll
+        } catch (e) {}
+  };
+  document.addEventListener('click', function(e) {
+    var b = e.target && e.target.closest && e.target.closest('button');
+    if (b && /^(Pick up a spade|Begin ascent|Take the rifle|Enter the dark)$/i.test((b.textContent || '').trim())) setTimeout(window.dssScrollPlayIntoView, 250);
+  }, true);
   window.dssShowMinigameRules = showRules;
 })();
 // ====== THE PRIMER: MORALE, SOBRIETY & HAUNTS ======
@@ -14430,7 +14473,8 @@ function init(container) {
       var el = overlays[i], wx = +el.dataset.wx, wy = +el.dataset.wy, dy = +el.dataset.dy || 0;
       var lx = (wx - cx) / W * 100, ly = (wy - cy + SKY*T + dy) / H * 100;
       el.style.left = lx + '%'; el.style.top = ly + '%';
-      el.style.visibility = (lx < -12 || lx > 112 || ly < -6 || ly > 106) ? 'hidden' : '';
+      // 2026-10-14 overnight: the street is clipped under the sky band now, so a door's arch or plate whose spot lies under the band is hidden with it
+      el.style.visibility = (lx < -12 || lx > 112 || (wy - cy + dy) < 0 || ly > 106) ? 'hidden' : '';
     }
     placeNextArrow(cx, cy);
   }
@@ -14441,14 +14485,15 @@ function init(container) {
     var id = hubFlag('next'), lab = id && labels[id], st = id && doors[id];
     if (!lab || !st || st.status !== 'open') { if (nextArrow) nextArrow.style.display = 'none'; return; }
     var lx = (+lab.dataset.wx - cx) / W * 100, ly = (+lab.dataset.wy - cy + SKY*T) / H * 100;
-    if (lx >= 6 && lx <= 94 && ly >= 4 && ly <= 96) { if (nextArrow) nextArrow.style.display = 'none'; return; }
+    var skyPct = SKY*T / H * 100; // the band at the top: a label under it is out of view
+    if (lx >= 6 && lx <= 94 && ly >= skyPct + 3 && ly <= 96) { if (nextArrow) nextArrow.style.display = 'none'; return; }
     if (!nextArrow) { nextArrow = document.createElement('div'); nextArrow.className = 'soho-next-arrow'; nextArrow.setAttribute('aria-hidden', 'true'); stage.appendChild(nextArrow); }
     var dx = lx - 50, dy = ly - 50, ang = Math.atan2(dy, dx), oct = Math.round(ang / (Math.PI / 4));
     var glyph = { '0': '\u25b6', '1': '\u25e2', '2': '\u25bc', '3': '\u25e3', '4': '\u25c0', '-4': '\u25c0', '-3': '\u25e4', '-2': '\u25b2', '-1': '\u25e5' }[String(oct)] || '\u25b6';
     var d = doorById(id), name = d ? (d.label || d.name) : '';
     nextArrow.textContent = (oct === 4 || oct === -4 || oct === 3 || oct === -3) ? glyph + ' NEXT \u00b7 ' + name : 'NEXT \u00b7 ' + name + ' ' + glyph;
     nextArrow.style.display = 'block';
-    var ax = Math.max(4, Math.min(96, lx)), ay = Math.max(5, Math.min(95, ly));
+    var ax = Math.max(4, Math.min(96, lx)), ay = Math.max(skyPct + 2, Math.min(95, ly));
     nextArrow.style.left = ax + '%'; nextArrow.style.top = ay + '%';
     nextArrow.style.transform = 'translate(' + (ax > 70 ? '-100%' : ax < 30 ? '0' : '-50%') + ',' + (ay > 70 ? '-100%' : ay < 30 ? '0' : '-50%') + ')';
     // 2026-10-12 (Sam): near the start of Dean Street the pointer sat right on the French's lit door, so it read as if the
@@ -14926,9 +14971,13 @@ function init(container) {
     var cx = Math.round(S.cam.x), cy = Math.round(S.cam.y);
     x.clearRect(0, 0, W, H);
     drawSky(x, doors, S.cam.x);
+    // 2026-10-14 overnight: the street and its glow were drawn unclipped, so whenever the camera was off the top row they
+    // painted over the sky band (stars, moon, Centre Point, the phase-3 dawn) and it never showed; clipped to the view band
+    x.save(); x.beginPath(); x.rect(0, SKY*T, W, H - SKY*T); x.clip();
     x.drawImage(base, -cx, SKY*T - cy);
     var flick = 0.88 + 0.12 * Math.sin(S.t * 0.21) * Math.sin(S.t * 0.077 + 1.3);
     x.globalAlpha = flick; x.drawImage(glow, -cx, SKY*T - cy); x.globalAlpha = 1;
+    x.restore();
     // the world is clipped to the view band; the sky stays above it
     if (S.meteor) { var mt3 = S.meteor, mf3 = Math.max(0, 1 - mt3.life / mt3.max); x.save(); x.globalAlpha = 0.85 * mf3; x.strokeStyle = '#e8e2d0'; x.lineWidth = 1; x.beginPath(); x.moveTo(mt3.x - mt3.vx*7, mt3.y - mt3.vy*7); x.lineTo(mt3.x, mt3.y); x.stroke(); x.fillStyle = '#fff8e8'; x.fillRect(Math.round(mt3.x), Math.round(mt3.y), 1, 1); x.restore(); }
     if (S.cloud) { var cl = S.cloud; x.save(); x.globalAlpha = 0.62; x.fillStyle = '#0d0d16'; x.beginPath(); x.ellipse(cl.x, cl.y + 4, cl.w * 0.5, 4.5, 0, 0, Math.PI * 2); x.ellipse(cl.x - cl.w * 0.22, cl.y + 2, cl.w * 0.32, 3.5, 0, 0, Math.PI * 2); x.ellipse(cl.x + cl.w * 0.2, cl.y + 1, cl.w * 0.28, 3, 0, 0, Math.PI * 2); x.fill(); x.globalAlpha = 0.18; x.strokeStyle = '#d8d4e6'; x.lineWidth = 0.6; x.beginPath(); x.ellipse(cl.x, cl.y + 4, cl.w * 0.5, 4.5, 0, Math.PI * 1.05, Math.PI * 1.95); x.stroke(); x.restore(); }
@@ -16421,6 +16470,16 @@ window.__dssHintShow = function(html, passage, go) {
   } catch (e) { window.__dssHintBusy = false; }
 };
 window.wordToTheWisePopup = function(message, go) { window.dssInlineHint(message, go ? { go: go } : null); };
+// 2026-10-14 overnight: Escape put away the notebook, the napkin, the lore notes, the cigarette and a room's card, but not a slip,
+// whose only way out was its ×. Escape now presses the newest slip's ×, when nothing else on screen is listening for it.
+// Checked in the capture phase, before any other Escape handler has closed its own thing, so one press closes one thing.
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  if (window.dssOverlayBusy && window.dssOverlayBusy()) return;
+  if (Array.prototype.some.call(document.querySelectorAll('tw-dialog, .dss-lore-card, .dss-rules-overlay, .phone-ringing:not(.ring-wait), tw-story > .dss-room-veil.dss-room-veil-on, .nb-tab'), function(n) { return n.getClientRects().length; })) return;
+  var xs = Array.prototype.filter.call(document.querySelectorAll('.dss-hint-slip .dss-hint-x'), function(x) { return x.getClientRects().length; });
+  if (xs.length) xs[xs.length - 1].click();
+}, true);
 // the place a slip has directed you to: a list of map door ids ('chippy,doorway'); the map lights the way to the nearest open one
 window.dssDirections = { get: function() { try { return sessionStorage.getItem('dssDirections') || ''; } catch (e) { return window.__dssDir || ''; } }, set: function(v) { window.__dssDir = v || ''; try { if (v) sessionStorage.setItem('dssDirections', v); else sessionStorage.removeItem('dssDirections'); } catch (e) {} } };
 // ====== STAT HEAL ANIMATION ======
@@ -16772,6 +16831,10 @@ this.canvas.addEventListener('touchstart', (e) => {
   }
   if (this.phase === 'carry') {
     e.preventDefault();
+    /* 2026-10-14 overnight: duck was keyboard-only, so the high obstacles (which only a duck clears) cost a touch player
+       every glass. A touch on the lower part of the canvas now ducks while held; anywhere above it jumps, as before. */
+    var tch = e.changedTouches && e.changedTouches[0], rc = this.canvas.getBoundingClientRect();
+    if (tch && rc.height && (tch.clientY - rc.top) / rc.height > 0.62) { this.carryPhase.playerDuckingInput = true; return; }
     this.carryPhase.jumpHeld = true;
     this._playerJump();
   }
@@ -16782,7 +16845,7 @@ this.canvas.addEventListener('touchend', (e) => {
     this.pourDone = true;
     this._scorePour();
   }
-  if (this.phase === 'carry') this._playerJumpRelease();
+  if (this.phase === 'carry') { this._playerJumpRelease(); if (!e.touches || !e.touches.length) this.carryPhase.playerDuckingInput = false; }
 });
 this.canvas.addEventListener('touchcancel', (e) => {
   if (this.phase === 'mixing' && this.pouring) {
@@ -16790,7 +16853,7 @@ this.canvas.addEventListener('touchcancel', (e) => {
     this.pourDone = true;
     this._scorePour();
   }
-  if (this.phase === 'carry') this._playerJumpRelease();
+  if (this.phase === 'carry') { this._playerJumpRelease(); this.carryPhase.playerDuckingInput = false; }
 });
 this.canvas.addEventListener('click', () => {
   // No longer needed for finish choices
@@ -17567,9 +17630,14 @@ c.fillStyle = '#d4a574';
 c.fillText('Get ready...', W/2, H/2 - 20);
 c.font = '14px Georgia';
 c.fillStyle = '#8a7a6a';
+if (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
+  c.fillText('Tap high to jump. Hold it for a higher jump.', W/2, H/2 + 20);
+  c.fillText('Hold low on the floor to duck.', W/2, H/2 + 45);
+} else {
 c.fillText('SPACE / UP to jump. Hold it for a higher jump.', W/2, H/2 + 20);
 c.fillText('DOWN to duck', W/2, H/2 + 45);
 c.fillText('Hold RIGHT to hurry. Hold LEFT to hang back.', W/2, H/2 + 70);
+}
 c.fillStyle = '#79b9cf';
 c.fillText('\u266b Catch three floating notes to steady the tray.', W/2, H/2 + 95);
 c.restore();
@@ -20671,6 +20739,8 @@ window.showDrinkPopup = function(drinkType) {
   new window.DrinkPopup(drinkType);
 };
 window.startBarGame = function() {
+/* 2026-10-14 overnight: the inline onclick and the delegated listener below both fire on one click; the second call is dropped */
+var _bsNow = Date.now(); if (window._barStartAt && _bsNow - window._barStartAt < 400) return; window._barStartAt = _bsNow;
 if (window.currentBarGame) window.currentBarGame.stop();
 document.getElementById('pre-bar').classList.add('hidden');
 var sobriety = parseInt(document.getElementById('sob-data-bar').textContent) || 55;
@@ -61837,7 +61907,7 @@ Among them, with his back to you, is your old friend. The eldest of the children
 #dss-house-cards .cards-status{min-height:2.6em;font-size:clamp(16px,2.6vw,19px);line-height:1.45;padding-top:8px}
 #dss-house-cards .cards-payment{display:none}
 #dss-house-cards .cards-payment.revealed{display:block}
-#dss-house-cards .cards-payment.revealed &gt; span &gt; tw-link{display:none}
+#dss-house-cards .cards-payment.revealed &gt; span &gt; tw-link,#dss-house-cards .cards-payment.revealed &gt; span &gt; tw-hook &gt; tw-link{display:none}
 #dss-house-cards [hidden]{display:none!important}
 &lt;/style&gt;
 &lt;script&gt;
@@ -64110,7 +64180,7 @@ return null;
 /* ── Input: LEFT/RIGHT ── */
 function onKey(e){
 if(phase===&#x27;title&#x27;){ startCowMusic(); phase=&#x27;countdown&#x27;; countdownAt=Date.now(); phaseStart=Date.now(); return; }
-if(gameOver) return;
+if(gameOver){ if(e.key===&#x27;Enter&#x27;){ e.preventDefault(); navigate(); } return; } /* 2026-10-14 overnight: the end buttons live on the canvas, so Enter continues for a keyboard player */
 if(phase===&#x27;countdown&#x27;) return;
 var now=Date.now(); if(now-lastKeyAt&lt;90) return; /* was 120 — keyboard swerves keep up with the top tiers */
 /* Lane flash + whoosh on keyboard swerves too, so all three input routes
@@ -65985,7 +66055,7 @@ You know who she is, she is SHANA, destroyer of worlds.]
 #dss-beer-mats .mats-help{font-size:12px;opacity:.75}
 #dss-beer-mats .mats-payment{display:none}
 #dss-beer-mats .mats-payment.revealed{display:block}
-#dss-beer-mats .mats-payment.revealed &gt; span &gt; tw-link{display:none}
+#dss-beer-mats .mats-payment.revealed &gt; span &gt; tw-link,#dss-beer-mats .mats-payment.revealed &gt; span &gt; tw-hook &gt; tw-link{display:none}
 #dss-beer-mats [hidden]{display:none!important}
 @media (max-width:650px){#dss-beer-mats .mats-bubble{top:30%;max-width:34%;padding:6px 8px}}
 &lt;/style&gt;
@@ -66008,6 +66078,7 @@ You know who she is, she is SHANA, destroyer of worlds.]
   var W = 600, H = 400, phase = &#x27;ready&#x27;, count = 1, best = 0, flightStart = 0, duration = 0, catchAt = 0, progress = 0, particles = [], last = 0, raf = 0, ended = false, disposed = false, observer = null, resizeObs = null, autoReturn = 0;
   var listeners = [];
   function listen(el, ev, fn, o) { el.addEventListener(ev, fn, o); listeners.push([el, ev, fn, o]); }
+  var roundBest = 0;
   try { best = Number(localStorage.getItem(&#x27;dss-trishas-mats-best&#x27;)) || 0; } catch (e) {}
   function plural(n) { return n + (n === 1 ? &#x27; mat&#x27; : &#x27; mats&#x27;); }
   $(&#x27;.mats-best&#x27;).textContent = best ? plural(best) : &#x27;—&#x27;;
@@ -66045,7 +66116,7 @@ You know who she is, she is SHANA, destroyer of worlds.]
   function catchStack() {
     progress = Math.min(1, (performance.now() - flightStart) / duration);
     if (Math.abs(progress * duration - catchAt) &lt;= windowMs()) {
-      phase = &#x27;won&#x27;; speak(&#x27;won&#x27;); best = Math.max(best, count);
+      phase = &#x27;won&#x27;; speak(&#x27;won&#x27;); best = Math.max(best, count); roundBest = Math.max(roundBest, count);
       try { localStorage.setItem(&#x27;dss-trishas-mats-best&#x27;, best); } catch (e) {}
       $(&#x27;.mats-best&#x27;).textContent = plural(best); play.textContent = &#x27;Try &#x27; + (count + 1) + &#x27; mats&#x27;; stop.textContent = &#x27;Bow out&#x27;;
       status(count &gt; RECORD ? &#x27;Lea’s record is beaten.&#x27; : &#x27;Clean catch.&#x27;, &#x27;&#x27;);
@@ -66059,7 +66130,8 @@ You know who she is, she is SHANA, destroyer of worlds.]
   function finish() {
     if (ended || disposed) return;
     ended = true; phase = &#x27;ended&#x27;; speak(&#x27;ended&#x27;); particles = [];
-    var outcome = best &gt; RECORD ? &#x27;win&#x27; : &#x27;loss&#x27;;
+    /* 2026-10-14 overnight: the outcome takes this visit&#x27;s best catch; the stored best (kept across nights for the &#x27;Your best&#x27; line) let a new night win by bowing out at once */
+    var outcome = roundBest &gt; RECORD ? &#x27;win&#x27; : &#x27;loss&#x27;;
     status(&#x27;Challenge finished.&#x27;, &#x27;&#x27;);
     play.disabled = true; stop.disabled = true;
     var target = payment.querySelector(&#x27;[data-outcome=&quot;&#x27; + outcome + &#x27;&quot;] tw-link&#x27;);
@@ -71876,7 +71948,7 @@ It’s bold to turn down an alley at this time of night. There are three in a gr
 (else-if: $coachUrgent is true)[(set: $nextId to &quot;coach&quot;)(set: $nextLabel to &quot;THE COACH AND HORSES&quot;)]
 (else-if: $blackouts is a number and $blackouts &gt;= 2)[(set: $nextId to &quot;north&quot;)(set: $nextLabel to &quot;CENTRE POINT&quot;)]
 (else-if: _a1 and _a2 and _a3 and _lived)[(set: $nextId to &quot;north&quot;)(set: $nextLabel to &quot;CENTRE POINT&quot;)]
-(else-if: $sobriety is a number and (_soberTo is not &quot;&quot;) and ($sobriety &lt; 30 or (((passage:)&#x27;s tags contains &quot;hub&quot;) and ($sobriety &lt; 40 or ($confidence is a number and $confidence &lt; 40)))))[(set: $nextId to _soberTo)]&lt;!-- 2026-10-12 (the opening playthrough): under 40 the detour is the street&#x27;s advice, so it leads only on Dean Street; inside a quest it waits unless sobriety is under 30 --&gt;
+(else-if: $sobriety is a number and (_soberTo is not &quot;&quot;) and ($sobriety &lt; 30 or (((passage:)&#x27;s tags contains &quot;hub&quot; or (_soberTo is &quot;chippy&quot; and ((passage:)&#x27;s name is &quot;Approach Chinese Fish and Chips&quot; or (passage:)&#x27;s tags contains &quot;venue-chippy&quot;))) and ($sobriety &lt; 40 or ($confidence is a number and $confidence &lt; 40)))))[(set: $nextId to _soberTo)]&lt;!-- 2026-10-12 (the opening playthrough): under 40 the detour is the street&#x27;s advice, so it leads only on Dean Street; inside a quest it waits unless sobriety is under 30. 2026-10-14 overnight: and on the chippy&#x27;s own approach and room when the chippy is the detour, or NEXT flipped to the next errand on the way in and said that errand, not HERE, inside --&gt;
 (else-if: ($metRed is not true))[(set: $nextId to &quot;ginger&quot;)(set: $nextLabel to &quot;THE GINGER LIGHT&quot;)]
 (else-if: _a1 and _a2 and ($cowRideDone is not true))[(set: $nextId to &quot;coach&quot;)(set: $nextLabel to &quot;THE COACH AND HORSES&quot;)]
 (else-if: (not _a2) and $inisToldOfPillars is true and $dreamKey is a string and ($dreamKey is not &quot;&quot;))[(if: _sober or (_soberTo is &quot;&quot;))[(set: $nextId to &quot;pillars&quot;)(set: $nextLabel to &quot;THE PILLARS&quot;)](else:)[(set: $nextId to _soberTo)]]

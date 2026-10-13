@@ -1,3 +1,129 @@
+# Overnight run — 2026-10-14
+
+Headless and muted throughout (Playwright Chromium, `--mute-audio`, `dssMuted2`). No git. Synced after every fix. Screenshots: `/private/tmp/claude-501/-Users-samquill-Claude-work-Dream-Street-Shuffle---Game-Files/c6a51d06-8c97-4b6e-babf-b5f00f350db8/scratchpad/overnight/shots/` (SHOTS below).
+
+**What broke the night (fixed):** on a second visit to the French, LILY's call rang inside the room's hidden panel. The room went blurred and nothing was visible; the buttons were there but unseen (SHOTS/n43_french_ring.png). Fixed and checked in the real build (ring_french_fixed.png).
+
+**Testing note:** the old harness flag `--use-angle=swiftshader` runs 3D at about 1 fps. Use `--use-angle=metal --enable-gpu --ignore-gpu-blocklist` instead: 60 fps, and WebGL works.
+
+## What I fixed (each checked headless)
+1. **LILY's ring invisible on a room revisit.** With no opening box, the room's panel sits at opacity 0, and the card was inside it. The panel now keeps its opacity while a phone rings (.twee 68051).
+2. **"← Back to Dean Street" unclickable on the outdoor 3D approaches** (Ginger Light, Colony, Ronnie's). The street-night `isolation: isolate` trapped it under `#gl-wrap`. It now gets `isolation: auto` (67604). Clicked through to Dean Street.
+3. **NEXT flipped on the chippy's own approach.** Dean Street said FISH AND CHIPS, but the approach and the room said THE PILLARS · SEEK THE SHORE. The detour now also leads on the chippy's approach and room (Next Target, 75485). Checked: the approach says FISH AND CHIPS and the room says HERE.
+4. **Beer Mat Game could be won without playing.** The outcome used the lifetime best stored in localStorage; it now uses this visit's best, `roundBest` (59531). Checked: a stored best of 7 plus "Bow out" no longer gives +8.
+5. **Unclicked outcome links showed after Beer Mats and House of Cards ended, and the stray mats-win link paid out.** The hiding selector now also matches `span > tw-hook > tw-link` (55182, 59455). Checked: the stray links are hidden and the onward link still shows.
+6. **Play areas sat below the fold at 1280x800.**
+   - Affected: the Cellar gloves, Pong, the waltz hit line, the cards and mats buttons, the worm meters (under the stat bar), and the Climb, Reclamation and Pyramid stages.
+   - After Play, or a game's start button, `window.dssScrollPlayIntoView` (4169) now scrolls the game into the space under the fixed stat bar.
+   - Checked on all of them.
+7. **Cow end screen was mouse-only.** Enter now continues at game over (57500).
+8. **Ronnie's bar game could not be won on touch.** Duck was keyboard-only, and high obstacles need a duck.
+   - Holding a touch on the lower part of the canvas now ducks. The wait screen gives touch words (7708).
+   - Checked: a touch-only bot keeps 3 glasses and wins.
+9. **Bar game was built twice per click.** A 400 ms guard in `startBarGame` (11849) stops the second build. Checked: one instance.
+10. **The map's sky band never showed.**
+    - The street and its glow were drawn unclipped over it: stars, moon, Centre Point and the phase-3 dawn tint never appeared. They are now clipped to the view band (5754).
+    - Door arches and plates under the band hide with it, and the NEXT edge pointer stays below it (5251).
+    - Screenshots: n53_map_sky.png, sky_canvas.png, prints_pair.png.
+    - **Sam (14 Oct): keep the sky band.**
+    - **This changes the look: the top three rows of the view are now sky.** To undo, remove the save/clip/restore at 5754.
+11. **The "running on fumes… Shelley's liver" hint** was squeezed into a one-word column over ALBA and NEXT (n57_pillars_flower_drunk.png). It now takes its own width, one line below the alba hint (62479; liver.png, liver_m.png).
+12. **Slips ignored Escape.** Escape now presses the newest slip's ×, but only when nothing else is open, so one press closes one thing (7318). Checked both cases: a slip on its own, and the notebook with a slip.
+
+A smoke test of 9 key passages on the final build shows no tw-errors and no JS errors.
+
+## What needs your call
+1. **Every revisit of the French opens a box holding only the taken lily, "~" and the ornament.** You must press TO THE BAR past an empty box (n47_french3.png).
+2. **NEXT · THE FRENCH five times running.** After O'Flatterly it sends you back for the lighter "on the bar", but nothing in the room points to "A bar".
+3. **NEXT sent a sobriety-8 player to the Pillars' flower.** Below 30, the threshold card shows no flower at all; only the header's liver line helps.
+4. **The novelist's "Everything"** throws you to Dean Street (morale -13) with no haunt. Intended?
+5. **Card styles come in four families:** the gilt plate (coin, matches, flower, liver), the older dark title-bar card (Hold to drink/eat/retch/piss), the framed napkin, and the cigarette with no card (pop_grid.png).
+6. **How each popup closes:**
+   | Popup | Escape | Click outside |
+   |---|---|---|
+   | Coin, drink, eat, spew, doorway, liver | no (own action only) | no |
+   | Cigarette, notebook | yes | yes |
+   | Napkin | yes | no |
+   | Slips | yes (now; × before) | no |
+
+   I left the action cards as they are.
+7. **The doorway and gents cards show a figure in silhouette.** Does that count as depicting the player?
+8. **Pong's 150 s bail** can show "Concede the table." mid-match during a long rally.
+9. **The Climb:** prints collect themselves on the centre line (the bot got 296 of 10), so slips ≤ 3 is the only real condition. On touch, the avalanche cue still says "HOLD SPACE".
+10. **Bar game pour accuracy** never affects the outcome (`mScore` is unused).
+11. **Phone layout:** the "One line is caught…" hint overlaps page text and game frames, and the notebook × overlaps the MAP tab (nbmap_m.png).
+12. **Cow hint** "←→ or click lane" overlaps the RIGHT label and says "click" on touch.
+13. **The waltz** shows "or A S D" on phones.
+14. **PP Victory:** the rising "+20" overlaps SOBRIETY.
+15. **Waits over 2 s on a first night** (Metal GPU, including about 1.5 s page start):
+    - **Typewriter pages:** Night Ahead 43 s to its link if not skipped (a click skips); Part Two 33 s; After Aoife about 20 s; After the call about 12 s.
+    - **Below the fold at 1280x800:** both typewriter links, and the map on the first Dean Street.
+    - **Approach button:**
+
+      | Approach | Wait |
+      |---|---|
+      | Ginger | 2.5 s |
+      | Coach | 2.8 s |
+      | Pillars | 3.8 s |
+      | Ronnie's | 4 s |
+      | Chippy | 4.1 s |
+      | O'Flatterly | 5.5 s |
+      | French | 6.1 s |
+      | Carthage | 8.3 s |
+      | Colony | 8.6 s |
+    - **Room's first button:** most about 2–2.7 s; Chippy 5.5 s; Colony 8 s; O'Flatterly's shop 8.9 s.
+    - **Other waits:**
+
+      | Moment | Wait |
+      |---|---|
+      | Pillars ring hold | about 7 s |
+      | Dual-ring call text before HANG UP | about 15 s |
+      | "The dawn is coming" to the Fetch | 15 s |
+      | "Traveller, wake!" to the White page | 34 s |
+      | Liver animation | 14.5 s |
+      | Hold to drink | 5 s |
+      | Hold to piss | 2.5 s |
+16. **Frame rate (Metal, headless):**
+    - **Ronnie Scott's room runs at 9.7 fps; every other room runs at 51–60.**
+    - Approaches to the French, Pillars, Cecil, Colony and Chippy run at 12–16 fps; the Ginger, Coach and Trisha's approaches run at 51–60.
+    - O'Flatterly's shop and the Carthage coast run at 31.
+    - The map and the five dream worlds run at 60.
+17. **Console warning:** `THREE.BufferGeometry.computeBoundingSphere(): Computed radius is NaN` appears a few times around the Pillars room and its call.
+
+## Checked, no change needed
+- **Section 1 (minigames):** two sub-agents bot-played all 15 games to a win and a loss. Endings route correctly, with onward links and no errors apart from the bugs fixed above. The napkin was tested in both engines.
+- **Section 2 (a first night):** a true Start, following NEXT all the way to Alba Complete, the White page and the Dawn. No tw-errors, and no soft-lock except the French ring (fixed).
+- **Section 4 (map features):**
+  - Lamps go out across phases 0–3, and the Ginger lamp is exempt in `lampOut`.
+  - Last night's prints rotate in on a new night.
+  - The dawn tint now shows, faintly.
+  - The Fetch appears, then goes as you walk toward him (fw_zoom.png).
+  - The night's walk draws on the notebook MAP and the Dawn page, on desktop and at 390×844 (nbmap_m.png, dawnplan_m.png).
+- **Section 5 (load):** the html is 6.8 MB. On localhost, DOMContentLoaded comes at about 0.25 s and BEGIN is clickable at 1.6–2.3 s. One cold run under heavy load took 25–39 s.
+- **Section 6 (save and resume):** Close, then Continue, brings back the right place with stats, alba, haunts, NEXT and the pocket item. Checked mid-venue (the Pillars), mid-minigame (The Climb), mid-conversation (the critic, the Stranger) and on the map (a reload goes back to Dean Street).
+
+## What I couldn't check
+- **Prints fading as you walk over them:** not clear at headless speed.
+- **The Dawn page drawing a real night's walk:** my run entered doors by link, so the route was under 8 steps. I checked it with a seeded route instead.
+- **Not reached:** the House of Cards plain-win (with some falls), the waltz's neutral bucket, the Reclamation's three-spirits loss, the cards' drag-to-tilt, and the Fight's "Get out" on touch.
+- **Real-device timings:** all the numbers here are headless.
+
+## Screenshots (SHOTS/)
+- **The French ring bug and fix:** n43_french_ring.png, ring_french_fixed.png
+- **Approach back link:** n11_approach_fixed.png
+- **Map sky band:** sky_canvas.png, n53_map_sky.png, prints_pair.png
+- **The Fetch:** fw_zoom.png
+- **Liver hint:** liver.png, liver_m.png
+- **The French revisit box:** n47_french3.png
+- **Popup styles:** pop_grid.png
+- **Phone notebook map:** nbmap_m.png
+- **Phone Dawn plan:** dawnplan_m.png
+- **Minigame bugs:** mgA_mats_loss_stray.png, barB_mobileT_carry2.png
+
+Scripts are in `overnight/mgA`, `overnight/mgB`, `overnight/map` and `overnight/driver.py`.
+
+---
+
 # Local session — 2026-10-13 (late)
 - The novelist's card line is now "There, sitting quietly at a table in the corner, you spot what you’re after." (cut from his scene's opening); the "familiar face" line is gone.
 - LORE daggers read **†LORE** (`.lore-fn-word`).

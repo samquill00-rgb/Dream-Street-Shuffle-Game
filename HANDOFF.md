@@ -1,3 +1,20 @@
+# Local session — 2026-10-13 (late)
+- The novelist's card line is now "There, sitting quietly at a table in the corner, you spot what you’re after." (cut from his scene's opening); the "familiar face" line is gone.
+- LORE daggers read **†LORE** (`.lore-fn-word`).
+- The room panel's "Close" names the way in by venue tag (`dssRoomProse`): To the bar (six pubs), To the counter (Chippy), Into the cellar, Into the gents, Into the office (LACKLAND), Into the shop (Cecil Court), Into the café (Green Sea), else Step inside. Only the Pillars' checked live.
+- A refused call's card ("Back to the bar") sat over the room's veil and ate every click, so the Ham couldn't be clicked; a click outside the card now presses "Back to the bar" (document pointerdown, beside `dssRingHold`). An unanswered ring still can't be clicked away. Verified in the Pillars.
+- Buttons (Sam): Cellar loss "Continue" → "Take the count"; napkin "Done" → "Sign it" (both engines); Dawn "Play again" → "Another night". Game controls (Pause, Resume, Expand, Undo, Clear, Cancel, Try again, ×) left as they are.
+- More words (Sam, my picks): rules-card Play is per game (`opts.play`): Serve, Take the floor, Square up, Build, Saddle up, First flick. "← Exit to the street" → "← Out onto the street"; House of Cards "Cancel" → "Take it back"; Beer Mats "Try again" → "Go again"; room strip "Look again" → "Take it in again". "OR CLICK ANYWHERE ELSE TO STEP BACK" kept.
+- Quests are ERRANDS on screen (Sam): notebook heading ERRANDS, key "errand done", the hand-held card "⟡ ERRAND ⟡". Other notebook headings and the caption bar: Sam keeps his own.
+- Map (Sam, ideas 1 and 2): street lamps go out with $nightPhase (0, 20%, 40%, 55%; `lampOut`, never the Ginger Light; cats and walkers only pause under lit ones); phase 3 (Alba whole) puts a dawn glow in the sky band. Last night's footsteps: `ROUTE` in the map init records each step (localStorage dssRouteNow, night from dssNightNo; rotated to dssRoutePrev on a new night if > 8 steps); the previous night shows as faint pale-blue print pairs that fade when walked over. Checked headless (lamps dark at phase 3, prints visible, no errors); the dawn glow not seen yet (the sky band was off-view in the shot).
+- The map door named by NEXT no longer carries a small "NEXT" over its name (Sam: said twice); the glow and the edge pointer stay.
+- The Fetch glimpsed on the map (Sam, idea 3): `fetchGlimpse` in the map init. Hub flag `fetch-near` (after midnight or night phase 1, until the first full meeting `$fetchMet >= 1`; not on the fire paths); 2 visits in 5, once a visit, 8 to 22 s in: your own map figure washed pale blue (`fetchSprites`) at 7 to 11 tiles down the street you are in, fades in, turns off the line and fades when you come within 4 tiles or after 7 s. Dev hook: localStorage dssFetchTest=1 on localhost makes one come at once. Seen headless; the walk-away not seen (headless frame rate too low).
+- The night drawn (Sam, idea 4): on the Dawn page (#dawn-night-plan, before the record) tonight's walk (dssRouteNow, this night only, 8+ steps) draws itself in gold over a faint plan built from the street map's tiles (window.dssSohoMap.tiles), leg by leg over 10 s, a point at each leg's end, then settles to 0.55. And on the notebook MAP (Sam): the same walk drawn in gold on the notebook plan, carried over street by street (road cols 6/18/30/42 = Wardour/Dean/Frith/Greek, rows 2/16/28/42 = Oxford/Bateman/Old Compton/Shaftesbury; XS/YS anchors), drawn in 2 s each time the notebook opens. Both checked headless. Sam: both now a soft highlighter/pastel stroke (#eac47e, wide, opacity 0.24, slight blur; notebook 7 units, Dawn 1 tile unit), points at 0.35.
+- Not done (Sam): idea 5 (the empty glass) and idea 6 (ringing doors on the map), both built and taken out again.
+- Sound: Sam does all audio himself later; don't list it as outstanding.
+
+---
+
 # Minigame play-test: paused for an overnight run — 2026-10-13 (late)
 
 Sam asked for every minigame to be played for real (win and loss, routing, errors). Started, then paused at his request; he'll restart it as an overnight task. Nothing found yet, nothing changed.

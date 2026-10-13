@@ -7857,7 +7857,10 @@ setTimeout(function() {
 _startCarryTransition() {
 var narr = document.getElementById('bar-narrative');
 document.getElementById('bar-round-display').textContent = '\u2727 Drinks ready! \u2727';
-narr.innerHTML = '<em style="color:#d4a574;">Now carry the tray back to the stage.</em>';
+// 2026-10-14 (overnight report, Sam: fix): the pours used to count for nothing; good pours (5 of a possible 6) steady the
+// hands, and the first knock on the way to the stage spills nothing
+this.carryPhase.steady = this.mScore >= 5 ? 1 : 0;
+narr.innerHTML = '<em style="color:#d4a574;">Now carry the tray back to the stage.' + (this.carryPhase.steady ? ' Your pours were good: steady hands, one knock forgiven.' : '') + '</em>';
 this.phase = 'carryWait';
 var self = this;
 setTimeout(function() {
@@ -8253,6 +8256,7 @@ for (var i = 0; i < cp.obstacles.length; i++) {
       if (window.dssAudio && window.dssAudio.glassClink) window.dssAudio.glassClink();
     } else {
       obs.hit = true;
+      if (cp.steady > 0) cp.steady--; else
       cp.glassesLeft = Math.max(0, cp.glassesLeft - 1);
       cp.wobbling = false;
       cp.wobbleTimer = 0;
@@ -8423,6 +8427,7 @@ if (cp.pitFalling) {
         cp.wobbling = true;
         cp.wobbleTimer = 3.0;
       } else {
+        if (cp.steady > 0) cp.steady--; else
         cp.glassesLeft = Math.max(0, cp.glassesLeft - 1);
         cp.wobbling = false;
         cp.wobbleTimer = 0;
@@ -12003,6 +12008,21 @@ document.addEventListener('pointerdown', function(ev) {
   var back = Array.prototype.find.call(document.querySelectorAll('.phone-ringing tw-link'), function(l) { return l.getClientRects().length && /^back to the bar$/i.test(l.textContent.trim()); });
   if (!back) return;
   ev.preventDefault(); ev.stopPropagation(); back.click();
+}, true);
+// 2026-10-14 (overnight report, Sam: fix): Escape on a hand-held card (coin, matches, key, flower, errand) presses its one
+// putting-away button, as the notebook and the slips already close on Escape; a card offering a choice (two buttons) is left alone
+document.addEventListener('keydown', function(ev) {
+  if (ev.key !== 'Escape' || ev.defaultPrevented) return;
+  var f = document.activeElement; if (f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)) return;
+  var cards = document.querySelectorAll('#coin-overlay, #match-overlay, #dss-key-overlay, #dss-quest-overlay, #dss-lily-overlay');
+  for (var i = cards.length - 1; i >= 0; i--) {
+    var c = cards[i]; if (!c.getClientRects().length || getComputedStyle(c).display === 'none') continue;
+    var btns = Array.prototype.filter.call(c.querySelectorAll('button, tw-link'), function(b) { return b.getClientRects().length; });
+    // only a button that puts the card away (Pocket them, On., the flower's), never an action such as Toss it
+    var b0 = btns.length === 1 && btns[0];
+    if (b0 && (b0.matches('.coin-overlay-dismiss, .dss-key-leave, .dss-lily-close') || (b0.matches('.dss-quest-go') && b0.textContent.trim() === 'On.'))) { ev.preventDefault(); ev.stopPropagation(); b0.click(); }
+    return;
+  }
 }, true);
 window.dssRingHold = (function() {
   function roomWords(card) {
@@ -22754,7 +22774,9 @@ if (pe.closest('tw-link, .phone-ringing, script, style, .dss-claimed, .dss-claim
 if (!pe.getClientRects().length) continue;
 out.push(t.nodeValue.replace(/\s+/g, ' '));
 }
-return out.join(' ').trim();
+// 2026-10-14 (overnight report, Sam: fix): marks with no words (the "~", an ornament) are not words to open the panel for
+var said = out.join(' ').trim();
+return /[A-Za-z0-9\u00C0-\u024F]/.test(said) ? said : '';
 }
 var full = false, mode = 'room', camMode = 'idle', shownProse = null;
 // If the browser takes the room's WebGL context and does not give it back (Safari does this
@@ -26327,7 +26349,7 @@ for (var i = 0; i < pos.count; i++) {
 var x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), a = Math.atan2(z, x), rr = Math.hypot(x, z);
 var flute = Math.max(0, Math.cos(a * 20)); var f = 1 - 0.05 * flute * flute;
 if (brokenTop && y > h / 2 - 0.01) { var j = rnd(seedA + a * 13) * 0.3; pos.setY(i, y - j); f *= 0.95 + rnd(a * 7 + seedA) * 0.1; }
-pos.setX(i, x / rr * rr * f); pos.setZ(i, z / rr * rr * f);
+if (rr > 1e-6) { pos.setX(i, x * f); pos.setZ(i, z * f); } // 2026-10-14: the cap's centre point (rr 0) went 0/0 = NaN (the console's computeBoundingSphere warning)
 }
 geo.computeVertexNormals(); return geo;
 }
@@ -52210,7 +52232,7 @@ window.dssEndgameStage = function(stage, marker) {
 <!-- Bail timers count from PASSAGE render, and every game starts behind a
      rules popup the player can dwell on — so all four bails run generous
      (150s) to guarantee they only ever appear on a genuine stall. -->
-(after: 150s)[<div class="canvas-bail">Your eyes lose the ball for good. [[Concede the table.|PP Defeat]]</div>]
+(after: 150s)[<div class="canvas-bail pp-bail">Your eyes lose the ball for good. [[Concede the table.|PP Defeat]]</div>]
 <script>
 (function(){var __boot=function(){
 var opponent = (document.getElementById('pp-data-opponent') || {}).textContent || 'Opponent';
@@ -52237,6 +52259,7 @@ var ctx = canvas.getContext('2d');
 var playerScore = 0, oppScore = 0, rallyCount = 0; // rallyCount escalates ball speed each serve
 var playerStreak = 0, rallyBurst = 0, hitSparks = [];
 var gameOver = false, paused = false, serving = true, serveTime = Date.now();
+document.body.classList.remove('pp-bail-ok');
 var ball = {x:W/2,y:H/2,dx:0,dy:0,r:5,base:5.0};
 var pPad = {x:12,y:H/2-35,w:8,h:70};
 var oPad = {x:W-20,y:H/2-35,w:8,h:70};
@@ -52410,6 +52433,8 @@ if(ball.x<-20){oppScore++;pointEnd(false);}
 else if(ball.x>W+20){playerScore++;pointEnd(true);}
 }
 function pointEnd(pw){
+/* 2026-10-14 (overnight report, Sam: fix): the bail waits for the end of a point, never pops in mid-rally */
+if(document.querySelector('.pp-bail'))document.body.classList.add('pp-bail-ok');
 if(window.dssAudio&&window.dssAudio.pongPoint)window.dssAudio.pongPoint(pw);
 /* Brief canvas tint so the point lands visually — cool white when you take
    it, red when it gets past you. Fades over ~500ms in draw(). */
@@ -52754,7 +52779,7 @@ What have you got to lose?
 
 <div class="french-lose-choices">
 [[Nothing|The novelist]]
-(link: "Everything")[(set: $confidence to ($statLoss: $confidence, 9))(go-to: "Dean Street")]
+<!-- 2026-10-14 (Sam, A): "Everything" also leads into his reading and THE REFUSAL, at a higher price than "Nothing" (6 more morale; the reading takes its own 9) -->(link: "Everything")[(set: $confidence to ($statLoss: $confidence, 6))(go-to: "The novelist")]
 </div>
 
 (display: "French Rule SVG h24")</svg>
@@ -52959,7 +52984,7 @@ You watch: from the stockroom, brassy figures emerge, lifesized and dancing; it 
 :: Cecil Court Waltz [venue-cecilcourt waltz-game] {"position":"300,1610","size":"100,100"}
 <div class="waltz-frame">
 <canvas id="waltz-canvas" aria-label="Waltz rhythm minigame" width="360" height="540" style="display:block;margin:0.6em auto;max-width:100%;height:auto;"></canvas>
-<div class="waltz-keys">&larr; &nbsp; &darr; &nbsp; &rarr; <span class="waltz-keys-aux">&nbsp;&nbsp;or A &nbsp; S &nbsp; D &nbsp;&middot;&nbsp; or tap the lanes</span></div>
+<div class="waltz-keys"><span class="dss-desk-only">&larr; &nbsp; &darr; &nbsp; &rarr; <span class="waltz-keys-aux">&nbsp;&nbsp;or A &nbsp; S &nbsp; D &nbsp;&middot;&nbsp; or tap the lanes</span></span><span class="dss-touch-only">tap the lanes</span></div>
 <div id="waltz-onward" style="display:none;text-align:center;margin-top:1em;">[[Onward, then.|Approach O'Flatterly]]</div>
 <span id="waltz-up" style="display:none;">[[Onward, then.|Waltz Result Up]]</span>
 <span id="waltz-down" style="display:none;">[[Onward, then.|Waltz Result Down]]</span>
@@ -57418,9 +57443,10 @@ ctx.fillStyle='#e8c060'; ctx.font='bold 9px monospace';
 ctx.fillText('DODGED ' + dodged, W-12, 28);
 }
 /* controls hint */
-if(phase==='practice'||phase==='real'){
-ctx.fillStyle='rgba(100,80,20,0.35)'; ctx.font='8px monospace'; ctx.textAlign='right';
-ctx.fillText('\u2190\u2192 or click lane',W-8,H-4);
+/* 2026-10-14 (overnight report, Sam: fix): it sat on the RIGHT lane label; now top left, and on a touch screen the rules card says it */
+if((phase==='practice'||phase==='real') && !(window.matchMedia&&window.matchMedia('(hover: none) and (pointer: coarse)').matches)){
+ctx.fillStyle='rgba(100,80,20,0.45)'; ctx.font='8px monospace'; ctx.textAlign='left';
+ctx.fillText('\u2190\u2192 or click a lane',8,12);
 }
 }
 
@@ -65324,6 +65350,10 @@ box-shadow: none;
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
+/* 2026-10-14 (overnight report, Sam: fix): the notebook's round × sat over the MAP tab on a phone */
+.nb-tabs { padding-right: 52px !important; } /* the tab bar is styled inline by script, so this needs !important */
+/* 2026-10-14 (overnight report, Sam: fix): the rising +N/-N ran over the SOBRIETY label on a phone */
+.stat-delta { font-size: 0.95em; top: -2px; }
 /* Header is shorter on phones (reduced padding) — keep back tucked just under it */
 .back-one-link { top: 142px; }
 /* Notebook fills the phone screen instead of the desktop 60vw column, so the
@@ -66235,6 +66265,7 @@ z-index: 1;
 .memory-photo-a4 { --rot:  0.7deg; }
 /* Emergency escape link for the canvas minigames — revealed only by a long (after:)
    timer if a game's JS auto-navigation stalls, so a player can never get stranded. */
+body:not(.pp-bail-ok) .canvas-bail.pp-bail { display: none; }
 .canvas-bail { text-align: center; margin: 1.4em auto 0.4em; font-style: italic; color: rgba(150,130,90,0.6); font-size: 0.9em; }
 .canvas-bail tw-link, .canvas-bail a { color: rgba(196,164,112,0.9); }
 /* A3 is a single short line — centre it both ways in the photo frame. */
@@ -74430,6 +74461,7 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
   var removers=[], loader=null, eng=null, feedbackTimer=null, lastNow=null, accumulator=0;
   var started=false, paused=false, finished=false, ending=-1, turned=false;
   var keys={}, pointerKeys={}, bufferT=0, coyoteT=.20, jumpCut=false;
+  var hcTouch=!!(window.matchMedia&&window.matchMedia('(hover: none) and (pointer: coarse)').matches);
   var s=2, u=0, y=0, vy=0, grounded=true, breath=1, slips=0, prints=0, checkpoint=2;
   var time=0, yetiS=13, nextPrint=3, printList=[], collected=new Set(), flagObjects=[];
   var climber, yeti, eyeMaterial, cameraReady=false, lastHUD='', running=0;
@@ -74782,8 +74814,11 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
     var material=new THREE.MeshBasicMaterial({color:0x57c7ff,transparent:true,opacity:.95,depthWrite:false});
     var g=new THREE.Group(),geo=new THREE.CircleGeometry(1,10);
     [-1,1].forEach(function(side){var foot=new THREE.Mesh(geo,material);foot.rotation.x=-Math.PI/2;foot.scale.set(.16,.32,1);foot.position.set(side*.19,0,side*.18);g.add(foot);});
-    g.position.copy(position(at,0,height(at)+.045));g.rotation.y=-Math.atan(tangent(at));scene.add(g);
-    printList.push({s:at,born:time,mesh:g,material:material,geometry:geo,id:Math.round(at*100)});
+    // 2026-10-14 (overnight report, Sam: fix): the prints wander across the path, so following them takes steering
+    // (on the centre line they collected themselves); on the narrow bridge they keep near the middle
+    var lim=Math.max(.2,width(at)/2-.9),pu=Math.max(-lim,Math.min(lim,1.6*Math.sin(at*.55)+.5*Math.sin(at*1.7)));
+    g.position.copy(position(at,pu,height(at)+.045));g.rotation.y=-Math.atan(tangent(at));scene.add(g);
+    printList.push({s:at,u:pu,born:time,mesh:g,material:material,geometry:geo,id:Math.round(at*100)});
   }
   // A fall is a whirlwind, not a teleport (Sam: "swept back onto the course
   // in a whirlwind like you did in the old version"). The climber is lifted,
@@ -74891,7 +74926,7 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
     if(avalanche.phase==='warning'){avalanche.t+=dt;avalanche.front=Math.max(s+18,avalanche.front-5*dt);if(avalanche.t>4){avalanche.phase='running';avalanche.t=0;}}
     if(avalanche.phase==='running'){
       var oldFront=avalanche.front;avalanche.front-=18*dt;avalanche.t+=dt;var C2=COULOIRS[avalanche.index];
-      if(!avalanche.cued && avalanche.front>s && (avalanche.front-s)/(18+Math.max(0,(s-oldS)/dt))<.50){avalanche.cued=true;announce('JUMP · HOLD SPACE');}
+      if(!avalanche.cued && avalanche.front>s && (avalanche.front-s)/(18+Math.max(0,(s-oldS)/dt))<.50){avalanche.cued=true;announce(hcTouch?'JUMP · HOLD JUMP':'JUMP · HOLD SPACE');}
       if(oldS<=oldFront && s>=avalanche.front && Math.abs(u)<width(s)/2 && y-height(s)<.6){respawn();announce('AVALANCHE · SWEPT BACK');return;}
       else if(avalanche.front<s-6 || avalanche.front<4){avalanche.phase='idle';avalanche.index=-1;}
     }
@@ -74903,13 +74938,13 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
     // A bounded trail of nine prints. They fade while the player pauses to chant.
     while(nextPrint<yetiS-1){makePrint(nextPrint);nextPrint+=1.35;}
     printList.forEach(function(p){var age=time-p.born;var available=!collected.has(p.id)&&age<24;p.mesh.visible=available;p.material.opacity=Math.max(0,.95-age/26);
-      if(available && Math.abs(s-p.s)<.75 && Math.abs(u)<.78 && Math.abs(y-height(p.s))<.7){collected.add(p.id);prints++;p.mesh.visible=false;if(eng)eng.tick();}
+      if(available && Math.abs(s-p.s)<.75 && Math.abs(u-(p.u||0))<.6 && Math.abs(y-height(p.s))<.7){collected.add(p.id);prints++;p.mesh.visible=false;if(eng)eng.tick();}
     });
     while(printList.length>9){var old=printList.shift();scene.remove(old.mesh);old.geometry.dispose();old.material.dispose();}
     if(s>=LENGTH-8 && grounded){ending=0;yetiS=LENGTH;clearInput();banner.textContent='';banner.style.opacity='0';hud.textContent='';}
     else{var wa=Math.min(4,Math.round(Math.abs(push)/.9)),windTxt=gust.phase==='warning'?'GUST COMING':wa===0?'WIND · calm':'WIND '+(push<0?'◀'.repeat(wa):'▶'.repeat(wa));
       var nearGap=GAPS.concat([CORNICE]).find(function(g){return g[0]-s>=-.1 && g[0]-s<6;});
-      var hazard=avalanche.phase!=='idle'?(avalanche.cued?'JUMP · HOLD SPACE':'AVALANCHE APPROACHING · GET READY'):nearGap?'GAP AHEAD · HOLD JUMP + ↑':STEPS.some(function(edge){return edge>=s && edge-s<2;})?'STEP UP · JUMP':'';
+      var hazard=avalanche.phase!=='idle'?(avalanche.cued?(hcTouch?'JUMP · HOLD JUMP':'JUMP · HOLD SPACE'):'AVALANCHE APPROACHING · GET READY'):nearGap?'GAP AHEAD · HOLD JUMP + ↑':STEPS.some(function(edge){return edge>=s && edge-s<2;})?'STEP UP · JUMP':'';
       var label=(hazard?hazard+'   ·   ':'')+'PRINTS '+prints+' / 10   ·   SLIPS '+slips+' / 3   ·   BREATH '+Math.round(breath*100)+'%   ·   '+windTxt+(climbing?'   ·   LADDER · HOLD ↑':chant?'   ·   '+['DATTA','DAYADHVAM','DAMYATA'][Math.floor(time*1.7)%3]:breath<.25?'   ·   Hold ↓ to chant':'');if(label!==lastHUD){hud.textContent=label;lastHUD=label;}}
     if(eng)eng.update(gust.phase!=='idle' || avalanche.phase!=='idle' || Math.abs(push)>1.4,chant,false);
   }
@@ -75477,6 +75512,7 @@ Massive earthworms are breaking through the floor!
 (set: _sober to ($sobriety is a number and $sobriety >= 30))
 <!-- the place Dean Street itself offers for sobering up or a bite (its low-state chain: low both, then low morale, then low sobriety), or "" when it offers none (the wanderer playthrough: NEXT pointed at a doorway or a greyed chippy the street wasn't offering) -->(set: _soberTo to "")
 (if: $returns is a number and $returns >= 3 and ($blackouts is not a number or $blackouts < 2) and ($hutBurnt is not true))[(if: $confidence < 30 and $sobriety < 30 and (($hadChippy is not true) or ($hadBreather is not true)))[(if: ($hadBreather is not true))[(set: _soberTo to "doorway")](else:)[(set: _soberTo to "chippy")]](else-if: $confidence < 40 and ($hadChippy is not true))[(set: _soberTo to "chippy")](else-if: $sobriety < 40)[(if: ($hadBreather is not true))[(set: _soberTo to "doorway")](else-if: ($hadChippy is not true))[(set: _soberTo to "chippy")]]]
+<!-- 2026-10-14 (overnight report, Sam: fix): under 30 with nothing on the street's chain, NEXT sent the player to a flower too drunk to gather; the doorway in Diadem Court, always open, is the place to sober up -->(if: (_soberTo is "") and ($sobriety is a number) and ($sobriety < 30) and ($hutBurnt is not true))[(unless: ($blackouts is a number) and ($blackouts >= 2))[(set: _soberTo to "dwdiadem")]]
 (if: $notebook is "stolen")[(set: $nextId to "foyles")(set: $nextLabel to "CHARING CROSS ROAD")]
 (else-if: $hutBurnt is true and ($coachBurnt is not true))[(set: $nextId to "coach")(set: $nextLabel to "THE COACH AND HORSES")]
 (else-if: $coachUrgent is true)[(set: $nextId to "coach")(set: $nextLabel to "THE COACH AND HORSES")]
@@ -75496,7 +75532,7 @@ Massive earthworms are breaking through the floor!
 <!-- 2026-10-12 (Sam, item 16): the haunts came in a fixed order, so NEXT could send you straight back to the place you had just left (the French, three times over for its three haunts). The places still owing a haunt are listed in the same order; if the first is the venue you were last inside and another is on the list, NEXT names that one instead. Inside a venue it is unchanged (HERE). $lastVenueId is the last venue you were in. -->(if: $nextId is "")[(set: _hc to (a:))(unless: ($haunts contains $haunt1) and ($haunts contains $haunt2) and ($haunts contains $haunt4))[(set: _hc to _hc + (a: "french"))](if: ($knowsRonnies is true) and ($completedSetlist is not true))[(set: _hc to _hc + (a: "ronnies"))](if: ($hasTrishaMatchbook is true) and ($metShana is not true))[(set: _hc to _hc + (a: "trishas"))](if: ($knowsLackland is true))[(unless: $haunts contains $haunt5)[(set: _hc to _hc + (a: "lackland"))]](if: _hc's length is 0)[(set: _hc to (a: "colony"))](set: _pick to _hc's 1st)(if: _hc's length > 1 and _here is "")[(if: _pick is $lastVenueId)[(set: _pick to _hc's 2nd)]](set: $nextId to _pick)(set: $nextLabel to (dm: "french", "THE FRENCH", "ronnies", "RONNIE SCOTT’S", "trishas", "TRISHA’S", "lackland", "LACKLAND’S", "colony", "THE COLONY ROOM")'s (_pick))]
 ]
 (if: $nextId is "")[(set: $nextId to "french")(set: $nextLabel to "THE FRENCH")]
-(if: $nextId is "doorway")[(set: $nextLabel to "A DOORWAY")](else-if: $nextId is "chippy")[(set: $nextLabel to "FISH AND CHIPS")]
+(if: $nextId is "doorway" or $nextId is "dwdiadem")[(set: $nextLabel to "A DOORWAY")](else-if: $nextId is "chippy")[(set: $nextLabel to "FISH AND CHIPS")]
 <!-- 2026-10-13 (Sam: "The 'next' shows too soon ... when I entered the French the first time it already said: 'Next The pillars'
      before I had any idea what that is. It should change/appear when I leave"): inside a venue NEXT holds what it said as you
      walked in (HERE, when it sent you there); it moves on when you leave. $nextHoldId/$nextHoldLabel keep the last outside answer. -->(if: _here is not "")[(if: ($nextHoldId is a string) and ($nextHoldId is not ""))[(set: $nextId to $nextHoldId)(set: $nextLabel to $nextHoldLabel)]](else:)[(set: $nextHoldId to $nextId)(set: $nextHoldLabel to $nextLabel)]

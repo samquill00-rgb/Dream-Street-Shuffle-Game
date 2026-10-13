@@ -1,3 +1,23 @@
+# Sam's calls on the overnight list — 2026-10-14
+
+- **Fixed (Sam: yes):**
+  - 1: a room's words panel no longer opens when it holds no words, only "~" or ornaments (`prose()` in `dssRoomProse`). The French revisit box is gone; a first visit still opens.
+  - 2: already worked (the room says SOMETHING HERE TO TAKE when only the lighter waits); the overnight test still had a flower in the room.
+  - 3: under 30 sobriety with nothing on the street's chain, NEXT sends you to the Diadem Court doorway (`dwdiadem`, always open), label A DOORWAY.
+  - 4: Pong's "Concede the table." waits until a point ends (`.pp-bail`, body `.pp-bail-ok`).
+  - 5: The Climb's prints wander across the path (`makePrint` sets `p.u`; collect within 0.6 of it); touch cue "JUMP · HOLD JUMP" (`hcTouch`).
+  - 6: phone fixes: the waltz shows only "tap the lanes" on touch; the cow's lane hint is top left and hidden on touch; the notebook × no longer covers the MAP tab (`.nb-tabs` padding-right 52px !important in the 600px media); the rising +N/-N is smaller on phones. The header hint overlap was not reproduced (fine on Dean Street at 390px).
+  - 8: the Pillars' NaN geometry warning came from `flutedShaft` dividing by zero at each cap's centre; guarded. Warning gone.
+  - 9: Ronnie's bar game: pours of 5 of 6 or better make `carryPhase.steady` = 1, and the first knock spills nothing (a short line on the carry card says so).
+  - 10: Escape on a hand-held card presses its put-away button (Pocket them, On., the flower's), never an action such as Toss it.
+  - 7 and 14 (Ronnie's room frame rate, slow room loads): a read-only profiling agent is measuring; fixes to follow.
+- **Sam's rulings:**
+  - 11: the novelist's "Everything" (−9 morale, to the street, haunt still there next visit). Sam asked if it can earn a haunt; offered A (Everything also leads into the reading at a higher cost) or B (a short scene of his own with a different haunt). Sam chose A: "Everything" now costs 6 morale and goes to "The novelist" (which takes its own 9), so both answers reach THE REFUSAL.
+  - 12: the doorway and gents cards' silhouette STAYS (Sam: "kinda funny that that's the only time you glimpse him").
+  - 13: card styles: undecided (arguments for consistency and for variation). Left as they are.
+
+---
+
 # Overnight run — 2026-10-14
 
 Headless and muted throughout (Playwright Chromium, `--mute-audio`, `dssMuted2`). No git. Synced after every fix. Screenshots: `/private/tmp/claude-501/-Users-samquill-Claude-work-Dream-Street-Shuffle---Game-Files/c6a51d06-8c97-4b6e-babf-b5f00f350db8/scratchpad/overnight/shots/` (SHOTS below).

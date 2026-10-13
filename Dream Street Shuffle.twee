@@ -11727,6 +11727,75 @@ if (e.target && e.target.id === 'fight-start-btn') window.startFightGame();
 // ringing card arrives beside words of the room's own, it is held back (.ring-wait) for a reading beat, about
 // 2 s plus 30 ms a character, at most 7 s (a room's name alone, about 2.5 s), or until the room's opening box is
 // closed; then it rings as before. A card with nothing beside it rings at once.
+// THE LORE AS FOOTNOTES (2026-10-13, Sam: the 'Lore' passages "seem like something from an older version of the game now";
+// his choice, footnotes). The passages are unchanged: each (link: "⟡ LORE: Title ⟡") is hidden and a small dagger is set at
+// the end of the sentence before it; the dagger, or a room object's button that holds the same link, presses the link,
+// and what it reveals (his words, Harlowe's own hook) is lifted into a note card headed with the title. Closing the card
+// keeps the note; the dagger opens it again.
+window.dssLore = (function() {
+  var RX = /^\s*(?:⟡\s*)?LORE:\s*/; // the links' ornament script takes the ⟡ off their text
+  function isLore(t) { return RX.test(t || ''); }
+  function titleOf(t) { return String(t || '').replace(RX, '').replace(/\s*⟡\s*$/, '').trim(); }
+  var notes = {};
+  function close() { var o = document.getElementById('dss-lore-overlay'); if (o) { o.classList.add('out'); setTimeout(function() { if (o.parentNode) o.parentNode.removeChild(o); }, 250); } }
+  function show(title) {
+    var held = notes[title]; if (!held) return;
+    close();
+    var o = document.createElement('div'); o.id = 'dss-lore-overlay';
+    var c = document.createElement('div'); c.className = 'dss-lore-card'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', title);
+    var x = document.createElement('button'); x.type = 'button'; x.className = 'dss-lore-x'; x.setAttribute('aria-label', 'Close'); x.textContent = '×';
+    var h = document.createElement('div'); h.className = 'dss-lore-title'; h.textContent = '† ' + title;
+    var b = document.createElement('div'); b.className = 'dss-lore-body'; b.appendChild(held);
+    if (held.querySelector('.lore-box > strong')) h.style.display = 'none'; // the note carries its own heading (his): no second one
+    c.appendChild(x); c.appendChild(h); c.appendChild(b); o.appendChild(c); document.body.appendChild(o);
+    function done() { if (held.parentNode === b) b.removeChild(held); close(); document.removeEventListener('keydown', onKey, true); }
+    function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); done(); } }
+    x.addEventListener('click', done);
+    o.addEventListener('click', function(ev) { if (ev.target === o) done(); });
+    document.addEventListener('keydown', onKey, true);
+    requestAnimationFrame(function() { o.classList.add('in'); try { x.focus({ preventScroll: true }); } catch (e) {} });
+  }
+  // a LORE link pressed (its dagger, or a room card's button): gather what it reveals into the note, then show the card
+  document.addEventListener('click', function(ev) {
+    var l = ev.target && ev.target.closest && ev.target.closest('tw-link');
+    if (!l || !isLore(l.textContent)) return;
+    var t = titleOf(l.textContent), hook = l.parentElement;
+    if (notes[t]) { ev.preventDefault(); ev.stopImmediatePropagation(); show(t); return; }
+    setTimeout(function() {
+      if (!hook || !hook.isConnected) return;
+      var frag = document.createElement('div'); frag.className = 'dss-lore-held';
+      Array.prototype.slice.call(hook.childNodes).forEach(function(n) { if (!(n.nodeType === 1 && n.tagName === 'TW-LINK')) frag.appendChild(n); });
+      hook.style.display = 'none';
+      notes[t] = frag; show(t);
+    }, 80);
+  }, true);
+  function placeDagger(l) {
+    if (l._dssLore) return; l._dssLore = true;
+    var t = titleOf(l.textContent), wrap = l.closest('tw-expression') || l.parentElement || l;
+    if (l.classList.contains('dss-claimed') || l.closest('.dss-claimed, .dss-claimed-wrap')) return; // a room object's card carries it
+    var fn = document.createElement('span'); fn.className = 'lore-fn'; fn.textContent = '†'; fn.title = t; fn.setAttribute('role', 'button'); fn.tabIndex = 0; fn.setAttribute('aria-label', 'Note: ' + t);
+    fn.addEventListener('click', function(ev) { ev.stopPropagation(); if (notes[t]) show(t); else if (l.isConnected) l.click(); });
+    fn.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); fn.click(); } });
+    // the end of the sentence before the link: skip line breaks and blank text back to the last words
+    // (skip line breaks, scripts and anything without words, then sit after the last words inside what is found)
+    function lastWords(el) { var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), last = null; while (w.nextNode()) { var tn = w.currentNode; if (tn.nodeValue.trim() && !tn.parentNode.closest('script, style, tw-link, svg, [hidden]')) last = tn; } return last; }
+    var prev = wrap.previousSibling, spot = null;
+    while (prev && !spot) {
+      if (prev.nodeType === 3 && prev.nodeValue.trim()) spot = prev;
+      else if (prev.nodeType === 1 && !/^(SCRIPT|STYLE|SVG|TW-LINK|BUTTON)$/i.test(prev.tagName) && !prev.classList.contains('lore-hidden-link')) spot = lastWords(prev);
+      if (!spot) prev = prev.previousSibling;
+    }
+    if (spot) spot.parentNode.insertBefore(fn, spot.nextSibling);
+    else wrap.parentNode.insertBefore(fn, wrap);
+    wrap.classList.add('lore-hidden-link');
+  }
+  function scan() { Array.prototype.forEach.call(document.querySelectorAll('tw-link'), function(l) { if (isLore(l.textContent)) placeDagger(l); }); }
+  var q = false;
+  function watch() { new MutationObserver(function() { if (q) return; q = true; setTimeout(function() { q = false; scan(); }, 60); }).observe(document.body, { childList: true, subtree: true }); }
+  if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
+  return { scan: scan, show: show };
+})();
+window.dssLoreLabel = function(t) { return /^\s*(?:⟡\s*)?LORE:/.test(t || '') ? '† ' + String(t).replace(/^\s*(?:⟡\s*)?LORE:\s*/, '').replace(/\s*⟡\s*$/, '').trim() : t; };
 window.dssRingHold = (function() {
   function roomWords(card) {
     var root = card.closest('.dss-room-prose') || card.closest('tw-passage');
@@ -16526,6 +16595,7 @@ soloDebounce = setTimeout(checkSoloLink, 350);
         tagExisting();
         try {
           var seenSet = window.dssSeenLore;
+          if (window.dssLore) return; // 2026-10-13: LORE notes are footnotes now (dssLore); a note read before is not printed inline again
           if (!seenSet || !seenSet.size) return;
           var preBoxes = new Set();
           var preDoc = document.querySelectorAll('.lore-box');
@@ -23757,7 +23827,7 @@ Array.prototype.forEach.call(card.querySelectorAll('.dss-card-keyart svg'), func
 var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
-b.className = 'fi-action'; b.textContent = link.textContent.trim(); b.style.cssText = BTN; keyable(b);
+b.className = 'fi-action'; b.textContent = window.dssLoreLabel ? window.dssLoreLabel(link.textContent.trim()) : link.textContent.trim(); b.style.cssText = BTN; keyable(b);
 if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
 if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
@@ -63345,6 +63415,19 @@ text-shadow: none;
 }
 
 /* ===== LORE BOX ===== */
+/* 2026-10-13: the LORE as footnotes (dssLore): the hidden link, the dagger in the prose and the note card */
+.lore-hidden-link { display: none !important; }
+.lore-fn { display: inline-block; vertical-align: super; font-size: 0.72em; line-height: 1; margin-left: 0.18em; padding: 0 0.15em; color: #d8b870; cursor: pointer; text-shadow: 0 0 8px rgba(216,184,112,0.45); font-style: normal; transition: color 0.2s, text-shadow 0.2s; }
+.lore-fn:hover, .lore-fn:focus-visible { color: #ffe2a0; text-shadow: 0 0 12px rgba(255,220,150,0.8); outline: none; }
+#dss-lore-overlay { position: fixed; inset: 0; z-index: 9999990; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; opacity: 0; transition: opacity 0.3s ease; }
+#dss-lore-overlay.in { opacity: 1; } #dss-lore-overlay.out { opacity: 0; }
+.dss-lore-card { position: relative; box-sizing: border-box; width: min(560px, 100%); max-height: 86vh; overflow-y: auto; padding: 1.6em 1.9em 1.5em; background: linear-gradient(180deg, #1c1408, #0c0804); border: 1px solid rgba(184,154,96,0.42); outline: 1px solid rgba(184,154,96,0.13); outline-offset: 5px; box-shadow: 0 0 40px rgba(0,0,0,0.65); color: #d4c4a8; font-family: 'Crimson Text', Georgia, serif; }
+.dss-lore-title { font-family: 'Playfair Display', Georgia, serif; font-size: 0.82em; letter-spacing: 0.22em; text-transform: uppercase; color: #d8b870; margin: 0 1.6em 0.9em 0; }
+.dss-lore-x { position: absolute; top: 0.55em; right: 0.6em; width: 1.8em; height: 1.8em; border-radius: 50%; border: 1px solid rgba(216,184,112,0.45); background: transparent; color: #d8b870; font-size: 1em; line-height: 1; cursor: pointer; }
+.dss-lore-x:hover { background: rgba(216,184,112,0.15); }
+.dss-lore-body .lore-box { margin: 0; background: none; box-shadow: none; padding: 0; }
+.dss-lore-body .lore-box::before { display: none; }
+@media (max-width: 520px) { .dss-lore-card { padding: 1.3em 1.2em 1.2em; } }
 .lore-box {
 position: relative;
 background: linear-gradient(135deg, #131513 0%, #1a1c1a 50%, #131513 100%);

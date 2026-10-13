@@ -1,3 +1,14 @@
+# Sam's playtest notes — 2026-10-13 (evening)
+
+1. **The Donkey coin card** (Sam: the frame/layout felt old): the hand-held cards (coin, matches, key, flower, quest) sit on a gilt-edged plate like the rules cards (`#coin-overlay .coin-overlay-box` etc.).
+2. **The Ginger Light's plate** stood over the corner you walk to (phone especially): moved up and right (ltx 24.4, lty 24.9).
+3. **NEXT too soon** (it said THE PILLARS on the French's first visit): inside a venue NEXT holds what it said as you walked in (`$nextHoldId`/`$nextHoldLabel`, Next Target) and moves on when you leave.
+4. **The French's path intros** (IMPORTANT): the artists' paragraphs and the novelist's line moved off the first visit's opening onto the painter's and the novelist's cards in the room (hidden `.fr-path-intro` spans read by the hotspots' `prose`; the card keeps paragraph breaks). The man at the bar's own intro was already in his scene. Flagged to Sam, not changed: the novelist's card ("In the corner, you spot a familiar face…") then his scene ("There, sitting quietly at a table in the corner, you spot…") repeat "corner" and "spot".
+5. **LORE as footnotes** (Sam's choice): `window.dssLore` hides each "⟡ LORE: Title ⟡" link (the ornament script strips the ⟡ from the text, so match `LORE:`) and sets a gold dagger † after the last words before it; the dagger presses the link and lifts what it reveals into a note card (gilt plate, his heading kept, ours "† Title" only when the note has none); it reopens. The old auto-expand of seen notes is off. A room card's LORE button would read "† Title" (`dssLoreLabel`), but the links are hidden before the rooms claim them, so the notes live as daggers in the opening text.
+6. **The blur on a ringing phone** (IMPORTANT, long-standing): in a 3D room or plain page the ring card sat inside the panel's stacking context (z 900) under the blur veil (98999), so the card blurred too; the panel is lifted to 99001 while a phone rings.
+
+---
+
 # Sam's last playthrough notes — 2026-10-13
 
 - **Phone calls look like calls** ("MAKE THE PHONECALLS LOOK DIFFERENT"; Sam: different from the rest of the game). Every `.phone-scene` shares an "on the line" look: a dark rounded Bakelite-like panel, a faint rotary dial behind the words, fine line static over it (still under reduced motion), the caller's lines on the left with a soft glow and your lines set to the right. Callers keep their colours (AOIFE red-brown, LILY violet). The ship call (`The Phone Box Answered`) is now wrapped in `.phone-scene.phone-box-call` too, so it shares the look and, as a phone scene, the heartbeat and line sound.

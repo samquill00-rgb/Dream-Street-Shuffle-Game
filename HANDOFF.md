@@ -1,3 +1,13 @@
+# Pre-playtest checks — 2026-10-14 (afternoon)
+
+A read-only sweep (202 passages, no errors), a phone pass (390x844) and an fps census, then fixes:
+- **Airport Pub (Himalayas dream) 9 → 55 fps:** 40 point lights + 9 spots. Left out the crate bulbs, booth wall lamps, concourse wall lamps, shelf strips (one kept, brighter), TV, exit sign, tank/fridge glows, sub-sign glow; troffer lights 6 → 2; pendant lights on 5 of 8 (1.9); track spots 5 → 3 (by tz*10, float-safe); shadows redrawn every 4th frame (`apShadowF`). Before/after shots match (scratchpad/speed/airport_*.png).
+- **Approach Ronnie Scott's 46 → 52:** street-lamp cube shadows off (the neon keeps its). Its remaining cost is spread over ~270 sprites and ~400 transparent meshes; left as is.
+- **Phone:** notebook tabs no longer collide (smaller, tighter labels; `.nb-tab` !important in the 600px block); the room panel starts 16px lower so the header's alba line no longer sits on its border; the Cellar's round header keeps "ROUND 1 OF 3" together (&nbsp;).
+- **Not changed (by design or minor):** the room panel's TO THE BAR button is sticky at the bottom and scrolls over text on a phone (deliberate, always reachable); notebook MAP labels are tiny on a phone (a scaled drawing); Pong's "CENTRE HITS" hint and the cow's HUD are small on a phone; the napkin's swatches sit low on a phone; Trisha's back link touches its sign; the French lamp post crosses the sign (the 3D composition).
+
+---
+
 # Sam's calls on the overnight list — 2026-10-14
 
 - **Fixed (Sam: yes):**

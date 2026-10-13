@@ -23059,10 +23059,11 @@ return { show: show };
 window.dssRoomReveal = function(wrap, camera, glows, idle) {
 var layer = document.createElement('div'); layer.className = 'dss-room-reveal'; wrap.appendChild(layer);
 var marks = glows.map(function(g) {
-var m = document.createElement('div'); m.className = 'dss-room-mark';
+var m = document.createElement('div'); m.className = 'dss-room-mark dss-room-mark-free';
 var ring = document.createElement('i'); var name = document.createElement('span'); name.textContent = g.spot.name || '';
-m.appendChild(ring); m.appendChild(name); layer.appendChild(m);
-return { g: g, el: m, shown: true };
+var lead = document.createElement('b'); lead.className = 'dss-room-lead';
+m.appendChild(lead); m.appendChild(ring); m.appendChild(name); layer.appendChild(m);
+return { g: g, el: m, ring: ring, name: name, lead: lead, shown: true };
 });
 var until = 0, shown = false, v = new THREE.Vector3();
 function show(ms) { until = performance.now() + (ms || 4200); }
@@ -23077,22 +23078,36 @@ marks.forEach(function(m) {
 var vis = !!m.g.on;
 if (vis) { v.copy(m.g.sp.position).project(camera); vis = v.z < 1 && Math.abs(v.x) < 1.02 && Math.abs(v.y) < 1.02; }
 if (vis !== m.shown) { m.shown = vis; m.el.style.display = vis ? '' : 'none'; }
-if (vis) { m.x = (v.x + 1) / 2 * w; m.y = (1 - v.y) / 2 * h; m.el.style.top = m.y.toFixed(1) + 'px'; }
+if (vis) { m.x = (v.x + 1) / 2 * w; m.y = (1 - v.y) / 2 * h; }
 });
 // names that would print over one another step down a line, left to right, so each stays legible;
 // 2026-10-11 (phone check): a mark is slid in from the screen's edge so its name is never cut off, and on a
 // narrow screen the step between lines is wider (the mark is centred on its object, ring and name together)
-var placed = [], step = w < 480 ? 19 : 15;
-marks.filter(function(m) { return m.shown; }).sort(function(a, b) { return a.x - b.x; }).forEach(function(m) {
-var name = m.el.lastChild, W = m.el.offsetWidth || 90, cx = W > w - 8 ? w / 2 : Math.max(4 + W / 2, Math.min(w - 4 - W / 2, m.x)), k = 0, rect;
-if (m.cx !== cx) { m.cx = cx; m.el.style.left = cx.toFixed(1) + 'px'; }
-for (k = 0; k < 6; k++) {
-rect = { l: cx - W / 2, t: m.y - 8 + k * step, r: cx + W / 2, b: m.y + 8 + k * step };
-if (!placed.some(function(o) { return rect.l < o.r && rect.r > o.l && rect.t < o.b && rect.b > o.t; })) break;
+// 2026-10-14 (Sam: "the circle should be on the thing the label names"): every ring stays on its object; the name
+// sits beside it, and where names would crowd, a name moves to the nearest clear line (up or down, or to the other
+// side of its ring) with a thin leader back to the ring. No name is printed over another name or another ring.
+var shownM = marks.filter(function(m) { return m.shown; });
+var placed = shownM.map(function(m) { return { l: m.x - 9, t: m.y - 9, r: m.x + 9, b: m.y + 9, own: m }; }); // the rings
+var step = w < 480 ? 20 : 17, OFFS = [0, 1, -1, 2, -2, 3, -3, 4, -4];
+shownM.sort(function(a, b) { return a.x - b.x; }).forEach(function(m) {
+m.ring.style.left = (m.x - 7).toFixed(1) + 'px'; m.ring.style.top = (m.y - 7).toFixed(1) + 'px';
+var NW = m.name.offsetWidth || 90, NH = 14, best = null, i, side, k, nx, ny, rect;
+for (i = 0; i < OFFS.length && !best; i++) for (side = 0; side < 2 && !best; side++) {
+k = OFFS[i];
+nx = (side === 0) === (m.x + 14 + NW <= w - 4) ? m.x + 14 : m.x - 14 - NW; // the right of the ring first, unless it runs off
+if (nx < 4) nx = 4; if (nx + NW > w - 4) nx = w - 4 - NW;
+ny = m.y + k * step;
+rect = { l: nx - 3, t: ny - NH / 2 - 2, r: nx + NW + 3, b: ny + NH / 2 + 2 };
+if (rect.t < 2 || rect.b > h - 2) continue;
+if (!placed.some(function(o) { return rect.l < o.r && rect.r > o.l && rect.t < o.b && rect.b > o.t; })) best = { nx: nx, ny: ny, k: k, rect: rect }; // its own ring too: a name squeezed by the screen's edge never covers its ring
 }
-placed.push(rect);
-var ty = k ? 'translateY(' + (k * step) + 'px)' : '';
-if (name._ty !== ty) { name._ty = ty; name.style.transform = ty; }
+if (!best) best = { nx: Math.min(w - 4 - NW, m.x + 14), ny: m.y, k: 0, rect: { l: 0, t: 0, r: 0, b: 0 } };
+placed.push(best.rect);
+m.name.style.left = best.nx.toFixed(1) + 'px'; m.name.style.top = (best.ny - NH / 2).toFixed(1) + 'px';
+// the leader: from the ring's edge to the near end of the name, only when the name has left the ring's side
+var ex = Math.max(best.nx - 3, Math.min(best.nx + NW + 3, m.x)), ey = (ex > best.nx - 3 && ex < best.nx + NW + 3) ? best.ny + (m.y > best.ny ? NH / 2 + 1 : -NH / 2 - 1) : best.ny, dx = ex - m.x, dy = ey - m.y, len = Math.sqrt(dx * dx + dy * dy); // to the name's nearest edge
+if (best.k !== 0 || len > 22) { var a = Math.atan2(dy, dx); m.lead.style.display = 'block'; m.lead.style.left = (m.x + Math.cos(a) * 8).toFixed(1) + 'px'; m.lead.style.top = (m.y + Math.sin(a) * 8).toFixed(1) + 'px'; m.lead.style.width = Math.max(0, len - 8).toFixed(1) + 'px'; m.lead.style.transform = 'rotate(' + a.toFixed(3) + 'rad)'; }
+else m.lead.style.display = 'none';
 });
 }
 return { tick: tick, show: show };
@@ -23106,11 +23121,12 @@ el.className = 'dss-room-hovername';
 wrap.appendChild(el);
 var shown = null;
 wrap.addEventListener('pointerdown', function() { if (shown !== null) { shown = null; el.style.opacity = '0'; } }, true);
-return function(name, ev) {
+return function(name, ev, at) {
 if (!name || !ev) { if (shown !== null) { shown = null; el.style.opacity = '0'; } return; }
 var r = wrap.getBoundingClientRect();
-el.style.left = (ev.clientX - r.left + 16) + 'px';
-el.style.top = (ev.clientY - r.top + 20) + 'px';
+// 2026-10-14 (Sam): one name at a time, set directly over the object's glow (else by the pointer, as before)
+if (at) { el.style.left = at.x + 'px'; el.style.top = (at.y - 16) + 'px'; el.style.transform = 'translate(-50%, -100%)'; }
+else { el.style.left = (ev.clientX - r.left + 16) + 'px'; el.style.top = (ev.clientY - r.top + 20) + 'px'; el.style.transform = ''; }
 if (shown !== name) { shown = name; el.textContent = name; el.style.opacity = '1'; }
 };
 };
@@ -23279,7 +23295,7 @@ deja: { fi: '‘Nothing gold can stay.’', ci: '‘Oh, no! no! You’ve been th
 objects: {
 // The French
 'fi': {
-'Photographs': { now: 'That’s Derby’s mother, who used to be an actress.', then: '' },
+'Photographs': { now: 'That’s Derby’s mother, who used to be an actress, with James Joyce.', then: '' },
 'A telephone': { now: '', then: '' },
 'A glass on the bar': { now: 'I’ll have what he’s having.', then: '', id: 'What\'s another glass when you\'re dead already?' },
 'A blue door': { now: '', then: '' },
@@ -24069,7 +24085,8 @@ if (spot.hint) { var hintLine = spot.hint(); if (hintLine) html += '<div style="
 if (VOICE && !vboxOn) html += VOICE.html(ROOM, spot.name);
 if (acts.length) html += '<div class="fi-actions"></div>';
 // when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
-var wayOn = acts.length ? [] : HOTSPOTS.filter(function(sp) { return sp !== spot && !sp.notAWay && spotActions(sp).length > 0; });
+// 2026-10-14 (Sam): no "A CHOICE WAITS AT" list; you step back into the room and find the choice yourself
+var wayOn = [];
 if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
 html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:' + cDim + ';opacity:0.7;margin-top:8px;">' + (function() { var tap = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches, v = tap ? 'TAP' : 'CLICK'; return (acts.length || wayOn.length) ? 'OR ' + v + ' ANYWHERE ELSE TO STEP BACK' : v + ' ANYWHERE TO STEP BACK'; })() /* 2026-10-12: touch screens tap */ + '</div>';
 // the card is live for screen readers before its words change, so the change is announced
@@ -24154,13 +24171,23 @@ mouseN.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r
 ray.setFromCamera(mouseN, camera);
 var hits = ray.intersectObjects(hotspotRoots, true);
 for (var i = 0; i < hits.length; i++) { var sp = hotspotFor(hits[i].object); if (available(sp)) return sp; }
+// 2026-10-14 (Sam): the coloured glow is the thing you point at, so a pointer on or near a glow picks its object
+var gl = glowNear(ev); if (gl && available(gl.spot)) return gl.spot;
 return null;
 }
+var glowV = new THREE.Vector3();
+function glowAt(g) { var r = canvas.getBoundingClientRect(), wr = wrap.getBoundingClientRect(); glowV.copy(g.sp.position).project(camera); return { x: r.left - wr.left + (glowV.x + 1) / 2 * r.width, y: r.top - wr.top + (1 - glowV.y) / 2 * r.height, z: glowV.z }; }
+function glowNear(ev) {
+var wr = wrap.getBoundingClientRect(), px = ev.clientX - wr.left, py = ev.clientY - wr.top, best = null, bd = 26 * 26;
+restGlows.forEach(function(g) { if (!g.on || !g.sp) return; var a = glowAt(g); if (a.z >= 1) return; var d = (a.x - px) * (a.x - px) + (a.y - py) * (a.y - py); if (d < bd) { bd = d; best = g; } });
+return best;
+}
+function glowFor(spot) { for (var i = 0; i < restGlows.length; i++) if (restGlows[i].spot === spot && restGlows[i].sp) return restGlows[i]; return null; }
 var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(wrap) : function() {};
 canvas.addEventListener('pointermove', function(ev) {
 if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
 var spot = pick(ev); hoverSpot = spot;
-if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; hoverName(spot.name, ev); }
+if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; var hg = glowFor(spot); hoverName(spot.name, ev, hg && hg.on ? glowAt(hg) : null); }
 else { halo.visible = false; canvas.style.cursor = 'default'; hoverName(null); }
 });
 canvas.addEventListener('pointerleave', function() { hoverName(null); });
@@ -24993,9 +25020,12 @@ for (var f = 0; f < 8; f++) {
 var fx = -3.12 + f * 0.66, fy = 2.0, fz = -D / 2 + 0.035; // the row stops short of the blue door
 mesh(new THREE.BoxGeometry(0.44, 0.56, 0.03), frameMat, fx, fy, fz, photoG);
 mesh(new THREE.PlaneGeometry(0.38, 0.5), mountMat, fx, fy, fz + 0.017, photoG);
+// 2026-10-14 (Sam): the empty frame now holds his own photograph (french-frame-photo.jpg, beside the html), black and
+// white with the faint warm cast of the other prints; the plain mount shows until it loads, or if it never does
 var pm = f === EMPTY
 ? new THREE.MeshStandardMaterial({ color: 0xcfc2a4, roughness: 0.9 })
 : new THREE.MeshStandardMaterial({ map: photoTex(f + 11), roughness: 0.6 });
+if (f === EMPTY) { (function(mat) { new THREE.TextureLoader().load('french-frame-photo.jpg?v=1', function(t) { mat.map = t; mat.color.setHex(0xeadfca); mat.roughness = 0.6; mat.needsUpdate = true; }); })(pm); }
 mesh(new THREE.PlaneGeometry(0.26, 0.36), pm, fx, fy, fz + 0.02, photoG);
 }
 // a couple more, smaller, high on the left wall behind the bar (the famous wall)
@@ -25274,7 +25304,7 @@ return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textC
 // 2026-10-13 (Sam): a path's introduction (hidden in the passage as .fr-path-intro) is printed on its figure's card
 function frIntro(k) { var pass = window.dssRoomScope(fiHost); var e = pass && pass.querySelector('.fr-path-intro[data-for="' + k + '"]'); if (!e) return ''; return Array.prototype.map.call(e.querySelectorAll('.fr-p'), function(p) { return p.textContent.replace(/\s+/g, ' ').trim(); }).join('\n\n'); }
 var HOTSPOTS = [
-{ root: photoG, name: 'Photographs', pos: [0.2, 1.95, -2.4], tgt: [0.9, 2.0, -4.5], haloAt: [0.4, 2.0, -4.4], haloSc: 1.4 },
+{ root: photoG, name: 'Photographs', pos: [0.2, 1.95, -2.4], tgt: [0.9, 2.0, -4.5], haloAt: [0.51, 2.0, -4.4], haloSc: 1.4 }, // 2026-10-14 (Sam): the glow sat on a frame; now in the gap between frames 5 and 6
 { root: phoneG, name: 'A telephone', pos: [-2.2, 1.6, 0.6], tgt: [-3.45, 1.32, -0.35],
 actions: function() { return passageLinks('.phone-ringing tw-link'); },
 prose: function() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link, tw-hook[name="lilyring"] tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); } },
@@ -62642,7 +62672,7 @@ border-left: 2px solid rgba(140, 120, 180, 0.3);
 .dss-room-prose .lore-box { max-height: none; }
 .dss-room-card { bottom: 40px !important; }
 .dss-room-card .fi-wayon-btn { opacity: 0.72; background: transparent !important; }
-.dss-room-hovername { position: absolute; z-index: 9005; pointer-events: none; font: 10px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: rgba(225,215,190,0.6); text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1); white-space: nowrap; opacity: 0; transition: opacity 0.35s ease; }
+.dss-room-hovername { position: absolute; z-index: 9005; pointer-events: none; font: 10px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: rgba(238,230,200,0.92); /* 2026-10-14: brighter, now the only name */ text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1); white-space: nowrap; opacity: 0; transition: opacity 0.35s ease; }
 /* 2026-10-05: the room's veil covers the whole viewport (it sits in tw-story, under the fixed header),
    so the words have the screen rather than the room's box and a short window reads the whole passage;
    long words scroll the veil as a page. The darker wash also covers the room while it warms up. */
@@ -62705,6 +62735,13 @@ tw-passage:has(#oi-container):not(:has(#oi-wrap))::after { content: 'loading'; p
 .dss-room-reveal { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; z-index: 9003; opacity: 0; transition: opacity 1.2s ease; }
 .dss-room-reveal-on { opacity: 1; transition: opacity 0.4s ease; }
 .dss-room-mark { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; display: flex; align-items: center; gap: 9px; }
+/* 2026-10-14: ring on the object, name placed beside it, a leader when crowding moves the name */
+.dss-room-mark.dss-room-mark-free { left: 0; top: 0; transform: none; display: block; }
+.dss-room-mark-free > i, .dss-room-mark-free > span { position: absolute; }
+.dss-room-mark-free > span { line-height: 14px; }
+/* 2026-10-14 (Sam): the reveal shows the circles on the glows only; a name comes one at a time, on hover */
+.dss-room-mark-free > span { display: none; }
+.dss-room-lead { position: absolute; display: none !important; height: 1px; transform-origin: 0 50%; background: rgba(238,230,200,0.55); box-shadow: 0 0 3px rgba(0,0,0,0.9); }
 .dss-room-mark i { display: block; width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(238,230,200,0.9); box-shadow: 0 0 10px rgba(225,240,170,0.6), inset 0 0 6px rgba(225,240,170,0.4); animation: dss-mark-breathe 2.4s ease-in-out infinite; }
 .dss-room-mark span { font: 10px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: rgba(238,230,200,0.92); text-shadow: 0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,1), 0 0 12px rgba(0,0,0,0.8); }
 @keyframes dss-mark-breathe { 50% { box-shadow: 0 0 18px rgba(225,240,170,0.9), inset 0 0 8px rgba(225,240,170,0.55); } }

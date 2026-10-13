@@ -4094,7 +4094,11 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
 
     var ul = document.createElement('ul');
     ul.className = 'dss-rules-list';
-    (opts.lines || []).forEach(function(line) {
+    // 2026-10-13 (Sam: "make it so the game identifies if it's using a phone or a laptop ... applied to all"): a card can
+    // carry touchLines, its words for a touch screen; on a phone or tablet (no hover, a coarse pointer, as the waltz and
+    // the map already test) they are shown instead of lines.
+    var dssTouch = !!(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+    ((dssTouch && opts.touchLines) ? opts.touchLines : (opts.lines || [])).forEach(function(line) {
       var li = document.createElement('li');
       li.innerHTML = line;   // author-controlled; allows &larr; <b> etc.
       ul.appendChild(li);
@@ -4183,7 +4187,7 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
   function showPrimer() {
     if (document.querySelector('.dss-hint-slip.long')) return;
     if (window.dssDeferIfBusy(showPrimer)) return;
-    window.dssInlineHint('STATS\n\n' + paras.join('\n\n'));
+    window.dssInlineHint('STATS\n\n' + paras.join('\n\n'), { sticky: true });
   }
   window.dssShowPrimer = showPrimer;
 })();
@@ -5201,7 +5205,7 @@ function init(container) {
     nextArrow._spot = spotKey; nextArrow._slid = null;
     var alongX = (ay <= 5 || ay >= 95), sr = stage.getBoundingClientRect();
     if (!sr.width || !sr.height) return;
-    var others = Array.prototype.filter.call(stage.querySelectorAll('.soho-door-mark, .soho-door-label'), function(e) { return e !== lab && e.style.visibility !== 'hidden' && e.getClientRects().length; })
+    var others = Array.prototype.filter.call(stage.querySelectorAll('.soho-door-mark, .soho-door-label, .soho-door-chev'), function(e) { return e !== lab && e.style.visibility !== 'hidden' && e.getClientRects().length; })
       .map(function(e) { return e.getBoundingClientRect(); });
     function clear() {
       var r = nextArrow.getBoundingClientRect(), pad = 4;
@@ -5210,10 +5214,18 @@ function init(container) {
     if (clear()) return;
     // the side the NEXT door lies on is tried first, so the pointer stays on its way there
     var sgn = ((alongX ? dx : dy) < 0) ? -1 : 1, steps = [6, 12, 18, 24, 32, 40].map(function(v) { return v * sgn; }).concat([6, 12, 18, 24, 32, 40].map(function(v) { return -v * sgn; }));
-    for (var si = 0; si < steps.length; si++) {
-      var nx = alongX ? Math.max(4, Math.min(96, ax + steps[si])) : ax, ny = alongX ? ay : Math.max(5, Math.min(95, ay + steps[si]));
-      nextArrow.style.left = nx + '%'; nextArrow.style.top = ny + '%';
-      if (clear()) { nextArrow._slid = [nx, ny]; return; }
+    // 2026-10-13 (the new-player playthrough): when the whole edge is crowded (the French's arch, its chevron and its
+    // plate at the top of the first view), it also tries a little way in from the edge, keeping to the edge if it can
+    var inward = (alongX ? (ay <= 5 ? 1 : -1) : (ax <= 4 ? 1 : -1));
+    var depths = [0, 9, 18, 27];
+    for (var di = 0; di < depths.length; di++) {
+      for (var si = -1; si < steps.length; si++) {
+        var st = si < 0 ? 0 : steps[si], dd = depths[di] * inward;
+        if (si < 0 && di === 0) continue;
+        var nx = alongX ? Math.max(4, Math.min(96, ax + st)) : Math.max(4, Math.min(96, ax + dd)), ny = alongX ? Math.max(5, Math.min(95, ay + dd)) : Math.max(5, Math.min(95, ay + st));
+        nextArrow.style.left = nx + '%'; nextArrow.style.top = ny + '%';
+        if (clear()) { nextArrow._slid = [nx, ny]; return; }
+      }
     }
     nextArrow.style.left = ax + '%'; nextArrow.style.top = ay + '%';
   }
@@ -6264,7 +6276,7 @@ window.dssQuestPopup = function() {
     (titleEl ? '<div class="dss-quest-name">' + titleEl.innerHTML + '</div>' : '') +
     '<p class="coin-overlay-text">' + (bodyEl ? bodyEl.innerHTML : offer.innerHTML) + '</p>' +
     '<div class="dss-key-foot"><button type="button" class="coin-overlay-btn dss-quest-go">' +
-      (goLink ? goLink.textContent.trim() : 'Good') + '</button></div>';
+      (goLink ? goLink.textContent.trim() : 'On.') + '</button></div>';
   overlay.appendChild(box);
   document.body.appendChild(overlay);
   var shown = false;
@@ -6368,7 +6380,7 @@ window.dssKeyPopup = function() {
         '<div class="coin-overlay-stage dss-key-stage">' + (window.DSS_KEY_ART[kid] || '') + '</div>' +
         '<p class="coin-overlay-text">' + msg + '</p>' +
         '<span class="inventory-note">' + ((window.DSS_KEY_LABEL[kid] || 'THE KEY').toUpperCase()) + ' \u00b7 POCKETED</span>' +
-        '<div class="dss-key-foot"><button type="button" class="coin-overlay-btn dss-key-leave">Good</button></div>';
+        '<div class="dss-key-foot"><button type="button" class="coin-overlay-btn dss-key-leave">On.</button></div>';
       for (var k = 1; k <= 12; k++) {
         var m = document.createElement('span');
         m.className = 'item-mote item-mote-' + k;
@@ -6941,8 +6953,11 @@ window.__dssHintPassage = function() {
   var all = document.querySelectorAll('tw-story > tw-passage');
   return all.length ? all[all.length - 1] : null;
 };
-window.dssInlineHint = function(html) {
-  window.__dssHintQueue.push({ html: html, passage: window.__dssHintPassage() });
+// 2026-10-13 (the new-player playthrough): a slip raised with { sticky: true } belongs to no passage, so it is not dropped
+// when the passage changes before it can show (the primer, queued behind the Pillars' opening box, was lost for the night
+// when the player answered AOIFE's call from inside the box; $primerShown was already set).
+window.dssInlineHint = function(html, opt) {
+  window.__dssHintQueue.push({ html: html, passage: (opt && opt.sticky) ? null : window.__dssHintPassage() });
   if (!window.__dssHintBusy) window.__dssHintNext();
 };
 // A new passage sends the old passage's slips on their way, read or not (Sam, 2026-10-09: they stayed until
@@ -6986,6 +7001,11 @@ window.__dssHintNext = function() {
   // cannot be closed, and the plain pages' panel is the page itself, so neither one holds a slip back.
   try {
     if (document.querySelector('tw-story > .dss-room-veil.dss-room-veil-on:not(.dss-room-veil-full):not(.dss-threshold)')) { setTimeout(window.__dssHintNext, 250); return; }
+  } catch (e) {}
+  // 2026-10-13 (the new-player playthrough): nor while a phone is ringing or a call is on; on a phone the slip sat over
+  // AOIFE's "Accept the call" and "I'm not here".
+  try {
+    if (document.querySelector('.phone-ringing:not(.ring-wait), .phone-scene')) { setTimeout(window.__dssHintNext, 250); return; }
   } catch (e) {}
   // (The 2026-09-16 "breathing space" after a long slip is gone: since 2026-10-07 a slip stays until it is
   // closed, and a later slip lands above it in the stack rather than waiting for it to leave.)
@@ -54302,7 +54322,7 @@ QUIET FRANKIE’S smiling.
 
 ‘Three rounds to find your feet,’ says COPPER. ‘Then it’s a real fight. Drop me or outlast me. But go down yourself, and it’s finished.’
 </div>
-<script>(window.dssShowMinigameRules||function(o){o.onPlay()})({key:'fight',title:'THE CELLAR',subtitle:'Three practice rounds first.',lines:["Click the side of the glove to dodge, below it to block, or COPPER himself to counter.","The keys are &larr; &rarr; to dodge, &darr; to block and &uarr; to counter."],onPlay:function(){ if (window.startFightGame) window.startFightGame(); }});</script>
+<script>(window.dssShowMinigameRules||function(o){o.onPlay()})({key:'fight',title:'THE CELLAR',subtitle:'Three practice rounds first.',lines:["Click the side of the glove to dodge, below it to block, or COPPER himself to counter.","The keys are &larr; &rarr; to dodge, &darr; to block and &uarr; to counter."],touchLines:["Tap the side of the glove to dodge, below it to block, or COPPER himself to counter."],onPlay:function(){ if (window.startFightGame) window.startFightGame(); }});</script>
 <div id="fight-arena" style="display:none;">
 <div class="pp-arena">
 <div class="pp-score" id="round-display">🤜 PRACTICE · ROUND 1 OF 3 🤜</div>
@@ -55231,8 +55251,12 @@ Among them, with his back to you, is your old friend. The eldest of the children
   (window.dssShowMinigameRules||function(o){o.onPlay()})({key:'cards',title:'HOUSE OF CARDS',lines:[
     '<div>Drag a card’s foot to move it. Drag its body to tilt it. Space places it.</div>',
     '<div>Lean cards in pairs, then lay a card across each pair.</div>',
-    '<div>The table roars now and then, and cards may fall. Eighteen cards; fifteen must stand.</div>',
-    '<div>Win: morale +8, or +12 if no card falls. First time only.</div>'
+    '<div>The table roars now and then, and cards may fall. Eighteen cards; fifteen must stand.</div>'
+    // 2026-10-13 (Sam, the words review): the reward line cut ("Win: morale +8, or +12 if no card falls. First time only.")
+  ],touchLines:[
+    '<div>Drag a card’s foot to move it. Drag its body to tilt it. <strong>Place card</strong> sets it down.</div>',
+    '<div>Lean cards in pairs, then lay a card across each pair.</div>',
+    '<div>The table roars now and then, and cards may fall. Eighteen cards; fifteen must stand.</div>'
   ],onPlay:boot});
 })();
 </script>
@@ -57217,7 +57241,7 @@ loop();
 /* Auto-trigger: skip the CLICK TO START title screen and drop the
    player straight into the practice round. The practice phase already
    acts as a learn-the-controls beat. */
-(window.dssShowMinigameRules||function(o){o.onPlay()})({key:'cow',title:"JEFFREY BERNARD’S COW",lines:["Use &larr; &rarr; or click LEFT, MID and RIGHT to change lane. You have three lives."],onPlay:function(){
+(window.dssShowMinigameRules||function(o){o.onPlay()})({key:'cow',title:"JEFFREY BERNARD’S COW",lines:["Use &larr; &rarr; or click LEFT, MID and RIGHT to change lane. You have three lives."],touchLines:["Tap LEFT, MID and RIGHT to change lane. You have three lives."],onPlay:function(){
   if (phase === 'title') {
     startCowMusic();
     phase = 'practice';
@@ -59315,10 +59339,14 @@ You know who she is, she is SHANA, destroyer of worlds.]
     startRoom(); resize(); last = performance.now(); raf = requestAnimationFrame(draw);
   }
   (window.dssShowMinigameRules || function (o) { o.onPlay(); })({ key: 'mats', title: 'THE BEER MAT GAME', lines: [
-    '<div>A stack of beermats on the edge of the bar. Flick them up with the back of your hand, then catch them as they turn over.</div>',
+    '<div>A stack of beer mats on the edge of the bar. Flick them up with the back of your hand, then catch them as they turn over.</div>',
     '<div>Use the space bar or click the button. Once to flick, a second time to catch.</div>',
-    '<div>You add a mat each time. Lea’s record is six, try to beat it. Bow out whenever you like.</div>',
-    '<div>Beat Lea and finish: morale +8, the first time only. Anything less costs nothing.</div>'
+    '<div>You add a mat each time. Lea’s record is six, try to beat it. Bow out whenever you like.</div>'
+    // 2026-10-13 (Sam, the words review): the reward line cut ("Beat Lea and finish: morale +8, the first time only. Anything less costs nothing.")
+  ], touchLines: [
+    '<div>A stack of beer mats on the edge of the bar. Flick them up with the back of your hand, then catch them as they turn over.</div>',
+    '<div>Tap the button. Once to flick, a second time to catch.</div>',
+    '<div>You add a mat each time. Lea’s record is six, try to beat it. Bow out whenever you like.</div>'
   ], onPlay: boot });
 })();
 </script>
@@ -69052,10 +69080,14 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
    clears below the lamp at full width. */
 /* THE HINT SLIP (2026-09-14) — white paper, typed. Since 2026-10-07 it STAYS until its × is pressed
    (Sam: "don't ever fade them"); later slips stack above it, newest at the bottom. */
+/* 2026-10-13 (Sam, the words review): words for one kind of screen only. A touch screen (no hover, a coarse pointer,
+   the same test as the rules cards' touchLines) shows .dss-touch-only and hides .dss-desk-only; anything else the reverse. */
+.dss-touch-only { display: none; }
+@media (hover: none) and (pointer: coarse) { .dss-touch-only { display: inline; } .dss-desk-only { display: none; } }
 /* 2026-10-12 (the parked list, 17): a slip could sit beside the coin card and the other hand-held pickups, two things asking
    to be read at once. While one of those cards is up the slips step out of sight; they wait (a slip only goes when clicked)
    and come back as the card goes. */
-body:has(#coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, #dss-key-overlay, #dss-lily-overlay, #dss-quest-overlay) .dss-hint-stack { visibility: hidden; }
+body:has(#coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, #dss-key-overlay, #dss-lily-overlay, #dss-quest-overlay, .phone-ringing:not(.ring-wait)) .dss-hint-stack { visibility: hidden; }
 .dss-hint-stack {
   position: fixed;
   right: 22px;
@@ -74656,7 +74688,7 @@ It’s bold to turn down an alley at this time of night. There are three in a gr
 Massive earthworms are breaking through the floor!
 <div id="dss-worm-game">
 <h2>WHACK-A-WORM</h2>
-<p class="worm-instructions">Keep the worms out. Click or tap a hole, or use keys 1–6.<br>Thirty seconds. Eighteen worms to win.</p>
+<p class="worm-instructions">Keep the worms out. <span class="dss-desk-only">Click or tap a hole, or use keys 1–6.</span><span class="dss-touch-only">Tap a hole.</span><br>Thirty seconds. Eighteen worms to win.</p>
 <div class="worm-meters"><span>HITS <b class="worm-score">0</b></span><span>SECONDS <b class="worm-time">30</b></span></div>
 <div class="worm-wall" aria-label="Six holes in the tiled wall">
 <button type="button" class="worm-hole" aria-label="Hole 1: empty"><span class="worm-body"></span><span class="worm-number">1</span></button>

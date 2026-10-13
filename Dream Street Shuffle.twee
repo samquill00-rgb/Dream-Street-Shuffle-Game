@@ -116,7 +116,7 @@ Dream Street Shuffle
 (set: $tookLily4 to false)\
 (set: $tookLily5 to false)\
 (set: $sawPentangle to false)\
-<script>window._dssSawPentangle=false;window._dssMatchPopupDone=false;try{sessionStorage.removeItem('dssMapHintDone');}catch(e){}</script>\
+<script>window._dssSawPentangle=false;window._dssMatchPopupDone=false;window.__dssDir='';try{sessionStorage.removeItem('dssMapHintDone');sessionStorage.removeItem('dssDirections');}catch(e){}</script>\
 (set: $visitedCentrePoint to false)\
 (set: $sawAstralReveal to false)\
 (set: $lilyHintShown to false)\
@@ -5315,6 +5315,8 @@ function init(container) {
   refreshBar();
 
   function enter(door) {
+    // arriving where a slip directed you puts the directions away
+    if (window.dssDirections) { var dl = window.dssDirections.get(); if (dl && dl.split(',').map(function(v) { return v.trim(); }).indexOf(door.id) >= 0) window.dssDirections.set(''); }
     var st = doors[door.id];
     if (st.status !== 'open' || !st.link) { refreshBar(); return; }
     S.entering = door; S.enterT = 0;
@@ -5603,9 +5605,17 @@ function init(container) {
   }
   function drawCecilThread(x, cx, cy) {
     for (var ti = 0; ti < THREADS.length; ti++) drawOneThread(x, cx, cy, THREADS[ti]);
+    // a slip's "Get Directions" (2026-10-13): a warm thread to the nearest open door it names
+    var dirs = window.dssDirections ? window.dssDirections.get() : '';
+    if (dirs) {
+      var best = null, bestLen = 1e9;
+      dirs.split(',').forEach(function(id) { id = id.trim(); var dd = doorById(id); if (!dd || !doors[id] || doors[id].status !== 'open') return; var pth = routeToCecil(dd); if (pth && pth.length < bestLen) { best = id; bestLen = pth.length; } });
+      window.__dssDirBest = best || '';
+      if (best) drawOneThread(x, cx, cy, { id: best, col: [255, 214, 140], always: true });
+    }
   }
   function drawOneThread(x, cx, cy, spec) {
-    if (hubFlag(spec.flag) !== 'on') return;
+    if (!spec.always && hubFlag(spec.flag) !== 'on') return;
     if (!doors[spec.id] || doors[spec.id].status !== 'open') return;
     var d = doorById(spec.id);
     if (!d) return;
@@ -5621,6 +5631,7 @@ function init(container) {
       if (px < cx - T || px > cx + W + T || py < cy - T || py > cy + VR * T + T) continue;
       var lead = head - i;
       var a = 0.10 + ((lead >= 0 && lead < 10) ? (1 - lead / 10) * 0.30 : 0);
+      if (spec.always) a = Math.min(1, a * 2.2 + 0.08); // a slip's directions burn brighter than the errands' threads
       if (i < 4) a *= i / 4;                       // don't pool around the player's own feet
       if (n - i < 3) a += 0.08;                    // and gather a little at the mouth
       var g = x.createRadialGradient(px, py, 0.5, px, py, 9);
@@ -6998,7 +7009,7 @@ window.__dssHintPassage = function() {
 // when the passage changes before it can show (the primer, queued behind the Pillars' opening box, was lost for the night
 // when the player answered AOIFE's call from inside the box; $primerShown was already set).
 window.dssInlineHint = function(html, opt) {
-  window.__dssHintQueue.push({ html: html, passage: (opt && opt.sticky) ? null : window.__dssHintPassage() });
+  window.__dssHintQueue.push({ html: html, passage: (opt && opt.sticky) ? null : window.__dssHintPassage(), go: (opt && opt.go) || null });
   if (!window.__dssHintBusy) window.__dssHintNext();
 };
 // A new passage sends the old passage's slips on their way, read or not (Sam, 2026-10-09: they stayed until
@@ -7054,9 +7065,9 @@ window.__dssHintNext = function() {
   var item = window.__dssHintQueue.shift();
   if (item === undefined) return;
   window.__dssHintBusy = true;
-  window.__dssHintShow(item.html, item.passage);
+  window.__dssHintShow(item.html, item.passage, item.go);
 };
-window.__dssHintShow = function(html, passage) {
+window.__dssHintShow = function(html, passage, go) {
   try {
     // THE STACK (Sam, 2026-10-07: "don't ever fade them, just make the cross more obvious to encourage
     // closing them"). No slip leaves on its own any more. Each one stays until its × or its paper is
@@ -7096,6 +7107,14 @@ window.__dssHintShow = function(html, passage) {
     inner.appendChild(body);
     card.appendChild(closer);
     card.appendChild(inner);
+    // 2026-10-13 (Sam: "When you get a suggestion in the slips, there should be a 'Get Directions' option, which lights up a
+    // path to where you are being directed"): a slip that names a place carries go (door ids, nearest first on the map);
+    // the button lights the way on the Dean Street map until you reach it (window.dssDirections).
+    if (go && window.dssDirections) {
+      var gd = document.createElement('button'); gd.type = 'button'; gd.className = 'dss-hint-go'; gd.textContent = 'Get Directions';
+      gd.addEventListener('click', function(ev) { ev.stopPropagation(); window.dssDirections.set(go); gd.textContent = 'Directions lit'; gd.disabled = true; });
+      card.appendChild(gd);
+    }
     stack.appendChild(card);
     requestAnimationFrame(function() { card.classList.add('in'); });
     setTimeout(function() { card.classList.add('in'); }, 120);   // backgrounded tabs stall rAF
@@ -7169,7 +7188,9 @@ window.__dssHintShow = function(html, passage) {
     setTimeout(step, 420);
   } catch (e) { window.__dssHintBusy = false; }
 };
-window.wordToTheWisePopup = function(message) { window.dssInlineHint(message); };
+window.wordToTheWisePopup = function(message, go) { window.dssInlineHint(message, go ? { go: go } : null); };
+// the place a slip has directed you to: a list of map door ids ('chippy,doorway'); the map lights the way to the nearest open one
+window.dssDirections = { get: function() { try { return sessionStorage.getItem('dssDirections') || ''; } catch (e) { return window.__dssDir || ''; } }, set: function(v) { window.__dssDir = v || ''; try { if (v) sessionStorage.setItem('dssDirections', v); else sessionStorage.removeItem('dssDirections'); } catch (e) {} } };
 
 
 
@@ -53958,7 +53979,7 @@ Better not tomorrow.
 <span class="dss-hub-flag" data-k="notebook" style="display:none">(print: $notebook)</span>\
 <!-- 2026-09-28 drink route: the stage the map can read. blackout / far / loose / empty. -->\
 <span class="dss-hub-flag" data-k="drunk" style="display:none">(cond: $sobriety < 10, "blackout", $sobriety < 30, "far", $sobriety < 60, "loose", "")</span>\
-(if: $hasMissingPage is true and $returnedPage is false and $pageReminderShown is false)[(set: $pageReminderShown to true)<script>setTimeout(function(){ if(window.dssInlineHint) window.dssInlineHint("Page 93 is in your pocket. INIS O&#39;FLATTERLY is waiting for it in Cecil Court."); }, 1100);</script>]\
+(if: $hasMissingPage is true and $returnedPage is false and $pageReminderShown is false)[(set: $pageReminderShown to true)<script>setTimeout(function(){ if(window.dssInlineHint) window.dssInlineHint("Page 93 is in your pocket. INIS O&#39;FLATTERLY is waiting for it in Cecil Court.", { go: "cecil" }); }, 1100);</script>]\
 <span class="dss-hub-flag" data-k="thread-cecil" style="display:none">(if: $knowsCecilCourt is true and $returnedPage is false)[on]</span>\
 (set: _ronSeen to false)(if: $visited is a datamap and $visited contains "Ronnies" and $visited's Ronnies is true)[(set: _ronSeen to true)]\
 <span class="dss-hub-flag" data-k="thread-ronnies" style="display:none">(if: $knowsRonnies is true and _ronSeen is false)[on]</span>\
@@ -54030,12 +54051,12 @@ Someone’s on the corner.
 
 <!-- 2026-09-16, spacing: this used to fire on hub visit 2, the same screen as the open-night slip (and the ledger tip), minutes after the 900-character primer inside the first venue. Now hub visit 4: one lesson per hub visit, open night (2), ledger (3), door marks (4). Order unchanged. -->\
 (if: $returns >= 4 and $visited's French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)<script>setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);</script>]
-(if: $hasLiver is true and ($confidence < 30 or $sobriety < 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You’re seriously flagging. You’ve still got Shelley’s liver. Now’s a good time to eat it.");},300);</script>](else-if: $returns >= 3 and $confidence < 30 and $sobriety < 30 and ($hadChippy is false or $hadBreather is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowBoth is false)[(set: $shownLowBoth to true)<span id="wtw-msg-low-both" style="display:none">(if: $hadChippy is false and $hadBreather is false)[You’re in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You’re in a bad way. Get some grub at the chippy.](else:)[You’re in a bad way. Find a doorway. Catch your breath.]</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-both');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},300);</script>]
+(if: $hasLiver is true and ($confidence < 30 or $sobriety < 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You’re seriously flagging. You’ve still got Shelley’s liver. Now’s a good time to eat it.");},300);</script>](else-if: $returns >= 3 and $confidence < 30 and $sobriety < 30 and ($hadChippy is false or $hadBreather is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowBoth is false)[(set: $shownLowBoth to true)<span id="wtw-msg-low-both" style="display:none">(if: $hadChippy is false and $hadBreather is false)[You’re in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You’re in a bad way. Get some grub at the chippy.](else:)[You’re in a bad way. Find a doorway. Catch your breath.]</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-both');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent,'chippy,doorway');},300);</script>]
 (if: $hadChippy is false)[[[The Chippy|Approach Chinese Fish and Chips]]
 ](if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]]
-](else-if: $returns >= 3 and $confidence < 40 and $hadChippy is false and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowConf is false)[(set: $shownLowConf to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You seem hungry. Get some grub at the chippy.");},300);</script>]
+](else-if: $returns >= 3 and $confidence < 40 and $hadChippy is false and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowConf is false)[(set: $shownLowConf to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You seem hungry. Get some grub at the chippy.","chippy");},300);</script>]
 [[The Chippy|Approach Chinese Fish and Chips]]
-](else-if: $returns >= 3 and $sobriety < 40 and ($hadBreather is false or $hadChippy is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowSobr is false)[(set: $shownLowSobr to true)<span id="wtw-msg-low-sob" style="display:none">Flagging again. You can fix this with a piss or some food. Find a doorway or the chippy.</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-sob');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent);},300);</script>]
+](else-if: $returns >= 3 and $sobriety < 40 and ($hadBreather is false or $hadChippy is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowSobr is false)[(set: $shownLowSobr to true)<span id="wtw-msg-low-sob" style="display:none">Flagging again. You can fix this with a piss or some food. Find a doorway or the chippy.</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-sob');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent,'doorway,chippy');},300);</script>]
 (if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]](else-if: $hadChippy is false)[[[The Chippy|Approach Chinese Fish and Chips]]]
 ]]
 <!-- Defensive escape valve (audit N5/S7): the coach-urgent funnel above lives
@@ -69365,6 +69386,9 @@ body:has(#coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, #dss-key-ove
 /* The primer arrives as one long slip with its own paragraph breaks, so the
    typed span has to keep its newlines. */
 .dss-hint-type { white-space: pre-wrap; }
+.dss-hint-go { display: block; margin: 0.7em 0 0.1em auto; padding: 0.35em 0.9em; font: bold 0.72em 'Courier New', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #3a2a10; background: rgba(216,170,80,0.28); border: 1px solid rgba(120,80,30,0.55); border-radius: 2px; cursor: pointer; }
+.dss-hint-go:hover { background: rgba(216,170,80,0.45); }
+.dss-hint-go:disabled { opacity: 0.6; cursor: default; }
 .dss-hint-type .dss-hint-head { display: inline-block; font-weight: bold; letter-spacing: 0.18em; border-bottom: 1px solid currentColor; padding-bottom: 1px; }
 .dss-hint-inner { display: block; }
 .dss-hint-slip.long { max-width: min(34em, 76vw); }

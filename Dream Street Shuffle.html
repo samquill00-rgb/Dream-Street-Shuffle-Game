@@ -3297,6 +3297,11 @@ text-shadow: none;
 /* ===== LORE BOX ===== */
 /* 2026-10-13: the LORE as footnotes (dssLore): the hidden link, the dagger in the prose and the note card */
 .lore-hidden-link { display: none !important; }
+.dss-voice-again { margin-top: 8px; font: italic 0.95em Georgia, serif; color: rgba(235,225,200,0.7); line-height: 1.45; }
+/* THE RUMOUR (dssRumourCard): the reopen link in the line, and the card's paragraphs */
+.rumour-open { font: 10px 'Courier New', monospace; letter-spacing: 3px; color: #d8b870; cursor: pointer; border-bottom: 1px dashed rgba(216,184,112,0.5); white-space: nowrap; margin-left: 0.3em; }
+.rumour-open:hover, .rumour-open:focus-visible { color: #ffe2a0; outline: none; }
+.dss-rumour-card .dss-lore-body p { margin: 0 0 0.85em; font-style: italic; line-height: 1.6; }
 /* 2026-10-14: the Watkins window (dssWatkinsVision) */
 .wk-vision .wk-p { position: relative; }
 .wk-run .wk-glass .wk-c { filter: blur(5px); opacity: 0.28; transition: filter 1.3s ease, opacity 1.3s ease; }
@@ -21062,6 +21067,35 @@ window.dssWatkinsVision = function() {
   var gen = null; setTimeout(function() { gen = window._passageGen; }, 150);
   var watch = setInterval(function() { if (gen === null) return; if (window._passageGen !== gen || !root.isConnected) { clearInterval(watch); timers.forEach(clearTimeout); document.removeEventListener('pointerdown', skip, true); document.removeEventListener('keydown', skip, true); } }, 500);
 };
+// 2026-10-14 (Sam): THE RUMOUR, the Great Ham's whispered speech on a card of its own (the LORE card's look); it opens a
+// moment after the page, and the small link in the line before it opens it again
+window.dssRumourCard = function() {
+  var src = document.querySelector('.rumour-text'), opener = document.querySelector('.rumour-open');
+  if (!src || src._rc) return; src._rc = true;
+  function close() { var o = document.getElementById('dss-lore-overlay'); if (o) { o.classList.add('out'); setTimeout(function() { if (o.parentNode) o.parentNode.removeChild(o); }, 250); } document.removeEventListener('keydown', onKey, true); }
+  function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } }
+  function show() {
+    if (document.getElementById('dss-lore-overlay')) return;
+    var o = document.createElement('div'); o.id = 'dss-lore-overlay';
+    var c = document.createElement('div'); c.className = 'dss-lore-card dss-rumour-card'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', 'The Rumour');
+    var x = document.createElement('button'); x.type = 'button'; x.className = 'dss-lore-x'; x.setAttribute('aria-label', 'Close'); x.textContent = '×';
+    var h = document.createElement('div'); h.className = 'dss-lore-title'; h.textContent = 'THE RUMOUR';
+    var b = document.createElement('div'); b.className = 'dss-lore-body'; b.innerHTML = src.innerHTML;
+    c.appendChild(x); c.appendChild(h); c.appendChild(b); o.appendChild(c); document.body.appendChild(o);
+    x.addEventListener('click', close);
+    o.addEventListener('click', function(ev) { if (ev.target === o) close(); });
+    document.addEventListener('keydown', onKey, true);
+    requestAnimationFrame(function() { o.classList.add('in'); });
+  }
+  if (opener) { opener.addEventListener('click', show); opener.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); show(); } }); }
+  var gen = null; setTimeout(function() { gen = window._passageGen; }, 150);
+  // the line may sit in an aftermath that fades in only after the reading; open once it is really on screen
+  function seen(el) { if (!el || !el.getClientRects().length) return false; for (var e = el; e && e.nodeType === 1; e = e.parentElement) { var cs = getComputedStyle(e); if (cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.6) return false; } return true; }
+  var poll = setInterval(function() {
+    if (!src.isConnected || (gen !== null && window._passageGen !== gen)) { clearInterval(poll); return; }
+    if (seen(opener)) { clearInterval(poll); setTimeout(function() { if (src.isConnected) show(); }, 1200); }
+  }, 300);
+};
 window.dssRingHold = (function() {
   function roomWords(card) {
     var root = card.closest('.dss-room-prose') || card.closest('tw-passage');
@@ -27004,7 +27038,18 @@ window.dssMakeComposer = function(scene, camera, renderer, opts) {
   if (typeof THREE === 'undefined' || typeof THREE.EffectComposer !== 'function' ||
       typeof THREE.UnrealBloomPass !== 'function' || typeof THREE.BokehPass !== 'function') return null;
   window.dssGuardThree(THREE);
-  var composer = window.dssGuardComposerRender(new THREE.EffectComposer(renderer), renderer);
+  // 2026-10-14 (Sam: "weirdly pixelated"): the composer's own buffer had no edge smoothing and ran at the screen's CSS
+  // size, so on a retina laptop every edge was doubled into steps. Now a multisampled buffer (WebGL2) and up to 1.5x the
+  // pixels; the scenes are light enough since the same day's lighting cuts. A WebGL1 browser keeps the plain buffer.
+  var dssPR = Math.min(window.devicePixelRatio || 1, window.innerWidth < 600 ? 1.25 : 1.5), msTarget = null;
+  try {
+    if (renderer.capabilities && renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) {
+      msTarget = new THREE.WebGLMultisampleRenderTarget(Math.round(window.innerWidth * dssPR), Math.round(window.innerHeight * dssPR), { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat });
+      msTarget.samples = 4;
+    }
+  } catch (e) { msTarget = null; }
+  var composer = window.dssGuardComposerRender(msTarget ? new THREE.EffectComposer(renderer, msTarget) : new THREE.EffectComposer(renderer), renderer);
+  if (composer.setPixelRatio) composer.setPixelRatio(dssPR);
   composer.addPass(new THREE.RenderPass(scene, camera));
   // Bokeh re-renders the whole scene for depth each frame — affordable only
   // in the small interior scenes, so it is opt-in via opts.bokeh
@@ -29269,12 +29314,16 @@ var plasterMat = new THREE.MeshStandardMaterial({ color: 0xc8c0b0, roughness: 0.
 // HELPERS
 // ============================================================
 function makeCanvasTexture(w, h, drawFunc) {
-var c = document.createElement('canvas');
-c.width = w; c.height = h;
-var cx = c.getContext('2d');
+// 2026-10-14 (Sam: "weirdly pixelated"): the windows, signs and brick were painted at their small sizes and stretched
+// two or three times on a laptop screen; they are painted at twice the resolution now (the same drawing, scaled), and
+// mipmapped so they do not shimmer when small
+var S = 2, c = document.createElement('canvas');
+c.width = w * S; c.height = h * S;
+var cx = c.getContext('2d'); cx.scale(S, S);
 drawFunc(cx, w, h);
 var tex = new THREE.CanvasTexture(c);
-tex.minFilter = THREE.LinearFilter;
+tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true;
+try { tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); } catch (e) {}
 return tex;
 }
 function placeMesh(group, geo, mat, x, y, z) {
@@ -32229,7 +32278,7 @@ for (var k in V.trails) V.trails[k].steps.forEach(function(s) { if (!known(s.at)
 (V.callbacks || []).forEach(function(c) { if (!known(c.at)) bad.push('callback at: ' + c.at); if (!known(c.after)) bad.push('callback after: ' + c.after); });
 if (bad.length) try { console.warn('DSS voices: no such object in DSS_VOICES.objects', bad); } catch (e) {}
 })();
-return { lines: lines, html: html, see: see, look: look, enter: enter, spent: spentNow, deja: deja, meet: meet, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
+return { heard: function(room, name) { return (spoken()[room + '/' + name] || []).slice(); }, lines: lines, html: html, see: see, look: look, enter: enter, spent: spentNow, deja: deja, meet: meet, has: has, keySpots: keySpots, keyReady: keyReady, isNext: isNext, claim: claim, claimed: claimed, popupOffers: popupOffers, forget: forget, idAwake: idAwake, mapMark: mapMark, slots: slots, unsee: unsee, roomNames: ROOM_NAME, roomPassages: ROOM_PASSAGE };
 })();
 // <<<< DSS VOICES END
 // >>>> DSS ROOM PLAY BEGIN
@@ -32270,7 +32319,10 @@ HOTSPOTS.forEach(function(h) { if (KEYSPOT[h.name]) VOICE.claim(KEYSPOT[h.name],
 // an object renamed in its room but not in the voices table goes quiet: the console names it
 if (VOICE) { var unvoiced = HOTSPOTS.filter(function(h) { return !(window.DSS_VOICES.objects[ROOM] || {})[h.name]; }).map(function(h) { return h.name; }); if (unvoiced.length) try { console.warn('DSS voices: ' + ROOM + ' objects with no entry in DSS_VOICES.objects', unvoiced); } catch (e) {} }
 // an object with nothing left to say and nothing to press is no longer offered (the voices' spent)
-function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0) && !(VOICE && spotActions(spot).length === 0 && VOICE.spent(ROOM, spot.name)); }
+// 2026-10-14 (Sam: "you should be able to return to something once you have clicked the coloured sprite"): a used-up object
+// stays clickable (its card and line again); its glow is only fainter (`used`). Figures with nothing left still go.
+function available(spot) { return !!spot && (!spot.figure || spotActions(spot).length > 0); }
+function usedUp(spot) { return !!(VOICE && spotActions(spot).length === 0 && VOICE.spent(ROOM, spot.name)); }
 var haloTex = tex(128, 128, function(cx, w, h) {
 cx.save(); cx.translate(64, 64); cx.scale(1, 0.78);
 var g = cx.createRadialGradient(-5, -7, 0, 0, 0, 64);
@@ -32367,7 +32419,7 @@ var reveal = window.dssRoomReveal ? window.dssRoomReveal(wrap, camera, restGlows
 function restRefresh() {
 var keepP = halo.position.clone(), keepS = halo.scale.clone(), keepC = halo.material.color.clone();
 restGlows.forEach(function(g) {
-g.on = restLevel > 0 && available(g.spot);
+g.on = restLevel > 0 && available(g.spot); g.used = g.on && usedUp(g.spot);
 var nx = !!VOICE && VOICE.isNext(ROOM, g.spot.name);
 if (nx !== !!g.next) { g.next = nx; if (nx) g.sp.material.color.setRGB(1, 0.8, 0.52); else if (g.spot._glowCol) g.sp.material.color.copy(g.spot._glowCol); else g.sp.material.color.setRGB(1, 1, 1); }
 if (g.on) { haloAt(g.spot); g.sp.position.copy(halo.position);
@@ -32393,7 +32445,7 @@ var idle = camMode === 'idle';
 restGlows.forEach(function(g) {
 var vis = idle && g.on && g.spot !== hoverSpot;
 g.sp.visible = vis && !g.lilyOn;
-if (vis) g.sp.material.opacity = Math.min(1, Math.max(restLevel, 0.92) * (g.next ? 1.1 : 1) * (still ? 0.95 : 0.84 + 0.16 * Math.sin(t * (g.next ? 0.9 : 0.5) + g.ph)));
+if (vis) g.sp.material.opacity = Math.min(1, Math.max(restLevel, 0.92) * (g.next ? 1.1 : 1) * (g.used ? 0.38 : 1) * (still ? 0.95 : 0.84 + 0.16 * Math.sin(t * (g.next ? 0.9 : 0.5) + g.ph)));
 if (g.core) { g.core.visible = vis && !g.lilyOn; if (g.core.visible) g.core.material.opacity = 0.75 * g.sp.material.opacity; }
 var lv = idle && g.on && g.lilyOn;
 g.lily.visible = lv;
@@ -32522,6 +32574,8 @@ html += '<div class="dss-card-key" style="margin-top:8px;"><div class="dss-card-
 // an object's hint of what it will give later (the dish and the glass eye); pink only while the line is still a draft
 if (spot.hint) { var hintLine = spot.hint(); if (hintLine) html += '<div style="margin-top:6px;' + (String(hintLine).indexOf('[Sam:') >= 0 ? PINK : KEY_RED) + '">' + hintLine + '</div>'; }
 if (VOICE && !vboxOn) html += VOICE.html(ROOM, spot.name);
+// 2026-10-14 (Sam: a used object, returned to, shows its line again): the last line it spoke, quietly, with no voice name
+if (VOICE && VOICE.heard && usedUp(spot)) { var heardL = VOICE.heard(ROOM, spot.name); if (heardL.length) html += '<div class="dss-voice-again">' + String(heardL[heardL.length - 1]).replace(/</g, '&lt;') + '</div>'; }
 if (acts.length) html += '<div class="fi-actions"></div>';
 // when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
 // 2026-10-14 (Sam): no "A CHOICE WAITS AT" list; you step back into the room and find the choice yourself
@@ -61149,9 +61203,9 @@ Better not tomorrow.
 &lt;/script&gt;</tw-passagedata>
 <tw-passagedata pid="52" name="Dean Street" tags="hub" position="900,400" size="100,100">&lt;!-- 2026-09-28 review fix: the street no longer resets $drinksRound, so the night&#x27;s drinks run 8, 13, 18, 23, 28 whichever pub they are in and the fifth from 70 blacks out anywhere. The round still resets at The Blackout and at Start. --&gt;\
 (if: $pendingLilyBreath is true)[(set: $pendingLilyBreath to false)(go-to: &quot;After the call&quot;)]\
-(if: $hadPhoneCall is true and $metCritic is true and $sawAoifeReflection is false)[(set: $sawAoifeReflection to true)(go-to: &quot;After Aoife&quot;)]\
+(if: $hadPhoneCall is true and $metCritic is true and $sawAoifeReflection is false)[(set: $sawAoifeReflection to true)(set: $aoifeReflectLap to $returns)(go-to: &quot;After Aoife&quot;)]\
 &lt;!-- A2: reliable mid-night Aoife memory. Fires on the first hub return from lap 5 onward, AFTER A1 (After Aoife), but NOT on the lap you&#x27;ve just come off a Lily memory ((history:)&#x27;s 2ndlast = the passage you arrived from), and NOT on the way back from a doorway or an alley ($alleyReturn; Sam, 2026-10-09: it fired when he &quot;just stopped in a doorway on the way to Cecil Court&quot;). Whole thing dormant until $aoifeRework is flipped on at go-live. NOTE 2026-09-14: kept on ONE line deliberately. Harlowe turns every newline inside a multi-line HTML comment into a &lt;br&gt;, and this comment alone was putting three blank lines and ~88px of dead space at the top of the hub, above the title. --&gt;\
-(if: $aoifeRework and $returns &gt;= 5 and $sawAoifeReflection is true and $sawAoifeMemory2 is false and (history:)&#x27;s 2ndlast is not &quot;After the call&quot; and (history:)&#x27;s 2ndlast is not &quot;LINE 2 Oxford&quot; and (history:)&#x27;s 2ndlast is not &quot;The Interval&quot; and (history:)&#x27;s 2ndlast is not &quot;After Aoife&quot;)[(unless: $alleyReturn is true)[(set: $sawAoifeMemory2 to true)(go-to: &quot;Aoife memory 2&quot;)]]\
+&lt;!-- 2026-10-14 (Sam: space them out): memory 2 waits at least one lap after After Aoife ($aoifeReflectLap) --&gt;(if: $aoifeRework and $returns &gt;= 5 and $sawAoifeReflection is true and (($aoifeReflectLap is not a num) or ($returns &gt; $aoifeReflectLap)) and $sawAoifeMemory2 is false and (history:)&#x27;s 2ndlast is not &quot;After the call&quot; and (history:)&#x27;s 2ndlast is not &quot;LINE 2 Oxford&quot; and (history:)&#x27;s 2ndlast is not &quot;The Interval&quot; and (history:)&#x27;s 2ndlast is not &quot;After Aoife&quot;)[(unless: $alleyReturn is true)[(set: $sawAoifeMemory2 to true)(go-to: &quot;Aoife memory 2&quot;)]]\
 (set: $awaitingLacklandPwd to false)\
 &lt;svg id=&quot;dean-lamp-svg&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;145&quot; height=&quot;400&quot; style=&quot;float:right;margin:0.3em -0.5em 1em 0.8em;overflow:hidden;&quot;&gt;&lt;defs&gt;&lt;radialGradient id=&quot;dslamp&quot; gradientUnits=&quot;userSpaceOnUse&quot; cx=&quot;85&quot; cy=&quot;80&quot; r=&quot;58&quot; gradientTransform=&quot;matrix(1,0,0,1.37,0,-29.6)&quot;&gt;&lt;stop offset=&quot;0%&quot; stop-color=&quot;#d4a060&quot; stop-opacity=&quot;0.7&quot;/&gt;&lt;stop offset=&quot;25%&quot; stop-color=&quot;#c89060&quot; stop-opacity=&quot;0.35&quot;/&gt;&lt;stop offset=&quot;60%&quot; stop-color=&quot;#c89060&quot; stop-opacity=&quot;0.12&quot;/&gt;&lt;stop offset=&quot;100%&quot; stop-color=&quot;#c89060&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;radialGradient id=&quot;dsPane&quot; cx=&quot;50%&quot; cy=&quot;45%&quot; r=&quot;55%&quot;&gt;&lt;stop offset=&quot;0&quot; stop-color=&quot;#f6e2b0&quot; stop-opacity=&quot;0.55&quot;/&gt;&lt;stop offset=&quot;0.5&quot; stop-color=&quot;#d4a060&quot; stop-opacity=&quot;0.22&quot;/&gt;&lt;stop offset=&quot;1&quot; stop-color=&quot;#c89060&quot; stop-opacity=&quot;0&quot;/&gt;&lt;/radialGradient&gt;&lt;/defs&gt;&lt;rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;145&quot; height=&quot;164&quot; fill=&quot;url(#dslamp)&quot;/&gt;&lt;g fill=&quot;none&quot; stroke=&quot;#c8a86a&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;&gt;&lt;path d=&quot;M90,22 L93,27 L90,33 L87,27 Z&quot; stroke-width=&quot;1.6&quot;/&gt;&lt;line x1=&quot;90&quot; y1=&quot;33&quot; x2=&quot;90&quot; y2=&quot;40&quot; stroke-width=&quot;1.8&quot;/&gt;&lt;path d=&quot;M64,50 Q90,38 116,50 L112,56 L68,56 Z&quot; stroke-width=&quot;1.8&quot;/&gt;&lt;path d=&quot;M68,56 L112,56 L108,106 L72,106 Z&quot; fill=&quot;url(#dsPane)&quot; stroke-width=&quot;2.2&quot;/&gt;&lt;path d=&quot;M90,56 L90,106 M69.5,72 L110.5,72 M71,90 L109,90&quot; stroke-width=&quot;1.2&quot;/&gt;&lt;path d=&quot;M76,60 L75,68&quot; stroke-width=&quot;0.9&quot; opacity=&quot;0.6&quot;/&gt;&lt;ellipse cx=&quot;90&quot; cy=&quot;82&quot; rx=&quot;5&quot; ry=&quot;8&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.8&quot;/&gt;&lt;ellipse cx=&quot;90&quot; cy=&quot;81&quot; rx=&quot;2&quot; ry=&quot;3.4&quot; fill=&quot;#c8a86a&quot; stroke=&quot;none&quot; opacity=&quot;0.9&quot;/&gt;&lt;rect x=&quot;70&quot; y=&quot;106&quot; width=&quot;40&quot; height=&quot;6&quot; rx=&quot;2&quot; stroke-width=&quot;1.8&quot;/&gt;&lt;rect x=&quot;82&quot; y=&quot;112&quot; width=&quot;16&quot; height=&quot;6&quot; rx=&quot;1.5&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;line x1=&quot;60&quot; y1=&quot;126&quot; x2=&quot;120&quot; y2=&quot;126&quot; stroke-width=&quot;2.2&quot;/&gt;&lt;path d=&quot;M60,126 q-5,-5 0,-10 M120,126 q5,-5 0,-10&quot; stroke-width=&quot;1.6&quot;/&gt;&lt;path d=&quot;M90,118 C90,150 72,160 74,190 C76,214 100,220 100,238&quot; stroke-width=&quot;3.0&quot;/&gt;&lt;path d=&quot;M76,168 q-8,4 -4,12 q6,2 8,-4&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.7&quot;/&gt;&lt;ellipse cx=&quot;100&quot; cy=&quot;240&quot; rx=&quot;13&quot; ry=&quot;4&quot; stroke-width=&quot;1.8&quot;/&gt;&lt;line x1=&quot;100&quot; y1=&quot;246&quot; x2=&quot;100&quot; y2=&quot;9999&quot; stroke-width=&quot;3.8&quot;/&gt;&lt;line x1=&quot;96.5&quot; y1=&quot;250&quot; x2=&quot;96.5&quot; y2=&quot;9999&quot; stroke-width=&quot;0.7&quot; opacity=&quot;0.45&quot;/&gt;&lt;ellipse cx=&quot;100&quot; cy=&quot;385&quot; rx=&quot;13&quot; ry=&quot;4&quot; stroke-width=&quot;1.8&quot;/&gt;&lt;ellipse cx=&quot;100&quot; cy=&quot;530&quot; rx=&quot;13&quot; ry=&quot;4&quot; stroke-width=&quot;1.8&quot;/&gt;&lt;rect x=&quot;84&quot; y=&quot;692&quot; width=&quot;32&quot; height=&quot;8&quot; rx=&quot;2&quot; stroke-width=&quot;1.8&quot;/&gt;&lt;/g&gt;&lt;/svg&gt;\
 &lt;h1 class=&quot;game-title&quot;&gt;DREAM&lt;br&gt;STREET&lt;br&gt;SHUFFLE&lt;/h1&gt;\
@@ -61285,7 +61339,7 @@ Someone’s on the corner.
 
 &lt;!-- 2026-09-16, spacing: this used to fire on hub visit 2, the same screen as the open-night slip (and the ledger tip), minutes after the 900-character primer inside the first venue. Now hub visit 4: one lesson per hub visit, open night (2), ledger (3), door marks (4). Order unchanged. --&gt;\
 (if: $returns &gt;= 4 and $visited&#x27;s French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)&lt;script&gt;setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);&lt;/script&gt;]
-(if: $hasLiver is true and ($confidence &lt; 30 or $sobriety &lt; 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)&lt;script&gt;setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup(&quot;You’re seriously flagging. You’ve still got Shelley’s liver. Now’s a good time to eat it.&quot;);},300);&lt;/script&gt;](else-if: $returns &gt;= 3 and $confidence &lt; 30 and $sobriety &lt; 30 and ($hadChippy is false or $hadBreather is false) and ($blackouts &lt; 2) and ($hutBurnt is false))[(if: $shownLowBoth is false)[(set: $shownLowBoth to true)&lt;span id=&quot;wtw-msg-low-both&quot; style=&quot;display:none&quot;&gt;(if: $hadChippy is false and $hadBreather is false)[You’re in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You’re in a bad way. Get some grub at the chippy.](else:)[You’re in a bad way. Find a doorway. Catch your breath.]&lt;/span&gt;&lt;script&gt;setTimeout(function(){var el=document.getElementById(&#x27;wtw-msg-low-both&#x27;);if(window.wordToTheWisePopup&amp;&amp;el)window.wordToTheWisePopup(el.textContent,&#x27;chippy,doorway&#x27;);},300);&lt;/script&gt;]
+(if: $hasLiver is true and ($confidence &lt; 30 or $sobriety &lt; 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)&lt;script&gt;setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup(&quot;You’re seriously flagging. You’ve still got Shelley’s liver. Now’s a good time to eat it.&quot;);},300);&lt;/script&gt;]&lt;!-- 2026-10-14 (regression run): the liver tip used to head this chain, so on its visit the doorway and chippy links below were not shown while NEXT pointed at them; it stands alone now --&gt;(if: $returns &gt;= 3 and $confidence &lt; 30 and $sobriety &lt; 30 and ($hadChippy is false or $hadBreather is false) and ($blackouts &lt; 2) and ($hutBurnt is false))[(if: $shownLowBoth is false)[(set: $shownLowBoth to true)&lt;span id=&quot;wtw-msg-low-both&quot; style=&quot;display:none&quot;&gt;(if: $hadChippy is false and $hadBreather is false)[You’re in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You’re in a bad way. Get some grub at the chippy.](else:)[You’re in a bad way. Find a doorway. Catch your breath.]&lt;/span&gt;&lt;script&gt;setTimeout(function(){var el=document.getElementById(&#x27;wtw-msg-low-both&#x27;);if(window.wordToTheWisePopup&amp;&amp;el)window.wordToTheWisePopup(el.textContent,&#x27;chippy,doorway&#x27;);},300);&lt;/script&gt;]
 (if: $hadChippy is false)[[[The Chippy|Approach Chinese Fish and Chips]]
 ](if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]]
 ](else-if: $returns &gt;= 3 and $confidence &lt; 40 and $hadChippy is false and ($blackouts &lt; 2) and ($hutBurnt is false))[(if: $shownLowConf is false)[(set: $shownLowConf to true)&lt;script&gt;setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup(&quot;You seem hungry. Get some grub at the chippy.&quot;,&quot;chippy&quot;);},300);&lt;/script&gt;]
@@ -65760,7 +65814,7 @@ You say you’ve not, thank him, and make to leave when he calls you back.
 (if: $cecilOpensSaid is not true)[(if: not ($haunts contains $haunt2))[(set: $cecilOpensSaid to true)&lt;div class=&quot;haunt-opens&quot;&gt;Cecil Court opens.&lt;/div&gt;]]
 (set: $knowsCecilCourt to true)
 &lt;!-- 2026-10-09, Sam: the ship rumour comes in the call-back, before midnight only; two versions by whether you have been down to the cellar yet. --&gt;
-(if: $shipNews is &quot;&quot; and $afterMidnight is false)[(set: $shipNews to &quot;rumour&quot;)(set: $hamRumour to true)(if: $metSalvu is false)[He leans low on his elbows and whispers, stagily, ‘Let me tell you something I’ve heard tonight. I believe you are familiar with ASHTON GRANGER. God love her: SALVU COPPER, the Maltese gangster, heard she has a few quid to spare. She’s been courting one of his muscle men, QUIET FRANKIE. Long story short, they charmed her into buying a shipment of “pipe cleaners” – Lord knows what it really is – that’s been on its way to Liverpool from America. Thing is, it’s meant to dock tonight and SALVU’S got the shivers, he hasn’t heard word of progress and thinks they’re all frightened to tell him it’s sunk. So SALVU’S got QUIET FRANKIE holding ASHTON GRANGER hostage, though she doesn’t know she’s a hostage, in his cellar under Dean Street. If the ship comes in she’ll never know a thing. Now, you didn’t hear a word of that; I assume that we’d both like to see the morning.’](else:)[‘Do you know anyone who can clean a dirty pipe?’]]
+(if: $shipNews is &quot;&quot; and $afterMidnight is false)[(set: $shipNews to &quot;rumour&quot;)(set: $hamRumour to true)(if: $metSalvu is false)[&lt;!-- 2026-10-14 (Sam, A and B): his speech, words unchanged, broken into paragraphs and set on a card, THE RUMOUR, that opens over the page a moment after; the small link reopens it (dssRumourCard) --&gt;He leans low on his elbows and whispers, stagily, &lt;span class=&quot;rumour-open&quot; role=&quot;button&quot; tabindex=&quot;0&quot;&gt;THE RUMOUR&lt;/span&gt;&lt;div class=&quot;rumour-text&quot; hidden&gt;&lt;p&gt;‘Let me tell you something I’ve heard tonight.&lt;/p&gt;&lt;p&gt;‘I believe you are familiar with ASHTON GRANGER. God love her: SALVU COPPER, the Maltese gangster, heard she has a few quid to spare. She’s been courting one of his muscle men, QUIET FRANKIE.&lt;/p&gt;&lt;p&gt;‘Long story short, they charmed her into buying a shipment of “pipe cleaners” – Lord knows what it really is – that’s been on its way to Liverpool from America. Thing is, it’s meant to dock tonight and SALVU’S got the shivers, he hasn’t heard word of progress and thinks they’re all frightened to tell him it’s sunk.&lt;/p&gt;&lt;p&gt;‘So SALVU’S got QUIET FRANKIE holding ASHTON GRANGER hostage, though she doesn’t know she’s a hostage, in his cellar under Dean Street. If the ship comes in she’ll never know a thing.&lt;/p&gt;&lt;p&gt;‘Now, you didn’t hear a word of that; I assume that we’d both like to see the morning.’&lt;/p&gt;&lt;/div&gt;&lt;script&gt;setTimeout(function(){ if (window.dssRumourCard) window.dssRumourCard(); }, 0);&lt;/script&gt;](else:)[‘Do you know anyone who can clean a dirty pipe?’]]
 
 [[Leave the pub.|Dean Street]]
 &lt;/div&gt;
@@ -72197,7 +72251,7 @@ It’s bold to turn down an alley at this time of night. There are three in a gr
 (else-if: (not _a2) and ($knowsCecilCourt is not true))[(if: ($metCritic is not true))[(set: $nextId to &quot;pillars&quot;)(set: $nextLabel to &quot;THE PILLARS&quot;)](else:)[(set: $nextId to &quot;french&quot;)(set: $nextLabel to &quot;THE FRENCH&quot;)]]
 (if: $nextId is &quot;&quot; and not _lived)[
 (if: ($lilyCount is not a number) or $lilyCount &lt; $needLilies)[(if: (not _sober) and (_soberTo is not &quot;&quot;))[(set: $nextId to _soberTo)](else-if: ($tookLily5 is not true))[(set: $nextId to &quot;french&quot;)(set: $nextLabel to &quot;THE FRENCH&quot;)](else-if: ($tookLily2 is not true))[(set: $nextId to &quot;pillars&quot;)(set: $nextLabel to &quot;THE PILLARS&quot;)](else-if: ($tookLily4 is not true) and ($haunts is an array) and ($haunts contains $haunt1))[(set: $nextId to &quot;colony&quot;)(set: $nextLabel to &quot;THE COLONY ROOM&quot;)](else-if: ($tookLily3 is not true) and ($knowsRonnies is true))[(set: $nextId to &quot;ronnies&quot;)(set: $nextLabel to &quot;RONNIE SCOTT’S&quot;)](else-if: ($tookLily1 is not true))[(set: $nextId to &quot;chippy&quot;)(set: $nextLabel to &quot;FISH AND CHIPS&quot;)]]
-&lt;!-- 2026-10-12 (Sam, item 16): the haunts came in a fixed order, so NEXT could send you straight back to the place you had just left (the French, three times over for its three haunts). The places still owing a haunt are listed in the same order; if the first is the venue you were last inside and another is on the list, NEXT names that one instead. Inside a venue it is unchanged (HERE). $lastVenueId is the last venue you were in. --&gt;(if: $nextId is &quot;&quot;)[(set: _hc to (a:))(unless: ($haunts contains $haunt1) and ($haunts contains $haunt2) and ($haunts contains $haunt4))[(set: _hc to _hc + (a: &quot;french&quot;))](if: ($knowsRonnies is true) and ($completedSetlist is not true))[(set: _hc to _hc + (a: &quot;ronnies&quot;))](if: ($hasTrishaMatchbook is true) and ($metShana is not true))[(set: _hc to _hc + (a: &quot;trishas&quot;))](if: ($knowsLackland is true))[(unless: $haunts contains $haunt5)[(set: _hc to _hc + (a: &quot;lackland&quot;))]](if: _hc&#x27;s length is 0)[(set: _hc to (a: &quot;colony&quot;))](set: _pick to _hc&#x27;s 1st)(if: _hc&#x27;s length &gt; 1 and _here is &quot;&quot;)[(if: _pick is $lastVenueId)[(set: _pick to _hc&#x27;s 2nd)]](set: $nextId to _pick)(set: $nextLabel to (dm: &quot;french&quot;, &quot;THE FRENCH&quot;, &quot;ronnies&quot;, &quot;RONNIE SCOTT’S&quot;, &quot;trishas&quot;, &quot;TRISHA’S&quot;, &quot;lackland&quot;, &quot;LACKLAND’S&quot;, &quot;colony&quot;, &quot;THE COLONY ROOM&quot;)&#x27;s (_pick))]
+&lt;!-- 2026-10-12 (Sam, item 16): the haunts came in a fixed order, so NEXT could send you straight back to the place you had just left (the French, three times over for its three haunts). The places still owing a haunt are listed in the same order; if the first is the venue you were last inside and another is on the list, NEXT names that one instead. Inside a venue it is unchanged (HERE). $lastVenueId is the last venue you were in. --&gt;(if: $nextId is &quot;&quot;)[(set: _hc to (a:))(unless: ($haunts contains $haunt1) and ($haunts contains $haunt2) and ($haunts contains $haunt4))[(set: _hc to _hc + (a: &quot;french&quot;))](if: ($knowsRonnies is true) and ($completedSetlist is not true))[(set: _hc to _hc + (a: &quot;ronnies&quot;))](if: ($hasTrishaMatchbook is true) and ($metShana is not true))[(set: _hc to _hc + (a: &quot;trishas&quot;))](if: ($knowsLackland is true) and ($knowsCopperSecret is true))[(unless: $haunts contains $haunt5)[(set: _hc to _hc + (a: &quot;lackland&quot;))]]&lt;!-- 2026-10-14 (regression run): only when its door is open, which also wants COPPER&#x27;s secret --&gt;(if: _hc&#x27;s length is 0)[(set: _hc to (a: &quot;colony&quot;))](set: _pick to _hc&#x27;s 1st)(if: _hc&#x27;s length &gt; 1 and _here is &quot;&quot;)[(if: _pick is $lastVenueId)[(set: _pick to _hc&#x27;s 2nd)]](set: $nextId to _pick)(set: $nextLabel to (dm: &quot;french&quot;, &quot;THE FRENCH&quot;, &quot;ronnies&quot;, &quot;RONNIE SCOTT’S&quot;, &quot;trishas&quot;, &quot;TRISHA’S&quot;, &quot;lackland&quot;, &quot;LACKLAND’S&quot;, &quot;colony&quot;, &quot;THE COLONY ROOM&quot;)&#x27;s (_pick))]
 ]
 (if: $nextId is &quot;&quot;)[(set: $nextId to &quot;french&quot;)(set: $nextLabel to &quot;THE FRENCH&quot;)]
 (if: $nextId is &quot;doorway&quot; or $nextId is &quot;dwdiadem&quot;)[(set: $nextLabel to &quot;A DOORWAY&quot;)](else-if: $nextId is &quot;chippy&quot;)[(set: $nextLabel to &quot;FISH AND CHIPS&quot;)]

@@ -1,3 +1,14 @@
+# Minigame play-test: paused for an overnight run — 2026-10-13 (late)
+
+Sam asked for every minigame to be played for real (win and loss, routing, errors). Started, then paused at his request; he'll restart it as an overnight task. Nothing found yet, nothing changed.
+- **Games (15):** Ping Pong (`PP Pong`), Cecil Court Waltz, the Cellar fight (`Fight starts`), House of Cards (`Green Sea House of Cards`), JEFFREY BERNARD'S cow (`Ride Jeffrey Bernard's cow`), the Beer Mat Game (`Trisha's Beer Mats`), Sketch the Painter, Whack-a-Worm (`Soho Square: the gardener’s hut`), Ronnie Scott's bar game (`bar-canvas`, ends `Bar Canvas Win`/`Lose`), Nazca Race, Pyramid Run, The Climb, The Wheel (Ezekiel), The Reclamation (Easter Island, `#rc-win`/`#rc-lose`), The Harmony (`King's Chamber`, sets `$pyramidHarmony`).
+- **How:** headless Playwright Chromium (`--mute-audio`, `localStorage.dssMuted2='1'`), its own `http.server` on a spare port; boot into a passage by rewriting Start (as `scratchpad/audit-2026-09-16/harness.py`). Playwright isn't installed system-wide: make a venv. The pane's Browser tab freezes rAF when hidden, so don't use it for games.
+- **Dev hooks** (`window.DSS_DEV`, true on localhost): `_rcDev`, `_harmonyDev`, `_hcDev`, `_houseCardsDev`, `_beerMatsDev`; a fallback after playing for real.
+- Running six headless browsers at once made screenshots time out; run two or three at a time.
+- Pong bot idea: wrap `CanvasRenderingContext2D.prototype.arc` to record the ball (drawn after `fillStyle='#f2ede0'`), move the mouse to follow it.
+
+---
+
 # Sam's playtest notes — 2026-10-13 (evening)
 
 1. **The Donkey coin card** (Sam: the frame/layout felt old): the hand-held cards (coin, matches, key, flower, quest) sit on a gilt-edged plate like the rules cards (`#coin-overlay .coin-overlay-box` etc.).

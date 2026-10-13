@@ -8869,7 +8869,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 /* 2026-10-12 (the parked list, 17): a slip could sit beside the coin card and the other hand-held pickups, two things asking
    to be read at once. While one of those cards is up the slips step out of sight; they wait (a slip only goes when clicked)
    and come back as the card goes. */
-body:has(#coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, #dss-key-overlay, #dss-lily-overlay, #dss-quest-overlay) .dss-hint-stack { visibility: hidden; }
+body:has(#coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, #dss-key-overlay, #dss-lily-overlay, #dss-quest-overlay, .phone-ringing:not(.ring-wait)) .dss-hint-stack { visibility: hidden; }
 .dss-hint-stack {
   position: fixed;
   right: 22px;
@@ -13339,7 +13339,7 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
   function showPrimer() {
     if (document.querySelector('.dss-hint-slip.long')) return;
     if (window.dssDeferIfBusy(showPrimer)) return;
-    window.dssInlineHint('STATS\n\n' + paras.join('\n\n'));
+    window.dssInlineHint('STATS\n\n' + paras.join('\n\n'), { sticky: true });
   }
   window.dssShowPrimer = showPrimer;
 })();
@@ -14337,7 +14337,7 @@ function init(container) {
     nextArrow._spot = spotKey; nextArrow._slid = null;
     var alongX = (ay <= 5 || ay >= 95), sr = stage.getBoundingClientRect();
     if (!sr.width || !sr.height) return;
-    var others = Array.prototype.filter.call(stage.querySelectorAll('.soho-door-mark, .soho-door-label'), function(e) { return e !== lab && e.style.visibility !== 'hidden' && e.getClientRects().length; })
+    var others = Array.prototype.filter.call(stage.querySelectorAll('.soho-door-mark, .soho-door-label, .soho-door-chev'), function(e) { return e !== lab && e.style.visibility !== 'hidden' && e.getClientRects().length; })
       .map(function(e) { return e.getBoundingClientRect(); });
     function clear() {
       var r = nextArrow.getBoundingClientRect(), pad = 4;
@@ -14346,10 +14346,18 @@ function init(container) {
     if (clear()) return;
     // the side the NEXT door lies on is tried first, so the pointer stays on its way there
     var sgn = ((alongX ? dx : dy) < 0) ? -1 : 1, steps = [6, 12, 18, 24, 32, 40].map(function(v) { return v * sgn; }).concat([6, 12, 18, 24, 32, 40].map(function(v) { return -v * sgn; }));
-    for (var si = 0; si < steps.length; si++) {
-      var nx = alongX ? Math.max(4, Math.min(96, ax + steps[si])) : ax, ny = alongX ? ay : Math.max(5, Math.min(95, ay + steps[si]));
-      nextArrow.style.left = nx + '%'; nextArrow.style.top = ny + '%';
-      if (clear()) { nextArrow._slid = [nx, ny]; return; }
+    // 2026-10-13 (the new-player playthrough): when the whole edge is crowded (the French's arch, its chevron and its
+    // plate at the top of the first view), it also tries a little way in from the edge, keeping to the edge if it can
+    var inward = (alongX ? (ay <= 5 ? 1 : -1) : (ax <= 4 ? 1 : -1));
+    var depths = [0, 9, 18, 27];
+    for (var di = 0; di < depths.length; di++) {
+      for (var si = -1; si < steps.length; si++) {
+        var st = si < 0 ? 0 : steps[si], dd = depths[di] * inward;
+        if (si < 0 && di === 0) continue;
+        var nx = alongX ? Math.max(4, Math.min(96, ax + st)) : Math.max(4, Math.min(96, ax + dd)), ny = alongX ? Math.max(5, Math.min(95, ay + dd)) : Math.max(5, Math.min(95, ay + st));
+        nextArrow.style.left = nx + '%'; nextArrow.style.top = ny + '%';
+        if (clear()) { nextArrow._slid = [nx, ny]; return; }
+      }
     }
     nextArrow.style.left = ax + '%'; nextArrow.style.top = ay + '%';
   }
@@ -16013,8 +16021,11 @@ window.__dssHintPassage = function() {
   var all = document.querySelectorAll('tw-story > tw-passage');
   return all.length ? all[all.length - 1] : null;
 };
-window.dssInlineHint = function(html) {
-  window.__dssHintQueue.push({ html: html, passage: window.__dssHintPassage() });
+// 2026-10-13 (the new-player playthrough): a slip raised with { sticky: true } belongs to no passage, so it is not dropped
+// when the passage changes before it can show (the primer, queued behind the Pillars' opening box, was lost for the night
+// when the player answered AOIFE's call from inside the box; $primerShown was already set).
+window.dssInlineHint = function(html, opt) {
+  window.__dssHintQueue.push({ html: html, passage: (opt && opt.sticky) ? null : window.__dssHintPassage() });
   if (!window.__dssHintBusy) window.__dssHintNext();
 };
 // A new passage sends the old passage's slips on their way, read or not (Sam, 2026-10-09: they stayed until
@@ -16058,6 +16069,11 @@ window.__dssHintNext = function() {
   // cannot be closed, and the plain pages' panel is the page itself, so neither one holds a slip back.
   try {
     if (document.querySelector('tw-story > .dss-room-veil.dss-room-veil-on:not(.dss-room-veil-full):not(.dss-threshold)')) { setTimeout(window.__dssHintNext, 250); return; }
+  } catch (e) {}
+  // 2026-10-13 (the new-player playthrough): nor while a phone is ringing or a call is on; on a phone the slip sat over
+  // AOIFE's "Accept the call" and "I'm not here".
+  try {
+    if (document.querySelector('.phone-ringing:not(.ring-wait), .phone-scene')) { setTimeout(window.__dssHintNext, 250); return; }
   } catch (e) {}
   // (The 2026-09-16 "breathing space" after a long slip is gone: since 2026-10-07 a slip stays until it is
   // closed, and a later slip lands above it in the stack rather than waiting for it to leave.)

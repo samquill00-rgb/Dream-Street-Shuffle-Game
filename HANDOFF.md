@@ -1,3 +1,11 @@
+# Sam's last playthrough notes — 2026-10-13
+
+- **Phone calls look like calls** ("MAKE THE PHONECALLS LOOK DIFFERENT"; Sam: different from the rest of the game). Every `.phone-scene` shares an "on the line" look: a dark rounded Bakelite-like panel, a faint rotary dial behind the words, fine line static over it (still under reduced motion), the caller's lines on the left with a soft glow and your lines set to the right. Callers keep their colours (AOIFE red-brown, LILY violet). The ship call (`The Phone Box Answered`) is now wrapped in `.phone-scene.phone-box-call` too, so it shares the look and, as a phone scene, the heartbeat and line sound.
+- **Cow ride:** the six-second practice round is cut; it opens on its count-in (Sam: the slow start is the practice).
+- **Room glows:** each clickable object's resting glow takes its own colour, the room's objects spread round the colour wheel (`_glowCol`, HSL i/n, 1, 0.5, on a white `haloTexW`); the hover glow takes the colour of the object under the pointer; the inner-voices trail tint (gold) still wins when it applies.
+
+---
+
 # The words review: rules cards, caption bar, buttons — 2026-10-13
 
 After the slips (PR #106) Sam went through the rest of the on-screen words one by one.

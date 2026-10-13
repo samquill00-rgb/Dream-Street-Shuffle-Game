@@ -1,3 +1,13 @@
+# The words review: rules cards, caption bar, buttons — 2026-10-13
+
+After the slips (PR #106) Sam went through the rest of the on-screen words one by one.
+- **Rules cards:** none states a reward now (Sam: cut them from House of Cards and the Beer Mat Game rather than add one to Ping Pong). Ping Pong, the Waltz (not a win/lose game, "just a way to move"), the hold prompts: kept.
+- **Touch screens:** a rules card can carry `touchLines`, shown on a touch screen (`(hover: none) and (pointer: coarse)`, the same test the waltz and map use) instead of `lines`. Given to the Cellar ("Tap the side of the glove…", no keys line), House of Cards ("**Place card** sets it down."), the cow ("Tap LEFT, MID and RIGHT…"), the Beer Mat Game ("Tap the button. Once to flick, a second time to catch."). Inline text can use `.dss-touch-only` / `.dss-desk-only` spans (Whack-a-Worm: "Tap a hole."). "beermats" → "beer mats"; THE BEER MAT GAME is its name.
+- **Caption bar** (Not tonight. / Not now. / Need a word. / Find page 93 first. / Closed. / Next: place): kept.
+- **Buttons:** kept, including "Always take a flower" (Sam: general advice that happens to fit). "Good" on the key-pocketed card and the quest note's fallback → "On." (the game's own word for carrying on). "Let it go" only shows on an ungathered flower; fine.
+
+---
+
 # Group B settled — 2026-10-12 (latest)
 
 Sam took my recommendations on the non-narrative ones and answered the three that were his words:

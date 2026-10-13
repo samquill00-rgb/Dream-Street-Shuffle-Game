@@ -134,6 +134,7 @@ Dream Street Shuffle
 (set: $hauntExplained to false)\
 (set: $statsExplained to false)\
 (set: $primerShown to false)\
+(set: $catFollows to false)\
 (set: $hasLiver to false)\
 (set: $lastDrink to "")\
 (set: $opponent to "")\
@@ -5168,6 +5169,13 @@ function init(container) {
   S.meteor = null; S.meteorNext = 40 + Math.random()*60;
   S.cloud = null; S.cloudNext = 50 + Math.random()*90;
   S.pigeons = []; for (var pgi = 0; pgi < 5; pgi++) { var pspot = randomPaveTile(3); S.pigeons.push({ x: pspot.c*T + 4 + Math.random()*8, y: pspot.r*T + 8 + Math.random()*4, fly: 0, vx: 0, vy: 0, settle: 0, peck: 0 }); }
+  // TRISHA'S CAT (2026-10-13, Sam: "One you meet her ... she follows you for the rest of the night on the walkable map. So a
+  // little black cat a few steps behind you ... if you go into the drains or else meet the fetch she disappears and is there
+  // again at Trisha's"). The hub flag 'cat' is on while $catFollows; she starts just behind the walker and keeps about a tile
+  // and a half back along the way he has walked, sitting when he stops. Meanwhile the street's wandering lamp cat is a black-and-white one (drawPiebald).
+  var catFollow = hubFlag('cat') === 'on';
+  S.fcat = catFollow ? { x: S.px - 18, y: S.py, t: 0, dir: 1, moving: false } : null;
+  S.catPath = catFollow ? [{ x: S.px - 18, y: S.py }, { x: S.px, y: S.py }] : [];
   (function(){ var catLamps = LAMPS.filter(function(l){ return !l.ginger; }); var cl = catLamps[Math.floor(Math.random()*catLamps.length)]; S.cat = { x: cl.c*T + 2, row: cl.r, next: 10 + Math.random()*20, moveTo: null, t: 0, blink: false }; })();
 
   function placeOverlays() {
@@ -5489,6 +5497,16 @@ function init(container) {
         if (pj.peck > 0) pj.peck--;
       }
     }
+    if (S.fcat) {
+      var fq = S.fcat, lastP = S.catPath[S.catPath.length - 1];
+      if (!lastP || Math.abs(lastP.x - S.px) + Math.abs(lastP.y - S.py) >= 1) S.catPath.push({ x: S.px, y: S.py });
+      var need = 22, acc = 0, ci2 = S.catPath.length - 1, tgt = S.catPath[0];
+      for (; ci2 > 0; ci2--) { var pa = S.catPath[ci2], pb = S.catPath[ci2 - 1], pd2 = Math.abs(pa.x - pb.x) + Math.abs(pa.y - pb.y); if (acc + pd2 >= need) { var kk = (need - acc) / (pd2 || 1); tgt = { x: pa.x + (pb.x - pa.x) * kk, y: pa.y + (pb.y - pa.y) * kk }; break; } acc += pd2; }
+      if (ci2 > 2) S.catPath.splice(0, ci2 - 2);
+      var fdx = tgt.x - fq.x, fdy = tgt.y - fq.y, fdd = Math.hypot(fdx, fdy);
+      if (fdd > 0.4) { var fstep = Math.min(fdd, Math.max(1.1, fdd * 0.22)); fq.x += fdx / fdd * fstep; fq.y += fdy / fdd * fstep; fq.moving = true; if (Math.abs(fdx) > 0.3) fq.dir = fdx > 0 ? 1 : -1; fq.t++; }
+      else fq.moving = false;
+    }
     var ct2 = S.cat;
     if (ct2.moveTo) { var mx2 = ct2.moveTo.x - ct2.x; ct2.x += Math.sign(mx2) * 0.6; ct2.t++; if (Math.abs(mx2) < 1) { ct2.x = ct2.moveTo.x; ct2.moveTo = null; ct2.next = 20 + Math.random()*30; } }
     else { ct2.next -= 1/60; if (ct2.next <= 0) { var lamp2 = LAMPS.filter(function(l){ return l.r === ct2.row && Math.abs(l.c*T - ct2.x) > 3*T && Math.abs(l.c*T - ct2.x) < 14*T; }); if (lamp2.length) { var pick = lamp2[Math.floor(Math.random()*lamp2.length)]; ct2.moveTo = { x: pick.c*T + 2 }; } else ct2.next = 20 + Math.random()*30; } }
@@ -5511,6 +5529,20 @@ function init(container) {
     var px2 = Math.round(pj.x), py2 = Math.round(pj.y);
     if (pj.fly > 0) { x.fillStyle = 'rgba(190,190,200,' + Math.min(1, pj.fly / 20) + ')'; var up = (pj.fly % 8) < 4; x.fillRect(px2 - 2, py2 + (up ? -1 : 0), 2, 1); x.fillRect(px2 + 1, py2 + (up ? -1 : 0), 2, 1); x.fillRect(px2, py2, 1, 1); }
     else { x.fillStyle = '#7c7c88'; x.fillRect(px2 - 1, py2 + (pj.peck > 0 ? 1 : 0), 3, 2); x.fillStyle = '#9a9aa8'; x.fillRect(px2, py2 - 1 + (pj.peck > 0 ? 1 : 0), 1, 1); }
+  }
+  // 2026-10-13 (Sam): while TRISHA'S cat walks with you, the street's wandering cat is another one: the same size, mostly
+  // white with black patches
+  function drawPiebald(x, ct) {
+    var kx = Math.round(ct.x), ky = ct.row * T + 9, W1 = '#e9e5dc', B1 = '#0a0a0e';
+    if (ct.moveTo) {
+      var right = ct.moveTo.x > ct.x, tw = Math.round(Math.sin(ct.t * 0.3) * 2);
+      x.fillStyle = W1; x.fillRect(kx, ky + 1, 7, 3); x.fillRect(kx + (right ? 6 : -1), ky, 2, 2);
+      x.fillStyle = B1; x.fillRect(kx + 2, ky + 1, 2, 2); x.fillRect(kx + (right ? 7 : -1), ky, 1, 1); x.fillRect(kx + (right ? -2 : 7), ky - 1 + tw, 2, 1);
+    } else {
+      x.fillStyle = W1; x.fillRect(kx + 1, ky, 5, 4); x.fillRect(kx + 1, ky - 2, 3, 2);
+      x.fillStyle = B1; x.fillRect(kx + 3, ky + 1, 2, 2); x.fillRect(kx + 3, ky - 2, 1, 1); x.fillRect(kx + 6, ky + 2, 3, 1); x.fillRect(kx + 8, ky, 1, 2);
+      if (!ct.blink) { x.fillStyle = '#7a9a30'; x.fillRect(kx + 1, ky - 1, 1, 1); x.fillRect(kx + 3, ky - 1, 1, 1); }
+    }
   }
   function drawCat(x, ct) {
     var kx = Math.round(ct.x), ky = ct.row * T + 9;
@@ -5647,7 +5679,7 @@ function init(container) {
     for (var ci = 0; ci < CHIMNEYS.length; ci++) { var ch = CHIMNEYS[ci]; for (var pi = 0; pi < 5; pi++) { var ph = ((S.t * 0.35 + pi * 24 + ch.k * 40) % 120) / 120; var sx2 = ch.x + Math.sin(ph * 6 + ch.k) * 3 + ph * 6, sy2 = ch.y - ph * 30; x.fillStyle = 'rgba(120,118,130,' + (0.22 * (1 - ph)) + ')'; x.fillRect(Math.round(sx2), Math.round(sy2), 2 + Math.round(ph * 3), 2); } }
     if (S.cab) { drawCab(x, S.cab); }
     for (var pd = 0; pd < S.pigeons.length; pd++) { drawPigeon(x, S.pigeons[pd]); }
-    drawCat(x, S.cat);
+    if (S.fcat) drawPiebald(x, S.cat); else drawCat(x, S.cat);
     if (S.walker) {
       var wk2 = S.walker;
       x.drawImage(walkerSprites[wk2.dir][wk2.f], Math.round(wk2.x), wk2.y - 2);
@@ -5720,6 +5752,13 @@ function init(container) {
     if (S.drunk) { var dq = S.drunk; x.drawImage(drunkSprites[dq.dir][dq.f], Math.round(dq.x), dq.y - 2); if (dq.pause > 0 && dq.asked) { x.fillStyle = 'rgba(255,240,200,0.9)'; x.fillRect(Math.round(dq.x) + (dq.dir === 'right' ? 12 : -2), dq.y + 3, 1, 1); } }
     // the trace: prints behind the walker, cold and faint, fading as the wet takes them
     for (var ti = S.trail.length - 1; ti >= 0; ti--) { var tp = S.trail[ti], tage = (S.t - tp.t) / 420; if (tage >= 1) { S.trail.splice(ti, 1); continue; } var ta = 0.5 * (1 - tage) * (1 - tage); x.fillStyle = 'rgba(200,214,232,' + ta.toFixed(3) + ')'; var tside = (tp.k % 2) ? 2 : -2; if (tp.f === 'left' || tp.f === 'right') x.fillRect(tp.x - 1, tp.y + tside - 1, 2, 2); else x.fillRect(tp.x + tside - 1, tp.y - 1, 2, 2); }
+    if (S.fcat) {
+      var fk = S.fcat, fkx = Math.round(fk.x) + 4, fky = Math.round(fk.y) + 10;
+      x.fillStyle = 'rgba(2,2,6,0.35)'; x.fillRect(fkx, fky + 4, 8, 1);
+      x.fillStyle = '#0a0a0e';
+      if (fk.moving) { x.fillRect(fkx, fky + 1, 7, 3); x.fillRect(fkx + (fk.dir > 0 ? 6 : -1), fky, 2, 2); var ftw = Math.sin(fk.t * 0.3) * 2; x.fillRect(fkx + (fk.dir > 0 ? -2 : 7), fky - 1 + Math.round(ftw), 2, 1); if ((fk.t >> 3) % 2) { x.fillRect(fkx + 1, fky + 4, 1, 1); x.fillRect(fkx + 5, fky + 4, 1, 1); } }
+      else { x.fillRect(fkx + 1, fky, 5, 4); x.fillRect(fkx + 1, fky - 2, 3, 2); x.fillRect(fkx + 6, fky + 2, 3, 1); x.fillRect(fkx + 8, fky + (Math.sin(S.t * 0.05) > 0 ? 0 : 1), 1, 2); if ((S.t % 220) >= 6) { x.fillStyle = '#e8c040'; x.fillRect(fkx + 1, fky - 1, 1, 1); x.fillRect(fkx + 3, fky - 1, 1, 1); } }
+    }
     var sp = sprites[S.facing][(S.moving || S.edge) ? S.frame : 0];
     var hx = Math.round(S.px) + 8, hy = Math.round(S.py) + 10;
     // the walker's own light (2026-09-12): a warm pool on the pavement that breathes, a shadow thrown
@@ -52470,6 +52509,7 @@ What have you got to lose?
 <div id="cl-container"></div>[[·|Turn to Copper]]
 
 :: Approach Trisha's [outdoor] {"position":"700,1300","size":"100,100"}
+<!-- 2026-10-13 (Sam): meeting the cat on the step; she follows you on the map from now on (Soho Map, 'cat' flag) -->(set: $catFollows to true)\
 <div class="approach-back">[[← Back to Dean Street|Dean Street]]</div>
 <div id="ts-container"></div><!-- 2026-10-11 structure pass 3: once you are in, the doorman knows you; before, every return (the cocaine's key door too) replayed his refusal and the matchbook. -->(set: _tIn to false)(if: $visited is a datamap)[(if: $visited contains "Trishas")[(set: _tIn to $visited's Trishas is true)]](if: _tIn)[[[·|Trisha's]]](else:)[[[·|Failure: Trisha's]]]
 (display: "Stash Point")
@@ -53412,6 +53452,7 @@ You find it after some looking, where you always knew it was: the Chinese Fish a
 (set: _wasCoachUrgent to $coachUrgent is true)\
 (set: $coachViaGents to true)\
 (set: _blackedOutNow to $blackedOut is true)\
+<!-- 2026-10-13 (Sam): down the drains, TRISHA'S cat leaves you; she is on her step again -->(if: $crashedAfterDualRing is true or _blackedOutNow)[(set: $catFollows to false)]\
 (set: $blackedOut to false)\
 (set: $coachUrgent to false)\
 <!-- The drain travel plays on the DUAL-RING CRASH arrival (the second phone
@@ -53646,6 +53687,7 @@ You found the poem, the path to dawn’s bleak Albion.
 [[Traveller, wake!|Dawn Approach White]]</div>
 
 :: The Fetch {"position":"1600,50","size":"100,100"}
+<!-- 2026-10-13 (Sam): meeting the Fetch, TRISHA'S cat leaves you; she is on her step again -->(set: $catFollows to false)\
 <!-- THE WEIGHTING (Sam, 2026-10-12: "the game is winnable too quickly ... without really engaging at all with the lily
      flowers or the haunts"). He opens the way on only to a night that has been lived: $needLilies of LILY's flowers and
      $needHaunts haunts (3 and 6, set in StoryInit and Start; tune them there). Before that he is a glimpse: no "Follow
@@ -53848,7 +53890,7 @@ Better not tomorrow.
 <!-- 2026-09-25: the corners the strangers stood on keep a trace of their light once they are met -->\
 (display: "Drunken Street Actions")\
 <!-- 2026-10-08 (Sam): the locked path. Once the hut burns the map shuts every door but the Coach and the six windows; three windows and the Coach offers its fire, every time. The old one-in-five roll is gone. The map prints its own label for this door, so this text is only the matcher. -->(if: $hutBurnt is true and $coachBurnt is false and $visitedCentrePoint is false)[<div class="soho-hub-dock">[[The Coach and Horses|Approach The Coach]]</div>]\
-<span class="dss-hub-flag" data-k="next" style="display:none">(display: "Next Target")(print: $nextId)</span><span class="dss-hub-flag" data-k="hut" style="display:none">(if: $hutBurnt is true)[burnt]</span><span class="dss-hub-flag" data-k="fire-only" style="display:none">(if: $blackouts >= 2 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="square-locked" style="display:none">(if: $sobriety < 30 and $blackouts >= 1 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="met-gooch" style="display:none">(if: $goochMet is true)[on]</span><span class="dss-hub-flag" data-k="met-fetch" style="display:none">(if: $fetchSeen is true)[on]</span><span class="dss-hub-flag" data-k="met-truze" style="display:none">(if: $truzeMet is true)[on]</span><span class="dss-hub-flag" data-k="met-line" style="display:none">(if: $lineWomanMet is true)[on]</span><span class="dss-hub-flag" data-k="ring" style="display:none">(if: $shipCall is "" and (history:) contains "Turn to Copper")[on]</span><span class="dss-hub-flag" data-k="met-longshanks" style="display:none">(if: $longshanksMet is true)[on]</span><span class="dss-hub-flag" data-k="met-songstrong" style="display:none">(if: $songstrongMet is true)[on]</span>\
+<span class="dss-hub-flag" data-k="next" style="display:none">(display: "Next Target")(print: $nextId)</span><span class="dss-hub-flag" data-k="hut" style="display:none">(if: $hutBurnt is true)[burnt]</span><span class="dss-hub-flag" data-k="cat" style="display:none">(if: $catFollows is true)[on]</span><span class="dss-hub-flag" data-k="fire-only" style="display:none">(if: $blackouts >= 2 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="square-locked" style="display:none">(if: $sobriety < 30 and $blackouts >= 1 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="met-gooch" style="display:none">(if: $goochMet is true)[on]</span><span class="dss-hub-flag" data-k="met-fetch" style="display:none">(if: $fetchSeen is true)[on]</span><span class="dss-hub-flag" data-k="met-truze" style="display:none">(if: $truzeMet is true)[on]</span><span class="dss-hub-flag" data-k="met-line" style="display:none">(if: $lineWomanMet is true)[on]</span><span class="dss-hub-flag" data-k="ring" style="display:none">(if: $shipCall is "" and (history:) contains "Turn to Copper")[on]</span><span class="dss-hub-flag" data-k="met-longshanks" style="display:none">(if: $longshanksMet is true)[on]</span><span class="dss-hub-flag" data-k="met-songstrong" style="display:none">(if: $songstrongMet is true)[on]</span>\
 <!-- THE CAPTION BAR AS NARRATOR (Sam, 2026-10-12: "1, 2 and 3, flash once"). At three turning points of the night the
      bar on the map gives one line, once, the first time you are back on the street after it: midnight passing, the
      first blackout, the Fetch. One a visit; a line left empty never shows. Sam's lines go in _beatLines. -->\
@@ -57484,6 +57526,7 @@ comments, so never write example macro syntax in here. -->\
 (set: $hangedManLooked to false)(set: $shownLedgerTip to false)\
 (set: $squareBenchTaken to false)(set: $wormPlayed to false)(set: $houseCardsPlayed to false)(set: $beerMatsPlayed to false)\
 (set: $primerShown to false)\
+(set: $catFollows to false)\
 (set: $prevConfidence to 70)(set: $prevSobriety to 70)\
 (set: $mantra to (a: "Datta", "Dayadhvam", "Damyata", "Shantih", "Shantih", "Shantih"))\
 (set: $keyNames to (dm: "cocaine", "bag of cocaine", "ticket", "chippy order ticket", "slip", "betting slip", "lighter", "brass lighter", "eye", "glass eye"))\

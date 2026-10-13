@@ -1,3 +1,13 @@
+# Group B settled — 2026-10-12 (latest)
+
+Sam took my recommendations on the non-narrative ones and answered the three that were his words:
+- Kept as they are: 8 (3 flowers / 6 haunts), 9 (Towards Dawn without readout), 10 (LINE 3's promise; Sam: keep), 11 (one "Not yet" at the forced ends), 13 (the Pillars' rain line; Sam: keep), 14 ("Not tonight." on a spent door).
+- 17: "You can keep exploring with the poem complete." cut from the open-night slip (Sam). Slips now step out of sight while a hand-held card is up (coin, matches, cigarette, eat, key, lily, quest) and come back when it goes (CSS on `.dss-hint-stack`).
+- **The slip review (Sam, 12-13 October), done, one by one:** 1 primer: his new version with STATS and HAUNTS headings (a short all-caps paragraph on a slip is now set as a bold underlined heading, `setBody` in the slip typer). 2 door-marks slip: cut. 3 page: comma cut. 4 open night: cut. 5 ledger: "…something still waiting". 6 liver: "You've still got Shelley's liver. Now's a good time to eat it." 7 both low: "Find a doorway" in both versions. 8 low morale ("You seem hungry…"): kept (eating gives morale +10, sobriety +18; a doorway +4/+6). 9 low sobriety: "Flagging again. You can fix this with a piss or some food. Find a doorway or the chippy." (his "Falgging" read as Flagging). 10 keys: "only one key" kept, the swap line cut. 11 a key left behind ("The X stays …"): kept. 12 first flower: brackets cut. 13 map: "hit a door" on both keyboard and touch. 14 my signposts: all kept (Sam: "I trust these").
+- Checked: the Coach-fire ending end to end (Square → hut → three windows → "Burn it" → the Fetch, final → Centre Point → Alba Incomplete → Black page → Dawn): no errors, no dead ends. The all-passage sweep after PR #105: 209 passages, none with errors.
+
+---
+
 # Group B, the technical three (12, 15, 16) — 2026-10-12 (later still)
 
 PR #104 (group A + the map pointer) is merged. Sam: "do 12, 15 and 16". Branch `claude/eager-ptolemy-5k37rz`, restarted from main.

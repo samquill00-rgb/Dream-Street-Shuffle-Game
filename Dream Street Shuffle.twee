@@ -16,6 +16,8 @@ Dream Street Shuffle
 (set: $returns to 0)\
 (set: $enteredVenue to false)\
 (set: $nightPhase to 0)\
+(set: $bookAt to "")(set: $bookLostTonight to false)(set: $bookLeftLap to 0)(set: $bookLastVenue to "")(set: $bookSold to false)(set: $bookDeclined to false)\
+(set: $pitchTarget to "")(set: $pitchName to "")\
 (set: $shownOpenNightTip to false)\
 (set: $knowsCopperWord to false)
 (set: $alba1 to "As cool as the pale wet leaves")\
@@ -4985,7 +4987,8 @@ function scanHub(passage) {
   var links = passage.querySelectorAll('tw-link');
   for (var i = 0; i < links.length; i++) {
     var txt = (links[i].textContent || '').trim();
-    if (/^((?:←\s*)?BACK|NOTEBOOK)$/.test(txt) || links[i].closest('.stat-bars, .header-links')) continue;
+    // 2026-10-15: the "Who will you show it to?" links name places too ("THE NOVELIST · the French"); they are not doors
+    if (/^((?:←\s*)?BACK|NOTEBOOK)$/.test(txt) || links[i].closest('.stat-bars, .header-links, .book-pitch')) continue;
     for (var j = 0; j < DOORS.length; j++) {
       if (DOORS[j].rx.test(txt)) {
         if (doors[DOORS[j].id].status !== 'open') { doors[DOORS[j].id] = { status:'open', link:links[i], label:'', glyphs:glyphsAfter(links[i]), lead:leadOf(links[i]) }; if (!lead) lead = doors[DOORS[j].id].lead; }
@@ -5101,6 +5104,10 @@ function init(container) {
     try { if (window.dssVoices && window.dssVoices.mapMark(d.id)) el.classList.add('soho-door-trail'); } catch (e) {}
     // 2026-10-12 (Sam: the next task must be much clearer): the door Next Target names glows and carries a small NEXT
     if (hubFlag('next') === d.id && st.status === 'open') el.classList.add('soho-door-next');
+    // 2026-10-15 (Sam: choose the door by who you might pitch the book to): the people inside who still have something
+    // to say about the book tonight, named on the plate (the 'who' hub flag, "pillars:THE GREAT HAM|colony:DAVY MERKIN, THE AGENT")
+    var whoNames = whoInside(d.id);
+    if (whoNames && st.status === 'open') { var whoEl = document.createElement('span'); whoEl.className = 'soho-door-who'; whoEl.textContent = whoNames; el.appendChild(whoEl); }
     var side = doorSide(d), ltx = d.c + 0.5, lty = d.r - 1.35;
     // The lit door icon, its spill and the chevron are the venue signature.
     // A doorway gets none of them — just a dim name (Sam, 2026-09-13).
@@ -5169,6 +5176,8 @@ function init(container) {
   var fenceSprites = buildSprites({ c:'#2a2a24', l:'#3c3a30' });
   var LIFE_ROWS = [0, 3, 14, 17, 26, 29, 34, 37, 40, 43];
   function hubFlag(k) { var el = document.querySelector('.dss-hub-flag[data-k="' + k + '"]'); return el ? el.textContent.trim() : ''; }
+  // 2026-10-15: who inside a door still has something to say about the book (the 'who' hub flag, set by Who Will Read)
+  function whoInside(id) { var f = hubFlag('who'); if (!f) return ''; var out = ''; f.split('|').forEach(function(p) { var i = p.indexOf(':'); if (i > 0 && p.slice(0, i).trim() === id) out = p.slice(i + 1).trim(); }); return out; }
   // Lines the street says. Sam's to rewrite; they are UI notes, not passage prose.
   var STREET_LINES = {
     copMove: 'Move along now, sir. Nothing to see.',
@@ -5363,7 +5372,7 @@ function init(container) {
     if (S.noteFlash && S.noteFlash.t > 0) { setBar(S.noteFlash.name, '', S.noteFlash.text); return; }
     if (!hintSeen && !S.hintShown && hubFlag('fire-only') !== 'on' && hubFlag('hut') !== 'burnt') { S.hintShown = true; var touchHint = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches; setBar(streetName(S.c, S.r), '', touchHint ? 'Use the arrows below to walk, or hit a door.' : 'Use the arrow keys to walk, or hit a door.'); return; }
     var d = facingDoor();
-    if (d) { var st = doors[d.id]; if (st.status === 'open') setBar(d.name, st.glyphs, st.lead); else if (st.status === 'grey') setBar(d.name, '', st.label); else setBar(d.name, '', 'Not tonight.'); }
+    if (d) { var st = doors[d.id]; if (st.status === 'open') { var whoBar = whoInside(d.id); setBar(d.name, st.glyphs, whoBar ? (whoBar + (st.lead ? ' · ' + st.lead : '')) : st.lead); } else if (st.status === 'grey') setBar(d.name, '', st.label); else setBar(d.name, '', 'Not tonight.'); }
     // 2026-10-11 (Sam): the fire path names itself in the caption bar: after the second blackout the choice, once the hut has burnt the one way left
     // 2026-10-12 (Sam): a turning point of the night, said once in the bar (the beat flag, set in Dean Street)
     else if (S.beat && S.beat.t > 0) { S.beatOn = true; setBar(streetName(S.c, S.r), '', S.beat.text); }
@@ -5717,6 +5726,9 @@ function init(container) {
       window.__dssDirBest = best || '';
       if (best) drawOneThread(x, cx, cy, { id: best, col: [255, 214, 140], always: true });
     }
+    // 2026-10-15 (Sam: the game guides you to the person you chose to pitch to): a gold thread to the picked door
+    var pitchDoor = hubFlag('pitch');
+    if (pitchDoor && pitchDoor !== window.__dssDirBest) drawOneThread(x, cx, cy, { id: pitchDoor, col: [236, 196, 110], always: true });
   }
   function drawOneThread(x, cx, cy, spec) {
     if (!spec.always && hubFlag(spec.flag) !== 'on') return;
@@ -12116,6 +12128,7 @@ window.dssRumourCard = function() {
   function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } }
   function show() {
     if (document.getElementById('dss-lore-overlay')) return;
+    window._dssRumourShown = true;
     var o = document.createElement('div'); o.id = 'dss-lore-overlay';
     var c = document.createElement('div'); c.className = 'dss-lore-card dss-rumour-card'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', 'The Rumour');
     var x = document.createElement('button'); x.type = 'button'; x.className = 'dss-lore-x'; x.setAttribute('aria-label', 'Close'); x.textContent = '×';
@@ -12133,8 +12146,86 @@ window.dssRumourCard = function() {
   function seen(el) { if (!el || !el.getClientRects().length) return false; for (var e = el; e && e.nodeType === 1; e = e.parentElement) { var cs = getComputedStyle(e); if (cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.6) return false; } return true; }
   var poll = setInterval(function() {
     if (!src.isConnected || (gen !== null && window._passageGen !== gen)) { clearInterval(poll); return; }
-    if (seen(opener)) { clearInterval(poll); setTimeout(function() { if (src.isConnected) show(); }, 1200); }
+    if (seen(opener) && !document.querySelector('.dss-slip-fly, .dss-refusal:not(.dss-filed)')) { clearInterval(poll); setTimeout(function() { if (src.isConnected) show(); }, 1200); } /* after the rejection slip is filed */
   }, 300);
+};
+// 2026-10-14 (Sam: "the clocking of rejections is the most important ... you have to really want to sell the book and be
+// sad that you fail"): each reading's verdict is filed as a rejection slip. The scene carries a hidden .dss-refusal with
+// the reader's own words; when it is on screen the slip rises, holds, and is filed into the NOTEBOOK; any haunt box in
+// the scene waits until it is filed (the book first, the haunt second). Slips are kept in localStorage 'dssRefusals' by
+// night ('dssNightNo'), so earlier nights' refusals stay in the notebook, fading. No count, no glow, no tally.
+window.dssRefusals = (function() {
+  var KEY = 'dssRefusals', mem = null;
+  function night() { try { return +localStorage.getItem('dssNightNo') || 0; } catch (e) { return 0; } }
+  function load() { if (mem) return mem; try { return JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { return []; } }
+  function save(a) { try { localStorage.setItem(KEY, JSON.stringify(a)); } catch (e) { mem = a; } }
+  function shown(el) {
+    if (!el || !el.getClientRects().length) return false;
+    for (var e = el; e && e.nodeType === 1 && e !== document.body; e = e.parentElement) { var cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.6) return false; }
+    return true;
+  }
+  function notebookLink() { return Array.prototype.find.call(document.querySelectorAll('#stat-bars-lifted tw-link, .stat-bars tw-link'), function(l) { return /NOTEBOOK/i.test(l.textContent) && l.getClientRects().length; }); }
+  function fly(rec, m) {
+    var slip = document.createElement('div'); slip.className = 'dss-slip-fly' + (rec.near ? ' dss-slip-near' : '') + (rec.yes ? ' dss-slip-yes' : '');
+    slip.setAttribute('aria-hidden', 'true');
+    var w = document.createElement('div'); w.className = 'dss-slip-who'; w.textContent = rec.who;
+    var t = document.createElement('div'); t.className = 'dss-slip-line'; t.textContent = rec.line;
+    slip.appendChild(w); slip.appendChild(t); document.body.appendChild(slip);
+    requestAnimationFrame(function() { requestAnimationFrame(function() { slip.classList.add('in'); }); });
+    setTimeout(function() {
+      var nb = notebookLink();
+      if (nb) { var r = nb.getBoundingClientRect(); slip.style.left = (r.left + r.width / 2) + 'px'; slip.style.top = (r.top + r.height / 2) + 'px'; }
+      slip.classList.add('out');
+      setTimeout(function() {
+        if (slip.parentNode) slip.parentNode.removeChild(slip);
+        m.classList.add('dss-filed');
+        // the scene's haunt box now plays its own reveal from the start
+        var root = m.closest('.dss-room-prose') || m.closest('tw-passage');
+        if (root) Array.prototype.forEach.call(root.querySelectorAll('.haunt-box'), function(h) { h.style.animation = 'none'; void h.offsetWidth; h.style.animation = ''; });
+        if (nb) { nb.classList.add('dss-nb-took'); setTimeout(function() { nb.classList.remove('dss-nb-took'); }, 1600); }
+      }, 1100);
+    }, 3200);
+  }
+  function file(m) {
+    if (m._filed) return; m._filed = true;
+    var n = night(), k = m.getAttribute('data-k'), a = load();
+    if (a.some(function(r) { return r.n === n && r.k === k; })) { m.classList.add('dss-filed'); return; }
+    var rec = { n: n, k: k, who: m.getAttribute('data-who') || '', line: m.textContent, near: m.hasAttribute('data-near'), yes: m.hasAttribute('data-yes') };
+    a.push(rec); save(a);
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { m.classList.add('dss-filed'); return; }
+    fly(rec, m);
+  }
+  function scan() { Array.prototype.forEach.call(document.querySelectorAll('.dss-refusal:not(.dss-filed)'), function(m) { if (!m._filed && shown(m.parentElement)) file(m); }); }
+  function slipEl(r, age) {
+    var d = document.createElement('div'); d.className = 'nb-slip' + (r.near ? ' nb-slip-near' : '') + (r.yes ? ' nb-slip-yes' : '') + (age ? ' nb-slip-age' + age : '');
+    var w = document.createElement('div'); w.className = 'nb-slip-who'; w.textContent = r.who;
+    var t = document.createElement('div'); t.className = 'nb-slip-line'; t.textContent = r.line;
+    d.appendChild(w); d.appendChild(t); return d;
+  }
+  function render(box) {
+    box.setAttribute('data-filled', '1');
+    var a = load(), n = night();
+    var tonight = a.filter(function(r) { return r.n === n; }), before = a.filter(function(r) { return r.n !== n; }).reverse().slice(0, 12);
+    tonight.forEach(function(r) { box.appendChild(slipEl(r, 0)); });
+    if (before.length) { var hr = document.createElement('div'); hr.className = 'nb-slips-before'; box.appendChild(hr); before.forEach(function(r) { box.appendChild(slipEl(r, Math.max(1, Math.min(3, n - r.n)))); }); }
+  }
+  setInterval(function() { scan(); Array.prototype.forEach.call(document.querySelectorAll('.nb-slips:not([data-filled])'), render); }, 300);
+  return { list: load, night: night };
+})();
+// 2026-10-14: the manuscript's other fates (Book Footer, The Deal). dssBookNote puts the footer's note on a slip, with
+// Get Directions to where the book is; dssBookDeal reveals LACKLAND's "Ask him to take it on" only on a later night, after
+// SHANA's six months (her slip from an earlier night), with at least four refusals filed across the nights.
+window.dssBookNote = function() {
+  var src = document.querySelector('.book-note-src'); if (!src || src._bn) return; src._bn = true;
+  var go = src.getAttribute('data-go');
+  if (window.dssInlineHint) window.dssInlineHint(src.innerHTML, go ? { go: go } : {});
+};
+window.dssBookDeal = function() {
+  var box = document.querySelector('.book-deal'); if (!box || box._bd) return; box._bd = true;
+  var list = (window.dssRefusals && window.dssRefusals.list()) || [], n = window.dssRefusals ? window.dssRefusals.night() : 0;
+  var shanaBefore = list.some(function(r) { return r.k === 'shana' && r.n < n; });
+  var refused = list.filter(function(r) { return !r.near && !r.yes; }).length;
+  if (n >= 2 && shanaBefore && refused >= 4) box.hidden = false;
 };
 window.dssRingHold = (function() {
   function roomWords(card) {
@@ -12169,6 +12260,7 @@ window.dssRingHold = (function() {
         return;
       }
       card._dssRingSeen = true; card._dssRoot = root;
+      if (card.classList.contains('ring-now')) { setTimeout(function() { if (card.isConnected && window.dssAudio && window.dssAudio.phoneBell) window.dssAudio.phoneBell(3); }, 250); return; } // brought in by a scene when it is time (the Ham's verdict)
       if (!roomWords(card)) return;
       card.classList.add('ring-wait');
       hold(card);
@@ -54047,7 +54139,7 @@ You heft your eyes to admire it, as he desires. He seems, for a moment, confused
 
 She moos.
 
-‘And I don’t want that book you’ve got, either. (if: $knowsLackland is false)[Speak to LACKLAND, he’ll be about. ]You best find your own way out.’
+‘And I don’t want that book you’ve got, either. (if: $knowsLackland is false)[Speak to LACKLAND, he’ll be about. ]You best find your own way out.’<span class="dss-refusal" data-k="jeffrey" data-who="JEFFREY BERNARD" hidden>‘And I don’t want that book you’ve got, either.’</span>
 (set: $knowsLackland to true)\
 (display: "Office Opens Line")\
 (set: $confidence to ($statGain: $confidence, 6))
@@ -54106,7 +54198,7 @@ You take its bridle. It sneezes. When you look back he’s disappeared to a time
 (display: "Colony Reentry")
 He’s wearing a suit that was probably clean this morning, which means he’s been home and changed, but now it’s beginning to crumple in sympathy with his mood.
 
-‘Not interested,’ he says. His audience, in parallel, is you, all skittish-pissed and needy, and the whole roiling gross of humanity, from Adam Kadmon’s day to his own, wherein a man still seeks a viable interlocutor.
+‘Not interested,’ he says.<span class="dss-refusal" data-k="davy" data-who="DAVY MERKIN" hidden>‘Not interested.’</span> His audience, in parallel, is you, all skittish-pissed and needy, and the whole roiling gross of humanity, from Adam Kadmon’s day to his own, wherein a man still seeks a viable interlocutor.
 
 The accent is Anglo-Antipodean; too clipped and politic to be functional downunder, yet here in the imperial core, it strays audibly at its burnt edges into an outback.
 
@@ -54283,7 +54375,7 @@ You did not find the poem. Sometimes the night is its own work, and the dawn wil
 <div class="dawn-stars" aria-hidden="true"><svg viewBox="0 0 1000 340" preserveAspectRatio="xMidYMin slice"><g fill="#e8e4f0"><circle cx="38" cy="42" r="1.1" opacity="0.55"/><circle cx="112" cy="18" r="0.8" opacity="0.4"/><circle cx="183" cy="76" r="1.3" opacity="0.5"/><circle cx="241" cy="30" r="0.7" opacity="0.35"/><circle cx="317" cy="58" r="1.0" opacity="0.5"/><circle cx="389" cy="14" r="0.8" opacity="0.45"/><circle cx="446" cy="83" r="1.2" opacity="0.4"/><circle cx="521" cy="36" r="0.7" opacity="0.5"/><circle cx="587" cy="64" r="1.0" opacity="0.35"/><circle cx="668" cy="22" r="1.3" opacity="0.55"/><circle cx="729" cy="71" r="0.8" opacity="0.4"/><circle cx="804" cy="41" r="1.1" opacity="0.5"/><circle cx="872" cy="12" r="0.7" opacity="0.4"/><circle cx="948" cy="66" r="1.0" opacity="0.45"/><circle cx="76" cy="128" r="0.9" opacity="0.4"/><circle cx="159" cy="151" r="1.2" opacity="0.35"/><circle cx="278" cy="119" r="0.7" opacity="0.45"/><circle cx="352" cy="163" r="1.0" opacity="0.4"/><circle cx="433" cy="132" r="0.8" opacity="0.3"/><circle cx="562" cy="148" r="1.1" opacity="0.45"/><circle cx="641" cy="117" r="0.7" opacity="0.35"/><circle cx="758" cy="156" r="1.0" opacity="0.4"/><circle cx="836" cy="124" r="0.8" opacity="0.45"/><circle cx="921" cy="147" r="1.2" opacity="0.35"/><circle cx="54" cy="214" r="0.8" opacity="0.3"/><circle cx="203" cy="232" r="1.0" opacity="0.3"/><circle cx="331" cy="208" r="0.7" opacity="0.25"/><circle cx="487" cy="228" r="0.9" opacity="0.3"/><circle cx="611" cy="204" r="0.7" opacity="0.25"/><circle cx="772" cy="236" r="1.0" opacity="0.3"/><circle cx="896" cy="211" r="0.8" opacity="0.25"/><circle cx="139" cy="287" r="0.7" opacity="0.2"/><circle cx="415" cy="279" r="0.8" opacity="0.2"/><circle cx="694" cy="292" r="0.7" opacity="0.2"/><circle cx="957" cy="281" r="0.8" opacity="0.2"/></g><g fill="#f4ecd8"><circle class="st-tw" cx="264" cy="47" r="1.4" style="animation-delay:0.6s"/><circle class="st-tw" cx="503" cy="96" r="1.3" style="animation-delay:1.8s"/><circle class="st-tw" cx="713" cy="38" r="1.5" style="animation-delay:2.9s"/><circle class="st-tw" cx="906" cy="93" r="1.3" style="animation-delay:1.2s"/></g><g stroke="#f4ecd8" stroke-width="0.5" opacity="0.5"><path d="M264,41 L264,53 M258,47 L270,47"/><path d="M713,32 L713,44 M707,38 L719,38"/></g></svg></div>
 <div class="ending-pane dawn-lighten"><div class="dawn-art-nouveau" aria-hidden="true"><svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><g id="dawnCornerArt"><path d="M 0,12 Q 22,12 38,28 Q 56,48 60,80" stroke="#caa890" stroke-width="1.1" fill="none" opacity="0.7"/><path d="M 0,4 Q 14,4 26,16" stroke="#caa890" stroke-width="0.45" fill="none" opacity="0.4"/><path d="M 38,28 Q 30,58 36,90 Q 44,108 38,120" stroke="#caa890" stroke-width="0.55" fill="none" opacity="0.4"/><path d="M 60,80 Q 78,86 84,78 Q 84,68 74,72 Q 72,82 80,82" stroke="#caa890" stroke-width="0.55" fill="none" opacity="0.4"/><path d="M 26,16 Q 18,22 14,32 Q 22,28 28,22 Z" fill="rgba(168,148,116,0.30)" stroke="#caa890" stroke-width="0.4"/><ellipse cx="33" cy="62" rx="3.0" ry="4" fill="rgba(228,204,176,0.32)" stroke="#caa890" stroke-width="0.55"/><ellipse cx="37" cy="86" rx="2.8" ry="3.8" fill="rgba(228,204,176,0.30)" stroke="#caa890" stroke-width="0.55"/><ellipse cx="42" cy="108" rx="2.4" ry="3.4" fill="rgba(228,204,176,0.28)" stroke="#caa890" stroke-width="0.55"/><ellipse cx="32" cy="60" rx="1.0" ry="1.4" fill="rgba(244,224,196,0.30)"/><ellipse cx="36" cy="84" rx="0.9" ry="1.2" fill="rgba(244,224,196,0.25)"/><circle cx="84" cy="78" r="1.3" fill="#e4c4a4" opacity="0.55"/></g></defs></svg><svg class="dawn-corner dawn-corner-tl" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg"><use href="#dawnCornerArt"/></svg><svg class="dawn-corner dawn-corner-tr" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg"><use href="#dawnCornerArt"/></svg><svg class="dawn-corner dawn-corner-bl" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg"><use href="#dawnCornerArt"/></svg><svg class="dawn-corner dawn-corner-br" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg"><use href="#dawnCornerArt"/></svg></div><div class="dawn-rule-top">(if: _albaComplete)[(display: "Dawn Rule SVG top")](else:)[(display: "Dawn Rule SVG eclipse")]</div>
 <div class="dawn-title">THE DAWN</div>
-<div class="dawn-bookname">// (print: $bookTitle) //</div>
+<!-- 2026-10-14 (Sam: the book should affect the dawn, not as a summary): its title marked by its fate, and a line by what is in your bag (pink, provisional) -->(if: $bookSold is true)[<div class="dawn-bookname dawn-book-sold">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">Your bag is light. The book is on a desk on Frith Street, waiting for the office to open.</span></div>](else-if: $bookAt is "foyles")[<div class="dawn-bookname dawn-book-gone">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is on a pile outside Foyles, priced for pennies, and the dew is getting into it.</span></div>](else-if: ($bookAt is a string) and ($bookAt is not ""))[<div class="dawn-bookname dawn-book-gone">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is still on a bar in Soho. Someone will sweep it up with the empties.</span></div>](else:)[<div class="dawn-bookname">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is in your bag, heavier than when you set out.</span></div>]
 You have been awake for so long.
 
 Yes, maybe tomorrow but till then you’ll lie with AOIFE and she’ll lie with you, and together you’ll raise a daughter.
@@ -54372,8 +54464,9 @@ Better not tomorrow.
 <!-- 2026-09-28 review fix: the street no longer resets $drinksRound, so the night's drinks run 8, 13, 18, 23, 28 whichever pub they are in and the fifth from 70 blacks out anywhere. The round still resets at The Blackout and at Start. -->\
 (if: $pendingLilyBreath is true)[(set: $pendingLilyBreath to false)(go-to: "After the call")]\
 (if: $hadPhoneCall is true and $metCritic is true and $sawAoifeReflection is false)[(set: $sawAoifeReflection to true)(set: $aoifeReflectLap to $returns)(go-to: "After Aoife")]\
+<!-- 2026-10-15 (Sam: the cover story revealed later): Night Ahead Part Two no longer follows RED's kiss. It comes on the first street after the Ham has refused the book and AOIFE has rung: after After Aoife if the call was answered (the trigger above runs first and sends you there; this one fires on the return), at once if the call was refused or left ringing ($hadPhoneCall still false). Insurance: a night that found the second line without the Ham gets it then. ONE LINE, as the comment below explains. -->(if: ($nightAheadPart2Shown is not true) and ((($metCritic is true) and (($hadPhoneCall is false) or ($sawAoifeReflection is true))) or ($alba contains $alba2)))[(go-to: "Night Ahead Part Two")]\
 <!-- A2: reliable mid-night Aoife memory. Fires on the first hub return from lap 5 onward, AFTER A1 (After Aoife), but NOT on the lap you've just come off a Lily memory ((history:)'s 2ndlast = the passage you arrived from), and NOT on the way back from a doorway or an alley ($alleyReturn; Sam, 2026-10-09: it fired when he "just stopped in a doorway on the way to Cecil Court"). Whole thing dormant until $aoifeRework is flipped on at go-live. NOTE 2026-09-14: kept on ONE line deliberately. Harlowe turns every newline inside a multi-line HTML comment into a <br>, and this comment alone was putting three blank lines and ~88px of dead space at the top of the hub, above the title. -->\
-<!-- 2026-10-14 (Sam: space them out): memory 2 waits at least one lap after After Aoife ($aoifeReflectLap) -->(if: $aoifeRework and $returns >= 5 and $sawAoifeReflection is true and (($aoifeReflectLap is not a num) or ($returns > $aoifeReflectLap)) and $sawAoifeMemory2 is false and (history:)'s 2ndlast is not "After the call" and (history:)'s 2ndlast is not "LINE 2 Oxford" and (history:)'s 2ndlast is not "The Interval" and (history:)'s 2ndlast is not "After Aoife")[(unless: $alleyReturn is true)[(set: $sawAoifeMemory2 to true)(go-to: "Aoife memory 2")]]\
+<!-- 2026-10-14 (Sam: space them out): memory 2 waits at least one lap after After Aoife ($aoifeReflectLap) -->(if: ($aoifeRework is true) and ($returns >= 5) and ($sawAoifeReflection is true) and (($aoifeReflectLap is not a num) or ($returns > $aoifeReflectLap)) and ($sawAoifeMemory2 is false) and ((history:)'s 2ndlast is not "After the call") and ((history:)'s 2ndlast is not "LINE 2 Oxford") and ((history:)'s 2ndlast is not "The Interval") and ((history:)'s 2ndlast is not "After Aoife"))[(unless: $alleyReturn is true)[(set: $sawAoifeMemory2 to true)(go-to: "Aoife memory 2")]]\
 (set: $awaitingLacklandPwd to false)\
 <svg id="dean-lamp-svg" xmlns="http://www.w3.org/2000/svg" width="145" height="400" style="float:right;margin:0.3em -0.5em 1em 0.8em;overflow:hidden;"><defs><radialGradient id="dslamp" gradientUnits="userSpaceOnUse" cx="85" cy="80" r="58" gradientTransform="matrix(1,0,0,1.37,0,-29.6)"><stop offset="0%" stop-color="#d4a060" stop-opacity="0.7"/><stop offset="25%" stop-color="#c89060" stop-opacity="0.35"/><stop offset="60%" stop-color="#c89060" stop-opacity="0.12"/><stop offset="100%" stop-color="#c89060" stop-opacity="0"/></radialGradient><radialGradient id="dsPane" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#f6e2b0" stop-opacity="0.55"/><stop offset="0.5" stop-color="#d4a060" stop-opacity="0.22"/><stop offset="1" stop-color="#c89060" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="145" height="164" fill="url(#dslamp)"/><g fill="none" stroke="#c8a86a" stroke-linecap="round" stroke-linejoin="round"><path d="M90,22 L93,27 L90,33 L87,27 Z" stroke-width="1.6"/><line x1="90" y1="33" x2="90" y2="40" stroke-width="1.8"/><path d="M64,50 Q90,38 116,50 L112,56 L68,56 Z" stroke-width="1.8"/><path d="M68,56 L112,56 L108,106 L72,106 Z" fill="url(#dsPane)" stroke-width="2.2"/><path d="M90,56 L90,106 M69.5,72 L110.5,72 M71,90 L109,90" stroke-width="1.2"/><path d="M76,60 L75,68" stroke-width="0.9" opacity="0.6"/><ellipse cx="90" cy="82" rx="5" ry="8" stroke-width="1.2" opacity="0.8"/><ellipse cx="90" cy="81" rx="2" ry="3.4" fill="#c8a86a" stroke="none" opacity="0.9"/><rect x="70" y="106" width="40" height="6" rx="2" stroke-width="1.8"/><rect x="82" y="112" width="16" height="6" rx="1.5" stroke-width="1.4"/><line x1="60" y1="126" x2="120" y2="126" stroke-width="2.2"/><path d="M60,126 q-5,-5 0,-10 M120,126 q5,-5 0,-10" stroke-width="1.6"/><path d="M90,118 C90,150 72,160 74,190 C76,214 100,220 100,238" stroke-width="3.0"/><path d="M76,168 q-8,4 -4,12 q6,2 8,-4" stroke-width="1.2" opacity="0.7"/><ellipse cx="100" cy="240" rx="13" ry="4" stroke-width="1.8"/><line x1="100" y1="246" x2="100" y2="9999" stroke-width="3.8"/><line x1="96.5" y1="250" x2="96.5" y2="9999" stroke-width="0.7" opacity="0.45"/><ellipse cx="100" cy="385" rx="13" ry="4" stroke-width="1.8"/><ellipse cx="100" cy="530" rx="13" ry="4" stroke-width="1.8"/><rect x="84" y="692" width="32" height="8" rx="2" stroke-width="1.8"/></g></svg>\
 <h1 class="game-title">DREAM<br>STREET<br>SHUFFLE</h1>\
@@ -54443,7 +54536,7 @@ Better not tomorrow.
 <!-- 2026-09-25: the corners the strangers stood on keep a trace of their light once they are met -->\
 (display: "Drunken Street Actions")\
 <!-- 2026-10-08 (Sam): the locked path. Once the hut burns the map shuts every door but the Coach and the six windows; three windows and the Coach offers its fire, every time. The old one-in-five roll is gone. The map prints its own label for this door, so this text is only the matcher. -->(if: $hutBurnt is true and $coachBurnt is false and $visitedCentrePoint is false)[<div class="soho-hub-dock">[[The Coach and Horses|Approach The Coach]]</div>]\
-<span class="dss-hub-flag" data-k="next" style="display:none">(display: "Next Target")(print: $nextId)</span><span class="dss-hub-flag" data-k="fetch-near" style="display:none">(unless: ($fetchMet is a num) and ($fetchMet >= 1))[(if: ($afterMidnight is true) or ($nightPhase >= 1))[on]]</span><span class="dss-hub-flag" data-k="hut" style="display:none">(if: $hutBurnt is true)[burnt]</span><span class="dss-hub-flag" data-k="cat" style="display:none">(if: $catFollows is true)[on]</span><span class="dss-hub-flag" data-k="fire-only" style="display:none">(if: $blackouts >= 2 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="square-locked" style="display:none">(if: $sobriety < 30 and $blackouts >= 1 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="met-gooch" style="display:none">(if: $goochMet is true)[on]</span><span class="dss-hub-flag" data-k="met-fetch" style="display:none">(if: $fetchSeen is true)[on]</span><span class="dss-hub-flag" data-k="met-truze" style="display:none">(if: $truzeMet is true)[on]</span><span class="dss-hub-flag" data-k="met-line" style="display:none">(if: $lineWomanMet is true)[on]</span><span class="dss-hub-flag" data-k="ring" style="display:none">(if: $shipCall is "" and (history:) contains "Turn to Copper")[on]</span><span class="dss-hub-flag" data-k="met-longshanks" style="display:none">(if: $longshanksMet is true)[on]</span><span class="dss-hub-flag" data-k="met-songstrong" style="display:none">(if: $songstrongMet is true)[on]</span>\
+<!-- 2026-10-15: who inside each door still has something to say about the book, and the door you chose to pitch at (the map names them on the plates and lights a thread to the pick) --><span class="dss-hub-flag" data-k="who" style="display:none">(display: "Who Will Read")(print: $whoFlag)</span><span class="dss-hub-flag" data-k="pitch" style="display:none">(print: $pitchTarget)</span><span class="dss-hub-flag" data-k="next" style="display:none">(display: "Next Target")(print: $nextId)</span><span class="dss-hub-flag" data-k="fetch-near" style="display:none">(unless: ($fetchMet is a num) and ($fetchMet >= 1))[(if: ($afterMidnight is true) or ($nightPhase >= 1))[on]]</span><span class="dss-hub-flag" data-k="hut" style="display:none">(if: $hutBurnt is true)[burnt]</span><span class="dss-hub-flag" data-k="cat" style="display:none">(if: $catFollows is true)[on]</span><span class="dss-hub-flag" data-k="fire-only" style="display:none">(if: $blackouts >= 2 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="square-locked" style="display:none">(if: $sobriety < 30 and $blackouts >= 1 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="met-gooch" style="display:none">(if: $goochMet is true)[on]</span><span class="dss-hub-flag" data-k="met-fetch" style="display:none">(if: $fetchSeen is true)[on]</span><span class="dss-hub-flag" data-k="met-truze" style="display:none">(if: $truzeMet is true)[on]</span><span class="dss-hub-flag" data-k="met-line" style="display:none">(if: $lineWomanMet is true)[on]</span><span class="dss-hub-flag" data-k="ring" style="display:none">(if: $shipCall is "" and (history:) contains "Turn to Copper")[on]</span><span class="dss-hub-flag" data-k="met-longshanks" style="display:none">(if: $longshanksMet is true)[on]</span><span class="dss-hub-flag" data-k="met-songstrong" style="display:none">(if: $songstrongMet is true)[on]</span>\
 <!-- THE CAPTION BAR AS NARRATOR (Sam, 2026-10-12: "1, 2 and 3, flash once"). At three turning points of the night the
      bar on the map gives one line, once, the first time you are back on the street after it: midnight passing, the
      first blackout, the Fetch. One a visit; a line left empty never shows. Sam's lines go in _beatLines. -->\
@@ -54478,6 +54571,7 @@ There is an atmosphere of the silver screen. Brando might emerge in a tight and 
 
 ]\
 (display: "Key Doors Open Line")(if: $returns is 1)[In your bag, you have your novel, in manuscript. It might open doors.](else:)[In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It might open doors.]\
+<!-- 2026-10-15 (Sam: "some sort of prompt where it asks you who you want to try to pitch the book to and then gives a choice and even guides you there"): the question under the bag line, from the second lap, while the book is in the bag and no forced road is on. The names come from Who Will Read (the people still owed a reading or a refusal, behind open doors). A pick sets NEXT to that person and the map lights a gold thread to their door; it clears when they have had their say, and the question comes back. -->(set: _bookInBag to (($bookAt is a string) and ($bookAt is "") and ($bookSold is not true)))(if: ($metRed is true) and _bookInBag and ($coachUrgent is not true) and ($hutBurnt is not true) and ($blackouts < 2) and ($whoList is an array) and ($whoList's length > 0))[<div class="book-pitch"><span class="book-pitch-q">Who will you show it to?</span>(for: each _w, ...$whoList)[(if: (_w's id is $pitchTarget) and (_w's name is $pitchName))[<span class="book-pitch-on">(print: _w's name) · (print: _w's place)</span>](else:)[<span class="book-pitch-opt">(link: _w's name + " · " + _w's place)[(set: $pitchTarget to _w's id)(set: $pitchName to _w's name)(set: $alleyReturn to true)(go-to: "Dean Street")]</span>]]</div>]\
 <!-- The blank line that used to separate this beat from the bag line sat
      OUTSIDE the hook, so it printed whether or not the beat did, and once the
      map moved below the prose it was one of two stray breaks pushing the street
@@ -54498,7 +54592,7 @@ Someone’s on the corner.
 <div id="soho-map-container"></div>\
 <!-- SOHO MAP alleys and corners (2026-09-11): each fires ONCE a night when the figure walks onto its tile; the links are read by the map like the doors and parked off-screen -->
 (if: $metRed is true)[\
-<!-- 2026-10-09 (Sam, decision card "Cut all six"): the mood-only alleys (Meard Street, St Anne's Court, Richmond Buildings, Bateman's Buildings, Walker's Court, Greek Court) are cut from the map; the plot alleys stay. --><div class="soho-alley-links soho-hub-dock">[[Livonia Street|Doorway: Livonia Street]][[Diadem Court|Doorway: Diadem Court]][[Ham Yard|Doorway: Ham Yard]][[Romilly Street|Doorway: Romilly Street]](unless: $alleys contains "bourchier")[[[Bourchier Street|Alley: Bourchier Street]]][[Soho Square|Alley: Soho Square]](if: $stashSites contains "Approach The French")[[[The French|Approach The French]]](if: $stashSites contains "Approach The Coach")[[[The Coach and Horses|Approach The Coach]]](if: $stashSites contains "Approach Lacklands Office")[[[Lackland’s Office|Approach Lacklands Office]]](if: $stashSites contains "Approach Chinese Fish and Chips")[[[The Chippy|Approach Chinese Fish and Chips]]](if: $stashSites contains "Approach Trisha's")[[[Trisha’s|Approach Trisha's]]](if: $notebook is "stolen" or ($stashSites contains "Alley: Charing Cross Road"))[[[Charing Cross Road|Alley: Charing Cross Road]]]</div>\
+<!-- 2026-10-09 (Sam, decision card "Cut all six"): the mood-only alleys (Meard Street, St Anne's Court, Richmond Buildings, Bateman's Buildings, Walker's Court, Greek Court) are cut from the map; the plot alleys stay. --><div class="soho-alley-links soho-hub-dock">[[Livonia Street|Doorway: Livonia Street]][[Diadem Court|Doorway: Diadem Court]][[Ham Yard|Doorway: Ham Yard]][[Romilly Street|Doorway: Romilly Street]](unless: $alleys contains "bourchier")[[[Bourchier Street|Alley: Bourchier Street]]][[Soho Square|Alley: Soho Square]](if: $stashSites contains "Approach The French")[[[The French|Approach The French]]](if: $stashSites contains "Approach The Coach")[[[The Coach and Horses|Approach The Coach]]](if: $stashSites contains "Approach Lacklands Office")[[[Lackland’s Office|Approach Lacklands Office]]](if: $stashSites contains "Approach Chinese Fish and Chips")[[[The Chippy|Approach Chinese Fish and Chips]]](if: $stashSites contains "Approach Trisha's")[[[Trisha’s|Approach Trisha's]]](if: ($notebook is "stolen") or ($bookAt is "foyles") or ((($bookAt is a string) and ($bookAt is not "") and ($bookLeftLap is a number)) and ($returns >= $bookLeftLap + 2)) or ($stashSites contains "Alley: Charing Cross Road"))[[[Charing Cross Road|Alley: Charing Cross Road]]]</div>\
 
 (if: $coachUrgent is true)[<div class="choice-box">‘[Noises off. Blackout.]’
 
@@ -54734,7 +54828,7 @@ The (print: $keyNames's ($dreamKey)) in your pocket seems to heat with some occu
 (click-replace: ?lily2)[(if: $sobriety < 30)[(display: "Lily SVG")(unless: $lostToDrink contains "lily2")[(set: $lostToDrink to $lostToDrink + (a: "lily2"))]<span class="lily-glimpse lily-fade">She was leaving town the day after PIERS GAV. She found you and your mates in a pub garden; you hadn’t slept and the acid was still funny. This is the flower you tried to give her. The one you picked in the ha-ha of some big house and kept in your buttonhole all night, and which she wouldn’t take.</span>](else:)[(set: $lostToDrink to $lostToDrink - (a: "lily2"))(set: $lilyCount to $lilyCount + 1)(set: $tookLily2 to true)(display: "Next Redraw")<span class="dss-lily-count" style="display:none">(print: $lilyCount)</span>(display: "Lily SVG")<span class="lily-glimpse lily-fade">There occurs, as you cross the threshold of the Pillars, a sonic peculiarity seen elsewhere, for instance, in the acoustic mirrors on Dungeness. If you stand in that precise spot and the atmospherics are favourable, you might hear a noise made at that same instant anywhere in Soho. You hear LILY laugh.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">Gather flowers. There are five to find.</div>](if: $lilyCount is 5)[(set: $confidence to ($statGain: $confidence, 25))(set: $sobriety to ($statGain: $sobriety, 15))<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">MORALE +25 | SOBRIETY +15</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
 <!-- 2026-10-12 (the Pillars audit): AOIFE's ring no longer hides the Ham. Before the critic the pub holds the call AND the
-     Ham (his 14 September rule), so both show, in any order; "no more business" waits until neither is left. -->(set: _aoifeRing to ($hadPhoneCall is false and ($ringSnoozed is not true)))\
+     Ham (his 14 September rule), so both show, in any order; "no more business" waits until neither is left. --><!-- 2026-10-14 (Sam: want the book): AOIFE's call comes straight after the Ham refuses the book (in The critic's judgement); here it rings only on later visits, until answered -->(set: _aoifeRing to (($hadPhoneCall is false) and ($ringSnoozed is not true) and ($metCritic is true)))\
 (if: _aoifeRing)[<div class="phone-ringing">Behind the bar a phone rings and your name is called.
 
 |aoifering>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 9))(go-to: "The phone call")]
@@ -55247,7 +55341,7 @@ setTimeout(function(){var r=document.getElementById('tarot-fourth-result');if(r)
 
 You hide it in your bag like a nursemaid’s thing.
 
-‘Bring it back to me in six months’ time.’
+‘Bring it back to me in six months’ time.’<span class="dss-refusal" data-k="shana" data-who="SHANA" hidden>‘Nothing is particularly wrong with it.’ ‘Bring it back to me in six months’ time.’</span>
 
 (set: $confidence to ($statGain: $confidence, 8))
 
@@ -55349,7 +55443,7 @@ As he turns from his ginger light he kisses you and, as he does, you close your 
 
 <strong class="alba-counter alba-fade-first">THE FIRST LINE OF THREE</strong>
 
-<span class="alba-link-fade">[[Dream On|Night Ahead Part Two]]</span>
+<!-- 2026-10-15 (Sam: the cover story revealed later): the kiss goes straight to the naming; Night Ahead Part Two now comes from Dean Street after the Ham's refusal and AOIFE's ring --><span class="alba-link-fade">[[Dream On|Name Your Book]]</span>
 
 :: Green Sea Approach [carthage-shore] {"position":"850,200","size":"100,100"}
 <div class="approach-back">[[← Back|Carthage shore]]</div>
@@ -56082,28 +56176,28 @@ He has a Garrard 401 screwed into the wall, with an SME arm bolted on and a Shur
 He found the album at Dobell’s several lunches ago, and it’s hardly been silent since.
 </div>]
 
-(unless: $lacklandRead is true)[(set: $lacklandRead to true)He turns to his desk with both his elbows and setting them down individually, says, (if: $metDavy is true)[‘You were sent here by DAVY?’](else-if: $cowRideDone is true)[‘You were sent here by JEFFREY?’](else:)[‘You were sent here, then?’]
+(unless: $lacklandRead is true)[He turns to his desk with both his elbows and setting them down individually, says, (if: $metDavy is true)[‘You were sent here by DAVY?’](else-if: $cowRideDone is true)[‘You were sent here by JEFFREY?’](else:)[‘You were sent here, then?’]
 
 You nod.
 
 ‘Well, give it here.’
 
-You lay //(print: $bookTitle)// down.
+<!-- 2026-10-14 (Sam: pitch the book): you choose to lay it down; "Not yet." keeps it for another visit -->|lkpitch>[(link: "Lay it down")[(set: $lacklandRead to true)<!-- 2026-10-15 (Sam's ruling: the book is fixed; the readers see the man). His near-yes used to want morale 60 and over, which every drink supplies. It now wants the lived night, the Fetch's own gate ($needLilies flowers and $needHaunts haunts, tuned in StoryInit and Start): lay it down early and he sets it down; "Not yet." keeps it for a later visit. -->(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](set: _lkNear to (($lilyCount is a number) and ($lilyCount >= $needLilies) and ($haunts is an array) and ($haunts's length >= $needHaunts)))(replace: ?lkpitch)[You lay //(print: $bookTitle)// down.
 
 He reads the first page; then the last; then a page from somewhere in the middle.
 
-(if: $confidence >= 60)[He sets it down as one might set a toddler down on the floor.
+(if: _lkNear)[He sets it down as one might set a toddler down on the floor.
 
 ‘This isn’t bad. Have you got a job? A wife? How long can you give to me? You’ve something but there’s work to do; lots of work.’
 
-This is as close as you’ve come to anything.
+This is as close as you’ve come to anything.<!-- 2026-10-14 (Sam: a rare sale): on a later night, after SHANA's six months, with enough refusals behind you and the book never lost tonight, you may ask him to take it on (dssBookDeal reveals the link) -->(if: ($bookLostTonight is not true) and ($bookSold is not true) and ($bookDeclined is not true))[<div class="book-deal" hidden>(link: "Ask him to take it on")[(go-to: "The Deal")]</div><script>setTimeout(function(){ if (window.dssBookDeal) window.dssBookDeal(); }, 0);</script>]<span class="dss-refusal" data-k="lackland" data-who="LACKLAND" data-near="1" hidden>‘This isn’t bad. Have you got a job? A wife? How long can you give to me? You’ve something but there’s work to do; lots of work.’</span>
 
 (set: $confidence to ($statGain: $confidence, 14))]
 (else:)[He sets it down.
 
-‘This isn’t there. You know’.
+‘This isn’t there. You know’.<span class="dss-refusal" data-k="lackland" data-who="LACKLAND" hidden>‘This isn’t there. You know’.</span>
 
-(set: $confidence to ($statLoss: $confidence, 9))]]
+(set: $confidence to ($statLoss: $confidence, 9))]]] (link: "Not yet.")[(replace: ?lkpitch)[]]]]
 
 (unless: $haunts contains $haunt5)[[[Linger|Martin Lackland's Back Door]]]
 
@@ -56164,7 +56258,7 @@ INIS O’FLATTERLY clocks you, first with his eyes still downcast, then eventual
 (else:)[[[Speak to him|O'Flatterly's quest]]]
 
 :: O'Flatterly's quest [venue-cecilcourt char-inis threshold] {"position":"300,1850","size":"100,100"}
-‘Dear boy,’ he burrs, ‘I don’t know who you are, and don’t care who you are, and I don’t know that I don’t like what you’ve written; but do me a kindness, kid, and let’s just assume I won’t need it. Besides, there is something that you must do for me, that we must do together.’
+‘Dear boy,’ he burrs, ‘I don’t know who you are, and don’t care who you are, and I don’t know that I don’t like what you’ve written; but do me a kindness, kid, and let’s just assume I won’t need it. Besides, there is something that you must do for me, that we must do together.’<span class="dss-refusal" data-k="inis" data-who="INIS O’FLATTERLY" hidden>‘I don’t know that I don’t like what you’ve written; but do me a kindness, kid, and let’s just assume I won’t need it.’</span>
 
 O’Flatterly coughs, disturbing the dust on the cover before him, agitating its thousand motes into flight, which hang over his desk like the clouds over Willesden Junction.
 
@@ -56308,7 +56402,7 @@ Jazz tells you more about prose than it does about poetry.
 
 The last note hangs itself from the rafters. The room’s dead still.
 
-MOE nods. ‘Go sell a book,’ he says.
+MOE nods. ‘Go sell a book,’ he says.<span class="dss-refusal" data-k="moe" data-who="MOE" hidden>‘Go sell a book.’</span>
 
 (if: not ($haunts contains $haunt7))[
 (set: $haunts to $haunts + (a: $haunt7))
@@ -58005,6 +58099,8 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $returns to 0)\
 (set: $enteredVenue to false)\
 (set: $nightPhase to 0)\
+(set: $bookAt to "")(set: $bookLostTonight to false)(set: $bookLeftLap to 0)(set: $bookLastVenue to "")(set: $bookSold to false)(set: $bookDeclined to false)\
+(set: $pitchTarget to "")(set: $pitchName to "")\
 (set: $shownOpenNightTip to false)\
 (set: $knowsCopperWord to false)
 (set: $alba to (a:))
@@ -58252,6 +58348,7 @@ You move to his table and place your drink on a little vacant patch among his pa
 (set: $sobriety to ($statGain: $sobriety, 12))
 (display: "Colony Reentry")
 ‘You write, too?’ she says, oddly.
+<!-- 2026-10-14 (Sam: pitch the book): a choice to show it; her own words go on the slip -->(unless: $pitchedAgent is true)[|agentpitch>[(link: "Show her the book")[(set: $pitchedAgent to true)(replace: ?agentpitch)[<span class="dss-refusal" data-k="agent" data-who="THE AGENT" hidden>‘You write, too?’</span>]]]]
 
 Tonight she’s not working. So you leave, via the gents, because of which detour things sharpen.
 
@@ -58453,6 +58550,7 @@ You’ll try, you suppose, the haunts you used to haunt and the people you knew.
 :: Night Ahead Part Two [night-ahead] {"position":"700,350","size":"100,100"}
 (if: $nightAheadPart2Shown is true)[(go-to: "Dean Street")]\
 (set: $nightAheadPart2Shown to true)\
+<!-- 2026-10-15 (Sam: the cover story revealed later): reached from Dean Street after the Ham's refusal and AOIFE's ring (see the trigger there), no longer from RED's kiss. The subtitle the naming page used to add joins the title here, and the typewriter types the whole title out below his words, so the stamp lands as he admits it. -->(unless: $bookTitle is a string)[(set: $bookTitle to "Untitled Manuscript")](if: $bookTitle is "")[(set: $bookTitle to "Untitled Manuscript")](unless: $bookTitle contains ": A Cover Story")[(set: $bookTitle to $bookTitle + ": A Cover Story")]\
 <div class="typewriter-page" style="font-family: 'Courier New', Courier, monospace; background: #e5d9b8; color: #1a1612; width: 560px; min-height: 380px; max-width: 90vw; padding: 3.5em 4em 3em; margin: 1.5em auto; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.18), 0 12px 40px rgba(0,0,0,0.3), inset 0 0 95px rgba(26,10,0,0.30), inset 0 0 38px rgba(26,10,0,0.18); border-radius: 1px 3px 3px 1px; text-shadow: none; line-height: 1.85; letter-spacing: 0.02em; font-size: 0.95em; position: relative;"><svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="napt2B1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#120802" stop-opacity="0.97"/><stop offset="20%" stop-color="#120802" stop-opacity="0.97"/><stop offset="45%" stop-color="#3f1c08" stop-opacity="0.78"/><stop offset="70%" stop-color="#7a3c0c" stop-opacity="0.45"/><stop offset="88%" stop-color="#a86014" stop-opacity="0.18"/><stop offset="100%" stop-color="#a86014" stop-opacity="0"/></radialGradient><radialGradient id="napt2B2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#150902" stop-opacity="0.95"/><stop offset="20%" stop-color="#150902" stop-opacity="0.95"/><stop offset="45%" stop-color="#44200a" stop-opacity="0.74"/><stop offset="70%" stop-color="#80400e" stop-opacity="0.40"/><stop offset="88%" stop-color="#ae6416" stop-opacity="0.16"/><stop offset="100%" stop-color="#ae6416" stop-opacity="0"/></radialGradient><radialGradient id="napt2WI" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#701020" stop-opacity="0.05"/><stop offset="70%" stop-color="#701020" stop-opacity="0.03"/><stop offset="100%" stop-color="#701020" stop-opacity="0"/></radialGradient></defs><circle cx="78" cy="640" r="68" fill="url(#napt2WI)"/><circle cx="78" cy="640" r="68" fill="none" stroke="rgba(112,20,30,0.42)" stroke-width="9"/><circle cx="78" cy="640" r="68" fill="none" stroke="rgba(80,10,18,0.20)" stroke-width="4"/><ellipse cx="74" cy="715" rx="2" ry="8" fill="rgba(100,18,28,0.28)"/><circle cx="540" cy="220" r="13" fill="url(#napt2B1)"/><circle cx="535" cy="252" r="10" fill="url(#napt2B2)"/><circle cx="22" cy="380" r="11" fill="url(#napt2B2)"/><circle cx="538" cy="510" r="9" fill="url(#napt2B1)"/><circle cx="30" cy="240" r="9" fill="url(#napt2B2)"/><circle cx="20" cy="560" r="12" fill="url(#napt2B1)"/><ellipse cx="18" cy="450" rx="3" ry="13" transform="rotate(8,18,450)" fill="rgba(68,32,7,0.36)"/><circle cx="530" cy="155" r="3" fill="rgba(135,80,28,0.22)"/><circle cx="42" cy="195" r="2.5" fill="rgba(140,85,30,0.20)"/><circle cx="510" cy="320" r="3.5" fill="rgba(125,72,24,0.22)"/><circle cx="55" cy="345" r="2" fill="rgba(145,90,35,0.18)"/><circle cx="525" cy="450" r="2.5" fill="rgba(130,78,26,0.20)"/><circle cx="62" cy="510" r="3" fill="rgba(132,80,28,0.20)"/><circle cx="14" cy="690" r="2.5" fill="rgba(138,82,30,0.19)"/><circle cx="540" cy="700" r="3" fill="rgba(128,76,24,0.21)"/><line x1="0" y1="380" x2="100%" y2="380" stroke="rgba(155,125,70,0.12)" stroke-width="2"/><line x1="0" y1="378" x2="100%" y2="378" stroke="rgba(75,50,20,0.07)" stroke-width="1"/><line x1="280" y1="0" x2="285" y2="900" stroke="rgba(110,80,35,0.06)" stroke-width="0.6"/></svg>
 You’ve been thinking about the form of the aubade, the morning poem, the song of wake-me-not-so-I-might-have-my-dream. You’ve been thinking about the first love of your life; LILY, from the rarest valley in Wales.
 
@@ -58466,7 +58564,9 @@ Soho’s churning night’s been in you too long; yours even while you weren’t
 
 You need to find one hidden in the night. To make the dawn, for AOIFE and your daughter.
 
-[[Name your book|Name Your Book]]
+<div class="tna-booktitle">(print: $bookTitle)</div>
+
+[[On.|Dean Street]]
 </div>
 
 :: Name Your Book {"position":"100,350","size":"100,100"}
@@ -58474,8 +58574,8 @@ You need to find one hidden in the night. To make the dawn, for AOIFE and your d
 <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="nbStain1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#120802" stop-opacity="0.85"/><stop offset="40%" stop-color="#3f1c08" stop-opacity="0.55"/><stop offset="78%" stop-color="#7a3c0c" stop-opacity="0.22"/><stop offset="100%" stop-color="#a86014" stop-opacity="0"/></radialGradient><radialGradient id="nbStain2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#150902" stop-opacity="0.78"/><stop offset="45%" stop-color="#44200a" stop-opacity="0.50"/><stop offset="80%" stop-color="#80400e" stop-opacity="0.18"/><stop offset="100%" stop-color="#ae6416" stop-opacity="0"/></radialGradient><radialGradient id="nbWine" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#701020" stop-opacity="0.30"/><stop offset="60%" stop-color="#701020" stop-opacity="0.10"/><stop offset="100%" stop-color="#701020" stop-opacity="0"/></radialGradient></defs><circle cx="-12" cy="40" r="22" fill="url(#nbStain1)"/><circle cx="-4" cy="80" r="14" fill="url(#nbStain2)"/><ellipse cx="540" cy="60" rx="9" ry="20" transform="rotate(-12,540,60)" fill="rgba(68,32,7,0.40)"/><circle cx="528" cy="280" r="11" fill="url(#nbStain2)"/><ellipse cx="62" cy="320" rx="14" ry="20" transform="rotate(8,62,320)" fill="url(#nbWine)"/><circle cx="48" cy="180" r="3" fill="rgba(125,72,24,0.28)"/><circle cx="486" cy="200" r="2.5" fill="rgba(140,85,30,0.22)"/><circle cx="38" cy="270" r="2" fill="rgba(132,80,28,0.20)"/><circle cx="500" cy="120" r="2" fill="rgba(132,80,28,0.20)"/></svg>
 (set: $bookTitle to "")\
 <div class="nb-input">(input-box: bind $bookTitle, 1)</div>
-<div class="nb-subtitle">: A Cover Story</div>
-<div class="nb-link-row">(link: "Back to Dean Street.")[(if: $bookTitle is "")[(set: $bookTitle to "Untitled Manuscript")](set: $bookTitle to $bookTitle + ": A Cover Story")(go-to: "Dean Street")]</div>
+<!-- 2026-10-15 (Sam: the cover story revealed later): the ": A Cover Story" subtitle no longer shows here or joins the title now; Night Ahead Part Two stamps it when the confession comes -->
+<div class="nb-link-row">(link: "Back to Dean Street.")[(if: $bookTitle is "")[(set: $bookTitle to "Untitled Manuscript")](go-to: "Dean Street")]</div>
 </div>
 
 <script>
@@ -59116,7 +59216,7 @@ He pulls //(print: $bookTitle)// close.
 <button class="critic-book-turn" id="critBookTurn" style="display:none;" aria-hidden="true">He turns the page.</button>
 </div>
 
-<div class="critic-aftermath" id="critAftermath">
+<div class="critic-aftermath" id="critAftermath"><span class="dss-refusal" data-k="ham" data-who="THE GREAT HAM" hidden>‘Not for me.’ ‘Have you tried America?’</span>
 
 //America, you think of new-found-land.//
 
@@ -59136,6 +59236,12 @@ You say you’ve not, thank him, and make to leave when he calls you back.
 <!-- 2026-10-09, Sam: the ship rumour comes in the call-back, before midnight only; two versions by whether you have been down to the cellar yet. -->
 (if: $shipNews is "" and $afterMidnight is false)[(set: $shipNews to "rumour")(set: $hamRumour to true)(if: $metSalvu is false)[<!-- 2026-10-14 (Sam, A and B): his speech, words unchanged, broken into paragraphs and set on a card, THE RUMOUR, that opens over the page a moment after; the small link reopens it (dssRumourCard) -->He leans low on his elbows and whispers, stagily, <span class="rumour-open" role="button" tabindex="0">THE RUMOUR</span><div class="rumour-text" hidden><p>‘Let me tell you something I’ve heard tonight.</p><p>‘I believe you are familiar with ASHTON GRANGER. God love her: SALVU COPPER, the Maltese gangster, heard she has a few quid to spare. She’s been courting one of his muscle men, QUIET FRANKIE.</p><p>‘Long story short, they charmed her into buying a shipment of “pipe cleaners” – Lord knows what it really is – that’s been on its way to Liverpool from America. Thing is, it’s meant to dock tonight and SALVU’S got the shivers, he hasn’t heard word of progress and thinks they’re all frightened to tell him it’s sunk.</p><p>‘So SALVU’S got QUIET FRANKIE holding ASHTON GRANGER hostage, though she doesn’t know she’s a hostage, in his cellar under Dean Street. If the ship comes in she’ll never know a thing.</p><p>‘Now, you didn’t hear a word of that; I assume that we’d both like to see the morning.’</p></div><script>setTimeout(function(){ if (window.dssRumourCard) window.dssRumourCard(); }, 0);</script>](else:)[‘Do you know anyone who can clean a dirty pipe?’]]
 
+<!-- 2026-10-14 (Sam: "you have to really want to sell the book"): straight after the Ham's refusal, home rings: AOIFE's call, the same card as the Pillars', brought in once the verdict, its slip and any rumour card have passed (the hidden link is pressed by the script below) -->(if: ($hadPhoneCall is false) and ($ringSnoozed is not true))[<span class="ham-ring-go" hidden>(link: "ham-ring-go")[(replace: ?hamring)[<div class="phone-ringing ring-now">Behind the bar a phone rings and your name is called.
+
+|hamaoifering>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 9))(go-to: "The phone call")]
+(link: "I’m not here")[(set: $confidence to ($statLoss: $confidence, 4))(display: "Bars Now")(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $ringSnoozed to true)(set: $resumingFromCall to true)(set: $refusedAoife to true)(replace: ?hamaoifering)[The barman looks you over utterly neutrally. He wishes he wasn’t paid to be part of this game. ‘Not seen him,’ he says, and puts back the receiver.
+(if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]
+[[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]]</span>]|hamring>[]
 [[Leave the pub.|Dean Street]]
 </div>
 
@@ -59364,6 +59470,21 @@ You say you’ve not, thank him, and make to leave when he calls you back.
 </script>
 </div>
 
+<script>
+(function(){
+  // 2026-10-14: AOIFE rings once the verdict is filed and the rumour card (if any) has been read and closed
+  var t0 = Date.now(), seenRumour = false;
+  var iv = setInterval(function() {
+    var go = document.querySelector('.ham-ring-go tw-link'), af = document.getElementById('critAftermath');
+    if (!go || !go.isConnected) { if (Date.now() - t0 > 4000) clearInterval(iv); return; }
+    if (!af || !af.classList.contains('revealed')) return;
+    if (document.querySelector('.dss-slip-fly, #dss-lore-overlay')) { seenRumour = seenRumour || !!document.getElementById('dss-lore-overlay'); return; }
+    if (document.querySelector('.rumour-text') && !seenRumour && !window._dssRumourShown) return;
+    clearInterval(iv); setTimeout(function() { if (go.isConnected) go.click(); }, 1400);
+  }, 300);
+})();
+</script>
+
 :: The novelist [venue-french char-novelist] {"position":"700,550","size":"100,100"}
 (display: "French Rule SVG h60")
 (set: $confidence to ($statLoss: $confidence, 9))
@@ -59371,7 +59492,7 @@ He’s been reading it for longer than is comfortable for either of you.
 
 At last, he pushes it back and asks: ‘Is this yours?’
 
-Before you can answer, he says, ‘I don’t know.’
+Before you can answer, he says, ‘I don’t know.’<span class="dss-refusal" data-k="novelist" data-who="THE NOVELIST" hidden>‘Is this yours?’ ‘I don’t know.’</span>
 
 (if: not ($haunts contains $haunt2))[
 (set: $haunts to $haunts + (a: $haunt2))
@@ -60337,6 +60458,7 @@ You don’t understand and smiling and then retreating, you strike, in the nifty
 (if: _queue is not '')[(set: _nb to '<div class="nb-page" data-pentangle-queue="' + _queue + '">')]\
 (set: _nb to _nb + '<div class="nb-tabs"><div class="nb-tab nb-tab-active" data-tab="notes" onclick="window.nbSwitchTab(this)">FINDS</div><div class="nb-tab" data-tab="inventory" onclick="window.nbSwitchTab(this)">EFFECTS</div><div class="nb-tab" data-tab="lily" onclick="window.nbSwitchTab(this)">LILIES</div><div class="nb-tab" data-tab="alba" onclick="window.nbSwitchTab(this)">POEM</div><div class="nb-tab" data-tab="dreams" onclick="window.nbSwitchTab(this)">DREAMS</div><div class="nb-tab" data-tab="map" onclick="window.nbSwitchTab(this)">MAP</div></div>')\
 (set: _nb to _nb + '<div class="nb-panel nb-panel-notes nb-panel-active">')\
+<!-- 2026-10-14 (Sam: the manuscript's importance): the notebook opens on your book, its title and the slips of those who have read it (dssRefusals fills .nb-slips) -->(if: ($bookTitle is a string) and ($bookTitle is not ""))[(set: _nb to _nb + '<div class="nb-section nb-book"><div class="nb-book-title">' + $bookTitle + '</div><div class="nb-slips"></div></div>')]\
 (set: _nb to _nb + '<div class="nb-key"><span class="nb-key-item"><span class="hp hp-done">◆</span> haunt caught &middot; <span class="hp">◇</span> still to catch</span><span class="nb-key-item"><span class="pp pp-done">▲</span> word learned &middot; <span class="pp">△</span> still to learn</span><span class="nb-key-item"><span class="al al-done">✦</span> alba line &middot; <span class="al">✧</span> still to find</span><span class="nb-key-item"><span class="qp qp-done">★</span> errand done &middot; <span class="qp">☆</span> still to do</span><span class="nb-key-item"><span class="lp lp-done">❀</span> lily gathered &middot; <span class="lp">❁</span> still to find</span></div>')\
 <!-- 2026-10-12 (the weighting): what the Fetch asks before he leads you on, while it is still owed -->(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](if: $lilyCount < $needLilies or $haunts's length < $needHaunts)[(set: _nb to _nb + '<div class="fetch-owed nb-owed">FOR THE DAWN · LILY’S FLOWERS ' + (text: $lilyCount) + ' OF ' + (text: $needLilies) + ' · HAUNTS ' + (text: $haunts's length) + ' OF ' + (text: $needHaunts) + '</div>')]\
 (set: _nb to _nb + '<div class="nb-section"><strong class="nb-heading">HAUNTS</strong>')\
@@ -60517,6 +60639,23 @@ You don’t understand and smiling and then retreating, you strike, in the nifty
   text-align: center;
   letter-spacing: 0.05em;
   margin-top: 0.6em;
+}
+/* 2026-10-15: the question under the bag line on Dean Street: who to show the book to tonight */
+.book-pitch { margin: 0.55em 0 0.2em; font-size: 0.86em; line-height: 1.9; }
+.book-pitch .book-pitch-q { color: #c8a86a; letter-spacing: 0.08em; font-variant: small-caps; margin-right: 0.9em; }
+.book-pitch .book-pitch-opt, .book-pitch .book-pitch-on { display: inline-block; margin-right: 1.1em; white-space: nowrap; }
+.book-pitch .book-pitch-opt tw-link { color: #d9bd78; letter-spacing: 0.06em; }
+.book-pitch .book-pitch-opt tw-link:hover { color: #f3dc9a; }
+.book-pitch .book-pitch-on { color: #f3dc9a; letter-spacing: 0.06em; text-shadow: 0 0 8px rgba(236,196,110,0.45); }
+.book-pitch .book-pitch-on::before { content: '\25B8 '; }
+/* 2026-10-15: the title, stamped with its subtitle, typed out at the foot of Night Ahead Part Two */
+.typewriter-page .tna-booktitle {
+  font-family: 'Special Elite', 'Courier New', monospace;
+  color: rgba(40,22,12,0.85);
+  font-size: 1.15em;
+  text-align: center;
+  letter-spacing: 0.05em;
+  margin: 1.4em 0 0.4em;
 }
 .book-naming .nb-link-row {
   text-align: center;
@@ -63937,6 +64076,29 @@ text-shadow: none;
 /* ===== LORE BOX ===== */
 /* 2026-10-13: the LORE as footnotes (dssLore): the hidden link, the dagger in the prose and the note card */
 .lore-hidden-link { display: none !important; }
+/* 2026-10-14: rejection slips (dssRefusals): the slip that rises and is filed, and the notebook's book page */
+.dss-slip-fly { position: fixed; left: 50%; top: 58%; z-index: 9999980; width: min(340px, 82vw); box-sizing: border-box; padding: 14px 18px 16px; background: #f6f1e4; color: #2a2218; box-shadow: 0 10px 30px rgba(0,0,0,0.55); transform: translate(-50%, -50%) rotate(-1.6deg) translateY(14px); opacity: 0; pointer-events: none; transition: opacity 0.6s ease, transform 0.6s ease; }
+.dss-slip-fly.in { opacity: 1; transform: translate(-50%, -50%) rotate(-1.6deg); }
+.dss-slip-fly.out { transition: left 1.05s cubic-bezier(.5,0,.75,0), top 1.05s cubic-bezier(.5,0,.75,0), transform 1.05s ease-in, opacity 1.05s ease-in; transform: translate(-50%, -50%) rotate(-8deg) scale(0.1); opacity: 0.15; }
+.dss-slip-who, .nb-slip-who { font: 10px 'Special Elite', 'Courier New', monospace; letter-spacing: 3px; color: #6a5a44; margin-bottom: 6px; }
+.dss-slip-line, .nb-slip-line { font: italic 0.98em Georgia, serif; line-height: 1.45; }
+.dss-slip-near { background: #f8f0dc; box-shadow: 0 10px 30px rgba(0,0,0,0.55), inset 3px 0 0 #c8a464; }
+.dss-nb-took { color: #ffe2a0 !important; transition: color 0.4s ease; }
+.dss-room-prose:has(.dss-refusal:not(.dss-filed)) .haunt-box, tw-passage:has(.dss-refusal:not(.dss-filed)) .haunt-box { visibility: hidden !important; animation-play-state: paused !important; } /* its own reveal waits for the slip, then plays */
+.nb-book { margin: 0 0 1.4em; }
+.nb-book-title { font: italic 1.15em Georgia, serif; color: #2a2218; margin-bottom: 0.6em; }
+.nb-slips { display: flex; flex-direction: column; gap: 8px; }
+.nb-slip { padding: 8px 12px 9px; background: #fbf8f0; box-shadow: 0 1px 4px rgba(60,40,20,0.22); color: #2a2218; transform: rotate(-0.6deg); }
+.nb-slip:nth-child(even) { transform: rotate(0.5deg); }
+.nb-slip-near { box-shadow: 0 1px 4px rgba(60,40,20,0.22), inset 3px 0 0 #c8a464; }
+.nb-slips-before { height: 1px; margin: 6px 0 2px; background: rgba(120,90,50,0.25); }
+.dss-slip-yes, .nb-slip-yes { background: #f7ecc8 !important; box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 0 1px #c8a464 !important; }
+.dawn-book-gone { text-decoration: line-through; text-decoration-thickness: 1px; opacity: 0.7; }
+.dawn-book-sold { text-decoration: underline; text-decoration-color: #c8a464; text-underline-offset: 4px; }
+.dawn-book-fate { text-align: center; font-style: italic; margin: 0.4em auto 1.2em; max-width: 34em; }
+.nb-slip-age1 { opacity: 0.6; } .nb-slip-age2 { opacity: 0.42; } .nb-slip-age3 { opacity: 0.3; }
+.nb-slip.nb-slip-age1, .nb-slip.nb-slip-age2, .nb-slip.nb-slip-age3 { background: #f1e9d4; }
+
 .dss-voice-again { margin-top: 8px; font: italic 0.95em Georgia, serif; color: rgba(235,225,200,0.7); line-height: 1.45; }
 
 /* THE RUMOUR (dssRumourCard): the reopen link in the line, and the card's paragraphs */
@@ -70071,6 +70233,9 @@ body:has(#coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, #dss-key-ove
   font-size: 1em; margin-left: 0.28em; letter-spacing: 0.04em; vertical-align: baseline;
 }
 .soho-door-label.soho-door-grey .soho-door-glyphs { opacity: 0.75; }
+/* 2026-10-15: who inside still has something to say about the book, named under the door's name */
+.soho-door-label .soho-door-who { display: block; font-size: 0.72em; letter-spacing: 0.1em; color: #d9bd78; opacity: 0.85; margin-top: 0.1em; white-space: nowrap; text-shadow: 0 0 6px rgba(0,0,0,0.9); }
+.soho-door-label.soho-door-next .soho-door-who { color: #f3dc9a; opacity: 1; }
 /* A doorway is not a venue: no glow, no plate, just a dim word on the pavement. */
 .soho-door-label.soho-door-quiet { background: rgba(6,5,10,0.55); border-color: rgba(150,168,200,0.22); color: #9aa2b0; box-shadow: none; text-shadow: none; font-size: clamp(6.5px, 2.1cqw, 0.56em); letter-spacing: 0.08em; opacity: 0.72; }
 .soho-door-label.soho-door-quiet.soho-door-open:hover, .soho-door-label.soho-door-quiet.soho-door-open:focus-visible { color: #cdd4e0; opacity: 1; box-shadow: none; }
@@ -75480,6 +75645,7 @@ It’s bold to turn down an alley at this time of night. There are three in a gr
 :: Alley: Charing Cross Road [street-night] {"position":"2600,1080","size":"100,100"}
 (unless: $alleys is an array)[(set: $alleys to (a:))](unless: $alleys contains "foyles")[(set: $alleys to $alleys + (a: "foyles"))](set: $alleyReturn to true)\
 (display: "Key Guards")(if: $notebook is "stolen")[<div>Outside Foyles, a man is flogging books. You spot your notebook on the top of a pile.</div>(if: $dreamKey is not "")[(set: _price to $keyNames's ($dreamKey))(link: "Trade the " + _price + " for the notebook")[(if: $dreamKey is "cocaine")[(set: $keyCocaine to "traded")](else-if: $dreamKey is "ticket")[(set: $keyTicket to "traded")](else-if: $dreamKey is "slip")[(set: $keySlip to "traded")](else-if: $dreamKey is "lighter")[(set: $keyLighter to "traded")](else-if: $dreamKey is "eye")[(set: $keyEye to "traded")](set: $dreamKey to "")(set: $notebook to "held")(replace: ?ccrstash)[]<script>/* structure pass 3: the traded key leaves the header's pocket cell at once */document.querySelectorAll('.pocket-cell').forEach(function(c){c.remove();});</script><div>He takes the (print: _price), seems satisfied and gives you your notebook.</div><div class="item-box"><div class="item-header">◈ OBJECT RECOVERED</div><div class="item-name">Your Notebook</div></div><script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.penScratch)window.dssAudio.penScratch();},500);</script>]](else:)[<div>He won’t give it for free. Your pockets are mostly empty. Look for something to trade.</div>]]
+<!-- 2026-10-14 (Sam: the manuscript stolen; pink for him): the book on the fence's pile; the coin or the pocket key buys it back -->(if: $bookAt is "foyles")[<div><span class="claude-draft">On the same pile, a price chalked on its cover, is your manuscript.</span></div>|bookfence>[(if: $hasCoin is true)[(link: "Pay with the coin")[(set: $hasCoin to false)(set: $bookAt to "")(replace: ?bookfence)[<span class="claude-draft">He bites the coin and hands you the book. You put it back in your bag.</span>]]](else-if: ($dreamKey is a string) and ($dreamKey is not ""))[(set: _bprice to $keyNames's ($dreamKey))(link: "Trade the " + _bprice + " for the book")[(if: $dreamKey is "cocaine")[(set: $keyCocaine to "traded")](else-if: $dreamKey is "ticket")[(set: $keyTicket to "traded")](else-if: $dreamKey is "slip")[(set: $keySlip to "traded")](else-if: $dreamKey is "lighter")[(set: $keyLighter to "traded")](else-if: $dreamKey is "eye")[(set: $keyEye to "traded")](set: $dreamKey to "")(set: $bookAt to "")(replace: ?bookfence)[<span class="claude-draft">He takes it and hands you the book. You put it back in your bag.</span>]<script>document.querySelectorAll('.pocket-cell').forEach(function(c){c.remove();});</script>]](else:)[<span class="claude-draft">He won’t give it for nothing. Find something to pay him with.</span>]]]
 |ccrstash>[(display: "Stash Point")]
 [[Back to the street|Dean Street]]
 
@@ -75775,22 +75941,37 @@ Massive earthworms are breaking through the floor!
      and haunts the Fetch now asks for. Sets $nextId (a Soho map door id) and $nextLabel (its name in capitals); the
      header prints NEXT · label and Dean Street hands the id to the map, which marks that door. -->
 (unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)]
+(display: "Who Will Read")<!-- 2026-10-15: who still has something to say about the book, and whether the player's pick ($pitchTarget) still stands -->
 (set: $nextId to "")(set: $nextLabel to "")
 (unless: $lastVenueId is a string)[(set: $lastVenueId to "")](set: _here to "")(set: _vh to (dm: "pillars", "venue-pillars", "cecil", "venue-cecilcourt", "french", "venue-french", "colony", "venue-colony", "ronnies", "venue-ronnies", "coach", "venue-coach", "trishas", "venue-trishas", "lackland", "venue-lackland", "chippy", "venue-chippy"))(for: each _vk, ...(dm-names: _vh))[(if: (passage:)'s tags contains (_vh's (_vk)))[(set: _here to _vk)]](if: _here is not "")[(set: $lastVenueId to _here)]
 (set: _a1 to ($alba is an array and $alba contains $alba1))(set: _a2 to ($alba is an array and $alba contains $alba2))(set: _a3 to ($alba is an array and $alba contains $alba3))
 (set: _hn to 0)(if: $haunts is an array)[(set: _hn to $haunts's length)]
 (set: _lived to ($lilyCount is a number and $lilyCount >= $needLilies and _hn >= $needHaunts))
+<!-- 2026-10-15: the book is in the bag and unsold (the readers' rungs below want it) -->(set: _bookIn to (($bookAt is a string) and ($bookAt is "") and ($bookSold is not true)))
 (set: _sober to ($sobriety is a number and $sobriety >= 30))
 <!-- the place Dean Street itself offers for sobering up or a bite (its low-state chain: low both, then low morale, then low sobriety), or "" when it offers none (the wanderer playthrough: NEXT pointed at a doorway or a greyed chippy the street wasn't offering) -->(set: _soberTo to "")
 (if: $returns is a number and $returns >= 3 and ($blackouts is not a number or $blackouts < 2) and ($hutBurnt is not true))[(if: $confidence < 30 and $sobriety < 30 and (($hadChippy is not true) or ($hadBreather is not true)))[(if: ($hadBreather is not true))[(set: _soberTo to "doorway")](else:)[(set: _soberTo to "chippy")]](else-if: $confidence < 40 and ($hadChippy is not true))[(set: _soberTo to "chippy")](else-if: $sobriety < 40)[(if: ($hadBreather is not true))[(set: _soberTo to "doorway")](else-if: ($hadChippy is not true))[(set: _soberTo to "chippy")]]]
 <!-- 2026-10-14 (overnight report, Sam: fix): under 30 with nothing on the street's chain, NEXT sent the player to a flower too drunk to gather; the doorway in Diadem Court, always open, is the place to sober up -->(if: (_soberTo is "") and ($sobriety is a number) and ($sobriety < 30) and ($hutBurnt is not true))[(unless: ($blackouts is a number) and ($blackouts >= 2))[(set: _soberTo to "dwdiadem")]]
 (if: $notebook is "stolen")[(set: $nextId to "foyles")(set: $nextLabel to "CHARING CROSS ROAD")]
+(else-if: ($bookAt is a string) and ($bookAt is not ""))[(set: $nextId to $bookAt)(set: $nextLabel to "YOUR BOOK")]<!-- 2026-10-14: the book left behind or at the fence leads NEXT -->
 (else-if: $hutBurnt is true and ($coachBurnt is not true))[(set: $nextId to "coach")(set: $nextLabel to "THE COACH AND HORSES")]
 (else-if: $coachUrgent is true)[(set: $nextId to "coach")(set: $nextLabel to "THE COACH AND HORSES")]
 (else-if: $blackouts is a number and $blackouts >= 2)[(set: $nextId to "north")(set: $nextLabel to "CENTRE POINT")]
 (else-if: _a1 and _a2 and _a3 and _lived)[(set: $nextId to "north")(set: $nextLabel to "CENTRE POINT")]
 (else-if: $sobriety is a number and (_soberTo is not "") and ($sobriety < 30 or (((passage:)'s tags contains "hub" or (_soberTo is "chippy" and ((passage:)'s name is "Approach Chinese Fish and Chips" or (passage:)'s tags contains "venue-chippy"))) and ($sobriety < 40 or ($confidence is a number and $confidence < 40)))))[(set: $nextId to _soberTo)]<!-- 2026-10-12 (the opening playthrough): under 40 the detour is the street's advice, so it leads only on Dean Street; inside a quest it waits unless sobriety is under 30. 2026-10-14 overnight: and on the chippy's own approach and room when the chippy is the detour, or NEXT flipped to the next errand on the way in and said that errand, not HERE, inside -->
 (else-if: ($metRed is not true))[(set: $nextId to "ginger")(set: $nextLabel to "THE GINGER LIGHT")]
+<!-- 2026-10-15 (Sam: the manuscript is the main thing; the readers' ladder is NEXT's spine). Once RED is met and the forced
+     roads and the sobering detour have had their say, NEXT names the next READER of the book, by name rather than by
+     door, in the order the night opens them: the Ham (lap two, as before), the novelist (the French, any time), LACKLAND
+     (once his office is open and the night is lived enough for his near-yes, the Fetch's own gate), SHANA (Trisha's opens
+     with the pong's matchbook, so she is the last). A reader is named only while the book is in the bag and unsold; the
+     book left behind already leads above. The dawn rule above still outranks the ladder once the poem is complete and the
+     night lived. The plot roads below (the cow, the crossing, the keys, page 93) come when no reader is waiting. -->
+<!-- 2026-10-15 (Sam): the player's own pick, from the question on Dean Street, outranks the ladder's order -->(else-if: _bookIn and ($pitchOn is true))[(set: $nextId to $pitchTarget)(set: $nextLabel to $pitchName)]
+(else-if: _bookIn and ($metCritic is not true))[(set: $nextId to "pillars")(set: $nextLabel to "THE GREAT HAM")]
+(else-if: _bookIn and not ($haunts contains $haunt2))[(set: $nextId to "french")(set: $nextLabel to "THE NOVELIST")]
+(else-if: _bookIn and ($knowsLackland is true) and ($knowsCopperSecret is true) and ($lacklandRead is not true) and _lived)[(set: $nextId to "lackland")(set: $nextLabel to "LACKLAND")]
+(else-if: _bookIn and ($hasTrishaMatchbook is true) and ($metShana is not true))[(set: $nextId to "trishas")(set: $nextLabel to "SHANA")]
 (else-if: _a1 and _a2 and ($cowRideDone is not true))[(set: $nextId to "coach")(set: $nextLabel to "THE COACH AND HORSES")]
 (else-if: (not _a2) and $inisToldOfPillars is true and $dreamKey is a string and ($dreamKey is not ""))[(if: _sober or (_soberTo is ""))[(set: $nextId to "pillars")(set: $nextLabel to "THE PILLARS")](else:)[(set: $nextId to _soberTo)]]
 (else-if: (not _a2) and $inisToldOfPillars is true)[(if: $keyLighter is "seed")[(set: $nextId to "french")(set: $nextLabel to "THE FRENCH")](else-if: $keySlip is "seed")[(set: $nextId to "coach")(set: $nextLabel to "THE COACH AND HORSES")](else-if: $keyTicket is "seed")[(set: $nextId to "chippy")(set: $nextLabel to "FISH AND CHIPS")](else-if: $keyCocaine is "seed" and $hasTrishaMatchbook is true)[(set: $nextId to "trishas")(set: $nextLabel to "TRISHA’S")]]
@@ -75808,6 +75989,31 @@ Massive earthworms are breaking through the floor!
      before I had any idea what that is. It should change/appear when I leave"): inside a venue NEXT holds what it said as you
      walked in (HERE, when it sent you there); it moves on when you leave. $nextHoldId/$nextHoldLabel keep the last outside answer. -->(if: _here is not "")[(if: ($nextHoldId is a string) and ($nextHoldId is not ""))[(set: $nextId to $nextHoldId)(set: $nextLabel to $nextHoldLabel)]](else:)[(set: $nextHoldId to $nextId)(set: $nextHoldLabel to $nextLabel)]
 <!-- 2026-10-12 (the opening playthrough): inside the place it names, NEXT says HERE (the map still marks the door by its id) -->(set: _vt to (dm: "pillars", "venue-pillars", "cecil", "venue-cecilcourt", "french", "venue-french", "colony", "venue-colony", "ronnies", "venue-ronnies", "coach", "venue-coach", "trishas", "venue-trishas", "lackland", "venue-lackland", "chippy", "venue-chippy"))(if: _vt contains $nextId)[(if: (passage:)'s tags contains (_vt's ($nextId)))[(set: $nextLabel to "HERE")]]
+}
+
+:: Who Will Read [system] {"position":"3050,2600","size":"100,100"}
+{<!-- 2026-10-15 (Sam: "when you are deciding which venue to go to next, surely the idea of who you might meet and who you
+     want to pitch it to could be involved"). Who still has something to say about the book tonight, by door: the people a
+     reading or a refusal is still owed from, behind doors that are open on Dean Street (the same conditions as the hub's
+     links). $whoList feeds the hub's question and NEXT; $whoFlag names them on the map's door plates and in its caption
+     bar (the 'who' hub flag). A pick ($pitchTarget, a door id, and $pitchName) stays on only while that person is still
+     here; once they have had their say it clears and the question comes back. -->
+(set: $whoList to (a:))
+(set: _wP to "")(set: _wF to "")(set: _wC to "")(set: _wE to "")(set: _wO to "")(set: _wR to "")(set: _wT to "")(set: _wL to "")
+(if: ($metCritic is not true))[(set: _wP to "THE GREAT HAM")(set: $whoList to it + (a: (dm: "id", "pillars", "name", "THE GREAT HAM", "place", "the Pillars of Hercules")))]
+(if: ($haunts is an array) and not ($haunts contains $haunt2))[(set: _wF to "THE NOVELIST")(set: $whoList to it + (a: (dm: "id", "french", "name", "THE NOVELIST", "place", "the French")))]
+(set: _colonyOpen to (($coachUrgent is not true) and ($haunts is an array) and ($haunts contains $haunt1) and not (($knowsRonnies is true) and ($knowsCopperSecret is true) and ($metSalvu is true))))
+(if: _colonyOpen and ($metDavy is not true))[(set: _wC to "DAVY MERKIN")(set: $whoList to it + (a: (dm: "id", "colony", "name", "DAVY MERKIN", "place", "the Colony Room")))]
+(if: _colonyOpen and ($knowsRonnies is not true) and ($pitchedAgent is not true))[(set: _wC to (cond: _wC is "", "THE AGENT", _wC + ", THE AGENT"))(set: $whoList to it + (a: (dm: "id", "colony", "name", "THE AGENT", "place", "the Colony Room")))]
+(if: ($knowsCecilCourt is true) and ($knowsAboutPage is not true))[(set: _wE to "INIS O’FLATTERLY")(set: $whoList to it + (a: (dm: "id", "cecil", "name", "INIS O’FLATTERLY", "place", "Cecil Court")))]
+(set: _coachOpen to (($coachUrgent is true) or (($inisToldOfPillars is true) and ($keySlip is "seed")) or (($alba is an array) and ($alba contains $alba1) and ($alba contains $alba2) and ($cowRideDone is not true))))
+(if: _coachOpen and ($sawJeffrey is not true))[(set: _wO to "JEFFREY BERNARD")(set: $whoList to it + (a: (dm: "id", "coach", "name", "JEFFREY BERNARD", "place", "the Coach and Horses")))]
+(if: ($knowsRonnies is true) and ($completedSetlist is not true))[(set: _wR to "MOE")(set: $whoList to it + (a: (dm: "id", "ronnies", "name", "MOE", "place", "Ronnie Scott’s")))]
+(if: ($hasTrishaMatchbook is true) and ($metShana is not true))[(set: _wT to "SHANA")(set: $whoList to it + (a: (dm: "id", "trishas", "name", "SHANA", "place", "Trisha’s")))]
+(if: ($knowsLackland is true) and ($knowsCopperSecret is true) and ($lacklandRead is not true))[(set: _wL to "LACKLAND")(set: $whoList to it + (a: (dm: "id", "lackland", "name", "LACKLAND", "place", "Frith Street")))]
+(set: $whoFlag to "pillars:" + _wP + "|french:" + _wF + "|colony:" + _wC + "|cecil:" + _wE + "|coach:" + _wO + "|ronnies:" + _wR + "|trishas:" + _wT + "|lackland:" + _wL)
+(unless: $pitchTarget is a string)[(set: $pitchTarget to "")](unless: $pitchName is a string)[(set: $pitchName to "")]
+(set: $pitchOn to false)(if: $pitchTarget is not "")[(for: each _w, ...$whoList)[(if: (_w's id is $pitchTarget) and (_w's name is $pitchName))[(set: $pitchOn to true)]]](unless: $pitchOn)[(set: $pitchTarget to "")(set: $pitchName to "")]
 }
 
 :: Next Shown [system] {"position":"3200,2750","size":"100,100"}
@@ -75829,6 +76035,35 @@ Massive earthworms are breaking through the floor!
 {<!-- recompute NEXT and redraw the header's line in place: the footer runs it after every passage, and a flower taken
      in a room runs it at once, so NEXT never lags what has just happened -->
 (display: "Next Shown")(if: $nextShown)[(display: "Next Target")(replace: ?nexthint)[(if: ($nextLabel is not ""))[<div class="next-hint">NEXT · (print: $nextLabel)</div>]]<span class="next-hint-src" hidden>(print: $nextLabel)</span><script>(function(){var s=document.querySelectorAll('.next-hint-src');var t=s.length?s[s.length-1].textContent.trim():'';if(!t)return;Array.prototype.forEach.call(document.querySelectorAll('.next-hint'),function(e){e.textContent='NEXT \u00b7 '+t;});})();</script>]
+}
+
+:: The Deal [venue-lackland] {"position":"1300,1150","size":"100,100"}
+<!-- 2026-10-14 (Sam: "should it even be possible to sell it? like a rare ending"): reached only from LACKLAND's near-yes on
+     a later night (dssBookDeal). Provisional words in pink; he decides what the sale means. Shaking hands leaves the book
+     with him ($bookSold; the Dawn knows); keeping it is the other road ($bookDeclined). -->
+<span class="claude-draft">He lights a cigarette and does not answer for a long time. Then he turns an envelope over and writes a figure on the back of it.</span>
+
+<span class="claude-draft">It is less than you hoped and more than you have ever had.</span>
+
+|dealchoice>[(link: "Shake his hand")[(set: $bookSold to true)(replace: ?dealchoice)[<span class="dss-refusal" data-k="deal" data-who="LACKLAND" data-yes="1" hidden>‘Leave it with me.’</span><span class="claude-draft">He keeps the manuscript. You go down the two doglegs of stairs with nothing in your bag.</span>
+
+[[Back to the street|Dean Street]]]]
+(link: "Keep it")[(set: $bookDeclined to true)(replace: ?dealchoice)[<span class="claude-draft">You put it back in your bag. He shrugs, as if he had expected nothing else.</span>
+
+[[Back to the street|Dean Street]]]]]
+
+:: Book Footer [footer] {"position":"3650,2600","size":"100,100"}
+{<!-- 2026-10-14 (Sam: the manuscript lost along the way; provisional words in pink for him): leave a venue very drunk
+     (sobriety under 25) and, one time in two, the book stays behind (once a night). NEXT and a Get Directions slip lead
+     back; entering that venue gets it back. Left two laps, it is gone to the man outside Foyles (Alley: Charing Cross
+     Road), who wants the coin or the pocket key for it. $bookAt: "" in your bag, a venue id, or "foyles". -->
+(unless: $bookAt is a string)[(set: $bookAt to "")](unless: $bookLastVenue is a string)[(set: $bookLastVenue to "")](unless: $bookLeftLap is a number)[(set: $bookLeftLap to 0)]
+(set: _bvh to (dm: "venue-pillars", "pillars", "venue-cecilcourt", "cecil", "venue-french", "french", "venue-colony", "colony", "venue-ronnies", "ronnies", "venue-coach", "coach", "venue-trishas", "trishas", "venue-lackland", "lackland", "venue-chippy", "chippy"))
+(set: _bplace to (dm: "pillars", "the Pillars", "cecil", "Cecil Court", "french", "the French", "colony", "the Colony", "ronnies", "Ronnie’s", "coach", "the Coach", "trishas", "Trisha’s", "lackland", "LACKLAND’S office", "chippy", "the chippy"))
+(set: _bhere to "")(for: each _t, ...(passage:)'s tags)[(if: _bvh contains _t)[(set: _bhere to _bvh's (_t))]]
+(if: _bhere is not "")[(if: $bookAt is _bhere)[(set: $bookAt to "")<span class="book-note-src" hidden><span class="claude-draft">Someone has kept it behind the bar for you. You put the book back in your bag.</span></span>](set: $bookLastVenue to _bhere)]
+(else-if: (passage:)'s tags contains "hub")[(if: ($bookLastVenue is not "") and ($bookAt is "") and ($bookSold is not true) and ($bookLostTonight is not true) and ($sobriety < 25) and ((random: 1, 2) is 1))[(set: $bookAt to $bookLastVenue)(set: $bookLostTonight to true)(set: $bookLeftLap to $returns)(print: "<span class='book-note-src' data-go='" + $bookAt + "' hidden><span class='claude-draft'>Halfway down the street your bag feels lighter. Your book is still at " + (_bplace's ($bookAt)) + ".</span></span>")](else-if: ($bookAt is not "") and ($bookAt is not "foyles") and ($returns >= $bookLeftLap + 2))[(set: $bookAt to "foyles")<span class="book-note-src" data-go="foyles" hidden><span class="claude-draft">Your book has been gone too long. Someone will have walked off with it by now. There is a man outside Foyles who buys anything.</span></span>](set: $bookLastVenue to "")]
+<script>setTimeout(function(){ if (window.dssBookNote) window.dssBookNote(); }, 500);</script>
 }
 
 :: Primer Footer [footer] {"position":"3500,2600","size":"100,100"}

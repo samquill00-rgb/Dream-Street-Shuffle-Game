@@ -1,3 +1,64 @@
+# The cover story revealed later — 2026-10-15
+
+Sam's brief: the manuscript must be the main thing the player cares about; the game has expanded and diluted. The design note is `HANDOFF-MANUSCRIPT-DESIGN.md` (reasoned from the .twee: the prologue demotes the book at minute two and every system obeys; every reader reads the man, not the book; the five dream-world gift flags are set and read nowhere in Soho; the proposal is four turns of existing mechanics: the readers' ladder as NEXT's spine, verdicts that vary with the lived night, the worlds wired to the readers as v2 promised, lending the book as well as losing it).
+
+Three premise questions were put to Sam. **Ruled (Q1): the cover story is revealed later.** Q2 (the book is fixed; the readers see the man) and Q3 (the sold dawn is hollow) were my recommendations, not yet ruled.
+
+**Built (Q1):**
+- `LINE 1`'s "Dream On" now goes to `Name Your Book`; `Night Ahead Part Two` is no longer reached from the kiss.
+- `Name Your Book` no longer shows or appends ": A Cover Story".
+- `Dean Street` has a new trigger after the After Aoife one: Part Two fires on the first street after the Ham has refused the book ($metCritic) and AOIFE has rung: after After Aoife if the call was answered (that trigger runs first; this fires on the return), at once if the call was refused or left ringing ($hadPhoneCall still false). Insurance: a night that found the second line without the Ham gets it then. Once only ($nightAheadPart2Shown).
+- `Night Ahead Part Two` stamps ": A Cover Story" onto the title (guarded against a double stamp) and types the whole title out below his words (`.tna-booktitle`, Special Elite). The typewriter treats the `(print:)` as a link: hidden while the prose types, faded in with the link after "for AOIFE and your daughter." Its link is now "On." to Dean Street (his typewriter-page convention), not "Name your book".
+- Not a word of his page changed.
+- Tested in the pane: (A) call answered: kiss, naming without the stamp, Ham, ring, call, After Aoife, Part Two with "The Tide Clock: A Cover Story", street with the stamped title, no repeat on the next lap. (B) call refused: Part Two at once; the call answered later gives After Aoife and no repeat. (C) left ringing ("Leave the pub." with the call unanswered): Part Two at once, then the street with the stamped title. Synced.
+
+**Q2 and Q3 ruled yes (same day):** the book is fixed and the readers see the man; the sold dawn is hollow (the book never changes the dawn's colour, only the poem does; it changes what is in the bag).
+
+**Built on them (mechanic only, no new words):**
+- **The readers' ladder is NEXT's spine** (`Next Target`, after RED and the sobering detour, before the cow and the plot roads): the Ham (`THE GREAT HAM`), the novelist (`THE NOVELIST`), LACKLAND (`LACKLAND`, once his office is open, the book unread there, and the night lived: the Fetch's gate), SHANA (`SHANA`, once the pong's matchbook has opened Trisha's, so she is the last reader). Named only while the book is in the bag and unsold (`_bookIn`); the book left behind already leads above. The dawn rule still outranks the ladder once the poem is complete and the night lived. Inside the named venue NEXT says HERE as before. The old "pillars if not met the critic, else french" rule below is now reached only when the book is away.
+- **LACKLAND's near-yes keys on the lived night**, not morale 60 (which every drink supplied): `_lkNear` = $needLilies flowers and $needHaunts haunts, set inside the "Lay it down" hook. Lay it down early and he sets it down; "Not yet." keeps it. His two lines unchanged.
+- Tested in the pane: a fresh night reads NEXT · THE GREAT HAM after the naming (HERE inside the Pillars), THE NOVELIST after the Ham and Part Two (HERE inside the French), CECIL COURT after the novelist's refusal. A debug jump to LACKLAND's office with nothing lived: "Lay it down" gives the flat no, no errors. The SHANA and LACKLAND rungs are reasoned, not reached live. Synced.
+
+**Sam's own idea, built the same evening: you choose the door by who you want to pitch to.** (He found the verdict-variant lines "guff that doesn't sound different"; the lever is the choice, not the lines.)
+- **`Who Will Read` (system):** who still has something to say about the book tonight, by door, behind doors that are open (the hub's own conditions): the Ham (until $metCritic), the novelist (until THE REFUSAL), DAVY and THE AGENT (the Colony), INIS (Cecil Court, until page 93 is asked for), JEFFREY (the Coach), MOE (Ronnie's, until the set), SHANA (Trisha's), LACKLAND (Frith Street, until read). Sets `$whoList` (datamaps: id, name, place), `$whoFlag` (for the map) and `$pitchOn`; a pick clears itself when its person has had their say.
+- **The question on Dean Street**, under the bag line, from lap two, while the book is in the bag and no forced road is on: "Who will you show it to?" then a link per person (NAME · place). A pick sets `$pitchTarget`/`$pitchName` and re-renders the hub ($alleyReturn, no lap counted); the picked one shows gold with a ▸. `.book-pitch` in the stylesheet.
+- **NEXT follows the pick** (a rung above the ladder's order); the map's door glow and the edge pointer follow NEXT as before; the map draws a gold thread to the picked door (the `pitch` hub flag, `drawCecilThread`).
+- **The door plates name who's inside** (`.soho-door-who` under the door's name, from the `who` hub flag; `whoInside(id)` in the map), and the caption bar says the names when you face the door. Only while they have something to say (Sam's ruling).
+- **Slips for DAVY, JEFFREY, MOE and INIS** in their own words (hidden `.dss-refusal` spans in Davy Merkin, Coach and Horses bar, The Set, O'Flatterly's quest), so every refusal in the night files in the notebook.
+- Tested in the pane: resumed night shows the question with INIS only, the plate reads "Cecil Court / INIS O’FLATTERLY", a pick gives NEXT · INIS O’FLATTERLY, pitch flag cecil, no errors. Fresh night: no question on lap one; on lap two the question offers THE GREAT HAM and THE NOVELIST and the plates name them; picking THE NOVELIST gives NEXT · THE NOVELIST and HERE inside the French; after his refusal the pick clears and the question offers THE GREAT HAM and INIS (Cecil Court has opened). Synced.
+- **Harlowe note:** the pick links are `(link:)` hooks inside a `(for:)` over `$whoList`; they rely on the hook keeping the loop's `_w` when clicked. Verified live (the pick landed on the right door).
+- **Map gotcha (found by screenshot, not by the DOM reads):** `scanHub` matches EVERY tw-link's text on Dean Street against the door regexes and docks the hook that holds a match off-screen (`.soho-hub-dock`, opacity 0, 1px wide). The pick links name places ("THE NOVELIST · the French"), so they were taken for door links: the whole question vanished into the dock, and a door on the map could have fired a pick instead of the walk. Fixed: `scanHub` skips links inside `.book-pitch`. Verified: the question renders at full width outside the dock, and the map's Pillars door button walks to the storm page. Any future hub link whose text names a venue needs the same exclusion.
+
+**Waiting on Sam's words (slots, keyed on the lived night and the slips):** the Ham's two variant verdicts (his last line is in the `lines` array of The critic's judgement and the slip's text; both would branch), SHANA's two (Shana's Verdict). Then the worlds wired to the readers (five lines), lending the book, gating the readings on the bag. Order and slots in the design note, section 7.
+
+**Pane gotcha, again:** with the browser pane not on screen, passage transitions stall (blank passage, no links, black screenshot) and a restart's BEGIN looks broken. A tiny screenshot forces a frame and the page appears. Not a game bug.
+
+**Pink correction (Sam):** the Dawn's four book lines, the Deal, the lost-book slips and the fence lines are last night's AI drafts, not his. Don't read intent into them.
+
+---
+
+# The manuscript's importance — 2026-10-14 (night)
+
+Sam's playtest (and his friend, the basis of ASHTON GRANGER): the manuscript's importance gets lost. Diagnosis agreed: everything is tracked except the book; its readings pay out as haunts and passwords; refusals don't accumulate. Plan (Sam): 1 clock the rejections (priority), 2 make the wanting felt, 3 lose/steal it, 4 a rare sale on a later night, 5 the Dawn varies by what is in your bag (not a summary). Sam does NOT want a hand-held manuscript card.
+
+**Built (1 and the AOIFE reorder):**
+- **Rejection slips (`dssRefusals`):** each reading's scene carries a hidden `.dss-refusal` (data-k, data-who, the reader's own verdict words): the Ham (in `#critAftermath`), the novelist, SHANA (`Shana's Verdict`), LACKLAND (no, and the near-yes, `data-near`). When on screen, a paper slip rises (reader's name, his words), holds ~3 s, flies into NOTEBOOK. Kept in localStorage `dssRefusals` by night (`dssNightNo`), deduped per night and reader. No count, no glow.
+- **The book first, the haunt second:** a haunt box in the same scene is hidden (paused) until the slip is filed, then plays its own reveal.
+- **The notebook opens on your book:** FINDS begins with the title and tonight's slips; earlier nights' slips below a rule, fading by age (12 kept). LACKLAND's near-yes has a gold edge.
+- **AOIFE after the Ham:** the Pillars no longer rings AOIFE before the Ham (`_aoifeRing` needs `$metCritic`); The critic's judgement brings in the same call (`.ring-now`, rings at once) once the verdict is filed and the Rumour card closed. The Rumour waits for the slip. Answering returns to the Pillars as before.
+- Tested headless: Ham verdict, then slip, then filed, then Rumour, then AOIFE's ring; novelist haunt waits; SHANA and LACKLAND filed; two nights shown in the notebook; no errors.
+
+**Built the same night with provisional words (all pink, `.claude-draft`, for Sam to rewrite tomorrow):**
+- **2b Pitches:** the Colony agent: "Show her the book" (once, `$pitchedAgent`); her slip is her own "‘You write, too?’" (no new words). LACKLAND: "Lay it down" / "Not yet." after "‘Well, give it here.’" (`$lacklandRead` now set only when laid down).
+- **3 Lost (`Book Footer`, a footer passage):** leave a venue with sobriety under 25 and, one time in two, once a night, the book stays there (`$bookAt` = venue id). Pink slip with Get Directions; NEXT says YOUR BOOK. Entering that venue gets it back (pink slip). Left two laps: gone to the Foyles fence (`$bookAt` "foyles", pink slip, Charing Cross Road opens); in `Alley: Charing Cross Road` pay with the coin or trade the pocket key (pink lines).
+- **4 The rare sale (`The Deal`):** LACKLAND's near-yes shows "Ask him to take it on" only when `dssBookDeal` finds: night 2+, a SHANA slip from an earlier night, 4+ refusals across nights, and the book not lost tonight. The Deal (pink): "Shake his hand" (`$bookSold`, a gold slip, his line ‘Leave it with me.’ is a draft too, in the marker) or "Keep it" (`$bookDeclined`).
+- **5 The Dawn:** under THE DAWN the title is struck through if lost or fenced, gold-underlined if sold; one pink line by what is in your bag (carried / left on a bar / at the fence / sold).
+- All tested headless (each branch). New state reset in StoryInit and Start: `$bookAt $bookLostTonight $bookLeftLap $bookLastVenue $bookSold $bookDeclined`.
+- **Known gap:** while the book is away (left, fenced, sold), the readers still read it (the Ham, novelist, SHANA, LACKLAND). Needs a ruling: gate the readings on the book being in your bag (careful: the Ham's reading opens the Pillars' road) or let it stand.
+- Also fixed on the way: the AOIFE memory 2 condition fully bracketed (Harlowe's ambiguous `is ... and`).
+
+---
+
 # Pre-playtest checks — 2026-10-14 (afternoon)
 
 A read-only sweep (202 passages, no errors), a phone pass (390x844) and an fps census, then fixes:

@@ -1,3 +1,19 @@
+# Astra's editorial audit, acted on — 2026-10-16 (late)
+
+Sam's friend's AI playtester (Astra, `~/Downloads/EDITORIAL-AUDIT.md`) played the live build to LACKLAND's office. Sam: "I trust you on this. Make the changes that you think make sense and ignore those that don't." All mechanic; no words of his changed. Tested headless (Playwright venv in the session scratchpad, cached chromium-1243, muted) on one fresh night: the Ham, JOHN, BENITO, the novelist, Part Two, DAVY, the agent. No page errors. Synced.
+
+**Built:**
+- **The agent's paragraph** ("At a table is an agent…") in The Colony Room is behind her link's own gate (`$knowsRonnies is false`), so it no longer describes her after she has gone.
+- **The pitch question lists readers only:** `$pitchList` (in Who Will Read) is `$whoList` without the entries with no slip key (JOHN, BENITO). The hub's question and its gate use it; the door plates, NEXT and the notebook's "Still to see" keep `$whoList`. So the French joins the question as THE NOVELIST once THE SKETCH is had.
+- **Back to the room, not the street:** The Empty Glass and The novelist now end "Back to the bar" → The French; DAVY's tip ends "Back to the bar" → The Colony Room with `$resumingFromCall` (no second 9-sobriety entry charge; verified 22 → 22). After the painter keeps its street exit (his page is about stepping out into the cartoon street); the agent keeps hers (her prose leaves via the gents); the chippy was already handled 12 Oct. Laps still count only on Dean Street, so a French night is now fewer laps; the calls' lap gaps stretch a little.
+- **Part Two waits for a second no:** besides the Ham and AOIFE's ring, `_secondNo` needs one more reader's refusal (THE REFUSAL, INIS's page 93, DAVY, JEFFREY, the agent shown the book, MOE's set, SHANA, LACKLAND). The second-line insurance stays (INIS always comes before alba 2). LILY's first call waits on Part Two, so it comes later too. Verified: no page after the Ham alone, nor after JOHN and BENITO; it fires on leaving the French after the novelist.
+- **The Pillars' lattice window** no longer offers "Not tonight." (Astra read it as declining the window; it left the pub). The header's Out onto the street is the exit; the window keeps "Back to the street" in the later branch.
+- **Ronnie's carry run shortened:** `maxScroll` 7000 → 4000 (about 20 s walking; obstacles, difficulty steps, notes and finish scale with it; ends on the flat). Physics dials untouched. Compiled; not played.
+
+**Checked and left:** the agent's slip does rise on a clean night (Astra's missing slip was most likely the per-night dedupe, since she began from CONTINUE); the fight (Sam ruled 16 Oct, practice rounds kept); the cow chorus (his ruling); the agent's 118-word intro, Ronnie's Stage line, the Aoife and refusal-variety points (his writing). The voices are with a separate audit session (label-swap test).
+
+---
+
 # The cover story revealed later — 2026-10-15
 
 Sam's brief: the manuscript must be the main thing the player cares about; the game has expanded and diluted. The design note is `HANDOFF-MANUSCRIPT-DESIGN.md` (reasoned from the .twee: the prologue demotes the book at minute two and every system obeys; every reader reads the man, not the book; the five dream-world gift flags are set and read nowhere in Soho; the proposal is four turns of existing mechanics: the readers' ladder as NEXT's spine, verdicts that vary with the lived night, the worlds wired to the readers as v2 promised, lending the book as well as losing it).

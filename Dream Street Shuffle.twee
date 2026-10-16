@@ -12519,24 +12519,18 @@ window._passageGen = 0;
                     setTimeout(function(){ window.dssAudio[fn](); }, 120);
                   }
                 }
-                // Cecil Court shop bell — fires when stepping inside
-                // O'Flatterly's shop (detected via .shop-bell-marker). Rings
-                // once per "phase" of the page-return arc: pre-quest,
-                // returning-with-page, and post-return — so the brass
-                // clapper rings again each time the situation has changed.
-                var _sbm = passageNode.querySelector('.shop-bell-marker');
-                if (_sbm) {
-                  // Phase is printed into the marker's text by Harlowe (window.Harlowe
-                  // isn't exposed for JS reads here). Falls back to 'pre'.
-                  var phase = (_sbm.textContent || '').trim() || 'pre';
-                  if (!window._heardOflatterlyBellPhases) window._heardOflatterlyBellPhases = {};
-                  if (!window._heardOflatterlyBellPhases[phase]) {
-                    window._heardOflatterlyBellPhases[phase] = true;
-                    if (window.dssAudio && window.dssAudio.doorShopBell) {
-                      setTimeout(function(){ window.dssAudio.doorShopBell(); }, 120);
-                    }
-                  }
+                // Cecil Court shop bell — rings as you come in through
+                // O'Flatterly's door. 2026-10-16 (Sam: "It should ring when you
+                // enter the shop, not later"): every time you step in from
+                // outside, not once per phase of the page arc; moving between
+                // the shop's own passages (the .shop-bell-marker ones and
+                // Inis's, tagged char-inis) is staying inside, so no ring.
+                // (the shop's room lifts its prose, marker and all, out of the passage before this runs; its #oi-container stays)
+                var _inShop = !!passageNode.querySelector('.shop-bell-marker, #oi-container') || tags.indexOf('char-inis') !== -1;
+                if (_inShop && !window._dssInOflatterlys && window.dssAudio && window.dssAudio.doorShopBell) {
+                  setTimeout(function(){ window.dssAudio.doorShopBell(); }, 120);
                 }
+                window._dssInOflatterlys = _inShop;
                 window._currentVenue = newVenue;
                 // Ambient beds: pyre (fire) > dream (wind) > outdoor (traffic).
                 // Each takes the _ambient slot; switching cleanly stops the
@@ -23564,6 +23558,7 @@ objects: {
 'A telephone': { now: '', then: '' },
 'A glass on the bar': { now: 'I’ll have what he’s having.', then: 'Strange how in their Prometheus myth, the Greeks seem to understand that a liver regenerates.', id: 'What\'s another glass when you\'re dead already?' },
 'A blue door': { now: '', then: '' },
+'An orange paperback': { now: '', then: '' },
 'A bar': { now: 'The barman buffs his face out of the bar.', then: 'This bar was in your dreams when you were young; you\'ll dream about it still when you\'ve grown old.' },
 'A man at the bar': { now: '', then: '' },
 'A novelist': { now: '', then: '' },
@@ -24099,7 +24094,7 @@ if (VOICE) { var unvoiced = HOTSPOTS.filter(function(h) { return !(window.DSS_VO
 // 2026-10-14 (Sam: "you should be able to return to something once you have clicked the coloured sprite"): a used-up object
 // stays clickable (its card and line again); its glow is only fainter (`used`). Figures with nothing left still go.
 // 2026-10-16 (Sam, from a tester: "loads of objects that you just click on and it shows you the object but they have no use beyond looking at them"): an object glows and takes a click only when it has something to do (an action, a lily, an onLook) or something to say (its own prose or line, or a voice line in DSS_VOICES.objects for this room). Give it a line in the voices table and it lights by itself.
-function spotWords(spot) { try { if (spot.line || (typeof spot.prose === 'function' ? spot.prose() : spot.prose)) return true; /* a prose function that comes out empty (a phone not ringing) says nothing */ var v = window.DSS_VOICES && window.DSS_VOICES.objects && window.DSS_VOICES.objects[ROOM]; var e = v && v[spot.name]; if (e && !e.untilTaken && (e.now || e.then || e.id || e.deja)) return true; /* 2026-10-16 (voices audit): a trail step or callback with words for it NOW lights it too (the 10-11 rule in spent()); the piano, chesterfield, globe, glass case, jukebox and the chippy's empty table were dark */ return !!(VOICE && VOICE.lines && VOICE.lines(ROOM, spot.name).length); } catch (e) { return false; } }
+function spotWords(spot) { try { if (spot.line || (typeof spot.prose === 'function' ? spot.prose() : spot.prose)) return true; /* a prose function that comes out empty (a phone not ringing) says nothing */ var v = window.DSS_VOICES && window.DSS_VOICES.objects && window.DSS_VOICES.objects[ROOM]; var e = v && v[spot.name]; if (e && !e.untilTaken && (e.now || e.then || (e.id && VOICE && VOICE.idAwake()) || e.deja)) return true; /* the thirst's line lights an object only while the thirst is awake (the room sweep: the Colony bar, the bulb, LACKLAND'S glass, the range lit with nothing to say) */ /* 2026-10-16 (voices audit): a trail step or callback with words for it NOW lights it too (the 10-11 rule in spent()); the piano, chesterfield, globe, glass case, jukebox and the chippy's empty table were dark */ return !!(VOICE && VOICE.lines && VOICE.lines(ROOM, spot.name).length); } catch (e) { return false; } }
 function available(spot) { return !!spot && (spotActions(spot).length > 0 || !!spot.onLook || !!spotLily(spot) || spotWords(spot)); }
 function usedUp(spot) { return !!(VOICE && spotActions(spot).length === 0 && VOICE.spent(ROOM, spot.name)); }
 var haloTex = tex(128, 128, function(cx, w, h) {
@@ -25607,7 +25602,7 @@ actions: function() { return byText(['Get a drink at the bar']); } },
 { root: bookG, name: 'An orange paperback', pos: [-0.9, 1.5, 0.45], tgt: [bp.x, 1.16, bp.z], haloAt: [bp.x - 0.05, 1.18, bp.z + 0.4], haloSc: 0.45, /* 2026-10-14: its glow a little along the bar, clear of the glass */ keepLine: true, notAWay: true,
 line: '<i>Chariots of the Gods?</i>' },
 { root: doorG, name: 'A blue door', pos: [1.9, 1.5, -2.3], tgt: [2.45, 1.3, -4.5], haloAt: [2.45, 1.3, -4.4], haloSc: 1.1,
-actions: function() { return byText(['Leave the French']); }, // 2026-10-12 (the venues audit): the way out is the door, not the window
+actions: function() { var a = byText(['Leave the French']); if (a.length) return a; var l = document.querySelector('.header-links .back-one-link tw-link'); return (l && l.getClientRects().length > 0) ? [l] : []; }, /* 2026-10-16 (room sweep): until the French is done the door offers the page's own exit, as the Coach's does, rather than a card with nothing on it */ // 2026-10-12 (the venues audit): the way out is the door, not the window
 onLook: function(on) { doorLight.intensity = on ? 0.9 : 0; doorGlow.material.opacity = on ? 0.55 : 0; } },
 { root: barG, name: 'A bar', pos: [-1.05, 1.45, 1.55], tgt: [-2.55, 1.25, -0.4], haloAt: [-1.75, 1.22, 1.7], haloSc: 1.4, // 2026-10-14 (Sam: glows too close): further along the bar, clear of the glass and the paperback
 actions: function() { return byText(['Get a drink at the bar']); } },
@@ -28649,7 +28644,7 @@ figure: true, actions: function() { return k.byText(['The Great Ham sent me', 'A
 { root: ladderHit, name: 'A ladder', pos: [-0.5, 1.6, -0.2], tgt: [-W / 2 + 0.55, 1.6, -1.6], haloAt: [-W / 2 + 0.55, 1.7, -1.6], haloSc: 1.2 },
 { root: caseHit, name: 'A glass case', pos: [-0.4, 1.4, 1.9], tgt: [-W / 2 + 0.55, 0.9, 1.1], haloAt: [-W / 2 + 0.8, 1.0, 1.1], haloSc: 1.3 },
 { root: globeHit, name: 'A globe', pos: [-0.6, 1.5, -0.6], tgt: [-1.5, 1.2, -1.9], haloAt: [-1.5, 1.25, -1.9], haloSc: 0.8 },
-{ root: bellHit, name: 'A bell', pos: [1.0, 1.9, 0.3], tgt: [W / 2, 2.1, 0.1], haloAt: [W / 2 - 0.2, 2.1, 0.1], haloSc: 0.6, onLook: function(on) { if (on && window.dssAudio && window.dssAudio.doorShopBell) { try { window.dssAudio.doorShopBell(); } catch (e) {} } } }, // 2026-10-16 (Sam): the bell rings when you look at it
+{ root: bellHit, name: 'A bell', pos: [1.0, 1.9, 0.3], tgt: [W / 2, 2.1, 0.1], haloAt: [W / 2 - 0.2, 2.1, 0.1], haloSc: 0.6, }, /* 2026-10-16 (Sam, later: "It should ring when you enter the shop, not later"): the bell rings at the door as you come in, not when you look at it */ // 2026-10-16 (Sam): the bell rings when you look at it
 { root: winHit, name: 'A window', pos: [0.5, 1.6, 1.0], tgt: [W / 2, 1.5, 1.0], haloAt: [W / 2 - 0.15, 1.5, 1.0], haloSc: 2.0 },
 { root: doorHit, name: 'A door', pos: [0.8, 1.3, -0.2], tgt: [W / 2, 1.2, -0.2], haloAt: [W / 2 - 0.15, 1.2, -0.2], haloSc: 1.2 }
 ];
@@ -56345,7 +56340,7 @@ Standing here you can see London, Carthage, Liverpool and everything else.
 <span class="shop-bell-marker" style="display:none">(if: $returnedPage is true)[post](else-if: $hasMissingPage is true)[has-page](else:)[pre]</span>(display: "Cecil Rule SVG")
 INIS O’FLATTERLY clocks you, first with his eyes still downcast, then eventually as he looks up. ‘You’re a novelist and that wasn’t a question,’ he steams; with the gentle steaming of the kettle, not that of the railway.
 
-(if: $hasMissingPage is true)[<script>setTimeout(function(){if(!window._heardOflatterlyBellPhases)window._heardOflatterlyBellPhases={};if(!window._heardOflatterlyBellPhases['has-page']){window._heardOflatterlyBellPhases['has-page']=true;if(window.dssAudio&&window.dssAudio.doorShopBell)window.dssAudio.doorShopBell();}},100);</script>You hand him the page.
+(if: $hasMissingPage is true)[You hand him the page.
 
 [[Show him the page|Return the page]]]\
 (else:)[[[Speak to him|O'Flatterly's quest]]]

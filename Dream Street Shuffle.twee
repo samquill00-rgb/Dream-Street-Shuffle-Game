@@ -5082,7 +5082,7 @@ function init(container) {
   // shone at full strength, so the French's red one was the loudest thing on the map even when NEXT named somewhere
   // else. While NEXT names an open door, the other venues' lit doors are dimmed (.soho-door-dim), and their light on
   // the street at half strength (the canvas, above); their name plates are unchanged and every door is still a way in.
-  var nextDoor = hubFlag('next'), dimOthers = !!(nextDoor && doors[nextDoor] && doors[nextDoor].status === 'open');
+  var nextDoor = hubFlag('next'), nextDoor2 = hubFlag('next2'), dimOthers = !!(nextDoor && doors[nextDoor] && doors[nextDoor].status === 'open'); /* 2026-10-17: next2 is the second reader's door while the pitch question is unanswered */
   DOORS.forEach(function(d){
     var st = doors[d.id];
     if (st.status === 'shut' || (d.event && !d.sign)) return;
@@ -5108,7 +5108,7 @@ function init(container) {
     // INNER VOICES (switch mapMark, off by default): a warm dot by a door whose venue holds a trail's next step
     try { if (window.dssVoices && window.dssVoices.mapMark(d.id)) el.classList.add('soho-door-trail'); } catch (e) {}
     // 2026-10-12 (Sam: the next task must be much clearer): the door Next Target names glows and carries a small NEXT
-    if (hubFlag('next') === d.id && st.status === 'open') el.classList.add('soho-door-next');
+    if ((hubFlag('next') === d.id || hubFlag('next2') === d.id) && st.status === 'open') el.classList.add('soho-door-next');
     // 2026-10-15 (Sam: choose the door by who you might pitch the book to): the people inside who still have something
     // to say about the book tonight, named on the plate (the 'who' hub flag, "pillars:THE GREAT HAM|colony:DAVY MERKIN, THE AGENT")
     var whoNames = whoInside(d.id);
@@ -5129,7 +5129,7 @@ function init(container) {
         '<circle cx="15.6" cy="24.5" r="1.05" fill="#0b0a10"/>' +
         (st.status === 'open' ? '<circle cx="12" cy="9.5" r="1.6" fill="#fff8e2"/>' : '') +
         '</svg>';
-      var dimMe = dimOthers && d.id !== nextDoor && st.status === 'open';
+      var dimMe = dimOthers && d.id !== nextDoor && d.id !== nextDoor2 && st.status === 'open';
       if (dimMe) mk.classList.add('soho-door-dim');
       addOverlay(mk, (d.c + 0.5)*T, (d.r + 0.5)*T);
       var rot = side === 'e' ? 0 : side === 'w' ? 180 : side === 's' ? 90 : -90;
@@ -5268,36 +5268,42 @@ function init(container) {
   }
   // 2026-10-12 (the opening playthrough): the NEXT door is often off the visible map, so nothing pointed to it. When its
   // label is out of view, a small pointer at the nearest edge names it and aims at it.
-  var nextArrow = null, lastNextId = null;
+  var arrowRefs = [{ el: null }, { el: null }], lastNextId = null;
+  /* 2026-10-17 (Sam: two options; the map shows both until you pick): one pointer per NEXT door, the 'next' flag's and the 'next2' flag's */
   function placeNextArrow(cx, cy) {
-    var id = hubFlag('next'), lab = id && labels[id], st = id && doors[id];
+    var id = hubFlag('next'), id2 = hubFlag('next2'), both = id + '|' + id2;
     // 2026-10-16: a pick on Dean Street changes NEXT without re-rendering the street, so the door's glow follows the flag live
-    if (id !== lastNextId) { lastNextId = id; Object.keys(labels).forEach(function(k) { var el = labels[k]; if (!el) return; var on = (k === id && doors[k] && doors[k].status === 'open'); if (on) el.classList.add('soho-door-next'); else el.classList.remove('soho-door-next'); }); }
-    if (!lab || !st || st.status !== 'open') { if (nextArrow) nextArrow.style.display = 'none'; return; }
+    if (both !== lastNextId) { lastNextId = both; Object.keys(labels).forEach(function(k) { var el = labels[k]; if (!el) return; var on = ((k === id || (id2 && k === id2)) && doors[k] && doors[k].status === 'open'); if (on) el.classList.add('soho-door-next'); else el.classList.remove('soho-door-next'); }); }
+    placeArrowFor(id, arrowRefs[0], cx, cy);
+    if (id2 && id2 !== id) placeArrowFor(id2, arrowRefs[1], cx, cy); else if (arrowRefs[1].el) arrowRefs[1].el.style.display = 'none';
+  }
+  function placeArrowFor(id, ref, cx, cy) {
+    var lab = id && labels[id], st = id && doors[id];
+    if (!lab || !st || st.status !== 'open') { if (ref.el) ref.el.style.display = 'none'; return; }
     var lx = (+lab.dataset.wx - cx) / W * 100, ly = (+lab.dataset.wy - cy + SKY*T) / H * 100;
     var skyPct = SKY*T / H * 100; // the band at the top: a label under it is out of view
-    if (lx >= 6 && lx <= 94 && ly >= skyPct + 3 && ly <= 96) { if (nextArrow) nextArrow.style.display = 'none'; return; }
-    if (!nextArrow) { nextArrow = document.createElement('div'); nextArrow.className = 'soho-next-arrow'; nextArrow.setAttribute('aria-hidden', 'true'); stage.appendChild(nextArrow); }
+    if (lx >= 6 && lx <= 94 && ly >= skyPct + 3 && ly <= 96) { if (ref.el) ref.el.style.display = 'none'; return; }
+    if (!ref.el) { ref.el = document.createElement('div'); ref.el.className = 'soho-next-arrow'; ref.el.setAttribute('aria-hidden', 'true'); stage.appendChild(ref.el); }
     var dx = lx - 50, dy = ly - 50, ang = Math.atan2(dy, dx), oct = Math.round(ang / (Math.PI / 4));
     var glyph = { '0': '\u25b6', '1': '\u25e2', '2': '\u25bc', '3': '\u25e3', '4': '\u25c0', '-4': '\u25c0', '-3': '\u25e4', '-2': '\u25b2', '-1': '\u25e5' }[String(oct)] || '\u25b6';
     var d = doorById(id), name = d ? (d.label || d.name) : '';
-    nextArrow.textContent = (oct === 4 || oct === -4 || oct === 3 || oct === -3) ? glyph + ' NEXT \u00b7 ' + name : 'NEXT \u00b7 ' + name + ' ' + glyph;
-    nextArrow.style.display = 'block';
+    ref.el.textContent = (oct === 4 || oct === -4 || oct === 3 || oct === -3) ? glyph + ' NEXT \u00b7 ' + name : 'NEXT \u00b7 ' + name + ' ' + glyph;
+    ref.el.style.display = 'block';
     var ax = Math.max(4, Math.min(96, lx)), ay = Math.max(skyPct + 2, Math.min(95, ly));
-    nextArrow.style.left = ax + '%'; nextArrow.style.top = ay + '%';
-    nextArrow.style.transform = 'translate(' + (ax > 70 ? '-100%' : ax < 30 ? '0' : '-50%') + ',' + (ay > 70 ? '-100%' : ay < 30 ? '0' : '-50%') + ')';
+    ref.el.style.left = ax + '%'; ref.el.style.top = ay + '%';
+    ref.el.style.transform = 'translate(' + (ax > 70 ? '-100%' : ax < 30 ? '0' : '-50%') + ',' + (ay > 70 ? '-100%' : ay < 30 ? '0' : '-50%') + ')';
     // 2026-10-12 (Sam): near the start of Dean Street the pointer sat right on the French's lit door, so it read as if the
     // French were NEXT. It now slides along its edge, a step at a time, to the nearest place clear of every other door's
     // arch and name plate. Only worked out again when its spot on the edge changes.
     var spotKey = Math.round(ax) + ',' + Math.round(ay) + ',' + id;
-    if (nextArrow._spot === spotKey) { if (nextArrow._slid) { nextArrow.style.left = nextArrow._slid[0] + '%'; nextArrow.style.top = nextArrow._slid[1] + '%'; } return; }
-    nextArrow._spot = spotKey; nextArrow._slid = null;
+    if (ref.el._spot === spotKey) { if (ref.el._slid) { ref.el.style.left = ref.el._slid[0] + '%'; ref.el.style.top = ref.el._slid[1] + '%'; } return; }
+    ref.el._spot = spotKey; ref.el._slid = null;
     var alongX = (ay <= 5 || ay >= 95), sr = stage.getBoundingClientRect();
     if (!sr.width || !sr.height) return;
-    var others = Array.prototype.filter.call(stage.querySelectorAll('.soho-door-mark, .soho-door-label, .soho-door-chev'), function(e) { return e !== lab && e.style.visibility !== 'hidden' && e.getClientRects().length; })
+    var others = Array.prototype.filter.call(stage.querySelectorAll('.soho-door-mark, .soho-door-label, .soho-door-chev, .soho-next-arrow'), function(e) { return e !== lab && e !== ref.el && e.style.visibility !== 'hidden' && e.getClientRects().length; })
       .map(function(e) { return e.getBoundingClientRect(); });
     function clear() {
-      var r = nextArrow.getBoundingClientRect(), pad = 4;
+      var r = ref.el.getBoundingClientRect(), pad = 4;
       return !others.some(function(o) { return o.right > r.left - pad && o.left < r.right + pad && o.bottom > r.top - pad && o.top < r.bottom + pad && o.right > sr.left && o.left < sr.right && o.bottom > sr.top && o.top < sr.bottom; });
     }
     if (clear()) return;
@@ -5312,11 +5318,11 @@ function init(container) {
         var st = si < 0 ? 0 : steps[si], dd = depths[di] * inward;
         if (si < 0 && di === 0) continue;
         var nx = alongX ? Math.max(4, Math.min(96, ax + st)) : Math.max(4, Math.min(96, ax + dd)), ny = alongX ? Math.max(5, Math.min(95, ay + dd)) : Math.max(5, Math.min(95, ay + st));
-        nextArrow.style.left = nx + '%'; nextArrow.style.top = ny + '%';
-        if (clear()) { nextArrow._slid = [nx, ny]; return; }
+        ref.el.style.left = nx + '%'; ref.el.style.top = ny + '%';
+        if (clear()) { ref.el._slid = [nx, ny]; return; }
       }
     }
-    nextArrow.style.left = ax + '%'; nextArrow.style.top = ay + '%';
+    ref.el.style.left = ax + '%'; ref.el.style.top = ay + '%';
   }
   // labels never overlap: the upper of any two that do steps up (never down onto its door)
   function settleLabels() {
@@ -5387,7 +5393,7 @@ function init(container) {
     else if (hubFlag('fire-only') === 'on') setBar(streetName(S.c, S.r), '', 'Burn it or leave');
     else if (scan.guided) setBar(streetName(S.c, S.r), '', scan.guided);
     else if (scan.lead) setBar(streetName(S.c, S.r), '', scan.lead);
-    else { var nxd = doorById(hubFlag('next')); setBar(streetName(S.c, S.r), '', nxd && doors[nxd.id] && doors[nxd.id].status === 'open' ? 'Next: ' + (nxd.label || nxd.name) : ''); }
+    else { var nxd = doorById(hubFlag('next')), nxd2 = doorById(hubFlag('next2')), nxOk = nxd && doors[nxd.id] && doors[nxd.id].status === 'open', nx2Ok = nxd2 && nxd2 !== nxd && doors[nxd2.id] && doors[nxd2.id].status === 'open'; setBar(streetName(S.c, S.r), '', nxOk ? 'Next: ' + (nxd.label || nxd.name) + (nx2Ok ? ' or ' + (nxd2.label || nxd2.name) : '') : ''); }
   }
   // a longer line stays longer (about 4.5s, plus time to read it: Sam's midnight line is a whole subtitle)
   var beatText = hubFlag('beat'); if (beatText) S.beat = { text: beatText, t: Math.max(270, 60 + beatText.length * 5) };
@@ -5804,7 +5810,7 @@ function init(container) {
   function draw() {
     var cx = Math.round(S.cam.x), cy = Math.round(S.cam.y);
     // 2026-10-16: a pick on Dean Street changes the 'next' flag in place; the glow, the pointer and the bar follow at once
-    if (hubFlag('next') !== lastNextId) { placeNextArrow(cx, cy); refreshBar(); }
+    if ((hubFlag('next') + '|' + hubFlag('next2')) !== lastNextId) { placeNextArrow(cx, cy); refreshBar(); }
     x.clearRect(0, 0, W, H);
     drawSky(x, doors, S.cam.x);
     // 2026-10-14 overnight: the street and its glow were drawn unclipped, so whenever the camera was off the top row they
@@ -23368,6 +23374,7 @@ strip.classList.toggle('dss-room-strip-on', stripOn);
 wrap.dataset.words = full ? 'full' : (modal ? 'modal' : 'room');
 }
 function open() { mode = 'modal'; veil.scrollTop = 0; clearHeader(); render(); }
+window.dssRoomProseReopen = function() { if (veil.isConnected) open(); }; /* 2026-10-17: with 'Take it in again' cut, the password Deploy reopens the panel through this */
 function close() { mode = 'room'; shownProse = prose(); render(); try { wrap.dispatchEvent(new CustomEvent('dss-room-words-away')); } catch (e) {} }
 veil.addEventListener('pointerdown', function(ev) { if (ev.target === veil || ev.target === sheet || ev.target === dismiss) { ev.stopPropagation(); if (!full) close(); } });
 dismiss.addEventListener('click', function(ev) { ev.stopPropagation(); if (!full) close(); });
@@ -23375,7 +23382,7 @@ dismiss.addEventListener('click', function(ev) { ev.stopPropagation(); if (!full
 // (Tab to it, Enter or Space), and Escape closes the panel too, unless a field or another modal holds the keyboard.
 dismiss.setAttribute('role', 'button'); dismiss.tabIndex = 0;
 // closed from the keyboard, the focus lands on the strip's Look again button, not back at the top of the page
-function keyClose() { close(); setTimeout(function() { var a = document.querySelector('.dss-room-strip-again'); if (a && a.getClientRects().length) { try { a.focus({ preventScroll: true }); } catch (e) {} } }, 0); }
+function keyClose() { close(); setTimeout(function() { var a = document.querySelector('.dss-room-strip-btn'); if (a && a.getClientRects().length) { try { a.focus({ preventScroll: true }); } catch (e) {} } }, 0); }
 dismiss.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); if (!full) keyClose(); } });
 function onPanelEsc(ev) {
 if (!veil.isConnected) { document.removeEventListener('keydown', onPanelEsc); return; }
@@ -23413,11 +23420,7 @@ b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
 b.addEventListener('click', function(ev) { ev.stopPropagation(); if (it.el.isConnected) it.el.click(); });
 strip.appendChild(b);
 });
-var again = document.createElement('button'); again.type = 'button'; again.className = 'dss-room-strip-btn dss-room-strip-again';
-again.textContent = 'Take it in again';
-again.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-again.addEventListener('click', function(ev) { ev.stopPropagation(); open(); });
-strip.appendChild(again);
+/* 2026-10-17 (Sam: "I don't think we need an option to read again"): the strip's 'Take it in again' button (it reopened the room's prose panel) is cut. To restore: create a button with class 'dss-room-strip-btn dss-room-strip-again', text 'Take it in again', whose click (after ev.stopPropagation()) calls open(), and append it to strip here. */
 }
 function refresh(claimed) {
 var lostNow = dead || (!!lostAt && (Date.now() - lostAt > 2500)), lostTurned = false;
@@ -24435,7 +24438,7 @@ if (cameForLinks.length) HOTSPOTS.forEach(function(h) { var acts = spotActions(h
 window.__dssCameFor = { name: cameForName, links: cameForLinks, lit: HOTSPOTS.filter(function(h) { return h._cameFor; }).map(function(h) { return h.name; }) }; // a readout for tests
 // the kit rooms carry .dss-room-caption; the older composer rooms (the French, the Pillars, the Colony) make a plain div with the same inline style, so it is found by that
 var cfCap = document.querySelector('.dss-room-caption') || Array.prototype.slice.call(document.querySelectorAll('div')).filter(function(d) { if (!d.textContent || d.textContent.length > 90 || d.children.length) return false; var cs = getComputedStyle(d); return cs.position === 'absolute' && cs.bottom === '18px' && cs.letterSpacing === '3px'; }).pop() || null;
-if (cfCap && cameForName && cfCap.textContent.indexOf('YOU CAME FOR') < 0) cfCap.textContent = (cfCap.textContent ? cfCap.textContent + ' · ' : '') + 'YOU CAME FOR ' + cameForName;
+if (cfCap && cameForName && cfCap.textContent.indexOf('YOU CAME FOR') < 0) { cfCap.textContent = (cfCap.textContent ? cfCap.textContent + ' · ' : '') + 'YOU CAME FOR ' + cameForName; if (cameFor.querySelector('.dss-came-for-first')) { cfCap.appendChild(document.createElement('br')); cfCap.appendChild(document.createTextNode('Talk to others first.')); } } /* 2026-10-17 (Sam's line): when the figure lit is the way to the one you picked, not them */
 }
 var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexW, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false }));
 halo.visible = false; halo.scale.set(0.5, 0.5, 1); scene.add(halo);
@@ -49524,7 +49527,7 @@ window.deployPwd = function(type) {
     var inp = document.getElementById(P.input), wrap = document.getElementById(P.wrap);
     if (!inp || !wrap) return;
     /* the room's words may be away: bring the panel, and the box with it, back first */
-    if (!inp.getClientRects().length) { var again = document.querySelector('.dss-room-strip-again'); if (again) again.click(); }
+    if (!inp.getClientRects().length && window.dssRoomProseReopen) window.dssRoomProseReopen();
     wrap.dataset.typing = '1'; inp.value = '';
     try { inp.focus({ preventScroll: true }); } catch (e) {}
     var i = 0, word = P.word;
@@ -54878,7 +54881,7 @@ Better not tomorrow.
 <!-- 2026-09-25: the corners the strangers stood on keep a trace of their light once they are met -->\
 (display: "Drunken Street Actions")\
 <!-- 2026-10-08 (Sam): the locked path. Once the hut burns the map shuts every door but the Coach and the six windows; three windows and the Coach offers its fire, every time. The old one-in-five roll is gone. The map prints its own label for this door, so this text is only the matcher. -->(if: $hutBurnt is true and $coachBurnt is false and $visitedCentrePoint is false)[<div class="soho-hub-dock">[[The Coach and Horses|Approach The Coach]]</div>]\
-<!-- 2026-10-15: who inside each door still has something to say about the book, and the door you chose to pitch at (the map names them on the plates and lights a thread to the pick) --><span class="dss-hub-flag" data-k="who" style="display:none">(display: "Who Will Read")(print: $whoFlag)</span><span class="dss-hub-flag" data-k="pitch" style="display:none">|pitchflag>[(print: $pitchTarget)]</span><span class="dss-hub-flag" data-k="next" style="display:none">|nextflag>[(display: "Next Target")(print: $nextId)]</span><!-- 2026-10-16: both hooks are replaced in place by a pick (Pitch Question), so the map's red path, glow and pointer follow without the street re-rendering --><span class="dss-hub-flag" data-k="fetch-near" style="display:none">(unless: ($fetchMet is a num) and ($fetchMet >= 1))[(if: ($afterMidnight is true) or ($nightPhase >= 1))[on]]</span><span class="dss-hub-flag" data-k="hut" style="display:none">(if: $hutBurnt is true)[burnt]</span><span class="dss-hub-flag" data-k="cat" style="display:none">(if: $catFollows is true)[on]</span><span class="dss-hub-flag" data-k="fire-only" style="display:none">(if: $blackouts >= 2 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="square-locked" style="display:none">(if: $sobriety < 30 and $blackouts >= 1 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="met-gooch" style="display:none">(if: $goochMet is true)[on]</span><span class="dss-hub-flag" data-k="met-fetch" style="display:none">(if: $fetchSeen is true)[on]</span><span class="dss-hub-flag" data-k="met-truze" style="display:none">(if: $truzeMet is true)[on]</span><span class="dss-hub-flag" data-k="met-line" style="display:none">(if: $lineWomanMet is true)[on]</span><span class="dss-hub-flag" data-k="ring" style="display:none">(if: $shipCall is "" and (history:) contains "Turn to Copper")[on]</span><span class="dss-hub-flag" data-k="met-longshanks" style="display:none">(if: $longshanksMet is true)[on]</span><span class="dss-hub-flag" data-k="met-songstrong" style="display:none">(if: $songstrongMet is true)[on]</span>\
+<!-- 2026-10-15: who inside each door still has something to say about the book, and the door you chose to pitch at (the map names them on the plates and lights a thread to the pick) --><span class="dss-hub-flag" data-k="who" style="display:none">(display: "Who Will Read")(print: $whoFlag)</span><span class="dss-hub-flag" data-k="pitch" style="display:none">|pitchflag>[(print: $pitchTarget)]</span><span class="dss-hub-flag" data-k="next" style="display:none">|nextflag>[(display: "Next Target")(print: $nextId)]</span><span class="dss-hub-flag" data-k="next2" style="display:none">|next2flag>[(print: $nextId2)]</span><!-- 2026-10-16: both hooks are replaced in place by a pick (Pitch Question), so the map's red path, glow and pointer follow without the street re-rendering --><span class="dss-hub-flag" data-k="fetch-near" style="display:none">(unless: ($fetchMet is a num) and ($fetchMet >= 1))[(if: ($afterMidnight is true) or ($nightPhase >= 1))[on]]</span><span class="dss-hub-flag" data-k="hut" style="display:none">(if: $hutBurnt is true)[burnt]</span><span class="dss-hub-flag" data-k="cat" style="display:none">(if: $catFollows is true)[on]</span><span class="dss-hub-flag" data-k="fire-only" style="display:none">(if: $blackouts >= 2 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="square-locked" style="display:none">(if: $sobriety < 30 and $blackouts >= 1 and $hutBurnt is false)[on]</span><span class="dss-hub-flag" data-k="met-gooch" style="display:none">(if: $goochMet is true)[on]</span><span class="dss-hub-flag" data-k="met-fetch" style="display:none">(if: $fetchSeen is true)[on]</span><span class="dss-hub-flag" data-k="met-truze" style="display:none">(if: $truzeMet is true)[on]</span><span class="dss-hub-flag" data-k="met-line" style="display:none">(if: $lineWomanMet is true)[on]</span><span class="dss-hub-flag" data-k="ring" style="display:none">(if: $shipCall is "" and (history:) contains "Turn to Copper")[on]</span><span class="dss-hub-flag" data-k="met-longshanks" style="display:none">(if: $longshanksMet is true)[on]</span><span class="dss-hub-flag" data-k="met-songstrong" style="display:none">(if: $songstrongMet is true)[on]</span>\
 <!-- THE CAPTION BAR AS NARRATOR (Sam, 2026-10-12: "1, 2 and 3, flash once"). At three turning points of the night the
      bar on the map gives one line, once, the first time you are back on the street after it: midnight passing, the
      first blackout, the Fetch. One a visit; a line left empty never shows. Sam's lines go in _beatLines. -->\
@@ -54914,7 +54917,7 @@ There is an atmosphere of the silver screen. Brando might emerge in a tight and 
 
 ]\
 (display: "Key Doors Open Line")(if: $returns is 1)[In your bag, you have your novel, in manuscript. It might open doors.](else:)[In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It might open doors.]\
-<!-- 2026-10-15 (Sam: "some sort of prompt where it asks you who you want to try to pitch the book to and then gives a choice and even guides you there"): the question under the bag line, from the second lap, while the book is in the bag and no forced road is on. The names come from Who Will Read (the people still owed a reading or a refusal, behind open doors). A pick sets NEXT to that person and the map lights a gold thread to their door; it clears when they have had their say, and the question comes back. -->(unless: $bookLent is a string)[(set: $bookLent to "")](set: _bookInBag to (($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($bookLent is "")))(if: ($metRed is true) and _bookInBag and ($coachUrgent is not true) and ($hutBurnt is not true) and ($blackouts < 2) and ($pitchList is an array) and ($pitchList's length > 0))[<div class="book-pitch">|pitchq>[(display: "Pitch Question")]</div>]\
+<!-- 2026-10-15 (Sam: "some sort of prompt where it asks you who you want to try to pitch the book to and then gives a choice and even guides you there"): the question under the bag line, from the second lap, while the book is in the bag and no forced road is on. The names come from Who Will Read (the people still owed a reading or a refusal, behind open doors). A pick sets NEXT to that person and the map lights a gold thread to their door; it clears when they have had their say, and the question comes back. -->(unless: $bookLent is a string)[(set: $bookLent to "")](set: _bookInBag to (($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($bookLent is "")))(if: ($metRed is true) and _bookInBag and ($coachUrgent is not true) and ($hutBurnt is not true) and ($blackouts < 2) and ($pitchList is an array) and ($pitchList's length > 1))[<!-- 2026-10-17 (Sam): a question only when there is a choice; one reader left, and NEXT and the map simply name them --><div class="book-pitch">|pitchq>[(display: "Pitch Question")]</div>]\
 <!-- The blank line that used to separate this beat from the bag line sat
      OUTSIDE the hook, so it printed whether or not the beat did, and once the
      map moved below the prose it was one of two stray breaks pushing the street
@@ -60804,7 +60807,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
      on once the night is lived ($needLilies flowers, $needHaunts haunts; the weighting), so until then it showed above a NEXT
      still pointing at a flower or a haunt. It now waits for both; until then the hint is silent and NEXT leads. -->(set: _hlived to (($lilyCount is a number) and ($needLilies is not a number or $lilyCount >= $needLilies) and ($haunts is an array) and ($needHaunts is not a number or $haunts's length >= $needHaunts)))\
 <div class="alba-hint">(if: $notebook is "stolen")[Your notebook is gone, and the poem with it.](else-if: _ac is 1)[One line is caught. Two more still to find.](else-if: _ac is 2)[Two lines, now. The third always close.](else-if: _ac >= 3 and _hlived)[The Alba is complete. Centre Point waits.]</div>
-<!-- 2026-10-16 (Sam: carry the pick indoors): inside the venue of the person you chose on Dean Street, a hidden span the room reads on build; that figure is lit red and the room's caption says who you came for -->(display: "Who Will Read")(if: ($pitchOn is true) and ($pitchTarget is a string) and ($pitchTarget is not ""))[(set: _cfTags to (dm: "pillars", "venue-pillars", "french", "venue-french", "colony", "venue-colony", "cecil", "venue-cecilcourt", "coach", "venue-coach", "ronnies", "venue-ronnies", "trishas", "venue-trishas", "lackland", "venue-lackland"))(if: (_cfTags contains $pitchTarget) and ((passage:)'s tags contains (_cfTags's ($pitchTarget))))[<span class="dss-came-for" hidden><span class="dss-came-for-name">(print: $pitchName)</span><span class="dss-came-for-link">(print: $pitchLink)</span></span>]]\
+<!-- 2026-10-16 (Sam: carry the pick indoors): inside the venue of the person you chose on Dean Street, a hidden span the room reads on build; that figure is lit red and the room's caption says who you came for -->(display: "Who Will Read")(if: ($pitchOn is true) and ($pitchTarget is a string) and ($pitchTarget is not ""))[(set: _cfTags to (dm: "pillars", "venue-pillars", "french", "venue-french", "colony", "venue-colony", "cecil", "venue-cecilcourt", "coach", "venue-coach", "ronnies", "venue-ronnies", "trishas", "venue-trishas", "lackland", "venue-lackland"))(if: (_cfTags contains $pitchTarget) and ((passage:)'s tags contains (_cfTags's ($pitchTarget))))[<span class="dss-came-for" hidden><span class="dss-came-for-name">(print: $pitchName)</span><span class="dss-came-for-link">(print: $pitchLink)</span>(if: ($pitchName is "THE NOVELIST") and ($pitchLink is not "Speak to him"))[<span class="dss-came-for-first"></span>]</span>]]<!-- 2026-10-17 (Sam): the novelist picked while JOHN or BENITO stands before him; the room adds "Talk to others first." under its caption -->\
 <!-- 2026-10-12 (Sam: the next task must be much clearer): the one place to go next, from Next Target; hidden on the hub's map screen's own bar, the endings and the night's opening pages -->(display: "Next Shown")(if: $nextShown)[(display: "Next Target")]|nexthint>[(if: $nextShown and ($nextLabel is not ""))[<div class="next-hint">NEXT · (print: $nextLabel)</div>]]
 (if: $hasLiver is true and ($confidence is a number and $sobriety is a number) and ($confidence < 10 or $sobriety < 10))[<div class="liver-hint">‘You’re running on fumes. Remember: Shelley’s liver in your notebook.’</div>]
 (set: _backHide to (a: "Talk to the critic", "None of us likes it!", "Turn to Copper", "Copper confronts", "Beaten", "St. John's Word", "Standing", "His round", "Talk to the Artists", "The Spanish Artist", "Sketch the Painter", "Shana Looks Again", "O'Flatterly introduction", "Lackland's Back Room", "Watch the decider", "You notice her", "You give him Red", "You give him John", "Title", "Start", "The Night Ahead", "Name Your Book", "Dawn", "White page", "Black page", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "PP Pong", "Ride Jeffrey Bernard's cow", "Fight starts", "Fight Victory", "Fight Defeat", "The phone call", "Lily phone call 1", "The dual ring", "After the call", "After Aoife", "The Painter's Gaze", "The Set", "Shana Reads", "Davy Merkin", "Return the page", "Give him the painting", "Bar Canvas Win", "Bar Canvas Lose", "Shana's Verdict", "Copper Word Accepted", "Stand your ground", "Approach the novelist", "Benito's Hour"))
@@ -60893,7 +60896,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 (set: _nb to _nb + '<div class="nb-tabs"><div class="nb-tab nb-tab-active" data-tab="notes" onclick="window.nbSwitchTab(this)">FINDS</div><div class="nb-tab" data-tab="inventory" onclick="window.nbSwitchTab(this)">EFFECTS</div><div class="nb-tab" data-tab="lily" onclick="window.nbSwitchTab(this)">LILIES</div><div class="nb-tab" data-tab="alba" onclick="window.nbSwitchTab(this)">POEM</div><div class="nb-tab" data-tab="dreams" onclick="window.nbSwitchTab(this)">DREAMS</div><div class="nb-tab" data-tab="map" onclick="window.nbSwitchTab(this)">MAP</div></div>')\
 (set: _nb to _nb + '<div class="nb-panel nb-panel-notes nb-panel-active">')\
 <!-- 2026-10-14 (Sam: the manuscript's importance): the notebook opens on your book, its title and the slips of those who have read it (dssRefusals fills .nb-slips) -->(if: ($bookTitle is a string) and ($bookTitle is not ""))[(set: _nb to _nb + '<div class="nb-section nb-book"><div class="nb-book-title">' + $bookTitle + '</div><div class="nb-slips"></div></div>')]\
-<!-- 2026-10-16 (Sam: suggestions, 2, the plan travels with you): under the slips, who is still to see tonight, the same list Dean Street asks about; the picked one marked -->(display: "Who Will Read")(if: ($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($whoList is an array) and ($whoList's length > 0))[(set: _nb to _nb + '<div class="nb-section nb-tosee"><div class="nb-tosee-h">Still to see</div>')(for: each _w, ...$whoList)[(set: _nb to _nb + '<div class="nb-tosee-row' + (cond: (_w's id is $pitchTarget) and (_w's name is $pitchName), ' nb-tosee-on', '') + '">' + (_w's name) + ' · ' + (_w's place) + '</div>')](set: _nb to _nb + '</div>')]\
+<!-- 2026-10-16 (Sam: suggestions, 2, the plan travels with you): under the slips, who is still to see tonight, the same list Dean Street asks about; the picked one marked -->(display: "Who Will Read")(if: ($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($whoList is an array) and ($whoList's length > 0))[(set: _nb to _nb + '<div class="nb-section nb-tosee"><div class="nb-tosee-h">Still to see</div>')(for: each _w, ...$whoList)[(set: _nb to _nb + '<div class="nb-tosee-row' + (cond: (_w's id is $pitchTarget) and ((_w's name is $pitchName) or (_w's id is "french")), ' nb-tosee-on', '') + '">' + (_w's name) + ' · ' + (_w's place) + '</div>')](set: _nb to _nb + '</div>')]\
 (set: _nb to _nb + '<div class="nb-key"><span class="nb-key-item"><span class="hp hp-done">◆</span> haunt caught &middot; <span class="hp">◇</span> still to catch</span><span class="nb-key-item"><span class="pp pp-done">▲</span> word learned &middot; <span class="pp">△</span> still to learn</span><span class="nb-key-item"><span class="al al-done">✦</span> alba line &middot; <span class="al">✧</span> still to find</span><span class="nb-key-item"><span class="qp qp-done">★</span> errand done &middot; <span class="qp">☆</span> still to do</span><span class="nb-key-item"><span class="lp lp-done">❀</span> lily gathered &middot; <span class="lp">❁</span> still to find</span></div>')\
 <!-- 2026-10-12 (the weighting): what the Fetch asks before he leads you on, while it is still owed -->(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](if: $lilyCount < $needLilies or $haunts's length < $needHaunts)[(set: _nb to _nb + '<div class="fetch-owed nb-owed">FOR THE DAWN · LILY’S FLOWERS ' + (text: $lilyCount) + ' OF ' + (text: $needLilies) + ' · HAUNTS ' + (text: $haunts's length) + ' OF ' + (text: $needHaunts) + '</div>')]\
 (set: _nb to _nb + '<div class="nb-section"><strong class="nb-heading">HAUNTS</strong>')\
@@ -76383,7 +76386,7 @@ Massive earthworms are breaking through the floor!
      header prints NEXT · label and Dean Street hands the id to the map, which marks that door. -->
 (unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)]
 (display: "Who Will Read")<!-- 2026-10-15: who still has something to say about the book, and whether the player's pick ($pitchTarget) still stands -->
-(set: $nextId to "")(set: $nextLabel to "")
+(set: $nextId to "")(set: $nextLabel to "")(set: $nextId2 to "")
 (unless: $lastVenueId is a string)[(set: $lastVenueId to "")](set: _here to "")(set: _vh to (dm: "pillars", "venue-pillars", "cecil", "venue-cecilcourt", "french", "venue-french", "colony", "venue-colony", "ronnies", "venue-ronnies", "coach", "venue-coach", "trishas", "venue-trishas", "lackland", "venue-lackland", "chippy", "venue-chippy"))(for: each _vk, ...(dm-names: _vh))[(if: (passage:)'s tags contains (_vh's (_vk)))[(set: _here to _vk)]](if: _here is not "")[(set: $lastVenueId to _here)]
 (set: _a1 to ($alba is an array and $alba contains $alba1))(set: _a2 to ($alba is an array and $alba contains $alba2))(set: _a3 to ($alba is an array and $alba contains $alba3))
 (set: _hn to 0)(if: $haunts is an array)[(set: _hn to $haunts's length)]
@@ -76409,6 +76412,7 @@ Massive earthworms are breaking through the floor!
      book left behind already leads above. The dawn rule above still outranks the ladder once the poem is complete and the
      night lived. The plot roads below (the cow, the crossing, the keys, page 93) come when no reader is waiting. -->
 <!-- 2026-10-15 (Sam): the player's own pick, from the question on Dean Street, outranks the ladder's order -->(else-if: _bookIn and ($pitchOn is true))[(set: $nextId to $pitchTarget)(set: $nextLabel to $pitchName)]
+<!-- 2026-10-17 (Sam: two options, and NEXT and the map show both until you pick): while the question offers a choice and none is made, NEXT names the first two readers in the ladder's order and the map marks both doors ($nextId2, the 'next2' hub flag; empty when they share a door) -->(else-if: _bookIn and ($pitchList is an array) and ($pitchList's length > 1))[(set: $nextId to $pitchList's 1st's id)(set: $nextLabel to $pitchList's 1st's name + " or " + $pitchList's 2nd's name)(if: $pitchList's 2nd's id is not $nextId)[(set: $nextId2 to $pitchList's 2nd's id)]]
 (else-if: _bookIn and ($metCritic is not true))[(set: $nextId to "pillars")(set: $nextLabel to "THE GREAT HAM")]
 (else-if: _bookIn and not ($haunts contains $haunt4))[(set: $nextId to "french")(set: $nextLabel to "JOHN ST. JOHN")]
 (else-if: _bookIn and not ($haunts contains $haunt1))[(set: $nextId to "french")(set: $nextLabel to "BENITO")]
@@ -76459,10 +76463,12 @@ Massive earthworms are breaking through the floor!
 <!-- 2026-10-17 (played live): after the back room's game the hub reads "Lackland's Office [NOT NOW]" (its door opens again only in the eye's window), yet the question and NEXT still named him. $lkOpen is the hub's own condition for his door. -->(set: $lkOpen to (($knowsLackland is true) and ($knowsCopperSecret is true) and ((($inisToldOfPillars is true) and ($keyEye is "seed") and ($alba is an array) and ($alba contains $alba3) and ($worldsVisited is an array) and ($worldsVisited's length >= 4)) or not (($haunts is an array) and ($haunts contains $haunt5)))))
 (if: ($lkOpen is true) and ($lacklandRead is not true))[(set: _wL to "LACKLAND")(set: $whoList to it + (a: (dm: "id", "lackland", "name", "LACKLAND", "place", "Frith Street", "k", "lackland", "link", "Lay it down|Not yet.")))]
 <!-- 2026-10-16 (Sam, from Astra's playtest: the pitch question offered JOHN, who never reads the book): $pitchList is $whoList without the entries that carry no slip key (JOHN and BENITO), for the hub's question only; the door plates, the notebook and NEXT keep $whoList -->
-(set: $pitchList to (a:))(if: $whoList's length > 0)[(for: each _w, ...$whoList)[(if: _w's k is not "")[(set: $pitchList to it + (a: _w))]]]
+<!-- 2026-10-17 (Sam: "it only gives one choice. The whole idea is that it should give two options"): THE NOVELIST is offered from the start, while JOHN or BENITO still stands before him in the French (his entry carries their link, so the room lights whoever is next on the way to him); and the list is in the ladder's order (the Ham, the novelist, LACKLAND, SHANA, then the rest), so NEXT can name the first two before a pick -->
+(set: _pc to (a:))(if: $whoList's length > 0)[(for: each _w, ...$whoList)[(if: _w's k is not "")[(set: _pc to it + (a: _w))](else-if: (_w's id is "french") and not ($haunts contains $haunt2))[(set: _pc to it + (a: (dm: "id", "french", "name", "THE NOVELIST", "place", "the French", "k", "novelist", "link", _w's link)))]]]
+(set: $pitchList to (a:))(if: _pc's length > 0)[(for: each _pk, "ham", "novelist", "lackland", "shana", "inis", "davy", "agent", "moe", "jeffrey")[(for: each _w, ..._pc)[(if: _w's k is _pk)[(set: $pitchList to it + (a: _w))]]]]
 (set: $whoFlag to "pillars:" + _wP + "|french:" + _wF + "|colony:" + _wC + "|cecil:" + _wE + "|coach:" + _wO + "|ronnies:" + _wR + "|trishas:" + _wT + "|lackland:" + _wL)
 (unless: $pitchTarget is a string)[(set: $pitchTarget to "")](unless: $pitchName is a string)[(set: $pitchName to "")](unless: $pitchLink is a string)[(set: $pitchLink to "")]
-(set: $pitchOn to false)(if: $pitchTarget is not "")[(for: each _w, ...$whoList)[(if: (_w's id is $pitchTarget) and (_w's name is $pitchName))[(set: $pitchOn to true)(set: $pitchLink to _w's link)]]](unless: $pitchOn)[(set: $pitchTarget to "")(set: $pitchName to "")(set: $pitchLink to "")]
+(set: $pitchOn to false)(if: ($pitchTarget is not "") and ($pitchList's length > 0))[(for: each _w, ...$pitchList)[(if: (_w's id is $pitchTarget) and (_w's name is $pitchName))[(set: $pitchOn to true)(set: $pitchLink to _w's link)]]](unless: $pitchOn)[(set: $pitchTarget to "")(set: $pitchName to "")(set: $pitchLink to "")]
 }
 
 :: Pitch Question [system] {"position":"3050,2750","size":"100,100"}
@@ -76474,7 +76480,7 @@ Massive earthworms are breaking through the floor!
      a name tried on an earlier night carries that night's verdict beside it, small (the hidden .book-pitch-k span holds
      the slip key; the script reads dssRefusals). -->
 (display: "Who Will Read")
-<span class="book-pitch-q">Who will you pitch the book to next?</span>(for: each _w, ...$pitchList)[(if: (_w's id is $pitchTarget) and (_w's name is $pitchName))[<span class="book-pitch-on"><span class="book-pitch-k" hidden>(print: _w's k)</span>(print: _w's name) · (print: _w's place)</span>](else:)[<span class="book-pitch-opt"><span class="book-pitch-k" hidden>(print: _w's k)</span>(link: _w's name + " · " + _w's place)[(set: $pitchTarget to _w's id)(set: $pitchName to _w's name)(set: $pitchLink to _w's link)(replace: ?pitchflag)[(print: $pitchTarget)](replace: ?nextflag)[(display: "Next Target")(print: $nextId)](replace: ?pitchq)[(display: "Pitch Question")]]</span>]]
+<span class="book-pitch-q">Who will you pitch the book to next?</span>(for: each _w, ...$pitchList)[(if: (_w's id is $pitchTarget) and (_w's name is $pitchName))[<span class="book-pitch-on"><span class="book-pitch-k" hidden>(print: _w's k)</span>(print: _w's name) · (print: _w's place)</span>](else:)[<span class="book-pitch-opt"><span class="book-pitch-k" hidden>(print: _w's k)</span>(link: _w's name + " · " + _w's place)[(set: $pitchTarget to _w's id)(set: $pitchName to _w's name)(set: $pitchLink to _w's link)(replace: ?pitchflag)[(print: $pitchTarget)](replace: ?nextflag)[(display: "Next Target")(print: $nextId)](replace: ?next2flag)[(print: $nextId2)](replace: ?pitchq)[(display: "Pitch Question")]]</span>]]
 <script>(function(){ var R = window.dssRefusals; if (!R) return; var all = R.list(), n = R.night(); Array.prototype.forEach.call(document.querySelectorAll('.book-pitch .book-pitch-opt:not([data-ago]), .book-pitch .book-pitch-on:not([data-ago])'), function(el) { el.setAttribute('data-ago', '1'); var kEl = el.querySelector('.book-pitch-k'), k = kEl ? kEl.textContent.trim() : ''; if (!k) return; var prev = all.filter(function(r) { return r.k === k && r.n < n; }); if (!prev.length) return; var last = prev[prev.length - 1]; var s = document.createElement('span'); s.className = 'book-pitch-ago'; s.textContent = (n - last.n === 1 ? 'Last night: ' : 'Night ' + last.n + ': ') + last.line; el.appendChild(s); }); })();</script>
 }
 

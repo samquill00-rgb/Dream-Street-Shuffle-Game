@@ -1,3 +1,42 @@
+# The pitch question, the map's doors, one person a visit — 2026-10-17 (session 2)
+
+All synced; Sam commits. Tested in the pane and headless (Chrome for Testing, Metal flags, the 16 Oct pwvenv; scripts in this session's scratchpad: doortest.py, test2–4.py). No page errors.
+
+**Cut and trimmed**
+- **House of Cards cut** from The Green Sea: LINE 2's link replaced by a comment holding the link to restore; the passage `Green Sea House of Cards` kept whole. Only loss: an optional morale +8/+12.
+- **Beer Mat Game shorter:** Lea's record 6 → 4 (`RECORD`), so five catches wins; the meter, the rules card and Astra's dead dialogue say four. The dialogue (Lea/Jack) is switched off since 10 Oct (`speak()` returns at once).
+- **TAKE IT IN AGAIN cut** from every room's strip (restore note in place). The password Deploy now reopens the panel through `window.dssRoomProseReopen`; Escape focuses the first strip button.
+- **CONTINUE smaller** than BEGIN on the title (1.05em).
+
+**The pitch question offers a choice** (Sam: "it should give two options")
+- THE NOVELIST is offered from the start, while JOHN or BENITO still stand before him (his entry carries their link, so the room lights whoever is next). `$pitchList` is in the ladder's order: Ham, novelist, LACKLAND, SHANA, INIS, DAVY, agent, MOE, JEFFREY.
+- The question shows only with two or more readers (`$pitchAvail`, the list without a resting venue). Ruled: it lists every reader, not just two.
+- Before a pick, NEXT names the first two ("THE GREAT HAM or THE NOVELIST"), the map glows both doors with a pointer each, the bar says "Next: A or B" (`$nextId2`, the `next2` hub flag). After a pick, one. NEXT says HERE inside either; `$nextHoldId2` holds the second.
+- The French's caption adds Sam's "Talk to others first." when the novelist is picked and JOHN/BENITO comes first (`.dss-came-for-first`).
+- Checked at 375 px: two names fit the header on one line.
+
+**One person a visit** (French and Colony only; Sam ruled not to extend, see memory project_venue_rest_rule)
+- A meeting (a haunt caught inside a venue, or DAVY / the agent) sets `$venueRest` in Next Target (`_met` vs `$restMet`); entering any other venue clears it. The French's painter and novelist links and the Colony's DAVY/agent links wait while it rests; NEXT and the question pass it by and NEXT doesn't hold HERE inside it.
+- Going back in from Dean Street is stopped by a click guard in UserScript ("A RESTING VENUE TURNS YOU AWAY", matching the hub's link texts) with Sam's slip "Look elsewhere; try again later." (no repeats). It stands down during $coachUrgent / $hutBurnt, when the book waits inside, and while NEXT points there (the lily and key rungs don't know about rest).
+
+**The map**
+- Door plates and the caption bar name the venue only (no who's inside).
+- Doors drawn from above: a gap in the side wall, lit from inside in the venue colour, door swung open (shut: dark, door closed), with a stone step on the pavement against the wall (`.soho-door-step`, replaces the ❮ chevron). Cecil Court keeps its arch. Plain doorways get a dim unlit version (alley doorways no step).
+- Entry: stop on a lit step for 350 ms (`STEP_PAUSE_MS`) and you go in; holding the key walks past; walking into the door still works. Verified headless on the Pillars and the French.
+- Tip: "Use the arrow keys to walk. Stop on a lit step, or click a door’s name, to go in." (touch: "tap").
+
+**Rooms**
+- The lily line is "There is a lily in this room. Gather it." in its own pale green-and-white box, top right (also the chippy's Eat. warning). The key line keeps its centred style.
+- Close-up cards fade the room's caption while up (`capAway` in dssRoomPlay), so cards no longer sit on it.
+- The French's bar is offered only while its drink is (`actionOnly`), not as an empty card on a first visit.
+- First haunt opens the NOTEBOOK once per browser (`dssHauntNotebookTut`), after the card and the primer, with the HAUNTS section glowing. Tested with a stand-in card, not a live haunt.
+
+**Not verified live:** the Colony's rest; the caption returning after a card (the pane froze animations); the French bar on a true first visit (reasoned).
+**Parked by Sam:** haunts explained more fully (later).
+**Gotchas:** Harlowe links carry only their text (no passage-name attribute); the pane stalls the map's rAF loop, so walk tests need the headless run; a dev teleport doesn't move the overlays until a real step.
+
+---
+
 # Drain pacing — 2026-10-17
 
 Sam wanted more time to see the drains and variable speed. Total 5.6 → 8.5 seconds. Continuous cubic Hermite distance curve: quick fall 0–1.65s (u .012→.28), slower bend 1.65–6s (.28→.66), rising surge 6–7.85s (.66→.962), final dissolve ends 8.5s. Mean cruise speed about half the fall/rise; monotonic/bounded curve verified. Fade, cleanup deadline and fallback CSS updated; reduced motion still 800ms. cosmicSewerSuck audio extended to 8.5s, quieter mid-travel whoosh, bubbles spread through the longer middle, splash at 7.75s. Preview fixtures/check timing updated. Synced; no git.

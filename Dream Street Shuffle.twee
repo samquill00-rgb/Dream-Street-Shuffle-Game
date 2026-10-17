@@ -23102,7 +23102,7 @@ var stripKey = null;
 function offer(claimedNow) {
 var items = [];
 Array.prototype.forEach.call(box.querySelectorAll('tw-link, button, a[href], tw-hook[name^="lily"]'), function(e) {
-if (claimedNow.indexOf(e) >= 0 || e.closest('.phone-ringing, .dss-claimed, .dss-claimed-wrap, .dss-trim, script')) return;
+if (claimedNow.indexOf(e) >= 0 || e.closest('.phone-ringing, .dss-claimed, .dss-claimed-wrap, .dss-trim, script, .dss-pwd-box')) return; /* 2026-10-17 (Sam): the password's Say it stays in its box, not on the strip (an empty Say it from the strip went straight to the fight) */
 if (e.tagName === 'TW-HOOK' && !e.querySelector('svg')) return;
 if (e.closest('tw-link, button, a[href]') !== e && e.tagName !== 'TW-HOOK') return;
 if (!e.getClientRects().length) return;
@@ -49188,64 +49188,69 @@ setInterval(function() {
 })();
 
 // ====== PASSWORD MECHANIC ======
-window.checkCopperPwd = function() {
-  // 2026-10-16 (a tester, "won't let you type password 'i said hello'"): quotes, a full stop or an apostrophe around the words used to fail it; only the letters count now
-  var val = (document.getElementById('copper-pwd-input').value || '').toLowerCase().replace(/[^a-z\s]/g, '').trim().replace(/\s+/g, ' ');
-  var yes = document.querySelector('#go-copper-yes tw-link') || document.querySelector('#go-copper-yes a');
-  var no  = document.querySelector('#go-copper-no tw-link')  || document.querySelector('#go-copper-no a');
-  if (val === 'i said hello') {
-    if (window.dssAudio && window.dssAudio.passwordSuccess) window.dssAudio.passwordSuccess();
-    if (yes) yes.click();
-  } else {
-    if (no) no.click();
-  }
+/* 2026-10-17 (Sam): the prompt line under the box opens the notebook, where Deploy waits; Deploy closes the
+   notebook, types the word into the box letter by letter and says it. A wrong word clears the box and flashes
+   the prompt; at COPPER's a second wrong word carries on into the confrontation; at LACKLAND's door nothing
+   happens but the flash. 2026-10-16 (a tester, "won't let you type password 'i said hello'"): only the letters count. */
+var DSS_PWD = {
+  copper:   { input: 'copper-pwd-input',   hint: 'copper-pwd-hint',   wrap: 'copper-pwd-wrap',   word: 'I said hello', yes: '#go-copper-yes',   key: 'i said hello', norm: function(v) { return v.toLowerCase().replace(/[^a-z\s]/g, '').trim().replace(/\s+/g, ' '); } },
+  lackland: { input: 'lackland-pwd-input', hint: 'lackland-pwd-hint', wrap: 'lackland-pwd-wrap', word: 'Valletta',     yes: '#go-lackland-yes', key: 'valletta',     norm: function(v) { return v.toLowerCase().replace(/[^a-z]/g, ''); } }
 };
-
-window.checkLacklandPwd = function() {
-  var val = (document.getElementById('lackland-pwd-input').value || '').toLowerCase().replace(/[^a-z]/g, ''); // 2026-10-16: letters only, as COPPER's
-  var yes = document.querySelector('#go-lackland-yes tw-link') || document.querySelector('#go-lackland-yes a');
-  if (val === 'valletta') {
+function dssPwdLink(sel) { return document.querySelector(sel + ' tw-link') || document.querySelector(sel + ' a'); }
+function dssPwdFlash(type, text) {
+  var h = document.getElementById(DSS_PWD[type].hint); if (!h) return;
+  if (text) h.textContent = text;
+  h.classList.remove('dss-pwd-flash'); void h.offsetWidth; h.classList.add('dss-pwd-flash');
+}
+window.dssPwdCheck = function(type) {
+  var P = DSS_PWD[type], inp = document.getElementById(P.input), wrap = document.getElementById(P.wrap);
+  if (!P || !inp || !wrap || wrap.dataset.typing === '1') return;
+  if (P.norm(inp.value || '') === P.key) {
     if (window.dssAudio && window.dssAudio.passwordSuccess) window.dssAudio.passwordSuccess();
-    if (yes) yes.click();
-  } else {
-    var hint = document.getElementById('lackland-pwd-hint');
-    if (hint) { hint.textContent = "That’s not it."; hint.style.color = '#c04040'; }
-    var inp = document.getElementById('lackland-pwd-input');
-    if (inp) inp.value = '';
+    var yes = dssPwdLink(P.yes); if (yes) yes.click();
+    return;
   }
+  var miss = (parseInt(wrap.dataset.miss, 10) || 0) + 1; wrap.dataset.miss = miss;
+  inp.value = '';
+  /* at LACKLAND's door nothing happens but the flash, however many times (Sam) */
+  if (miss < 2 || type !== 'copper') { dssPwdFlash(type, 'That’s not it. Check your notebook.'); return; }
+  var no = dssPwdLink('#go-copper-no'); if (no) no.click();
 };
-
+window.checkCopperPwd = function() { window.dssPwdCheck('copper'); };
+window.checkLacklandPwd = function() { window.dssPwdCheck('lackland'); };
+/* the prompt line opens the notebook (the header's own link) */
+window.dssPwdNotebook = function() {
+  var nb = document.querySelector('.notebook-link tw-link') || document.querySelector('.notebook-link a') || document.querySelector('.notebook-link');
+  if (nb) nb.click();
+};
 window.deployPwd = function(type) {
-  var TEXT = (type === 'copper') ? 'I said hello'
-           : (type === 'lackland') ? 'Valletta'
-           : null;
-  if (!TEXT) return;
-  // Close the notebook dialog
+  var P = DSS_PWD[type]; if (!P) return;
   var closeLink = document.querySelector('tw-dialog-links tw-link');
   if (closeLink) closeLink.click();
-  // After dialog teardown, fill the input and trigger the check
   var attempts = 0;
   var fill = function() {
-    if (document.querySelector('tw-dialog') && ++attempts < 40) {
-      setTimeout(fill, 50);
-      return;
-    }
-    if (type === 'copper') {
-      var inp = document.getElementById('copper-pwd-input');
-      if (inp) { inp.value = TEXT; if (window.checkCopperPwd) window.checkCopperPwd(); }
-    } else if (type === 'lackland') {
-      var inp = document.getElementById('lackland-pwd-input');
-      if (inp) { inp.value = TEXT; if (window.checkLacklandPwd) window.checkLacklandPwd(); }
-    }
+    if (document.querySelector('tw-dialog') && ++attempts < 40) { setTimeout(fill, 50); return; }
+    var inp = document.getElementById(P.input), wrap = document.getElementById(P.wrap);
+    if (!inp || !wrap) return;
+    /* the room's words may be away: bring the panel, and the box with it, back first */
+    if (!inp.getClientRects().length) { var again = document.querySelector('.dss-room-strip-again'); if (again) again.click(); }
+    wrap.dataset.typing = '1'; inp.value = '';
+    try { inp.focus({ preventScroll: true }); } catch (e) {}
+    var i = 0, word = P.word;
+    (function tick() {
+      if (!inp.isConnected) { wrap.dataset.typing = ''; return; }
+      inp.value = word.slice(0, ++i);
+      if (window.dssAudio && window.dssAudio.typeKey) { try { window.dssAudio.typeKey(); } catch (e) {} }
+      if (i < word.length) { setTimeout(tick, 70 + Math.random() * 60); return; }
+      setTimeout(function() { wrap.dataset.typing = ''; window.dssPwdCheck(type); }, 500);
+    })();
   };
   setTimeout(fill, 80);
 };
-
 document.addEventListener('click', function(e) {
   if (e.target && e.target.id === 'copper-pwd-btn')  window.checkCopperPwd();
   if (e.target && e.target.id === 'lackland-pwd-btn') window.checkLacklandPwd();
 });
-
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Enter') return;
   if (document.activeElement && document.activeElement.id === 'copper-pwd-input')  window.checkCopperPwd();
@@ -54787,6 +54792,7 @@ The fire must burn with you or without you.
 (unless: $knowsAboutPage is true and $hasMissingPage is false)[[[Rest here|Stay in Carthage]]]]
 
 :: Entering The Pillars of Hercules [venue-pillars] {"position":"300,1100","size":"100,100"}
+<!-- 2026-10-17 (design note 5.5): a reader cannot read a book that is not in the bag (left, fenced, sold or lent) -->(set: _bagBook to ((($bookAt is not a string) or ($bookAt is "")) and ($bookSold is not true) and (($bookLent is not a string) or ($bookLent is ""))))\
 <!-- Sam, 2026-09-14: "you can return to the Pillars again soon and get three
      phone calls very quickly". Before the critic, the pub holds the Aoife call
      and the Ham and nothing else — the Lily rings wait for the French or the
@@ -54920,7 +54926,7 @@ When Dr. Johnson, the harmless drudge and titan nonpareil among London’s liter
 When Ian Hamilton occupied a similar position, two centuries later, nobody (I am sadly but reliably informed) bestowed on him the obvious sobriquet. Here I intend to fix that.
 </div>
 </div>]
-[[Talk to the Great Ham|Talk to the critic]]
+(if: _bagBook)[[[Talk to the Great Ham|Talk to the critic]]]
 <!-- 2026-10-03, Sam: the venue loops come in any order, so the bar and the crossing no longer wait for the critic (same links and gates as the branch below). -->
 [[Get a drink at the bar|Which drink at the Pillars?]]
 <!-- 2026-10-09, Sam: "get rid of the walk on water thing". The in-pub crossing is cut; the only road to Carthage is "Seek the shore" in the storm outside. -->
@@ -55415,15 +55421,19 @@ setTimeout(function(){var r=document.getElementById('tarot-fourth-result');if(r)
 <div class="trishas-frame">
 <span class="trishas-strip">(display: "Trisha Strip SVG")</span>
 
-<!-- 2026-10-17 (Sam's lines): the verdict varies with the night. Lived (flowers and haunts at the Fetch's thresholds), nothing gathered (no flowers), else the fixed line. The slip takes the quoted words. -->(if: ($lilyCount >= $needLilies) and ($haunts's length >= $needHaunts))[‘Something’s got into this since I last saw it,’ she says, pushing it back at you. ‘Go on. Bring it back to me six months from now.’
+<!-- 2026-10-17 (Sam's lines): the verdict varies with the night. Lived (flowers and haunts at the Fetch's thresholds), nothing gathered (no flowers), else the fixed line. The slip takes the quoted words. -->(if: ($lilyCount >= $needLilies) and ($haunts's length >= $needHaunts))[<span class="shana-lived" hidden>‘Something’s got into this since I last saw it,’ she says, pushing it back at you. ‘Go on. Bring it back to me six months from now.’
 
-You hide it in your bag like a nursemaid’s thing.<span class="dss-refusal" data-k="shana" data-who="SHANA" hidden>‘Something’s got into this since I last saw it.’ ‘Bring it back to me six months from now.’</span>](else-if: $lilyCount is 0)[‘There’s nothing here,’ she says. ‘Not now. Go out and gather what you can, then bring it back to me.’
+You hide it in your bag like a nursemaid’s thing.<span class="dss-refusal" data-k="shana" data-who="SHANA" hidden>‘Something’s got into this since I last saw it.’ ‘Bring it back to me six months from now.’</span></span>](if: $lilyCount is 0)[‘There’s nothing here,’ she says. ‘Not now. Go out and gather what you can, then bring it back to me.’
 
-You hide it in your bag like a nursemaid’s thing.<span class="dss-refusal" data-k="shana" data-who="SHANA" hidden>‘There’s nothing here.’ ‘Go out and gather what you can, then bring it back to me.’</span>](else:)[‘Nothing is particularly wrong with it,’ she says, pushing it back towards you.
+You hide it in your bag like a nursemaid’s thing.<span class="dss-refusal" data-k="shana" data-who="SHANA" hidden>‘There’s nothing here.’ ‘Go out and gather what you can, then bring it back to me.’</span>](else-if: not (($lilyCount >= $needLilies) and ($haunts's length >= $needHaunts)))[‘Nothing is particularly wrong with it,’ she says, pushing it back towards you.
 
 You hide it in your bag like a nursemaid’s thing.
 
-‘Bring it back to me in six months’ time.’<span class="dss-refusal" data-k="shana" data-who="SHANA" hidden>‘Nothing is particularly wrong with it.’ ‘Bring it back to me in six months’ time.’</span>]
+‘Bring it back to me in six months’ time.’<span class="dss-refusal" data-k="shana" data-who="SHANA" hidden>‘Nothing is particularly wrong with it.’ ‘Bring it back to me in six months’ time.’</span>](else:)[<span class="shana-default">‘Nothing is particularly wrong with it,’ she says, pushing it back towards you.
+
+You hide it in your bag like a nursemaid’s thing.
+
+‘Bring it back to me in six months’ time.’<span class="dss-refusal" data-k="shana" data-who="SHANA" hidden>‘Nothing is particularly wrong with it.’ ‘Bring it back to me in six months’ time.’</span></span><script>/* 2026-10-17: the lived line is hers only once she has read it on an earlier night (a shana slip from before tonight in the slips store); otherwise the fixed lines stand */(function(){ try { var n = window.dssRefusals ? window.dssRefusals.night() : 0; var before = !!(window.dssRefusals && window.dssRefusals.list().some(function(r){ return r.k === 'shana' && r.n < n; })); if (before) { var l = document.querySelector('.shana-lived'), d = document.querySelector('.shana-default'); if (l) l.removeAttribute('hidden'); if (d) d.remove(); } } catch (e) {} })();</script>]
 
 (set: $confidence to ($statGain: $confidence, 8))
 
@@ -56254,6 +56264,7 @@ Do you keep going?
 </div>
 
 :: Martin Lackland's Office [char-lack venue-lackland] {"position":"1200,1000","size":"100,100"}
+<!-- 2026-10-17 (design note 5.5): a reader cannot read a book that is not in the bag (left, fenced, sold or lent) -->(set: _bagBook to ((($bookAt is not a string) or ($bookAt is "")) and ($bookSold is not true) and (($bookLent is not a string) or ($bookLent is ""))))\
 <div id="lk-container"></div>\
 <!-- 2026-10-11 structure pass 3: every visit replayed the whole meeting and paid its morale again (+14 or -9), and "Linger" then "Step back" looped it for free morale; the return for the eye replayed it too. The reading and its verdict happen once ($lacklandRead); stepping back from the back door skips the arrival; "Linger" goes once the back room's game is played. -->(set: _lkBack to false)(if: (history:)'s length > 0)[(set: _lkBack to (history:)'s last is "Martin Lackland's Back Door")]\
 (unless: _lkBack)[You find the building on Frith Street, on the door: M. LACKLAND.
@@ -56274,7 +56285,7 @@ He has a Garrard 401 screwed into the wall, with an SME arm bolted on and a Shur
 He found the album at Dobell’s several lunches ago, and it’s hardly been silent since.
 </div>]
 
-(unless: $lacklandRead is true)[He turns to his desk with both his elbows and setting them down individually, says, (if: $metDavy is true)[‘You were sent here by DAVY?’](else-if: $cowRideDone is true)[‘You were sent here by JEFFREY?’](else:)[‘You were sent here, then?’]
+(unless: ($lacklandRead is true) or (not _bagBook))[He turns to his desk with both his elbows and setting them down individually, says, (if: $metDavy is true)[‘You were sent here by DAVY?’](else-if: $cowRideDone is true)[‘You were sent here by JEFFREY?’](else:)[‘You were sent here, then?’]
 
 You nod.
 
@@ -56313,10 +56324,11 @@ This is as close as you’ve come to anything.<!-- 2026-10-17 (Sam's lines; lend
 (set: $awaitingLacklandPwd to true)\
 You notice a door at the back of the office you hadn’t seen before. Or perhaps you had, but now it means something.
 
-<div id="lackland-pwd-wrap" style="text-align:center;margin-top:1.2em;">
+<!-- 2026-10-17 (Sam): as COPPER's box, but a wrong whisper here only flashes the prompt, however many times -->
+<div id="lackland-pwd-wrap" class="dss-pwd-box" style="text-align:center;margin-top:1.2em;">
 <input type="text" id="lackland-pwd-input" placeholder="Whisper the word…" style="background:#0d0806;color:#d4a574;border:1px solid #8a4a3a;padding:6px 14px;font-family:Georgia,serif;font-size:1em;width:220px;outline:none;" />
 <button id="lackland-pwd-btn" style="background:#1a0a08;color:#d4a574;border:1px solid #8a4a3a;padding:6px 18px;font-family:Georgia,serif;font-size:1em;cursor:pointer;margin-left:6px;">Whisper it</button>
-<p id="lackland-pwd-hint" style="font-size:0.78em;color:#7a6a5a;margin-top:0.6em;letter-spacing:0.05em;">If you can’t remember the password, check your notebook.</p>
+<p id="lackland-pwd-hint" class="dss-pwd-hint" onclick="window.dssPwdNotebook()" style="font-size:0.78em;color:#7a6a5a;margin-top:0.6em;letter-spacing:0.05em;">If you can’t remember the password, check your notebook.</p>
 </div>
 <div style="text-align:center;margin-top:1em;font-size:0.85em;opacity:0.7;">[[Step back|Martin Lackland's Office]]</div>
 <span id="go-lackland-yes" style="display:none">[[·|Lackland's Back Room]]</span>
@@ -58457,6 +58469,7 @@ You move to his table and place your drink on a little vacant patch among his pa
 </div>
 
 :: Talk to the intimidating agent [venue-colony] {"position":"1400,700","size":"100,100"}
+<!-- 2026-10-17 (design note 5.5): a reader cannot read a book that is not in the bag (left, fenced, sold or lent) -->(set: _bagBook to ((($bookAt is not a string) or ($bookAt is "")) and ($bookSold is not true) and (($bookLent is not a string) or ($bookLent is ""))))\
 <div class="colony-scene">
 <svg class="colony-corner tl" viewBox="0 0 36 36"><path d="M3,34 L3,8 Q3,3 8,3 L34,3" fill="none" stroke="#6a9a50" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/><path d="M7,34 L7,12 Q7,7 12,7 L34,7" fill="none" stroke="#8a7a28" stroke-width="0.7" opacity="0.4" stroke-linecap="round"/><path d="M3,8 Q1,14 4,18 Q6,14 3,8" fill="#5a8a40" opacity="0.25"/><path d="M8,3 Q14,1 18,4 Q14,6 8,3" fill="#5a8a40" opacity="0.25"/><path d="M3,8 Q5,11 3,15" fill="none" stroke="#7aaa60" stroke-width="0.6" opacity="0.5"/><path d="M8,3 Q11,5 15,3" fill="none" stroke="#7aaa60" stroke-width="0.6" opacity="0.5"/><circle cx="3" cy="3" r="2.5" fill="none" stroke="#8a9a50" stroke-width="0.8" opacity="0.6"/><circle cx="3" cy="3" r="1" fill="#c8b860" opacity="0.55"/><circle cx="3" cy="3" r="0.4" fill="#e0d080" opacity="0.4"/></svg>
 <svg class="colony-corner tr" viewBox="0 0 36 36"><path d="M3,34 L3,8 Q3,3 8,3 L34,3" fill="none" stroke="#6a9a50" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/><path d="M7,34 L7,12 Q7,7 12,7 L34,7" fill="none" stroke="#8a7a28" stroke-width="0.7" opacity="0.4" stroke-linecap="round"/><path d="M3,8 Q1,14 4,18 Q6,14 3,8" fill="#5a8a40" opacity="0.25"/><path d="M8,3 Q14,1 18,4 Q14,6 8,3" fill="#5a8a40" opacity="0.25"/><path d="M3,8 Q5,11 3,15" fill="none" stroke="#7aaa60" stroke-width="0.6" opacity="0.5"/><path d="M8,3 Q11,5 15,3" fill="none" stroke="#7aaa60" stroke-width="0.6" opacity="0.5"/><circle cx="3" cy="3" r="2.5" fill="none" stroke="#8a9a50" stroke-width="0.8" opacity="0.6"/><circle cx="3" cy="3" r="1" fill="#c8b860" opacity="0.55"/><circle cx="3" cy="3" r="0.4" fill="#e0d080" opacity="0.4"/></svg>
@@ -58467,7 +58480,7 @@ You move to his table and place your drink on a little vacant patch among his pa
 (set: $sobriety to ($statGain: $sobriety, 12))
 (display: "Colony Reentry")
 ‘You write, too?’ she says, oddly.
-<!-- 2026-10-14 (Sam: pitch the book): a choice to show it; her own words go on the slip -->(unless: $pitchedAgent is true)[|agentpitch>[(link: "Show her the book")[(set: $pitchedAgent to true)(replace: ?agentpitch)[<span class="dss-refusal" data-k="agent" data-who="THE AGENT" hidden>‘You write, too?’</span>]]]]
+<!-- 2026-10-14 (Sam: pitch the book): a choice to show it; her own words go on the slip -->(if: ($pitchedAgent is not true) and _bagBook)[|agentpitch>[(link: "Show her the book")[(set: $pitchedAgent to true)(replace: ?agentpitch)[<span class="dss-refusal" data-k="agent" data-who="THE AGENT" hidden>‘You write, too?’</span>]]]]
 
 Tonight she’s not working. So you leave, via the gents, because of which detour things sharpen.
 
@@ -58562,6 +58575,7 @@ Outside, leaning upon Dean Street, with a glass in his hand gone stray from anot
 (link: "Drink with Davy Merkin")[(set: $sobriety to ($statLoss: $sobriety, 9))(go-to: "Davy Merkin")]
 
 :: The French [venue-french] {"position":"300,550","size":"100,100"}
+<!-- 2026-10-17 (design note 5.5): a reader cannot read a book that is not in the bag (left, fenced, sold or lent) -->(set: _bagBook to ((($bookAt is not a string) or ($bookAt is "")) and ($bookSold is not true) and (($bookLent is not a string) or ($bookLent is ""))))\
 (if: $haunts is not an array)[(set: $haunts to (a:))]\
 (set: _lilyRing to (($ringSnoozed is not true) and ($nightAheadPart2Shown is true) and $lilyCount >= 2 and $hadLilyCall1 is false and $hadPhoneCall is true and ($returns - $phoneCallReturnsAt) >= 3 and $visited contains "French" and $visited's French is true))\
 (set: _dualRing to (($refusedDualRing is not true) and $lilyCount >= 2 and $hadLilyCall1 is true and $hadDualRing is false and $crossedThreshold is true and ($returns - $lilyCall1ReturnsAt) >= 2 and $visited contains "French" and $visited's French is true))\
@@ -58599,7 +58613,7 @@ At one end of the bar are the artists; you know them, they are famous.
 Stuffed into a barstool which his arsecheeks overhang, like clouds waiting to rain, is a stout man with his back to you. His leather jacket, somehow both parched and sweating, falls short at the neck, flashing a collar of labial pink.
 
 Opposite him is the only man who clocks you, who is thin like verdaccio and hardly there at all.]
-<!-- 2026-10-13 (Sam: "the text introducing the paths should be attached to each path"): the artists' paragraphs and the novelist's line, which stood in the first visit's opening, now come on that figure's card in the room (the painter's, the novelist's), after you click the figure and before you choose to go into its story. Sam's words, unchanged; the room reads them from these hidden spans. -->(if: ($haunts contains $haunt4) and not ($haunts contains $haunt1))[<div class="fr-path-intro" data-for="artists" hidden><span class="fr-p">At one end of the bar are the artists; you know them, they are famous.</span><!-- 2026-10-16 (Sam, option 2): the Bacon paragraph and "Opposite him" are read once, at the door (the French's opening); the painter's card keeps only this line --></div>](if: ($haunts contains $haunt1) and not ($haunts contains $haunt2))[<div class="fr-path-intro" data-for="novelist" hidden><span class="fr-p">There, sitting quietly at a table in the corner, you spot what you’re after.</span></div>]
+<!-- 2026-10-13 (Sam: "the text introducing the paths should be attached to each path"): the artists' paragraphs and the novelist's line, which stood in the first visit's opening, now come on that figure's card in the room (the painter's, the novelist's), after you click the figure and before you choose to go into its story. Sam's words, unchanged; the room reads them from these hidden spans. -->(if: ($haunts contains $haunt4) and not ($haunts contains $haunt1))[<div class="fr-path-intro" data-for="artists" hidden><span class="fr-p">At one end of the bar are the artists; you know them, they are famous.</span><!-- 2026-10-16 (Sam, option 2): the Bacon paragraph and "Opposite him" are read once, at the door (the French's opening); the painter's card keeps only this line --></div>](if: ($haunts contains $haunt1) and not ($haunts contains $haunt2) and _bagBook)[<div class="fr-path-intro" data-for="novelist" hidden><span class="fr-p">There, sitting quietly at a table in the corner, you spot what you’re after.</span></div>]
 <!-- 2026-10-07 (Sam: "it still shows the 'reentry prose' when you come in ... fold those bits of prose into the story loop after the click on the figure"): the second- and third-visit lines that stood here now come up from "French Reentry", once a visit, at the top of whichever loop the first clicked figure opens. -->
 
 <div class="prose-tilde">~</div>
@@ -58610,7 +58624,7 @@ Opposite him is the only man who clocks you, who is thin like verdaccio and hard
 (if: not ($haunts contains $haunt4))[<span class="guided-link">[[Approach|The Stranger at the French]]</span>]\
 <!-- 2026-10-16 (Sam: the order in the French is JOHN ST. JOHN first, then the painter, then the novelist): the artists wait for THE DEBT, the novelist for THE SKETCH -->(if: ($haunts contains $haunt4) and not ($haunts contains $haunt1))[[[Approach the artists|Talk to the Artists]]]\
 (if: ($haunts contains $haunt1) and $hasDrawing is false)[[[Sketch him on a napkin|Sketch the Painter]]]
-(if: ($haunts contains $haunt1) and not ($haunts contains $haunt2))[[[Speak to him|Approach the novelist]]]\
+(if: ($haunts contains $haunt1) and not ($haunts contains $haunt2) and _bagBook)[[[Speak to him|Approach the novelist]]]\
 (if: ($haunts contains $haunt1) and ($haunts contains $haunt2) and ($haunts contains $haunt4))[(if: $tookLily5 is true)[<div class="venue-exhausted">[NOT NOW]</div>]
 [[Leave the French|Dean Street]]
 [[The Colony Room is just round the corner.|The Colony Room Door]] (if: $knowsLackland is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]](if: $knowsRonnies is true)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]]]
@@ -59403,6 +59417,7 @@ You say you’ve not, thank him, and make to leave when he calls you back.
   var critAgain = false;
   try { var crN = window.dssRefusals ? window.dssRefusals.night() : 0; critAgain = !!(window.dssRefusals && window.dssRefusals.list().some(function(r){ return r.k === 'ham' && r.n < crN; })); } catch (e) { critAgain = false; }
   if (critAgain) {
+    if (narr) narr.textContent = ""; /* 2026-10-17: the opening beat ("He sets it on the table and opens it.") is not shown on a return night, since he does not open it */
     lines = ["\u2018I know this one,\u2019 he says, and doesn\u2019t open it. \u2018It was no last time. Has it changed or have you? Did you try America?\u2019"];
     if (critSlip) critSlip.textContent = "\u2018I know this one.\u2019 \u2018Has it changed or have you?\u2019";
   } else if (document.getElementById('critDrunk')) {
@@ -59885,6 +59900,7 @@ tw-passage:has(#dss-title){transform:none!important;animation:dst-arrive 1.4s ea
 </script>
 
 :: Trisha's [venue-trishas] {"position":"700,1550","size":"100,100"}
+<!-- 2026-10-17 (design note 5.5): a reader cannot read a book that is not in the bag (left, fenced, sold or lent) -->(set: _bagBook to ((($bookAt is not a string) or ($bookAt is "")) and ($bookSold is not true) and (($bookLent is not a string) or ($bookLent is ""))))\
 <div id="ti-container"></div>\
 (unless: $visited is a datamap)[(set: $visited to (dm:))]\
 (unless: $visited contains "Trishas")[(set: $visited's Trishas to false)]\
@@ -59899,7 +59915,7 @@ Sessile on the circumambient benches, a woman is a mathematical attractor; that 
 
 You know who she is, she is SHANA, destroyer of worlds.]
 
-(if: $metShana is false)[[[Approach Shana|Approach Shana]]]
+(if: ($metShana is false) and _bagBook)[[[Approach Shana|Approach Shana]]]
 [[Play the Beer Mat Game|Trisha's Beer Mats]]
 
 (if: $knowsRonnies is true and $completedSetlist is false)[[[Ronnie Scott’s is nearby.|Approach Ronnie Scott's]] (if: $haunts contains $haunt7)[<span class="hp hp-done">◆</span>](else:)[(if: $hauntExplained is true)[<span class="hp">◇</span>]]]
@@ -60282,10 +60298,11 @@ ASHTON is counting the stairs. She was JOHN’S before she was COPPER’S, and s
 
 ‘So who are you?’ says COPPER. ‘And what do you imagine you’ve got to say for yourself?’
 
-(if: $knowsCopperWord)[<div id="copper-pwd-wrap" style="text-align:center;margin-top:1.2em;">
+(if: $knowsCopperWord)[<!-- 2026-10-17 (Sam): the words are said in this box only (the room strip skips .dss-pwd-box); the prompt line opens the notebook, where Deploy types them in -->
+<div id="copper-pwd-wrap" class="dss-pwd-box" style="text-align:center;margin-top:1.2em;">
 <input type="text" id="copper-pwd-input" placeholder="Say the words…" style="background:#0d0806;color:#d4a574;border:1px solid #8a4a3a;padding:6px 14px;font-family:Georgia,serif;font-size:1em;width:220px;outline:none;" />
 <button id="copper-pwd-btn" style="background:#1a0a08;color:#d4a574;border:1px solid #8a4a3a;padding:6px 18px;font-family:Georgia,serif;font-size:1em;cursor:pointer;margin-left:6px;">Say it</button>
-<p style="font-size:0.78em;color:#7a6a5a;margin-top:0.6em;letter-spacing:0.05em;">If you can’t remember the password, check your notebook.</p>
+<p id="copper-pwd-hint" class="dss-pwd-hint" onclick="window.dssPwdNotebook()" style="font-size:0.78em;color:#7a6a5a;margin-top:0.6em;letter-spacing:0.05em;">If you can’t remember the password, check your notebook.</p>
 </div>
 <span id="go-copper-yes" style="display:none">[[·|Copper Word Accepted]]</span>
 <span id="go-copper-no" style="display:none">[[·|Copper confronts]]</span>
@@ -65411,6 +65428,11 @@ color: #ffffff;
 border-color: rgba(232,120,24,0.85);
 background: rgba(0,0,0,0.55);
 }
+/* 2026-10-17 (Sam): the password box's prompt line opens the notebook; a wrong word flashes it */
+.dss-pwd-hint { cursor: pointer; transition: color 0.18s; }
+.dss-pwd-hint:hover { color: #d4a574 !important; }
+@keyframes dssPwdFlash { 0%, 100% { color: #7a6a5a; text-shadow: none; } 40% { color: #f0dca0; text-shadow: 0 0 10px rgba(232,196,110,0.55); } }
+.dss-pwd-flash { animation: dssPwdFlash 0.8s ease-in-out 2; }
 /* Liver-eat button — the inner content is a Harlowe tw-link, so we
    neutralise the default link styling and let the wrapper carry the
    button look. */

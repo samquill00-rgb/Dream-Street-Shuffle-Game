@@ -1,3 +1,35 @@
+# Three loose ends closed — 2026-10-17 (night)
+
+- **The Ham on a return night:** the opening beat ("He sets it on the table and opens it.") is cleared by the script before his "I know this one" line, since he doesn't open it. His words untouched; the beat still shows on every other reading.
+- **SHANA's lived line waits for a night she has read it:** Harlowe prints the lived variant hidden (`.shana-lived`) beside the fixed lines (`.shana-default`); a script in the passage shows the lived one and removes the default when the slips store holds a `shana` slip from an earlier night. Only the visible slip files. Tested: lived with an earlier slip → her lived line and its slip; lived on a first night → the fixed lines; nothing gathered unchanged.
+- **Reached live now:** the Dawn's pink line for a book still on LACKLAND's shelf; CONTINUE in a fresh tab after lending → the hub with NEXT · LACKLAND (the autosave carries `$bookLent`; the earlier worry was a stale autosave in the test tab).
+- **Ruled (Sam, 17 Oct): tonight only.** The Dean Street strangers (Gooch, Truze, Longshanks, Songstrong) and the notebook stay keyed on tonight's crossing; only the five reader lines read the lifetime gift store. Nothing to build.
+
+---
+
+# The readings gated on the bag — 2026-10-17 (latest)
+
+Design note 5.5, the last step: a reader cannot read a book that is not in the bag. `_bagBook` is set at the top of five passages (the book not left, not fenced, not sold, not lent: `$bookAt` "", `$bookSold` not true, `$bookLent` ""), and the way into each reading needs it: the Pillars' "Talk to the Great Ham"; the French's "Speak to him" and the novelist's figure intro (both gates); Trisha's "Approach Shana"; the Colony agent's "Show her the book"; LACKLAND's "Well, give it here" block (his lent-book return runs first and is untouched). No new words: the rooms stand as they are, NEXT already says YOUR BOOK or LACKLAND, and the pitch question is already quiet while the book is away.
+
+- **Tested in the pane** (debug jumps with `$bookAt` "french" in both stores): the Pillars has no "Talk to the Great Ham", the office no "Well, give it here", Trisha's no "Approach Shana"; with the book back in the bag all three return. No tw-errors. The French's and the agent's gates are the same expression, not reached live.
+- **Hard locks checked (design note 5.5):** the novelist's reading opens Cecil Court as well as the Ham's, and the cellar takes "Say nothing" without COPPER's word; so a night with the book away is not shut, only poorer.
+
+Design note steps 1 to 5 are now all built.
+
+---
+
+# Lend the book to LACKLAND — 2026-10-17 (later)
+
+Sam's two lines (design note 5.4; SHANA's lend dropped: six months can't pass in a night and she isn't a buyer). State `$bookLent` ("" or "lackland"), reset in StoryInit and Start.
+
+- **The choice:** in the office's near-yes, after "This is as close as you’ve come to anything.", a `|lklend>` hook with "Leave it with him" (while unsold): sets `$bookLent` and replaces itself with "He files it on a shelf; he knows his system. ‘Come back before they call time tonight. I read everything fast and nothing twice.’" The Deal's "Ask him to take it on" stays beside it.
+- **The return:** the office's revisit, after "He lifts the needle…", while `$bookLent is "lackland"`: clears it, sets `$bookLentBack`, and prints "Your manuscript’s already on his desk. ‘I was right the first time,’ he says, with the tone of a man breaking news. ‘There’s something here but not enough of it. Come back when you’re finished.’"
+- **While lent:** NEXT reads LACKLAND (a rung after YOUR BOOK); `_bookIn` (Next Target) and `_bookInBag` (Dean Street) are false, so the readers' ladder and the pitch question go quiet; the Book Footer's coin flip can't lose a lent book; the Dawn has a pink line for a book still on his shelf (`(else-if: $bookLent is "lackland")`, before the Foyles case). The readings themselves are not yet gated on the bag (step 5, still open).
+- **Tested in the pane** (office jumped with the Fetch's thresholds at 0): Lay it down, Leave it with him, his line; out to Dean Street: NEXT · LACKLAND, no pitch question; back by Linger then Step back: the return line, the pitch not offered again. No tw-errors. **Not reached live:** the Dawn's pink line; a CONTINUE after closing the browser (the hub's localStorage autosave did not carry `$bookLent` in the test, though a plain reload's session did; worth one real check).
+- **Jump gotcha, corrected:** a debug jump restores the localStorage autosave (hub render, `$returns >= 1`), not only the session, and a `(set:)` made by a link nested inside `(replace:)`d content was missing from that autosave. Test nested-link state by walking (Linger, Step back), not by jumping.
+
+---
+
 # The worlds wired to the readers — 2026-10-17
 
 Sam's five lines (design note 5.3), each behind its world's gift flag, his words with four touches (below). The pairings follow the v2 block comments: Himalayas/mantra → the Ham; Nazca/tracing → LACKLAND; Easter/glyph → RED; Pyramid/proportion → INIS; Ezekiel/vision → BENITO. Each sits in a `(if: $flag is true)[…]` marked `2026-10-17 (Sam's line, the worlds wired to the readers)`.
@@ -28,6 +60,8 @@ Played in headless Chromium (Playwright over CDP, Chrome for Testing 153, Metal 
 **4. NEXT's readers' ladder.** SHANA reached live two ways: after the cellar's matchbook (NEXT · SHANA from Standing on, the French trio done) and after the pong's (PP Defeat, the back room, the street all read SHANA). LACKLAND reached live: after DAVY's tip, Ronnie's and SHANA (six haunts: the Debt, the Sketch, the Refusal, the Head, the Spread, the Wound; three lilies: the Pillars, the French, Ronnie's) the street reads NEXT · LACKLAND, the plate and the question name him; "Lay it down" gives the near-yes ("This isn't bad. Have you got a job?…") and the book-deal link; afterwards NEXT · CECIL COURT. **Fixed:** after the back room's game (haunt 5) the hub reads "Lackland's Office [NOT NOW]", yet the pitch question still offered him and, once the night was lived, NEXT said LACKLAND at a closed door. `$lkOpen` (Who Will Read) is the hub's own condition for his door (the eye's window, or no haunt 5); the question's entry and the ladder's rung use it. Verified on the same night: NEXT · SHANA, the question INIS and SHANA only.
 
 **Checked and left:** Trisha's doorman with the pong's matchbook (PERCY RITSON's name) lets you in; the Pillars' and the French's flowers are taken by clicking the claimed hook, as the room cards do; a run that never jumps but ducks can still bring all three glasses home when the layout is mostly high obstacles (the wobble and the steady hand forgive two knocks), which is the design's forgiveness, not a fault.
+
+**Later the same day (Sam): the password boxes.** The prompt belongs in the box, not on the room card; a wrong word flashes it; a second wrong word carries on; the prompt opens the notebook, and Deploy types the word in. Built, mechanic only: both boxes (Turn to Copper, Martin Lackland's Back Door) carry `.dss-pwd-box`, which the cellar's room strip now skips (its bare SAY IT, pressed with the box out of sight, sent an empty word straight to the fight); the prompt line ("If you can't remember the password, check your notebook.") is `.dss-pwd-hint` and opens the NOTEBOOK (`dssPwdNotebook`); one wrong word clears the box and flashes the line as "That's not it. Check your notebook." (`dssPwdFlash`, 0.8 s twice); at COPPER's a second wrong word goes on into the confrontation; at LACKLAND's door nothing happens but the flash, however many times (Sam's ruling); Deploy closes the notebook, brings the room's panel back if the words are away, types the word into the box letter by letter (70 to 130 ms a letter, `dssAudio.typeKey` if it exists) and says it. The checker is one `dssPwdCheck(type)` for both doors. Verified live at both doors: the strip without SAY IT, the flash, the confrontation on COPPER's second miss and nothing but the flash on LACKLAND's, the notebook from the prompt, the typing and the door opening.
 
 **Harness:** `dss.py` (links, go, dump, the bots), `night.py` (the phases: fresh, ham, french, cellar, pong_lose, bar) and `drive.py` (one-off steps against the same headless Chrome over CDP, port 9333) in this session's scratchpad. Gotchas met: a second CDP browser context steered the first tab (two drivers crossed, a night was lost), so one night at a time; localStorage.clear() does not wipe the autosave for a debug jump (the save comes back), so relaunch Chrome with a fresh profile instead.
 

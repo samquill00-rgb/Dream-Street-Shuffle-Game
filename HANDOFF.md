@@ -1,3 +1,9 @@
+# Drain pacing — 2026-10-17
+
+Sam wanted more time to see the drains and variable speed. Total 5.6 → 8.5 seconds. Continuous cubic Hermite distance curve: quick fall 0–1.65s (u .012→.28), slower bend 1.65–6s (.28→.66), rising surge 6–7.85s (.66→.962), final dissolve ends 8.5s. Mean cruise speed about half the fall/rise; monotonic/bounded curve verified. Fade, cleanup deadline and fallback CSS updated; reduced motion still 800ms. cosmicSewerSuck audio extended to 8.5s, quieter mid-travel whoosh, bubbles spread through the longer middle, splash at 7.75s. Preview fixtures/check timing updated. Synced; no git.
+
+---
+
 # Drain water — dirt and movement, 2026-10-17
 
 Sam requested dirtier water and more motion. Replaced clean teal water with blurred olive/brown silt washes and broken scum trails in a scrolling procedural texture; water mesh now undulates with two small time-based waves, with moving broken arc ripples. Existing route, timing, audio and reduced-motion behaviour retained. Preview fixtures updated. No external assets; water textures covered by existing disposal. Synced; no git.

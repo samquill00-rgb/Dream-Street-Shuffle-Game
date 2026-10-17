@@ -3703,7 +3703,7 @@ window.dssAudio = (function() {
   function cosmicSewerSuck() {
     _play(function(ac) {
       var now = ac.currentTime;
-      var DUR = 5.6;
+      var DUR = 8.5;
       // ── Delay/feedback network — used as a parallel send for the wet,
       //    cathedral-ish tail. Light feedback, gentle highshelf cut so
       //    the tail doesn't get harsh. ──
@@ -3723,13 +3723,18 @@ window.dssAudio = (function() {
       var nSrc = ac.createBufferSource(); nSrc.buffer = nbuf;
       var nLp  = ac.createBiquadFilter(); nLp.type = 'lowpass'; nLp.Q.value = 0.9;
       nLp.frequency.setValueAtTime(320, now);
-      nLp.frequency.exponentialRampToValueAtTime(2400, now + DUR * 0.78);
+      nLp.frequency.exponentialRampToValueAtTime(1800, now + 1.3);
+      nLp.frequency.exponentialRampToValueAtTime(650, now + 2.4);
+      nLp.frequency.exponentialRampToValueAtTime(900, now + 6.0);
+      nLp.frequency.exponentialRampToValueAtTime(2400, now + 7.65);
       nLp.frequency.exponentialRampToValueAtTime(4800, now + DUR);
       var nHp = ac.createBiquadFilter(); nHp.type = 'highpass';
       nHp.frequency.setValueAtTime(120, now);
       var nG  = ac.createGain();
       nG.gain.setValueAtTime(0.0001, now);
-      nG.gain.exponentialRampToValueAtTime(0.34, now + DUR * 0.55);
+      nG.gain.exponentialRampToValueAtTime(0.34, now + 1.3);
+      nG.gain.exponentialRampToValueAtTime(0.18, now + 2.4);
+      nG.gain.exponentialRampToValueAtTime(0.22, now + 6.0);
       nG.gain.exponentialRampToValueAtTime(0.55, now + DUR * 0.85);
       nG.gain.exponentialRampToValueAtTime(0.0001, now + DUR);
       nSrc.connect(nLp); nLp.connect(nHp); nHp.connect(nG);
@@ -3753,7 +3758,7 @@ window.dssAudio = (function() {
       rG.connect(ac.destination); rG.connect(delay);
       rOsc.start(now); rOsc.stop(now + DUR + 0.05);
       // ── 3. Submerged bubble pops scattered through the middle ──
-      [0.5, 1.4, 2.4, 3.5].forEach(function(off) {
+      [0.65, 1.7, 3.0, 4.3, 5.7, 6.8].forEach(function(off) {
         var bt = now + off + (Math.random() - 0.5) * 0.18;
         // Pop body: short low sine that drops in pitch (cavity closes)
         var bOsc = ac.createOscillator(); bOsc.type = 'sine';
@@ -3784,7 +3789,7 @@ window.dssAudio = (function() {
       // ── 4. Final splash — wet ploom when the player breaks the
       //    surface at the end of the pipe. Two layers: a low "thoom"
       //    oscillator and a fast noise transient with a falling bandpass. ──
-      var spT = now + DUR * 0.82;
+      var spT = now + 7.75;
       var spOsc = ac.createOscillator(); spOsc.type = 'sine';
       spOsc.frequency.setValueAtTime(160, spT);
       spOsc.frequency.exponentialRampToValueAtTime(48, spT + 0.45);
@@ -18712,7 +18717,7 @@ window.dssDrainTravel = function(host) {
   if (!host || host.dataset.drainStarted) return;
   host.dataset.drainStarted = '1';
   var renderer, scene, raf = 0, observer, stopped = false, loader;
-  var deadline = setTimeout(cleanup, 7500);
+  var deadline = setTimeout(cleanup, 10500);
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function cleanup() {
     if (stopped) return;
@@ -18912,23 +18917,35 @@ window.dssDrainTravel = function(host) {
       var glow=new T.Mesh(new T.CircleGeometry(2.05,32),new T.MeshBasicMaterial({color:0xd6d8c6,side:T.DoubleSide}));glow.position.z=0.3;outlet.add(glow);scene.add(outlet);
       var veil=document.createElement('div');veil.style.cssText='position:absolute;inset:0;background:#d5d8cc;opacity:0;z-index:4;pointer-events:none';host.appendChild(veil);
       host.style.animation='none';
-      clearTimeout(deadline);deadline=setTimeout(cleanup,6100);
+      clearTimeout(deadline);deadline=setTimeout(cleanup,9000);
       if(window.dssAudio && window.dssAudio.cosmicSewerSuck) window.dssAudio.cosmicSewerSuck();
+      // Continuous speed between beats: quick fall, lingering bend, rising surge.
+      // Knots are [seconds, distance fraction, speed fraction per second].
+      function travelPosition(t) {
+        var beats=[[0,0.012,0.015],[1.65,0.28,0.10],[6.0,0.66,0.075],[7.85,0.962,0.035]];
+        if(t>=7.85)return 0.962;
+        for(var i=0;i<beats.length-1;i++) {
+          var a=beats[i],b=beats[i+1];
+          if(t<=b[0]) {
+            var dt=b[0]-a[0],x=Math.max(0,(t-a[0])/dt),x2=x*x,x3=x2*x;
+            return (2*x3-3*x2+1)*a[1]+(x3-2*x2+x)*dt*a[2]+(-2*x3+3*x2)*b[1]+(x3-x2)*dt*b[2];
+          }
+        }
+      }
       var start=performance.now();
       function render(now) {
         if(stopped) return;
-        var elapsed=(now-start)/1000, progress=Math.min(elapsed/5.05,1);
-        // Ease into the fall and out of the rise, with steady travel through the bend.
-        var u=0.012+0.95*(progress*progress*(3-2*progress));
+        var elapsed=(now-start)/1000;
+        var u=travelPosition(elapsed);
         var f=frame(u);camera.position.copy(f.p).addScaledVector(f.up,0.12);
         camera.up.copy(f.up);camera.lookAt(path.getPointAt(Math.min(0.999,u+0.032)));
         travelLight.position.copy(camera.position).addScaledVector(f.up,0.6).addScaledVector(f.t,-0.35);
         moveWater(elapsed);
         rippleMat.opacity=0.19+Math.sin(elapsed*2.4)*0.045;
-        veil.style.opacity=String(Math.max(0,Math.min(1,(elapsed-4.7)/0.4)));
-        host.style.opacity=String(1-Math.max(0,Math.min(1,(elapsed-5.08)/0.52)));
+        veil.style.opacity=String(Math.max(0,Math.min(1,(elapsed-7.6)/0.38)));
+        host.style.opacity=String(1-Math.max(0,Math.min(1,(elapsed-7.98)/0.52)));
         renderer.render(scene,camera);
-        if(elapsed>=5.6) cleanup();else raf=requestAnimationFrame(render);
+        if(elapsed>=8.5) cleanup();else raf=requestAnimationFrame(render);
       }
       raf=requestAnimationFrame(render);
     } catch(e) { console.warn('Drain transition unavailable',e); cleanup(); }
@@ -68573,7 +68590,7 @@ tw-passage[tags~="street-night"]::before, tw-passage[tags~="outdoor"]:not([tags~
   background: #050302;
   z-index: 9500;
   pointer-events: none;
-  animation: coachPlumbFade 5.6s ease-out both;
+  animation: coachPlumbFade 8.5s ease-out both;
   overflow: hidden;
   display: flex;
   align-items: center;

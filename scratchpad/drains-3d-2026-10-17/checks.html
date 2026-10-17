@@ -1,0 +1,210 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;background:#353c36;color:#d5d8cc;font:20px Georgia} .coach-plumbing-intro{position:fixed;inset:0;overflow:hidden;background:#080f13}.coach-plumbing-intro:after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse,transparent 38%,rgba(0,0,0,.4) 74%,rgba(0,0,0,.68) 100%)}button{position:fixed;bottom:16px;left:16px;z-index:10}</style></head><body><p>The gents — transition finished.</p><button onclick="location.reload()">Replay drain travel</button><script src="../../vendor/three/three.min.js"></script><script>// Stylised sewer travel: actual camera motion through a curved, faceted pipe.
+window.dssDrainTravel = function(host) {
+  if (!host || host.dataset.drainStarted) return;
+  host.dataset.drainStarted = '1';
+  var renderer, scene, raf = 0, observer, stopped = false, loader;
+  var deadline = setTimeout(cleanup, 7500);
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function cleanup() {
+    if (stopped) return;
+    stopped = true; clearTimeout(deadline); clearInterval(checkOwner); cancelAnimationFrame(raf);
+    window.removeEventListener('resize', resize);
+    if (observer) observer.disconnect();
+    if (loader) { loader.onload = loader.onerror = null; loader.remove(); }
+    if (scene) {
+      var geos = new Set(), mats = new Set(), maps = new Set();
+      scene.traverse(function(o) {
+        if (o.geometry) geos.add(o.geometry);
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(function(m) {
+          mats.add(m); if(m.map) maps.add(m.map);
+        });
+      });
+      geos.forEach(function(g){g.dispose();}); maps.forEach(function(t){t.dispose();});
+      mats.forEach(function(m){m.dispose();});
+    }
+    if (renderer) { renderer.dispose(); renderer.forceContextLoss(); }
+    host.remove();
+  }
+  var camera;
+  function resize() {
+    if (!renderer || !camera) return;
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight);
+  }
+  observer = new MutationObserver(function(){if(!host.isConnected) cleanup();});
+  observer.observe(document.body,{childList:true,subtree:true});
+  // Follow the passage even when the room system reparents its contents.
+  var owner = document.querySelector('tw-passage');
+  var checkOwner = setInterval(function(){
+    if(stopped) {clearInterval(checkOwner);return;}
+    if(owner && !owner.isConnected) {cleanup();clearInterval(checkOwner);}
+  },200);
+  if (reduced) { clearTimeout(deadline); deadline=setTimeout(cleanup,800); return; }
+  function build() {
+    if(stopped || !host.isConnected) return;
+    try {
+      var T=window.THREE;
+      scene=new T.Scene(); scene.background=new T.Color(0x080f13);
+      scene.fog=new T.FogExp2(0x101b20,0.065);
+      camera=new T.PerspectiveCamera(76,1,0.04,70);
+      renderer=new T.WebGLRenderer({antialias:true,alpha:false});
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
+      renderer.toneMapping=T.ACESFilmicToneMapping; renderer.toneMappingExposure=0.95;
+      renderer.domElement.style.cssText='display:block;width:100%;height:100%;';
+      host.prepend(renderer.domElement); resize();
+      window.addEventListener('resize',resize);
+      var path=new T.CatmullRomCurve3([
+        new T.Vector3(0,10,6),new T.Vector3(0,5,1),new T.Vector3(0,0,-7),
+        new T.Vector3(0,-1,-18),new T.Vector3(7,-1,-29),new T.Vector3(12,0,-39),
+        new T.Vector3(12,5,-47),new T.Vector3(12,12,-51)
+      ]);
+      var length=path.getLength(), radius=2.25;
+      function frame(u) {
+        var p=path.getPointAt(u), t=path.getTangentAt(u).normalize();
+        var right=new T.Vector3().crossVectors(t,new T.Vector3(0,1,0)).normalize();
+        var up=new T.Vector3().crossVectors(right,t).normalize();
+        return {p:p,t:t,right:right,up:up};
+      }
+      // Broad staggered masonry, muted like the Coach's painted tile bands.
+      var tile=document.createElement('canvas');tile.width=256;tile.height=256;
+      var ctx=tile.getContext('2d');ctx.fillStyle='#263638';ctx.fillRect(0,0,256,256);
+      var shades=['#53625b','#62675b','#475c59','#66665b','#495555','#59665e'];
+      for(var row=0;row<8;row++) for(var col=-1;col<4;col++) {
+        var x=col*85+(row%2)*42;
+        ctx.fillStyle=shades[(row*5+col+7)%shades.length];ctx.fillRect(x+2,row*32+2,81,28);
+        ctx.fillStyle='rgba(177,179,144,.12)';ctx.fillRect(x+3,row*32+3,78,2);
+      }
+      // Painted damp, algae and chipped mortar: broad marks, not photo noise.
+      var grimeSeed=723;
+      function dirtRand(){grimeSeed=(grimeSeed*1664525+1013904223)>>>0;return grimeSeed/4294967296;}
+      function blot(cx,x,y,w,h,color) {
+        cx.fillStyle=color;cx.beginPath();
+        for(var k=0;k<12;k++) {
+          var a=k*Math.PI/6, r=0.65+dirtRand()*0.35;
+          var px=x+Math.cos(a)*w*r,py=y+Math.sin(a)*h*r;
+          if(k===0)cx.moveTo(px,py);else cx.lineTo(px,py);
+        }
+        cx.closePath();cx.fill();
+      }
+      for(var d=0;d<65;d++) {
+        var dx=dirtRand()*256,dy=dirtRand()*256;
+        blot(ctx,dx,dy,8+dirtRand()*28,4+dirtRand()*18,
+          ['rgba(18,31,27,.55)','rgba(43,56,24,.65)','rgba(99,72,40,.38)','rgba(14,27,26,.4)'][d%4]);
+        if(d%3===0) {
+          ctx.strokeStyle='rgba(21,33,25,.45)';ctx.lineWidth=2+dirtRand()*5;
+          ctx.beginPath();ctx.moveTo(dx,dy);ctx.lineTo(dx+4,dy+15+dirtRand()*32);ctx.stroke();
+        }
+      }
+      for(var chip=0;chip<36;chip++) {
+        var cx=dirtRand()*256,cy=Math.floor(dirtRand()*8)*32;
+        blot(ctx,cx,cy,3+dirtRand()*7,2+dirtRand()*4,'rgba(151,142,109,.3)');
+      }
+      for(var crack=0;crack<9;crack++) {
+        var cx=dirtRand()*256,cy=dirtRand()*256;
+        ctx.strokeStyle='rgba(12,25,23,.65)';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(cx,cy);
+        for(var k=0;k<4;k++){cx+=(dirtRand()-.5)*13;cy+=5+dirtRand()*8;ctx.lineTo(cx,cy);}ctx.stroke();
+      }
+      var map=new T.CanvasTexture(tile);map.wrapS=map.wrapT=T.RepeatWrapping;
+      map.repeat.set(length/2.4,2);map.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+      var tube=new T.Mesh(new T.TubeGeometry(path,180,radius,16,false),
+        new T.MeshStandardMaterial({map:map,color:0x71877d,side:T.BackSide,roughness:0.94}));scene.add(tube);
+      var rustCanvas=document.createElement('canvas');rustCanvas.width=256;rustCanvas.height=128;
+      var rustCtx=rustCanvas.getContext('2d');rustCtx.fillStyle='#465451';rustCtx.fillRect(0,0,256,128);
+      for(var r=0;r<65;r++) blot(rustCtx,dirtRand()*256,dirtRand()*128,5+dirtRand()*24,3+dirtRand()*14,
+        ['#754c30','#986039','#302f28','#5a3d2b'][r%4]);
+      var rustMap=new T.CanvasTexture(rustCanvas);rustMap.wrapS=rustMap.wrapT=T.RepeatWrapping;
+      var iron=new T.MeshStandardMaterial({map:rustMap,color:0x9ba294,roughness:0.96,metalness:0.03});
+      var rimGeo=new T.TorusGeometry(radius-0.06,0.075,5,32);
+      var zAxis=new T.Vector3(0,0,1);
+      for(var i=0;i<27;i++) {
+        var f=frame(0.015+i*0.036), rim=new T.Mesh(rimGeo,iron);
+        rim.position.copy(f.p);rim.quaternion.setFromUnitVectors(zAxis,f.t);scene.add(rim);
+      }
+      // Side drain mouths interrupt the masonry: clear scale and parallax cues.
+      var holeMat=new T.MeshBasicMaterial({color:0x071012});
+      for(var i=0;i<6;i++) {
+        var f=frame(0.14+i*0.125), side=i%2?1:-1;
+        var normal=f.right.clone().multiplyScalar(-side);
+        var mouth=new T.Group();mouth.position.copy(f.p).addScaledVector(f.right,side*2.12).addScaledVector(f.up,0.12);
+        mouth.quaternion.setFromUnitVectors(zAxis,normal);
+        mouth.add(new T.Mesh(new T.CircleGeometry(0.55,16),holeMat));
+        mouth.add(new T.Mesh(new T.TorusGeometry(0.56,0.07,5,20),iron));scene.add(mouth);
+      }
+      // One old service pipe follows the wall: a simple rust-coloured silhouette.
+      var servicePoints=[];
+      for(var i=0;i<=70;i++) {
+        var f=frame(i/70);servicePoints.push(f.p.clone().addScaledVector(f.right,1.67).addScaledVector(f.up,1.08));
+      }
+      var serviceMap=rustMap.clone();serviceMap.repeat.set(18,1);serviceMap.needsUpdate=true;
+      var service=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(servicePoints),140,0.11,6,false),
+        new T.MeshStandardMaterial({map:serviceMap,color:0x9b7754,roughness:0.98}));scene.add(service);
+      // A continuous shallow runnel follows the tunnel floor around its bend.
+      var waterPos=[], waterIndices=[];
+      for(var i=0;i<=160;i++) {
+        var f=frame(i/160);
+        [-1,1].forEach(function(side){var p=f.p.clone().addScaledVector(f.up,-1.72).addScaledVector(f.right,side*1.38);waterPos.push(p.x,p.y,p.z);});
+        if(i<160){var n=i*2;waterIndices.push(n,n+2,n+1,n+1,n+2,n+3);}
+      }
+      var waterGeo=new T.BufferGeometry();waterGeo.setAttribute('position',new T.Float32BufferAttribute(waterPos,3));waterGeo.setIndex(waterIndices);waterGeo.computeVertexNormals();
+      var water=new T.Mesh(waterGeo,new T.MeshStandardMaterial({color:0x254b48,emissive:0x102f2c,emissiveIntensity:0.24,roughness:0.48,metalness:0.22,side:T.DoubleSide}));scene.add(water);
+      var rippleMat=new T.MeshBasicMaterial({color:0x92ae97,transparent:true,opacity:0.25});
+      var ripples=[];
+      for(var i=0;i<34;i++) {
+        var f=frame(0.025+i*0.027), stripe=new T.Mesh(new T.PlaneGeometry(0.6+(i%4)*0.3,0.025),rippleMat);
+        stripe.position.copy(f.p).addScaledVector(f.up,-1.705);
+        stripe.quaternion.setFromUnitVectors(zAxis,f.up);scene.add(stripe);ripples.push(stripe);
+      }
+      scene.add(new T.AmbientLight(0x819d9c,0.42));
+      var travelLight=new T.PointLight(0xb7c9b1,1.1,15,1.4);scene.add(travelLight);
+      var warm=new T.PointLight(0xd6a36b,1.5,19,1.5);warm.position.copy(path.getPointAt(0.62));scene.add(warm);
+      var endLight=new T.PointLight(0xe0d9ac,2.6,22,1.2);endLight.position.copy(path.getPointAt(0.985));scene.add(endLight);
+      // Porcelain outlet, with the pale olive / cream of the actual gents.
+      var end=frame(0.985), outlet=new T.Group();outlet.position.copy(end.p);outlet.quaternion.setFromUnitVectors(zAxis,end.t);
+      var porcelain=new T.MeshStandardMaterial({color:0xd6d8c6,roughness:0.65,emissive:0x66694e,emissiveIntensity:0.3});
+      outlet.add(new T.Mesh(new T.TorusGeometry(2.08,0.24,8,32),porcelain));
+      var glow=new T.Mesh(new T.CircleGeometry(2.05,32),new T.MeshBasicMaterial({color:0xd6d8c6,side:T.DoubleSide}));glow.position.z=0.3;outlet.add(glow);scene.add(outlet);
+      var veil=document.createElement('div');veil.style.cssText='position:absolute;inset:0;background:#d5d8cc;opacity:0;z-index:4;pointer-events:none';host.appendChild(veil);
+      host.style.animation='none';
+      clearTimeout(deadline);deadline=setTimeout(cleanup,6100);
+      if(window.dssAudio && window.dssAudio.cosmicSewerSuck) window.dssAudio.cosmicSewerSuck();
+      var start=performance.now();
+      function render(now) {
+        if(stopped) return;
+        var elapsed=(now-start)/1000, progress=Math.min(elapsed/5.05,1);
+        // Ease into the fall and out of the rise, with steady travel through the bend.
+        var u=0.012+0.95*(progress*progress*(3-2*progress));
+        var f=frame(u);camera.position.copy(f.p).addScaledVector(f.up,0.12);
+        camera.up.copy(f.up);camera.lookAt(path.getPointAt(Math.min(0.999,u+0.032)));
+        travelLight.position.copy(camera.position).addScaledVector(f.up,0.6).addScaledVector(f.t,-0.35);
+        rippleMat.opacity=0.2+Math.sin(elapsed*2.4)*0.06;
+        veil.style.opacity=String(Math.max(0,Math.min(1,(elapsed-4.7)/0.4)));
+        host.style.opacity=String(1-Math.max(0,Math.min(1,(elapsed-5.08)/0.52)));
+        renderer.render(scene,camera);
+        if(elapsed>=5.6) cleanup();else raf=requestAnimationFrame(render);
+      }
+      raf=requestAnimationFrame(render);
+    } catch(e) { console.warn('Drain transition unavailable',e); cleanup(); }
+  }
+  if(window.THREE) build();
+  else {loader=document.createElement('script');loader.src='vendor/three/three.min.js';loader.onload=build;loader.onerror=cleanup;document.head.appendChild(loader);}
+};
+
+var report=document.createElement('pre');document.body.appendChild(report);
+var disposed=0;var original=THREE.WebGLRenderer.prototype;
+// Count the concrete renderer's disposal without modifying production code.
+var Renderer=THREE.WebGLRenderer;
+THREE.WebGLRenderer=function(opts){var r=new Renderer(opts),dispose=r.dispose.bind(r);r.dispose=function(){disposed++;dispose();};return r;};
+function host(){var e=document.createElement('div');e.className='coach-plumbing-intro';document.body.appendChild(e);return e;}
+function record(s,pass){report.textContent+=(pass?'PASS ':'FAIL ')+s+'\n';}
+var normal=host();dssDrainTravel(normal);
+setTimeout(function(){
+ record('Normal travel removes overlay and disposes renderer',!normal.isConnected&&disposed===1);
+ var early=host();dssDrainTravel(early);early.remove();
+ setTimeout(function(){
+  record('Leaving early disposes renderer',disposed===2);
+  var mm=window.matchMedia;window.matchMedia=function(){return {matches:true};};
+  var still=host();dssDrainTravel(still);window.matchMedia=mm;
+  setTimeout(function(){record('Reduced motion removes overlay without WebGL',!still.isConnected&&disposed===2);},900);
+ },100);
+},5900);
+</script></body></html>

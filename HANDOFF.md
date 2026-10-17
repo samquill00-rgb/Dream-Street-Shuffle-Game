@@ -1,3 +1,9 @@
+# Drain water — dirt and movement, 2026-10-17
+
+Sam requested dirtier water and more motion. Replaced clean teal water with blurred olive/brown silt washes and broken scum trails in a scrolling procedural texture; water mesh now undulates with two small time-based waves, with moving broken arc ripples. Existing route, timing, audio and reduced-motion behaviour retained. Preview fixtures updated. No external assets; water textures covered by existing disposal. Synced; no git.
+
+---
+
 # Drains dirt pass — 2026-10-17
 
 Sam loves the 3D travel but wanted the pipe dirtier. Added deterministic painted damp/algae blotches, runoff streaks, chipped mortar and sparse cracks to the masonry texture; mottled rust textures on iron collars, side-drain rims and service pipe. Same restrained geometry, camera, duration and lighting. Updated extracted previews; browser visually checked, no warnings/errors. Screenshot `scratchpad/drains-3d-2026-10-17/dirty-bend.png`. Synced; no git.

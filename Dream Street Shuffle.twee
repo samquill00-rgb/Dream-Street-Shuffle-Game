@@ -18848,20 +18848,58 @@ window.dssDrainTravel = function(host) {
       var service=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(servicePoints),140,0.11,6,false),
         new T.MeshStandardMaterial({map:serviceMap,color:0x9b7754,roughness:0.98}));scene.add(service);
       // A continuous shallow runnel follows the tunnel floor around its bend.
-      var waterPos=[], waterIndices=[];
+      var waterPos=[], waterIndices=[], waterUV=[], waterFrames=[];
       for(var i=0;i<=160;i++) {
-        var f=frame(i/160);
-        [-1,1].forEach(function(side){var p=f.p.clone().addScaledVector(f.up,-1.72).addScaledVector(f.right,side*1.38);waterPos.push(p.x,p.y,p.z);});
+        var f=frame(i/160);waterFrames.push(f);
+        [-1,1].forEach(function(side){var p=f.p.clone().addScaledVector(f.up,-1.72).addScaledVector(f.right,side*1.38);waterPos.push(p.x,p.y,p.z);waterUV.push((side+1)/2,i/160);});
         if(i<160){var n=i*2;waterIndices.push(n,n+2,n+1,n+1,n+2,n+3);}
       }
-      var waterGeo=new T.BufferGeometry();waterGeo.setAttribute('position',new T.Float32BufferAttribute(waterPos,3));waterGeo.setIndex(waterIndices);waterGeo.computeVertexNormals();
-      var water=new T.Mesh(waterGeo,new T.MeshStandardMaterial({color:0x254b48,emissive:0x102f2c,emissiveIntensity:0.24,roughness:0.48,metalness:0.22,side:T.DoubleSide}));scene.add(water);
-      var rippleMat=new T.MeshBasicMaterial({color:0x92ae97,transparent:true,opacity:0.25});
+      var waterGeo=new T.BufferGeometry();waterGeo.setAttribute('position',new T.Float32BufferAttribute(waterPos,3));waterGeo.setAttribute('uv',new T.Float32BufferAttribute(waterUV,2));waterGeo.setIndex(waterIndices);waterGeo.computeVertexNormals();
+      var silt=document.createElement('canvas');silt.width=256;silt.height=512;
+      var sx=silt.getContext('2d');sx.fillStyle='#434c30';sx.fillRect(0,0,256,512);sx.filter='blur(5px)';
+      for(var q=0;q<100;q++) blot(sx,dirtRand()*256,dirtRand()*512,5+dirtRand()*25,12+dirtRand()*48,
+        ['rgba(17,30,24,.55)','rgba(115,99,49,.35)','rgba(25,39,27,.6)','rgba(126,132,73,.25)'][q%4]);
+      sx.filter='none';
+      // Broken yellow-olive scum trails stretch with the current.
+      for(var q=0;q<34;q++) {
+        var x=dirtRand()*256,y=dirtRand()*512;
+        sx.strokeStyle='rgba(162,151,94,.28)';sx.lineWidth=1+dirtRand()*3;
+        sx.beginPath();sx.moveTo(x,y);sx.bezierCurveTo(x+12,y+10,x-8,y+22,x+4,y+38);sx.stroke();
+      }
+      var siltMap=new T.CanvasTexture(silt);siltMap.wrapS=siltMap.wrapT=T.RepeatWrapping;siltMap.repeat.set(1,12);
+      var water=new T.Mesh(waterGeo,new T.MeshStandardMaterial({map:siltMap,color:0x8b9168,emissive:0x172417,emissiveIntensity:0.15,roughness:0.62,metalness:0.12,side:T.DoubleSide}));scene.add(water);
+      var rippleMat=new T.MeshBasicMaterial({color:0xaba477,transparent:true,opacity:0.23,depthWrite:false,side:T.DoubleSide});
       var ripples=[];
-      for(var i=0;i<34;i++) {
-        var f=frame(0.025+i*0.027), stripe=new T.Mesh(new T.PlaneGeometry(0.6+(i%4)*0.3,0.025),rippleMat);
-        stripe.position.copy(f.p).addScaledVector(f.up,-1.705);
-        stripe.quaternion.setFromUnitVectors(zAxis,f.up);scene.add(stripe);ripples.push(stripe);
+      // Broken shallow arcs instead of ruler-straight lines across the channel.
+      var rippleShape=new T.Shape();
+      rippleShape.moveTo(-0.5,0);rippleShape.quadraticCurveTo(0,0.13,0.5,0);
+      rippleShape.lineTo(0.5,0.025);rippleShape.quadraticCurveTo(0,0.17,-0.5,0.025);rippleShape.closePath();
+      var rippleGeo=new T.ShapeGeometry(rippleShape,8);
+      for(var i=0;i<42;i++) {
+        var stripe=new T.Mesh(rippleGeo,rippleMat);scene.add(stripe);ripples.push(stripe);
+      }
+      function waterHeight(u,side,t) {
+        return -1.72+Math.sin(u*155-t*3.1+side*0.5)*0.045+Math.sin(u*280+t*1.8)*0.018;
+      }
+      function moveWater(t) {
+        siltMap.offset.y=-t*0.075;siltMap.offset.x=Math.sin(t*0.65)*0.018;
+        var positions=waterGeo.attributes.position;
+        for(var i=0;i<=160;i++) {
+          var f=waterFrames[i];
+          for(var side=-1;side<=1;side+=2) {
+            var h=waterHeight(i/160,side,t),v=i*2+(side+1)/2;
+            positions.setXYZ(v,f.p.x+f.up.x*h+f.right.x*side*1.38,f.p.y+f.up.y*h+f.right.y*side*1.38,f.p.z+f.up.z*h+f.right.z*side*1.38);
+          }
+        }
+        positions.needsUpdate=true;waterGeo.computeVertexNormals();
+        for(var i=0;i<ripples.length;i++) {
+          var u=(0.015+i*0.023+t*0.006)%0.98,f=frame(u),r=ripples[i];
+          var side=Math.sin(i*4.1+t*0.8)*0.65;
+          var h=(waterHeight(u,-1,t)*(1-side/1.38)+waterHeight(u,1,t)*(1+side/1.38))/2;
+          r.position.copy(f.p).addScaledVector(f.up,h+0.024).addScaledVector(f.right,side);
+          r.quaternion.setFromUnitVectors(zAxis,f.up);
+          r.scale.set(0.45+(i%4)*0.28+Math.sin(t*2+i)*0.08,1,1);
+        }
       }
       scene.add(new T.AmbientLight(0x819d9c,0.42));
       var travelLight=new T.PointLight(0xb7c9b1,1.1,15,1.4);scene.add(travelLight);
@@ -18885,7 +18923,8 @@ window.dssDrainTravel = function(host) {
         var f=frame(u);camera.position.copy(f.p).addScaledVector(f.up,0.12);
         camera.up.copy(f.up);camera.lookAt(path.getPointAt(Math.min(0.999,u+0.032)));
         travelLight.position.copy(camera.position).addScaledVector(f.up,0.6).addScaledVector(f.t,-0.35);
-        rippleMat.opacity=0.2+Math.sin(elapsed*2.4)*0.06;
+        moveWater(elapsed);
+        rippleMat.opacity=0.19+Math.sin(elapsed*2.4)*0.045;
         veil.style.opacity=String(Math.max(0,Math.min(1,(elapsed-4.7)/0.4)));
         host.style.opacity=String(1-Math.max(0,Math.min(1,(elapsed-5.08)/0.52)));
         renderer.render(scene,camera);
@@ -60103,7 +60142,7 @@ You know who she is, she is SHANA, destroyer of worlds.]
 <div id="dss-beer-mats">
 <h2>THE BEER MAT GAME</h2>
 <div class="mats-stage"><canvas width="600" height="400" tabindex="0" aria-label="A stack of beer mats resting on the edge of Trisha’s bar. Flick them up, then catch them as they turn over."></canvas></div>
-<div class="mats-meters"><span><small>On the bar</small><b class="mats-stack">1 mat</b></span><span><small>Lea’s record</small><b>6 mats</b></span><span><small>Your best</small><b class="mats-best">—</b></span></div>
+<div class="mats-meters"><span><small>On the bar</small><b class="mats-stack">1 mat</b></span><span><small>Lea’s record</small><b>4 mats</b></span><span><small>Your best</small><b class="mats-best">—</b></span></div>
 <div class="mats-status" role="status" aria-live="polite"><b class="mats-title"></b><span class="mats-hint"></span></div>
 <div class="mats-controls"><button type="button" class="mats-play">Flick</button><button type="button" class="mats-stop">Bow out</button></div>
 <div class="mats-payment" aria-hidden="true">
@@ -60150,7 +60189,7 @@ You know who she is, she is SHANA, destroyer of worlds.]
   var canvas = root.querySelector('canvas'), ctx = canvas.getContext('2d');
   if (!ctx) return;
   // TUNING (2026-10-04, loosened from Astra's prototype: flick 190-340 ms, window 29-2n ms, floor 12).
-  var RECORD = 6;                 // Lea's record; beat it to settle the round with a reward
+  var RECORD = 4;                 /* Lea's record; beat it to settle the round with a reward. 2026-10-17 (Sam: "a touch shorter"): 6 to 4, so five catches wins, not seven */
   var CATCH_MIN = 320, CATCH_RANGE = 160;   // ms from flick to the catch point
   var TAIL = 170;                 // ms after the catch point before the stack is gone
   var WINDOW_BASE = 70, WINDOW_PER_MAT = 3, WINDOW_FLOOR = 40; // catch window in ms
@@ -60173,7 +60212,7 @@ You know who she is, she is SHANA, destroyer of worlds.]
   function status(title, hint) { $('.mats-title').textContent = title; $('.mats-hint').textContent = hint; }
   // 2026-10-10 (Sam, bare bones): no speech bubbles; Lea's record shows in the score row.
   function speak(event) { return;
-    var lines = { ready: [count === 1 ? 'Six is mine. See if you can beat it.' : 'Another one. Ready?', 'I’ll count.'],
+    var lines = { ready: [count === 1 ? 'Four is mine. See if you can beat it.' : 'Another one. Ready?', 'I’ll count.'],
       won: ['Go on, then. One more?', count + ' caught.'], lost: ['Watch the edge.', 'That one doesn’t count.'],
       ended: ['We’ll leave it there.', 'Same time next round?'] };
     var pair = lines[event]; if (!pair) return;
@@ -60428,12 +60467,12 @@ You know who she is, she is SHANA, destroyer of worlds.]
   (window.dssShowMinigameRules || function (o) { o.onPlay(); })({ key: 'mats', play: 'First flick', title: 'THE BEER MAT GAME', lines: [
     '<div>A stack of beer mats on the edge of the bar. Flick them up with the back of your hand, then catch them as they turn over.</div>',
     '<div>Use the space bar or click the button. Once to flick, a second time to catch.</div>',
-    '<div>You add a mat each time. Lea’s record is six, try to beat it. Bow out whenever you like.</div>'
+    '<div>You add a mat each time. Lea’s record is four, try to beat it. Bow out whenever you like.</div>'
     // 2026-10-13 (Sam, the words review): the reward line cut ("Beat Lea and finish: morale +8, the first time only. Anything less costs nothing.")
   ], touchLines: [
     '<div>A stack of beer mats on the edge of the bar. Flick them up with the back of your hand, then catch them as they turn over.</div>',
     '<div>Tap the button. Once to flick, a second time to catch.</div>',
-    '<div>You add a mat each time. Lea’s record is six, try to beat it. Bow out whenever you like.</div>'
+    '<div>You add a mat each time. Lea’s record is four, try to beat it. Bow out whenever you like.</div>'
   ], onPlay: boot });
 })();
 </script>

@@ -3881,6 +3881,8 @@ width: 100% !important;
 height: 100% !important;
 display: block;
 }
+@keyframes nbHauntsFlash { 0% { background: rgba(214,178,98,0); box-shadow: 0 0 0 rgba(214,178,98,0); } 25% { background: rgba(214,178,98,0.22); box-shadow: 0 0 14px rgba(214,178,98,0.45); } 100% { background: rgba(214,178,98,0); box-shadow: 0 0 0 rgba(214,178,98,0); } }
+.nb-haunts.nb-haunts-flash { animation: nbHauntsFlash 2.6s ease-out 2; border-radius: 3px; } /* 2026-10-17: the first haunt's notebook tutorial */
 .nb-section {
 margin: 0 0 0.9em 0;
 padding: 0.4em 0.8em;
@@ -13587,6 +13589,30 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
   }
   window.dssShowPrimer = showPrimer;
 })();
+/* ====== THE FIRST HAUNT OPENS THE NOTEBOOK (2026-10-17, Sam: "when you get the first haunt it should automatically open up the notebook, sort of like a tutorial, so you know where they are and also so you notice the haunts") ======
+   Once per browser (localStorage dssHauntNotebookTut). A haunt card reading "1 of 12 caught" starts it; it waits about 2.6 s so the card is read,
+   then for the primer slip, any overlay, a dialog or a ringing phone to clear, then opens the NOTEBOOK and brings its HAUNTS section into view with a brief glow. */
+(function() {
+  var KEY = 'dssHauntNotebookTut', pending = false;
+  function done() { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } }
+  function busy() { return (window.dssOverlayBusy && window.dssOverlayBusy()) || !!document.querySelector('.dss-hint-slip.long, tw-dialog, .phone-ringing:not(.ring-wait), .dss-rules-overlay'); }
+  setInterval(function() {
+    if (pending || done()) return;
+    var hp = Array.prototype.filter.call(document.querySelectorAll('.haunt-progress'), function(e) { return /^\s*1 of/.test(e.textContent) && e.getClientRects().length; })[0];
+    if (!hp) return;
+    pending = true;
+    var t0 = Date.now();
+    (function tryOpen() {
+      if (done()) { pending = false; return; }
+      if (Date.now() - t0 < 2600 || busy()) { setTimeout(tryOpen, 300); return; }
+      var nb = document.querySelector('.notebook-link tw-link');
+      if (!nb || !nb.getClientRects().length) { if (Date.now() - t0 < 60000) { setTimeout(tryOpen, 500); } else { pending = false; } return; }
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+      nb.click();
+      setTimeout(function() { var h = document.querySelector('tw-dialog .nb-haunts'); if (h) { try { h.scrollIntoView({ block: 'center' }); } catch (e) {} h.classList.add('nb-haunts-flash'); } }, 450);
+    })();
+  }, 500);
+})();
 // ====== POPUP SERIALIZATION ======
 // Soft "info" modals (the haunts/stats primers, the venue hint, word-to-the-
 // wise nudges, the morale warning) must never land on top of a "hard" tactile
@@ -14451,8 +14477,7 @@ function init(container) {
     if ((hubFlag('next') === d.id || hubFlag('next2') === d.id) && st.status === 'open') el.classList.add('soho-door-next');
     // 2026-10-15 (Sam: choose the door by who you might pitch the book to): the people inside who still have something
     // to say about the book tonight, named on the plate (the 'who' hub flag, "pillars:THE GREAT HAM|colony:DAVY MERKIN, THE AGENT")
-    var whoNames = whoInside(d.id);
-    if (whoNames && st.status === 'open') { var whoEl = document.createElement('span'); whoEl.className = 'soho-door-who'; whoEl.textContent = whoNames; el.appendChild(whoEl); }
+    /* 2026-10-17 (Sam: the pick is signalled enough elsewhere; the plate names the venue only): the names of who is inside are no longer added to the plate. To restore: var whoNames = whoInside(d.id); if (whoNames && st.status === 'open') append a span.soho-door-who holding whoNames to el. */
     var side = doorSide(d), ltx = (d.lc != null ? d.lc : d.c + 0.5), lty = (d.lr != null ? d.lr : d.r - 1.35); // 2026-10-16: a gate's plate sits on its gap (lc/lr)
     // The lit door icon, its spill and the chevron are the venue signature.
     // A doorway gets none of them — just a dim name (Sam, 2026-09-13).
@@ -33229,15 +33254,18 @@ hint.textContent = o.hint || 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 function roomHolds() {
 var flower = false, take = false;
 HOTSPOTS.forEach(function(h) { try { if (available(h) && spotLily(h)) flower = true; if (keyLinks(h).length) take = true; } catch (e) {} });
-return flower ? 'A FLOWER IS HERE \u00b7\u00a0LOOK\u00a0CLOSER' : take ? 'SOMETHING HERE TO TAKE \u00b7\u00a0LOOK\u00a0CLOSER' : ''; // the dot ends a line, never starts one
+return flower ? 'There is a lily in this room. Gather it.' : take ? 'SOMETHING HERE TO TAKE \u00b7\u00a0LOOK\u00a0CLOSER' : ''; // the dot ends a line, never starts one
 }
-function holdsHint() { var h = roomHolds(); if (h) { hint.textContent = h; hint.dataset.keep = '1'; hint.style.color = cFg; hint.style.textShadow = '0 0 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9)'; hint.style.fontSize = '12.5px'; hint.style.background = 'rgba(8,6,4,0.55)'; hint.style.padding = '5px 12px'; hint.style.borderRadius = '2px'; } }
+/* 2026-10-17 (Sam: "There is a lily in this room. Gather it.", in a little box of its own at the top right, green and white): the lily line has its own box; the key's line keeps the centred style */
+function holdsHint() { var h = roomHolds(); if (h) { hint.textContent = h; hint.dataset.keep = '1'; var lily = (h === 'There is a lily in this room. Gather it.'); var S = hint.style;
+if (lily) { S.top = '14px'; S.left = 'auto'; S.right = '14px'; S.transform = 'none'; S.textAlign = 'left'; S.maxWidth = '260px'; S.font = '13px Georgia, \'Crimson Text\', serif'; S.letterSpacing = '0.02em'; S.color = '#23402a'; S.textShadow = 'none'; S.background = 'rgba(238,246,234,0.94)'; S.border = '1px solid rgba(96,140,92,0.8)'; S.boxShadow = '0 2px 10px rgba(0,0,0,0.45)'; S.padding = '7px 12px'; S.borderRadius = '3px'; }
+else { S.top = '22px'; S.left = '50%'; S.right = 'auto'; S.transform = 'translateX(-50%)'; S.textAlign = 'center'; S.maxWidth = '90%'; S.font = '12.5px \'Courier New\', monospace'; S.letterSpacing = '3px'; S.color = cFg; S.textShadow = '0 0 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9)'; S.background = 'rgba(8,6,4,0.55)'; S.border = 'none'; S.boxShadow = 'none'; S.padding = '5px 12px'; S.borderRadius = '2px'; } } }
 // taken: the hint lets go and fades like any other room's
 var holdsTimer = setInterval(function() {
 if (!wrap.isConnected) { clearInterval(holdsTimer); return; }
 var nowHolds = roomHolds();
 if (hint.dataset.keep && !nowHolds) { delete hint.dataset.keep; hint.style.opacity = '0'; }
-else if (hint.dataset.keep && nowHolds !== hint.textContent) hint.textContent = nowHolds; // the flower taken, a key still waits
+else if (hint.dataset.keep && nowHolds !== hint.textContent) holdsHint(); // the flower taken, a key still waits (restyled: the lily's box gives way to the centred line)
 else if (!hint.dataset.keep && roomHolds()) { holdsHint(); hint.style.opacity = '0.95'; }
 }, 1500);
 hint.style.cssText = 'position:absolute;top:22px;left:50%;transform:translateX(-50%);font:11px \'Courier New\',monospace;color:' + cDim + ';opacity:0;letter-spacing:3px;z-index:9003;pointer-events:none;transition:opacity 2s ease;text-align:center;max-width:90%;white-space:normal;';
@@ -61321,7 +61349,7 @@ You find it after some looking, where you always knew it was: the Chinese Fish a
 ]\
 
 &lt;!-- 2026-10-09, Sam: &quot;Eating fish and chips happens twice, once inside the room and then as a modal. Make the modal part of the in the venue bit.&quot; The eating card now opens here at the counter; the street follows once the paper is empty. --&gt;
-&lt;!-- 2026-10-12 (Sam, item 12): &quot;Eat.&quot; took you out to the street with LILY&#x27;s flower or the ticket still in the room. While either is there to take (the flower only sober enough to hold it), the first &quot;Eat.&quot; puts the room&#x27;s own LOOK CLOSER line on a slip and you stay; a second &quot;Eat.&quot; eats and leaves as before. --&gt;(set: $chippyEatWarned to false)(link-repeat: &quot;Eat.&quot;)[(set: _cfHolds to &quot;&quot;)(if: $tookLily1 is false and $sobriety &gt;= 30)[(set: _cfHolds to &quot;A FLOWER IS HERE · LOOK CLOSER&quot;)](else-if: $inisToldOfPillars is true and $keyTicket is &quot;seed&quot;)[(set: _cfHolds to &quot;SOMETHING HERE TO TAKE · LOOK CLOSER&quot;)](if: _cfHolds is not &quot;&quot; and $chippyEatWarned is false)[(set: $chippyEatWarned to true)&lt;span class=&quot;cf-eat-warn&quot; hidden&gt;(print: _cfHolds)&lt;/span&gt;&lt;script&gt;(function(){var s=document.querySelectorAll(&#x27;.cf-eat-warn&#x27;);var t=s.length?s[s.length-1].textContent.trim():&#x27;&#x27;;if(t&amp;&amp;window.dssInlineHint)window.dssInlineHint(t);})();&lt;/script&gt;](else:)[(set: $hadChippy to true)(set: $confidence to ($statGain: $confidence, 10))(set: $sobriety to ($statGain: $sobriety, 18))&lt;span id=&quot;cf-eat-go&quot; style=&quot;display:none&quot;&gt;[[·|Dean Street]]&lt;/span&gt;&lt;script&gt;(function(){var gen=window._passageGen;function go(){if(window._passageGen!==gen)return;var l=document.querySelector(&#x27;#cf-eat-go tw-link&#x27;)||document.querySelector(&#x27;#cf-eat-go a&#x27;);if(l)l.click();}if(window.showEatPopup){window.showEatPopup(&#x27;chips&#x27;,go);}else{go();}})();&lt;/script&gt;]]
+&lt;!-- 2026-10-12 (Sam, item 12): &quot;Eat.&quot; took you out to the street with LILY&#x27;s flower or the ticket still in the room. While either is there to take (the flower only sober enough to hold it), the first &quot;Eat.&quot; puts the room&#x27;s own LOOK CLOSER line on a slip and you stay; a second &quot;Eat.&quot; eats and leaves as before. --&gt;(set: $chippyEatWarned to false)(link-repeat: &quot;Eat.&quot;)[(set: _cfHolds to &quot;&quot;)(if: $tookLily1 is false and $sobriety &gt;= 30)[(set: _cfHolds to &quot;There is a lily in this room. Gather it.&quot;)](else-if: $inisToldOfPillars is true and $keyTicket is &quot;seed&quot;)[(set: _cfHolds to &quot;SOMETHING HERE TO TAKE · LOOK CLOSER&quot;)](if: _cfHolds is not &quot;&quot; and $chippyEatWarned is false)[(set: $chippyEatWarned to true)&lt;span class=&quot;cf-eat-warn&quot; hidden&gt;(print: _cfHolds)&lt;/span&gt;&lt;script&gt;(function(){var s=document.querySelectorAll(&#x27;.cf-eat-warn&#x27;);var t=s.length?s[s.length-1].textContent.trim():&#x27;&#x27;;if(t&amp;&amp;window.dssInlineHint)window.dssInlineHint(t);})();&lt;/script&gt;](else:)[(set: $hadChippy to true)(set: $confidence to ($statGain: $confidence, 10))(set: $sobriety to ($statGain: $sobriety, 18))&lt;span id=&quot;cf-eat-go&quot; style=&quot;display:none&quot;&gt;[[·|Dean Street]]&lt;/span&gt;&lt;script&gt;(function(){var gen=window._passageGen;function go(){if(window._passageGen!==gen)return;var l=document.querySelector(&#x27;#cf-eat-go tw-link&#x27;)||document.querySelector(&#x27;#cf-eat-go a&#x27;);if(l)l.click();}if(window.showEatPopup){window.showEatPopup(&#x27;chips&#x27;,go);}else{go();}})();&lt;/script&gt;]]
 &lt;/div&gt;
 
 &lt;!-- v2 KEY PICKUP (phase 2, 2026-09-01): the ticket. Pink draft for Sam. --&gt;
@@ -67588,7 +67616,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 &lt;!-- 2026-10-16 (Sam: suggestions, 2, the plan travels with you): under the slips, who is still to see tonight, the same list Dean Street asks about; the picked one marked --&gt;(display: &quot;Who Will Read&quot;)(if: ($bookAt is a string) and ($bookAt is &quot;&quot;) and ($bookSold is not true) and ($whoList is an array) and ($whoList&#x27;s length &gt; 0))[(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-section nb-tosee&quot;&gt;&lt;div class=&quot;nb-tosee-h&quot;&gt;Still to see&lt;/div&gt;&#x27;)(for: each _w, ...$whoList)[(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-tosee-row&#x27; + (cond: (_w&#x27;s id is $pitchTarget) and ((_w&#x27;s name is $pitchName) or (_w&#x27;s id is &quot;french&quot;)), &#x27; nb-tosee-on&#x27;, &#x27;&#x27;) + &#x27;&quot;&gt;&#x27; + (_w&#x27;s name) + &#x27; · &#x27; + (_w&#x27;s place) + &#x27;&lt;/div&gt;&#x27;)](set: _nb to _nb + &#x27;&lt;/div&gt;&#x27;)]\
 (set: _nb to _nb + &#x27;&lt;div class=&quot;nb-key&quot;&gt;&lt;span class=&quot;nb-key-item&quot;&gt;&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt; haunt caught &amp;middot; &lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt; still to catch&lt;/span&gt;&lt;span class=&quot;nb-key-item&quot;&gt;&lt;span class=&quot;pp pp-done&quot;&gt;▲&lt;/span&gt; word learned &amp;middot; &lt;span class=&quot;pp&quot;&gt;△&lt;/span&gt; still to learn&lt;/span&gt;&lt;span class=&quot;nb-key-item&quot;&gt;&lt;span class=&quot;al al-done&quot;&gt;✦&lt;/span&gt; alba line &amp;middot; &lt;span class=&quot;al&quot;&gt;✧&lt;/span&gt; still to find&lt;/span&gt;&lt;span class=&quot;nb-key-item&quot;&gt;&lt;span class=&quot;qp qp-done&quot;&gt;★&lt;/span&gt; errand done &amp;middot; &lt;span class=&quot;qp&quot;&gt;☆&lt;/span&gt; still to do&lt;/span&gt;&lt;span class=&quot;nb-key-item&quot;&gt;&lt;span class=&quot;lp lp-done&quot;&gt;❀&lt;/span&gt; lily gathered &amp;middot; &lt;span class=&quot;lp&quot;&gt;❁&lt;/span&gt; still to find&lt;/span&gt;&lt;/div&gt;&#x27;)\
 &lt;!-- 2026-10-12 (the weighting): what the Fetch asks before he leads you on, while it is still owed --&gt;(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](if: $lilyCount &lt; $needLilies or $haunts&#x27;s length &lt; $needHaunts)[(set: _nb to _nb + &#x27;&lt;div class=&quot;fetch-owed nb-owed&quot;&gt;FOR THE DAWN · LILY’S FLOWERS &#x27; + (text: $lilyCount) + &#x27; OF &#x27; + (text: $needLilies) + &#x27; · HAUNTS &#x27; + (text: $haunts&#x27;s length) + &#x27; OF &#x27; + (text: $needHaunts) + &#x27;&lt;/div&gt;&#x27;)]\
-(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-section&quot;&gt;&lt;strong class=&quot;nb-heading&quot;&gt;HAUNTS&lt;/strong&gt;&#x27;)\
+(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-section nb-haunts&quot;&gt;&lt;strong class=&quot;nb-heading&quot;&gt;HAUNTS&lt;/strong&gt;&#x27;)\
 (if: $haunts contains $haunt1)[(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-item&quot;&gt;&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt; &#x27; + $haunt1 + &#x27; &lt;span class=&quot;haunt-stage haunt-stage-calcinatio&quot;&gt;(Calcinatio)&lt;/span&gt;&lt;/div&gt;&#x27;)](else:)[(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-grey&quot;&gt;&lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt; The Sketch&lt;/div&gt;&#x27;)]\
 (if: $haunts contains $haunt2)[(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-item&quot;&gt;&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt; &#x27; + $haunt2 + &#x27; &lt;span class=&quot;haunt-stage haunt-stage-solutio&quot;&gt;(Solutio)&lt;/span&gt;&lt;/div&gt;&#x27;)](else:)[(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-grey&quot;&gt;&lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt; The Refusal&lt;/div&gt;&#x27;)]\
 (if: $haunts contains $haunt3)[(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-item&quot;&gt;&lt;span class=&quot;hp hp-done&quot;&gt;◆&lt;/span&gt; &#x27; + $haunt3 + &#x27; &lt;span class=&quot;haunt-stage haunt-stage-putrefactio&quot;&gt;(Putrefactio)&lt;/span&gt;&lt;/div&gt;&#x27;)](else:)[(set: _nb to _nb + &#x27;&lt;div class=&quot;nb-grey&quot;&gt;&lt;span class=&quot;hp&quot;&gt;◇&lt;/span&gt; The Beast&lt;/div&gt;&#x27;)]\
@@ -72892,8 +72920,8 @@ It’s bold to turn down an alley at this time of night. There are three in a gr
 (if: $nextId is &quot;doorway&quot; or $nextId is &quot;dwdiadem&quot;)[(set: $nextLabel to &quot;A DOORWAY&quot;)](else-if: $nextId is &quot;chippy&quot;)[(set: $nextLabel to &quot;FISH AND CHIPS&quot;)]
 &lt;!-- 2026-10-13 (Sam: &quot;The &#x27;next&#x27; shows too soon ... when I entered the French the first time it already said: &#x27;Next The pillars&#x27;
      before I had any idea what that is. It should change/appear when I leave&quot;): inside a venue NEXT holds what it said as you
-     walked in (HERE, when it sent you there); it moves on when you leave. $nextHoldId/$nextHoldLabel keep the last outside answer. --&gt;(if: _here is not &quot;&quot;)[(if: ($nextHoldId is a string) and ($nextHoldId is not &quot;&quot;))[(set: $nextId to $nextHoldId)(set: $nextLabel to $nextHoldLabel)]](else:)[(set: $nextHoldId to $nextId)(set: $nextHoldLabel to $nextLabel)]
-&lt;!-- 2026-10-12 (the opening playthrough): inside the place it names, NEXT says HERE (the map still marks the door by its id) --&gt;(set: _vt to (dm: &quot;pillars&quot;, &quot;venue-pillars&quot;, &quot;cecil&quot;, &quot;venue-cecilcourt&quot;, &quot;french&quot;, &quot;venue-french&quot;, &quot;colony&quot;, &quot;venue-colony&quot;, &quot;ronnies&quot;, &quot;venue-ronnies&quot;, &quot;coach&quot;, &quot;venue-coach&quot;, &quot;trishas&quot;, &quot;venue-trishas&quot;, &quot;lackland&quot;, &quot;venue-lackland&quot;, &quot;chippy&quot;, &quot;venue-chippy&quot;))(if: _vt contains $nextId)[(if: (passage:)&#x27;s tags contains (_vt&#x27;s ($nextId)))[(set: $nextLabel to &quot;HERE&quot;)]]
+     walked in (HERE, when it sent you there); it moves on when you leave. $nextHoldId/$nextHoldLabel keep the last outside answer. --&gt;(unless: $nextId2 is a string)[(set: $nextId2 to &quot;&quot;)](unless: $nextHoldId2 is a string)[(set: $nextHoldId2 to &quot;&quot;)](if: _here is not &quot;&quot;)[(if: ($nextHoldId is a string) and ($nextHoldId is not &quot;&quot;))[(set: $nextId to $nextHoldId)(set: $nextLabel to $nextHoldLabel)(set: $nextId2 to $nextHoldId2)]](else:)[(set: $nextHoldId to $nextId)(set: $nextHoldLabel to $nextLabel)(set: $nextHoldId2 to $nextId2)]&lt;!-- 2026-10-17: the second reader&#x27;s door is held with the first --&gt;
+&lt;!-- 2026-10-12 (the opening playthrough): inside the place it names, NEXT says HERE (the map still marks the door by its id) --&gt;(set: _vt to (dm: &quot;pillars&quot;, &quot;venue-pillars&quot;, &quot;cecil&quot;, &quot;venue-cecilcourt&quot;, &quot;french&quot;, &quot;venue-french&quot;, &quot;colony&quot;, &quot;venue-colony&quot;, &quot;ronnies&quot;, &quot;venue-ronnies&quot;, &quot;coach&quot;, &quot;venue-coach&quot;, &quot;trishas&quot;, &quot;venue-trishas&quot;, &quot;lackland&quot;, &quot;venue-lackland&quot;, &quot;chippy&quot;, &quot;venue-chippy&quot;))(if: _vt contains $nextId)[(if: (passage:)&#x27;s tags contains (_vt&#x27;s ($nextId)))[(set: $nextLabel to &quot;HERE&quot;)]](if: ($nextId2 is not &quot;&quot;) and (_vt contains $nextId2))[(if: (passage:)&#x27;s tags contains (_vt&#x27;s ($nextId2)))[(set: $nextLabel to &quot;HERE&quot;)]]&lt;!-- 2026-10-17: HERE inside either of the two readers&#x27; venues --&gt;
 }</tw-passagedata>
 <tw-passagedata pid="237" name="Who Will Read" tags="system" position="3050,2600" size="100,100">{&lt;!-- 2026-10-15 (Sam: &quot;when you are deciding which venue to go to next, surely the idea of who you might meet and who you
      want to pitch it to could be involved&quot;). Who still has something to say about the book tonight, by door: the people a

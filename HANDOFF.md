@@ -1,3 +1,29 @@
+# Final Wheel reveal atmosphere — 2026-10-18
+
+Sam requested final wheel scene/render atmosphere (no game). Inspected The Wheel's current depth-projected canvas reveal (not a WebGL wheel) and enhanced its existing renderer rather than adding context/dependency. Only The Wheel scripts: slow layered violet/amber cloud field, three muted light shafts, fine atmospheric filaments, rear/near depth motes. Thicker aged electrum bands with stable fine nicks, narrow moving specular highlights, continuous rear bevel and larger central eye. Preserved depth-sorted crossing,48 rim eyes,3.2s staged reveal, sound timing, SVG fallback, text and links. Reduced-motion remains still; existing observer/visibility disposal retained. First per-segment side faces produced jagged edge in visual QA; replaced with continuous bevel, and gated it by existing reveal fraction.
+
+Syntax/build and desktop/phone reduced-motion checks pass with no JS/tw-errors, one canvas. Screenshots /tmp/wheel.png and /tmp/wheel-mobile.png visually inspected; test /tmp/wheel-browser.cjs. Original /tmp/wheel-before-atmosphere.twee. Prose/markup verified unchanged by stripping scripts. No git commands; synced.
+
+---
+
+# START HERE — state at the end of 2026-10-18
+
+**Two sessions edited the game on 18 October:** this one (sound, rules cards, the dream games' chrome, the yeti, the climber) and a parallel graphics session (Pyramid, Easter Island, Nazca, Himalayas atmosphere; its sections are interleaved below). Checked at 23:34: both sets of changes are in the .twee and the compiled html, which were synced together. Scripts here rewrite the whole .twee, so avoid two sessions editing it at once.
+
+**Uncommitted:** everything since Sam's last commit (he commits in GitHub Desktop). Expect new files in `french-live-originals/` (tools, layered beds, transitions, `listen.html`, `sfx-board.html`) and new root audio (`*-floor.m4a`, `french-*.m4a`, `the-street-layered-floor.m4a`, re-rendered `the-*-ambience.m4a`).
+
+**Waiting on Sam's ears or eyes**
+- The 30 new sound effects: `french-live-originals/sfx-board.html` (keep / change / drop).
+- The Coach bar bed plays about 10 dB under the French (levelled to the old Coach bed); raise or leave.
+- The real-to-generated balance in the five chatter beds ("for now at least"); layered vs polished was never compared by ear.
+- A phone play-through (Sam: "I'll play on a phone later"); the race's lap map covers a lot of the track on a phone (judgement call, untouched).
+
+**Not yet seen in play by anyone:** the climber's walk and the yeti's turn with the aviators (the pane freezes backgrounded tabs); the stair transitions at Trisha's, the Colony and the Coach gents; room ticks and close-up sounds in a live room.
+
+**Notes for Claude:** Shift+N in a dev build saves playtest notes (Sam may hand over an exported .md). The browser pane serves stale frames for backgrounded tabs: toggle tabs before a screenshot, and test in a fresh tab for a clean console.
+
+---
+
 # Textured pursuing boulder and debris — 2026-10-18
 
 Sam asked rougher/dramatic rolling stone, dust and flying stone fragments. Added baked porous/mineral-veined boulder texture rotating with existing stone markings; independent fixed raking highlight/deep lower shade. Eight bounded rolling dust puffs trail behind, thirteen varied angular chips thrown in ballistic arcs from contact. Reduced-motion freezes decorative rotation/particles; physical pursuit unchanged. Syntax/build and direct chase fixture desktop/phone reduced-motion render pass, no JS/console/tw-errors. Desktop /tmp/pyramid-boulder.png visually inspected; phone -mobile.png. Fixture /tmp/pyramid-boulder-browser.cjs injects test-only warp from Twee, not saved in game. No prose/speed/collision changes. No git commands; synced, refresh preview.

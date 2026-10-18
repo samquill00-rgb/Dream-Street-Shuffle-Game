@@ -1,3 +1,15 @@
+# Orange sunset sky and pass-through verification — 2026-10-18
+
+Sam requested more orange sky and cars driving through each other. Sky gradient now mauve→burnt orange→amber, sky material toneMapped:false prevents ACES desaturating it, matching orange distant fog. No car-body collision existed; retained and documented intentional pass-through. Browser-only test hook injected from Twee into test page compared ten updates starting at exact overlap vs1404 units apart: identical player coordinates/speed2.42, no spin. Zero JS/console/tw-errors. Screenshot /tmp/nazca-orange-sky.png visually inspected, test /tmp/nazca-contact-browser.cjs (hook not saved into game). Syntax/build passed; prose unchanged. No git commands; synced.
+
+---
+
+# Nazca orange light, square start posts, rounded cars — 2026-10-18
+
+Sam's three requests: orange light/longer shadows; blockier, less Greek start pillars; rounder elegant cars. All built in Nazca Race only: sun height115→78/intensity1.8/orange0xffa04b, sun sprite lowered, warm reflection horizon and dust highlights. Start arch posts/feet now square timber (other arches unchanged). Added local rounded-box coachwork helper with smooth corner normals; rounded chassis/bonnet/boot/cabin/windows/bumpers, curving fender wings and period round headlamps/rear lamps for both cars. Satin paint retained, gameplay dimensions/handling unchanged. Prose/markup verified unchanged. Todo /tmp/nazca-shape-todo.md complete. Syntax/build pass; desktop driving and phone reduced-motion browser checks passed, no JS/console/tw-errors; rounded-car screenshot visually inspected. Updated test /tmp/nazca-browser.cjs now dismisses the new .dss-rules-play instruction overlay before driving. Original /tmp/nazca-before-shape.twee. No git commands; synced.
+
+---
+
 # More visible sunlit dust devils — 2026-10-18
 
 Sam wanted dust devils visibly swirling from ground and catching sunlight. Enlarged columns to 140 tall, narrowed base/widened top, brighter warm streak texture, 20 rising helical sprite clumps per devil with phase-dependent sunlight tint, soft ground dust skirt. Spawn beside road 260 ahead/135 lateral when occasional fade starts, then wander locally. Existing intermittent schedule and passing gust/clear intervals retained. Prose/physics unchanged. Syntax and sync passed; browser check passed with zero JS/console/tw-errors, active devil screenshot visually inspected. Test /tmp/nazca-devil-browser.cjs, screenshot /tmp/nazca-devil.png. No git commands.

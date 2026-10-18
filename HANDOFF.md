@@ -4,6 +4,8 @@ Sam named the Easter Island revolutionary **Subcomandante Fortuna**. The name is
 
 Sam asked for a barbershop on one of the alleys: **Donny Florentine's**, a door and nothing behind it. Built: a wall door on the south side of Meard Street (DOORS id `barber`, c11 r24, entered from the alley tile above, the chippy's shop bell on the way in), a `[[Donny Florentine|Donny Florentine's]]` link in the hub's alley dock, and the passage `Donny Florentine's` [street-night]: a haircut and a shave, each once a night, each `$statGain` 6 on $confidence (MORALE +6 on the note), the second still offered after the first, "nothing left to do" on a third visit. $alleyReturn keeps it off the lap count. Flags $barberCut/$barberShave in StoryInit and the Start reset list. Lines are pink. Verified live in the pane: plate, lit door and step draw on Meard Street, the step pause takes you in, morale 70 → 77 after both, respawn on the step. Synced; no git commands.
 
+2026-10-19 (Sam): the plate and the hub link say only **The barbershop** (DOORS name/label, rx `/^The barbershop$/i`); the passage is renamed `The Barbershop` and Donny Florentine is named only in its text. The link is gated in the hub dock on `$nightPhase >= 1` (Night Progress: four haunts, two lines, or midnight if ever unparked; midnight is parked, so $afterMidnight alone would never open it). Checked live: absent on hub 2 of a fresh night; present, with plate and passage, from the DBG Complete state (jumped in-page with the debug boot's fake-link trick after the preset's own (go-to:) stalled).
+
 ---
 
 # Lifelike outward-looking glass pair — 2026-10-18

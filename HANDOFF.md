@@ -1,3 +1,21 @@
+# More visible sunlit dust devils — 2026-10-18
+
+Sam wanted dust devils visibly swirling from ground and catching sunlight. Enlarged columns to 140 tall, narrowed base/widened top, brighter warm streak texture, 20 rising helical sprite clumps per devil with phase-dependent sunlight tint, soft ground dust skirt. Spawn beside road 260 ahead/135 lateral when occasional fade starts, then wander locally. Existing intermittent schedule and passing gust/clear intervals retained. Prose/physics unchanged. Syntax and sync passed; browser check passed with zero JS/console/tw-errors, active devil screenshot visually inspected. Test /tmp/nazca-devil-browser.cjs, screenshot /tmp/nazca-devil.png. No git commands.
+
+---
+
+# Nazca dust reduced; passing gusts — 2026-10-18
+
+Sam found constant dust obscured track: wanted less dust, big gusts that clear, odd dust devil. Restored fog distance 620–1500; reduced wind bank pool to 5 mobile/8 desktop, fully invisible outside five-second gust envelopes every 24 seconds (bank stagger .14s); gust travels across road, lower peak opacity. Shorter/smaller tyre plumes. Two distant devils now fade in/out for ten seconds each, staggered 22s, rather than continuously. Reduced-motion removes gust/devil animation. Prose/mechanics unchanged. Syntax/build passed; envelope checks confirm banks absent at t=0,14.1,20 and active at10.5. Desktop and phone browser verification passed with zero errors; clear screenshot visually inspected. Test /tmp/nazca-clear-browser.cjs; clear screenshot /tmp/nazca-dust-clear.png. No git commands; synced.
+
+---
+
+# Larger sunlit cross-track dust — 2026-10-18
+
+Sam asked for bigger dust clouds blowing across the track and catching sunlight. Wind-dust sprites now use a bespoke feathered multi-puff texture with warm luminous crowns and darker bellies. Banks 180–288 by 45–75 units, anchored along road ahead with lateral sweeps, billowing, rise and subtle rotation; view towards sun increases warm scattering. Reduced motion holds wind animation. First desktop/phone browser passes zero JS/console/tw-errors; desktop inspection prompted additional boundary feathering to remove rectangular texture edges. Final desktop/phone checks passed, zero errors; softened desktop screenshot visually inspected. Synced; no git commands.
+
+---
+
 # Nazca race atmosphere and satin cars — 2026-10-18
 
 Sam asked for dramatic light/dust and older cars' matt shine. Only Nazca Race scripts changed: lower warmer sun and weaker ambient for contrast, cooler sky fill, copper dusk palette/fog. 12 mobile/20 desktop low windblown dust veils, longer/larger tyre plumes with crosswind, 72-puff bounded pool. Opponent remains dustless. Paint/chrome use a one-time tiny generated sky/earth PMREM reflection probe, satin paint roughness .46/metalness .55 and muted rough chrome. Probe disposed with scene. No handling/prose changes. Todo /tmp/nazca-visual-todo.md complete. Syntax/sync and actual headless Chrome desktop driving + phone reduced-motion checks passed, zero JS/console/tw-errors. Desktop screenshot inspected /tmp/nazca-beauty.png, phone /tmp/nazca-beauty-mobile.png; test /tmp/nazca-browser.cjs; original source /tmp/nazca-before-beauty.twee. No git commands. Synced, Sam commits.
@@ -15,8 +33,16 @@ Sam: the rules cards "still have a very 'claude' look"; from four mocked directi
 | Jeffrey Bernard's cow | a betting slip (header "No. 93 · DEAN ST", a flourish of mine Sam can change or drop) |
 | Cecil Court waltz | a dance card on a cord, dotted lines |
 | Tennis Court Oaths (was Ping Pong; Sam renamed it 2026-10-18 on the card and the canvas label; the debug panel's group and code comments still say ping pong) | a green scorecard with a score grid, title at 1.5em so it sits on two lines |
+| NAZCAR (the Nazca race) | a race-day ticket with chequered bands and punched notches; raised from the race's own UI build, Play presses its Start race button; the pre-race HUD text clears on Play (the HUD shows lap and position once racing), the help line under the track stays |
+| The Climb | a luggage tag with an eyelet |
+| The Reclamation | a stencilled ammunition-box label with four bolts |
+| The Pyramid Run | a museum ticket with a cartouche round the name and an ankh |
+| Whack-a-worm (the worm hut) | a seed packet with a pinked top and a green band |
 | House of cards | a playing card, K ♠ corners. **Dormant**: the game was cut from The Green Sea on 17 Oct; its passage and rules call remain, so the card shows only if it's restored |
 
+- **Dream-world games (Sam: "all the dream world games in the next style too"):** the Climb, the Reclamation and the Pyramid Run open on a cover inside their frame; a 400 ms sweep beside `dssShowMinigameRules` raises the card whenever such a cover is showing (`hc-cover`, `rc-cover`, `pr-cover`): kicker as the slip's bold first line, each paragraph verbatim with its line breaks, the button's own word; Play presses the cover's button; the cover is hidden while the card is up and raises it again if it comes back (a retry). NAZCAR has both its instruction texts on the slip verbatim, not merged. Ezekiel has no game (The Wheel is a reveal). The worm hut (Soho Square: the gardener’s hut) has it too, at Sam's ask: WHACK-A-WORM on a seed packet, its instruction line word for word (desk and touch spans kept, so each device sees its own words), Play presses Pick up a spade; its game is laid out inline, so the card is raised once per visit (`data-dss-card` on `#dss-worm-game`) and the page is left as it was.
+- Long instructions (over 380 characters: the four dream-world games) get a wider card (`.dss-rules-wide`, 460 px), so a shorter one.
+- Tested in the pane: each of the four raises its card with the right object, words and button; the race, the Climb and the Reclamation start from Play (countdown/HUD live, cover gone); all fit at 1280×800 and phone width (the Reclamation scrolls in a 510 px window).
 - Every word on the cards is the games' own (title, subtitle, lines, touchLines, play word); the ▶ before the play word is gone. Lines render as `div`s (some games' lines are already `div`s).
 - The slip is styled like `.dss-hint-slip`; the button is typed on it (scoped `.dss-rules-slip .dss-rules-play`, so the shared gold button style elsewhere is untouched).
 - The overlay now scrolls and the objects shrink on short windows (`max-height` 700 and 520 rules).

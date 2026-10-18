@@ -1,3 +1,27 @@
+# Textured pursuing boulder and debris — 2026-10-18
+
+Sam asked rougher/dramatic rolling stone, dust and flying stone fragments. Added baked porous/mineral-veined boulder texture rotating with existing stone markings; independent fixed raking highlight/deep lower shade. Eight bounded rolling dust puffs trail behind, thirteen varied angular chips thrown in ballistic arcs from contact. Reduced-motion freezes decorative rotation/particles; physical pursuit unchanged. Syntax/build and direct chase fixture desktop/phone reduced-motion render pass, no JS/console/tw-errors. Desktop /tmp/pyramid-boulder.png visually inspected; phone -mobile.png. Fixture /tmp/pyramid-boulder-browser.cjs injects test-only warp from Twee, not saved in game. No prose/speed/collision changes. No git commands; synced, refresh preview.
+
+---
+
+# Dramatic Pyramid torches — 2026-10-18
+
+Sam asked flickering flames, rising sparks and moving wall shadows. Torch flames now three overlapping irregular Bezier tongues with hot core and local glow; stronger smooth multi-frequency flicker; nine curved rising/fading spark trails per visible torch. Added softened projected bracket shadows and subtle shifting shadows beneath nearby stone courses. Uses existing reduced-motion now2=0 clock, no gameplay/prose changes. Syntax/build and desktop/phone reduced-motion render/jump checks passed, zero JS/console/tw-errors. Desktop /tmp/pyramid-atmosphere.png visually inspected. No git commands; synced, refresh preview.
+
+---
+
+# Pyramid ancient wall texture and moving torch relief — 2026-10-18
+
+Sam asked more textured/weathered stone and torch flicker across it. Added baked limestone pitting/fine mineral grain, chipped course edges, streaks and dark worn joints over existing wall art; same wear overlays gallery. Separate pre-baked per-torch radial-masked relief glints shimmer subtly with existing flicker and subpixel motion (static in reduced-motion). Only visible torches draw, no per-frame texture generation. Prose/gameplay untouched. Syntax/build, desktop/phone reduced-motion render/jump checks pass, zero JS/console/tw-errors; /tmp/pyramid-atmosphere.png visually inspected. No git commands; synced. Refresh existing preview.
+
+---
+
+# Pyramid Run light and atmosphere — 2026-10-18
+
+Sam requested same atmosphere pass for Egyptian game. Only Pyramid Run draw() changed: warmer/stronger torch pools, five soft rising smoke curls per visible torch, five world-anchored cool fissure shafts with gentle drift, subtle low haze,44 varied round dust motes instead of24 squares, stronger gallery gold wash/shafts. Existing now2 reduced-motion clock freezes animation. Prose/markup/physics/hazards untouched (verified prose stripping scripts). Syntax/build and desktop + phone reduced-motion render/jump checks passed, zero JS/console/tw-errors. Desktop screenshot /tmp/pyramid-atmosphere.png inspected; phone /tmp/pyramid-atmosphere-mobile.png. Test /tmp/pyramid-browser.cjs; original /tmp/pyramid-before-atmosphere.twee. No git commands; synced, Sam commits.
+
+---
+
 # Explicit scoreboard target labels — 2026-10-18
 
 Sam asked that rigs/crawlers etc clearly be marked enemies to shoot. Added aligned scoreboard heading: ENEMIES · SHOOT spans machine columns; DO NOT SHOOT sits above spirits. Warm/cool matching colours and narrow-screen styling. Synced; no git commands.

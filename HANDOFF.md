@@ -1,3 +1,17 @@
+# Explicit scoreboard target labels — 2026-10-18
+
+Sam asked that rigs/crawlers etc clearly be marked enemies to shoot. Added aligned scoreboard heading: ENEMIES · SHOOT spans machine columns; DO NOT SHOOT sits above spirits. Warm/cool matching colours and narrow-screen styling. Synced; no git commands.
+
+---
+
+# Top scoreboard with per-type counts — 2026-10-18
+
+Sam asked bottom scoreboard moved to top, more scoreboard-like, exact counts for each type shot. Added responsive fixed-cell dark scoreboard above canvas: Drones/Rigs/Crawlers destroyed and Spirits Hit, plus total silenced /10, at wall /3 and rounds/reloading. Original HUD moved above canvas too; during play it now carries aim/urgency hints rather than duplicating score. Per-kind shotCounts increment only in kill(), not each damage hit and not victory's decorative shutdown. Spirits counter directly uses existing disturbed count. Final score persists after finish. Fullscreen frame allowance increased for top board. No combat rules/outcome prose changed.
+
+Syntax/build passed. Phone full actual-shot test verified1drone/1rig/1crawler after1/2/3 hits; exact displayed numbers inspected /tmp/easter-scoreboard.png. Victory persists counts, exit works, cleanup works; zero JS/console/tw-errors. Spirit test shot missed (counter correctly stayed0); did not claim hit-penalty test coverage. /tmp/easter-score-browser.cjs. CSS responsive four columns verified390px. No git commands; synced. Refresh preview.
+
+---
+
 # Old ones made abstract again; dramatic moonlit sea — 2026-10-18
 
 Sam rejected cartoon Casper spirits: wanted abstract, more like biblically accurate angels. Replaced ghost silhouette/paired eyes with six folded feather-like translucent veils, three intersecting wavy wheels, thirteen small eyelets and one central eye. No human head/body; cool sea-green maintained vs orange machine diamonds. Slight slow sway, static reduced-motion. Texture fitted to canvas to avoid clipping; sprite2.1x3.3, hit volumes unchanged. Existing spirit mechanics/penalties untouched.

@@ -1,3 +1,9 @@
+# Recognisable blue/green pair on the rim — 2026-10-18
+
+Sam requested the two recognised eyes on rim, adjacent, more obvious, blue and green like Soho glass eyes. Replaced one outer-rim eye with close adjacent pair, larger1.35 scale, near-full opacity, pale glass whites and saturated electric-blue/green irises with round pupils and coordinated gaze. Removed central eye/circular socket, leaving only quiet amber hub glow. Remaining rim eyes unchanged. No prose changes. Syntax/build and desktop/phone reduced-motion checks pass; screenshot /tmp/wheel.png visually inspected, pair clear at lower-right rim. No git commands; synced, refresh preview.
+
+---
+
 # Living wheel eyes and stronger mist — 2026-10-18
 
 Sam requested eerie looking-around eyes, light-catching, stronger mist swirl. Each rim eye now has independent slow gaze with lingering motion, small vertical drift and two moving catchlights; upper socket edge catches changing light. Central eye uses calmer gaze. Mist has18 banks, faster broad circulation with radial curl, stronger visibility, plus three thin foreground wisps. Existing reduced-motion rendering static; reveal/text unchanged. Syntax/build and desktop/phone reduced-motion checks pass, zero JS/tw-errors, one canvas; /tmp/wheel.png inspected. No git commands; synced, refresh preview.

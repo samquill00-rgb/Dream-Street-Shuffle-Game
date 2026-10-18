@@ -1,3 +1,9 @@
+# Lifelike outward-looking glass pair — 2026-10-18
+
+Sam said coloured pair too hidden, must match recognition prose and face viewer together as wheel turns. Added dedicated glassEye renderer: shaded rounded ivory sclera, rich blue/green radial iris with44 fine fibers, round pupil, shared corneal glints/curved reflection. Pair larger1.55 perspective scale, sits adjacent on lower/front rim (angle1.35±.125, small slow drift), painted after ordinary rim eyes to retain clarity; faces camera without tangent rotation and coordinated tiny gaze. Wheel yaw now bounded slow turn (.46+sin(t*.11)*.43) to prevent rim disappearing edge-on; rest of motion preserved. No central eye, text/reveal unchanged. Syntax/build and desktop/phone reduced-motion checks pass, zero JS/tw-errors, one canvas; actual final screenshot /tmp/wheel.png visually inspected with pair unmistakable. No git commands; synced, refresh preview.
+
+---
+
 # Recognisable blue/green pair on the rim — 2026-10-18
 
 Sam requested the two recognised eyes on rim, adjacent, more obvious, blue and green like Soho glass eyes. Replaced one outer-rim eye with close adjacent pair, larger1.35 scale, near-full opacity, pale glass whites and saturated electric-blue/green irises with round pupils and coordinated gaze. Removed central eye/circular socket, leaving only quiet amber hub glow. Remaining rim eyes unchanged. No prose changes. Syntax/build and desktop/phone reduced-motion checks pass; screenshot /tmp/wheel.png visually inspected, pair clear at lower-right rim. No git commands; synced, refresh preview.

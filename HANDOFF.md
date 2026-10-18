@@ -1,3 +1,9 @@
+# Moonlit wind-swaying vegetation — 2026-10-18
+
+Sam asked grass/brush to sway and catch moonlight. Existing batched tufts now use Phong material with cool restrained specular. Vertex shader bends tips in patch-specific two-frequency wind with slow gust envelope, roots fixed; normals bend with blades so real moonlight shifts across them, small tip brightness variation. Uses shared skyClock, freezes on pause, reduced-motion amplitude0. No extra draws or per-frame CPU mesh work. Syntax/build pass; desktop render/shoot/cleanup test passed zero JS/console/tw-errors; phone reduced-motion render/shoot/cleanup also passed with zero errors. Test /tmp/easter-browser.cjs. Prose/terrain geometry/gameplay unchanged. No git commands; synced. Refresh preview.
+
+---
+
 # Easter Island full visual/feedback polish — 2026-10-18
 
 Sam explicitly said do all four suggested improvements (distinct movement, hit reactions, individual deaths, spirit-led ending), plus more real grass/brush/sand/stone ground. Complete; /tmp/easter-polish-todo.md.
@@ -14,6 +20,7 @@ Validation: syntax/sync pass. Desktop actual shots verified drone1/rig2/crawler3
 
 Sam: the player's body in the Climb "looks kinda lame"; of four options (respecting the no-depiction rule: never a face) he chose a hooded mountaineer seen from behind. `mountaineer()` replaces `person(false)` as `climber`; `person()` is now unused (left in place). Synced; Sam commits.
 
+- **Colour (Sam: "still feels a bit 'sensible orange'"):** the anorak is now a deep weathered oxblood (0x5a2823, yoke 0x381916); in the game's light and fog it reads as dark brick-red.
 - Hood up (no face is ever built: a dark recess tucked inside it, ringed by a fur ruff), a peak and a back seam; a long weathered anorak (lathe, hem at mid-thigh) with a darker shoulder yoke, belt, chest pockets, a snow-crusted hem and drawcord; a frame pack (slate blue) with lid, side pockets, shoulder and compression straps, a rolled mustard mat on top and an ice axe strapped across; a rope coil over the left shoulder; tapered trousers, gaiters with a strap, heavy boots and soles; tapered sleeves with elbow patches, cuffs and mitts; a dusting of snow on the hood, shoulders and pack.
 - Same limb groups and order (leg, arm per side), so the walk, the wind lean and the snow-whirl animate him unchanged. Dev hook: `window._hcDev.climber`.
 - Checked: studio renders (behind and above as the game camera sees him, three-quarter back, side, beside the yeti for scale) over two passes (the first had stacked-ball limbs again and the hood's opening poking out in profile); in play he reads clearly from behind under the game's light and fog; no console errors. **Not seen:** the walk in motion (the pane backgrounded the tab and froze the loop); his four limb groups are in place in the same order, so it should animate as before.

@@ -1,3 +1,11 @@
+# Old ones made abstract again; dramatic moonlit sea — 2026-10-18
+
+Sam rejected cartoon Casper spirits: wanted abstract, more like biblically accurate angels. Replaced ghost silhouette/paired eyes with six folded feather-like translucent veils, three intersecting wavy wheels, thirteen small eyelets and one central eye. No human head/body; cool sea-green maintained vs orange machine diamonds. Slight slow sway, static reduced-motion. Texture fitted to canvas to avoid clipping; sprite2.1x3.3, hit volumes unchanged. Existing spirit mechanics/penalties untouched.
+
+Also completed preceding sea request: stronger three-component swell, higher-resolution water grid (40x44 mobile/56x60 desktop), broken procedural foam crest shader, sharper cool specular, moon-reflection strip now subdivided and following same waves at24Hz. Reduced-motion has static sculpted waves/foam. No prose or combat rules changed. Syntax/build passed; desktop/phone render/cleanup zero JS/console/tw-errors, phone drone shot confirmed. /tmp/easter-sea-spirits-browser.cjs for closeups; /tmp/oldones-detail.png and /tmp/easter-sea.png. No git commands; synced.
+
+---
+
 # Moonlit wind-swaying vegetation — 2026-10-18
 
 Sam asked grass/brush to sway and catch moonlight. Existing batched tufts now use Phong material with cool restrained specular. Vertex shader bends tips in patch-specific two-frequency wind with slow gust envelope, roots fixed; normals bend with blades so real moonlight shifts across them, small tip brightness variation. Uses shared skyClock, freezes on pause, reduced-motion amplitude0. No extra draws or per-frame CPU mesh work. Syntax/build pass; desktop render/shoot/cleanup test passed zero JS/console/tw-errors; phone reduced-motion render/shoot/cleanup also passed with zero errors. Test /tmp/easter-browser.cjs. Prose/terrain geometry/gameplay unchanged. No git commands; synced. Refresh preview.

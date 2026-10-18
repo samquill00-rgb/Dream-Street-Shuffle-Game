@@ -2836,7 +2836,7 @@ window.dssAudio = (function() {
     'gents>venue-coach':  { url: '__DSS_TR_UP_DATA_URI__',    gain: 0.24 }
   };
   var TR_STREET = { 'hub': 1, 'outdoor': 1, 'street-night': 1 };
-  var _trBufs = {}, _trVenue = null, _trPrewarmed = false;
+  var _trBufs = {}, _trVenue = null, _trPrewarmed = false, _trCurrent = null; // _trCurrent: the clip still sounding, so a quick crossing back cuts it off (Sam, 2026-10-18)
   function _trDecode(url, cb) {
     if (_trBufs[url]) { if (cb) cb(_trBufs[url]); return; }
     var ac = getCtx(); if (!ac) return;
@@ -2858,8 +2858,13 @@ window.dssAudio = (function() {
       var g = ac2.createGain(); g.gain.value = 0; g.connect(ac2.destination);
       var src = ac2.createBufferSource(); src.buffer = buf; src.connect(g);
       var t = ac2.currentTime;
+      if (_trCurrent) {  // cut in: the previous crossing's clip gives way
+        var old = _trCurrent; _trCurrent = null;
+        try { old.g.gain.cancelScheduledValues(t); old.g.gain.setValueAtTime(old.g.gain.value, t); old.g.gain.linearRampToValueAtTime(0.0001, t + 0.12); old.src.stop(t + 0.14); } catch(e) {}
+      }
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(spec.gain, t + 0.08);
-      src.onended = function() { try { g.disconnect(); } catch(e) {} };
+      var me = { src: src, g: g }; _trCurrent = me;
+      src.onended = function() { if (_trCurrent === me) _trCurrent = null; try { g.disconnect(); } catch(e) {} };
       src.start(t);
     });
   }
@@ -2960,8 +2965,8 @@ window.dssAudio = (function() {
     dataUri: '__DSS_STREET_DATA_URI__',
     tags: { 'outdoor': 1, 'street-night': 1 },
     notTags: { 'hub': 1 },
-    volume: 0.18,
-    duckVolume: 0.06
+    volume: 0.07,     // 2026-10-18 (Sam: "most should probably be much quieter"): was 0.18, about 8 dB down; he'll play and judge
+    duckVolume: 0.025
   });
   // Retro game music — plays during canvas-based minigames (the cellar fight,
   // PP Pong, Bernard's cow ride, the Sketch the Painter napkin-draw, and the

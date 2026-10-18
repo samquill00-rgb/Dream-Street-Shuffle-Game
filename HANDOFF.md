@@ -1,3 +1,12 @@
+# Sam's calls, 2026-10-18 evening
+
+- **The street bed, much quieter:** Sam, "most should probably be much quieter. I guess I'll play and see." Volume 0.18 → 0.07 (about 8 dB down), duck 0.06 → 0.025. One number on the `street` bed if he wants it moved; a louder exception for Approach The French (where it was recorded) would need a tag on that passage.
+- **Quick double crossings cut in:** a new transition now fades the one still sounding out in 0.12 s (`_trCurrent` in the transition player). Tested silently: leave clip playing, enter fired 1.2 s later, the leave clip's stop was scheduled 0.14 s out.
+- **Carthage melody's opening 0.28 s:** a breath, ruled fine. Leave it.
+- **Still his to listen and rule on:** the 30 new effects on `sfx-board.html`; the Coach busy bar playing about 10 dB under the French (levelled to the old Coach bed); the real-to-generated balance in the chatter beds.
+
+---
+
 # The 5 ms loop dropout fixed; tonight's wiring walked for real — 2026-10-18 afternoon
 
 Sam asked for a pass of my choosing during a nap. Synced; Sam commits. Nothing new to hear: the change is a silence removed.

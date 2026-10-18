@@ -1,3 +1,15 @@
+# Easter Island full visual/feedback polish — 2026-10-18
+
+Sam explicitly said do all four suggested improvements (distinct movement, hit reactions, individual deaths, spirit-led ending), plus more real grass/brush/sand/stone ground. Complete; /tmp/easter-polish-todo.md.
+
+The Reclamation only: drones twitch/bank; rigs have animated leg stepping and slow head scan, stop to plant; crawler tracks/body have heavy alternating vibration. Damage flashes armor emissive and gives a short kick; first rig hit sputters lamp .28s then extinguishes. Individual destruction: drones spiral/fall/ground puff, rigs buckle legs/drop head, crawlers grind/settle with fading ember materials. Machine update extracted to updateMachines outside gameplay-only branch so death animation continues on final kill. Victory stops remaining live machines without changing score, dims quarry lamps/glare, gathers spirits beside near moai, settles mist; win exit now6.5s, loss still3.6s. Existing outcome prose/markup byte-identical.
+
+Ground: baked mottled moss/soil/grit texture and bump, separately recoloured warmer sandy road; 650 phone/1250 desktop batched sparse grass tussocks and180 instanced volcanic pebbles. No new collision objects or ray targets. Existing HP/hit areas/waves/speeds/ten-kill rule unchanged. Reduced-motion suppresses decorative banking/recoil/spins; damage readable via flash/dimming.
+
+Validation: syntax/sync pass. Desktop actual shots verified drone1/rig2/crawler3, first lamp goes out, all corpses removed, victory spirit gathering/exits and cleanup pass with zero JS/console/tw-errors. Phone reduced-motion repeated same full checks with zero errors. Test /tmp/easter-polish-browser.cjs now phone-only with target spacing/aim settling for reliable timing; desktop result from prior run. First test crawler reached wall during reload (fixture too close), corrected to farther range. Phone aim timing fixed in fixture, no gameplay changes. Desktop screenshot /tmp/easter-polish.png and victory /tmp/easter-victory.png inspected; phone /tmp/easter-polish-mobile.png and /tmp/easter-victory-mobile.png include final sandy-road tint. Original /tmp/easter-before-polish.twee. No git commands; synced, Sam commits.
+
+---
+
 # The climber: a hooded mountaineer — 2026-10-18 evening
 
 Sam: the player's body in the Climb "looks kinda lame"; of four options (respecting the no-depiction rule: never a face) he chose a hooded mountaineer seen from behind. `mountaineer()` replaces `person(false)` as `climber`; `person()` is now unused (left in place). Synced; Sam commits.

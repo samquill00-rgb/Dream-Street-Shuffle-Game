@@ -1,3 +1,11 @@
+# Subcomandante Fortuna and Donny Florentine's — 2026-10-18
+
+Sam named the Easter Island revolutionary **Subcomandante Fortuna**. The name is now in the Reclamation's game chrome (the cover line about him lowering the rifle, the three end banners, the build comment) and in Among the Moai, Sam's own line: ‘Call me Subcomandante Fortuna.’ His own two attributions ("the man in the balaclava says / leans in", The Listening Moai and The Glyph) are untouched, for him to rename or not.
+
+Sam asked for a barbershop on one of the alleys: **Donny Florentine's**, a door and nothing behind it. Built: a wall door on the south side of Meard Street (DOORS id `barber`, c11 r24, entered from the alley tile above, the chippy's shop bell on the way in), a `[[Donny Florentine|Donny Florentine's]]` link in the hub's alley dock, and the passage `Donny Florentine's` [street-night]: a haircut and a shave, each once a night, each `$statGain` 6 on $confidence (MORALE +6 on the note), the second still offered after the first, "nothing left to do" on a third visit. $alleyReturn keeps it off the lap count. Flags $barberCut/$barberShave in StoryInit and the Start reset list. Lines are pink. Verified live in the pane: plate, lit door and step draw on Meard Street, the step pause takes you in, morale 70 → 77 after both, respawn on the step. Synced; no git commands.
+
+---
+
 # Lifelike outward-looking glass pair — 2026-10-18
 
 Sam said coloured pair too hidden, must match recognition prose and face viewer together as wheel turns. Added dedicated glassEye renderer: shaded rounded ivory sclera, rich blue/green radial iris with44 fine fibers, round pupil, shared corneal glints/curved reflection. Pair larger1.55 perspective scale, sits adjacent on lower/front rim (angle1.35±.125, small slow drift), painted after ordinary rim eyes to retain clarity; faces camera without tangent rotation and coordinated tiny gaze. Wheel yaw now bounded slow turn (.46+sin(t*.11)*.43) to prevent rim disappearing edge-on; rest of motion preserved. No central eye, text/reveal unchanged. Syntax/build and desktop/phone reduced-motion checks pass, zero JS/tw-errors, one canvas; actual final screenshot /tmp/wheel.png visually inspected with pair unmistakable. No git commands; synced, refresh preview.

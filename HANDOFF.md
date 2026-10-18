@@ -1,3 +1,9 @@
+# Living wheel eyes and stronger mist — 2026-10-18
+
+Sam requested eerie looking-around eyes, light-catching, stronger mist swirl. Each rim eye now has independent slow gaze with lingering motion, small vertical drift and two moving catchlights; upper socket edge catches changing light. Central eye uses calmer gaze. Mist has18 banks, faster broad circulation with radial curl, stronger visibility, plus three thin foreground wisps. Existing reduced-motion rendering static; reveal/text unchanged. Syntax/build and desktop/phone reduced-motion checks pass, zero JS/tw-errors, one canvas; /tmp/wheel.png inspected. No git commands; synced, refresh preview.
+
+---
+
 # Final Wheel reveal atmosphere — 2026-10-18
 
 Sam requested final wheel scene/render atmosphere (no game). Inspected The Wheel's current depth-projected canvas reveal (not a WebGL wheel) and enhanced its existing renderer rather than adding context/dependency. Only The Wheel scripts: slow layered violet/amber cloud field, three muted light shafts, fine atmospheric filaments, rear/near depth motes. Thicker aged electrum bands with stable fine nicks, narrow moving specular highlights, continuous rear bevel and larger central eye. Preserved depth-sorted crossing,48 rim eyes,3.2s staged reveal, sound timing, SVG fallback, text and links. Reduced-motion remains still; existing observer/visibility disposal retained. First per-segment side faces produced jagged edge in visual QA; replaced with continuous bevel, and gated it by existing reveal fraction.

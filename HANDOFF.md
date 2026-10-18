@@ -1,3 +1,14 @@
+# Playtest notes key — 2026-10-18 evening
+
+For Sam's play-through. **Shift+N** anywhere opens a small note box (dev only: localhost, or `?dev=1` on the live site); Enter saves, Shift+Enter is a new line, Escape cancels. Each note is stamped with the time, the passage name and its tags, and kept in that browser's localStorage (`dssPlaytestNotes`). The box shows the count and has **Export** (a dated `.md` download, also put on the clipboard) and **Clear** (asks first). Also on the backtick debug panel. While the box is open, keys stop there, so the game never reacts.
+
+- New: a hidden `<span id="dss-pn">` at the top of the header prints `(passage:)'s name`, the house's hidden-print pattern. Scripts can now read the current passage name; `window.dssPlaytestNote()` and `window.dssPlaytestNotes.{list,exportMarkdown}` are exposed.
+- Tested in the pane: the bridge reads "Approach The French", Shift+N opens the box stamped "Approach The French · outdoor", Enter saved the note and closed the box, the game's key listeners saw nothing while it was open, Escape closes, the export text is right. No console errors. Not tested: the actual file download (the pane), and it on the live site with `?dev=1`.
+
+To hand me the notes: Export, then paste or drop the file here.
+
+---
+
 # Sam's calls, 2026-10-18 evening
 
 - **The street bed, much quieter:** Sam, "most should probably be much quieter. I guess I'll play and see." Volume 0.18 → 0.07 (about 8 dB down), duck 0.06 → 0.025. One number on the `street` bed if he wants it moved; a louder exception for Approach The French (where it was recorded) would need a tag on that passage.

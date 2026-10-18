@@ -16010,6 +16010,7 @@ function createPanel() {
   // truly clean run.
   html += '<div id="dss-dbg-tool-voices" style="padding:6px 10px;margin:2px 0;background:rgba(234,122,122,0.10);border:1px solid rgba(234,122,122,0.3);border-radius:3px;cursor:pointer;font-size:12px;color:#ea9a9a;">\u232b Forget the voices (trails and callbacks start again)</div>';
   html += '<div id="dss-dbg-tool-dreams" style="padding:6px 10px;margin:2px 0;background:rgba(234,122,122,0.10);border:1px solid rgba(234,122,122,0.3);border-radius:3px;cursor:pointer;font-size:12px;color:#ea9a9a;">\u232b Forget completed dreams (every key opens its world again)</div>';
+  html += '<div id="dss-dbg-tool-notes" style="padding:6px 10px;margin:2px 0;background:rgba(122,200,160,0.14);border:1px solid rgba(122,200,160,0.40);border-radius:3px;cursor:pointer;font-size:12px;color:#bfe8d0;">&#9998; Playtest note (Shift+N anywhere) &middot; export &middot; clear</div>';
   html += '<div id="dss-dbg-tool-pentangle" style="padding:6px 10px;margin:2px 0;background:rgba(212,176,80,0.05);border:1px solid rgba(212,176,80,0.15);border-radius:3px;cursor:pointer;font-size:11px;color:#aa9070;">(legacy small overlay — for visual debug only)</div>';
   // Controls
   html += '<div style="margin:14px 0 8px;"><strong style="color:#d4b050;">Jump to Passage</strong></div>';
@@ -16132,6 +16133,8 @@ function createPanel() {
   if (toolPent) toolPent.addEventListener('click', function() {
     if (window.dssShowPentangleOverlay) window.dssShowPentangleOverlay();
   });
+  var toolNotes = document.getElementById('dss-dbg-tool-notes');
+  if (toolNotes) toolNotes.addEventListener('click', function() { if (window.dssPlaytestNote) window.dssPlaytestNote(); });
   // Archive toggle
   var archiveGrps = panel.querySelectorAll('.dss-dbg-archive-grp');
   for (var a = 0; a < archiveGrps.length; a++) archiveGrps[a].style.display = 'none';
@@ -16184,6 +16187,96 @@ window.DSS_DEV = (function(){
 document.addEventListener('keydown', function(e) {
   if (window.DSS_DEV && e.key === '`') { e.preventDefault(); createPanel(); }
 });
+})();
+/* ====== PLAYTEST NOTES (2026-10-18, Sam: "a key that saves a note stamped with the passage you're in") ======
+   Dev only (localhost, or ?dev=1 on the live site). Shift+N anywhere opens a small box: type, Enter saves
+   (Shift+Enter for a new line), Escape cancels. Each note is stamped with the time, the passage name (read
+   from the header's hidden #dss-pn print) and its tags, and kept in this browser's localStorage under
+   'dssPlaytestNotes'. The box also lists the count and offers Export (a dated .md download, also copied to
+   the clipboard) and Clear. While the box is open, keys stop here, so the game never sees them. */
+(function() {
+  var KEY = 'dssPlaytestNotes', open = null;
+  function load() { try { return JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch(e) { return []; } }
+  function save(list) { try { localStorage.setItem(KEY, JSON.stringify(list)); return true; } catch(e) { return false; } }
+  function where() {
+    var pn = document.getElementById('dss-pn'), p = document.querySelector('tw-story > tw-passage');
+    return { passage: pn ? pn.textContent.trim() : '(unknown passage)', tags: p ? (p.getAttribute('tags') || '') : '' };
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function stamp(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function asMarkdown(list) {
+    var out = '# Dream Street Shuffle playtest notes\n\nExported ' + stamp(new Date()) + ', ' + list.length + ' note' + (list.length === 1 ? '' : 's') + '.\n\n';
+    list.forEach(function(n, i) {
+      out += (i + 1) + '. **' + n.passage + '**' + (n.tags ? ' (' + n.tags + ')' : '') + ', ' + n.time + '\n   ' + String(n.note).replace(/\n/g, '\n   ') + '\n';
+    });
+    return out;
+  }
+  function exportNotes(msg) {
+    var list = load(); if (!list.length) { msg('No notes yet.'); return; }
+    var md = asMarkdown(list), d = new Date(), name = 'dss-playtest-notes-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.md';
+    try { if (navigator.clipboard) navigator.clipboard.writeText(md).catch(function(){}); } catch(e) {}
+    try {
+      var url = URL.createObjectURL(new Blob([md], { type: 'text/markdown' })), a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+      msg('Exported ' + list.length + ' note' + (list.length === 1 ? '' : 's') + ' to ' + name + ' (also on the clipboard).');
+    } catch(e) { msg('Download failed; the notes are on the clipboard.'); }
+  }
+  function toast(text) {
+    var t = document.createElement('div'); t.textContent = text;
+    t.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:2147483001;background:#173126;color:#d8f2e2;border:1px solid #4f9a76;border-radius:6px;padding:8px 14px;font:13px/1.3 system-ui,sans-serif;pointer-events:none;opacity:1;transition:opacity .4s';
+    document.body.appendChild(t); setTimeout(function() { t.style.opacity = '0'; }, 1400); setTimeout(function() { t.remove(); }, 1900);
+  }
+  function close() { if (!open) return; window.removeEventListener('keydown', open.trap, true); open.el.remove(); open = null; }
+  function show() {
+    if (open) { open.ta.focus(); return; }
+    var w = where(), el = document.createElement('div');
+    el.id = 'dss-playtest-note';
+    el.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px';
+    el.innerHTML = '<div style="width:min(520px,100%);background:#141a17;color:#e6efe9;border:1px solid #4f9a76;border-radius:8px;padding:14px 16px;font:14px/1.45 system-ui,sans-serif;box-shadow:0 10px 40px rgba(0,0,0,.5)">' +
+      '<div style="font-size:11px;letter-spacing:.12em;color:#8fd0ad;margin-bottom:6px">PLAYTEST NOTE</div>' +
+      '<div class="pn-where" style="font-size:12px;color:#a9bdb1;margin-bottom:8px"></div>' +
+      '<textarea rows="4" style="width:100%;box-sizing:border-box;background:#0d1210;color:#f2f7f4;border:1px solid #3c6a55;border-radius:5px;padding:8px;font:14px/1.4 system-ui,sans-serif;resize:vertical"></textarea>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px">' +
+        '<button type="button" class="pn-save" style="background:#2f7a57;color:#fff;border:0;border-radius:5px;padding:7px 12px;cursor:pointer;font:13px system-ui,sans-serif">Save (Enter)</button>' +
+        '<button type="button" class="pn-cancel" style="background:transparent;color:#cfe3d7;border:1px solid #3c6a55;border-radius:5px;padding:7px 12px;cursor:pointer;font:13px system-ui,sans-serif">Cancel (Esc)</button>' +
+        '<span style="flex:1"></span>' +
+        '<span class="pn-count" style="font-size:12px;color:#a9bdb1"></span>' +
+        '<button type="button" class="pn-export" style="background:transparent;color:#8fd0ad;border:1px solid #3c6a55;border-radius:5px;padding:7px 10px;cursor:pointer;font:12px system-ui,sans-serif">Export</button>' +
+        '<button type="button" class="pn-clear" style="background:transparent;color:#e3a3a3;border:1px solid #6a3c3c;border-radius:5px;padding:7px 10px;cursor:pointer;font:12px system-ui,sans-serif">Clear</button>' +
+      '</div><div class="pn-msg" style="font-size:12px;color:#8fd0ad;margin-top:8px;min-height:1em"></div></div>';
+    el.querySelector('.pn-where').textContent = w.passage + (w.tags ? '  ·  ' + w.tags : '');
+    document.body.appendChild(el);
+    var ta = el.querySelector('textarea'), msg = function(t) { el.querySelector('.pn-msg').textContent = t; };
+    var count = function() { var n = load().length; el.querySelector('.pn-count').textContent = n + ' saved'; };
+    count();
+    function commit() {
+      var text = ta.value.trim(); if (!text) { close(); return; }
+      var list = load(); list.push({ time: stamp(new Date()), passage: w.passage, tags: w.tags, note: text });
+      if (save(list)) { close(); toast('Noted (' + list.length + ')'); } else msg('Could not save: this browser blocks local storage.');
+    }
+    var trap = function(e) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+      if (e.key === 'Enter' && !e.shiftKey && document.activeElement === ta) { e.preventDefault(); e.stopPropagation(); commit(); return; }
+      e.stopPropagation(); /* everything else stays in the box; the game never sees it */
+    };
+    window.addEventListener('keydown', trap, true);
+    el.addEventListener('mousedown', function(e) { if (e.target === el) close(); });
+    el.querySelector('.pn-save').onclick = commit;
+    el.querySelector('.pn-cancel').onclick = close;
+    el.querySelector('.pn-export').onclick = function() { exportNotes(msg); };
+    el.querySelector('.pn-clear').onclick = function() { if (!load().length) { msg('Nothing to clear.'); return; } if (confirm('Delete all ' + load().length + ' playtest notes from this browser? Export first if you want them.')) { save([]); count(); msg('Cleared.'); } };
+    open = { el: el, ta: ta, trap: trap };
+    setTimeout(function() { ta.focus(); }, 0);
+  }
+  window.dssPlaytestNote = show;
+  window.dssPlaytestNotes = { list: load, exportMarkdown: function() { return asMarkdown(load()); } };
+  document.addEventListener('keydown', function(e) {
+    if (!window.DSS_DEV || open) return;
+    if (!(e.key === 'N' && e.shiftKey) || e.ctrlKey || e.metaKey || e.altKey) return;
+    var a = document.activeElement, tag = a && a.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (a && a.isContentEditable)) return;
+    e.preventDefault(); e.stopPropagation(); show();
+  }, true);
 })();
 // ====== COIN FLIP POPUP (notebook) ======
 window.showCoinModal = function(opts) {
@@ -67981,7 +68074,8 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 
 [[Walk on|LINE 1]]
 &lt;/div&gt;</tw-passagedata>
-<tw-passagedata pid="149" name="header header" tags="header" position="700,50" size="100,100">(display: &quot;Dream Progress&quot;)\
+<tw-passagedata pid="149" name="header header" tags="header" position="700,50" size="100,100">&lt;span id=&quot;dss-pn&quot; style=&quot;display:none;&quot;&gt;(print: (passage:)&#x27;s name)&lt;/span&gt;\
+(display: &quot;Dream Progress&quot;)\
 &lt;!-- 2026-09-16: has the player been INSIDE a venue yet? Gates the dawn door on Dean Street. Old mid-night saves: treat a second hub visit as yes. --&gt;\
 (unless: $enteredVenue is a boolean)[(set: $enteredVenue to ($returns is a number and $returns &gt;= 2))]\
 (if: $enteredVenue is false and ((passage:)&#x27;s tags contains any of (a: &quot;venue-french&quot;, &quot;venue-colony&quot;, &quot;venue-ronnies&quot;, &quot;venue-coach&quot;, &quot;venue-gents&quot;, &quot;venue-trishas&quot;, &quot;venue-lackland&quot;, &quot;venue-lackland-back&quot;, &quot;venue-cecilcourt&quot;, &quot;venue-pillars&quot;, &quot;venue-cellar&quot;) or (a: &quot;Chinese Fish and Chips&quot;, &quot;At the Corner of Dean Street and Greek Street&quot;, &quot;Maltese Gangsters&quot;) contains (passage:)&#x27;s name))[(set: $enteredVenue to true)]\

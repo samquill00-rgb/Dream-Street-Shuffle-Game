@@ -1,3 +1,124 @@
+# Floor mixes wired, the gents kept pure — 2026-10-18
+
+Sam's rule: **when the real sounds matter and are more than background, keep them as they were; otherwise the floor mix.** So:
+- Wired now: `the-french-pub-layered-floor.m4a`, `indoor-busy-bar-floor.m4a`, `indoor-warm-pub-floor.m4a`, `indoor-quiet-lounge-floor.m4a`, `indoor-colony-room-floor.m4a` (real material 3 dB under the September generated bed, `FLOOR_DB = 3.0`). Plain layered versions stay in `french-live-originals/layered/`.
+- The gents stays `the-gents-french-layered.m4a`, real only (its floor variant made the cistern hum dominate).
+- The transitions are untouched: real, and they matter.
+Synced; decode-checked in the pane; the listening page's "In the game now" tags moved to match. Not heard in-game. Sam commits.
+
+---
+
+# "+ September floor" variants — 2026-10-18
+
+Sam's idea: use the September generated beds too, so the real noise "sits on top of and brings that to life". Built as variants, **not wired**: `french-live-originals/layered-with-floor/` holds each of the six layered beds with its generated predecessor tiled underneath (`E.file_layer`, equal-power tiling so the generated loop's own seam never shows), `python3 recipes.py --floor`. At -8 dB the floor was inaudible under the chatter (scores identical), so the variants went to -3 dB, then Sam asked for the real material "a little more quiet": then again: now **+3 dB**, the generated bed 3 dB over the real material (`FLOOR_DB`). The chatter beds barely change by measure; the **gents** changes a lot, because the real gents is a very quiet room and the generated gents is a steady cistern hum, which now dominates (centroid 125 Hz, self-similarity 0.83). Both versions of each are on `listen.html` ("+ September floor" rows). Sam decides by ear; wiring any one is a copy to the root and a tuple swap.
+
+---
+
+# Transitions: in, out, and the stairs — 2026-10-18
+
+Sam: "I really love the bits where I move up or down the stairs or enter (or maybe leave) the bar. Can we use those too?" Done; synced; Sam commits. Not heard in-game by anyone.
+
+**Clips** (`french-live-originals/tools/cut_transitions.sh`, from the polished mono sources; stereo spread then levelled to -30 LUFS; root + `french-live-originals/transitions/`):
+- `french-enter-bar.m4a` (9.0 s): **composed** after Sam heard the continuous take as "much less clear" than the way out: the pavement (rec144 77–80) → the door into the gents at 20.04 s of the walk → the bar at its loudest (rec143 29–34.5). Only the stairs are single continuous recordings now.
+- `french-leave-bar.m4a` (11.4 s): **composed**, not one recording: the bar (rec143 71–75) → the gents door closing (rec145 65.6–67.0) → the pavement (rec144 10–17). 
+- `french-stairs-down.m4a` (11.0 s): rec145 7–18, out of the bar and down (footfalls at 9 and 14–16).
+- `french-stairs-up.m4a` (12.5 s): rec145 91–103.5, up and into the bar.
+
+**Engine** (UserScript, just above `updateAmbientBedsForPassage`): a `TRANSITIONS` table keyed `<venue left>><venue entered>`, 'out' meaning a passage tagged hub, outdoor or street-night. `_transitionForPassage` runs first inside `updateAmbientBedsForPassage`, so it fires once per new passage on the same hook as the beds. A passage with neither a venue tag nor a street tag (phone calls, the dual ring) leaves the state alone, so a call taken in the French is not a walk out and back. Nothing plays on the first passage after a load. Exported as `dssAudio.playTransition(key)`; `window.dssLastTransition` holds the last key asked for (muted or not) for tests. Decoded once each, prewarmed on the first venue.
+
+| Key | Clip | Gain |
+|---|---|---|
+| out>venue-french | enter | 0.28 |
+| venue-french>out | leave | 0.26 |
+| out>venue-trishas, venue-colony>out | stairs down | 0.26 |
+| venue-trishas>out, out>venue-colony | stairs up | 0.26 |
+| gents>venue-coach (fired by the SpewPopup as it hands the gents to the bar) | stairs up | 0.24 |
+
+Trisha's is a basement and the Colony is up a flight, so the stairs are the real Soho. The Coach has no street transition (you arrive by the drains).
+
+**Tested in the pane** (muted): the four files decode; no console errors; fourteen fake passage steps through `updateAmbientBedsForPassage` fire exactly the expected keys (hub → French → untagged → French → outdoor → Colony → hub → Trisha's → street-night → Coach lock → Coach bar); the SpewPopup key resolves. **Not tested:** a real walk through the passages, and the level of a clip against its bed (0.26 is about 3 dB over the beds at -30 LUFS).
+
+---
+
+# The four interiors wired — 2026-10-18
+
+Sam: "render the new ones where appropriate." The four French-derived interiors now replace the generated beds at the venues they were aimed at; the generated files stay on disk, so each is one tuple in `AUDIO_EMBEDS` to put back. Synced; Sam commits. Not heard in-game by anyone.
+
+| Bed label | Venue tag | Now | Was |
+|---|---|---|---|
+| coach-bar | venue-coach | indoor-busy-bar.m4a | the-coach-night-ambience.m4a |
+| pub-pillars | venue-pillars | indoor-warm-pub.m4a | the-pillars-pub-ambience.m4a |
+| trishas | venue-trishas | indoor-quiet-lounge.m4a | the-trishas-ambience.m4a |
+| colony | venue-colony | indoor-colony-room.m4a | the-colony-ambience.m4a |
+
+Each bed's `registerAmbientBed` carries a dated note; the capture list's drop-in table is updated. Decode checked in the pane (exact length, stereo, no trailing zeros, registry URLs right). Still banked: the outside loop and the stairs (no home). Still generated: Green Sea, cellar, Soho dawn, Carthage, the five worlds.
+
+Sam's rulings this evening: the licensed originals are free to use but not to profit from; `licensed-originals/` stays in the repo (so on the public site) until his own replacements are done, then goes.
+
+---
+
+# The French, layered — overnight 2026-10-17 (05:42–05:55)
+
+Sam's night task: layer the French clips into smooth looped textures, and (added at 05:45) "how different bits of each might be layered to make say 3 different 'indoor' soundscapes". My brief: `HANDOFF-french-layering-brief.md`. Synced; Sam commits. Nothing heard by anyone: every judgement below is by measurement.
+
+**Listen first:** `french-live-originals/listen.html`, served by the dss-game preview (`http://localhost:8732/french-live-originals/listen.html`). Every version of every bed (raw, plain, polished, layered, and the generated bed it replaced or would replace), looped as the game loops them, "Hear the seam" starts 4 s before the wrap, loudness-matched by default.
+
+**Wired now:** `the-french-pub-layered.m4a` (venue-french) and `the-gents-french-layered.m4a` (venue-gents), tuples swapped in `AUDIO_EMBEDS`, bed comments and the capture list updated. To go back, point the two tuples at `french-live-originals/polished/the-french-pub-live.m4a` / `the-gents-french-live.m4a` (copy to root first) or the generated `the-french-pub-ambience.mp3` / `the-gents-coach-toilet.mp3`.
+
+**How they're built** (`french-live-originals/tools/`; `make_clean.sh` then `python3 recipes.py [name]`, system python has numpy/scipy; rebuild checked identical to -80 dB):
+- Each bed is a ring of N samples (a multiple of 1024): every layer wraps round it, so there is no loop seam at all; joins are equal-power crossfades inside layers.
+- **French bar (92 s):** rec143 split in two, plus the other two bar stretches tone-matched to it (they were 6–15 dB darker up top), crossfaded in turn with slight pan drift; a granular wash, different on each side; a slow level rider (±3 dB); a touch of room.
+- **Gents (64 s):** only event-free room tone as the bed, a different shuffle each side, reused stretches at ±2% speed; ten small room sounds placed once per lap; the two door bangs (30 dB over the room) left out.
+- **Outside (80 s):** quiet stretches cut into 8 s pieces, shuffled differently each side; the passing sounds placed once per lap. Banked.
+- **Four interiors (banked, each the French standing in for another room):** Colony room, added in the morning at Sam's ask so Trisha's and the Colony get one each (88 s, -33 LUFS: the crowd close, a second crowd 2% higher across the room, the bar's laughs and louder glasses placed often, +2 dB above 2.5 kHz, a 0.35 s bright room; scores clean, the brightest and most talk-shaped of the four, 14 dB brighter above 4 kHz than the lounge, which now aims at Trisha's alone); busy bar (three crowds at different tape speeds, scattered clinks, bigger room; aimed at the Coach bar, levelled to its -40 LUFS), warm wood-panelled pub (two crowds, soft top, short dark room; the Pillars, -29.4), quiet members' lounge (wordless grain murmur, a next-room layer, sparse soft clinks; Trisha's/Colony, -36.5).
+
+**Scores** (`tools/score.py`; natural material: repeat ≈0.22–0.36, seam ≤ p95):
+
+| Bed | Lap | Seam | 3 s spread | Repeat | L/R corr |
+|---|---|---|---|---|---|
+| French bar, polished single take | 75 s | ok | 4.6 dB | once a lap | 0.86 |
+| French bar, layered | 92 s | ok | 2.4 dB | 0.31 | 0.63 |
+| Gents, layered | 64 s | ok | 1.9 dB | 0.43 | 0.12 |
+| Outside, layered | 80 s | ok | 2.4 dB | 0.43 | 0.11 |
+| Busy bar | 92 s | ok | 1.7 dB | 0.34 | 0.36 |
+| Warm pub | 92 s | ok | 2.4 dB | 0.31 | 0.21 |
+| Quiet lounge | 90 s | ok | 1.6 dB | 0.39 | 0.06 |
+
+All: no clicks; decode in the pane at exact length, no trailing zeros. Character: busy is brightest, warm about 10 dB softer above 4 kHz, lounge about 14 dB softer and least speech-modulated.
+
+**Risks only an ear can rule on:** granular washes can sound chorused or "underwater"; tape-speed layers can sound like the same crowd doubled; the lounge's next-room layer may read as muffled rather than intimate. Each is a gain or a line in `recipes.py`.
+
+**Found:** the generated .m4a beds still in the game (Coach, Pillars, Trisha's, Colony and others from `tools_make_beds.py`) each decode with 260 trailing zero samples (about 5 ms), a tiny dropout every lap. Not touched.
+
+**Fixed along the way (engine):** a body fill that tiled a short piece without a crossfade (visible seam), whole-ring filters that weren't circular (edge artefacts at the wrap), and reused pieces repeating their heads across the wrap.
+
+---
+
+# The French recorded — Sam's own beds, 2026-10-17
+
+Sam recorded the French on his phone: three Voice Memos (the bar; outside; stairs down, the gents, stairs up). Raw files kept with descriptive names in `french-live-originals/`. Synced; Sam commits.
+
+**Wired**
+- `pub-french` bed → `the-french-pub-live.m4a`: the whole 78 s bar recording, 70 Hz high-pass, 3 s equal-power loop crossfade (75.2 s), levelled to the old bed's -30.2 LUFS. Tuple swapped in `AUDIO_EMBEDS`; the generated `the-french-pub-ambience.mp3` stays on disk.
+- `toilet-gents` bed (the Coach's cubicle) → `the-gents-french-live.m4a`: the quiet stretch of the walk (rec145 20–67 s) standing in for the Coach's gents; 44.032 s, -33.3 LUFS. Generated `the-gents-coach-toilet.mp3` stays on disk.
+- A dated comment on each `registerAmbientBed`; `FIELD-RECORDING-CAPTURE-LIST.md` ticked and its drop-in table updated.
+
+**Polished (Sam asked, same session):** the wired beds and the banked cuts are now the polished renders; the untreated cuts are in `french-live-originals/plain/` for A/B, the earlier "bright" variant removed. Chain (`french-live-originals/polish.sh`, ffmpeg): high-pass 80–100 Hz; the bar's 100 Hz mains hum notched (was +27 dB above its neighbours, now 16 dB below); low-mid "pocket" cuts at 130–250 Hz; mild FFT noise reduction (8–10 dB); presence lift +4 at 2 kHz, +6 at 4 kHz, +10 shelf from 5 kHz, measured against the licensed French original (bar now within ±4 dB of it up to 4 kHz, 7–15 dB under above 5 kHz, as far as a 68 kbps phone source will go); a mid/side spread with the side made from all-passed copies (L/R correlation 0.86, mono sum exactly the original); limiter at -1.5 dB; same loudness targets. Not pushed: the gents' top end (quiet room, the reference is a different recording) and the bar's tonal cluster at 170–210 Hz (a motor or the room, left in).
+
+**Banked in `french-live-originals/`, not wired**
+- `the-french-outside-live.m4a`: the pavement crowd (rec144 4–79 s), 72 s loop at -31 LUFS. No outdoor bed exists; a home would be `Approach The French` or the `outdoor` tag.
+- `the-french-stairs-down-live.m4a` (19.5 s) and `the-french-stairs-up-live.m4a` (12.5 s): faded one-shots; nothing in the game climbs stairs yet.
+
+**Verified:** both files fetched and decoded in the pane at exact length (75.2 s and 44.032 s, mono 48 kHz, no trailing zeros), registry URLs correct, no sync warnings. **Not verified:** heard in-game on the French / Coach passages. Beds are stereo via the mid/side spread.
+
+**Gotchas**
+- Chrome's `decodeAudioData` keeps AAC end-padding: make a loop's length a multiple of 1024 samples at 48 kHz or the seam gets a sliver of silence. (The generated 72 s beds at 44.1 kHz aren't aligned either; nobody has noticed at bed volume.)
+- Voice Memos exports are mono 48 kHz AAC at about 68 kbps; `aac_at` re-encode at 128k as for the generated beds.
+- Build scripts in this session's scratchpad: `profile.py` (per-second level/band map), `build_beds.sh`, `build_gents.sh`.
+- The Pillars (shut) wants "another old wood-panelled Soho pub" per the capture list; the French is that, but all 78 s of bar are already the French bed.
+
+---
+
 # The pitch question, the map's doors, one person a visit — 2026-10-17 (session 2)
 
 All synced; Sam commits. Tested in the pane and headless (Chrome for Testing, Metal flags, the 16 Oct pwvenv; scripts in this session's scratchpad: doortest.py, test2–4.py). No page errors.

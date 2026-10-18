@@ -11834,7 +11834,67 @@ window.dssAudio = (function() {
       arm();
     });
   }
+  // ----- Transition one-shots (2026-10-18) ---------------------------------
+  // Sam's French recordings of walking in, walking out, and taking the stairs,
+  // played once as the player crosses between the street and a venue. Keyed
+  // on the venue tag left and entered ('out' = a passage tagged hub, outdoor
+  // or street-night). Trisha's is a basement and the Colony is up a flight, so
+  // each gets the stairs; the Coach's gents hand off to its bar inside one
+  // passage, so the SpewPopup fires that one itself ('gents>venue-coach').
+  // Passages with neither a venue tag nor a street tag (phone calls, system
+  // routing) leave the state alone, so a call taken inside the French is not
+  // a walk out and back. Nothing plays on the first passage of a page load.
+  var TRANSITIONS = {
+    'out>venue-french':   { url: 'french-enter-bar.m4a', gain: 0.28 },
+    'venue-french>out':   { url: 'french-leave-bar.m4a', gain: 0.26 },
+    'out>venue-trishas':  { url: 'french-stairs-down.m4a',  gain: 0.26 },
+    'venue-trishas>out':  { url: 'french-stairs-up.m4a',    gain: 0.26 },
+    'out>venue-colony':   { url: 'french-stairs-up.m4a',    gain: 0.26 },
+    'venue-colony>out':   { url: 'french-stairs-down.m4a',  gain: 0.26 },
+    'gents>venue-coach':  { url: 'french-stairs-up.m4a',    gain: 0.24 }
+  };
+  var TR_STREET = { 'hub': 1, 'outdoor': 1, 'street-night': 1 };
+  var _trBufs = {}, _trVenue = null, _trPrewarmed = false;
+  function _trDecode(url, cb) {
+    if (_trBufs[url]) { if (cb) cb(_trBufs[url]); return; }
+    var ac = getCtx(); if (!ac) return;
+    try {
+      fetch(url).then(function(r) { return r.arrayBuffer(); })
+        .then(function(ab) { return ac.decodeAudioData(ab); })
+        .then(function(buf) { _trBufs[url] = buf; if (cb) cb(buf); })
+        .catch(function(err) { if (window.console) console.error('[dssAudio] transition decode failed:', url, err); });
+    } catch(e) {}
+  }
+  function playTransition(key) {
+    var spec = TRANSITIONS[key]; if (!spec) return;
+    window.dssLastTransition = key; // debug/test marker: the last transition asked for, muted or not
+    if (_muted) return;
+    var ac = getCtx(); if (!ac) return;
+    if (ac.state === 'suspended') { try { ac.resume(); } catch(e) {} }
+    _trDecode(spec.url, function(buf) {
+      var ac2 = getCtx(); if (!ac2) return;
+      var g = ac2.createGain(); g.gain.value = 0; g.connect(ac2.destination);
+      var src = ac2.createBufferSource(); src.buffer = buf; src.connect(g);
+      var t = ac2.currentTime;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(spec.gain, t + 0.08);
+      src.onended = function() { try { g.disconnect(); } catch(e) {} };
+      src.start(t);
+    });
+  }
+  function _transitionForPassage(passageNode) {
+    if (!passageNode) return;
+    var tags = (passageNode.getAttribute('tags') || '').split(/\s+/).filter(Boolean);
+    var venue = null, street = false;
+    for (var i = 0; i < tags.length; i++) {
+      if (!venue && tags[i].indexOf('venue-') === 0) venue = tags[i];
+      if (TR_STREET[tags[i]]) street = true;
+    }
+    if (venue) { if (_trVenue === 'out') playTransition('out>' + venue); _trVenue = venue; }
+    else if (street) { if (_trVenue && _trVenue !== 'out') playTransition(_trVenue + '>out'); _trVenue = 'out'; }
+    if (!_trPrewarmed && _trVenue) { _trPrewarmed = true; for (var k in TRANSITIONS) _trDecode(TRANSITIONS[k].url); }
+  }
   function updateAmbientBedsForPassage(passageNode) {
+    try { _transitionForPassage(passageNode); } catch(e) {}
     for (var i = 0; i < _ambientBeds.length; i++) {
       var bed = _ambientBeds[i];
       if (_bedShouldPlay(bed, passageNode)) _startBed(bed);
@@ -11855,9 +11915,10 @@ window.dssAudio = (function() {
   }
   // ----- Registered beds ---------------------------------------------------
   // The French — pub field recording, plays on every venue-french passage.
+  // 2026-10-17: the file is now Sam's own recordings made inside the French, layered into a seamless loop (the-french-pub-layered.m4a; raw and tools in french-live-originals/), levelled to the old bed's loudness.
   registerAmbientBed({
     label: 'pub-french',
-    dataUri: 'the-french-pub-ambience.mp3',
+    dataUri: 'the-french-pub-layered-floor.m4a',
     tags: { 'venue-french': 1 },
     volume: 0.16,
     duckVolume: 0.05
@@ -11865,8 +11926,8 @@ window.dssAudio = (function() {
   // The Pillars of Hercules — London-pub field recording, plays on every
   // venue-pillars passage (the in-pub interior scenes).
   registerAmbientBed({
-    label: 'pub-pillars',
-    dataUri: 'the-pillars-pub-ambience.m4a',
+    label: 'pub-pillars', /* 2026-10-18: the file is Sam's French recordings layered as a warm panelled pub (indoor-warm-pub.m4a) */
+    dataUri: 'indoor-warm-pub-floor.m4a',
     tags: { 'venue-pillars': 1 },
     volume: 0.20,
     duckVolume: 0.07
@@ -11898,12 +11959,13 @@ window.dssAudio = (function() {
     duckVolume: 0.10
   });
   // Coach and Horses Gents toilet — auto-starts on the Coach passage (which
+  // 2026-10-17: the file is now Sam's own recording made in the French's gents, layered into a seamless loop (the-gents-french-layered.m4a), levelled to the old bed's loudness.
   // opens with "you've come-to in a cubicle"), then is manually stopped by
   // the SpewPopup's _fadeOut so the toilet rumble doesn't bleed into the bar
   // prose that appears in-place after the popup closes.
   registerAmbientBed({
     label: 'toilet-gents',
-    dataUri: 'the-gents-coach-toilet.mp3',
+    dataUri: 'the-gents-french-layered.m4a',
     tags: { 'venue-gents': 1 },
     volume: 0.22,
     duckVolume: 0.08
@@ -11973,15 +12035,15 @@ window.dssAudio = (function() {
   // is a small bright members' room (murmur, ice, a cackle, lighter clicks);
   // Trisha's is a basement (electrics hum, few voices, footsteps overhead).
   registerAmbientBed({
-    label: 'colony',
-    dataUri: 'the-colony-ambience.m4a',
+    label: 'colony', /* 2026-10-18: the file is Sam's French recordings layered as a small packed room (indoor-colony-room.m4a) */
+    dataUri: 'indoor-colony-room-floor.m4a',
     tags: { 'venue-colony': 1 },
     volume: 0.20,
     duckVolume: 0.07
   });
   registerAmbientBed({
-    label: 'trishas',
-    dataUri: 'the-trishas-ambience.m4a',
+    label: 'trishas', /* 2026-10-18: the file is Sam's French recordings layered as a quiet lounge (indoor-quiet-lounge.m4a) */
+    dataUri: 'indoor-quiet-lounge-floor.m4a',
     tags: { 'venue-trishas': 1 },
     volume: 0.20,
     duckVolume: 0.07
@@ -12107,8 +12169,8 @@ window.dssAudio = (function() {
   // cubicle intro still opens on the gents bed alone; the SpewPopup hand-start
   // below is unchanged and the tag keeps the bed running into the bar passage.
   registerAmbientBed({
-    label: 'coach-bar',
-    dataUri: 'the-coach-night-ambience.m4a',
+    label: 'coach-bar', /* 2026-10-18: the file is Sam's French recordings layered as a busy bar (indoor-busy-bar.m4a) */
+    dataUri: 'indoor-busy-bar-floor.m4a',
     tags: { 'venue-coach': 1 },
     notTags: { 'venue-gents': 1 },
     volume: 0.20,
@@ -13241,7 +13303,8 @@ window.dssAudio = (function() {
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
     mapFootstep: mapFootstep, mapCab: mapCab, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
     startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel,
-    prewarmBed: prewarmBedByLabel
+    prewarmBed: prewarmBedByLabel,
+    playTransition: playTransition
   };
 })();
 // ====== MUTE BUTTON (bottom-right corner) ======
@@ -22599,6 +22662,7 @@ _fadeOut() {
   // the coach-bar bed when the player navigates out of the passage.
   if (window.dssAudio && window.dssAudio.stopBed) {
     try { window.dssAudio.stopBed('toilet-gents'); } catch(e) {}
+    if (window.dssAudio.playTransition) { try { window.dssAudio.playTransition('gents>venue-coach'); } catch(e) {} } // 2026-10-18: up the stairs to the bar
   }
   if (window.dssAudio && window.dssAudio.startBed) {
     try { window.dssAudio.startBed('coach-bar'); } catch(e) {}

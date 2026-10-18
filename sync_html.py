@@ -39,19 +39,19 @@ html_path = os.path.join(_here, "Dream Street Shuffle.html")
 AUDIO_MODE = "link"
 AUDIO_EMBEDS = [
     ("__DSS_MUSIC_DATA_URI__",       "Dream Street Shuffle experiment theme loop.m4a", "audio/mp4"),
-    ("__DSS_PUB_DATA_URI__",         "the-french-pub-ambience.mp3",                    "audio/mpeg"),
-    ("__DSS_PILLARS_DATA_URI__",     "the-pillars-pub-ambience.m4a",                   "audio/mp4"),
+    ("__DSS_PUB_DATA_URI__",         "the-french-pub-layered-floor.m4a",                     "audio/mp4"),   # 2026-10-17: Sam's own French bar recordings, layered into a seamless 92 s loop (french-live-originals/; polished single-take in polished/, generated bed the-french-pub-ambience.mp3)
+    ("__DSS_PILLARS_DATA_URI__",     "indoor-warm-pub-floor.m4a",                            "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a warm panelled pub over the generated bed (french-live-originals/layered-with-floor/); generated the-pillars-pub-ambience.m4a stays on disk
     ("__DSS_PIANO_DATA_URI__",       "piano-eoin-roe.mp3",                             "audio/mpeg"),
-    ("__DSS_GENTS_DATA_URI__",       "the-gents-coach-toilet.mp3",                     "audio/mpeg"),
-    ("__DSS_COACH_NIGHT_DATA_URI__", "the-coach-night-ambience.m4a",                   "audio/mp4"),
+    ("__DSS_GENTS_DATA_URI__",       "the-gents-french-layered.m4a",                   "audio/mp4"),   # 2026-10-17: Sam's recording of the French's gents, layered into a seamless 64 s loop (polished single-take in french-live-originals/polished/, generated bed the-gents-coach-toilet.mp3)
+    ("__DSS_COACH_NIGHT_DATA_URI__", "indoor-busy-bar-floor.m4a",                            "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a busy bar; generated the-coach-night-ambience.m4a stays on disk
     ("__DSS_SOHO_DAWN_DATA_URI__",   "the-soho-dawn-ambience.m4a",                     "audio/mp4"),
     ("__DSS_GREEN_SEA_DATA_URI__",   "the-green-sea-cafe-ambience.m4a",                "audio/mp4"),
     ("__DSS_CARTHAGE_DATA_URI__",    "the-carthage-cicadas-ambience.m4a",              "audio/mp4"),
     ("__DSS_CARTHAGE_MELODY_DATA_URI__", "carthage-melody.m4a",                            "audio/mp4"),
     ("__DSS_DIDOS_LAMENT_DATA_URI__", "didos-lament.m4a",                               "audio/mp4"),
     ("__DSS_CELLAR_DATA_URI__",      "the-cellar-pump-ambience.m4a",                   "audio/mp4"),
-    ("__DSS_COLONY_DATA_URI__",      "the-colony-ambience.m4a",                        "audio/mp4"),
-    ("__DSS_TRISHAS_DATA_URI__",     "the-trishas-ambience.m4a",                       "audio/mp4"),
+    ("__DSS_COLONY_DATA_URI__",      "indoor-colony-room-floor.m4a",                         "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a small packed room; generated the-colony-ambience.m4a stays on disk
+    ("__DSS_TRISHAS_DATA_URI__",     "indoor-quiet-lounge-floor.m4a",                        "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a quiet lounge; generated the-trishas-ambience.m4a stays on disk
     ("__DSS_HIMALAYA_DATA_URI__",    "the-himalaya-ambience.m4a",                      "audio/mp4"),
     ("__DSS_NAZCA_DATA_URI__",       "the-nazca-ambience.m4a",                         "audio/mp4"),
     ("__DSS_EASTER_DATA_URI__",      "the-easter-island-ambience.m4a",                 "audio/mp4"),
@@ -66,6 +66,11 @@ AUDIO_EMBEDS = [
     ("__DSS_INTERVAL_RADIO_DATA_URI__", "the-interval-radio.m4a",                       "audio/mp4"),
     ("__DSS_LACKLAND_DATA_URI__",    "lacklands-office-music.m4a",                     "audio/mp4"),
     ("__DSS_DOORWAY_STREAM_DATA_URI__", "the-doorway-stream.mp3",                       "audio/mpeg"),
+    # 2026-10-18: Sam's French transition clips (french-live-originals/tools/cut_transitions.sh), played once between street and venue
+    ("__DSS_TR_ENTER_DATA_URI__",    "french-enter-bar.m4a",                           "audio/mp4"),
+    ("__DSS_TR_LEAVE_DATA_URI__",    "french-leave-bar.m4a",                           "audio/mp4"),
+    ("__DSS_TR_DOWN_DATA_URI__",     "french-stairs-down.m4a",                         "audio/mp4"),
+    ("__DSS_TR_UP_DATA_URI__",       "french-stairs-up.m4a",                           "audio/mp4"),
 ]
 
 # ============================================================

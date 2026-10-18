@@ -1,3 +1,25 @@
+# Ancient weathered gate stones — 2026-10-18
+
+Sam asked for rougher, more ancient gate. All start stones and lintel now use irregular worn/chipped rounded edges, pitted mottling, branching cracks, joint staining and bump detail. Existing course spacing and material colour variations retained. Other arches/prose/handling unchanged. Syntax/build and browser checks passed, zero JS/console/tw-errors, active gate screenshot /tmp/nazca-orange-sky.png inspected. No git commands; synced. Refresh existing preview.
+
+---
+
+# The dream games' running chrome — 2026-10-18 evening
+
+Sam, of the bar under the NAZCAR race: it "still feels very 'claude' and unfinished" (a tracked-caps status line, three outlined buttons, a help paragraph repeating the rules card). The Climb, the Reclamation and the Pyramid Run had the same status line and the same dark buttons, so one shared treatment for all four, in the rules cards' language (a CSS block after the race's rules, headed "the dream games' running chrome"):
+- **Status line** (`#nazca-race-hud`, `#hc-hud`, `#rc-hud`, `#pyr-run-hud`): a strip of the slip's paper under the frame, Courier, slightly tilted; hidden when empty. The live text is unchanged.
+- **Buttons**: toolbar buttons, the control pads and the race's touch keys are typed keys (cream paper, Courier, dark ink; held or pressed = inked). Toolbar labels typed in Courier.
+- **The race** now has a toolbar above its frame like the other three ("NAZCA · THE RACE", my label, with Pause · P / Item · Space / Expand moved into it; label hidden under 480 px). Its help paragraph shows only while paused, as a slip over the track (`nz-paused` toggled in `setPaused`); the rules card carries it before the race.
+- Tested in the pane: race toolbar above the frame, status tape below, help slip on pause and gone on resume, styles applied in the Climb (tape, toolbar keys, pad keys). **Phone width (375×812, touch) checked in play for all four:** rules card fits, no sideways overflow anywhere, status tape wraps to two or three lines, touch keys and pads typed; the Climb's "↓ Chant" wrapped, so pad lettering on phones is 12px, single line. The Reclamation and the Pyramid Run were also played at phone width (not at laptop width).
+
+---
+
+# Stone start-gate lintel — 2026-10-18
+
+Sam requested a huge matching stone slab for the beam. Start crossbeam now uses gateStoneMats[2], 9 units tall/16 deep, broad overhang, underside at45 resting atop stacked blocks. Other arches unchanged; banner/lights preserved. Syntax/build and browser check pass, zero errors; screenshot /tmp/nazca-orange-sky.png. No git commands; synced.
+
+---
+
 # Start gate: stacked huge stones — 2026-10-18
 
 Sam wanted start pillars made from huge stacked stones, still too Greco-Roman after square posts. Replaced each start post with five broad rough box stones, .5-unit visible joints, subtly irregular corners/rotation/alignment and mottled stone materials; removed start bases/capitals. Timber crossbeam/banner/lights and other arches retained. Browser render checked, no JS/console/tw-errors; stone stack screenshot inspected. First inspection showed texture grain banding; replaced lattice coordinates with hashed scatter then resynced. Gameplay and prose untouched; no git commands. Synced.

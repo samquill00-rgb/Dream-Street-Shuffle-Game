@@ -71,6 +71,7 @@ AUDIO_EMBEDS = [
     ("__DSS_TR_LEAVE_DATA_URI__",    "french-leave-bar.m4a",                           "audio/mp4"),
     ("__DSS_TR_DOWN_DATA_URI__",     "french-stairs-down.m4a",                         "audio/mp4"),
     ("__DSS_TR_UP_DATA_URI__",       "french-stairs-up.m4a",                           "audio/mp4"),
+    ("__DSS_STREET_DATA_URI__",      "the-street-layered-floor.m4a",                   "audio/mp4"),   # 2026-10-18 night: the street outside any venue (outdoor + street-night passages), Sam's outside-the-French recording under the generated late-night street
 ]
 
 # ============================================================

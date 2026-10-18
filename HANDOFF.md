@@ -1,3 +1,37 @@
+# Sound effects night — 2026-10-18, 03:01 to about 03:20
+
+Sam's night task: two hours on sound effects, as many as possible to good quality, iteratively. My brief: `HANDOFF-sfx-night-brief.md`. The brief's whole list is built, synced and tested silently in the pane; nothing has been heard by anyone. Sam commits.
+
+**Listen first:** `french-live-originals/sfx-board.html` (dss-game preview, `http://localhost:8732/french-live-originals/sfx-board.html`): every cue in the game on a button, 104 of them, played by the game's own engine in a hidden frame; green buttons are tonight's. The game's mute setting is left as it was. The beds page links to it.
+
+**Built**
+1. **The street bed** (`street`, tags outdoor + street-night, not hub): `the-street-layered-floor.m4a`, the outside-the-French recording 3 dB under the generated late-night street, 80 s ring loop at -36 LUFS. Dean Street keeps its theme alone. 64 passages that were silent now have a bed; that includes the burning hut's, under the fire.
+2. **Room ticks** (`TAG_TICKS`, which had only the cellar's drip): Lackland (vinyl run-out crackle), Cecil Court (a far shop bell, flagstone footsteps), Ronnie's (a glass set down, a chair), the Himalayas (gust, rarely the far bell), Nazca (dry gust, gravel), Easter Island (surf, a far gull), the Pyramid (sand slipping), Ezekiel (the wheel's groan), Carthage (quiet surf), the Green Sea (crockery). Every 7 to 32 s, each picks between two sounds, all randomised in pitch, level and timing.
+3. **Close-ups in every 3D room** (`spotSound`, called from the kit's pointerdown with the hotspot's name): telephone (handset lifted, the line's hum), jukebox (carriage knocks, relay buzz), bulb (glass ping, filament buzz), globe (a spin on its bearing), ladder and chesterfield (wood creak), counter and table (two knocks), range (gas hiss), plate and dish (crockery), stairs (flagstones); glass, optics and the glass case (existing clink), paper things (existing rustle), door (existing creak), bell, window, turntable, cow (existing). People and ways out stay silent.
+4. **The platformers:** Pyramid Run and the Climb get a take-off puff and a landing thud scaled to fall speed; the Climb's gust warning now sounds the wind. None of these duck the game music.
+5. **Pocket keys:** the lighter clicks open and strikes, the glass eye knocks and settles; the ticket, slip and wrap keep the paper rustle (`keyPickup(kid)` in the WITHIN REACH take).
+7. **The beer mat game** (Trisha's): the flick off the edge, the catch in the palm, the mat on the floor, on the game's three phase changes.
+6. **Fire:** `fireCrackle(host)`, a low roar with random pops, runs while the hut burns (started with the scene, stopped in its dispose) and in the Coach fire room (stops by itself when the room leaves the page). Follows the mute switch.
+
+**Engine changes:** `_tick(fn)` plays a cue without ducking music or beds (`_noBedDuckNext`); ticks, close-ups and game cues use it. Twenty-seven cues and `spotSound`, `keyPickup`, `fireCrackle`, `_tick` are exported.
+
+**Tested in the pane, silently** (the frame's audio graph tapped before a zero gain, levels read off an analyser): the engine loads with no console errors after every edit; every new cue produces signal at a sensible peak (ticks 0.01–0.05, close-ups 0.03–0.15 next to the existing clink at 0.13 and bell at 0.22); the name map resolves sixteen hotspot names and leaves COPPER silent; the fire stops on command and when its host is removed; the game's stored mute never changed.
+
+**Gotchas found tonight**
+- A GainNode's gain is 1 until the first `setValueAtTime`: start the oscillator and set the gain at the same `now`, or the first few milliseconds play at full scale (the glass and the bulb both clipped this way before the fix).
+- `paperRustle` is an export alias, not a function in the engine's scope: inside the engine use `pageRustle`. Naming a non-function in a table at engine load kills the whole engine with no console line in the pane.
+- The hut's indentation differs from the room kit's; anchor edits there by regex.
+
+**Not built:** Nazca already has its own engine sound; the Easter and Ezekiel games were not found as separate modules; more doors need Sam's next recording trip.
+
+---
+
+# Transitions tightened — 2026-10-18 (evening)
+
+Sam: "when you leave a venue the interior noises should stop; they linger while you are in the street." The beds release in 0.5 s (`LEAVE_S`), so the linger was the leave clip's own opening: four seconds of bar before the door. Re-cut so the crossing comes at once: leave = 1.0 s of bar → door → pavement (8.3 s); enter = 1.5 s of pavement → door → bar (7.5 s); stairs down starts at the first footfall (9.6 s). Stairs up unchanged (it ends in the bar, where you arrive). Synced; decode-checked. Not heard in-game.
+
+---
+
 # Floor mixes wired, the gents kept pure — 2026-10-18
 
 Sam's rule: **when the real sounds matter and are more than background, keep them as they were; otherwise the floor mix.** So:

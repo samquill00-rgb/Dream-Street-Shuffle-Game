@@ -566,6 +566,7 @@ window.dssAudio = (function() {
   // Helper: only schedule audio when the context is actually running.
   // If it's still suspending, wait for the resume promise then run.
   var _noDuckNext = false; // set by quiet, frequent SFX (map footsteps) so they don't pump the beds
+  var _noBedDuckNext = false;
   function _play(fn) {
     if (_muted) { _noDuckNext = false; return; }
     var ac = getCtx(); if (!ac) { _noDuckNext = false; return; }
@@ -576,7 +577,8 @@ window.dssAudio = (function() {
     // Duck the background music + any venue ambient beds so the SFX cuts through clearly
     if (!_noDuckNext) { try { _duckMusic(); } catch(e) {} }
     _noDuckNext = false;
-    try { _duckAllBeds(); } catch(e) {}
+    if (!_noBedDuckNext) { try { _duckAllBeds(); } catch(e) {} } // 2026-10-18: room ticks must not dip the bed they belong to
+    _noBedDuckNext = false;
     try { fn(ac); }
     catch(e) { if (window.console && console.error) console.error('dssAudio:', e); }
   }
@@ -2323,8 +2325,377 @@ window.dssAudio = (function() {
   // on that passage — a drip in the cellar every few seconds, for instance.
   // Cleared and re-armed on every passage change. Each entry: min/max gap in
   // seconds, the SFX to fire.
+  // ====== ROOM TICKS, 2026-10-18 night (Claude, Sam's sound-effects night) ======
+  // Small random textures for rooms that had none. Every one is quiet, short,
+  // randomised in pitch, level and timing, and plays through _tick so it never
+  // ducks the bed it belongs to. Levels sit under the beds, not over them.
+  function _tick(fn) { _noDuckNext = true; _noBedDuckNext = true; try { fn(); } catch(e) { _noDuckNext = false; _noBedDuckNext = false; } }
+  function _rnd(a, b) { return a + Math.random() * (b - a); }
+  function _burstNoise(ac, secs, shape) {
+    var n = Math.max(1, Math.floor(ac.sampleRate * secs)), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) { var x = i / n; d[i] = (Math.random() * 2 - 1) * (shape ? shape(x) : 1); }
+    return buf;
+  }
+  function _noiseThrough(ac, buf, type, freq, q, gain, when, env) {
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    var g = ac.createGain(); g.gain.value = gain;
+    src.connect(f); f.connect(g); g.connect(ac.destination);
+    if (env) env(f, g, when);
+    src.start(when); return src;
+  }
+  // Vinyl run-out: the needle in the dead groove after the record, a few soft pops over a hiss bed (Lackland's office).
+  function vinylCrackle() {
+    _play(function(ac) {
+      var now = ac.currentTime, dur = _rnd(1.2, 2.2);
+      _noiseThrough(ac, _burstNoise(ac, dur, function(x) { return Math.sin(Math.PI * x); }), 'bandpass', 3200, 0.8, 0.006, now);
+      var pops = 2 + Math.floor(Math.random() * 4);
+      for (var i = 0; i < pops; i++) {
+        var t = now + _rnd(0.05, dur - 0.1), len = _rnd(0.004, 0.012);
+        _noiseThrough(ac, _burstNoise(ac, len, function(x) { return Math.exp(-x * 5); }), 'lowpass', _rnd(900, 2400), 1, _rnd(0.03, 0.08), t);
+      }
+    });
+  }
+  // A shop bell heard from the far end of the court: the shop bell's shape, a quarter the level, through a closed door.
+  function shopBellFar() {
+    _play(function(ac) {
+      var now = ac.currentTime, lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1900; lp.Q.value = 0.7;
+      var master = ac.createGain(); master.gain.value = _rnd(0.18, 0.3); lp.connect(master); master.connect(ac.destination);
+      var base = _rnd(2500, 2800);
+      [[0, 0.14], [0.13, 0.1], [0.27, 0.07], [0.45, 0.05]].forEach(function(p) {
+        var bt = now + p[0];
+        [base, base * 1.5].forEach(function(freq, idx) {
+          var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = freq * (1 + (Math.random() - 0.5) * 0.006);
+          var og = ac.createGain(); og.gain.setValueAtTime(0.0001, bt); og.gain.linearRampToValueAtTime(p[1] * (idx ? 0.55 : 1), bt + 0.003);
+          og.gain.exponentialRampToValueAtTime(0.0006, bt + 0.65); o.connect(og); og.connect(lp); o.start(bt); o.stop(bt + 0.7);
+        });
+      });
+    });
+  }
+  // Footsteps on flagstones, a passer-by: three to six, walking towards or away.
+  function flagstoneSteps() {
+    _play(function(ac) {
+      var now = ac.currentTime, n = 3 + Math.floor(Math.random() * 4), gap = _rnd(0.42, 0.58), away = Math.random() < 0.5, t = now;
+      for (var i = 0; i < n; i++) {
+        var k = away ? 1 - i / n : (i + 1) / n, amp = 0.012 + 0.03 * k, f = _rnd(700, 1100);
+        _noiseThrough(ac, _burstNoise(ac, 0.045, function(x) { return Math.exp(-x * 7); }), 'bandpass', f, 2.5, amp, t);
+        var o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(f * 0.5, t); o.frequency.exponentialRampToValueAtTime(f * 0.35, t + 0.05);
+        var g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp * 0.6, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.07);
+        o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.08);
+        t += gap * _rnd(0.92, 1.08);
+      }
+    });
+  }
+  // Gravel underfoot: the same walk, but a crunch rather than a knock (Nazca).
+  function gravelSteps() {
+    _play(function(ac) {
+      var now = ac.currentTime, n = 3 + Math.floor(Math.random() * 4), gap = _rnd(0.5, 0.7), t = now;
+      for (var i = 0; i < n; i++) {
+        _noiseThrough(ac, _burstNoise(ac, _rnd(0.07, 0.11), function(x) { return Math.pow(1 - x, 1.5) * (0.6 + 0.4 * Math.random()); }), 'bandpass', _rnd(1800, 3200), 1.2, _rnd(0.02, 0.045), t);
+        t += gap * _rnd(0.9, 1.1);
+      }
+    });
+  }
+  // A glass set down on wood: a dull knock and a faint ring (Ronnie's).
+  function glassSetDown() {
+    _play(function(ac) {
+      var now = ac.currentTime, amp = _rnd(0.03, 0.06);
+      _noiseThrough(ac, _burstNoise(ac, 0.03, function(x) { return Math.exp(-x * 6); }), 'bandpass', _rnd(500, 750), 2, amp * 1.4, now);
+      var ring = _rnd(2300, 3100);
+      [ring, ring * 1.41].forEach(function(freq, i) {
+        var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+        var g = ac.createGain(); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(amp * (i ? 0.25 : 0.45), now + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0004, now + _rnd(0.18, 0.3)); o.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + 0.35);
+      });
+    });
+  }
+  // A chair dragged a few inches on a boarded floor.
+  function chairScrape() {
+    _play(function(ac) {
+      var now = ac.currentTime, dur = _rnd(0.22, 0.45), f = _rnd(260, 520);
+      _noiseThrough(ac, _burstNoise(ac, dur, function(x) { return Math.sin(Math.PI * Math.pow(x, 0.7)) * (0.7 + 0.3 * Math.sin(x * 90)); }), 'bandpass', f, 3.5, _rnd(0.05, 0.1), now,
+        function(filt, g, t) { filt.frequency.setValueAtTime(f, t); filt.frequency.linearRampToValueAtTime(f * _rnd(1.2, 1.6), t + dur); });
+    });
+  }
+  // A gust: a slow swell of low noise, the filter opening and closing with it. 'dry' is thinner and higher (Nazca).
+  function gust(dry) {
+    _play(function(ac) {
+      var now = ac.currentTime, dur = _rnd(1.6, 3.2), lo = dry ? 500 : 220, hi = dry ? 1600 : 900;
+      _noiseThrough(ac, _burstNoise(ac, dur, function(x) { return Math.pow(Math.sin(Math.PI * x), 1.6); }), 'lowpass', lo, 0.9, dry ? 0.035 : 0.05, now,
+        function(filt, g, t) { filt.frequency.setValueAtTime(lo, t); filt.frequency.exponentialRampToValueAtTime(hi, t + dur * _rnd(0.35, 0.6)); filt.frequency.exponentialRampToValueAtTime(lo, t + dur); });
+    });
+  }
+  // Surf: a wave gathering, breaking and draining back over sand, three to five seconds, far off.
+  function surfWash(quiet) {
+    _play(function(ac) {
+      var now = ac.currentTime, dur = _rnd(3.0, 5.0), amp = quiet ? 0.03 : 0.055;
+      _noiseThrough(ac, _burstNoise(ac, dur, function(x) { return Math.pow(Math.sin(Math.PI * Math.pow(x, 0.8)), 1.3); }), 'lowpass', 400, 0.8, amp, now,
+        function(filt, g, t) { filt.frequency.setValueAtTime(350, t); filt.frequency.exponentialRampToValueAtTime(2400, t + dur * 0.4); filt.frequency.exponentialRampToValueAtTime(500, t + dur); });
+      _noiseThrough(ac, _burstNoise(ac, dur * 0.7, function(x) { return Math.pow(1 - x, 2) * Math.pow(x, 0.3); }), 'highpass', 2500, 0.7, amp * 0.25, now + dur * 0.35);
+    });
+  }
+  // A gull, far off: two or three falling cries, vowel-shaped by a bandpass, quiet.
+  function gullFar() {
+    _play(function(ac) {
+      var now = ac.currentTime, n = 2 + Math.floor(Math.random() * 2), t = now, base = _rnd(1500, 2100);
+      for (var i = 0; i < n; i++) {
+        var o = ac.createOscillator(), dur = _rnd(0.22, 0.38); o.type = 'sawtooth';
+        o.frequency.setValueAtTime(base * 1.25, t); o.frequency.exponentialRampToValueAtTime(base, t + dur * 0.3); o.frequency.exponentialRampToValueAtTime(base * 0.72, t + dur);
+        var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = base * 1.6; bp.Q.value = 2.2;
+        var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
+        var g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(_rnd(0.012, 0.022), t + 0.04); g.gain.exponentialRampToValueAtTime(0.0003, t + dur);
+        o.connect(bp); bp.connect(lp); lp.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+        t += dur + _rnd(0.15, 0.4);
+      }
+    });
+  }
+  // Sand slipping: a handful of grains running, a short hiss falling in pitch.
+  function sandSlip() {
+    _play(function(ac) {
+      var now = ac.currentTime, n = 2 + Math.floor(Math.random() * 3), t = now;
+      for (var i = 0; i < n; i++) {
+        var dur = _rnd(0.18, 0.4);
+        _noiseThrough(ac, _burstNoise(ac, dur, function(x) { return Math.pow(1 - x, 1.2) * Math.pow(x, 0.25); }), 'bandpass', 1800, 1.0, _rnd(0.025, 0.045), t,
+          function(filt, g, tt) { filt.frequency.setValueAtTime(_rnd(1600, 2200), tt); filt.frequency.exponentialRampToValueAtTime(_rnd(500, 800), tt + dur); });
+        t += dur * _rnd(0.6, 1.1);
+      }
+    });
+  }
+  // The wheel: iron taking the strain, a slow groan with a tremor in it (Ezekiel).
+  function wheelCreak() {
+    _play(function(ac) {
+      var now = ac.currentTime, dur = _rnd(0.6, 1.3), f = _rnd(130, 200);
+      var o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f * 1.15, now); o.frequency.exponentialRampToValueAtTime(f, now + dur);
+      var v = ac.createOscillator(); v.type = 'sine'; v.frequency.value = _rnd(5, 9); var vg = ac.createGain(); vg.gain.value = f * 0.03; v.connect(vg); vg.connect(o.frequency);
+      var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = _rnd(700, 1100); bp.Q.value = 3;
+      var g = ac.createGain(); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(_rnd(0.02, 0.04), now + dur * 0.3); g.gain.exponentialRampToValueAtTime(0.0004, now + dur);
+      o.connect(bp); bp.connect(g); g.connect(ac.destination); o.start(now); v.start(now); o.stop(now + dur + 0.05); v.stop(now + dur + 0.05);
+    });
+  }
+  // Crockery: a cup on a saucer, a plate stacked; two or three dull ceramic clinks.
+  function crockery() {
+    _play(function(ac) {
+      var now = ac.currentTime, n = 2 + Math.floor(Math.random() * 2), t = now;
+      for (var i = 0; i < n; i++) {
+        var f = _rnd(2600, 4200), amp = _rnd(0.02, 0.04);
+        _noiseThrough(ac, _burstNoise(ac, 0.012, function(x) { return Math.exp(-x * 5); }), 'bandpass', f, 3, amp, t);
+        var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f; var g = ac.createGain();
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp * 0.8, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0004, t + _rnd(0.08, 0.16));
+        o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.2);
+        t += _rnd(0.08, 0.3);
+      }
+    });
+  }
+  function _pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+  // ----- Close-up and game cues (2026-10-18 night) --------------------------
+  // A handset lifted: the plastic clack, then the line's faint hum for a moment.
+  function handsetLift() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      _noiseThrough(ac, _burstNoise(ac, 0.03, function(x) { return Math.exp(-x * 5); }), 'bandpass', _rnd(1100, 1500), 2.5, 0.14, now);
+      var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = 400; var o2 = ac.createOscillator(); o2.type = 'sine'; o2.frequency.value = 450;
+      var g = ac.createGain(); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.025, now + 0.06); g.gain.setValueAtTime(0.025, now + 0.5); g.gain.linearRampToValueAtTime(0.0001, now + 0.7);
+      o.connect(g); o2.connect(g); g.connect(ac.destination); o.start(now + 0.05); o2.start(now + 0.05); o.stop(now + 0.75); o2.stop(now + 0.75);
+    });
+  }
+  // A jukebox mechanism: two knocks of the carriage and the relay's buzz.
+  function jukeboxClunk() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      [0, 0.22].forEach(function(dt) { _noiseThrough(ac, _burstNoise(ac, 0.05, function(x) { return Math.exp(-x * 6); }), 'bandpass', _rnd(240, 360), 2, 0.2, now + dt); });
+      var o = ac.createOscillator(); o.type = 'square'; o.frequency.value = _rnd(95, 125); var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600;
+      var g = ac.createGain(); g.gain.setValueAtTime(0, now + 0.3); g.gain.linearRampToValueAtTime(0.03, now + 0.34); g.gain.setValueAtTime(0.03, now + 0.55); g.gain.linearRampToValueAtTime(0.0001, now + 0.62);
+      o.connect(lp); lp.connect(g); g.connect(ac.destination); o.start(now + 0.3); o.stop(now + 0.65);
+    });
+  }
+  // A bare bulb touched: a tiny glass ping and the filament's buzz.
+  function filamentPing() {
+    _play(function(ac) {
+      var now = ac.currentTime, f = _rnd(4800, 6200);
+      var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f; var g = ac.createGain();
+      g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.012, now + 0.003); g.gain.exponentialRampToValueAtTime(0.0003, now + 0.09);
+      o.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + 0.1);
+      var b = ac.createOscillator(); b.type = 'sawtooth'; b.frequency.value = 100; var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 6;
+      var bg = ac.createGain(); bg.gain.setValueAtTime(0, now); bg.gain.linearRampToValueAtTime(0.003, now + 0.08); bg.gain.exponentialRampToValueAtTime(0.0003, now + 0.45);
+      b.connect(bp); bp.connect(bg); bg.connect(ac.destination); b.start(now); b.stop(now + 0.5);
+    });
+  }
+  // A globe given a spin: a whir on its bearing that slows and stops.
+  function globeSpin() {
+    _play(function(ac) {
+      var now = ac.currentTime, dur = _rnd(0.7, 1.3), n = 10 + Math.floor(Math.random() * 6), t = now, gap = 0.05;
+      for (var i = 0; i < n; i++) { _noiseThrough(ac, _burstNoise(ac, 0.025, function(x) { return Math.exp(-x * 4); }), 'bandpass', _rnd(500, 800), 1.5, 0.2 * (1 - i / n), t); t += gap; gap *= 1.17; }
+    });
+  }
+  // Wood taking weight: a ladder rung, a chesterfield frame; shorter and drier than the wheel.
+  function woodCreak() {
+    _play(function(ac) {
+      var now = ac.currentTime, dur = _rnd(0.25, 0.55), f = _rnd(300, 480);
+      var o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f, now); o.frequency.exponentialRampToValueAtTime(f * _rnd(0.8, 1.2), now + dur);
+      var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = _rnd(1300, 1900); bp.Q.value = 4;
+      var g = ac.createGain(); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(_rnd(0.08, 0.15), now + dur * 0.25); g.gain.exponentialRampToValueAtTime(0.0003, now + dur);
+      o.connect(bp); bp.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + dur + 0.05);
+    });
+  }
+  // Knuckles on a counter or table: two knocks.
+  function woodKnock() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      [0, _rnd(0.16, 0.24)].forEach(function(dt, i) {
+        _noiseThrough(ac, _burstNoise(ac, 0.035, function(x) { return Math.exp(-x * 7); }), 'bandpass', _rnd(380, 520), 2.5, i ? 0.07 : 0.09, now + dt);
+        var o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(220, now + dt); o.frequency.exponentialRampToValueAtTime(150, now + dt + 0.05);
+        var g = ac.createGain(); g.gain.setValueAtTime(0, now + dt); g.gain.linearRampToValueAtTime(0.05, now + dt + 0.004); g.gain.exponentialRampToValueAtTime(0.0004, now + dt + 0.08);
+        o.connect(g); g.connect(ac.destination); o.start(now + dt); o.stop(now + dt + 0.1);
+      });
+    });
+  }
+  // Gas under a pan: a steady quiet hiss.
+  function gasHiss() {
+    _play(function(ac) {
+      var now = ac.currentTime, dur = _rnd(0.8, 1.4);
+      _noiseThrough(ac, _burstNoise(ac, dur, function(x) { return Math.min(1, x * 12) * Math.min(1, (1 - x) * 6); }), 'highpass', 3500, 0.7, 0.02, now);
+    });
+  }
+  // The platformers: a short puff of breath and cloth on take-off, a thud on landing. Neither ducks the game's music.
+  function jumpPuff() {
+    _tick(function() { _play(function(ac) {
+      var now = ac.currentTime;
+      _noiseThrough(ac, _burstNoise(ac, 0.09, function(x) { return Math.pow(x, 0.3) * Math.pow(1 - x, 1.6); }), 'bandpass', _rnd(900, 1300), 1.2, 0.05, now);
+      var o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(_rnd(260, 320), now); o.frequency.exponentialRampToValueAtTime(_rnd(480, 560), now + 0.09);
+      var g = ac.createGain(); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.025, now + 0.015); g.gain.exponentialRampToValueAtTime(0.0003, now + 0.11);
+      o.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + 0.12);
+    }); });
+  }
+  function landThud(hard) {
+    _tick(function() { _play(function(ac) {
+      var now = ac.currentTime, k = Math.max(0.4, Math.min(1.4, hard || 1));
+      _noiseThrough(ac, _burstNoise(ac, 0.06, function(x) { return Math.exp(-x * 6); }), 'lowpass', 500, 0.8, 0.09 * k, now);
+      var o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(110, now); o.frequency.exponentialRampToValueAtTime(55, now + 0.08);
+      var g = ac.createGain(); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.09 * k, now + 0.004); g.gain.exponentialRampToValueAtTime(0.0004, now + 0.12);
+      o.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + 0.14);
+    }); });
+  }
+  // ----- Pocket keys and fire (2026-10-18 night, later) -----------------------
+  // The brass lighter: lid flicked open, the flint's rasp, the flame catching.
+  function zippoClick() {
+    _play(function(ac) {
+      var now = ac.currentTime;
+      [3400, 5100].forEach(function(f, i) {
+        var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f * _rnd(0.97, 1.03); var g = ac.createGain();
+        g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(i ? 0.03 : 0.05, now + 0.002); g.gain.exponentialRampToValueAtTime(0.0003, now + 0.06);
+        o.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + 0.07);
+      });
+      _noiseThrough(ac, _burstNoise(ac, 0.07, function(x) { return Math.pow(x, 0.4) * Math.pow(1 - x, 0.8) * (0.5 + 0.5 * Math.random()); }), 'bandpass', _rnd(2300, 3000), 1.5, 0.12, now + 0.12);
+      _noiseThrough(ac, _burstNoise(ac, 0.3, function(x) { return Math.pow(x, 0.6) * Math.pow(1 - x, 1.4); }), 'lowpass', 500, 0.8, 0.05, now + 0.19);
+    });
+  }
+  // The glass eye set down on wood: a hard little knock, then it settles with two smaller ones.
+  function marbleTap() {
+    _play(function(ac) {
+      var now = ac.currentTime, t = now;
+      [1, 0.45, 0.22].forEach(function(k, i) {
+        _noiseThrough(ac, _burstNoise(ac, 0.02, function(x) { return Math.exp(-x * 7); }), 'bandpass', _rnd(1100, 1500), 3, 0.1 * k, t);
+        var o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(_rnd(850, 1000), t); o.frequency.exponentialRampToValueAtTime(600, t + 0.04);
+        var g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.06 * k, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0004, t + 0.06);
+        o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.08);
+        t += _rnd(0.09, 0.16) * (1 - i * 0.3);
+      });
+    });
+  }
+  // What you hear as a key goes into the pocket.
+  function keyPickup(kid) {
+    if (kid === 'lighter') zippoClick();
+    else if (kid === 'eye') marbleTap();
+    else pageRustle();
+  }
+  // Fire: a low roar and random pops for as long as `host` is in the page (or maxSeconds). Returns { stop }.
+  // Not a one-shot, so it builds its own graph: follows the mute switch, fades out on stop, never ducks anything.
+  function fireCrackle(host, maxSeconds) {
+    var ac = getCtx(); if (!ac) return { stop: function(){} };
+    if (ac.state === 'suspended') { try { ac.resume(); } catch(e) {} }
+    var master = ac.createGain(); master.gain.value = _muted ? 0 : 1; master.connect(ac.destination);
+    var roar = ac.createBufferSource(); roar.buffer = _noiseBuf(ac, 4, true); roar.loop = true;
+    var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.7;
+    var rg = ac.createGain(); rg.gain.setValueAtTime(0, ac.currentTime); rg.gain.linearRampToValueAtTime(0.22, ac.currentTime + 1.5);
+    var wob = ac.createOscillator(); wob.type = 'sine'; wob.frequency.value = 0.37; var wg = ac.createGain(); wg.gain.value = 0.035; wob.connect(wg); wg.connect(rg.gain);
+    roar.connect(lp); lp.connect(rg); rg.connect(master); roar.start(); wob.start();
+    var alive = true, timer = null, started = Date.now(), limit = (maxSeconds || 240) * 1000;
+    function pop() {
+      if (!alive) return;
+      var now = ac.currentTime, len = _rnd(0.004, 0.016), f = _rnd(1400, 4200);
+      var src = ac.createBufferSource(); src.buffer = _burstNoise(ac, len, function(x) { return Math.exp(-x * 4); });
+      var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 1.2;
+      var g = ac.createGain(); g.gain.value = _rnd(0.05, 0.2); src.connect(bp); bp.connect(g); g.connect(master); src.start(now);
+      if (Math.random() < 0.25) { var s2 = ac.createBufferSource(); s2.buffer = _burstNoise(ac, 0.08, function(x) { return Math.pow(1 - x, 2); }); var g2 = ac.createGain(); g2.gain.value = 0.04; var l2 = ac.createBiquadFilter(); l2.type = 'bandpass'; l2.frequency.value = _rnd(600, 1200); s2.connect(l2); l2.connect(g2); g2.connect(master); s2.start(now + 0.01); }
+      timer = setTimeout(pop, _rnd(50, 320));
+    }
+    timer = setTimeout(pop, 300);
+    var poll = setInterval(function() {
+      if (!alive) return;
+      master.gain.setTargetAtTime(_muted ? 0 : 1, ac.currentTime, 0.1);
+      if ((host && !document.body.contains(host)) || Date.now() - started > limit) stop();
+    }, 500);
+    function stop() {
+      if (!alive) return; alive = false; clearTimeout(timer); clearInterval(poll);
+      var t = ac.currentTime; try { master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t); master.gain.linearRampToValueAtTime(0.0001, t + 1.2); } catch(e) {}
+      setTimeout(function() { try { roar.stop(); wob.stop(); master.disconnect(); } catch(e) {} }, 1400);
+    }
+    return { stop: stop };
+  }
+  // ----- The beer mat game (2026-10-18 night, last) ----------------------------
+  // The flick off the table edge, the catch in the palm, the mat flopping to the floor.
+  function matFlick() {
+    _tick(function() { _play(function(ac) {
+      var now = ac.currentTime;
+      _noiseThrough(ac, _burstNoise(ac, 0.014, function(x) { return Math.exp(-x * 5); }), 'bandpass', _rnd(1600, 2200), 2, 0.12, now);
+      _noiseThrough(ac, _burstNoise(ac, 0.05, function(x) { return Math.pow(x, 0.5) * Math.pow(1 - x, 1.2); }), 'highpass', 2500, 0.8, 0.05, now + 0.01,
+        function(filt, g, t) { filt.frequency.setValueAtTime(2500, t); filt.frequency.exponentialRampToValueAtTime(6000, t + 0.05); });
+    }); });
+  }
+  function matCatch() {
+    _tick(function() { _play(function(ac) {
+      var now = ac.currentTime;
+      _noiseThrough(ac, _burstNoise(ac, 0.03, function(x) { return Math.exp(-x * 6); }), 'lowpass', 900, 0.9, 0.22, now);
+      var o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(190, now); o.frequency.exponentialRampToValueAtTime(120, now + 0.05);
+      var g = ac.createGain(); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.08, now + 0.003); g.gain.exponentialRampToValueAtTime(0.0004, now + 0.07);
+      o.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + 0.09);
+    }); });
+  }
+  function matDrop() {
+    _tick(function() { _play(function(ac) {
+      var now = ac.currentTime, t = now;
+      [1, 0.5].forEach(function(k) {
+        _noiseThrough(ac, _burstNoise(ac, 0.06, function(x) { return Math.pow(x, 0.3) * Math.pow(1 - x, 1.5); }), 'lowpass', _rnd(450, 650), 0.9, 0.09 * k, t);
+        t += _rnd(0.09, 0.14);
+      });
+    }); });
+  }
+  // The 3D rooms' close-ups: a sound for what you reach for, chosen from the hotspot's name. People and ways out stay silent.
+  var SPOT_CUES = [
+    ['glass case', glassClink], ['optics', glassClink], ['glass', glassClink], ['telephone', handsetLift], ['turntable', needleLift],
+    ['jukebox', jukeboxClunk], ['bulb', filamentPing], ['globe', globeSpin], ['ladder', woodCreak], ['chesterfield', woodCreak],
+    ['counter', woodKnock], ['table', woodKnock], ['range', gasHiss], ['plate', crockery], ['dish', crockery], ['cow', cowMooShort],
+    ['photograph', pageRustle], ['book', pageRustle], ['menu', pageRustle], ['ticket', pageRustle], ['shelves', pageRustle],
+    ['bell', doorShopBell], ['window', distantTraffic], ['stairs', flagstoneSteps], ['door', doorCreak]
+  ];
+  function spotSound(name) {
+    var n = String(name || '').toLowerCase();
+    for (var i = 0; i < SPOT_CUES.length; i++) { if (n.indexOf(SPOT_CUES[i][0]) !== -1) { _tick(SPOT_CUES[i][1]); return SPOT_CUES[i][0]; } }
+    return null;
+  }
   var TAG_TICKS = {
-    'venue-cellar':   { min: 5,  max: 12, fn: function(){ dripDrop(); } }
+    'venue-cellar':      { min: 5,  max: 12, fn: function(){ dripDrop(); } },
+    // 2026-10-18 night: rooms that had no sound of their own. Each fn picks, so no room has one noise only.
+    'venue-lackland':    { min: 14, max: 32, fn: function(){ _tick(vinylCrackle); } },
+    'venue-cecilcourt':  { min: 10, max: 26, fn: function(){ _tick(Math.random() < 0.3 ? shopBellFar : flagstoneSteps); } },
+    'venue-ronnies':     { min: 9,  max: 22, fn: function(){ _tick(Math.random() < 0.25 ? chairScrape : glassSetDown); } },
+    'himalayan':         { min: 8,  max: 20, fn: function(){ _tick(Math.random() < 0.2 ? distantBell : function(){ gust(false); }); } },
+    'nazca':             { min: 8,  max: 20, fn: function(){ _tick(Math.random() < 0.35 ? gravelSteps : function(){ gust(true); }); } },
+    'easter':            { min: 7,  max: 16, fn: function(){ _tick(Math.random() < 0.25 ? gullFar : function(){ surfWash(false); }); } },
+    'pyramid':           { min: 10, max: 25, fn: function(){ _tick(sandSlip); } },
+    'ezekiel':           { min: 12, max: 30, fn: function(){ _tick(wheelCreak); } },
+    'carthage-cicadas':  { min: 9,  max: 20, fn: function(){ _tick(function(){ surfWash(true); }); } },
+    'green-sea':         { min: 9,  max: 24, fn: function(){ _tick(crockery); } }
   };
   // ----- Soho map street life (2026-09-11 sound pass) -----
   // Small, un-ducked sounds for the things that move on the map: the black
@@ -2580,6 +2951,17 @@ window.dssAudio = (function() {
     tags: { 'venue-gents': 1 },
     volume: 0.22,
     duckVolume: 0.08
+  });
+  // The street (2026-10-18 night) — Sam's recording outside the French under
+  // the generated late-night street, on every outdoor / street-night passage
+  // that isn't Dean Street itself (the hub keeps its theme alone).
+  registerAmbientBed({
+    label: 'street',
+    dataUri: '__DSS_STREET_DATA_URI__',
+    tags: { 'outdoor': 1, 'street-night': 1 },
+    notTags: { 'hub': 1 },
+    volume: 0.18,
+    duckVolume: 0.06
   });
   // Retro game music — plays during canvas-based minigames (the cellar fight,
   // PP Pong, Bernard's cow ride, the Sketch the Painter napkin-draw, and the
@@ -3920,7 +4302,12 @@ window.dssAudio = (function() {
     mapFootstep: mapFootstep, mapCab: mapCab, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
     startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel,
     prewarmBed: prewarmBedByLabel,
-    playTransition: playTransition
+    playTransition: playTransition,
+    // 2026-10-18 night: room ticks, exported for the effects board
+    vinylCrackle: vinylCrackle, shopBellFar: shopBellFar, flagstoneSteps: flagstoneSteps, gravelSteps: gravelSteps, glassSetDown: glassSetDown, chairScrape: chairScrape,
+    gust: gust, surfWash: surfWash, gullFar: gullFar, sandSlip: sandSlip, wheelCreak: wheelCreak, crockery: crockery, _tick: _tick,
+    handsetLift: handsetLift, jukeboxClunk: jukeboxClunk, filamentPing: filamentPing, globeSpin: globeSpin, woodCreak: woodCreak, woodKnock: woodKnock, gasHiss: gasHiss,
+    jumpPuff: jumpPuff, landThud: landThud, spotSound: spotSound, zippoClick: zippoClick, marbleTap: marbleTap, keyPickup: keyPickup, fireCrackle: fireCrackle, matFlick: matFlick, matCatch: matCatch, matDrop: matDrop
   };
 })();
 
@@ -6765,7 +7152,8 @@ window.dssKeyPopup = function() {
         box.appendChild(m);
       }
       box.querySelector('.dss-key-leave').addEventListener('click', close);
-      if (window.dssAudio && window.dssAudio.paperRustle) { try { window.dssAudio.paperRustle(); } catch(e) {} }
+      if (window.dssAudio && window.dssAudio.keyPickup) { try { window.dssAudio.keyPickup(kid); } catch(e) {} } // 2026-10-18 night: the lighter clicks, the eye knocks, paper rustles
+      else if (window.dssAudio && window.dssAudio.paperRustle) { try { window.dssAudio.paperRustle(); } catch(e) {} }
     }, 160);
   }
 
@@ -21134,7 +21522,7 @@ function buildSquare(host) {
     for(var co=0;co<32;co++){var chip=box(.025+rnd()*.05,.018,.07+rnd()*.15,rnd()*4-2,.38+rnd()*.1,rnd()*2+1,coal);chip.rotation.y=rnd()*6;}
   }
   var aim=new THREE.Vector3(0,1.7,1), idlePos=new THREE.Vector3(), idleAim=new THREE.Vector3(0,1.7,1), fromPos=new THREE.Vector3(), fromAim=new THREE.Vector3(), destPos=new THREE.Vector3(), destAim=new THREE.Vector3();
-  var fireStarted=performance.now();
+  var fireStarted=performance.now();var _crackle=(burnt&&window.dssAudio&&window.dssAudio.fireCrackle)?window.dssAudio.fireCrackle(renderer.domElement):null; /* 2026-10-18 night: the hut crackles while it burns */
   var matchFound=false;var establishing=true,tween=0, selected=null, hover=null, elapsed=0, last=performance.now(), raf=0, disposed=false;
   function layout(){var portrait=innerWidth<600;idlePos.set(portrait?12:8.2,portrait?8:4.6,portrait?31:18.5);dock.style.bottom=portrait?'64px':'15px';if(!selected){camera.position.copy(idlePos);aim.copy(idleAim);camera.lookAt(aim);} }
   var card=document.createElement('div');card.id='sq-card';
@@ -21212,7 +21600,7 @@ function buildSquare(host) {
     puddles.forEach(function(p){p.visible=true;});reflectionMaterial.uniforms.time.value=t;
     if(composer)composer.render();else renderer.render(scene,camera);
   }
-  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(raf);window.removeEventListener('resize',layout);window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('click',click);if(composer&&composer.dssDispose)composer.dssDispose();reflectionTarget.dispose();water.dispose();window._dssDisposeWrap('sq-wrap');if(current&&current.host===host)current=null;}
+  function dispose(){if(disposed)return;disposed=true;if(_crackle)_crackle.stop();cancelAnimationFrame(raf);window.removeEventListener('resize',layout);window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('click',click);if(composer&&composer.dssDispose)composer.dssDispose();reflectionTarget.dispose();water.dispose();window._dssDisposeWrap('sq-wrap');if(current&&current.host===host)current=null;}
   raf=requestAnimationFrame(frame);return {host:host,dispose:dispose};
 }
 setInterval(function(){var host=document.querySelector('tw-passage #sq-container');if(current&&current.host!==host){current.dispose();current=null;}if(!host){pending=null;return;}if(!current&&pending!==host)boot(host);},300);
@@ -24926,6 +25314,7 @@ var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
 if (!spot) { if (words) words.down(ev); return; }
 activeSpot = spot; halo.visible = false; canvas.style.cursor = 'default';
 showCard(spot);
+if (window.dssAudio && window.dssAudio.spotSound) { try { window.dssAudio.spotSound(spot.name); } catch(e) {} } // 2026-10-18 night: a sound for what you reach for
 beginTween(spot.pos, spot.tgt, 'inspect');
 if (spot.onLook) spot.onLook(true);
 });
@@ -29157,6 +29546,7 @@ function makeCoachFire(scene,pub,windows){
 
 function buildCHScene() {
 var chIsFire=chHost&&chHost.dataset.fire==='true';
+if(chIsFire&&window.dssAudio&&window.dssAudio.fireCrackle){try{window.dssAudio.fireCrackle(chHost);}catch(e){}} /* 2026-10-18 night: stops by itself when the room leaves the page */
 var chStill=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Full-screen overlay wrapper
 var chWrap = document.createElement('div');
@@ -60434,7 +60824,7 @@ You know who she is, she is SHANA, destroyer of worlds.]
   function down() {
     if (ended) return;
     if (phase === 'ready') {
-      catchAt = CATCH_MIN + Math.random() * CATCH_RANGE; duration = catchAt + TAIL; flightStart = performance.now(); progress = 0; phase = 'flying';
+      catchAt = CATCH_MIN + Math.random() * CATCH_RANGE; duration = catchAt + TAIL; flightStart = performance.now(); progress = 0; phase = 'flying'; if (window.dssAudio && window.dssAudio.matFlick) window.dssAudio.matFlick(); /* 2026-10-18 night */
       play.textContent = 'Catch'; status('', '');
     } else if (phase === 'flying') catchStack();
     else if (phase === 'won') { count++; reset(); }
@@ -60448,14 +60838,14 @@ You know who she is, she is SHANA, destroyer of worlds.]
   function catchStack() {
     progress = Math.min(1, (performance.now() - flightStart) / duration);
     if (Math.abs(progress * duration - catchAt) <= windowMs()) {
-      phase = 'won'; speak('won'); best = Math.max(best, count); roundBest = Math.max(roundBest, count);
+      phase = 'won'; speak('won'); if (window.dssAudio && window.dssAudio.matCatch) window.dssAudio.matCatch(); best = Math.max(best, count); roundBest = Math.max(roundBest, count);
       try { localStorage.setItem('dss-trishas-mats-best', best); } catch (e) {}
       $('.mats-best').textContent = plural(best); play.textContent = 'Try ' + (count + 1) + ' mats'; stop.textContent = 'Bow out';
       status(count > RECORD ? 'Lea’s record is beaten.' : 'Clean catch.', '');
     } else fail(progress * duration < catchAt ? 'Too early.' : 'Too late.');
   }
   function fail(label) {
-    phase = 'lost'; speak('lost'); play.textContent = 'Go again'; status(label, 'Try the same number again.');
+    phase = 'lost'; speak('lost'); if (window.dssAudio && window.dssAudio.matDrop) window.dssAudio.matDrop(); play.textContent = 'Go again'; status(label, 'Try the same number again.');
     var p = pose(progress);
     for (var i = 0; i < count; i++) particles.push({ x: W * .5, y: p.y, vx: (Math.random() - .5) * 110, vy: 50 + Math.random() * 60, a: p.angle });
   }
@@ -74898,10 +75288,12 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
       if(walledMs>12000){var ahead=floorAt(px+15);if(ahead!==null){px+=15;py=ahead;walledMs=0;say('The stone lifts you, unimpressed.');}}
       if (bufferT > 0 && (onGround || coyoteT > 0) && !jumping && !ducking){
         jumping = true; onGround = false; coyoteT = 0; bufferT = 0;
+        if(window.dssAudio&&window.dssAudio.jumpPuff)window.dssAudio.jumpPuff(); /* 2026-10-18 night */
         vy = snakePace?-320:JUMP;
         if(!jumpHeld)vy*=JUMPCUT;
       }
       if (!onGround && fl !== null && vy >= 0 && previousY<=fl+4 && py >= fl){
+        if(window.dssAudio&&window.dssAudio.landThud)window.dssAudio.landThud(Math.min(1.4,Math.abs(vy)/Math.abs(JUMP))); /* 2026-10-18 night: harder from higher */
         py = fl; vy = 0; onGround = true; jumping = false; landPuff = 1; dust(px,py,6);
       }
       // fell into a pit mouth
@@ -75894,7 +76286,7 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
     climbing=LADDERS.some(function(l){return s>=l.a-.1 && s<l.b && Math.abs(u)<1.15 && Math.abs(y-height(s))<.25;});
     if(climbing){bufferT=0;vy=0;grounded=true;u*=Math.max(0,1-dt*8);}
     bufferT=Math.max(0,bufferT-dt);coyoteT=grounded?COYOTE:Math.max(0,coyoteT-dt);
-    if(bufferT>0 && coyoteT>0){vy=JUMP;grounded=false;bufferT=0;coyoteT=0;jumpCut=false;}
+    if(bufferT>0 && coyoteT>0){vy=JUMP;grounded=false;bufferT=0;coyoteT=0;jumpCut=false;if(window.dssAudio&&window.dssAudio.jumpPuff)window.dssAudio.jumpPuff();}
     var oldY=y, oldS=s, oldU=u;
     // Breath changes walking speed only. Airborne range stays fully available.
     var speed=grounded?SPEED*(.66+.34*Math.min(1,breath*4)):SPEED;
@@ -75919,7 +76311,7 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
       // uphill floor can meet a rising foot near the apex; vertical velocity
       // alone must not reject that landing or let the snow overtake the feet.
       var wasAbove=support(oldS,oldU) ? oldY>=height(oldS)-.002 : oldY>=top-.002;
-      if(supported && wasAbove && y<=top){y=top;vy=0;grounded=true;}
+      if(supported && wasAbove && y<=top){if(window.dssAudio&&window.dssAudio.landThud)window.dssAudio.landThud(Math.min(1.4,Math.abs(vy)/Math.abs(JUMP)));y=top;vy=0;grounded=true;}
     }
     // GUSTS. Idle → warning (1.4s: the flurries lean and the wind rises, no
     // push yet) → blowing (1.2s: a sideways shove of 2.4 you can lean against,
@@ -75937,7 +76329,7 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
     wind.timer-=dt;if(wind.timer<=0){wind.timer=2.4+Math.random()*3.6;wind.target=windLock?0:(Math.random()<.2?0:(.6+Math.random()))*(Math.random()<.5?-1:1);}
     wind.strength+=(wind.target-wind.strength)*Math.min(1,dt*1.1);
     var pl=plateau(s),windMul=(s<FLAGS[0]?.45:1)*(1+dawn*.35)*(pl?pl[3]:1);
-    if(gust.phase==='idle'){gust.next-=dt;if(gust.next<=0 && !exempt && s>=FLAGS[0]){gust.phase='warning';gust.t=0;gust.dir=Math.random()<.5?-1:1;if(reducedMotion)announce('GUST FROM THE '+(gust.dir<0?'RIGHT':'LEFT'));}}
+    if(gust.phase==='idle'){gust.next-=dt;if(gust.next<=0 && !exempt && s>=FLAGS[0]){gust.phase='warning';gust.t=0;gust.dir=Math.random()<.5?-1:1;if(window.dssAudio&&window.dssAudio.gust&&window.dssAudio._tick)window.dssAudio._tick(function(){window.dssAudio.gust(false);}); /* 2026-10-18 night: the wind rises with the warning */if(reducedMotion)announce('GUST FROM THE '+(gust.dir<0?'RIGHT':'LEFT'));}}
     else{gust.t+=dt;
       if(gust.phase==='warning' && gust.t>1.4){gust.phase='blowing';gust.t=0;}
       else if(gust.phase==='blowing' && gust.t>1.5){gust.phase='idle';gust.t=0;gust.next=4+Math.random()*5;}

@@ -122,8 +122,15 @@ def colony_room():
     E.rider(r, win=4.0, maxdb=3.0, strength=0.6)
     return r, "indoor-colony-room", -33.0
 
+def street():
+    """The street outside any venue: the outside-the-French material (quiet stretches shuffled, passing sounds once a lap);
+    with --floor the September late-night-street bed sits on top per Sam's rule for background rooms."""
+    r, name, target = outside()
+    return r, "the-street-layered", -36.0
+
+
 # the September generated bed that each real bed replaced, as an optional floor under it
-FLOORS = {"the-french-pub-layered": "the-french-pub-ambience.mp3", "the-gents-french-layered": "the-gents-coach-toilet.mp3",
+FLOORS = {"the-street-layered": "the-coach-night-ambience.m4a", "the-french-pub-layered": "the-french-pub-ambience.mp3", "the-gents-french-layered": "the-gents-coach-toilet.mp3",
           "indoor-busy-bar": "the-coach-night-ambience.m4a", "indoor-warm-pub": "the-pillars-pub-ambience.m4a",
           "indoor-quiet-lounge": "the-trishas-ambience.m4a", "indoor-colony-room": "the-colony-ambience.m4a"}
 FLOOR_DB = 3.0    # the generated bed 3 dB over the real material (2026-10-18, Sam: real quieter twice; 0 and -3 before, -8 inaudible)

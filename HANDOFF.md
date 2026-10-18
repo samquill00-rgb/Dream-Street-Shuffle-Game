@@ -1,3 +1,15 @@
+# Storm snow in gusts — 2026-10-18
+
+Sam asked for stronger blowing snow during gusts. Snow gust drift 14→36, smoothly eased; per-flake speed variation and rolling eddies add sideways curl, lift and depth turbulence. Gusts reveal full particle budget (72% calm), increase opacity/size; upper vertical wrapping handles uplift. Reduced motion freezes new storm animation. Prose/physics untouched. Syntax/build pass; headless browser forced gust at s=180 reached blowing with no JS/console errors; /tmp/hc-storm-gust.png, /tmp/hc-storm-browser.cjs. Synced; no git commands.
+
+---
+
+# Stronger cloud swirl — 2026-10-18
+
+Sam asked for more pronounced swirl, especially in gusts. Increased cloud eddy speed and travel, vertical curl, rotation and gentle stretching; gust flow rises 3→7, smoothing responds faster, angular acceleration is stronger. Weather intensity also widens the eddies and lift. Continuous deck, reduced motion and mechanics unchanged. Syntax/build passed. Synced; no git commands.
+
+---
+
 # Wind-driven cloud swirl — 2026-10-18
 
 Sam asked for more drift/swirl around the mountain. Cloud banks now curl in overlapping oval eddies, lift and turn gently, with upper mist sweeping more broadly. Wind/gust drive smoothed integrated flow and accelerate the eddies; continuous deck retained. Reduced motion holds cloud animation; pause freezes integrated clocks. Only The Climb scripts changed; prose and other passages verified unchanged. Syntax/build and headless browser base/summit render pass, no console/JS errors. Synced, no git commands.

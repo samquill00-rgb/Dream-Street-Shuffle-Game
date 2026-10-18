@@ -1,3 +1,56 @@
+# The climber: a hooded mountaineer — 2026-10-18 evening
+
+Sam: the player's body in the Climb "looks kinda lame"; of four options (respecting the no-depiction rule: never a face) he chose a hooded mountaineer seen from behind. `mountaineer()` replaces `person(false)` as `climber`; `person()` is now unused (left in place). Synced; Sam commits.
+
+- Hood up (no face is ever built: a dark recess tucked inside it, ringed by a fur ruff), a peak and a back seam; a long weathered anorak (lathe, hem at mid-thigh) with a darker shoulder yoke, belt, chest pockets, a snow-crusted hem and drawcord; a frame pack (slate blue) with lid, side pockets, shoulder and compression straps, a rolled mustard mat on top and an ice axe strapped across; a rope coil over the left shoulder; tapered trousers, gaiters with a strap, heavy boots and soles; tapered sleeves with elbow patches, cuffs and mitts; a dusting of snow on the hood, shoulders and pack.
+- Same limb groups and order (leg, arm per side), so the walk, the wind lean and the snow-whirl animate him unchanged. Dev hook: `window._hcDev.climber`.
+- Checked: studio renders (behind and above as the game camera sees him, three-quarter back, side, beside the yeti for scale) over two passes (the first had stacked-ball limbs again and the hood's opening poking out in profile); in play he reads clearly from behind under the game's light and fog; no console errors. **Not seen:** the walk in motion (the pane backgrounded the tab and froze the loop); his four limb groups are in place in the same order, so it should animate as before.
+
+---
+
+# Spirit/machine visual distinction — 2026-10-18
+
+Sam found shoot/don’t-shoot insufficiently distinct, especially spirit lights. Spirits now use custom turquoise/mint flowing ghost silhouette with dark eyes/trailing edges, normal blending and opaque-ish legible sprite (no white additive orb). Existing core reduced to .08 opacity; glow breathing subtle and static in reduced motion; flare/reappearance opacity adjusted. Machine lamps now custom saturated orange-red diamond/slit sprites, rig beam orange instead of white. Shape and colour both distinguish; no text/prose/hitbox/HP/penalty changes. Syntax/build, desktop and phone reduced-motion checks passed, drone shot and round count correct, cleanup works, zero JS/console/tw-errors. Screenshot /tmp/easter-atmosphere.png visually inspected: distinction clear. Test /tmp/easter-browser.cjs. Synced; no git commands; refresh preview.
+
+---
+
+# Living nebula sky — 2026-10-18
+
+Sam requested slow nebula swirl, gentle star twinkle and preview. Split panorama into opaque gas sphere and transparent star sphere. Gas shader smoothly warps UVs with slow curling flow; star shader varies brightness gently by position/phase. Shared visual clock freezes on pause and reduced-motion; slight shared celestial drift retained. Two sky draws, no new dependencies. Syntax/build and desktop/phone reduced-motion render/shoot/cleanup checks pass, zero JS/console/tw-errors; screenshot inspected /tmp/easter-atmosphere.png. Preview opened direct to The Reclamation. Prose/gameplay unchanged; synced, no git commands.
+
+---
+
+# The yeti: ragged, hairy, aviators — 2026-10-18 evening
+
+Sam: "less like the Michelin Man. Keep him muscular, but he should be more ragged and hairy. Also when he turns at the end he should be wearing aviator sunglasses." In `muscularYeti()` (The Climb). Synced; Sam commits.
+
+- **Body:** the muscle volumes stay (the shape underneath); the skin under them a shade darker (0xa9b1b0) so gaps read as depth.
+- **Fur:** about 2,700 flat four-sided locks (instanced, one batch per moving part, so they swing with the limbs), grown from every volume and the lathe torso, **combed down the body's curves** (downhill tangent lifted off the skin by 1 − droop; undersides simply hang; near a top they tip down and shorten so they don't overhang). Nine tones from snow to weathered grey and old ivory, darker on the back and low down; 7% long matted outliers. Longest at the shoulders, forearm cuffs, shins and the back of the skull; a dense mane on the head framing a bare grey face; the brows a shaggy fringe over the eyes; nose, hands and feet dark leathery grey. Deterministic (seeded), so he's the same every load.
+- **Aviators:** teardrop lenses (dark, a cool specular glint), thin gold wire rims, double bridge, temples into the fur; `yeti.userData.shades`, shown from the moment he turns (`turned`, set at ending > 1.2 in update; applied in draw every frame) and kept on as he walks into the cave.
+- **Fixed on the way:** an empty fur batch (the brows sit wholly on the bare face) crashed three r128's renderer; empty batches are skipped. The face patch was near-black and read as goggles even without the aviators; now grey skin.
+- **Tested in the pane:** no console errors in a fresh load; a studio render (the yeti cloned under three lights: front, back, three-quarter, head close-ups with and without the aviators) after each of five passes; in game he reads as a shaggy figure up the path. **Not watched:** the turn itself in motion (the pane backgrounds its tab and freezes the animation; the ending started, and the code path was checked by reading). Draw calls 68 → 105.
+- Dev hook: `window._hcDev.yeti` (dev builds only) for close-ups.
+
+---
+
+# Eerie moai mist and celestial panorama — 2026-10-18
+
+Sam requested stronger swirling moonlit mist around figures and much richer sky: nebulae, varied star types/colours/sizes. Added three pale-blue coiling wisps per moai, varying moonward illumination, alongside shore mist. Replaced 700 uniform Points stars with one baked 2048x1024 celestial panorama on inside sphere: three sinuous layered nebula arms, violet/blue/teal/pink palette, dark dust filaments, 6200 varied warm/cool stars including haloed giants/diffraction crosses and 12 fine clusters. sRGB texture keeps sky dark/saturated; extremely slow rotation, static for reduced-motion. Sky is one draw; no dependencies/assets. Prose/hitboxes/gameplay unchanged. Todo /tmp/easter-sky-todo.md complete. Syntax/build and desktop + phone reduced-motion checks passed: all machine types, drone shot, round count, cleanup; no JS/console/tw-errors. Desktop sky screenshot visually inspected /tmp/easter-atmosphere.png; phone -mobile.png; /tmp/easter-browser.cjs. No git commands; synced. Refresh existing preview.
+
+---
+
+# Easter Island atmosphere, alien machinery, volcanic stone — 2026-10-18
+
+Sam moved to Easter Island: mist, dramatic light, stranger machines distinct from nature, textured figures. The Reclamation only: 10 mobile/16 desktop low mist banks, colder stronger moonlight with cool front fill and muted warm quarry rim; fog tightened modestly. Machines now graphite/violet specular angular shells, drone oblique rings, rig canted cage/prongs, crawler dorsal fins and moving collar. Amber target lamps and turquoise spirits, hitboxes, HP, waves/speeds all retained. Moai use shared porous volcanic texture with pitting/minerals/cracks and modest bump (.045 after visual QA). Reduced-motion freezes decorative drift/rotation. No prose edits. Todo /tmp/easter-atmosphere-todo.md complete. Desktop preview all types renders; shot kills drone, round decremented, cleanup removes dev hooks, no JS/console/tw-errors. Final desktop/phone reduced-motion rerun passed: shooting/round count/cleanup correct, zero errors. /tmp/easter-browser.cjs, /tmp/easter-atmosphere.png and -mobile.png. Original /tmp/easter-before-atmosphere.twee. Synced; no git commands.
+
+---
+
+# Weathered NAZCAR sign — 2026-10-18
+
+Sam asked sign to match ancient gate. Added sun-bleached patches, water stains, faded/scuffed ink, fine abrasions, fold grime, ragged transparent edges and a slightly sagging uneven sign mesh. NAZCAR wording unchanged and readable. Syntax/build and browser check pass with no JS/console/tw-errors; screenshot /tmp/nazca-orange-sky.png visually inspected. Prose/gameplay unchanged; synced, no git commands. Refresh existing preview.
+
+---
+
 # Ancient weathered gate stones — 2026-10-18
 
 Sam asked for rougher, more ancient gate. All start stones and lintel now use irregular worn/chipped rounded edges, pitted mottling, branching cracks, joint staining and bump detail. Existing course spacing and material colour variations retained. Other arches/prose/handling unchanged. Syntax/build and browser checks passed, zero JS/console/tw-errors, active gate screenshot /tmp/nazca-orange-sky.png inspected. No git commands; synced. Refresh existing preview.

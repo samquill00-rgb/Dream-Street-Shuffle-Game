@@ -100,13 +100,19 @@ class Bed:
             at = self.r.uniform(0, self.n / SR) if region is None else self.r.uniform(*region)
             self.add(make(), gain * self.r.uniform(1 - gain_jit, 1.0), self.r.uniform(-spread, spread), at)
     def finish(self, peak=0.5, xf=3.0):
+        k = int(xf * SR)
+        # 2026-10-18: the looped length (n - k) must be a whole number of 1024-sample AAC frames, or the
+        # decoder keeps the last frame's padding and every lap ends in ~5 ms of near-silence. Trim the
+        # render's end BEFORE the crossfade, so the tail that is blended into the head is still the one
+        # that meets it.
+        n = k + ((self.n - k) // 1024) * 1024
         for ch in ("L", "R_"):
-            x = getattr(self, ch)
+            x = getattr(self, ch)[:n]
             # seamless loop: equal-power crossfade of the tail into the head
-            k = int(xf * SR); w = np.linspace(0, 1, k)
+            w = np.linspace(0, 1, k)
             head = x[:k].copy(); tail = x[-k:].copy()
             x[:k] = head * np.sqrt(w) + tail * np.sqrt(1 - w)
-            x = x[: self.n - k]
+            x = x[: n - k]
             setattr(self, ch, x)
         m = max(np.abs(self.L).max(), np.abs(self.R_).max()) + 1e-9
         self.L *= peak / m; self.R_ *= peak / m

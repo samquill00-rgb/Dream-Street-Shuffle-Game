@@ -1,3 +1,21 @@
+# The 5 ms loop dropout fixed; tonight's wiring walked for real — 2026-10-18 afternoon
+
+Sam asked for a pass of my choosing during a nap. Synced; Sam commits. Nothing new to hear: the change is a silence removed.
+
+**The dropout.** All nine generated beds still looping in the game (cellar, Carthage cicadas, Green Sea, Soho dawn, the five dream worlds) ended every lap in about 5 ms of dead air: AAC end-padding, because the loop wasn't a whole number of 1024-sample frames. `tools_make_beds.py`'s `Bed.finish` now trims the render to an aligned length *before* the loop crossfade, so the tail blended into the head is still the one that meets it. The nine were re-rendered (`python3 tools_make_beds.py . cellar cicadas green_sea soho_dawn himalaya nazca easter pyramid ezekiel`) and checked against the old files: correlation 0.999 or better from 4 to 60 s, identical loudness, 68.986 s instead of 69.010 s, and in the pane each now ends at body level instead of 25–55 dB under it. The generated beds no longer linked (Coach, Pillars, Trisha's, Colony, French, gents) were left alone; they're floors inside the layered beds, where their ends fall inside crossfades.
+
+**Also found, not touched (Sam's music):** `carthage-melody.m4a` opens with 0.28 s of silence, which recurs every lap of the Carthage shore bed; it may be a deliberate breath. `the-doorway-stream.mp3`'s 0.56 s silent tail is harmless (the stream plays a loop region, then the tail once).
+
+**Walked in real passages** (debug jump to Approach The French, then real link clicks, muted throughout; `AudioBufferSourceNode.start` tapped to see which loops began):
+- Approach (outdoor) → the French: `out>venue-french` fired; the 92 s French floor bed started.
+- The French → Dean Street: `venue-french>out` fired; the 32 s Dean Street theme started, and no street bed (the hub keeps its theme alone).
+- Dean Street → an outdoor passage: the 80 s street bed started; no transition (street to street).
+The game's stored mute was unchanged. Not walked: Trisha's, the Colony and the Coach gents transitions; the room ticks and close-ups in a live room.
+
+**Gotcha:** a debug jump needs a real reload. Navigating to the same page with a new `#dss-debug-jump=` hash only changes the hash and leaves you on the title; call `location.reload()` after.
+
+---
+
 # Sound effects night — 2026-10-18, 03:01 to about 03:20
 
 Sam's night task: two hours on sound effects, as many as possible to good quality, iteratively. My brief: `HANDOFF-sfx-night-brief.md`. The brief's whole list is built, synced and tested silently in the pane; nothing has been heard by anyone. Sam commits.

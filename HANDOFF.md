@@ -1,3 +1,25 @@
+# Minigame rules cards: title card + slip — 2026-10-18 evening
+
+Sam: the rules cards "still have a very 'claude' look"; from four mocked directions he chose a mix: **a title card from the game's own world carrying only the game's name, with the explanation and the button on the game's ordinary paper instruction slip tucked over it.** Built in `showRules` (the `dssShowMinigameRules` IIFE) and its CSS; the gold-bordered dark panel, corner vines and engraved emblems are gone. Synced; Sam commits.
+
+| Game | Title object |
+|---|---|
+| The cellar | a fight bill (double rules, three red stars) |
+| The beer mat game | a round mat with two printed rings |
+| Jeffrey Bernard's cow | a betting slip (header "No. 93 · DEAN ST", a flourish of mine Sam can change or drop) |
+| Cecil Court waltz | a dance card on a cord, dotted lines |
+| Tennis Court Oaths (was Ping Pong; Sam renamed it 2026-10-18 on the card and the canvas label; the debug panel's group and code comments still say ping pong) | a green scorecard with a score grid, title at 1.5em so it sits on two lines |
+| House of cards | a playing card, K ♠ corners. **Dormant**: the game was cut from The Green Sea on 17 Oct; its passage and rules call remain, so the card shows only if it's restored |
+
+- Every word on the cards is the games' own (title, subtitle, lines, touchLines, play word); the ▶ before the play word is gone. Lines render as `div`s (some games' lines are already `div`s).
+- The slip is styled like `.dss-hint-slip`; the button is typed on it (scoped `.dss-rules-slip .dss-rules-play`, so the shared gold button style elsewhere is untouched).
+- The overlay now scrolls and the objects shrink on short windows (`max-height` 700 and 520 rules).
+- **Gotcha:** the story's `*, ::before, ::after { position: relative }` rule makes every wrapper a containing block; decoration wrappers carry `.ro-deco { position: static }` so corners and the cord anchor to the card.
+- **Tested in the pane:** all six fit at 1280×800, 375×812 and 700×480 (button reachable everywhere); aria label and focus on the play button kept; Play fires the game's start and removes the overlay; screenshots of the five live cards checked. Not tested: inside each game's real passage (the call is unchanged, so only the look differs).
+- Mockups (all four directions, and the chosen mix) were in this session's scratchpad `rules-mock/`, not in the repo.
+
+---
+
 # Storm snow in gusts — 2026-10-18
 
 Sam asked for stronger blowing snow during gusts. Snow gust drift 14→36, smoothly eased; per-flake speed variation and rolling eddies add sideways curl, lift and depth turbulence. Gusts reveal full particle budget (72% calm), increase opacity/size; upper vertical wrapping handles uplift. Reduced motion freezes new storm animation. Prose/physics untouched. Syntax/build pass; headless browser forced gust at s=180 reached blowing with no JS/console errors; /tmp/hc-storm-gust.png, /tmp/hc-storm-browser.cjs. Synced; no git commands.

@@ -1,3 +1,33 @@
+# Wind-driven cloud swirl — 2026-10-18
+
+Sam asked for more drift/swirl around the mountain. Cloud banks now curl in overlapping oval eddies, lift and turn gently, with upper mist sweeping more broadly. Wind/gust drive smoothed integrated flow and accelerate the eddies; continuous deck retained. Reduced motion holds cloud animation; pause freezes integrated clocks. Only The Climb scripts changed; prose and other passages verified unchanged. Syntax/build and headless browser base/summit render pass, no console/JS errors. Synced, no git commands.
+
+---
+
+# Thicker underside cloud — 2026-10-18
+
+Sam wanted the mountain to disappear into cloud underneath. Raised cloud floor from -23 to -13 relative to shelf; raised, enlarged and thickened soft banks (.68→.9 opacity). Rock shader now fades lower faces into altitude-tinted cloud over an 11-unit band below shelf, preserving the path. Syntax/build and browser render at base/s=390 pass, zero console/JS errors; summit screenshot inspected. /tmp/hc-cloud-high.png updated. Synced; no git commands.
+
+---
+
+# Himalayas cloud deck and glitter — 2026-10-18
+
+Sam asked to shroud the empty underneath in mist/cloud and add glitter. The Climb now has a continuous 700-unit cloud floor 23 units beneath the shelf and 28 feathered sprite banks above it, following altitude; all warm with the orange dawn. Snow surface uses sparse emissive crystal glints; flakes twinkle independently. Reduced motion freezes animation. Scene cleanup owns new resources. Verified prose/markup and all other passages unchanged; syntax/sync passed. Headless Chrome checked actual rendering at base and s=390, zero JS/console errors; summit screenshot visually inspected: cloud fills drop, fine snow glints readable. Evidence /tmp/hc-cloud-low.png and /tmp/hc-cloud-high.png; browser script /tmp/hc-browser.cjs. No git commands. Synced, Sam commits.
+
+---
+
+# Himalayas orange ascent — 2026-10-18
+
+Sam asked for more dramatic lighting, progressively orange with altitude. The Climb's dawn palette now ends in burnt-orange sky/fog, orange directional light and amber snow/spindrift. Warmth starts earlier (dawn^.8); hemispheric fill falls .72→.52 while direct light rises .65→.82, rim .28→.52, preserving contrast. Height-driven; weather/physics/prose unchanged. Syntax and sync passed; not visually reviewed. No git commands. Refresh preview to see it.
+
+---
+
+# Himalayas atmosphere — 2026-10-18
+
+Sam asked for a few weather/lighting effects. The Climb now has seven soft sprite banks of spindrift beyond the immediate jumping area, fog and flake density easing up during gusts, and a low grazing rim light shifting from blue to amber with the existing dawn. Uses the existing flake texture and scene disposal; no new dependencies. Reduced motion holds the mist drift still. Prose, markup, physics and every other passage verified unchanged against /tmp/hc-before.twee. JavaScript syntax check and sync_html.py passed. Not browser-playtested or visually reviewed yet. Synced; Sam commits. No git commands.
+
+---
+
 # Playtest notes key — 2026-10-18 evening
 
 For Sam's play-through. **Shift+N** anywhere opens a small note box (dev only: localhost, or `?dev=1` on the live site); Enter saves, Shift+Enter is a new line, Escape cancels. Each note is stamped with the time, the passage name and its tags, and kept in that browser's localStorage (`dssPlaytestNotes`). The box shows the count and has **Export** (a dated `.md` download, also put on the clipboard) and **Clear** (asks first). Also on the backtick debug panel. While the box is open, keys stop there, so the game never reacts.

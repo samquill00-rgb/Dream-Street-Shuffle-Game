@@ -1,3 +1,9 @@
+# Start gate: stacked huge stones — 2026-10-18
+
+Sam wanted start pillars made from huge stacked stones, still too Greco-Roman after square posts. Replaced each start post with five broad rough box stones, .5-unit visible joints, subtly irregular corners/rotation/alignment and mottled stone materials; removed start bases/capitals. Timber crossbeam/banner/lights and other arches retained. Browser render checked, no JS/console/tw-errors; stone stack screenshot inspected. First inspection showed texture grain banding; replaced lattice coordinates with hashed scatter then resynced. Gameplay and prose untouched; no git commands. Synced.
+
+---
+
 # Orange sunset sky and pass-through verification — 2026-10-18
 
 Sam requested more orange sky and cars driving through each other. Sky gradient now mauve→burnt orange→amber, sky material toneMapped:false prevents ACES desaturating it, matching orange distant fog. No car-body collision existed; retained and documented intentional pass-through. Browser-only test hook injected from Twee into test page compared ten updates starting at exact overlap vs1404 units apart: identical player coordinates/speed2.42, no spin. Zero JS/console/tw-errors. Screenshot /tmp/nazca-orange-sky.png visually inspected, test /tmp/nazca-contact-browser.cjs (hook not saved into game). Syntax/build passed; prose unchanged. No git commands; synced.

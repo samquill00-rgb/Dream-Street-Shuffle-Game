@@ -1,3 +1,9 @@
+# Nazca race atmosphere and satin cars — 2026-10-18
+
+Sam asked for dramatic light/dust and older cars' matt shine. Only Nazca Race scripts changed: lower warmer sun and weaker ambient for contrast, cooler sky fill, copper dusk palette/fog. 12 mobile/20 desktop low windblown dust veils, longer/larger tyre plumes with crosswind, 72-puff bounded pool. Opponent remains dustless. Paint/chrome use a one-time tiny generated sky/earth PMREM reflection probe, satin paint roughness .46/metalness .55 and muted rough chrome. Probe disposed with scene. No handling/prose changes. Todo /tmp/nazca-visual-todo.md complete. Syntax/sync and actual headless Chrome desktop driving + phone reduced-motion checks passed, zero JS/console/tw-errors. Desktop screenshot inspected /tmp/nazca-beauty.png, phone /tmp/nazca-beauty-mobile.png; test /tmp/nazca-browser.cjs; original source /tmp/nazca-before-beauty.twee. No git commands. Synced, Sam commits.
+
+---
+
 # Minigame rules cards: title card + slip — 2026-10-18 evening
 
 Sam: the rules cards "still have a very 'claude' look"; from four mocked directions he chose a mix: **a title card from the game's own world carrying only the game's name, with the explanation and the button on the game's ordinary paper instruction slip tucked over it.** Built in `showRules` (the `dssShowMinigameRules` IIFE) and its CSS; the gold-bordered dark panel, corner vines and engraved emblems are gone. Synced; Sam commits.

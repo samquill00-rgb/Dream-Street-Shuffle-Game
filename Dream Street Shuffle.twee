@@ -4761,16 +4761,22 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
 (function() {
   var KEY = 'dssHauntNotebookTut', pending = false;
   function done() { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } }
-  function busy() { return (window.dssOverlayBusy && window.dssOverlayBusy()) || !!document.querySelector('.dss-hint-slip.long, tw-dialog, .phone-ringing:not(.ring-wait), .dss-rules-overlay'); }
+  function busy() { return (window.dssOverlayBusy && window.dssOverlayBusy()) || !!document.querySelector('.dss-hint-slip.long, tw-dialog, .phone-ringing:not(.ring-wait), .dss-rules-overlay, .dss-slip-fly, .dss-refusal:not(.dss-filed)'); } /* 2026-10-19 overnight: and a rejection slip, now held 6 s */
   setInterval(function() {
     if (pending || done()) return;
     var hp = Array.prototype.filter.call(document.querySelectorAll('.haunt-progress'), function(e) { return /^\s*1 of/.test(e.textContent) && e.getClientRects().length; })[0];
     if (!hp) return;
+    /* 2026-10-19 overnight (seen live in a headless run): the count began while the box was still hidden behind the drink popup, so the
+       notebook opened right over THE DEBT's flash. It now starts once the box is fully shown, and gives the flare time to finish. */
+    var hbox = hp.closest('.haunt-box');
+    if (hbox) { var hcs = getComputedStyle(hbox); if (hcs.visibility === 'hidden' || parseFloat(hcs.opacity) < 0.95) return; }
     pending = true;
     var t0 = Date.now();
     (function tryOpen() {
       if (done()) { pending = false; return; }
-      if (Date.now() - t0 < 2600 || busy()) { setTimeout(tryOpen, 300); return; }
+      if (document.querySelector('tw-dialog .nb-haunts')) { try { localStorage.setItem(KEY, '1'); } catch (e) {} pending = false; return; } /* 2026-10-19 overnight: the player opened the NOTEBOOK themselves, so the lesson is learnt; don't pop it open again once they close it */
+      if (busy()) { t0 = Date.now(); setTimeout(tryOpen, 300); return; } /* the count restarts while anything is up (the drink popup above all) */
+      if (Date.now() - t0 < 4500) { setTimeout(tryOpen, 300); return; } /* 4.5 s clear: the box's reveal and flare (to 2.8 s) are over */
       var nb = document.querySelector('.notebook-link tw-link');
       if (!nb || !nb.getClientRects().length) { if (Date.now() - t0 < 60000) { setTimeout(tryOpen, 500); } else { pending = false; } return; }
       try { localStorage.setItem(KEY, '1'); } catch (e) {}
@@ -4795,7 +4801,8 @@ window.dssOverlayBusy = function() {
     '#dss-quest-overlay,' +
     '#venue-hint-overlay,#word-wise-overlay,#wtw-overlay,' +
     '#liver-eat-overlay,#napkin-popup-overlay,.dss-rules-overlay,' +
-    '#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro'
+    '#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro,' +
+    '#dss-lore-overlay' /* 2026-10-19 overnight: a lore note or THE RUMOUR, so nothing pops up over his words while they are being read */
   );
 };
 window.dssDeferIfBusy = function(retry) {
@@ -5993,6 +6000,7 @@ function init(container) {
       refreshBar(); return;
     }
     if (st.status !== 'open' || !st.link) { refreshBar(); return; }
+    if (S.bump) { S.bump = null; S.px = S.c * T; S.py = S.r * T; } /* 2026-10-19 overnight: a plate clicked mid-bump */
     S.entering = door; S.enterT = 0;
     try { if ((door.id === 'chippy' || door.id === 'barber') && window.dssAudio && window.dssAudio.doorShopBell) setTimeout(function(){ window.dssAudio.doorShopBell(); }, 900); } catch(e) {}
     try { sessionStorage.setItem('dssMapLast', door.id); } catch(e) {}
@@ -6343,10 +6351,11 @@ function init(container) {
     // 2026-10-15 (Sam: the game guides you to the person you chose to pitch to): a gold thread to the picked door
     // 2026-10-16 (Sam): a red path, from where you stand to the chosen door, that you follow
     var pitchDoor = hubFlag('pitch');
-    if (pitchDoor && pitchDoor !== window.__dssDirBest) { drawOneThread(x, cx, cy, { id: pitchDoor, col: [236, 58, 46], always: true, strong: true }); pitchLitSound(pitchDoor); }
+    if (pitchDoor && pitchDoor !== window.__dssDirBest) { if (drawOneThread(x, cx, cy, { id: pitchDoor, col: [236, 58, 46], always: true, strong: true })) pitchLitSound(pitchDoor); }
   }
   // 2026-10-19 (Sam, playtest: "when you select a path and the route there lights up in red, there should be a noise"): the quest's call, once for each door picked in a night
   function pitchLitSound(id) {
+    if (S.pitchLitId === id) return; S.pitchLitId = id; /* 2026-10-19 overnight: checked once per map visit, not on every frame */
     var key = id + '@' + ((function() { try { return localStorage.getItem('dssNightNo') || ''; } catch (e) { return ''; } })()), was = '';
     try { was = sessionStorage.getItem('dssPitchLit') || ''; } catch (e) { was = window.__dssPitchLit || ''; }
     if (was === key) return;
@@ -6395,7 +6404,7 @@ function init(container) {
     if (!d) return;
     var path = routeToCecil(d);
     if (!path || path.length < 4) return;
-    var n = path.length, col = spec.col;
+    var n = path.length, col = spec.col, drawn = true; /* 2026-10-19 overnight: returns true when drawn, so the red route's sound waits for a real route */
     // the pulse travels away from the player, then rests before setting off again
     var head = (S.t * 0.5) % (n + 30);
     x.save();
@@ -6415,6 +6424,7 @@ function init(container) {
       x.fillStyle = g; x.fillRect(px - 9, py - 9, 18, 18);
     }
     x.restore();
+    return drawn;
   }
   function draw() {
     var cx = Math.round(S.cam.x), cy = Math.round(S.cam.y);
@@ -7194,6 +7204,11 @@ window.dssQuestPopup = function() {
      before this runs, so the offer and its link are looked for there as well */
   var offer = document.querySelector('tw-passage .dss-quest-offer, tw-story > .dss-threshold .dss-quest-offer, tw-story > .dss-room-fixed .dss-quest-offer');
   if (!offer) return;
+  /* 2026-10-19 overnight (seen live, O'Flatterly's quest): the errand waits for a rejection slip to be filed, and 2.5 s more so the haunt it
+     brings is seen, instead of landing on top of INIS's slip */
+  var slipDue = !!document.querySelector('.dss-slip-fly') || Array.prototype.some.call(document.querySelectorAll('.dss-refusal:not(.dss-filed)'), function(m) { var pe = m.parentElement; return pe && !pe.closest('[hidden]') && pe.getClientRects().length > 0; });
+  if (window._dssQuestWaitGen !== window._passageGen) { window._dssQuestWaitGen = window._passageGen; window._dssQuestWaitFrom = Date.now(); }
+  if ((slipDue || Date.now() - (window._dssSlipFiledAt || 0) < 2500) && Date.now() - window._dssQuestWaitFrom < 20000) { setTimeout(window.dssQuestPopup, 500); return; }
   if (window.dssDeferIfBusy(window.dssQuestPopup)) return;
 
   var gen = window._passageGen;
@@ -12752,7 +12767,7 @@ window.dssLore = (function() {
   // 2026-10-19 (Sam, playtest): a room card's lore button opens the note and leaves the card up, so closing the note goes back to the card
   function open(l) { var t = titleOf(l.textContent); if (notes[t]) show(t); else if (l.isConnected) l.click(); }
   /* 2026-10-19: a note held in the page rather than behind a link (THE GREAT WORK, printed hidden by the header) */
-  function showFrom(title, src) { if (!notes[title] && src) { var frag = document.createElement('div'); frag.className = 'dss-lore-held'; frag.innerHTML = src.innerHTML; notes[title] = frag; } show(title); }
+  function showFrom(title, src) { if (!notes[title] && src) { var frag = document.createElement('div'); frag.className = 'dss-lore-held'; frag.innerHTML = src.innerHTML; Array.prototype.forEach.call(frag.querySelectorAll('[style]'), function(e) { e.style.removeProperty('opacity'); e.style.removeProperty('transition'); }); notes[title] = frag; } show(title); } /* (overnight: no inline opacity carried into the card) */
   return { scan: scan, show: show, isLore: isLore, open: open, showFrom: showFrom };
 })();
 /* 2026-10-19 (Sam: explain the alchemy, "4 plus 3"). THE WHEEL IN THE NOTEBOOK and THE GREAT WORK NOTE.
@@ -12964,7 +12979,7 @@ window.dssWatkinsVision = function() {
   function glassFrame(){if(!root.isConnected)return;window.dssWaltzGlass(glassCanvas,performance.now()-glassBorn,0,.35,still);glassRAF=requestAnimationFrame(glassFrame);}
   requestAnimationFrame(glassFrame);
   if(links)links.addEventListener('click',function(ev){var a=ev.target.closest('tw-link');if(!a||a.textContent.trim()!=='Waltz on to the light')return;
-    if(music)music.open();
+    if(music&&music.open)music.open(); /* 2026-10-19 overnight: the stub (no audio yet) has no open() */
     window._dssWaltzCarry={music:music,born:glassBorn,at:performance.now()};
     var cover=document.createElement('canvas');cover.width=360;cover.height=540;cover.getContext('2d').drawImage(glassCanvas,0,0);cover.id='wk-glass-crossing';var r=glassCanvas.getBoundingClientRect();cover.style.cssText='position:fixed;pointer-events:none;z-index:9999;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;transition:all 900ms ease,opacity 600ms ease 700ms';document.body.appendChild(cover);setTimeout(function(){cover.remove();},2200);
   },true);
@@ -13036,6 +13051,7 @@ window.dssRumourCard = function() {
   var stage = null;
   function close() { stage = null; var o = document.getElementById('dss-lore-overlay'); if (o) { o.classList.add('out'); setTimeout(function() { if (o.parentNode) o.parentNode.removeChild(o); }, 250); } document.removeEventListener('keydown', onKey, true); }
   function onKey(ev) {
+    if (!document.querySelector('#dss-lore-overlay .dss-rumour-card')) { stage = null; document.removeEventListener('keydown', onKey, true); return; } /* 2026-10-19 overnight: another card took the overlay */
     if (stage && stage.left() && (ev.key === 'Escape' || ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); ev.stopPropagation(); stage.next(); return; }
     if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
   }
@@ -13055,6 +13071,7 @@ window.dssRumourCard = function() {
       var done = document.createElement('button'); done.type = 'button'; done.className = 'dss-rumour-done'; done.textContent = 'Not a word.';
       done.addEventListener('click', function(ev) { ev.stopPropagation(); close(); });
       c.appendChild(done); try { done.focus({ preventScroll: true }); } catch (e) {}
+      setTimeout(function() { try { done.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }, 60); /* 2026-10-19 overnight: on a short screen the button sat below the card's fold, so the end of his speech showed no way out */
     }
     function next() {
       if (i >= ps.length || Date.now() < ready) return;
@@ -13119,7 +13136,7 @@ window.dssRefusals = (function() {
       slip.classList.add('out');
       setTimeout(function() {
         if (slip.parentNode) slip.parentNode.removeChild(slip);
-        m.classList.add('dss-filed'); after(m);
+        m.classList.add('dss-filed'); after(m); window._dssSlipFiledAt = Date.now();
         // the scene's haunt box now plays its own reveal from the start
         var root = m.closest('.dss-room-prose') || m.closest('tw-passage');
         if (root) Array.prototype.forEach.call(root.querySelectorAll('.haunt-box'), function(h) { h.style.animation = 'none'; void h.offsetWidth; h.style.animation = ''; });
@@ -13147,7 +13164,7 @@ window.dssRefusals = (function() {
     Array.prototype.forEach.call(document.querySelectorAll('.dss-refusal:not(.dss-filed)'), function(m) { if (!m._filed && shown(m.parentElement)) file(m); });
     // 2026-10-19 (Sam: "these are post-conversation reflections"): a line whose conversation ends in a later passage than its slip
     // (DAVY's, in his tip) carries data-later and shows once that reader's slip is filed tonight
-    Array.prototype.forEach.call(document.querySelectorAll('.dss-refusal-after[data-later][hidden]'), function(sl) { var k = sl.getAttribute('data-k'), n = night(); if (load().some(function(r) { return r.n === n && r.k === k; })) { sl.hidden = false; setTimeout(function() { sl.classList.add('dss-in'); }, 30); } });
+    if (!document.querySelector('.dss-slip-fly')) Array.prototype.forEach.call(document.querySelectorAll('.dss-refusal-after[data-later][hidden]'), function(sl) { var k = sl.getAttribute('data-k'), n = night(); if (load().some(function(r) { return r.n === n && r.k === k; })) { /* (overnight: not while his slip is still flying) */ sl.hidden = false; setTimeout(function() { sl.classList.add('dss-in'); }, 30); } });
   }
   function slipEl(r, age) {
     var d = document.createElement('div'); d.className = 'nb-slip' + (r.near ? ' nb-slip-near' : '') + (r.yes ? ' nb-slip-yes' : '') + (age ? ' nb-slip-age' + age : '');
@@ -13488,7 +13505,7 @@ window._passageGen = 0;
             // (link:)-wrapped lore-boxes aren't in the DOM yet at this point,
             // so they won't get caught by the selector.
             var hideSel = '.haunt-box, .revelation-box, .page-found, .item-box, .lore-box';
-            var toHide = n.querySelectorAll(hideSel);
+            var toHide = Array.prototype.filter.call(n.querySelectorAll(hideSel), function(el) { return !el.closest('[hidden], #dss-lore-greatwork'); }); /* 2026-10-19 overnight: not the header's hidden copy of THE GREAT WORK (it made every page fire dss:boxreveal) */
             for (var hh = 0; hh < toHide.length; hh++) {
               toHide[hh].style.transition = 'opacity 0.8s ease';
               toHide[hh].style.opacity = '0';
@@ -13626,7 +13643,9 @@ window._passageGen = 0;
                       el.classList.remove('haunt-bloom');
                       void el.offsetWidth;
                       el.classList.add('haunt-bloom');
-                      setTimeout(function() { el.classList.remove('haunt-bloom'); }, 3000); /* 2026-10-19: 3 s, so THE DEBT's red flash (2.8 s) finishes before the class goes */
+                      /* 2026-10-19 overnight: the class stays. Taking it off swapped the box's animation back to hauntReveal, which restarted from
+                         opacity 0, so every haunt box blinked out and faded in again about 3 s after landing (seen live in a headless run).
+                         The flare's last keyframe is the resting look, held by its fill. */
                     })(toHide[rr]);
                   }
                 }
@@ -14306,7 +14325,7 @@ window.showDrinkPopupSafe = function(typeOrFn, delay) {
 // Default is 'gents' for back-compat with any old callsites.
 window.SpewPopup = class SpewPopup {
 constructor(mode) {
-  this.mode = (mode === 'doorway') ? 'doorway' : 'gents';
+  this.mode = (mode === 'doorway' || mode === 'doorway-spew') ? mode : 'gents'; /* 2026-10-19: 'doorway-spew', retching in a doorway when drunk */
   // the doorway's stream is a file: fetch and decode it as the popup opens, so the hold plays at once
   if (this.mode === 'doorway' && window.dssAudio && window.dssAudio.primePissStream) { try { window.dssAudio.primePissStream(); } catch(e) {} }
   this.done = false;
@@ -14372,7 +14391,7 @@ _build() {
     'color:rgba(200,168,106,0.85);',
     'border-bottom:1px solid rgba(200,168,106,0.15);',
   ].join('');
-  this.nameLabel.textContent = (this.mode === 'doorway') ? 'A Doorway' : 'The Gents';
+  this.nameLabel.textContent = (this.mode === 'gents') ? 'The Gents' : 'A Doorway';
   this.card.appendChild(this.nameLabel);
   // Sage separator under the label
   var sep = document.createElement('div');
@@ -14441,11 +14460,12 @@ _fadeOut() {
   // the audio: stop the toilet ambience and start the late-night-street
   // bed for the bar moment that follows. Tag-based auto-stop will catch
   // the coach-bar bed when the player navigates out of the passage.
-  if (window.dssAudio && window.dssAudio.stopBed) {
+  /* 2026-10-19 (found on Sam's playtest): the hand-off to the Coach's bar belongs to the gents only; a Soho doorway was starting the coach-bar bed */
+  if (this.mode === 'gents' && window.dssAudio && window.dssAudio.stopBed) {
     try { window.dssAudio.stopBed('toilet-gents'); } catch(e) {}
     if (window.dssAudio.playTransition) { try { window.dssAudio.playTransition('gents>venue-coach'); } catch(e) {} } // 2026-10-18: up the stairs to the bar
   }
-  if (window.dssAudio && window.dssAudio.startBed) {
+  if (this.mode === 'gents' && window.dssAudio && window.dssAudio.startBed) {
     try { window.dssAudio.startBed('coach-bar'); } catch(e) {}
   }
   var self = this;
@@ -14486,7 +14506,7 @@ _startLoop() {
             size: 1.2 + Math.random() * 2.0,
             col: Math.random() < 0.6 ? '#a8862c' : '#c4a43a'
           });
-        } else {
+        } else if (self.mode === 'doorway') { /* 2026-10-19 overnight: the piss's splash, not the retch's */
           self.particles.push({
             x: 104 + (Math.random() - 0.5) * 8,
             y: 162,
@@ -14497,6 +14517,19 @@ _startLoop() {
             col: Math.random() < 0.6 ? '#a8862c' : '#c4a43a'
           });
         }
+      }
+      if (self.mode === 'doorway-spew' && Math.random() < 0.55) {
+        /* the doorway retch: a spray at the mouth and splashes where it lands on the step */
+        var atMouth = Math.random() < 0.5;
+        self.particles.push({
+          x: atMouth ? 102 + Math.random() * 6 : 98 + (Math.random() - 0.5) * 16,
+          y: atMouth ? 52 + Math.random() * 4 : 166,
+          vx: atMouth ? 6 + Math.random() * 18 : (Math.random() - 0.5) * 40,
+          vy: atMouth ? 10 + Math.random() * 24 : -10 - Math.random() * 24,
+          life: atMouth ? 0.8 : 0.7,
+          size: 1.1 + Math.random() * 1.8,
+          col: Math.random() < 0.6 ? '#7e6c30' : '#8e7a3a'
+        });
       }
       if (self.mode === 'gents' && Math.random() < 0.12) {
         self.ripples.push({ r: 4, life: 1 });
@@ -14703,8 +14736,9 @@ _draw() {
     c.fillStyle = 'rgba(24,24,26,0.9)'; c.fillRect(0, 178, W, H - 178);
     c.strokeStyle = 'rgba(140,140,130,0.06)'; c.lineWidth = 1;
     c.beginPath(); c.moveTo(0, 189); c.lineTo(W, 189); c.stroke();
+    var spew = (this.mode === 'doorway-spew'); /* 2026-10-19: drunk in the doorway, retching (no stream; leaning on the jamb) */
     // Wet splash mark climbing the door as it goes on
-    if (wl > 0.03) {
+    if (wl > 0.03 && !spew) {
       c.fillStyle = 'rgba(4,4,5,' + (0.3 + wl * 0.3).toFixed(2) + ')';
       c.beginPath();
       c.ellipse(106, 166, 7 + wl * 7, 13 + wl * 14, -0.25, 0, Math.PI * 2);
@@ -14744,6 +14778,7 @@ _draw() {
     // The figure: solid silhouette from behind, coat on, feet planted
     var lean = Math.sin(t * 0.9) * 1.2;
     var fx = 70 + lean, fy = 40;
+    if (spew) { c.save(); c.translate(fx, fy + 136); c.rotate(0.22 + (this.retching ? Math.sin(t * 7) * 0.025 : 0)); c.translate(-fx, -(fy + 136)); }
     c.fillStyle = 'rgba(28,25,20,0.95)';
     c.beginPath(); c.arc(fx + sway * 0.6, fy, 8.5, 0, Math.PI * 2); c.fill();
     c.beginPath();
@@ -14756,11 +14791,11 @@ _draw() {
     c.lineTo(fx + 21, fy + 30);
     c.quadraticCurveTo(fx + 20, fy + 14, fx + 8, fy + 7);
     c.closePath(); c.fill();
-    // Near arm angled in front (unseen hands)
+    // Near arm angled in front (unseen hands); retching, it is braced out against the jamb
     c.strokeStyle = 'rgba(28,25,20,0.95)'; c.lineWidth = 7; c.lineCap = 'round';
     c.beginPath();
     c.moveTo(fx + 16, fy + 22);
-    c.quadraticCurveTo(fx + 27, fy + 42, fx + 18, fy + 62);
+    if (spew) c.quadraticCurveTo(fx + 34, fy + 18, fx + 50, fy + 8); else c.quadraticCurveTo(fx + 27, fy + 42, fx + 18, fy + 62);
     c.stroke();
     // Legs
     c.lineWidth = 8;
@@ -14777,8 +14812,26 @@ _draw() {
     c.moveTo(fx - 19, fy + 16);
     c.lineTo(fx - 17, fy + 92);
     c.stroke();
+    if (spew) {
+      c.restore();
+      /* what comes up: a thick, broken fall from the mouth to the step */
+      if (this.retching && wl > 0) {
+        var va = Math.min(1, 0.55 + wl * 0.5), cx1 = 114 + Math.sin(t * 6) * 3;
+        c.lineCap = 'round';
+        c.strokeStyle = 'rgba(112,98,44,' + (va * 0.45).toFixed(2) + ')'; c.lineWidth = 2.2;
+        c.beginPath(); c.moveTo(103, 54); c.quadraticCurveTo(cx1, 110, 99, 166); c.stroke();
+        /* chunks falling down that curve: broken, murky, not a clean stream */
+        for (var vk = 0; vk < 16; vk++) {
+          var vu = ((vk / 16) + t * 1.7) % 1, vm = 1 - vu;
+          var vx = vm * vm * 103 + 2 * vm * vu * cx1 + vu * vu * 99, vy = vm * vm * 54 + 2 * vm * vu * 110 + vu * vu * 166;
+          var vr = 1.6 + (Math.sin(t * 13 + vk * 2.3) + 1) * 1.1 + vu * 0.8;
+          c.fillStyle = (vk % 3 === 0) ? 'rgba(138,118,52,' + va.toFixed(2) + ')' : 'rgba(118,104,46,' + (va * 0.9).toFixed(2) + ')';
+          c.beginPath(); c.arc(vx + Math.sin(t * 11 + vk) * 1.6, vy, vr, 0, Math.PI * 2); c.fill();
+        }
+      }
+    }
     // The stream, past his side to the door foot
-    if (this.retching && wl > 0) {
+    if (this.retching && wl > 0 && !spew) {
       var pa = Math.min(1, 0.5 + wl * 0.6);
       c.lineCap = 'round';
       c.strokeStyle = 'rgba(186,156,54,' + pa.toFixed(2) + ')';
@@ -17789,7 +17842,7 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     '.back-one-link, .notebook-link, .phone-exit, .phone-ringing, .guided-link, .gents-side-action, ' +
     '.title-begin, .dream-sequence, .reclamation-invite, .book-naming, .nb-inv-eat, ' +
     '.canvas-bail, .typewriter-page, .worm-payment, .dss-night-choice, .dss-dawn-choice, ' +
-    'tw-dialog, .lore-box, .greyed-out, .soho-map-wrap, #dean-lamp, .night-record';
+    'tw-dialog, .lore-box, .greyed-out, .soho-map-wrap, #dean-lamp, .night-record, .critic-replies'; /* 2026-10-19 overnight: the critic's replies are buttons of their own */
   var DREAM_TAGS = /\b(dream|minigame|waltz-game|pong|reclamation|nazca|pyramid|easter|himalayan|ezekiel|pyre|sanctum|synthesis|green-sea|carthage-shore)\b/;
   var STREET_TAGS = /\b(outdoor|street-night)\b/;
   function add(map, key, target) {
@@ -17926,6 +17979,7 @@ soloDebounce = setTimeout(checkSoloLink, 350);
     // restorations, not fresh discoveries.
     if (link.getAttribute('data-auto-expand') === '1') return;
     if (window.dssAudio && window.dssAudio.loreUnravel) {
+      window._dssLoreRustleAt = Date.now(); /* 2026-10-19 overnight: the box watcher below stays quiet for this one (it was a double rustle) */
       window.dssAudio.loreUnravel();
     }
     var title = (link.textContent || '').trim();
@@ -18023,9 +18077,14 @@ soloDebounce = setTimeout(checkSoloLink, 350);
       // No passage swap — any lore-box added now is from a click expansion.
       var boxes = document.querySelectorAll('.lore-box');
       for (var b = 0; b < boxes.length; b++) {
+        /* 2026-10-19 overnight: a hidden box (the header's copy of THE GREAT WORK) or a page-turn after-image's clone is not a note
+           being opened; without this the rustle played on nearly every page turn */
+        if (boxes[b].closest('[hidden], .dss-ghost, #dss-lore-greatwork')) { seen.add(boxes[b]); continue; }
         if (!seen.has(boxes[b])) {
           seen.add(boxes[b]);
+          if (Date.now() - (window._dssLoreRustleAt || 0) < 900) continue; /* the link's own click just rustled */
           if (window.dssAudio && window.dssAudio.loreUnravel) {
+            window._dssLoreRustleAt = Date.now();
             window.dssAudio.loreUnravel();
             break; // only one rustle per click expansion
           }
@@ -22006,10 +22065,10 @@ var fhStill = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
    (localStorage dssFairyVisits) picks its note set, so each visit sounds a little different */
 (function() {
   var visit = 0; try { visit = (+localStorage.getItem('dssFairyVisits') || 0) + 1; localStorage.setItem('dssFairyVisits', String(visit)); } catch (e) {}
-  var seen = false;
+  var seen = false, waits = 0;
   function twinkle() {
     var on = !!(fhWrap && fhWrap.isConnected); /* this build's own overlay (hoisted var): wait for it, stop once it is gone */
-    if (!on) { if (!seen) setTimeout(twinkle, 500); return; }
+    if (!on) { if (!seen && ++waits < 20) setTimeout(twinkle, 500); return; } /* 2026-10-19 overnight: gives up after 10 s, so a visit left within the first beat doesn't poll all night */
     seen = true;
     if (!document.hidden && window.dssAudio && window.dssAudio.fairyTwinkle) { try { window.dssAudio._tick(function() { window.dssAudio.fairyTwinkle(visit); }); } catch (e) {} }
     setTimeout(twinkle, 6000 + Math.random() * 5000);
@@ -24531,7 +24590,7 @@ window.dssRoomReveal = function(wrap, camera, glows, idle) {
 var layer = document.createElement('div'); layer.className = 'dss-room-reveal'; wrap.appendChild(layer);
 var marks = glows.map(function(g) {
 var m = document.createElement('div'); m.className = 'dss-room-mark dss-room-mark-free';
-var ring = document.createElement('i'); var name = document.createElement('span'); name.textContent = g.spot.name || '';
+var ring = document.createElement('i'); var name = document.createElement('span'); name.textContent = g.spot.label || g.spot.name || ''; /* 2026-10-19 overnight: the label (WAY OUT) as the hover, card and keys show it */
 var lead = document.createElement('b'); lead.className = 'dss-room-lead';
 m.appendChild(lead); m.appendChild(ring); m.appendChild(name); layer.appendChild(m);
 return { g: g, el: m, ring: ring, name: name, lead: lead, shown: true };
@@ -25760,9 +25819,9 @@ return flower ? 'There is a lily in this room. Gather it.' : take ? 'SOMETHING H
 function holdsHint() { var h = roomHolds(); if (h) { hint.textContent = h; hint.dataset.keep = '1'; hint.dataset.line = h; var lily = (h === 'There is a lily in this room. Gather it.'); var S = hint.style;
 if (lily) { S.top = '14px'; S.left = 'auto'; S.right = '14px'; S.transform = 'none'; S.textAlign = 'left'; S.maxWidth = '300px'; S.font = 'italic 15px Georgia, \'Crimson Text\', serif'; S.letterSpacing = '0.02em'; S.color = '#eef7e6'; S.textShadow = '0 0 8px rgba(150,220,130,0.35)'; S.background = 'rgba(12,20,12,0.92)'; S.border = '1px solid rgba(176,226,156,0.9)'; S.boxShadow = '0 0 18px rgba(150,220,130,0.45), 0 2px 10px rgba(0,0,0,0.5)'; S.padding = '9px 14px 9px 10px'; S.borderRadius = '3px';
 /* 2026-10-19 (Sam: "drab and unfinished ... should be more obvious"): a dark ground, a breathing green glow, and the game's own lily sprig before the line */
-hint.classList.add('dss-lily-hint'); var lsv = null; try { var lh = window.dssRoomScope(o.host); lsv = lh && lh.querySelector('tw-hook[name^="lily"] svg'); } catch (e) {}
-if (lsv) { var ic = lsv.cloneNode(true); ic.removeAttribute('id'); ic.setAttribute('aria-hidden', 'true'); ic.setAttribute('class', 'dss-lily-hint-ic'); hint.insertBefore(ic, hint.firstChild); } }
-else { hint.classList.remove('dss-lily-hint'); S.top = '22px'; S.left = '50%'; S.right = 'auto'; S.transform = 'translateX(-50%)'; S.textAlign = 'center'; S.maxWidth = '90%'; S.font = '12.5px \'Courier New\', monospace'; S.letterSpacing = '3px'; S.color = cFg; S.textShadow = '0 0 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9)'; S.background = 'rgba(8,6,4,0.55)'; S.border = 'none'; S.boxShadow = 'none'; S.padding = '5px 12px'; S.borderRadius = '2px'; } } }
+hint.classList.add('dss-room-lily-hint'); var lsv = null; try { var lh = window.dssRoomScope(o.host); lsv = null; if (lh) Array.prototype.some.call(lh.querySelectorAll('tw-hook[name^="lily"]'), function(hk) { if (!/^lily\d$/.test(hk.getAttribute('name') || '')) return false; lsv = hk.querySelector('svg'); return !!lsv; }); } catch (e) {}
+if (lsv) { var ic = lsv.cloneNode(true); ic.removeAttribute('id'); ic.setAttribute('aria-hidden', 'true'); ic.setAttribute('class', 'dss-room-lily-hint-ic'); hint.insertBefore(ic, hint.firstChild); } }
+else { hint.classList.remove('dss-room-lily-hint'); S.top = '22px'; S.left = '50%'; S.right = 'auto'; S.transform = 'translateX(-50%)'; S.textAlign = 'center'; S.maxWidth = '90%'; S.font = '12.5px \'Courier New\', monospace'; S.letterSpacing = '3px'; S.color = cFg; S.textShadow = '0 0 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9)'; S.background = 'rgba(8,6,4,0.55)'; S.border = 'none'; S.boxShadow = 'none'; S.padding = '5px 12px'; S.borderRadius = '2px'; } } }
 // taken: the hint lets go and fades like any other room's
 var holdsTimer = setInterval(function() {
 if (!wrap.isConnected) { clearInterval(holdsTimer); return; }
@@ -54391,9 +54450,9 @@ if(window.dssAudio) { setTimeout(function(){ window.dssAudio.uncork(); }, 250); 
      like that, so the tutorial was overselling the mechanic it exists to
      explain. Small gain, and one time in four nothing, exactly as elsewhere. -->
 (set: $alleyReturn to true)\
-(set: $hadBreather to true)(set: $justDoorway to true)\
+(set: $hadBreather to true)(set: $justDoorway to true)<!-- 2026-10-19 (Sam, playtest: "I just took a piss in a doorway but it used the vomit 'spew up your guts' line. That should only be available later and use a different animation"): drunk (sobriety under 30) you retch in the doorway instead, and only then does the spew line follow on the street -->(set: $doorSpew to ($sobriety is a number and $sobriety < 30))\
 (if: (random: 1, 4) > 1)[(set: $confidence to ($statGain: $confidence, 4))(set: $sobriety to ($statGain: $sobriety, 6))]\
-<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('doorway',300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('doorway');},300);}</script>\
+<span class="dss-door-mode" hidden>(if: $doorSpew is true)[spew]</span><script>(function(){var dm=document.querySelector('.dss-door-mode');var m=(dm&&dm.textContent.trim()==='spew')?'doorway-spew':'doorway';if(window.showSpewPopupSafe){window.showSpewPopupSafe(m,300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup(m);},300);}})();</script>\
 (go-to: "Dean Street")
 
 :: Doorway: Livonia Street [outdoor hub] {"position":"700,620","size":"100,100"}
@@ -54414,9 +54473,9 @@ if(window.dssAudio) { setTimeout(function(){ window.dssAudio.uncork(); }, 250); 
      that one now gives exactly what these do, so there is nothing left to guard.
      The prompt itself is untouched: the same showSpewPopup('doorway'). -->
 (set: $alleyReturn to true)\
-(set: $hadBreather to true)(set: $justDoorway to true)\
+(set: $hadBreather to true)(set: $justDoorway to true)<!-- 2026-10-19 (Sam, playtest: "I just took a piss in a doorway but it used the vomit 'spew up your guts' line. That should only be available later and use a different animation"): drunk (sobriety under 30) you retch in the doorway instead, and only then does the spew line follow on the street -->(set: $doorSpew to ($sobriety is a number and $sobriety < 30))\
 (if: (random: 1, 4) > 1)[(set: $confidence to ($statGain: $confidence, 4))(set: $sobriety to ($statGain: $sobriety, 6))]\
-<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('doorway',300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('doorway');},300);}</script>\
+<span class="dss-door-mode" hidden>(if: $doorSpew is true)[spew]</span><script>(function(){var dm=document.querySelector('.dss-door-mode');var m=(dm&&dm.textContent.trim()==='spew')?'doorway-spew':'doorway';if(window.showSpewPopupSafe){window.showSpewPopupSafe(m,300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup(m);},300);}})();</script>\
 (go-to: "Dean Street")
 
 :: Doorway: Diadem Court [outdoor hub] {"position":"800,620","size":"100,100"}
@@ -54437,9 +54496,9 @@ if(window.dssAudio) { setTimeout(function(){ window.dssAudio.uncork(); }, 250); 
      that one now gives exactly what these do, so there is nothing left to guard.
      The prompt itself is untouched: the same showSpewPopup('doorway'). -->
 (set: $alleyReturn to true)\
-(set: $hadBreather to true)(set: $justDoorway to true)\
+(set: $hadBreather to true)(set: $justDoorway to true)<!-- 2026-10-19 (Sam, playtest: "I just took a piss in a doorway but it used the vomit 'spew up your guts' line. That should only be available later and use a different animation"): drunk (sobriety under 30) you retch in the doorway instead, and only then does the spew line follow on the street -->(set: $doorSpew to ($sobriety is a number and $sobriety < 30))\
 (if: (random: 1, 4) > 1)[(set: $confidence to ($statGain: $confidence, 4))(set: $sobriety to ($statGain: $sobriety, 6))]\
-<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('doorway',300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('doorway');},300);}</script>\
+<span class="dss-door-mode" hidden>(if: $doorSpew is true)[spew]</span><script>(function(){var dm=document.querySelector('.dss-door-mode');var m=(dm&&dm.textContent.trim()==='spew')?'doorway-spew':'doorway';if(window.showSpewPopupSafe){window.showSpewPopupSafe(m,300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup(m);},300);}})();</script>\
 (go-to: "Dean Street")
 
 :: Doorway: Ham Yard [outdoor hub] {"position":"900,620","size":"100,100"}
@@ -54460,9 +54519,9 @@ if(window.dssAudio) { setTimeout(function(){ window.dssAudio.uncork(); }, 250); 
      that one now gives exactly what these do, so there is nothing left to guard.
      The prompt itself is untouched: the same showSpewPopup('doorway'). -->
 (set: $alleyReturn to true)\
-(set: $hadBreather to true)(set: $justDoorway to true)\
+(set: $hadBreather to true)(set: $justDoorway to true)<!-- 2026-10-19 (Sam, playtest: "I just took a piss in a doorway but it used the vomit 'spew up your guts' line. That should only be available later and use a different animation"): drunk (sobriety under 30) you retch in the doorway instead, and only then does the spew line follow on the street -->(set: $doorSpew to ($sobriety is a number and $sobriety < 30))\
 (if: (random: 1, 4) > 1)[(set: $confidence to ($statGain: $confidence, 4))(set: $sobriety to ($statGain: $sobriety, 6))]\
-<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('doorway',300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('doorway');},300);}</script>\
+<span class="dss-door-mode" hidden>(if: $doorSpew is true)[spew]</span><script>(function(){var dm=document.querySelector('.dss-door-mode');var m=(dm&&dm.textContent.trim()==='spew')?'doorway-spew':'doorway';if(window.showSpewPopupSafe){window.showSpewPopupSafe(m,300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup(m);},300);}})();</script>\
 (go-to: "Dean Street")
 
 :: Doorway: Romilly Street [outdoor hub] {"position":"1000,620","size":"100,100"}
@@ -54483,9 +54542,9 @@ if(window.dssAudio) { setTimeout(function(){ window.dssAudio.uncork(); }, 250); 
      that one now gives exactly what these do, so there is nothing left to guard.
      The prompt itself is untouched: the same showSpewPopup('doorway'). -->
 (set: $alleyReturn to true)\
-(set: $hadBreather to true)(set: $justDoorway to true)\
+(set: $hadBreather to true)(set: $justDoorway to true)<!-- 2026-10-19 (Sam, playtest: "I just took a piss in a doorway but it used the vomit 'spew up your guts' line. That should only be available later and use a different animation"): drunk (sobriety under 30) you retch in the doorway instead, and only then does the spew line follow on the street -->(set: $doorSpew to ($sobriety is a number and $sobriety < 30))\
 (if: (random: 1, 4) > 1)[(set: $confidence to ($statGain: $confidence, 4))(set: $sobriety to ($statGain: $sobriety, 6))]\
-<script>if(window.showSpewPopupSafe){window.showSpewPopupSafe('doorway',300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup('doorway');},300);}</script>\
+<span class="dss-door-mode" hidden>(if: $doorSpew is true)[spew]</span><script>(function(){var dm=document.querySelector('.dss-door-mode');var m=(dm&&dm.textContent.trim()==='spew')?'doorway-spew':'doorway';if(window.showSpewPopupSafe){window.showSpewPopupSafe(m,300);}else{setTimeout(function(){if(window.showSpewPopup)window.showSpewPopup(m);},300);}})();</script>\
 (go-to: "Dean Street")
 
 :: The Phone Box [outdoor street-night] {"position":"1400,300","size":"100,100"}
@@ -55831,10 +55890,11 @@ Better not tomorrow.
 :: Dean Street [hub] {"position":"900,400","size":"100,100"}
 <!-- 2026-09-28 review fix: the street no longer resets $drinksRound, so the night's drinks run 8, 13, 18, 23, 28 whichever pub they are in and the fifth from 70 blacks out anywhere. The round still resets at The Blackout and at Start. -->\
 (if: $pendingLilyBreath is true)[(set: $pendingLilyBreath to false)(go-to: "After the call")]\
-(if: $hadPhoneCall is true and $metCritic is true and $sawAoifeReflection is false)[(set: $sawAoifeReflection to true)(set: $aoifeReflectLap to $returns)(go-to: "After Aoife")]\
-<!-- 2026-10-15 (Sam: the cover story revealed later): Night Ahead Part Two no longer follows RED's kiss. It comes on the first street after the Ham has refused the book and AOIFE has rung: after After Aoife if the call was answered (the trigger above runs first and sends you there; this one fires on the return), at once if the call was refused or left ringing ($hadPhoneCall still false). Insurance: a night that found the second line without the Ham gets it then. ONE LINE, as the comment below explains. --><!-- 2026-10-16 (Sam, from Astra's playtest: "I had scarcely begun believing in the book-selling mission before the game told me how to interpret it"): the confession now waits for a second reader's no as well as the Ham's, so the book has been turned down twice, by two people, before the night calls it a cover story. Any reader with a slip counts: the novelist (THE REFUSAL), INIS (page 93 asked for), DAVY, JEFFREY, the agent shown the book, SHANA, LACKLAND (2026-10-19, Sam: MOE's set no longer counts; he is not a reader). INIS always comes before the second line, so the insurance still catches every night. -->(set: _secondNo to ((($haunts is an array) and ($haunts contains $haunt2)) or ($knowsAboutPage is true) or ($metDavy is true) or ($sawJeffrey is true) or ($pitchedAgent is true) or ($metShana is true) or ($lacklandRead is true)))(if: ($nightAheadPart2Shown is not true) and ((($metCritic is true) and _secondNo and (($hadPhoneCall is false) or ($sawAoifeReflection is true))) or ($alba contains $alba2)))[(go-to: "Night Ahead Part Two")]\
-<!-- A2: reliable mid-night Aoife memory. Fires on the first hub return from lap 5 onward, AFTER A1 (After Aoife), but NOT on the lap you've just come off a Lily memory ((history:)'s 2ndlast = the passage you arrived from), and NOT on the way back from a doorway or an alley ($alleyReturn; Sam, 2026-10-09: it fired when he "just stopped in a doorway on the way to Cecil Court"). Whole thing dormant until $aoifeRework is flipped on at go-live. NOTE 2026-09-14: kept on ONE line deliberately. Harlowe turns every newline inside a multi-line HTML comment into a <br>, and this comment alone was putting three blank lines and ~88px of dead space at the top of the hub, above the title. -->\
-<!-- 2026-10-14 (Sam: space them out): memory 2 waits at least one lap after After Aoife ($aoifeReflectLap) -->(if: ($aoifeRework is true) and ($returns >= 5) and ($sawAoifeReflection is true) and (($aoifeReflectLap is not a num) or ($returns > $aoifeReflectLap)) and ($sawAoifeMemory2 is false) and ((history:)'s 2ndlast is not "After the call") and ((history:)'s 2ndlast is not "LINE 2 Oxford") and ((history:)'s 2ndlast is not "The Interval") and ((history:)'s 2ndlast is not "After Aoife"))[(unless: $alleyReturn is true)[(set: $sawAoifeMemory2 to true)(go-to: "Aoife memory 2")]]\
+<!-- 2026-10-19 (Sam, playtest: "two typewriter passages appeared, one after the other. That shouldn't happen"): none of the street's story pages below fires straight after another typewriter page; it waits for the next visit. Both history slots are checked, whichever one holds the page you came from. -->(set: _twPages to (a: "After the call", "After Aoife", "Night Ahead Part Two", "Aoife memory 2", "LINE 2 Oxford", "The Interval", "After the music", "After Cecil Court", "After the painter", "Things turn up", "The dark pass", "The Night Ahead", "The Blackout"))(set: _twLast to false)(if: (history:)'s length > 0)[(if: _twPages contains (history:)'s last)[(set: _twLast to true)]](if: (history:)'s length > 1)[(if: _twPages contains (history:)'s 2ndlast)[(set: _twLast to true)]]\
+(if: $hadPhoneCall is true and $metCritic is true and $sawAoifeReflection is false and not _twLast)[(set: $sawAoifeReflection to true)(set: $aoifeReflectLap to $returns)(go-to: "After Aoife")]\
+<!-- 2026-10-15 (Sam: the cover story revealed later): Night Ahead Part Two no longer follows RED's kiss. It comes on the first street after the Ham has refused the book and AOIFE has rung: after After Aoife if the call was answered (the trigger above runs first and sends you there; this one fires on the return), at once if the call was refused or left ringing ($hadPhoneCall still false). Insurance: a night that found the second line without the Ham gets it then. ONE LINE, as the comment below explains. --><!-- 2026-10-16 (Sam, from Astra's playtest: "I had scarcely begun believing in the book-selling mission before the game told me how to interpret it"): the confession now waits for a second reader's no as well as the Ham's, so the book has been turned down twice, by two people, before the night calls it a cover story. Any reader with a slip counts: the novelist (THE REFUSAL), INIS (page 93 asked for), DAVY, JEFFREY, the agent shown the book, SHANA, LACKLAND (2026-10-19, Sam: MOE's set no longer counts; he is not a reader). INIS always comes before the second line, so the insurance still catches every night. -->(set: _secondNo to ((($haunts is an array) and ($haunts contains $haunt2)) or ($knowsAboutPage is true) or ($metDavy is true) or ($sawJeffrey is true) or ($pitchedAgent is true) or ($metShana is true) or ($lacklandRead is true)))(if: ($nightAheadPart2Shown is not true) and (not _twLast) and ((($metCritic is true) and _secondNo and (($hadPhoneCall is false) or ($sawAoifeReflection is true))) or ($alba contains $alba2)))[(go-to: "Night Ahead Part Two")]\
+<!-- A2: reliable mid-night Aoife memory. Fires on the first hub return from lap 5 onward (2026-10-19: lap 7, three laps after A1, never straight after a typewriter page; see _twLast), AFTER A1 (After Aoife), but NOT on the lap you've just come off a Lily memory (2026-10-19: in Harlowe 3 (history:) leaves out the current passage, so its last is the page you came from; _twLast checks both slots), and NOT on the way back from a doorway or an alley ($alleyReturn; Sam, 2026-10-09: it fired when he "just stopped in a doorway on the way to Cecil Court"). Whole thing dormant until $aoifeRework is flipped on at go-live. NOTE 2026-09-14: kept on ONE line deliberately. Harlowe turns every newline inside a multi-line HTML comment into a <br>, and this comment alone was putting three blank lines and ~88px of dead space at the top of the hub, above the title. -->\
+<!-- 2026-10-14 (Sam: space them out): memory 2 waits at least one lap after After Aoife ($aoifeReflectLap) --><!-- 2026-10-19 (Sam: "Can we save this passage about how wonderful Aoife is for a later moment?"): lap 7 (was 5), three laps after After Aoife (was one), and never straight after a typewriter page (_twLast, above) -->(if: ($aoifeRework is true) and ($returns >= 7) and ($sawAoifeReflection is true) and (($aoifeReflectLap is not a num) or ($returns >= $aoifeReflectLap + 3)) and ($sawAoifeMemory2 is false) and (not _twLast))[(unless: $alleyReturn is true)[(set: $sawAoifeMemory2 to true)(go-to: "Aoife memory 2")]]\
 (set: $awaitingLacklandPwd to false)\
 <svg id="dean-lamp-svg" xmlns="http://www.w3.org/2000/svg" width="145" height="400" style="float:right;margin:0.3em -0.5em 1em 0.8em;overflow:hidden;"><defs><radialGradient id="dslamp" gradientUnits="userSpaceOnUse" cx="85" cy="80" r="58" gradientTransform="matrix(1,0,0,1.37,0,-29.6)"><stop offset="0%" stop-color="#d4a060" stop-opacity="0.7"/><stop offset="25%" stop-color="#c89060" stop-opacity="0.35"/><stop offset="60%" stop-color="#c89060" stop-opacity="0.12"/><stop offset="100%" stop-color="#c89060" stop-opacity="0"/></radialGradient><radialGradient id="dsPane" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#f6e2b0" stop-opacity="0.55"/><stop offset="0.5" stop-color="#d4a060" stop-opacity="0.22"/><stop offset="1" stop-color="#c89060" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="145" height="164" fill="url(#dslamp)"/><g fill="none" stroke="#c8a86a" stroke-linecap="round" stroke-linejoin="round"><path d="M90,22 L93,27 L90,33 L87,27 Z" stroke-width="1.6"/><line x1="90" y1="33" x2="90" y2="40" stroke-width="1.8"/><path d="M64,50 Q90,38 116,50 L112,56 L68,56 Z" stroke-width="1.8"/><path d="M68,56 L112,56 L108,106 L72,106 Z" fill="url(#dsPane)" stroke-width="2.2"/><path d="M90,56 L90,106 M69.5,72 L110.5,72 M71,90 L109,90" stroke-width="1.2"/><path d="M76,60 L75,68" stroke-width="0.9" opacity="0.6"/><ellipse cx="90" cy="82" rx="5" ry="8" stroke-width="1.2" opacity="0.8"/><ellipse cx="90" cy="81" rx="2" ry="3.4" fill="#c8a86a" stroke="none" opacity="0.9"/><rect x="70" y="106" width="40" height="6" rx="2" stroke-width="1.8"/><rect x="82" y="112" width="16" height="6" rx="1.5" stroke-width="1.4"/><line x1="60" y1="126" x2="120" y2="126" stroke-width="2.2"/><path d="M60,126 q-5,-5 0,-10 M120,126 q5,-5 0,-10" stroke-width="1.6"/><path d="M90,118 C90,150 72,160 74,190 C76,214 100,220 100,238" stroke-width="3.0"/><path d="M76,168 q-8,4 -4,12 q6,2 8,-4" stroke-width="1.2" opacity="0.7"/><ellipse cx="100" cy="240" rx="13" ry="4" stroke-width="1.8"/><line x1="100" y1="246" x2="100" y2="9999" stroke-width="3.8"/><line x1="96.5" y1="250" x2="96.5" y2="9999" stroke-width="0.7" opacity="0.45"/><ellipse cx="100" cy="385" rx="13" ry="4" stroke-width="1.8"/><ellipse cx="100" cy="530" rx="13" ry="4" stroke-width="1.8"/><rect x="84" y="692" width="32" height="8" rx="2" stroke-width="1.8"/></g></svg>\
 <h1 class="game-title">DREAM<br>STREET<br>SHUFFLE</h1>\
@@ -55912,7 +55972,7 @@ Better not tomorrow.
 <!-- 2026-10-16 (Sam: restore): the doorway's line from the 15 April backup, words unchanged; the doorways themselves are silent now (the hold-to-piss card does the act), so the bar says it as you step back onto the street, every time -->\
 (unless: $beatShown is an array)[(set: $beatShown to (a:))](set: _beat to "")\
 (if: $afterMidnight is true and ($beatShown does not contain "midnight") and _beatLines's midnight is not "")[(set: _beat to "midnight")](else-if: $blackouts >= 1 and ($beatShown does not contain "blackout") and _beatLines's blackout is not "")[(set: _beat to "blackout")](else-if: $fetchSeen is true and ($beatShown does not contain "fetch") and _beatLines's fetch is not "")[(set: _beat to "fetch")]\
-(if: _beat is not "")[(set: $beatShown to it + (a: _beat))](if: (_beat is "") and ($justDoorway is true))[(set: _beat to "doorway")](set: $justDoorway to false)<span class="dss-hub-flag" data-k="beat" style="display:none">(if: _beat is not "")[(print: _beatLines's (_beat))]</span>\
+(if: _beat is not "")[(set: $beatShown to it + (a: _beat))](if: (_beat is "") and ($justDoorway is true) and ($doorSpew is true))[(set: _beat to "doorway")](set: $justDoorway to false)(set: $doorSpew to false)<span class="dss-hub-flag" data-k="beat" style="display:none">(if: _beat is not "")[(print: _beatLines's (_beat))]</span>\
 (if: _towerReady)[<div class="dss-night-choice"><span class="dss-night-ready">The poem is complete. Stay as long as you like.</span></div>]\
 <!-- THE WAY OUT (2026-09-13, Sam: "there should be an exit at the edge of the map
      which is towards Centre point. That is the way out of the game and the night").
@@ -61909,7 +61969,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 (unless: $prevCigsTonight is a number)[(set: $prevCigsTonight to ($cigsTonight + 0))]\
 (if: $cigsTonight is a number and $cigsTonight > $prevCigsTonight)[<script>if(window.startBurningCigarette)window.startBurningCigarette();</script>]\
 (set: $prevCigsTonight to $cigsTonight)\
-(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)<script>(function(){try{var b=document.getElementById('stat-bars-lifted')||document.querySelector('.stat-bars');if(!b)return;var d=b.querySelectorAll('.stat-delta');if(!d.length)return;for(var i=0;i<d.length;i++){d[i].style.animationPlayState='paused';}var gen=window._passageGen,done=false,t0=Date.now(),lastSeen=0;function play(){if(done)return;done=true;for(var j=0;j<d.length;j++){d[j].style.animationPlayState='running';}}function up(){if(window._drinkPopupOpen===true)return true;return !!document.querySelector('.dss-rules-overlay,#coin-overlay,#match-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,.venue-hint-box,#word-wise-overlay,#liver-eat-overlay,#napkin-popup-overlay,#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro');}setTimeout(play,25000);(function loop(){if(done)return;if(window._passageGen!==gen){play();return;}var n=Date.now();if(up()){lastSeen=n;setTimeout(loop,100);return;}if(lastSeen===0?(n-t0>750):(n-lastSeen>1200)){play();return;}setTimeout(loop,100);})();}catch(e){}})();</script>
+(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)<script>(function(){try{var b=document.getElementById('stat-bars-lifted')||document.querySelector('.stat-bars');if(!b)return;var d=b.querySelectorAll('.stat-delta');if(!d.length)return;for(var i=0;i<d.length;i++){d[i].style.animationPlayState='paused';}var gen=window._passageGen,done=false,t0=Date.now(),lastSeen=0;function play(){if(done)return;done=true;for(var j=0;j<d.length;j++){d[j].style.animationPlayState='running';}}function up(){if(window._drinkPopupOpen===true)return true;return !!document.querySelector('.dss-rules-overlay,#coin-overlay,#match-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,.venue-hint-box,#word-wise-overlay,#liver-eat-overlay,#napkin-popup-overlay,#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro,#dss-lore-overlay');}setTimeout(play,25000);(function loop(){if(done)return;if(window._passageGen!==gen){play();return;}var n=Date.now();if(up()){lastSeen=n;setTimeout(loop,100);return;}if(lastSeen===0?(n-t0>750):(n-lastSeen>1200)){play();return;}setTimeout(loop,100);})();}catch(e){}})();</script>
 (if: $afterMidnight is true)[<span id="dst-after-midnight" style="display:none"></span>]
 ]
 
@@ -64596,9 +64656,13 @@ tw-passage:has(#oi-container):not(:has(#oi-wrap)) > :not(tw-include):not(tw-side
 /* Venue names sit on their own readable plaque above scene washes and grain. */
 /* 2026-10-19 (Sam): the room's lily prompt, made obvious: the glow breathes; the sprig sits before the words */
 @keyframes dssLilyHintBreath { 0%, 100% { box-shadow: 0 0 14px rgba(150,220,130,0.35), 0 2px 10px rgba(0,0,0,0.5); } 50% { box-shadow: 0 0 26px rgba(170,235,150,0.7), 0 2px 10px rgba(0,0,0,0.5); } }
-.dss-lily-hint { animation: dssLilyHintBreath 2.6s ease-in-out infinite; display: flex; align-items: center; gap: 9px; }
-.dss-lily-hint-ic { flex: 0 0 auto; width: 26px; height: 34px; }
-@media (prefers-reduced-motion: reduce) { .dss-lily-hint { animation: none; } }
+.dss-room-lily-hint { animation: dssLilyHintBreath 2.6s ease-in-out infinite; display: flex; align-items: center; gap: 9px; } /* (named apart from the flower popup's own .dss-lily-hint) */
+.dss-room-lily-hint-ic { flex: 0 0 auto; width: 30px; height: 38px; filter: brightness(1.7) saturate(1.2) drop-shadow(0 0 4px rgba(170, 235, 150, 0.65)); } /* overnight: the sprig read too dark on the dark ground */
+@media (prefers-reduced-motion: reduce) { .dss-room-lily-hint { animation: none; } }
+/* 2026-10-19 overnight: the caption rule's opacity:1 !important (another session, 03:00) beat capAway's inline fade, so a two-line caption sat over the
+   bottom of an open card; and Centre Point's plaque showed empty before its line was typed */
+.dss-room-caption[data-cap-op], .dss-room-caption:empty { opacity: 0 !important; }
+.dss-room-caption { margin-left: auto; margin-right: auto; } /* a caption set left:0;right:0 (Centre Point's) sits centred under the max-width, not flush left */
 .dss-room-caption {
   white-space: pre-line !important; /* 2026-10-19: the name over the place, broken at the first comma (see the caption script) */
   z-index: 10010 !important;
@@ -66374,7 +66438,7 @@ margin: 0.25em 0;
 .nb-sol .nb-sol-dot { fill: rgba(150, 108, 26, 0.9); stroke: none; }
 .nb-sol line { stroke: rgba(150, 108, 26, 0.75); stroke-width: 0.8; }
 .nb-wheel-list { min-width: 0; }
-.nb-gate-num { display: inline-block; min-width: 2.6em; opacity: 0.75; }
+.nb-gate-num { display: inline-block; min-width: 5.6ch; opacity: 0.75; } /* 2026-10-19 overnight: room for VIII. so every name lines up */
 .nb-heading .dss-gw-fn { color: #8a6420; text-shadow: none; font-size: 0.6em; vertical-align: 0.5em; }
 .nb-heading .dss-gw-fn:hover, .nb-heading .dss-gw-fn:focus-visible { color: #5a3e10; text-shadow: none; }
 
@@ -74365,8 +74429,8 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
 [[Walk on|Dean Street]]
 
 :: Lore The Great Work [system] {"position":"600,2100","size":"100,100"}
-<!-- 2026-10-19 (Sam: explain the alchemy, "4 plus 3"): the editor's note behind the ⟡ LORE mark on the notebook's HAUNTS heading and on "The work" line of the night's first haunt. Printed hidden in the header (#dss-lore-greatwork); the mark lifts it onto a note card, as the passages' own LORE links do. -->
-<!-- 2026-10-19: Sam's version, from Claude's draft (built on Ripley's lines, quoted from The Compound of Alchymy as Ashmole printed it in Theatrum Chemicum Britannicum, 1652, whose colophon dates it AN.DOM.1471; the first gate, stanzas 22 and 17; the twelfth gate, stanza 8). Typo fixes only: "dedicated,to", a double space; then (Sam) the repeated "you know that" cut and "left-hand" hyphenated. -->
+<!-- 2026-10-19 (Sam: explain the alchemy, "4 plus 3"): the editor's note behind the ⟡ LORE mark on the notebook's HAUNTS heading and on "The work" line of the night's first haunt. Printed hidden in the header (#dss-lore-greatwork); the mark lifts it onto a note card, as the passages' own LORE links do. -->\
+<!-- 2026-10-19: Sam's version, from Claude's draft (built on Ripley's lines, quoted from The Compound of Alchymy as Ashmole printed it in Theatrum Chemicum Britannicum, 1652, whose colophon dates it AN.DOM.1471; the first gate, stanzas 22 and 17; the twelfth gate, stanza 8). Typo fixes only: "dedicated,to", a double space; then (Sam) the repeated "you know that" cut and "left-hand" hyphenated. -->\
 <div class="lore-box"><strong>⟡ THE GREAT WORK ⟡</strong>
 <div class="editors-note"><span class="editors-note-label">Editor’s note</span><p>In 1471 George Ripley, a canon of Bridlington in Yorkshire, dedicated to King Edward IV a poem on the making of the Stone. He called it <em>The Compound of Alchymy</em> and divided the Great Work into twelve gates, Calcination first, Projection last, each to be passed in its order. At the first gate he writes:</p><div class="verse">At the fyrst Gate, now art thou in,<br>Of the Phylosophers Castle where they dwell;<br>Whych Castle ys round as any Bell:<br>And Gates hath Eleven yet mo,<br>One ys conquered, now to the second go.</div><p>Tonight, like every night for those who live, you are an alchemist: ‘The Wheele of Elements thou canst turne about.’ Like any journeyman in the left-hand path you know that magic happens in the world and not within you, if it would be called magic at all. Soho is the little world tonight. Its haunts are seeded with twelve gates. Find them. They will not come in Ripley’s perfect order; a night so seldom does. But take them as they come to you and you might do such things…</p><p>That ‘all the Castell thou holdyst at wyll,’</p><p>Take fewer and the dawn will come regardless, though incompletely, like you.</p></div></div>
 
@@ -74374,8 +74438,7 @@ Shopping her would clear your debt with JOHN ST. JOHN. It’s the debt that keep
 <!-- v2-expansion: rendered via (display:) right after each haunt-set.
      Reads $haunts's length (which has just been incremented) to figure
      out which mantra syllable to fade in. The fade is brief — player
-     notices but doesn't yet understand. Realisation lands at the Cave. -->
-<!-- 2026-10-19 (Sam: "On the sanskrit, you decide"): the syllable no longer shows on the haunt box, so each box carries one system, the Work (and the six syllables ran out halfway through the twelve). The chant stays in the notebook's DREAMS row and the Cave. To restore, put back:
+     notices but doesn't yet understand. Realisation lands at the Cave. --><!-- 2026-10-19 (Sam: "On the sanskrit, you decide"): the syllable no longer shows on the haunt box, so each box carries one system, the Work (and the six syllables ran out halfway through the twelve). The chant stays in the notebook's DREAMS row and the Cave. To restore, put back:
 {(set: _n to $haunts's length)(if: _n is a number and _n >= 1 and _n <= $mantra's length)[<div class="mantra-cue">⟨ (print: _n of $mantra) ⟩</div>]} -->
 
 :: Nazca Race [dream nazca] {"position":"2250,3250","size":"100,100"}

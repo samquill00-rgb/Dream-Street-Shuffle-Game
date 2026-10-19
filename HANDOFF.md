@@ -1,3 +1,46 @@
+# START HERE — morning of 2026-10-19
+
+**State:**
+- Everything from last night's playtests is in the .twee and synced to the html.
+- Sam's last commit was 04:40 ("MORE"). Everything after it is uncommitted: the third batch, the overnight fixes, the Great Work note, captions and so on.
+- The overnight review (04:53 to 06:18) fixed 11 things a player would notice, plus smaller ones. Its summary is at the top of **HANDOFF-overnight-review-2026-10-19.md**, with the step-by-step log below it. A full sweep of all 214 story passages found no errors.
+- Other sessions edited the .twee last night (Watkins looking-glass, room labels such as WAY OUT, the caption plaque rule, the Coach and French rooms). Their work is in place, and the review fixed three places where it collided with ours.
+
+**Sam's five open calls (from the third playtest batch):**
+1. **Top-left exits:** removing them strands the player in six rooms. Add in-room exits first, or keep them?
+2. **Carthage:** there is no haunt gate. The road is the Pillars storm after INIS's page 93, and nothing hints at it before that. Add a hint?
+3. **The doors:** the 3D street draws the Colony on the left, but "Right" is correct. Swap the 3D doors or the links? (The Donkey's first toss always sends you Left.)
+4. **"Night 5: …"** on the pitch question: reword to "On an earlier night: …"?
+5. **Long text:** a page-break mark Sam places, or proposed break points to approve? (Audit in HANDOFF-text-audit-2026-10-19.md, recounted at 05:47.)
+
+**Also waiting:** the Night Ahead Part Two rewrite (Sam's note, hidden in the passage).
+
+---
+
+# Playtest notes, third batch — 2026-10-19 (04:05–04:30, 16 notes)
+
+**Done, synced, checked in the pane (fresh profile at http://127.0.0.1:8732 — a different origin, so empty storage; localhost keeps the old autosave):**
+- 2 Lily prompt: dark ground, breathing green glow, italic 15px, the game's lily sprig cloned in; hidden once $lilyCount >= 2 (header prints it hidden as #dss-lily-n).
+- 3 The French's Photographs close-up centred on Sam's photo (frame 5): pos [1.2, 2.0, -3.25], tgt [1.34, 2.0, -4.45].
+- 4 Rejection slips hold 6 s (was 3.2). THE RUMOUR, first time: darker scrim, uncannyBreath, his paragraphs one per click/key, no close until the last, then "Not a word." (UI chrome); reopened from the small link it shows whole. AOIFE's ring still follows its close.
+- 5 THE THIRST's "Go in, there's always someone there…" taken off the Pillars door (now the exit); kept in a comment.
+- 6 The burning cigarette: a faint thread of wisps off the lit tip (cigTipRise).
+- 7 Doorways: $doorSpew = sobriety under 30 → card mode 'doorway-spew' (leaning on the jamb, chunky murky fall, retch audio); the spew beat line only after a retch. Also fixed: SpewPopup._fadeOut started the Coach's coach-bar bed and gents transition after ANY doorway; now gents only.
+- 9 Watkins: letters clear by ~2 s (0.2 + rand 1.9), waltz at T2 2800 (was 5000), music at 0.7 s (was 5 s) with a 1.6 s fade (was 2.5).
+- 10 The double click: the depart block replays a navigating link's click after 240 ms and the link tick played again; `window._dssDepartReplay` silences the replay. Also fixed: dssQuestPopup looked only in tw-passage, so threshold pages (O'Flatterly's quest) never raised the errand card.
+- 11 Night Ahead Part Two carries a hidden "SAM TO REWRITE" comment (not giving up selling the book straight away).
+- 12 Dean Street's story pages (After Aoife, Night Ahead Part Two, Aoife memory 2) never fire straight after a typewriter page (`_twLast`, both history slots checked). Aoife memory 2: lap 7 (was 5), three laps after After Aoife (was one).
+- 14 The green fairy: dssAudio.fairyTwinkle(visit), quiet bells, one of five note sets by a localStorage visit counter (dssFairyVisits); ~1.4 s after arrival then every 6–11 s, via _tick (no ducking). Not heard: the pane is muted.
+
+**Waiting on Sam:**
+- 8 Top-left exits: removing them strands the player in Coach and Horses bar (always), The French (until haunts 1, 2, 4), Ronnie Scott's (until the set), Martin Lackland's Office (after The Game), The Colony Room (resting, DAVY unmet), O'Flatterly's shop (forward only); the French, Coach and chippy door objects press the header link. Approach pages' "← Back" is the only way back without going in.
+- 13 Carthage has no haunt gate: the road is the Pillars door's storm ("Seek the shore") once $knowsAboutPage (INIS's page 93); nothing shows before that. Dido's "Go back to shore" needs 3 haunts.
+- 15 The doors: links are Left → Maltese Gangsters (wrong), Right → the Colony; but Approach The Colony Room's 3D street draws the Colony's oxblood 41 on the LEFT and a black 43 on the right. The Donkey's first toss is always heads = Left.
+- 1 "Night 5: …" on the pitch question is a slip from an earlier night (night 5 of this browser); offer: reword.
+- 16 Long text: Copper Word Accepted is only 74 words; the audit in HANDOFF-text-audit-2026-10-19.md lists the 27 passages with a paragraph of 80 words or more (The Woman from the Line 195w, the critic's judgement 177w, which is THE RUMOUR's source and already staged, The Reclamation 152w, Dawn 148w, the Pillars entry 143w, Bourchier Street car park 141w …).
+
+---
+
 ## 2026-10-19 — Watkins reflection and impossible Cecil Court waltz
 - Sam approved the impossible street/disobedient reflection and seamless transition; prose explicitly preserved. Cecil Court/Watkins passage content verified identical.
 - Shared dssWaltzGlass canvas renderer: window mullions open into street perspective, delayed/leading human reflection, brass pair, repeating arched doors, shifting windows/cobble curves, third silhouette at high enchantment. Successful steps strengthen enchantment; misses briefly reveal a quieter street; closing bar settles it. Hit targets unchanged. Reduced motion keeps scenery still.

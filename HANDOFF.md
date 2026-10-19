@@ -1,3 +1,9 @@
+## 2026-10-19 — Pillars exit clarified; bar labels and seated ghost
+- User clarified removed threshold was meant to remain an exit. Restored hotspot with visible WAY OUT label, matching Back to the street action. Internal voice key stays A threshold to preserve existing lore/progress; all displayed labels use WAY OUT.
+- Exit now solid upper wooden panels instead of lattice glazing, larger brass lever, WAY OUT plaque; separate lattice window remains.
+- Previous request completed: seated bar ghost moved to nearer stool z.2, seated texture and opacity.3, away from ruined pillar. Shared roomObjectLabel displays THE BAR for all venue bar hover/card/keyboard labels while retaining internal A bar lore/trail keys.
+- Synced. Syntax/browser passed; keyboard labels include THE BAR and WAY OUT, header exit visible, no page/Harlowe errors. No prose/git changes.
+
 ## 2026-10-19 — Pillars ruined pair and Great Ham glow
 - Two visible columns now both broken (shaft heights2.0/2.04), jagged tops and six rubble pieces each. Previously right column2.25 crossed whole-column threshold and kept capital.
 - Pair moved back to z-2.65 at x-.75/+1.45 to flank projected rear doorway sightline; contact shadows follow. Third Pillar position/unlock behavior unchanged.

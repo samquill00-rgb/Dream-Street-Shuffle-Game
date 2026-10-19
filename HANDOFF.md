@@ -1,3 +1,21 @@
+## 2026-10-19 — Coach layout corrected; burgundy plaster ceiling
+- User clarified gents belongs on back wall next to bar; left oak wall with walk-through opening; higher swirled plaster ceiling, explicitly BURGUNDY.
+- Gents moved to x3.42/z-3.42, facing forward; light/inspection target/halo moved with it. Existing graffiti/sigil/actions remain. Rehung print above door.
+- Shortened barLen6.4 to4.8 so rounded end clears door; rail/panel spacing follows length; fascia shortened. Telephone moved to x-2.35 and targets updated inside main room.
+- Replaced left L divider with full left oak wall x-2.8, open portal along z-.9..1.1, height2.45, framed jambs/header, no sill/glass.
+- Ceiling raised H3.4 to4.2, new procedural combed swirl plaster texture with bump, deep burgundy base #682f3e. Chandelier chains extended; fittings remain lower under higher ceiling.
+- Synced. Syntax and desktop/phone browser checks passed without errors; keyboard objects/header exit preserved; desktop visually checked.
+- No prose edits/git commands.
+
+## 2026-10-19 — Coach and Horses reference-based interior pass
+- User supplied three interior photos: honey oak full-height lower panels, green upper walls, pale ceiling/cornice, cream/chocolate tiles, rounded oak bar with pale plinth, brass candle chandeliers, framed cartoons and compartment partitions. User clarified story objects together in bar compartment, gents right of bar.
+- Edited only CB room block: new worn tile canvas/material, green paint and honey oak panelling, taller rails/stiles, cream double cornice, L-shaped left snug partition and broad doorway, small right return, framed procedural prints.
+- Rounded bar ends and stone plinth; polished oak physical material with clearcoat/env and actual planar counter reflection (256 phone/512 desktop). Back-bar fascia has reference brewery lettering.
+- Replaced cone pendants with three five-arm brass candle chandeliers, sconces, warm light, three drifting smoke layers. Reduced exposure/bloom after first preview was overbright; final exposure.76, bloom.2, softer lights.
+- All existing interactive roots/routes/characters/graffiti preserved; gents remains right; reduced-motion stops added motion via existing frame guard.
+- Synced. Source syntax and desktop/390px phone previews passed without page/Harlowe errors, object keyboard labels and header exit verified. Test scripts /tmp/coach-room-check.cjs, /tmp/coach-phone-check.cjs; screenshots /tmp/coach-room.png,/tmp/coach-phone.png.
+- No creative prose edits or git commands.
+
 ## 2026-10-19 — Pillars exit clarified; bar labels and seated ghost
 - User clarified removed threshold was meant to remain an exit. Restored hotspot with visible WAY OUT label, matching Back to the street action. Internal voice key stays A threshold to preserve existing lore/progress; all displayed labels use WAY OUT.
 - Exit now solid upper wooden panels instead of lattice glazing, larger brass lever, WAY OUT plaque; separate lattice window remains.
@@ -13,7 +31,7 @@
 # Explaining the alchemy — 2026-10-19 (Sam: "4 plus 3"; the Sanskrit "you decide")
 
 - **The wheel in the notebook (4):** HAUNTS opens on a small ink wheel (Ripley's twelve gates, dssOpusReveal's order, clockwise from the top, Sol at the hub with the Dawn's 9 long + 3 short rays); a gate is gilded with its numeral once its haunt is caught. The list under it is moved into the wheel's order and numbered I to XII (JS over the Build Notebook list, `.nb-haunts[data-wheel]`; the Harlowe list is untouched). Checked in the pane (12 lit, order right; a mixed state screenshotted).
-- **The Great Work note (3):** a ⟡ LORE mark on the HAUNTS heading and on "The work" line of the night's first haunt ("1 of 12") opens the card THE GREAT WORK. Its text is the new passage **Lore The Great Work** (pink placeholder: Sam writes it), printed hidden by the header as `#dss-lore-greatwork`; `dssLore.showFrom` lifts it onto the card. Checked: opens over the notebook, closes back to it; only a first box is marked.
+- **The Great Work note (3):** a ⟡ LORE mark on the HAUNTS heading and on "The work" line of the night's first haunt ("1 of 12") opens the card THE GREAT WORK. Its text is the new passage **Lore The Great Work** (Claude's pink draft at Sam's ask, built on Ripley's own lines quoted verbatim from Ashmole's 1652 printing, sources in the passage's comment; Sam to rework), printed hidden by the header as `#dss-lore-greatwork`; `dssLore.showFrom` lifts it onto the card. Checked: opens over the notebook, closes back to it; only a first box is marked.
 - **The Sanskrit:** the syllable cue is off the haunt boxes (Mantra Syllable Cue prints nothing; the old line kept in a comment to restore). The chant stays in DREAMS and the Cave.
 - Another session edited and synced the .twee at 02:57; all of this session's edits were checked present after it.
 

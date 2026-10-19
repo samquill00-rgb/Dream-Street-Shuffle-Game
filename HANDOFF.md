@@ -1,3 +1,10 @@
+## 2026-10-19 — Coach mood, marker spacing and visible cow
+- User wanted separated coloured markers, darker/grimier mood, prominent cow.
+- CB hotspot halos now smaller and spread vertically/horizontally: optics high-left, Bernard low-left of bar, glass higher-right, cow separate foreground, window high-left/door low-left. Internal keys/actions unchanged.
+- Reduced exposure.76->.63, ambient/hemi, darker oak and worn tiles. Added procedural soot/grime to actual oak/wall texture canvases.
+- Cow moved from behind counter onto floor at[1.35,0,-1], scale.95, yaw.72; full body/head visible in desktop shot. Warm spotlight, contact shadow, inspection target updated. Moved nearby table/regular to room corner.
+- Synced. Source syntax, desktop and phone checks passed without page/Harlowe errors; object labels and exit available. No prose/git changes.
+
 ## 2026-10-19 — Coach layout corrected; burgundy plaster ceiling
 - User clarified gents belongs on back wall next to bar; left oak wall with walk-through opening; higher swirled plaster ceiling, explicitly BURGUNDY.
 - Gents moved to x3.42/z-3.42, facing forward; light/inspection target/halo moved with it. Existing graffiti/sigil/actions remain. Rehung print above door.

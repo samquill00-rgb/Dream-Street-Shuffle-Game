@@ -1,3 +1,9 @@
+## 2026-10-19 — French windows and street life
+- Five street windows share a continuous canvas night-street panorama: buildings/shopfronts, amber streetlights and seven walking silhouettes, animated at 12 fps. Reduced-motion uses a still view.
+- One continuous projecting sill spans glazing only. Shortened right-side dado beneath glazing so it no longer crosses the exit. Removed extra potted houseplant; lily retained.
+- Eight back-wall photographs evenly spaced across available width; moved photograph hotspot glow accordingly.
+- Synced. Source JavaScript syntax and browser preview passed with no page/Harlowe errors. No prose changes or git commands.
+
 # Playtest notes, second batch — 2026-10-19 (02:42–02:44)
 
 - **Stuck at the French (11):** on the Soho map, walking into a resting venue's door (Dean Street's 'rest' flag: the French or the Colony) started the map's fade to black, then pressed the door's link; the 2026-10-17 rest rule cancelled that click, so the fade never ended and the map took no input. `enter()` now checks the flag first: no fade; the walker bumps a third of a tile at the door and back (`S.bump`, 16 frames, `muffledThud`), and the "Look elsewhere; try again later." slip shows once. Checked in the pane: bump set and finished, slip once, no entering.

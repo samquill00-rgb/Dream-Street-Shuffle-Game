@@ -1,3 +1,17 @@
+## 2026-10-19 — Coach left partition and shared bar clarified
+- User clarified left wall is an internal oak partition to another bar, floor-to-ceiling until it meets counter; shared bar continues through pub. Interpreted final “now wooden partition” as no divider through service area behind bar, consistent with shared counter.
+- Solid oak full-height divider, opening retained; rear divider segment now ends at z-1.99 (customer edge), not back wall. No partition behind counter.
+- Expanded adjacent interior to x-6.2 with same floor/ceiling; continued counter/backbar shelves/mirror/stools into it, removed left endcap to join counter. Added bottles, lamp, tables and regular beyond opening.
+- Removed obsolete street-window geometry/hotspot from left view; moved actual exterior exit to far wall of adjoining room, keeping its inspection/header route. Replaced old frosted door pane with oak.
+- Matched tile scale across extension; moved left exterior cornice. Cow/gents retained clear and unchanged.
+- Synced. Syntax and successful desktop/phone browser checks with no page/Harlowe errors, keyboard objects/header exit available. First transitional check had removed frostMat reference; corrected before final checks.
+- No creative prose/git changes.
+
+## 2026-10-19 — Cow wording and gents sightline
+- User explicitly authorized relevant cow location prose changes: introduction now says “and, in the bar, his cow” (was “tall under the optics”). Targeted search found other “behind the bar” mentions refer to telephones/books and remain unchanged. Updated related cow source comments.
+- Cow yaw now-.55 so head turns left toward viewer, clearing the back-right gents door; inspection target adjusted. Desktop screenshot confirms cow and GENTS plaque both visible.
+- Synced; browser passed without page/Harlowe errors. No git commands.
+
 ## 2026-10-19 — Coach mood, marker spacing and visible cow
 - User wanted separated coloured markers, darker/grimier mood, prominent cow.
 - CB hotspot halos now smaller and spread vertically/horizontally: optics high-left, Bernard low-left of bar, glass higher-right, cow separate foreground, window high-left/door low-left. Internal keys/actions unchanged.
@@ -40,6 +54,8 @@
 - **The wheel in the notebook (4):** HAUNTS opens on a small ink wheel (Ripley's twelve gates, dssOpusReveal's order, clockwise from the top, Sol at the hub with the Dawn's 9 long + 3 short rays); a gate is gilded with its numeral once its haunt is caught. The list under it is moved into the wheel's order and numbered I to XII (JS over the Build Notebook list, `.nb-haunts[data-wheel]`; the Harlowe list is untouched). Checked in the pane (12 lit, order right; a mixed state screenshotted).
 - **The Great Work note (3):** a ⟡ LORE mark on the HAUNTS heading and on "The work" line of the night's first haunt ("1 of 12") opens the card THE GREAT WORK. Its text is the new passage **Lore The Great Work** (Claude's pink draft at Sam's ask, built on Ripley's own lines quoted verbatim from Ashmole's 1652 printing, sources in the passage's comment; Sam to rework), printed hidden by the header as `#dss-lore-greatwork`; `dssLore.showFrom` lifts it onto the card. Checked: opens over the notebook, closes back to it; only a first box is marked.
 - **The Sanskrit:** the syllable cue is off the haunt boxes (Mantra Syllable Cue prints nothing; the old line kept in a comment to restore). The chant stays in DREAMS and the Cave.
+- **Scene captions (Sam: a line break between the venue name and its location):** every `.dss-room-caption` breaks at its first ", " or " — " (a script edits only its first text node, so YOU CAME FOR and "Talk to others first." survive; CSS `white-space: pre-line`). Checked on the Pillars: "THE PILLARS OF HERCULES\nGREEK STREET", two lines. Centre Point's typed quote has no comma, so it is untouched.
+- **The Great Work note** is now Sam's own version (no pink); later fixes at his word: the repeat cut, "left-hand", "would be called magic".
 - Another session edited and synced the .twee at 02:57; all of this session's edits were checked present after it.
 
 ---

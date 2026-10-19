@@ -1,3 +1,29 @@
+## 2026-10-19 — Pillars ruined pair and Great Ham glow
+- Two visible columns now both broken (shaft heights2.0/2.04), jagged tops and six rubble pieces each. Previously right column2.25 crossed whole-column threshold and kept capital.
+- Pair moved back to z-2.65 at x-.75/+1.45 to flank projected rear doorway sightline; contact shadows follow. Third Pillar position/unlock behavior unchanged.
+- Man-through-fumes hotspot glow moved down/aside to [W/2-1,.98,-.9], scale.6, clear of ghost face.
+- Synced; syntax/browser checks passed, no page/Harlowe errors. No prose/git changes.
+
+# Explaining the alchemy — 2026-10-19 (Sam: "4 plus 3"; the Sanskrit "you decide")
+
+- **The wheel in the notebook (4):** HAUNTS opens on a small ink wheel (Ripley's twelve gates, dssOpusReveal's order, clockwise from the top, Sol at the hub with the Dawn's 9 long + 3 short rays); a gate is gilded with its numeral once its haunt is caught. The list under it is moved into the wheel's order and numbered I to XII (JS over the Build Notebook list, `.nb-haunts[data-wheel]`; the Harlowe list is untouched). Checked in the pane (12 lit, order right; a mixed state screenshotted).
+- **The Great Work note (3):** a ⟡ LORE mark on the HAUNTS heading and on "The work" line of the night's first haunt ("1 of 12") opens the card THE GREAT WORK. Its text is the new passage **Lore The Great Work** (pink placeholder: Sam writes it), printed hidden by the header as `#dss-lore-greatwork`; `dssLore.showFrom` lifts it onto the card. Checked: opens over the notebook, closes back to it; only a first box is marked.
+- **The Sanskrit:** the syllable cue is off the haunt boxes (Mantra Syllable Cue prints nothing; the old line kept in a comment to restore). The chant stays in DREAMS and the Cave.
+- Another session edited and synced the .twee at 02:57; all of this session's edits were checked present after it.
+
+---
+
+## 2026-10-19 — Brighter gold interior pub signs
+- French and Pillars lettering now has warm gold gradients with pale highlights, brighter subtitles/rules and physical metallic materials with room-environment reflections, clearcoat and gentle emissive lift.
+- Wording and sign positions unchanged. Synced; syntax and both browser checks passed without page/Harlowe errors; visually checked both signs.
+- No git commands.
+
+## 2026-10-19 — Interior pub lettering clipping
+- User clarified the issue was the actual gilt pub name behind the bar, not footer captions.
+- French gilt lettering fitted to clear shelf band (plane height .62, center1.94), moved forward of bottles/shelf faces. Pillars lettering lowered to2.06 and brought forward to clear shelf edge.
+- Colony lettering brought clear of opaque mirror backing. Checked Ronnie’s/Coach/Trisha sign layouts; no matching shelf intersection found.
+- Synced; French and Pillars browser checks passed with no page/Harlowe errors; visual screenshots confirm intact letter tops. No prose edits/git commands.
+
 ## 2026-10-19 — French streetlight spill; room framing and captions
 - Added three amber spotlights, faint physical glass reflections, and a transparent carpet light projection. Outside walkers synchronously interrupt light and cut soft walking shadows into pools; updates at 12 fps, still for reduced motion. Browser check passed.
 - French room now measures visible viewport space below header, avoiding nested offset estimates. Wider camera (68 landscape/86 portrait), pulled back to show more of bar and street wall.

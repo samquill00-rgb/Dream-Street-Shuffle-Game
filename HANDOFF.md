@@ -1,3 +1,11 @@
+## 2026-10-19 — Watkins reflection and impossible Cecil Court waltz
+- Sam approved the impossible street/disobedient reflection and seamless transition; prose explicitly preserved. Cecil Court/Watkins passage content verified identical.
+- Shared dssWaltzGlass canvas renderer: window mullions open into street perspective, delayed/leading human reflection, brass pair, repeating arched doors, shifting windows/cobble curves, third silhouette at high enchantment. Successful steps strengthen enchantment; misses briefly reveal a quieter street; closing bar settles it. Hit targets unchanged. Reduced motion keeps scenery still.
+- Watkins gets a window canvas above existing staged paragraphs. Its existing waltz link carries a temporary canvas across the passage and bypasses the intervening rules card (direct game entry retains rules).
+- Muffled audio object handed over without restarting; filter opens, gameplay clock follows continuous loop time aligned to two-second bars. Ownership claimed immediately before the 450ms boot delay to avoid previous passage cleanup stopping it. Mute retained; stop idempotent, context promises handled, keyboard listener removed on exit. Early exit stops inherited music too.
+- Synced. UserScript/game scripts parse; desktop full successful-step run reached O'Flatterly without JS/Harlowe errors, original audio confirmed playing after transition. Final phone reduced-motion full run also reached O'Flatterly without JS/Harlowe errors; layout visually checked.
+- Evidence/scripts /tmp/waltz-check.cjs, /tmp/waltz-hit.cjs, /tmp/waltz-phone-final.cjs; screenshots /tmp/waltz-window-false.png, /tmp/waltz-street-false.png, /tmp/waltz-street-true.png. Local preview server port8741. No git commands.
+
 ## 2026-10-19 — Coach left partition and shared bar clarified
 - User clarified left wall is an internal oak partition to another bar, floor-to-ceiling until it meets counter; shared bar continues through pub. Interpreted final “now wooden partition” as no divider through service area behind bar, consistent with shared counter.
 - Solid oak full-height divider, opening retained; rear divider segment now ends at z-1.99 (customer edge), not back wall. No partition behind counter.

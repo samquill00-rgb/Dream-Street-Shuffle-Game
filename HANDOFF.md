@@ -1,3 +1,16 @@
+# Playtest notes, second batch — 2026-10-19 (02:42–02:44)
+
+- **Stuck at the French (11):** on the Soho map, walking into a resting venue's door (Dean Street's 'rest' flag: the French or the Colony) started the map's fade to black, then pressed the door's link; the 2026-10-17 rest rule cancelled that click, so the fade never ended and the map took no input. `enter()` now checks the flag first: no fade; the walker bumps a third of a tile at the door and back (`S.bump`, 16 frames, `muffledThud`), and the "Look elsewhere; try again later." slip shows once. Checked in the pane: bump set and finished, slip once, no entering.
+- **THE DEBT flashes red (10):** on The Empty Glass (its `.empty-glass-marker`), the haunt box lands with two red flashes (`debtFlash` on the box, `debtNameFlash` on the name), in the glass-smash beat, then settles to the resting gold. `haunt-bloom` now stays 3 s (was 2.6) so the 2.8 s flash completes. Checked the animation values in the pane (red at 0.26 s). Sam's other half of the note, whether and how to explain the alchemy, is his.
+- Title screen: CONTINUE (0.66em, dim) and the save note (0.62em) made secondary to BEGIN.
+
+---
+
+## 2026-10-19 — French House street wall
+- Moved interior blue exit from back wall onto right/street-facing wall near far corner; rotated entire door group and relocated its light, glow and inspection camera/halo.
+- Replaced small window with five broad tall glazed bays spanning the rest of that wall, with sash rails and projecting sills. Existing window interaction preserved.
+- Synced; browser preview rendered successfully with no page or Harlowe errors. No prose changes or git commands.
+
 ## 2026-10-19 — Cow gallop animation
 - Cow now bounds and rocks, kicks all four legs, flaps its ears and swishes its tail; rider wobbles with the gallop.
 - Small fading dust puffs trail behind it. New motion/dust suppressed for reduced-motion preferences.

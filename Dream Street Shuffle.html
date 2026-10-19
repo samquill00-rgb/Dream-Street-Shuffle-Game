@@ -2765,8 +2765,25 @@ animation: lilyTextGlow 2s ease-out 1.6s forwards !important;
 100% { box-shadow: 0 0 20px rgba(180,140,50,0.1), 0 0 40px rgba(160,120,40,0.05), inset 0 0 20px rgba(0,0,0,0.15); }
 }
 .haunt-box.haunt-bloom { animation: hauntBloom 2.4s ease-out both; }
+/* 2026-10-19 (Sam, playtest, The Empty Glass: "when the first debt is discovered it should flash red on the page"): THE DEBT lands
+   with two red flashes, in the beat of JOHN's glass smashing, then settles to the resting gold. Only on that page (its .empty-glass-marker). */
+@keyframes debtFlash {
+0%   { box-shadow: 0 0 0 rgba(200,40,36,0), inset 0 0 20px rgba(0,0,0,0.15); border-color: rgba(180,140,60,0.2); }
+9%   { box-shadow: 0 0 34px rgba(214,46,38,0.75), 0 0 80px rgba(170,24,20,0.4), inset 0 0 30px rgba(200,40,36,0.22); border-color: rgba(220,60,50,0.85); }
+24%  { box-shadow: 0 0 10px rgba(200,40,36,0.15), inset 0 0 20px rgba(0,0,0,0.15); border-color: rgba(180,140,60,0.3); }
+38%  { box-shadow: 0 0 30px rgba(214,46,38,0.6), 0 0 70px rgba(170,24,20,0.3), inset 0 0 26px rgba(200,40,36,0.18); border-color: rgba(220,60,50,0.7); }
+100% { box-shadow: 0 0 20px rgba(180,140,50,0.1), 0 0 40px rgba(160,120,40,0.05), inset 0 0 20px rgba(0,0,0,0.15); border-color: rgba(180,140,60,0.2); }
+}
+@keyframes debtNameFlash {
+0%, 100% { color: #d4c4a0; text-shadow: 0 0 12px rgba(200,160,70,0.25); }
+9%, 38%  { color: #e8483c; text-shadow: 0 0 14px rgba(220,50,40,0.6); }
+24%      { color: #c89a8a; text-shadow: 0 0 8px rgba(200,60,50,0.2); }
+}
+:is(tw-passage, .dss-room-prose):has(.empty-glass-marker) .haunt-box.haunt-bloom { animation: debtFlash 2.8s ease-out both; }
+:is(tw-passage, .dss-room-prose):has(.empty-glass-marker) .haunt-box.haunt-bloom .haunt-name { animation: debtNameFlash 2.8s ease-out both; }
 @media (prefers-reduced-motion: reduce) {
   .haunt-box.haunt-bloom { animation: none; }
+  :is(tw-passage, .dss-room-prose):has(.empty-glass-marker) .haunt-box.haunt-bloom, :is(tw-passage, .dss-room-prose):has(.empty-glass-marker) .haunt-box.haunt-bloom .haunt-name { animation: none; }
 }
 .haunt-box {
 position: relative;
@@ -15425,6 +15442,16 @@ function init(container) {
     // arriving where a slip directed you puts the directions away
     if (window.dssDirections) { var dl = window.dssDirections.get(); if (dl && dl.split(',').map(function(v) { return v.trim(); }).indexOf(door.id) >= 0) window.dssDirections.set(''); }
     var st = doors[door.id];
+    // 2026-10-19 (Sam, playtest: "I tried to re-enter the French and it got stuck as it turned me away. It should just naturally bump me away, not go black"):
+    // a resting venue (Dean Street's 'rest' flag) is not entered at all. The fade used to start first; the hub's rest rule then stopped the
+    // link's click, so the fade never ended and the map took no more input. Now the walker bumps off the door and the slip says why.
+    var restNow = hubFlag('rest');
+    if (restNow && door.id === restNow) {
+      if (Math.abs(door.c - S.c) + Math.abs(door.r - S.r) === 1 && !S.moving && !S.bump) { S.bump = { dx: door.c - S.c, dy: door.r - S.r, t: 0 }; if (window.dssAudio && window.dssAudio.muffledThud) { try { window.dssAudio.muffledThud(); } catch (e) {} } }
+      var restSlip = Array.prototype.some.call(document.querySelectorAll('.dss-hint-slip'), function(e) { return e.textContent.indexOf('Look elsewhere; try again later.') >= 0; });
+      if (!restSlip && window.dssInlineHint) window.dssInlineHint('Look elsewhere; try again later.');
+      refreshBar(); return;
+    }
     if (st.status !== 'open' || !st.link) { refreshBar(); return; }
     S.entering = door; S.enterT = 0;
     try { if ((door.id === 'chippy' || door.id === 'barber') && window.dssAudio && window.dssAudio.doorShopBell) setTimeout(function(){ window.dssAudio.doorShopBell(); }, 900); } catch(e) {}
@@ -15433,7 +15460,7 @@ function init(container) {
   }
   var STEP_PAUSE_MS = 350; /* 2026-10-17: the pause on a lit step that takes you in */
   function tryStep(dir) {
-    if (S.edge) return;
+    if (S.edge || S.bump) return;
     S.stepWait = null;
     S.facing = dir;
     var dc = dir === 'right' ? 1 : dir === 'left' ? -1 : 0, dr = dir === 'down' ? 1 : dir === 'up' ? -1 : 0;
@@ -15524,6 +15551,13 @@ function init(container) {
     // it only runs down while it is in the bar and nothing covers the map (a door faced, the first-visit hint or a card such as the matches holds it back)
     if (S.beat && S.beatOn && S.beat.t > 0 && !busy()) { S.beat.t--; if (S.beat.t === 0) { S.beat = null; refreshBar(); } }
     if (S.entering) { S.enterT++; }
+    else if (S.bump) {
+      // 2026-10-19: a resting door turned you away: a third of a tile at it, and back (16 frames)
+      var bp = S.bump; bp.t++;
+      var bk = bp.t <= 6 ? bp.t / 6 : Math.max(0, 1 - (bp.t - 6) / 10);
+      S.px = (S.c + bp.dx * 0.32 * bk) * T; S.py = (S.r + bp.dy * 0.32 * bk) * T;
+      if (bp.t >= 16) { S.px = S.c*T; S.py = S.r*T; S.bump = null; S.held = {}; refreshBar(); }
+    }
     else if (S.edge) {
       // off the edge: 20 frames out, a pause, a turn, 20 frames back to the tile
       var eg = S.edge; eg.t++;
@@ -22537,7 +22571,7 @@ window._passageGen = 0;
                       el.classList.remove('haunt-bloom');
                       void el.offsetWidth;
                       el.classList.add('haunt-bloom');
-                      setTimeout(function() { el.classList.remove('haunt-bloom'); }, 2600);
+                      setTimeout(function() { el.classList.remove('haunt-bloom'); }, 3000); /* 2026-10-19: 3 s, so THE DEBT's red flash (2.8 s) finishes before the class goes */
                     })(toHide[rr]);
                   }
                 }
@@ -34590,7 +34624,7 @@ mesh(new THREE.BoxGeometry(W, 0.06, 0.1), mahogany, 0, 1.07, -D / 2 + 0.05);
 // side walls
 var leftWall = mesh(new THREE.PlaneGeometry(D, H), ochreWall, -W / 2, H / 2, 0); leftWall.rotation.y = Math.PI / 2;
 var rightWall = mesh(new THREE.PlaneGeometry(D, H), ochreWall, W / 2, H / 2, 0); rightWall.rotation.y = -Math.PI / 2;
-mesh(new THREE.BoxGeometry(0.06, 1.05, D), darkWood, W / 2 - 0.03, 0.525, 0);
+mesh(new THREE.BoxGeometry(0.06, 0.75, 7.3), darkWood, W / 2 - 0.03, 0.375, 0.67);
 var frontWall = mesh(new THREE.PlaneGeometry(W, H), ochreWall, 0, H / 2, D / 2); frontWall.rotation.y = Math.PI;
 // the frieze of prints under the ceiling, all round
 // Sepia pen studies: twenty individual heads, fine hatching and uneven ink.
@@ -34796,7 +34830,7 @@ var edge=cx.createRadialGradient(w/2,h*0.45,w*0.22,w/2,h*0.45,h*0.7); edge.addCo
 }
 var EMPTY = 5; // the one frame with no one in it
 for (var f = 0; f < 8; f++) {
-var fx = -3.12 + f * 0.66, fy = 2.0, fz = -D / 2 + 0.035; // the row stops short of the blue door
+var fx = -W / 2 + 0.58 + f * ((W - 1.16) / 7), fy = 2.0, fz = -D / 2 + 0.035; // evenly spaced across the full back wall
 mesh(new THREE.BoxGeometry(0.44, 0.56, 0.03), frameMat, fx, fy, fz, photoG);
 mesh(new THREE.PlaneGeometry(0.38, 0.5), mountMat, fx, fy, fz + 0.017, photoG);
 // 2026-10-14 (Sam): the empty frame now holds his own photograph (french-frame-photo.jpg, beside the html), black and
@@ -34817,30 +34851,66 @@ var lp = mesh(new THREE.PlaneGeometry(0.18, 0.24), new THREE.MeshStandardMateria
 var pillar = mesh(new THREE.BoxGeometry(0.34, H, 0.34), mahogany, 3.05, H / 2, 0.2); pillar.castShadow = true;
 mesh(new THREE.BoxGeometry(0.5, 0.12, 0.5), mahogany, 3.05, H - 0.06, 0.2);
 mesh(new THREE.BoxGeometry(0.5, 0.12, 0.5), mahogany, 3.05, 0.06, 0.2);
-// sash window on the right wall, night outside with the street's lamp in it
-var winTex = tex(128, 192, function(cx, w, h) {
-cx.fillStyle = '#0c0e18'; cx.fillRect(0, 0, w, h);
-var g = cx.createRadialGradient(w * 0.6, h * 0.3, 2, w * 0.6, h * 0.3, w * 0.7);
-g.addColorStop(0, 'rgba(255,200,110,0.55)'); g.addColorStop(0.35, 'rgba(160,110,50,0.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-cx.fillStyle = g; cx.fillRect(0, 0, w, h);
-cx.fillStyle = 'rgba(236,228,205,0.35)';
-for (var i = 0; i < 6; i++) cx.fillRect(4 + i * 20, 0, 3, h); // net curtain
-cx.fillStyle = '#e8e0c8'; cx.fillRect(0, h / 2 - 3, w, 6); cx.fillRect(w / 2 - 3, 0, 6, h);
-});
-var winMat = new THREE.MeshStandardMaterial({ map: winTex, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.55, roughness: 0.9 });
-var win = mesh(new THREE.PlaneGeometry(1.1, 1.7), winMat, W / 2 - 0.03, 1.95, -2.4); win.rotation.y = -Math.PI / 2;
-var winFrame = mesh(new THREE.BoxGeometry(0.06, 1.85, 1.25), new THREE.MeshStandardMaterial({ color: 0xe8e0c8, roughness: 0.7 }), W / 2 - 0.02, 1.95, -2.4);
-win.position.x = W / 2 - 0.06;
-var winG = new THREE.Group(); scene.add(winG); winG.add(win); winG.add(winFrame);
-// a plant on the sill
-var leafMat = new THREE.MeshStandardMaterial({ color: 0x2a5a24, roughness: 0.8, side: THREE.DoubleSide });
-for (var lf = 0; lf < 9; lf++) {
-var leaf = mesh(new THREE.PlaneGeometry(0.16, 0.42), leafMat, W / 2 - 0.3, 1.25 + rnd(lf) * 0.2, -2.4 + (rnd(lf + 2) - 0.5) * 0.4);
-leaf.rotation.set((rnd(lf + 3) - 0.5) * 1.4, rnd(lf + 4) * Math.PI, (rnd(lf + 5) - 0.5) * 1.2);
+// A continuous night street panorama, shared across all five window bays.
+var streetCanvas = document.createElement('canvas'); streetCanvas.width = 1536; streetCanvas.height = 512;
+var streetCtx = streetCanvas.getContext('2d');
+function paintStreet(t) {
+var cx=streetCtx,w=1536,h=512;
+var sky=cx.createLinearGradient(0,0,0,h);sky.addColorStop(0,'#101525');sky.addColorStop(1,'#343139');cx.fillStyle=sky;cx.fillRect(0,0,w,h);
+for(var house=0;house<9;house++) {
+var x=house*184-35;
+cx.fillStyle=['#302c32','#3b3434','#272e36'][house%3];cx.fillRect(x,0,178,368);
+cx.fillStyle='#171820';cx.fillRect(x+4,310,170,58);
+cx.fillStyle=['#754c3c','#3b5051','#655339'][house%3];cx.fillRect(x+8,290,162,18);
+for(var row=0;row<3;row++)for(var col=0;col<3;col++){
+var wx=x+18+col*50,wy=18+row*86;
+cx.fillStyle='#756d65';cx.fillRect(wx-3,wy-3,32,60);
+cx.fillStyle=(house+row+col)%3===0?'#a88b5d':'#19202c';cx.fillRect(wx,wy,26,54);
+cx.fillStyle='rgba(223,202,160,.3)';cx.fillRect(wx+12,wy,2,54);cx.fillRect(wx,wy+28,26,2);
 }
-mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.18, 10), new THREE.MeshStandardMaterial({ color: 0x8a4a2a, roughness: 0.9 }), W / 2 - 0.3, 1.08, -2.4);
-// the blue door at the back right (to the stairs)
-var doorG = new THREE.Group(); doorG.position.set(2.45, 0, -D / 2 + 0.06); scene.add(doorG);
+for(var shop=0;shop<3;shop++){cx.fillStyle=shop===1?'#776148':'#27333b';cx.fillRect(x+17+shop*49,318,39,43);}
+}
+cx.fillStyle='#5a5351';cx.fillRect(0,368,w,36);cx.fillStyle='#96816b';cx.fillRect(0,400,w,4);
+var road=cx.createLinearGradient(0,404,0,h);road.addColorStop(0,'#242630');road.addColorStop(1,'#111923');cx.fillStyle=road;cx.fillRect(0,404,w,h-404);
+for(var l=0;l<4;l++){
+var lx=100+l*420;
+var glow=cx.createRadialGradient(lx,163,0,lx,163,137);glow.addColorStop(0,'rgba(255,212,134,.44)');glow.addColorStop(.2,'rgba(241,174,83,.13)');glow.addColorStop(1,'rgba(241,174,83,0)');cx.fillStyle=glow;cx.fillRect(lx-137,26,274,274);
+cx.fillStyle='#171b24';cx.fillRect(lx-3,164,6,233);cx.fillRect(lx-15,147,30,7);cx.fillRect(lx-12,154,24,27);
+cx.fillStyle='#ffe2a5';cx.fillRect(lx-8,157,16,19);
+var pool=cx.createRadialGradient(lx,403,0,lx,403,115);pool.addColorStop(0,'rgba(221,171,94,.18)');pool.addColorStop(1,'rgba(221,171,94,0)');cx.save();cx.translate(0,300);cx.scale(1,.25);cx.fillStyle=pool;cx.fillRect(lx-120,280,240,240);cx.restore();
+}
+// Small walkers travel both ways, with alternating steps and coat hems.
+for(var person=0;person<7;person++) {
+var dir=person%2?1:-1,px=((person*239+dir*t*(14+person*1.8))%1750+1750)%1750-100;
+var py=385+(person%3)*5,step=Math.sin(t*5+person*2),scale=.7+(person%3)*.12;
+cx.save();cx.translate(px,py);cx.scale(scale,scale);
+cx.fillStyle='rgba(0,0,0,.3)';cx.beginPath();cx.ellipse(0,2,15,3,0,0,Math.PI*2);cx.fill();
+cx.strokeStyle='#141823';cx.lineWidth=5;cx.beginPath();cx.moveTo(-4,-21);cx.lineTo(-5-step*5,0);cx.moveTo(4,-21);cx.lineTo(5+step*5,0);cx.stroke();
+cx.fillStyle=['#514342','#303f50','#595248'][person%3];cx.beginPath();cx.moveTo(-7,-49);cx.lineTo(7,-49);cx.lineTo(10+step,-18);cx.lineTo(-10+step,-18);cx.closePath();cx.fill();
+cx.fillStyle='#aa8e78';cx.beginPath();cx.arc(0,-56,6,0,Math.PI*2);cx.fill();cx.fillStyle='#21232d';cx.fillRect(-7,-62,14,4);cx.restore();
+}
+}
+paintStreet(0);
+var winTex = new THREE.CanvasTexture(streetCanvas); winTex.minFilter=THREE.LinearFilter;winTex.generateMipmaps=false;
+var streetLast=-1, streetTextures=[];
+// Broad street-facing glazing, from beside the exit to the near corner.
+var winG = new THREE.Group(); scene.add(winG);
+var windowTrim = new THREE.MeshStandardMaterial({ color: 0xe8e0c8, roughness: 0.7 });
+var windowStart = -2.98, windowEnd = D / 2 - 0.18, windowBays = 5;
+var bayWidth = (windowEnd - windowStart) / windowBays;
+for (var wb = 0; wb < windowBays; wb++) {
+var wz = windowStart + (wb + 0.5) * bayWidth;
+var bayTex=winTex.clone();bayTex.repeat.set(1/windowBays,1);bayTex.offset.set(1-(wb+1)/windowBays,0);bayTex.needsUpdate=true;streetTextures.push(bayTex);
+var winMat=new THREE.MeshBasicMaterial({map:bayTex,color:0xc1c7d2});
+var pane = mesh(new THREE.PlaneGeometry(bayWidth - 0.1, 1.95), winMat, W / 2 - 0.08, 1.84, wz, winG); pane.rotation.y = -Math.PI / 2;
+// Separate frame strips leave the glass visible, with a deep wooden sill.
+[0.83, 2.85].forEach(function(y) { mesh(new THREE.BoxGeometry(0.13, 0.09, bayWidth), windowTrim, W / 2 - 0.035, y, wz, winG); });
+[-0.5, 0.5].forEach(function(edge) { mesh(new THREE.BoxGeometry(0.13, 2.1, 0.08), windowTrim, W / 2 - 0.035, 1.84, wz + edge * bayWidth, winG); });
+mesh(new THREE.BoxGeometry(0.15, 0.045, bayWidth), windowTrim, W / 2 - 0.06, 1.95, wz, winG);
+}
+mesh(new THREE.BoxGeometry(0.32, 0.08, windowEnd-windowStart), darkWood, W / 2 - 0.13, 0.78, (windowStart+windowEnd)/2, winG);
+// Street exit, still at the far end, now on the street-facing right wall.
+var doorG = new THREE.Group(); doorG.position.set(W / 2 - 0.09, 0, -3.7); doorG.rotation.y = -Math.PI / 2; scene.add(doorG);
 var blue = new THREE.MeshStandardMaterial({ color: 0x1e4a9a, roughness: 0.45, metalness: 0.05 });
 var blueDark = new THREE.MeshStandardMaterial({ color: 0x163a7a, roughness: 0.5 });
 mesh(new THREE.BoxGeometry(1.06, 2.25, 0.08), blue, 0, 1.125, 0, doorG).castShadow = true;
@@ -34855,8 +34925,8 @@ mesh(new THREE.SphereGeometry(0.035, 10, 8), brass, 0.4, 1.05, 0.07, doorG);
 // a small notice pinned to it
 mesh(new THREE.PlaneGeometry(0.2, 0.26), new THREE.MeshStandardMaterial({ color: 0xe6dcc4, roughness: 0.9 }), 0.16, 1.92, 0.05, doorG);
 // a thin line of light under it
-var doorLight = new THREE.PointLight(0xffd090, 0.0, 1.6); doorLight.position.set(2.45, 0.08, -D / 2 + 0.3); scene.add(doorLight);
-var doorGlow = mesh(new THREE.PlaneGeometry(1.0, 0.03), new THREE.MeshBasicMaterial({ color: 0xffd8a0, transparent: true, opacity: 0.0 }), 2.45, 0.015, -D / 2 + 0.11);
+var doorLight = new THREE.PointLight(0xffd090, 0.0, 1.6); doorLight.position.set(W / 2 - 0.35, 0.08, -3.7); scene.add(doorLight);
+var doorGlow = mesh(new THREE.PlaneGeometry(1.0, 0.03), new THREE.MeshBasicMaterial({ color: 0xffd8a0, transparent: true, opacity: 0.0 }), 0, 0.035, 0.065, doorG);
 // ---------- STOOLS ----------
 var stoolSeat = new THREE.MeshStandardMaterial({ color: 0x7a1c1c, roughness: 0.6 });
 var stoolLeg = new THREE.MeshStandardMaterial({ color: 0x1a0e08, roughness: 0.5 });
@@ -35084,7 +35154,7 @@ prose: function() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''
 actions: function() { return byText(['Get a drink at the bar']); } },
 { root: bookG, name: 'An orange paperback', pos: [-0.9, 1.5, 0.45], tgt: [bp.x, 1.16, bp.z], haloAt: [bp.x - 0.05, 1.18, bp.z + 0.4], haloSc: 0.45, /* 2026-10-14: its glow a little along the bar, clear of the glass */ keepLine: true, notAWay: true,
 line: '<i>Chariots of the Gods?</i>' },
-{ root: doorG, name: 'A blue door', pos: [1.9, 1.5, -2.3], tgt: [2.45, 1.3, -4.5], haloAt: [2.45, 1.3, -4.4], haloSc: 1.1,
+{ root: doorG, name: 'A blue door', pos: [1.65, 1.5, -2.8], tgt: [3.6, 1.3, -3.7], haloAt: [3.45, 1.3, -3.7], haloSc: 1.1,
 actions: function() { var a = byText(['Leave the French']); if (a.length) return a; var l = document.querySelector('.header-links .back-one-link tw-link'); return (l && l.getClientRects().length > 0) ? [l] : []; }, /* 2026-10-16 (room sweep): until the French is done the door offers the page's own exit, as the Coach's does, rather than a card with nothing on it */ // 2026-10-12 (the venues audit): the way out is the door, not the window
 onLook: function(on) { doorLight.intensity = on ? 0.9 : 0; doorGlow.material.opacity = on ? 0.55 : 0; } },
 { root: barG, name: 'A bar', pos: [-1.05, 1.45, 1.55], tgt: [-2.55, 1.25, -0.4], haloAt: [-1.75, 1.22, 1.7], haloSc: 1.4, actionOnly: true, /* 2026-10-17 (Sam: "do whatever makes most sense"): the French's bar is offered only once its drink is (the second visit on), not as an empty card with a voice line */ // 2026-10-14 (Sam: glows too close): further along the bar, clear of the glass and the paperback
@@ -35115,6 +35185,7 @@ function fiFrame() {
 var dt = Math.min(0.1, clock.getDelta());
 var t = fiStill ? 0 : clock.getElapsedTime();
 play.frame(t, dt);
+if(Math.floor(t*12)!==streetLast){streetLast=Math.floor(t*12);paintStreet(t);streetTextures.forEach(function(tx){tx.needsUpdate=true;});}
 if (!fiStill) {
 var breath = Math.sin(t * 0.43) * 0.035 + Math.sin(t * 0.19) * 0.018;
 lampMain.intensity = 1.5 + breath;

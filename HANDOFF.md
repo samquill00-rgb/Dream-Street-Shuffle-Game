@@ -1,3 +1,10 @@
+## 2026-10-19 — French streetlight spill; room framing and captions
+- Added three amber spotlights, faint physical glass reflections, and a transparent carpet light projection. Outside walkers synchronously interrupt light and cut soft walking shadows into pools; updates at 12 fps, still for reduced motion. Browser check passed.
+- French room now measures visible viewport space below header, avoiding nested offset estimates. Wider camera (68 landscape/86 portrait), pulled back to show more of bar and street wall.
+- Older scene location labels now use shared dss-room-caption class. Shared high-contrast dark plaques above vignette/grain; wrap on narrow screens. No creative wording altered.
+- Synced; syntax check, desktop and phone browser checks passed without errors. Phone room bottom832 within viewport844. STATS tutorial slip may still overlay scene on fresh dev preview; close with ×.
+- No git commands.
+
 ## 2026-10-19 — French windows and street life
 - Five street windows share a continuous canvas night-street panorama: buildings/shopfronts, amber streetlights and seven walking silhouettes, animated at 12 fps. Reduced-motion uses a still view.
 - One continuous projecting sill spans glazing only. Shortened right-side dado beneath glazing so it no longer crosses the exit. Removed extra potted houseplant; lily retained.

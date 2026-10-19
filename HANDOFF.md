@@ -1,3 +1,16 @@
+# Playtest notes, first batch — 2026-10-19 (00:30–00:46, nine notes)
+
+Sam exported nine Shift+N notes; eight fixed, synced, verified in the pane (no console errors). Not committed.
+- **Stuck in the Pillars (9):** the only exit object was the back lattice window; the door ("A threshold") held only the lily. Now the door carries "Back to the street" and the lily sits in the back lattice window, in front of the camera, clear of the STATS slip (5). Pickup checked.
+- **'Not tonight.' (4):** the first-visit branch's link is now "Back to the street", claimed by the door, so the opening words carry no exit.
+- **Lore (6):** the mark is ⟡ (the dagger read as an up arrow) on the inline mark, the note's title and room cards. A room card's lore button opens the note and leaves the card up (`dssLore.open`, `isLore`). Also fixed: a `//` comment had switched off the inline mark's title, role and tab stop.
+- **Critic (7):** the two '… but' replies are bordered buttons (`.critic-replies`) with a gap. **(8):** the verdict narration ends "He sets the book down." (drunk: "He shuts it up."; his "he sneers, empathetically" went with the quote, kept in a comment); the words come on the slip. The return-night line is untouched and still repeats its slip. Also fixed: the return-night "doesn't open it" beat never cleared the opening line (`narr` read before it was declared).
+- **Coin (2):** Pocket it takes Toss it's place, same size; "Tails." stays under it.
+- **Red route (3):** `questCall` plays once per picked door per night when the red path first draws (`pitchLitSound`, sessionStorage `dssPitchLit`).
+- **Rejection lines (1), slots built:** Sam writes them. 13 pink `.dss-refusal-after` slots (data-k) beside the slip markers: JEFFREY, DAVY (end of his paragraph), SHANA x4 (one per variant), LACKLAND near and no, INIS, MOE, THE AGENT, THE GREAT HAM (after the America line), THE NOVELIST; none for the Deal (a yes). `dssRefusals.after(m)` shows a scene's slot once its slip is filed, at once on a same-night revisit or with reduced motion. Checked with a planted slip in the pane (shown 4.5 s after, and at once on a revisit). To fill one: replace the slot's placeholder text and drop `claude-draft`. **Filled 2026-10-19 from Sam's doc (Rejection Lines, https://claude.ai/code/artifact/805eaf31-049a-4958-b7ca-4b748be242a3):** ten wired, typo fixes only (book's, your, elsewhere, "? you think,"), "Twelve thousand years", INIS "he'll give you more than he could if he were". Sam: "these are post-conversation reflections", so JEFFREY's moved after "seacoast of Bohemia.", INIS's after "Find it for me!", the Ham's after the rumour block, DAVY's into Davy Merkin's tip after "being adored." (`data-later`: shows when that reader's slip is filed tonight; checked in the pane). Still pink: SHANA ready, THE AGENT, MOE.
+
+---
+
 # Subcomandante Fortuna and Donny Florentine's — 2026-10-18
 
 Sam named the Easter Island revolutionary **Subcomandante Fortuna**. The name is now in the Reclamation's game chrome (the cover line about him lowering the rifle, the three end banners, the build comment) and in Among the Moai, Sam's own line: ‘Call me Subcomandante Fortuna.’ His own two attributions ("the man in the balaclava says / leans in", The Listening Moai and The Glyph) are untouched, for him to rename or not.

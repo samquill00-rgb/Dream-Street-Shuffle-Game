@@ -1,3 +1,16 @@
+## 2026-10-19 — Cow gallop animation
+- Cow now bounds and rocks, kicks all four legs, flaps its ears and swishes its tail; rider wobbles with the gallop.
+- Small fading dust puffs trail behind it. New motion/dust suppressed for reduced-motion preferences.
+- Handling, collision area and creative prose unchanged. Synced with sync_html.py; JavaScript syntax and desktop browser checks passed without errors.
+
+# Cow ride: old arcade cabinet pass — 2026-10-19
+
+Sam wanted cow ride more ridiculously old-fashioned arcade, more flashing/moving bits. Only Ride Jeffrey Bernard's cow scripts changed: chasing cyan/magenta/gold pixel bulbs around border; low-opacity static CRT scanlines; scrolling neon lane dashes and side speed streaks escalating with existing tier; brief +1 dodge, HIT!, NEAR MISS! and large existing tier-name callouts. Title font/glow retro treatment; no authored text changes. New effects suppressed/static under reduced-motion; existing game motion unchanged. Bounded pop pool, no new timers/listeners/dependencies. Original prose/markup verified unchanged. Handling, obstacle logic, timing, music and end links untouched.
+
+Syntax/build and desktop/phone reduced-motion load, start, lane-key input and live-render checks passed with zero JS/console/tw-errors. Desktop screenshot /tmp/cow-arcade.png visually inspected (CANTER pop, lamps, lanes); phone /tmp/cow-arcade-mobile.png. Test /tmp/cow-arcade-browser.cjs, original /tmp/cow-before-arcade.twee. No git commands; synced, Sam commits.
+
+---
+
 # Shared subtle pointer gaze — 2026-10-19
 
 Sam requested blue/green eyes follow mouse together. Added window pointer coordinates mapped into canvas space, shared smoothed pair gaze relative to front-rim anchor, limited to1.35 horizontal/1 vertical iris units. Glass reflections stay fixed to cornea; coordinated blink retained. Gaze relaxes to centre when pointer leaves window/blur; touch ignored and reduced-motion remains static. Pointer listeners removed in existing dispose. No text/reveal changes. Syntax/build and desktop pointer-left/right plus phone reduced-motion render checks pass, zero JS/tw-errors, one canvas. /tmp/wheel-gaze-browser.cjs; /tmp/wheel-gaze-left.png and /tmp/wheel.png. No git commands; synced, refresh preview.

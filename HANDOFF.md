@@ -1,3 +1,69 @@
+## 2026-10-20 — Mist carries from bookshop into street
+- Sam requested floor mist through transition, feeling of waltzing out of shop.
+- Shared renderer's mist no longer gated/faded by room opening. Same banks persist through dissolve, drift down towards viewer, then gradually thin using streetProgress=t/TOTAL_MS. Approximately68% strength at full opening before travel thinning,27% by dance end. Room vignette still fades; controls drawn over fog. Reduced-motion drift remains still.
+- Source/prose unchanged except visual script. Synced. Source parse/prose and desktop/phone transition checks pass without JS/Harlowe errors via /tmp/watkins-carrymist-check.cjs; street sampled at10s after full dissolve, desktop screenshot visually confirms persistent mist. No git commands.
+
+## 2026-10-20 — Clearer stars; loose dry-ice floor banks
+- Sam requested more visible eerie twinkling stars and mist less like a donut, like stage dry ice.
+- Stars: increased minimum/peak brightness, larger pale halo and rays, small bright core; independent gentle twinkle retained, reduced-motion steady.
+- Removed rotating ring of eight ankle curls and drawn rising wisps. Replaced with nine irregular broad overlapping floor-fog banks passing through centre/feet and spreading towards foreground; slow independent sideways drift/roll and thin soft crest layers. No orbital motion/central gap. Earlier broad low haze stays. Prose unchanged.
+- Synced. Source parse/prose identity and desktop/phone transition checks passed without JS/Harlowe errors via /tmp/watkins-floorfog-check.cjs; full scene phone screenshot visually inspected. No git commands.
+
+## 2026-10-20 — Flickering rear-wall stars
+- Sam requested flickering stars on back wall. Added ten small pale green-gold four-point glimmers across rear wall, each with independent gentle brightness cycle/soft halo. Reduced-motion steady; they reveal with interior and dissolve before street. Prose untouched.
+- Synced. Source parse/prose checks and desktop/phone transition checks passed without JS/Harlowe errors via /tmp/watkins-stars-check.cjs. No git commands.
+
+## 2026-10-20 — Stronger eerie atmosphere; single onlooker first
+- Sam asked for more pronounced moving shadows/mist and one large silhouette of the person looking through window first, fading to scene.
+- Opening now overlays opaque frosted glass with a single large still head/shoulders/coat silhouette; it fades with clarity ramp. Couple geometry also fades in with reveal instead of appearing as initial pair of shadows. Only dancers remain after reveal; reduced-motion shows scene directly.
+- Shelf shadow projection spread .9->1.25, opacity .24->.53 plus candle variation, blur2.1. Added broad slowly moving green-amber light spills clipped to book spines under silhouettes.
+- Increased floor haze and ankle curl opacity/height plus more visible wisps; all room effects still dissolve away before street. Prose/game/audio unchanged.
+- Synced. Parse/prose checks and desktop transition pass; opening screenshot inspected /tmp/watkins-eerie-window-false.png. Phone transition also passed without JS/Harlowe errors via /tmp/watkins-eerie-check.cjs. No git commands.
+
+## 2026-10-20 — Dancing candle shadows and ankle mist
+- Sam requested flickering shadows over bookcases as couple dances and mist at their feet.
+- Shared renderer projects cached solid couple mesh from chandelier light onto a reusable shadow canvas; clips soft silhouettes to actual bookcases. Dance rotation changes silhouettes and small candle-position/intensity variation shifts their edges, with faint secondary candle shadow.
+- Added eight soft ankle-height fog curls following couple's six-second rotation, plus rising wisps. Existing low floor mist remains. Reduced-motion fixes turn/light/mist; room effects fade with dissolve, prose/audio/gameplay unchanged.
+- Synced. UserScript/game parse and prose checks pass; desktop/phone transition checks pass without JS/Harlowe errors; full-reveal reduced-motion screenshot inspected. Evidence /tmp/watkins-shadows-check.cjs and /tmp/watkins-shadows-window-true.png. No git commands.
+
+## 2026-10-20 — Ghostly candle chandelier
+- Sam asked what the bird on Crowley's chest is, and requested ghostly candle chandelier/flicker. Explained no explicit bird emblem exists: pale collar/gilt lapels read as wings over waistcoat; clothing unchanged.
+- Replaced shaded electric lamp in Watkins with six wax candles on curving tarnished-silver chandelier arms and hanging chain, pale green/amber flames/halos. Gentle small irregular candle flicker affects room pool and solid dancers' shading; reduced-motion flames/light stay steady. Existing mist, silhouettes/dissolve, prose untouched.
+- Synced. Source parse/prose checks pass; desktop/phone transition checks passed without JS/Harlowe errors; reduced-motion phone window screenshot visually inspected. Evidence /tmp/watkins-candles-check.cjs and /tmp/watkins-candles-window-false.png. No git commands.
+
+## 2026-10-20 — Silhouette reveal, slower dissolve, richer interior textures
+- Sam requested slower dreamlike bookshop-to-street dissolve, initial silhouettes on window fading into interior, and improved textures.
+- Watkins canvas starts with featureless dark silhouettes behind misted glass; smooth clarity ramp from 1s to7.5s reveals shelves/costumes/props. Reduced-motion shows full scene immediately.
+- Next scene dissolves bookshop into street across8s (smoothstep); window crossing eases1.8s and fades1.4s, clears after3.4s. Mullions dissolve with smaller perspective shift. Reduced-motion dissolve1.2s.
+- First playable step moved6s->8s; every note +3 beats, count-in6..8s, duration32->34s, music loops across extended route. Same playable figures/hit windows/outcomes preserved.
+- Shelves now have grain/highlights, books have gilt bands/worn edges/spine marks, cached deterministic dust/scuffs enrich surfaces/floor without noise shimmer. Prose unchanged.
+- Synced. UserScript/game parse and prose checks pass; desktop screenshot confirms silhouette/reveal and bookshop/street overlapping dissolve. Full desktop and reduced-motion phone runs both reached O'Flatterly without JS/Harlowe errors; canvas fits both viewports. Evidence /tmp/watkins-dissolve-check.cjs and /tmp/watkins-dissolve-window-false.png, /tmp/watkins-dissolve-street-false.png. No git commands.
+
+## 2026-10-20 — Anonymous faces, spooky lighting, mist and occult shop objects
+- Sam preferred earlier anonymous faces; requested spooky light/mist plus occult symbols/apparatus.
+- Removed explicit nose/eye/brow/mouth geometry while retaining solid heads and full turning couple/clothes/hold. No viewer figure.
+- Darkened room's lamp pool/edges, added subtle green and violet sidelights, low slowly drifting mist; reduced motion keeps all added atmosphere still, no flashes.
+- Wall pentagram seal and planetary glyphs, worn chalk floor circle, brass armillary on side table, scrying glass among stacked books. No prose changes.
+- Synced. Source parse/prose checks pass; desktop visual inspected and transition without JS/Harlowe errors. Phone transition also passed without JS/Harlowe errors. Evidence /tmp/watkins-mist-check.cjs, /tmp/watkins-mist-window-false.png. No git commands.
+
+## 2026-10-20 — Solid turning dancers, face/profile/back views
+- Sam asked to replace flat puppet-like turning with actual faces/profiles/backs while in each other's arms.
+- Shared dssWaltzGlass now caches a solid 3D mesh in _dssWaltzCoupleMesh and projects/depth-sorts its surfaces into existing canvas. Actual noses, eyes, heads, rear hair/headcloth, full skirt circumference, coat front/lapels and uninterrupted back; rounded solid limbs. Couple rotates about shared axis in six seconds, soft rise/fall; reduced-motion static.
+- Closed hold: outside hands clasp, Blavatsky's other hand on his shoulder, his other arm around her back. Both partners' local front axes face each other. No third silhouette. Shop/prose/audio/rhythm unchanged.
+- Synced. UserScript/game parse and prose identity checks pass. Desktop/phone transition checks without JS/Harlowe errors. Four quarter-turn views inspected at /tmp/watkins-depth-poses.png; final arm hold refinement rerun with /tmp/watkins-depth-poses.cjs. No git commands.
+
+## 2026-10-20 — Dancers clothed and third figure removed
+- Sam requested recognisable Blavatsky/Beast rather than stick figures, proper clothes/natural waltz, removal of third viewer figure.
+- Replaced dancer drawing with fuller heads/bodies: older Blavatsky in layered high-necked dress, folded skirt, fringed shawl and hair/headdress; human Crowley in dark dinner coat, lapels, waistcoat/buttons, white collar/bow tie, solid trousers/shoes and bald profile. Brass shading retained.
+- Six-second shared turn, depth sorting, gentle three-beat rise/fall, subtle coordinated steps and bent clothed arms meeting at fixed shared hands. Reduced-motion still. Removed all viewer/reflection/third silhouettes from shared renderer and updated canvas accessible label. Prose unchanged.
+- Synced; source parses, prose check passes, desktop transition without JS/Harlowe errors; screenshot visually inspected. Phone transition also passed without JS/Harlowe errors. Evidence /tmp/watkins-costumes-check.cjs and /tmp/watkins-costumes-window-false.png. No git commands.
+
+## 2026-10-20 — Watkins bookshop and turning dance corrected
+- Sam disliked waving figures and the road visible through Watkins: asked for spinning/waltzing among bookshelves, road only in next scene.
+- dssWaltzGlass now draws a stationary bookshop at opening=0: four filled bookcases, stockroom door, lamplit wood floor and book table. Crossfades to existing impossible street only during next passage's opening.
+- Brass pair orbit one centre in closed ballroom hold with joined hands, depth sorting, skirt/coat and stepping feet. No waving; reflection arms stay at sides. Reduced-motion stays still. Prose untouched.
+- Synced. Source parse/prose checks and desktop/phone transition checks passed without JS/Harlowe errors; desktop screenshot inspected. Final tiny hand-position adjustment joins both dancers at shared world coordinates. No git commands. Evidence /tmp/watkins-shop-check.cjs, /tmp/watkins-shop-window-false.png, /tmp/watkins-shop-street-true.png.
+
 # START HERE — morning of 2026-10-19
 
 **State:**
@@ -7,7 +73,7 @@
 - Other sessions edited the .twee last night (Watkins looking-glass, room labels such as WAY OUT, the caption plaque rule, the Coach and French rooms). Their work is in place, and the review fixed three places where it collided with ours.
 
 **Sam's five open calls (from the third playtest batch):**
-1. **Top-left exits:** removing them strands the player in six rooms. Add in-room exits first, or keep them?
+1. **Top-left exits:** DONE 2026-10-20 (Sam: "can we just add working doors?" and "an arrow on the floor that indicates the exit as behind you"). "← Out onto the street" stays in the header, hidden (`.dss-exit-reserve`); the header's guard script shows it (`.dss-exit-needed`) only on a page with no link of its own (it searches tw-passage and `tw-story > .dss-threshold`) or a room whose 3D did not come up; CSS shows it when a room's WebGL is lost (`.dss-room-strip-lost`). `window.dssStreetExit()` returns that link; every room door falls back to it (the French, Coach, chippy, Ronnie's, Pillars WAY OUT, Trisha's stairs, and O'Flatterly's door, which was look-only). The Colony and Lackland's office have a chalked WAY OUT arrow on the floor (`window.dssWayOutArrow`); its close-up turns the camera round to the real door behind you. Also fixed: Lackland's phone camera stood outside the front wall (z 3.3), so the back of the entrance door blacked out half the phone screen; it is z 2.75 now. A soft landing light lights that door. All nine rooms checked in the pane, desktop and phone shapes, no errors.
 2. **Carthage:** there is no haunt gate. The road is the Pillars storm after INIS's page 93, and nothing hints at it before that. Add a hint?
 3. **The doors:** DONE 2026-10-20 (Sam: "swap the 3D doors"). Approach The Colony Room now draws the oxblood 41 on the RIGHT and the black 43 on the left (`CR_DOOR_X` / `NB_DOOR_X` in buildCRScene; the fanlight glow, knocker, scraper and cobweb moved with their doors). The links are unchanged. Checked in the pane with no errors.
 4. **"Night 5: …"**: DONE 2026-10-20 (Sam: "yes"). The pitch question now reads "On an earlier night: …" for anything older than last night.

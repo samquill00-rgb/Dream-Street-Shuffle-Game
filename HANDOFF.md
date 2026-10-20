@@ -1,3 +1,22 @@
+# START HERE — 2026-10-21
+
+**State:**
+- Everything is in the .twee and synced to the html. Sam commits in GitHub Desktop.
+- Nothing is open from the third playtest batch. All five calls and the Night Ahead Part Two rewrite are closed; the details are under "Sam's five calls from the third playtest batch, all closed" below the Watkins entries.
+- Done on 2026-10-20/21:
+  - The Colony's 3D doors were swapped, so the red 41 is on the right.
+  - The pitch question says "On an earlier night".
+  - Every room leaves through its own door. The top-left link is now a hidden safety net, and the Colony and Lackland's office have chalked WAY OUT floor arrows.
+  - Lackland's phone camera was moved inside the room.
+  - 26 paragraph breaks went into long prose.
+  - Sam's Night Ahead Part Two is in.
+- Another session worked on Watkins and the Cecil Court waltz on 2026-10-20 (the entries just below). Both sessions' edits were checked present after each sync.
+- Clean test state: http://127.0.0.1:8732 has its own empty storage; hard-mute the pane.
+
+**Next:** Sam's next playtest.
+
+---
+
 ## 2026-10-20 — Mist carries from bookshop into street
 - Sam requested floor mist through transition, feeling of waltzing out of shop.
 - Shared renderer's mist no longer gated/faded by room opening. Same banks persist through dissolve, drift down towards viewer, then gradually thin using streetProgress=t/TOTAL_MS. Approximately68% strength at full opening before travel thinning,27% by dance end. Room vignette still fades; controls drawn over fog. Reduced-motion drift remains still.
@@ -64,22 +83,16 @@
 - Brass pair orbit one centre in closed ballroom hold with joined hands, depth sorting, skirt/coat and stepping feet. No waving; reflection arms stay at sides. Reduced-motion stays still. Prose untouched.
 - Synced. Source parse/prose checks and desktop/phone transition checks passed without JS/Harlowe errors; desktop screenshot inspected. Final tiny hand-position adjustment joins both dancers at shared world coordinates. No git commands. Evidence /tmp/watkins-shop-check.cjs, /tmp/watkins-shop-window-false.png, /tmp/watkins-shop-street-true.png.
 
-# START HERE — morning of 2026-10-19
+## 2026-10-19/20 — Sam's five calls from the third playtest batch, all closed
 
-**State:**
-- Everything from last night's playtests is in the .twee and synced to the html.
-- Sam's last commit was 04:40 ("MORE"). Everything after it is uncommitted: the third batch, the overnight fixes, the Great Work note, captions and so on.
-- The overnight review (04:53 to 06:18) fixed 11 things a player would notice, plus smaller ones. Its summary is at the top of **HANDOFF-overnight-review-2026-10-19.md**, with the step-by-step log below it. A full sweep of all 214 story passages found no errors.
-- Other sessions edited the .twee last night (Watkins looking-glass, room labels such as WAY OUT, the caption plaque rule, the Coach and French rooms). Their work is in place, and the review fixed three places where it collided with ours.
-
-**Sam's five open calls (from the third playtest batch):**
+(This was the START HERE of 2026-10-19; the 2026-10-19 overnight review's summary is at the top of HANDOFF-overnight-review-2026-10-19.md.)
 1. **Top-left exits:** DONE 2026-10-20 (Sam: "can we just add working doors?" and "an arrow on the floor that indicates the exit as behind you"). "← Out onto the street" stays in the header, hidden (`.dss-exit-reserve`); the header's guard script shows it (`.dss-exit-needed`) only on a page with no link of its own (it searches tw-passage and `tw-story > .dss-threshold`) or a room whose 3D did not come up; CSS shows it when a room's WebGL is lost (`.dss-room-strip-lost`). `window.dssStreetExit()` returns that link; every room door falls back to it (the French, Coach, chippy, Ronnie's, Pillars WAY OUT, Trisha's stairs, and O'Flatterly's door, which was look-only). The Colony and Lackland's office have a chalked WAY OUT arrow on the floor (`window.dssWayOutArrow`); its close-up turns the camera round to the real door behind you. Also fixed: Lackland's phone camera stood outside the front wall (z 3.3), so the back of the entrance door blacked out half the phone screen; it is z 2.75 now. A soft landing light lights that door. All nine rooms checked in the pane, desktop and phone shapes, no errors.
 2. **Carthage:** CLOSED 2026-10-20, no change (Sam: "I must have just not realised that I didn't get the page 93 errand yet then. In which case I don't think anything needs to change"). The road stays gated on O'Flatterly's errand, per his 10-09 ruling.
 3. **The doors:** DONE 2026-10-20 (Sam: "swap the 3D doors"). Approach The Colony Room now draws the oxblood 41 on the RIGHT and the black 43 on the left (`CR_DOOR_X` / `NB_DOOR_X` in buildCRScene; the fanlight glow, knocker, scraper and cobweb moved with their doors). The links are unchanged. Checked in the pane with no errors.
 4. **"Night 5: …"**: DONE 2026-10-20 (Sam: "yes"). The pitch question now reads "On an earlier night: …" for anything older than last night.
 5. **Long text:** DONE 2026-10-20 (Sam: "I trust you to put breaks in according to where they should be grammatically ... then I will make changes if I want to"). 26 paragraph breaks, words untouched (word-level diff checked): Approach The Coach, Cecil Court, After Cecil Court, Carthage shore, Dawn, Fight Victory Perfect, Lackland's turntable aside, O'Flatterly's Gift (third pillar; one opening ‘ added to follow his own run-on-speech convention), Ronnie's story 3, the Colony's agent, Pyramid Mouth, The Synthesis, The Phone Box Answered (FRANKIE branch), The Woman from the Line (all three branches), Bourchier Street car park. The Coach's locked-path wait card now copies innerHTML so its breaks show. Left whole: single long sentences (RED at the corner, Pyramid Mouth's middle), the Jeffrey Bernard quote, speeches (Benito, Shelley's liver, Davy's tip), branches already short, lore boxes in `<p>`s, pink lines. The old audit's per-paragraph counts merged separate elements; recount per displayed line with the scratchpad longlines.py approach.
 
-**Also waiting:** the Night Ahead Part Two rewrite (Sam's note, hidden in the passage).
+**Night Ahead Part Two:** DONE 2026-10-21. Sam's own rewrite is in (paragraphs 3 to 5: "So try to sell the book. It's both your get out and your cover story. …", "Soho's rain churns up your silted bloodstream; even in the years that you aren't here.", "The only way out is through a morning song."). His typos were fixed at his word; the "SAM TO REWRITE" comment is replaced by a dated note.
 
 ---
 

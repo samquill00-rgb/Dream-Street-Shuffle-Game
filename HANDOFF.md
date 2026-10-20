@@ -9,8 +9,8 @@
 **Sam's five open calls (from the third playtest batch):**
 1. **Top-left exits:** removing them strands the player in six rooms. Add in-room exits first, or keep them?
 2. **Carthage:** there is no haunt gate. The road is the Pillars storm after INIS's page 93, and nothing hints at it before that. Add a hint?
-3. **The doors:** the 3D street draws the Colony on the left, but "Right" is correct. Swap the 3D doors or the links? (The Donkey's first toss always sends you Left.)
-4. **"Night 5: …"** on the pitch question: reword to "On an earlier night: …"?
+3. **The doors:** DONE 2026-10-20 (Sam: "swap the 3D doors"). Approach The Colony Room now draws the oxblood 41 on the RIGHT and the black 43 on the left (`CR_DOOR_X` / `NB_DOOR_X` in buildCRScene; the fanlight glow, knocker, scraper and cobweb moved with their doors). The links are unchanged. Checked in the pane with no errors.
+4. **"Night 5: …"**: DONE 2026-10-20 (Sam: "yes"). The pitch question now reads "On an earlier night: …" for anything older than last night.
 5. **Long text:** a page-break mark Sam places, or proposed break points to approve? (Audit in HANDOFF-text-audit-2026-10-19.md, recounted at 05:47.)
 
 **Also waiting:** the Night Ahead Part Two rewrite (Sam's note, hidden in the passage).

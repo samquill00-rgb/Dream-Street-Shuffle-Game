@@ -1,3 +1,10 @@
+## 2026-10-21 — JEFFREY's Friesian speech moved to his click; "milky indifference" cut
+- Sam saw the speech in the Coach and Horses bar prose and asked why. Cause: the 2026-10-16 lost-prose restore put it back where the 15 April "Meet Jeffrey Bernard" had it (main prose); his later idea was that it plays on his click. He ruled: move it, cut "The cow regards you with milky indifference.", and the lead-in is now his new line "He resumes a conversation he hadn’t begun:" (curly apostrophe, colon kept).
+- Passage: the comment, lead-in, speech and milky line are gone; a dated note is glued to the start of "‘Will you please do something about this cow?’" so no empty line is added. "Milk her" still follows (its set-up now lives on his card).
+- Room kit: the card prints a spot's `prose` only when it has buttons (Sam's 7 Oct rule); a new `keepProse: true` flag on a spot prints it regardless. JEFFREY's Coach spot carries `keepProse` and the speech as `prose`. He is removed from the room on every visit after the first (`.cb-jeff-gone`), so the speech is a first-visit, click-only beat; his two inner-voice lines still show in the parchment box beside him.
+- Checked on 127.0.0.1:8732 (debug jump, fresh storage): no console errors; the prose reads without the speech; his card shows the lead-in and the speech; phone-sized load gives the centred 86% card (the side column only appears when the room is ≥900px wide). Pre-existing, not touched: in the reading panel the gap before "‘Will you please" is a single line break where other paragraphs get a full gap; the structure (hidden refusal span + three macro lines + blank) is the same one that sat before "He stops" until today.
+- Synced. No git commands.
+
 ## 2026-10-21 — Coach narrow-preview interior fixed
 Sam saw only coloured hotspots. Verified in actual IAB at 503px: portrait camera z=3.9 sat outside front wall z=3.5. Moved portrait camera to z=2.9, rebuilt with sync_html.py. Actual IAB now visibly shows entire interior, cow, tiled floor and bar after entrance card dismissed. Wide camera unchanged; no prose changes. Screenshot /tmp/coach-interior-fixed.png.
 

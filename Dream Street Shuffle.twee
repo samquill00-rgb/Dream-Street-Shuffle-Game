@@ -2866,10 +2866,18 @@ window.dssAudio = (function() {
         try { old.g.gain.cancelScheduledValues(t); old.g.gain.setValueAtTime(old.g.gain.value, t); old.g.gain.linearRampToValueAtTime(0.0001, t + 0.12); old.src.stop(t + 0.14); } catch(e) {}
       }
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(spec.gain, t + 0.08);
-      var me = { src: src, g: g }; _trCurrent = me;
+      var me = { src: src, g: g, base: spec.gain }; _trCurrent = me;
       src.onended = function() { if (_trCurrent === me) _trCurrent = null; try { g.disconnect(); } catch(e) {} };
       src.start(t);
     });
+  }
+  // 2026-10-21 (Sam: "the 'outside the venue' noise fades as you walk further from a venue"): the leave clip (the pub heard
+  // from its door) follows the walker on the Dean Street map; tiles is the walk from the door, silent by seven
+  function transitionDistance(tiles) {
+    var me = _trCurrent; if (!me || me.base == null) return;
+    var ac = getCtx(); if (!ac) return;
+    var f = Math.max(0, Math.min(1, 1 - tiles / 7));
+    try { var t = ac.currentTime; me.g.gain.cancelScheduledValues(t); me.g.gain.setValueAtTime(me.g.gain.value, t); me.g.gain.linearRampToValueAtTime(Math.max(0.0001, me.base * f), t + 0.25); } catch(e) {}
   }
   function _transitionForPassage(passageNode) {
     if (!passageNode) return;
@@ -4328,7 +4336,7 @@ window.dssAudio = (function() {
     // Venue ambient beds
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
-    mapFootstep: mapFootstep, mapCab: mapCab, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
+    mapFootstep: mapFootstep, transitionDistance: transitionDistance, mapCab: mapCab, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
     startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel,
     prewarmBed: prewarmBedByLabel,
     playTransition: playTransition,
@@ -4709,8 +4717,8 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
 })();
 
 // ====== THE PRIMER: MORALE, SOBRIETY & HAUNTS ======
-// One card for the whole night, raised through window.dssShowPrimer and guarded
-// by $primerShown, so whichever comes first, a drink or a haunt, shows it.
+// Two slips since 2026-10-21 (Sam: "the stats and haunts split into two"): STATS, then HAUNTS the moment it is closed.
+// Raised through window.dssShowPrimer and guarded by $primerShown, so whichever comes first, a drink or a haunt, shows them.
 //
 // 2026-09-14: this was a full-screen gold-on-dark modal. Sam asked for it on the
 // paper slip with the rest of the instructions, "long enough to be read". Every
@@ -4733,7 +4741,7 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
   function showPrimer() {
     if (document.querySelector('.dss-hint-slip.long')) return;
     if (window.dssDeferIfBusy(showPrimer)) return;
-    window.dssInlineHint('STATS\n\n' + paras.join('\n\n'), { sticky: true });
+    window.dssInlineHint('STATS\n\n' + paras.slice(0, 4).join('\n\n'), { sticky: true, then: function() { window.dssInlineHint(paras.slice(4).join('\n\n'), { sticky: true }); } });
   }
   window.dssShowPrimer = showPrimer;
 })();
@@ -5780,8 +5788,8 @@ function init(container) {
 
   // spawn: outside the door you last went through, else near the bottom (Shaftesbury Avenue end)
   // of Dean Street, facing north up the street towards the ginger light (Sam, 2026-10-11).
-  var spawnC = 17, spawnR = 38, facing = 'up';
-  try { var last = sessionStorage.getItem('dssMapLast'); if (last) { var ld = doorById(last); if (ld && walkable(ld.fc, ld.fr)) { spawnC = ld.fc; spawnR = ld.fr; facing = ld.spot ? 'down' : (ld.c < ld.fc ? 'right' : (ld.c > ld.fc ? 'left' : (ld.r < ld.fr ? 'down' : 'up'))); } } } catch(e) {}
+  var spawnC = 17, spawnR = 38, facing = 'up', spawnDoor = null; /* spawnDoor: 2026-10-21, the door you came out of, for the fading pub noise */
+  try { var last = sessionStorage.getItem('dssMapLast'); if (last) { var ld = doorById(last); if (ld && walkable(ld.fc, ld.fr)) { spawnC = ld.fc; spawnR = ld.fr; spawnDoor = { c: ld.fc, r: ld.fr }; facing = ld.spot ? 'down' : (ld.c < ld.fc ? 'right' : (ld.c > ld.fc ? 'left' : (ld.r < ld.fr ? 'down' : 'up'))); } } } catch(e) {}
 
   var S = { trail:[], stepK:0, c:spawnC, r:spawnR, px:spawnC*T, py:spawnR*T, moving:false, dx:0, dy:0, prog:0, facing:facing, frame:0, stepT:0,
             held:{}, entering:null, enterT:0, t:0, walker:null, walkerNext:14 + Math.random()*12, hintShown:false, noteFlash:null, alive:true, raf:null,
@@ -6128,6 +6136,7 @@ function init(container) {
         // the trace (polish loop 2026-09-23): each step leaves a pale print on the wet pavement that the rain takes back over seven seconds
         S.stepK++; S.trail.push({ x: S.px + 8, y: S.py + 15, t: S.t, f: S.facing, k: S.stepK }); if (S.trail.length > 28) S.trail.shift(); routeStep();
         if (window.dssAudio && window.dssAudio.mapFootstep) { try { window.dssAudio.mapFootstep(); } catch(e) {} }
+        if (spawnDoor && window.dssAudio && window.dssAudio.transitionDistance) { try { window.dssAudio.transitionDistance(Math.abs(S.c - spawnDoor.c) + Math.abs(S.r - spawnDoor.r)); } catch(e) {} } /* 2026-10-21 (Sam): the pub heard from outside fades with the walk from its door */
         var here = doorAt(S.c, S.r);
         if (here && here.spot && doors[here.id].status === 'open') { enter(here); }
         /* 2026-10-17 (Sam: "you have to pause ever so slightly in the lit pavement. If you keep holding down the walk button you are just walking through"): coming to a stop on a wall door's step starts a short wait (STEP_PAUSE_MS); still standing there when it ends, you go in. Holding a direction walks on. */
@@ -7937,7 +7946,7 @@ window.__dssHintPassage = function() {
 // when the passage changes before it can show (the primer, queued behind the Pillars' opening box, was lost for the night
 // when the player answered AOIFE's call from inside the box; $primerShown was already set).
 window.dssInlineHint = function(html, opt) {
-  window.__dssHintQueue.push({ html: html, passage: (opt && opt.sticky) ? null : window.__dssHintPassage(), go: (opt && opt.go) || null });
+  window.__dssHintQueue.push({ html: html, passage: (opt && opt.sticky) ? null : window.__dssHintPassage(), go: (opt && opt.go) || null, then: (opt && opt.then) || null }); /* then: 2026-10-21 (Sam), a function run the moment this slip is closed (the HAUNTS slip follows the STATS slip) */
   if (!window.__dssHintBusy) window.__dssHintNext();
 };
 // A new passage sends the old passage's slips on their way, read or not (Sam, 2026-10-09: they stayed until
@@ -7993,9 +8002,9 @@ window.__dssHintNext = function() {
   var item = window.__dssHintQueue.shift();
   if (item === undefined) return;
   window.__dssHintBusy = true;
-  window.__dssHintShow(item.html, item.passage, item.go);
+  window.__dssHintShow(item.html, item.passage, item.go, item.then);
 };
-window.__dssHintShow = function(html, passage, go) {
+window.__dssHintShow = function(html, passage, go, then) {
   try {
     // THE STACK (Sam, 2026-10-07: "don't ever fade them, just make the cross more obvious to encourage
     // closing them"). No slip leaves on its own any more. Each one stays until its × or its paper is
@@ -8063,6 +8072,7 @@ window.__dssHintShow = function(html, passage, go) {
     var finish = function() {
       if (card.__dssGoing) return;
       card.__dssGoing = true;
+      if (then) { var nextUp = then; then = null; setTimeout(function() { try { nextUp(); } catch (e) {} }, 60); } /* 2026-10-21 (Sam): what follows this slip, the moment it goes */
       card.classList.add('out');
       setTimeout(function() {
         if (card.parentNode) card.parentNode.removeChild(card);
@@ -12782,6 +12792,7 @@ window.dssLore = (function() {
   function placeDagger(l) {
     if (l._dssLore) return; l._dssLore = true;
     var t = titleOf(l.textContent), wrap = l.closest('tw-expression') || l.parentElement || l;
+    if (l.closest('.lore-card-only')) { wrap.classList.add('lore-hidden-link'); return; } /* 2026-10-21 (Sam): the Great Ham's lore comes only from his card; no footnote in the room's words */
     if (l.classList.contains('dss-claimed') || l.closest('.dss-claimed, .dss-claimed-wrap')) return; // a room object's card carries it
     var fn = document.createElement('span'); fn.className = 'lore-fn'; fn.innerHTML = '⟡<span class="lore-fn-word">LORE</span>'; /* Sam: the dagger alone didn't say what it was. 2026-10-19 (Sam): the dagger read as an up arrow; the lore's own ⟡. (A // comment here had switched off the title, role and tab stop after it.) */ fn.title = t; fn.setAttribute('role', 'button'); fn.tabIndex = 0; fn.setAttribute('aria-label', 'Note: ' + t);
     fn.addEventListener('click', function(ev) { ev.stopPropagation(); if (notes[t]) show(t); else if (l.isConnected) l.click(); });
@@ -13880,8 +13891,9 @@ window._passageGen = 0;
                 var startLeft = rect.left + rect.width * 0.5;
                 var nbEl = document.querySelector('.notebook-link');
                 var nb = nbEl ? nbEl.getBoundingClientRect() : null;
-                var nbX = nb ? (nb.left + nb.width * 0.5) : null;
-                var nbY = nb ? (nb.top  + nb.height * 0.5) : null;
+                /* 2026-10-21 (Sam): the motes go to the top right corner of the screen, not to the NOTEBOOK link */
+                var nbX = window.innerWidth - 34;
+                var nbY = 30;
                 for (var k = 1; k <= count; k++) {
                   var m = document.createElement('span');
                   m.className = cls + ' ' + cls + '-' + k;
@@ -13917,8 +13929,9 @@ window._passageGen = 0;
                 // the real header link instead of using a fixed translate.
                 var notebookEl = document.querySelector('.notebook-link');
                 var nb = notebookEl ? notebookEl.getBoundingClientRect() : null;
-                var nbX = nb ? (nb.left + nb.width * 0.5) : null;
-                var nbY = nb ? (nb.top  + nb.height * 0.5) : null;
+                /* 2026-10-21 (Sam): the motes go to the top right corner of the screen, not to the NOTEBOOK link */
+                var nbX = window.innerWidth - 34;
+                var nbY = 30;
                 var anyBoxSpawned = false;
                 TYPES.forEach(function(t) {
                   var boxes = document.querySelectorAll(t.sel + ':not([data-motes])');
@@ -25539,6 +25552,8 @@ if (!line || (!window.DSS_DEV && unwritten(line)) || !(spoken()[p] || []).length
 var m = dejaMap(), d = m[p], n = nightNo();
 // used up before this was built (no record): count it as an earlier night
 if (!d) { d = m[p] = { at: n - 1 }; dejaSave(m); }
+// 2026-10-21 (Sam: the photographs and then a second object both said the French's line): a room speaks its line once a night, through the first used-up object looked at; the rest stay dark
+for (var k in m) { if (k !== p && k.indexOf(room + '/') === 0 && m[k] && m[k].shown === n) return ''; }
 return d.at < n && d.shown !== n ? line : '';
 }
 // what the rooms ask: used up, and no deja line waiting for it tonight
@@ -27088,9 +27103,9 @@ for (var st = 0; st < 5; st++) {
 var pAlong = P1.clone().add(barDir.clone().multiplyScalar(0.9 + st * 1.05)).add(barPerp.clone().multiplyScalar(0.72));
 stools.push(stool(pAlong.x, pAlong.z));
 }
-stool(2.5, -3.6); stool(3.1, -3.1); stool(1.9, -1.9);
+stool(3.0, -2.6); stool(3.05, -1.3); stool(1.9, -1.9); /* 2026-10-21: the two stools that stood by the door moved along to the ledge under the windows */
 // a shelf on the right wall the stools sit at
-mesh(new THREE.BoxGeometry(0.3, 0.05, 2.4), counterTop, W / 2 - 0.16, 1.05, -2.9);
+mesh(new THREE.BoxGeometry(0.3, 0.05, 2.4), counterTop, W / 2 - 0.16, 1.05, -1.7); /* 2026-10-21 (Sam, playtest: "a plank of wood going across this bar, blocking the door ... the bar should be under the windows"): the ledge ran from z -4.1 to -1.7 and crossed the blue door at -3.7; it now runs under the first window bays, from -2.9 to -0.5 */
 
 // THE GLASS someone left on the bar, with its ring
 var glassG = new THREE.Group();
@@ -27281,7 +27296,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = window.dssRoomScope(fiHost);
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || !!l.closest('.lore-card-only') || l.getClientRects().length > 0); }); /* 2026-10-21: a lore link kept for a card alone (.lore-card-only) is hidden by design, so it counts though it has no box */
 }
 // Harlowe 3 keeps a link's target out of the DOM, so the passage's links are known by their own wording (as the signpost script does).
 // the lily, when it is still there to take: the hook's own click-replace does the work
@@ -27914,7 +27929,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = window.dssRoomScope(ciHost);
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || !!l.closest('.lore-card-only') || l.getClientRects().length > 0); }); /* 2026-10-21: a lore link kept for a card alone (.lore-card-only) is hidden by design, so it counts though it has no box */
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
 function lilyHook(n) { var pass = window.dssRoomScope(ciHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
@@ -28605,7 +28620,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = window.dssRoomScope(piHost);
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || !!l.closest('.lore-card-only') || l.getClientRects().length > 0); }); /* 2026-10-21: a lore link kept for a card alone (.lore-card-only) is hidden by design, so it counts though it has no box */
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
 function lilyHook(n) { var pass = window.dssRoomScope(piHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
@@ -29177,7 +29192,7 @@ var PINK = 'color:#ff3aa8;text-shadow:0 0 4px rgba(255,58,168,0.45);';
 function passageLinks(sel) {
 var pass = window.dssRoomScope(riHost);
 if (!pass) return [];
-return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && (l.classList.contains('dss-claimed') || !!l.closest('.lore-card-only') || l.getClientRects().length > 0); }); /* 2026-10-21: a lore link kept for a card alone (.lore-card-only) is hidden by design, so it counts though it has no box */
 }
 // the lily, when it is still there to take: the hook's own click-replace does the work
 function lilyHook(n) { var pass = window.dssRoomScope(riHost); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
@@ -55868,7 +55883,7 @@ INIS O’FLATTERLY sits at the thick wooden counter, reading what he’s reading
 (if: $hadChippy is true and $tookLily1 is false)[<span class="dss-flower-only-marker"></span>]
 You find it after some looking, where you always knew it was: the Chinese Fish and Chips.
 
-(unless: $tookLily1 is true)[You’re eating at the counter when somebody passes the window: that’s LILY.]
+<!-- 2026-10-21 (ordering audit): LILY's name waits for Night Ahead Part Two, as her phone rings do in every venue; before it the lily is here unnamed, as in the other rooms -->(if: ($tookLily1 is not true) and ($nightAheadPart2Shown is true))[You’re eating at the counter when somebody passes the window: that’s LILY.]
 
 (if: $tookLily1 is false)[|lily1>[(display: "Lily SVG")]\
 (click-replace: ?lily1)[(if: $sobriety < 30)[(display: "Lily SVG")(unless: $lostToDrink contains "lily1")[(set: $lostToDrink to $lostToDrink + (a: "lily1"))]<span class="lily-glimpse lily-fade">She was leaving town the day after PIERS GAV. She found you and your mates in a pub garden; you hadn’t slept and the acid was still funny. This is the flower you tried to give her. The one you picked in the ha-ha of some big house and kept in your buttonhole all night, and which she wouldn’t take.</span>](else:)[(set: $lostToDrink to $lostToDrink - (a: "lily1"))(set: $lilyCount to $lilyCount + 1)(set: $tookLily1 to true)(display: "Next Redraw")<span class="dss-lily-count" style="display:none">(print: $lilyCount)</span>(display: "Lily SVG")<span class="lily-glimpse lily-fade">That must be her, as tall as the Amazon; her joints articulate how you remember.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">Gather flowers. There are five to find.</div>](if: $lilyCount is 5)[(set: $confidence to ($statGain: $confidence, 25))(set: $sobriety to ($statGain: $sobriety, 15))<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">MORALE +25 | SOBRIETY +15</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
@@ -56135,7 +56150,7 @@ You found the poem, the path to dawn’s bleak Albion.
 ]\
 <!-- 2026-10-11 (Sam, A): the second meeting, his Beckett line above the way on. 2026-10-12 (Sam): the first meeting has his Baudelaire, by way of Eliot, in the same place. -->(if: _ready and $fetchMet >= 2)[<div style="margin:0 0 0.9em;font-style:italic;">‘I can’t go on, I’ll go on.’</div>](else:)[<div style="margin:0 0 0.9em;font-style:italic;">‘You! hypocrite lecteur! – mon semblable, – mon frère!’</div>](if: _ready)[[[Follow him|Approach Centre Point]]]
 (if: not _ready)[There are still flowers to gather in the night, and work yet to be done.
-<div class="fetch-owed">LILY’S FLOWERS (print: $lilyCount) of (print: $needLilies) · HAUNTS (print: $haunts's length) of (print: $needHaunts)</div>](else-if: not ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[(if: $lilyCount < 5 or $haunts's length < 12)[
+<div class="fetch-owed"><!-- 2026-10-21 (ordering audit): the tally names LILY only once Night Ahead Part Two has -->(if: $nightAheadPart2Shown is true)[LILY’S FLOWERS](else:)[FLOWERS] (print: $lilyCount) of (print: $needLilies) · HAUNTS (print: $haunts's length) of (print: $needHaunts)</div>](else-if: not ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[(if: $lilyCount < 5 or $haunts's length < 12)[
 You can leave now, perhaps it’s wise to get out. But there are still flowers to gather in the night, and work yet to be done.]]
 (unless: _ready and ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[
 
@@ -56423,7 +56438,7 @@ Someone’s on the corner.
 ](if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]]
 ](else-if: $returns >= 3 and $confidence < 40 and $hadChippy is false and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowConf is false)[(set: $shownLowConf to true)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You seem hungry. Get some grub at the chippy.","chippy");},300);</script>]
 [[The Chippy|Approach Chinese Fish and Chips]]
-](else-if: $returns >= 3 and $sobriety < 40 and ($hadBreather is false or $hadChippy is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowSobr is false)[(set: $shownLowSobr to true)<span id="wtw-msg-low-sob" style="display:none">Flagging again. You can fix this with a piss or some food. Find a doorway or the chippy.</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-sob');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent,'doorway,chippy');},300);</script>]
+](else-if: $returns >= 3 and $sobriety < 40 and ($hadBreather is false or $hadChippy is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowSobr is false)[(set: $shownLowSobr to true)<span id="wtw-msg-low-sob" style="display:none">You’re flagging. You can fix this with a piss or some food. Find a doorway or the chippy.</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-sob');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent,'doorway,chippy');},300);</script>]
 (if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]](else-if: $hadChippy is false)[[[The Chippy|Approach Chinese Fish and Chips]]]
 ]]
 <!-- Defensive escape valve (audit N5/S7): the coach-urgent funnel above lives
@@ -56644,7 +56659,7 @@ The (print: $keyNames's ($dreamKey)) in your pocket seems to heat with some occu
 (link: "Turn and leave")[(set: $refusedDualRing to true)(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $resumingFromCall to true)(replace: ?dualring)[<!-- 2026-10-11 (Sam, option C part B): turning LILY away is a glimpse of the Fetch, not a meeting. PARKED (Sam): a musical intervention here, so the sound tells you something important has happened. --><div class="glass-pane">(display: "Fetch Window SVG")</div>
 [[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]
 (else:)[(if: $hadPhoneCall is true and $metCritic is true and $tookLily2 is false)[<span class="dss-flower-only-marker"></span>](if: $tookLily2 is false)[|lily2>[(display: "Lily SVG")]\
-(click-replace: ?lily2)[(if: $sobriety < 30)[(display: "Lily SVG")(unless: $lostToDrink contains "lily2")[(set: $lostToDrink to $lostToDrink + (a: "lily2"))]<span class="lily-glimpse lily-fade">She was leaving town the day after PIERS GAV. She found you and your mates in a pub garden; you hadn’t slept and the acid was still funny. This is the flower you tried to give her. The one you picked in the ha-ha of some big house and kept in your buttonhole all night, and which she wouldn’t take.</span>](else:)[(set: $lostToDrink to $lostToDrink - (a: "lily2"))(set: $lilyCount to $lilyCount + 1)(set: $tookLily2 to true)(display: "Next Redraw")<span class="dss-lily-count" style="display:none">(print: $lilyCount)</span>(display: "Lily SVG")<span class="lily-glimpse lily-fade">There occurs, as you cross the threshold of the Pillars, a sonic peculiarity seen elsewhere, for instance, in the acoustic mirrors on Dungeness. If you stand in that precise spot and the atmospherics are favourable, you might hear a noise made at that same instant anywhere in Soho. You hear LILY laugh.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">Gather flowers. There are five to find.</div>](if: $lilyCount is 5)[(set: $confidence to ($statGain: $confidence, 25))(set: $sobriety to ($statGain: $sobriety, 15))<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">MORALE +25 | SOBRIETY +15</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
+(click-replace: ?lily2)[(if: $sobriety < 30)[(display: "Lily SVG")(unless: $lostToDrink contains "lily2")[(set: $lostToDrink to $lostToDrink + (a: "lily2"))]<span class="lily-glimpse lily-fade">She was leaving town the day after PIERS GAV. She found you and your mates in a pub garden; you hadn’t slept and the acid was still funny. This is the flower you tried to give her. The one you picked in the ha-ha of some big house and kept in your buttonhole all night, and which she wouldn’t take.</span>](else:)[(set: $lostToDrink to $lostToDrink - (a: "lily2"))(set: $lilyCount to $lilyCount + 1)(set: $tookLily2 to true)(display: "Next Redraw")<span class="dss-lily-count" style="display:none">(print: $lilyCount)</span>(display: "Lily SVG")<span class="lily-glimpse lily-fade">There occurs, as you crossed the threshold of the Pillars, a sonic peculiarity seen elsewhere, for instance, in the acoustic mirrors on Dungeness. If you stand in that precise spot and the atmospherics are favourable, you might hear a noise made at that same instant anywhere in Soho. You hear LILY laugh.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">Gather flowers. There are five to find.</div>](if: $lilyCount is 5)[(set: $confidence to ($statGain: $confidence, 25))(set: $sobriety to ($statGain: $sobriety, 15))<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">MORALE +25 | SOBRIETY +15</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
 <!-- 2026-10-12 (the Pillars audit): AOIFE's ring no longer hides the Ham. Before the critic the pub holds the call AND the
      Ham (his 14 September rule), so both show, in any order; "no more business" waits until neither is left. --><!-- 2026-10-14 (Sam: want the book): AOIFE's call comes straight after the Ham refuses the book (in The critic's judgement); here it rings only on later visits, until answered -->(set: _aoifeRing to (($hadPhoneCall is false) and ($ringSnoozed is not true) and ($metCritic is true)))\
@@ -56656,7 +56671,7 @@ The (print: $keyNames's ($dreamKey)) in your pocket seems to heat with some occu
 [[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]
 (if: $metCritic is false)[Through the fumes, vapours and drink, you recognise a man.
 
-(link: "⟡ LORE: The Great Ham ⟡")[<div class="lore-box">
+<span class="lore-card-only">(link: "⟡ LORE: The Great Ham ⟡")[<div class="lore-box">
 <strong>⟡ THE GREAT HAM ⟡</strong>
 
 <div class="editors-note">
@@ -56665,13 +56680,13 @@ When Dr. Johnson, the harmless drudge and titan nonpareil among London’s liter
 
 When Ian Hamilton occupied a similar position, two centuries later, nobody (I am sadly but reliably informed) bestowed on him the obvious sobriquet. Here I intend to fix that.
 </div>
-</div>]
+</div>]</span>
 (if: _bagBook)[[[Talk to the Great Ham|Talk to the critic]]]
 <!-- 2026-10-03, Sam: the venue loops come in any order, so the bar and the crossing no longer wait for the critic (same links and gates as the branch below). -->
 [[Get a drink at the bar|Which drink at the Pillars?]]
 <!-- 2026-10-09, Sam: "get rid of the walk on water thing". The in-pub crossing is cut; the only road to Carthage is "Seek the shore" in the storm outside. -->
 <!-- 2026-10-19 (Sam, playtest): no 'Not tonight.' on the opening words; the way out is the door, in the bar -->[[Back to the street|Dean Street]]]
-(else-if: not _aoifeRing)[<!-- 2026-10-12: not under the third pillar, which is business -->(unless: ($inisToldOfPillars is true) and ($dreamKey is not ""))[You’ve no more business here.]
+(else-if: not _aoifeRing)[<!-- 2026-10-12: not under the third pillar, which is business -->(unless: (($inisToldOfPillars is true) and ($dreamKey is not "")) or ($tookLily2 is false))[You’ve no more business here.]<!-- 2026-10-21 (Sam): not while the lily is still there, which is business -->
 
 (unless: $pillarsVisits is a num)[(set: $pillarsVisits to 0)]\
 (if: $pillarsVisits >= 6)[‘Water, water everywhere. Another drop to drink.’]\
@@ -57225,7 +57240,7 @@ You say you wouldn’t know. He’s gracious and decides to press no further.
 
 ‘You’re selling,’ he says. ‘I saw you buttering RED.’
 
-JOHN ST. JOHN (for that is his name) is another poet. He hates RED. His rancour took seed in the days when they both used the same upstairs room in a Bloomsbury pub as their makeshift office.
+JOHN ST. JOHN (if: $savedBy is not "john")[(for that is his name) ]is another poet.<!-- 2026-10-21 (ordering audit): a player beaten in the cellar before this scene has already been rescued by him, and named, there --> He hates RED. His rancour took seed in the days when they both used the same upstairs room in a Bloomsbury pub as their makeshift office.
 
 (link: "⟡ LORE: On Red and John St. John ⟡")[<div class="lore-box"><p>There is a cleaving-apart in English poetics, much as there is in philosophy, which derives from a difference of opinion about the French and the Germans. Where RED isn’t English, he is mostly French. He is Arthur Rimbaud on Charing Cross Road and his poems enact their dérive among the fragments of Mallarmé and Laforgue that Eliot shored up against the ruins in which the Great War left Europe.</p>
 
@@ -57959,9 +57974,9 @@ if (window.dssAudio) {
   setTimeout(function(){ window.dssAudio.thunderClap(); }, 6800);
 }
 </script>\
-<div class="maritime-scene">
-<div class="maritime-lamp"></div>
-<div class="maritime-lightning"></div>
+<div class="maritime-scene">\
+<div class="maritime-lamp"></div>\
+<div class="maritime-lightning"></div>\
 <span class="maritime-svg-wrap"><svg viewBox="0 0 1200 18" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><path d="M0,9 C25,2 50,16 75,9 C100,2 125,16 150,9 C175,2 200,16 225,9 C250,2 275,16 300,9 C325,2 350,16 375,9 C400,2 425,16 450,9 C475,2 500,16 525,9 C550,2 575,16 600,9 C625,2 650,16 675,9 C700,2 725,16 750,9 C775,2 800,16 825,9 C850,2 875,16 900,9 C925,2 950,16 975,9 C1000,2 1025,16 1050,9 C1075,2 1100,16 1125,9 C1150,2 1175,16 1200,9" fill="none" stroke="#4a7090" stroke-width="1.5" opacity="0.8"/></svg></span>
 
 Turning onto Greek Street, you find yourself at sea and in a storm.
@@ -57978,32 +57993,13 @@ A big hand splits the sky and a big voice booms:
 
 Do you keep going?
 
-<!-- RESTORED FORK (2026-07-22): both destinations always on offer — press on
-     to the pub, or answer NE PLUS ULTRA and cross early. Early crossing is
-     safe: Green Sea/LINE 2 is gated behind the page quest at Carthage shore,
-     and The Interval self-guards. The lap is the price. -->
-<!-- NARROWED 2026-09-14 (Sam: "I was able to go straight to Carthage from my
-     first visit to the Pillars, I thought it was meant to be gated"). The gate
-     he asked for went on the in-pub "I can walk on water" link; this interlude
-     was the other way through and had none. The sea-road now opens once he has
-     been inside the pub once, which lines up with the pub link's own gate: on
-     the first trip you go to the Pillars, and both routes open from the second.
-     Delete the (if:) to put the fork back as it was. -->
+<!-- RESTORED FORK (2026-07-22): both destinations always on offer — press on to the pub, or answer NE PLUS ULTRA and cross early. Early crossing is safe: Green Sea/LINE 2 is gated behind the page quest at Carthage shore, and The Interval self-guards. The lap is the price. --><!-- NARROWED 2026-09-14 (Sam: "I was able to go straight to Carthage from my first visit to the Pillars, I thought it was meant to be gated"). The gate he asked for went on the in-pub "I can walk on water" link; this interlude was the other way through and had none. The sea-road now opens once he has been inside the pub once, which lines up with the pub link's own gate: on the first trip you go to the Pillars, and both routes open from the second. Delete the (if:) to put the fork back as it was. --><!-- 2026-10-21 (Sam, playtest: "this page should fit on a laptop screen"): the comments here are on one line each and glued to what follows, and the scene's own tags end in \, so the blank lines that stood between them no longer print as empty lines -->\
 (unless: $pillarsVisits is a num)[(set: $pillarsVisits to 0)]\
 (unless: $inisToldOfPillars is a boolean)[(set: $inisToldOfPillars to false)]\
-<!-- PHASES (2026-09-14). The pub itself is only open in two of the night's three
-     Pillars phases: before the critic, and again once page 93 is back with Inis
-     and the third column has been named. In between, the door is shut and the
-     only thing out here is the sea. -->
-<!-- 2026-10-09 (evening), Sam: "I want it gated until you meet Inis and get the little quest for page 93. Otherwise it should take you to the pub." The pub door is open in every phase now; the sea-road waits for O'Flatterly's quest ($knowsAboutPage), not for the critic. -->
-[[Yes|Approach The Pillars]]
+<!-- PHASES (2026-09-14). The pub itself is only open in two of the night's three Pillars phases: before the critic, and again once page 93 is back with Inis and the third column has been named. In between, the door is shut and the only thing out here is the sea. --><!-- 2026-10-09 (evening), Sam: "I want it gated until you meet Inis and get the little quest for page 93. Otherwise it should take you to the pub." The pub door is open in every phase now; the sea-road waits for O'Flatterly's quest ($knowsAboutPage), not for the critic. -->[[Yes|Approach The Pillars]]
 <!-- 2026-10-11 structure pass 3: once Carthage is finished (the page found and the Green Sea's table sat at), the shore only says "You have what you came for" and wakes you, so the sea road closes, as the Carthage shore itself decides. -->(if: $knowsAboutPage is true and not (((history:) contains "LINE 2") and ($hasMissingPage is true or $returnedPage is true)))[//Somewhere out past the breakers, an older shore. //
 [[Seek the shore|The coast of Carthage]]]
-<!-- A WAY BACK (2026-09-14, Sam: "so you don't have to loop loads"). In the
-     middle phase the pub is shut and the shore was the only thing on offer, so
-     answering NE PLUS ULTRA meant crossing whether you wanted to or not. The
-     storm always lets you turn round now. -->
-[[Back to Soho|Dean Street]]
+<!-- A WAY BACK (2026-09-14, Sam: "so you don't have to loop loads"). In the middle phase the pub is shut and the shore was the only thing on offer, so answering NE PLUS ULTRA meant crossing whether you wanted to or not. The storm always lets you turn round now. -->[[Back to Soho|Dean Street]]\
 </div>
 
 :: Martin Lackland's Office [char-lack venue-lackland] {"position":"1200,1000","size":"100,100"}
@@ -61206,25 +61202,27 @@ He pulls //(print: $bookTitle)// close.
 <button class="critic-book-turn" id="critBookTurn" style="display:none;" aria-hidden="true">He turns the page.</button>
 </div>
 
-<div class="critic-aftermath" id="critAftermath"><span class="dss-refusal" data-k="ham" data-who="THE GREAT HAM" hidden>‘Not for me.’ ‘Have you tried America?’</span>
+<div class="critic-aftermath" id="critAftermath"><span class="dss-refusal" data-k="ham" data-who="THE GREAT HAM" hidden>‘Not for me.’ ‘Have you tried America?’</span><!-- 2026-10-21 (Sam, playtest: "the order is wrong here"): his verdict first, on its slip; the rest of the scene, your reply included, once the slip is filed (a revisit or reduced motion shows it at once, as the after-lines do) --><div class="dss-refusal-after critic-after-verdict" data-k="ham" hidden>
 
 //America, you think of new-found-land.//
 
 You say you’ve not, thank him, and make to leave when he calls you back.
 
-<!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="himalayas" hidden>‘Looks like you found thunder on the mountain. It still won’t sell but, if it’s any consolation, it’ll keep.’<br><br></span>(if: $mantraComplete is true)[<span class="dss-gift-now" data-gift="himalayas" hidden></span>]‘When you’re next in Cecil Court, look for INIS O’FLATTERLY. Quare fellow, knows a lot about books. I think he’d like to meet you. He’s been trying to get to Carthage, on his way to The Pillars of Hercules.(if: $metSalvu is false)[ And if you see COPPER, tell him I said hello.]’
-
-(if: $knowsCopperWord is false and $metSalvu is false)[<div class="item-box critic-deferred-motes" data-motes="1">
-<div class="item-header">PASSWORD LEARNED</div>
-<div class="item-name">“I said hello”</div>
-<div class="item-note">It&#39;s saved in your notebook <span class="item-note-arrow">&#8593;</span></div>
-</div>
-(set: $knowsCopperWord to true)]
+<!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="himalayas" hidden>‘Looks like you found thunder on the mountain. It still won’t sell but, if it’s any consolation, it’ll keep.’<br><br></span>(if: $mantraComplete is true)[<span class="dss-gift-now" data-gift="himalayas" hidden></span>]‘When you’re next in Cecil Court, look for INIS O’FLATTERLY. Quare fellow, knows a lot about books. I think he’d like to meet you. He’s been trying to get to Carthage, on his way to The Pillars of Hercules.’
 <!-- 2026-10-11, Sam: the venue-opens line wherever a new venue opens. The header back-fills $knowsCecilCourt as soon as $metCritic is true, so this keys on its own once-flag; the novelist carries his own line inside the haunt box. -->
 (if: $cecilOpensSaid is not true)[(if: not ($haunts contains $haunt2))[(set: $cecilOpensSaid to true)<div class="haunt-opens">Cecil Court opens.</div>]]
 (set: $knowsCecilCourt to true)
 <!-- 2026-10-09, Sam: the ship rumour comes in the call-back, before midnight only; two versions by whether you have been down to the cellar yet. -->
-(if: $shipNews is "" and $afterMidnight is false)[(set: $shipNews to "rumour")(set: $hamRumour to true)(if: $metSalvu is false)[<!-- 2026-10-14 (Sam, A and B): his speech, words unchanged, broken into paragraphs and set on a card, THE RUMOUR, that opens over the page a moment after; the small link reopens it (dssRumourCard) -->He leans low on his elbows and whispers, stagily, <span class="rumour-open" role="button" tabindex="0">THE RUMOUR</span><div class="rumour-text" hidden><p>‘Let me tell you something I’ve heard tonight.</p><p>‘I believe you are familiar with ASHTON GRANGER. God love her: SALVU COPPER, the Maltese gangster, heard she has a few quid to spare. She’s been courting one of his muscle men, QUIET FRANKIE.</p><p>‘Long story short, they charmed her into buying a shipment of “pipe cleaners” – Lord knows what it really is – that’s been on its way to Liverpool from America. Thing is, it’s meant to dock tonight and SALVU’S got the shivers, he hasn’t heard word of progress and thinks they’re all frightened to tell him it’s sunk.</p><p>‘So SALVU’S got QUIET FRANKIE holding ASHTON GRANGER hostage, though she doesn’t know she’s a hostage, in his cellar under Dean Street. If the ship comes in she’ll never know a thing.</p><p>‘Now, you didn’t hear a word of that; I assume that we’d both like to see the morning.’</p></div><script>setTimeout(function(){ if (window.dssRumourCard) window.dssRumourCard(); }, 0);</script>](else:)[‘Do you know anyone who can clean a dirty pipe?’]]<span class="dss-refusal-after" data-k="ham" hidden>Perhaps you’ll try America after all.</span>
+(if: $shipNews is "" and $afterMidnight is false)[(set: $shipNews to "rumour")(set: $hamRumour to true)(if: $metSalvu is false)[<!-- 2026-10-14 (Sam, A and B): his speech, words unchanged, broken into paragraphs and set on a card, THE RUMOUR, that opens over the page a moment after; the small link reopens it (dssRumourCard) -->He leans low on his elbows and whispers, stagily, <span class="rumour-open" role="button" tabindex="0">THE RUMOUR</span><div class="rumour-text" hidden><p>‘Let me tell you something I’ve heard tonight.</p><p>‘I believe you are familiar with ASHTON GRANGER. God love her: SALVU COPPER, the Maltese gangster, heard she has a few quid to spare. She’s been courting one of his muscle men, QUIET FRANKIE.</p><p>‘Long story short, they charmed her into buying a shipment of “pipe cleaners” – Lord knows what it really is – that’s been on its way to Liverpool from America. Thing is, it’s meant to dock tonight and SALVU’S got the shivers, he hasn’t heard word of progress and thinks they’re all frightened to tell him it’s sunk.</p><p>‘So SALVU’S got QUIET FRANKIE holding ASHTON GRANGER hostage, though she doesn’t know she’s a hostage, in his cellar under Dean Street. If the ship comes in she’ll never know a thing.</p><p>‘Now, you didn’t hear a word of that; I assume that we’d both like to see the morning.’</p></div><script>setTimeout(function(){ if (window.dssRumourCard) window.dssRumourCard(); }, 0);</script>](else:)[‘Do you know anyone who can clean a dirty pipe?’]]<!-- 2026-10-21 (Sam, playtest: "the order is wrong here ... he knows it on the first meeting"): his aside about COPPER, and the password it carries, now come after the rumour that first names COPPER; the sentence is his, unchanged, with its own quote marks; same gate as before (not once SALVU has been met) -->(if: $metSalvu is false)[
+
+‘And if you see COPPER, tell him I said hello.’
+
+(if: $knowsCopperWord is false)[<div class="item-box critic-deferred-motes" data-motes="1">
+<div class="item-header">PASSWORD LEARNED</div>
+<div class="item-name">“I said hello”</div>
+<div class="item-note">It&#39;s saved in your notebook <span class="item-note-arrow">&#8593;</span></div>
+</div>
+(set: $knowsCopperWord to true)]]<span class="dss-refusal-after" data-k="ham" hidden>Perhaps you’ll try America after all.</span>
 
 <!-- 2026-10-14 (Sam: "you have to really want to sell the book"): straight after the Ham's refusal, home rings: AOIFE's call, the same card as the Pillars', brought in once the verdict, its slip and any rumour card have passed (the hidden link is pressed by the script below) -->(if: ($hadPhoneCall is false) and ($ringSnoozed is not true))[<span class="ham-ring-go" hidden>(link: "ham-ring-go")[(replace: ?hamring)[<div class="phone-ringing ring-now">Behind the bar a phone rings and your name is called.
 
@@ -61233,7 +61231,7 @@ You say you’ve not, thank him, and make to leave when he calls you back.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]
 [[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]]</span>]|hamring>[]
 [[Leave the pub.|Dean Street]]
-</div>
+</div></div>
 (if: $sobriety < 30)[<span id="critDrunk" hidden></span>]
 <script>
 (function(){
@@ -61428,7 +61426,8 @@ You say you’ve not, thank him, and make to leave when he calls you back.
             var box = aftermath.querySelector('.critic-deferred-motes');
             if (box && window.dssSpawnMotes) {
               box.removeAttribute('data-motes');
-              window.dssSpawnMotes(box, 'item-mote', 18, { noScroll: true });
+              /* 2026-10-21: the box waits inside .critic-after-verdict until the verdict's slip is filed; the motes wait with it */
+              var tries = 0; (function whenShown() { var w = box.closest('.critic-after-verdict') || box; if (box.getClientRects().length && parseFloat(getComputedStyle(w).opacity) > 0.6) { window.dssSpawnMotes(box, 'item-mote', 18, { noScroll: true }); return; } if (++tries < 80) setTimeout(whenShown, 250); })();
             }
           }, 500);
         }, 850);
@@ -62470,7 +62469,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 <!-- 2026-10-14 (Sam: the manuscript's importance): the notebook opens on your book, its title and the slips of those who have read it (dssRefusals fills .nb-slips) -->(if: ($bookTitle is a string) and ($bookTitle is not ""))[(set: _nb to _nb + '<div class="nb-section nb-book"><div class="nb-book-title">' + $bookTitle + '</div><div class="nb-slips"></div></div>')]\
 <!-- 2026-10-16 (Sam: suggestions, 2, the plan travels with you): under the slips, who is still to see tonight, the same list Dean Street asks about; the picked one marked -->(display: "Who Will Read")(if: ($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($whoList is an array) and ($whoList's length > 0))[(set: _nb to _nb + '<div class="nb-section nb-tosee"><div class="nb-tosee-h">Still to see</div>')(for: each _w, ...$whoList)[(set: _nb to _nb + '<div class="nb-tosee-row' + (cond: (_w's id is $pitchTarget) and ((_w's name is $pitchName) or (_w's id is "french")), ' nb-tosee-on', '') + '">' + (_w's name) + ' · ' + (_w's place) + '</div>')](set: _nb to _nb + '</div>')]\
 (set: _nb to _nb + '<div class="nb-key"><span class="nb-key-item"><span class="hp hp-done">◆</span> haunt caught &middot; <span class="hp">◇</span> still to catch</span><span class="nb-key-item"><span class="pp pp-done">▲</span> word learned &middot; <span class="pp">△</span> still to learn</span><span class="nb-key-item"><span class="al al-done">✦</span> alba line &middot; <span class="al">✧</span> still to find</span><span class="nb-key-item"><span class="qp qp-done">★</span> errand done &middot; <span class="qp">☆</span> still to do</span><span class="nb-key-item"><span class="lp lp-done">❀</span> lily gathered &middot; <span class="lp">❁</span> still to find</span></div>')\
-<!-- 2026-10-12 (the weighting): what the Fetch asks before he leads you on, while it is still owed -->(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](if: $lilyCount < $needLilies or $haunts's length < $needHaunts)[(set: _nb to _nb + '<div class="fetch-owed nb-owed">FOR THE DAWN · LILY’S FLOWERS ' + (text: $lilyCount) + ' OF ' + (text: $needLilies) + ' · HAUNTS ' + (text: $haunts's length) + ' OF ' + (text: $needHaunts) + '</div>')]\
+<!-- 2026-10-12 (the weighting): what the Fetch asks before he leads you on, while it is still owed -->(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](if: $lilyCount < $needLilies or $haunts's length < $needHaunts)[(set: _nb to _nb + '<div class="fetch-owed nb-owed">FOR THE DAWN · ' + (cond: $nightAheadPart2Shown is true, "LILY’S FLOWERS ", "FLOWERS ") + (text: $lilyCount) + ' OF ' + (text: $needLilies) + ' · HAUNTS ' + (text: $haunts's length) + ' OF ' + (text: $needHaunts) + '</div>')]\
 (set: _nb to _nb + '<div class="nb-section nb-haunts"><strong class="nb-heading">HAUNTS</strong>')\
 (if: $haunts contains $haunt1)[(set: _nb to _nb + '<div class="nb-item"><span class="hp hp-done">◆</span> ' + $haunt1 + ' <span class="haunt-stage haunt-stage-calcinatio">(Calcinatio)</span></div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="hp">◇</span> The Sketch</div>')]\
 (if: $haunts contains $haunt2)[(set: _nb to _nb + '<div class="nb-item"><span class="hp hp-done">◆</span> ' + $haunt2 + ' <span class="haunt-stage haunt-stage-solutio">(Solutio)</span></div>')](else:)[(set: _nb to _nb + '<div class="nb-grey"><span class="hp">◇</span> The Refusal</div>')]\
@@ -66224,6 +66223,7 @@ text-shadow: none;
 
 /* 2026-10-14: the Watkins window (dssWatkinsVision) */
 .wk-looking-glass {display:block;width:min(100%,360px);height:auto;max-height:46vh;object-fit:contain;margin:0 auto 1.2em;border:1px solid #6f5c3e;box-shadow:0 0 45px #b18b4320;}
+.wk-looking-glass { filter: sepia(0.85) contrast(1.04); } /* 2026-10-21 (Sam): the look through the Watkins window in sepia */
 .wk-vision .wk-p { position: relative; }
 .wk-run .wk-glass .wk-c { filter: blur(5px); opacity: 0.28; transition: filter 1.3s ease, opacity 1.3s ease; }
 .wk-run .wk-glass.wk-clear .wk-c, .wk-done .wk-glass .wk-c { filter: none; opacity: 1; }
@@ -67591,6 +67591,8 @@ letter-spacing: 0.01em;
 }
 
 /* ===== GLASS-PANE (smaller, reusable mid-game moment pane) ===== */
+/* 2026-10-21 (Sam): the look through a window at the Fetch, in sepia (the French's glimpse; the Watkins window has the same, .wk-looking-glass) */
+.glass-pane svg.fetch-window, .glass-pane .fetch-window-caption { filter: sepia(0.85); }
 .glass-pane {
   position: relative;
   background: linear-gradient(135deg, #131513 0%, #1a1c1a 50%, #131513 100%);
@@ -69155,6 +69157,19 @@ animation: waveSlide 11s linear infinite reverse;
 opacity: 0.6;
 }
 
+/* 2026-10-21 (Sam, playtest: "this page should fit on a laptop screen ... no scrolling except for on a phone"): on a laptop the storm's
+   paragraph gaps, wave margins and the NE PLUS ULTRA margins close up so the page fits 1440x900 and 1280x800 without a scrollbar; phones keep the spacing above */
+@media (min-width: 900px) {
+  /* the header passage leaves a few empty lines above every page; on this one they are the difference between fitting and scrolling */
+  tw-passage:has(.maritime-scene) > br, tw-passage:has(.maritime-scene) > tw-consecutive-br,
+  tw-passage:has(.maritime-scene) > tw-transition-container > br, tw-passage:has(.maritime-scene) > tw-transition-container > tw-consecutive-br { display: none; }
+  tw-story:has(#stat-bars-lifted) tw-passage:has(.maritime-scene) { padding-top: calc(var(--dss-header-h, 148px) + 20px); padding-bottom: 0.4em; } /* the header's clearance, 44px elsewhere, is 20px here */
+  .maritime-scene { line-height: 1.35; }
+  .maritime-scene tw-consecutive-br { height: 3px; }
+  .maritime-svg-wrap { margin: 0.25em 0; height: 14px; }
+  .maritime-svg-wrap svg { height: 14px; }
+  .ne-plus-ultra { margin: 0.3em 0; font-size: 1.4em; }
+}
 .ne-plus-ultra {
 display: block;
 text-align: center;

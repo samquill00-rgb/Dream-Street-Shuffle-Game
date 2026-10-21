@@ -1,3 +1,9 @@
+## 2026-10-21 — Least-developed candidate: Whack-a-Worm polish
+- Sam asked which minigame had least work and to improve it similarly. Compared source/handoff candidates: napkin already has watercolour/replay, cards/beer mats fuller custom games; Whack-a-Worm remains mostly flat CSS. Described it as strongest visual candidate rather than definitive historical edit count.
+- Worm hut game now has procedural stable glazed tiles (grain/chips/cracks/damp stains), deeper bevelled holes, wet segmented worm shading, metal/wood spade strike art, muted miss flash, readable centred hole numbers and slim remaining-time line. Instruction card/wording and original sad-trombone hit sound retained. Reduced-motion has no wriggle/strike animation; static spade clears after320ms.
+- All30s spawn timing, eighteen-hit win threshold,28-hit excellent threshold, payments/navigation unchanged. Source comparison confirmed prose/rules/payment markup identical.
+- Synced. Desktop automated hit run48 -> GLORY/excellent payment, phone native touch then loss1 -> LA PETITE MORT/loss payment; no JS/Harlowe errors. Desktop/phone layouts visually inspected. Scripts/screenshots /tmp/worm-polish-check.cjs, /tmp/worm-polish-false.png and -true.png. Final polish centred number badges and cleared reduced-motion strike feedback promptly. No git commands.
+
 ## 2026-10-21 — Removed hot-drink lines from instruction illustration
 - Sam noticed steam-like heat lines over drinks in popup. Removed three wavy strokes from engraved header glassware. Pouring diagram remains, and its layout selector now uses :has(.bar-pour-diagram) so Harlowe-added breaks cannot defeat side-by-side layout. No gameplay/prose changes. Synced; no git commands.
 
@@ -68,6 +74,16 @@
 - It waits for overlays, the NOTEBOOK and long slips, and drops itself if the page changes. `#dss-gate-flash` is registered in dssOverlayBusy and the rising numbers' up().
 - A box inside a room's closed words panel waits until the panel shows it. `window.__dssGateFlashTest(gateIndex, [heldNames])` draws one by hand.
 - Checked in the pane: it fires 1.1 s after the box lands, shades the right gate (Sublimatio), cleans up and clears the busy flag. A first haunt shows no flash. The header prints the list with no errors on the next page. Desktop and phone sizes are fine.
+
+**2026-10-21, lore on room cards** (Sam, of Ronnie's Photographs: "the lore is a great idea! Let's just make that more obvious when you click"):
+- A lore choice on any room card is now a gold, slowly breathing button with "⟡ LORE" above its title (`.fi-lore-btn` in showCard). It covers Ronnie's Photographs, the Great Ham at the Pillars and Lackland's turntable. Detection uses `isLore`, a leading ⟡, or the ornament pass's `.dss-orn` spans.
+- Note cards (`#dss-lore-overlay`) now keep paragraph spacing (`tw-consecutive-br` styled). Before, Ronnie's four stories ran together.
+- Audit of the room objects:
+  - Every voices entry matches an object, and no trail or callback points at a missing one. One stale empty 'Windows' slot remains in cb.
+  - The only written line not attached is THE THIRST's "Go in, there's always someone there…", parked in a comment on pi/A threshold since 10-19.
+  - Always dark, with no line written: the Colony's window, the cellar stairs, Trisha's ship's wheel, Lackland's window, and O'Flatterly's counter, shelves, ladder, bell and window.
+  - LACKLAND is dark unless you came to pitch to him.
+  - His glass and the chippy's range speak only with THE THIRST.
 
 **Next:** Sam's next playtest.
 

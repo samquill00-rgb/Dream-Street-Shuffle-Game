@@ -1,3 +1,6 @@
+## 2026-10-21 — Coach narrow-preview interior fixed
+Sam saw only coloured hotspots. Verified in actual IAB at 503px: portrait camera z=3.9 sat outside front wall z=3.5. Moved portrait camera to z=2.9, rebuilt with sync_html.py. Actual IAB now visibly shows entire interior, cow, tiled floor and bar after entrance card dismissed. Wide camera unchanged; no prose changes. Screenshot /tmp/coach-interior-fixed.png.
+
 ## 2026-10-21 — Animal pass, in Sam's requested order: cow, rat, map cats
 - Cow first: Coach standing cow now rounded body/shoulders/neck/skull, broad muzzle/nostrils, eyes/glints, broad ears/inner planes, curved horns, articulated upper/lower legs, joints/cloven hooves, continuous curved tail/tuft. Head details share proper head pivot; tail pivots at rump. Corrected existing breathing scale to new ellipsoid base dimensions after visual check. Same room position, cow hotspot/actions and prose.
 - Rat second: cellar rat now low haunches/chest, tapered muzzle/nose, ears/inner skin, dark reflective eyes, whiskers, articulated little feet. Reduced whole-body bounce, alternating feet, quieter paused sniffing; twelve connected tapered tail segments undulate behind. Route/speed/waits/state logic preserved. Named dss-cellar-rat.

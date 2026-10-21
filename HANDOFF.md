@@ -62,6 +62,13 @@
 - Another session worked on Watkins and the Cecil Court waltz on 2026-10-20 (the entries just below). Both sessions' edits were checked present after each sync.
 - Clean test state: http://127.0.0.1:8732 has its own empty storage; hard-mute the pane.
 
+**2026-10-21, THE GATE FLASH** (Sam: "every time you gather a haunt the wheel shows up, but after the first time, it just shows as a sort of golden line drawing, briefly, with the part of the wheel you found shaded in"):
+- The first haunt in a browser still opens the NOTEBOOK on its wheel (the tutorial, `dssHauntNotebookTut`). Every haunt after that gets a gold hairline wheel over the page for about 3.7 s. It draws itself in, the gate just caught is hatched and gilt, the gates caught before are faintly gilt, there are no words, and then it fades.
+- It is an IIFE in the UserScript after the notebook wheel's. It reads the gate from the box's "The work: X." and the earlier gates from the header's new hidden `#dss-haunts-held`, which is printed before the passage adds the new haunt.
+- It waits for overlays, the NOTEBOOK and long slips, and drops itself if the page changes. `#dss-gate-flash` is registered in dssOverlayBusy and the rising numbers' up().
+- A box inside a room's closed words panel waits until the panel shows it. `window.__dssGateFlashTest(gateIndex, [heldNames])` draws one by hand.
+- Checked in the pane: it fires 1.1 s after the box lands, shades the right gate (Sublimatio), cleans up and clears the busy flag. A first haunt shows no flash. The header prints the list with no errors on the next page. Desktop and phone sizes are fine.
+
 **Next:** Sam's next playtest.
 
 ---

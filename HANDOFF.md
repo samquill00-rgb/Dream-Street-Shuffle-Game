@@ -1,3 +1,52 @@
+## 2026-10-21 — Removed hot-drink lines from instruction illustration
+- Sam noticed steam-like heat lines over drinks in popup. Removed three wavy strokes from engraved header glassware. Pouring diagram remains, and its layout selector now uses :has(.bar-pour-diagram) so Harlowe-added breaks cannot defeat side-by-side layout. No gameplay/prose changes. Synced; no git commands.
+
+## 2026-10-21 — Pouring diagram restored in step I
+- Sam asked to restore diagram showing what to expect in Pour three drinks instructions.
+- Added etched brass SVG beside step-I text: tilted bottle, stream, stemmed glass/liquid, dashed fill line and side markers. Matches worn card, scales down on phone; accessible image label. Header glassware remains. No gameplay/prose changes.
+- Synced. Desktop/phone popup Back/reopen/Start flow checks passed without JS/Harlowe errors via /tmp/ronnies-popup-check.cjs; phone diagram layout visually inspected. No git commands.
+
+## 2026-10-21 — Smoky jazz aesthetics for bar run
+- Sam asked for aesthetic improvement of second (carry/run) phase with smoky jazz atmosphere.
+- Carry background now charcoal/wine walls, hanging amber and cool club spot fixtures/soft beams, shaded lamps on audience tables, cached walnut grain/scuffs clipped to terrain floor. Nine irregular parallax smoke banks plus restrained depth haze replace nearly invisible old smoke; smoke stays behind hazards/carrier and clears floor lip. Reduced-motion added haze stays still apart from gameplay scroll.
+- Groove HUD cyan accents muted to brass/ivory; warnings/obstacles, player, route, timings and physics untouched. Source comparison confirms carry movement/collision/outcome sections byte-identical.
+- Synced. Source parses; desktop/phone entry->stage->popup->Start->carry renders at0/1300/3300 passed without JS/Harlowe errors; desktop middle and phone late-route screenshots inspected, hazards visible. Checks via /tmp/ronnies-run-check.cjs, screenshots /tmp/ronnies-run-false-0.png etc. No git commands.
+
+## 2026-10-21 — First bar-game phase improved (pouring)
+- Sam requested improvement of pouring phase. Larger working glass (scale1.5->2.05), glass-specific base aligned to counter, lit dark coaster, restrained brass target band sized to each glass rather than oversized neon block. Existing glass/bottle details retained.
+- Replaced tiny canvas tray sidebar with responsive DOM order rail (Bourbon/Moscow Mule/Scotch, musician/current/on tray). Added live text cue below canvas: hold/release instruction, pour towards brass line, Release now in perfect zone, over-line warning/result. Rail/cue disappear on carry transition.
+- Softened four-harmonic jitter to slow three-harmonic target drift. Drawing/cue and scoring share clamped target; scoring thresholds .07/.16, drinks, score rewards and carry logic unchanged. Working canvas keeps mouse/native touch hold-release.
+- Synced. Source parses; desktop mouse all three pours completed into carryWait (score5), phone native touch all3 completed into carryWait (score6), no JS/Harlowe errors. Full stage/chat/popup/Start sequence also passes. Screenshots /tmp/ronnies-pouring-false-0.png and -true-1.png visually inspected. Final visual polish narrowed band to glass-specific width; tests /tmp/ronnies-pouring-check.cjs. No git commands.
+
+## 2026-10-21 — Characterful bar card and separate chat/rules/start steps
+- Sam wanted character restored after overly clean instruction design, then explicitly requested Go to the bar at bottom of musicians' chat -> separate instruction popup -> Start -> game.
+- Card now has worn charcoal/fibre textures, amber/cool smoky light washes, fine inset edges, italic printed title/headings, monochrome engraved three-glass illustration and stamped-looking button. Full-size instruction typography/touch variants retained; dialogue unchanged.
+- Ronnie’s Drinks now shows musicians' prose then #bar-instructions-btn Go to the bar. #bar-arena initially display:none. dssOpenBarInstructions moves actual arena into a modal with Back, Escape/backdrop dismissal, focus trap and navigation cleanup. Start button renamed Start; startBarGame moves arena back, removes modal/hides chat button, starts game normally, scrolls canvas into view and focuses it. Same game IDs/logic/audio.
+- Synced. Desktop and phone stage -> dialogue -> hidden instructions -> Go to bar -> popup -> Back -> reopen -> Start tested, live game/canvas confirmed, popup removed, no JS/Harlowe errors. Both rich popup screenshots visually inspected /tmp/ronnies-popup-rules-false.png and -true.png. Test /tmp/ronnies-popup-check.cjs. No git commands.
+
+## 2026-10-21 — Ronnie instruction card: restrained smoky jazz styling
+- Sam liked readable instructions but found cartoonish, asked cooler/smoky jazz-club mood.
+- Removed glass/tray cartoon pictograms, numbered circles and button diamonds. Quiet Roman-numeral section markers, lighter serif headings, unboxed arrow controls, muted brass/ivory copy on smoky charcoal with fine rules. Plain understated monospaced start button; typography remains full-size/responsive. No instruction wording/gameplay/dialogue changes.
+- Synced. Desktop/phone stage/dialogue/start checks passed without JS/Harlowe errors via /tmp/ronnies-cool-check.cjs; both layouts visually inspected; screenshots /tmp/ronnies-cool-order-false.png and -true.png. No git commands.
+
+## 2026-10-21 — Readable Ronnie bar-game instruction graphics
+- Sam disliked tiny/cramped illustrated instructions after musicians' dialogue.
+- Replaced pre-bar SVG instruction plate with semantic two-step panels, full-size responsive text, simple text-free glass/tray SVGs, numbered headings and keycaps. Desktop shows arrow controls; coarse-pointer phones show upper-area hold-to-jump/lower-area hold-to-duck controls. Simplified ornamental THE BAR title to readable text; restrained larger existing start button, same id/events. Prose outside instruction graphic and all game logic unchanged.
+- Synced. Source parses; stage->dialogue->instructions->game checks passed on desktop and phone with no JS/Harlowe errors via /tmp/ronnies-rules-check.cjs; both instruction layouts visually inspected. Screenshots /tmp/ronnies-rules-order-false.png and -true.png. No git commands.
+
+## 2026-10-21 — Ronnie stage-first drinks sequence, stronger smoke, softer global lily prompt
+- Sam requested more visible smoke; corrected prose/minigame order; clarified entry ONLY from stage because you chat to musicians; also requested no green bordered lily prompt, soft oval green glow everywhere.
+- Added Ronnie’s Drinks passage. Moved unchanged two opening sentences, pianist/guitarist/MOE drinks-order prose and complete game arena/start/result links from Ronnie room into it. Room keeps visits/sobriety/lily/lore/phone/exhaustion logic. Stage offers Speak to the musicians -> new passage -> existing Go to the Bar starts pour/carry game. Bar hotspot offers no game. Completed-set guard retained. Photo lore gets stable local link wrapper/action so no empty lore-only entry panel; room opens straight into3D.
+- Stage smoke texture and sprite opacity increased, beams more visible; original motion/reduced-motion behavior retained.
+- Shared dssRoomPlay lily hint now borderless, no dark rectangle or box-shadow pulse. Radial elliptical green glow behind sprig/text, existing text glow retained; global for every room using this prompt, show/hide/count logic unchanged.
+- Synced. Source parses. Desktop entry data-words=room, no MOE order on entry; Stage keyboard action -> musicians' prose -> Go to the Bar -> currentBarGame/canvas confirmed, no JS/Harlowe errors. Phone entry/stage/dialogue/game flow also passed without JS/Harlowe errors via /tmp/ronnies-sequence-check.cjs. Screenshots /tmp/ronnies-sequence-room-false.png and -order-false.png inspected. No git commands.
+
+## 2026-10-21 — Ronnie Scott's smoky stage atmosphere
+- Sam requested smoky haze and better lighting around stage in existing 3D room.
+- Within buildRIScene only: lowered ambient/hemi fill, slightly higher exposure and denser wine-blue room fog. Added warm piano spotlight, blue-violet stage rim and low wine-red curtain light; two restrained textured beams, no added shadow maps.
+- Replaced two flat haze sprites with eight softly textured multi-lobed smoke layers at stage/table/ceiling levels; slow independent drift/rotation/opacity. Reduced motion keeps smoke and lights still. Existing centre spotlight, lamps, scene disposal/shared materials tracking and interactions retained.
+- Synced. UserScript parses; Ronnie passage text byte-identical. Desktop and reduced-motion phone checks passed without JS/Harlowe errors; canvas fits phone. Visual pass hides tutorial overlay for a clear stage view. Scripts /tmp/ronnies-atmosphere-check.cjs and /tmp/ronnies-atmosphere-visual.cjs; screenshots /tmp/ronnies-atmosphere-false.png and -true.png. No git commands.
+
 # START HERE — 2026-10-21
 
 **State:**

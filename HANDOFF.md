@@ -1,3 +1,43 @@
+# START HERE — 2026-10-22
+
+**State:**
+- Everything is in the .twee and synced to the html. Sam commits in GitHub Desktop.
+- Several sessions work on the .twee at once. Grep the other sessions' markers after every sync, and never rewrite the whole file.
+- Nothing is open from any playtest batch. One question is still with Sam: note 12 of 2026-10-21, the Dean Street white space, which wasn't reproduced. He was asked where he saw it.
+
+**Recent work, newest first (details in the entries below):**
+- 2026-10-22: THE THIRST's parked line is on Lackland's back door. The repeated déjà line, from the 21 October notes, is checked fixed in all ten rooms.
+- 2026-10-21, this session:
+  - The gate flash: a gold wheel after every haunt but the first.
+  - Gold "⟡ LORE" buttons on room cards.
+  - Note cards keep their paragraph spacing.
+  - A room-object audit. See "exits, breaks, the gate flash, lore buttons" below the Watkins entries.
+- 2026-10-21, other sessions:
+  - The title page: moody lights and white petals. The pentangle and street options were tried and dropped.
+  - The ordering audit (HANDOFF-ordering-audit-2026-10-21.md).
+  - The 12 playtest-note fixes.
+  - JEFFREY stays in the Coach on every visit.
+  - The animal pass.
+  - Inner voices: every voice speaks on every look.
+  - Ronnie's bar game and stage atmosphere.
+  - The Whack-a-Worm polish.
+- 2026-10-20:
+  - Room exits (hidden top-left link, working doors, WAY OUT arrows).
+  - The Colony door swap.
+  - "On an earlier night".
+  - 26 paragraph breaks.
+  - Sam's Night Ahead Part Two.
+  - The Watkins and Cecil Court waltz work (another session).
+
+**Testing:**
+- If http://127.0.0.1:8732 doesn't answer, start the `dss-game` preview server.
+- 127.0.0.1 and [::1] each have their own clean storage.
+- Hard-mute the pane.
+
+**Next:** Sam's next playtest.
+
+---
+
 ## 2026-10-21 — Title page, third pass (Sam: "I don't like the pentangle either. Just try it keeping the moody lights and the falling white petals which are a premonition of the final dawn")
 - `_titleMode` is "lights" (default) or "street". The pentangle is gone (code and CSS). Lights: the beams' own frame loop now also sways each beam about its source (±1.2°, 37/43/51 s periods; CSS transform on the group restates the attribute's translate/rotate) beside the breathing it already had; reduced motion still holds a frame. Petals: nine white ones (#f3efe6) at three depths (near 15–16px, mid 11–12px, far 8px with a .6px blur), three drift patterns (a, b and a gentler c), 22–46 s falls. The blue petals are gone.
 - Checked cold at desktop and phone; BEGIN tears down; no errors. Synced. No git commands.
@@ -119,11 +159,8 @@ Sam saw only coloured hotspots. Verified in actual IAB at 503px: portrait camera
 - Replaced two flat haze sprites with eight softly textured multi-lobed smoke layers at stage/table/ceiling levels; slow independent drift/rotation/opacity. Reduced motion keeps smoke and lights still. Existing centre spotlight, lamps, scene disposal/shared materials tracking and interactions retained.
 - Synced. UserScript parses; Ronnie passage text byte-identical. Desktop and reduced-motion phone checks passed without JS/Harlowe errors; canvas fits phone. Visual pass hides tutorial overlay for a clear stage view. Scripts /tmp/ronnies-atmosphere-check.cjs and /tmp/ronnies-atmosphere-visual.cjs; screenshots /tmp/ronnies-atmosphere-false.png and -true.png. No git commands.
 
-# START HERE — 2026-10-21
+## 2026-10-20 to 22 — exits, breaks, the gate flash, lore buttons (one session; was the START HERE of 2026-10-21)
 
-**State:**
-- Everything is in the .twee and synced to the html. Sam commits in GitHub Desktop.
-- Nothing is open from the third playtest batch. All five calls and the Night Ahead Part Two rewrite are closed; the details are under "Sam's five calls from the third playtest batch, all closed" below the Watkins entries.
 - Done on 2026-10-20/21:
   - The Colony's 3D doors were swapped, so the red 41 is on the right.
   - The pitch question says "On an earlier night".
@@ -146,12 +183,10 @@ Sam saw only coloured hotspots. Verified in actual IAB at 503px: portrait camera
 - Note cards (`#dss-lore-overlay`) now keep paragraph spacing (`tw-consecutive-br` styled). Before, Ronnie's four stories ran together.
 - Audit of the room objects:
   - Every voices entry matches an object, and no trail or callback points at a missing one. One stale empty 'Windows' slot remains in cb.
-  - The only written line not attached is THE THIRST's "Go in, there's always someone there…", parked in a comment on pi/A threshold since 10-19.
+  - The only written line not attached was THE THIRST's "Go in, there's always someone there…" (parked since 10-19). On 2026-10-22, at Sam's word, it is the id line of lk/A door at the back (the table-tennis back room). Checked: silent when sober, speaks when THE THIRST is awake.
   - Always dark, with no line written: the Colony's window, the cellar stairs, Trisha's ship's wheel, Lackland's window, and O'Flatterly's counter, shelves, ladder, bell and window.
   - LACKLAND is dark unless you came to pitch to him.
   - His glass and the chippy's range speak only with THE THIRST.
-
-**Next:** Sam's next playtest.
 
 ---
 

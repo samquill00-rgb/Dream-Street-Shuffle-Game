@@ -15,6 +15,7 @@
 - Not listed here, by Sam's rules: the pink lines (his to redraft) and audio (the sound pass comes after the building).
 
 **Recent work, newest first (details in the entries below):**
+- 2026-10-22, late, a session: character deco. Every character's plain-page panel gets stepped Art Deco corners; JOHN ST. JOHN (a stepped Zippo flame) and INIS O'FLATTERLY (a fanned open book) also get a faint motif behind the words. More characters' motifs are waiting on Sam's picks. See "Character deco" below.
 - 2026-10-22, this session: the dedication page. `Dedicate Your Book` follows the naming; the notebook's FINDS page shows and changes it; the Dawn prints it under the title; kept across nights, old choices struck through. See "The dedication page" below.
 - 2026-10-22, a side session: the ordering audit's pass 3 (every character scene's prose read end to end). Log, fixes and findings for Sam in HANDOFF-ordering-audit-2026-10-21.md under "Log, pass 3". Fixed and synced: the Trisha's doorman names whoever gave the matchbook (COPPER's name is a pink slot); the Coach's front door no longer sets $afterMidnight while midnight is parked (it was flipping the date and silencing the Ham's rumour). For Sam: LILY named in four places before Night Ahead Part Two can have shown; DAVY, INIS and JEFFREY refuse a book that may not be in the bag; the ship call's "pipe cleaners" without the rumour.
 - 2026-10-22: THE THIRST's parked line is on Lackland's back door. The repeated déjà line, from the 21 October notes, is checked fixed in all ten rooms.
@@ -46,6 +47,17 @@
 - Hard-mute the pane.
 
 **Next:** Sam's next playtest: the dedication page (the naming, For, the notebook's FINDS page, the Dawn), the critic's rebuilt order, and his word on pass 3's three findings.
+
+---
+
+## 2026-10-22 — Character deco (Sam: "add some decoration ... that indicates the interlocutor ... art deco style line type things", then "Yeah i like this, build them")
+- Replaces the line portraits Sam took off. `window.dssCharDeco` (UserScript, right after `window.dssThreshold`) plus CSS beside the panel's frame-light rules (`.dss-deco-*`). The `char-<id>` tags are the only key; no passage was edited.
+- **Corners, every character:** on a passage with any `char-` tag, the plain-page panel (`tw-story > .dss-threshold`) gets four stepped corners: the after-image line steps out twice into a small stepped block, with a second inner line. They are inline SVGs in `.dss-deco-frame`, a child of the veil laid over the panel's box by offsetLeft/Top and kept fitted by a ResizeObserver. They live in the veil and not the panel because the panel's `trim()` counts an `svg` as content and would stop trimming blank lines. They draw in after 1 s, then settle from 0.95 to 0.62. On a phone they shrink to 48px so the first step still lies on the after-image line.
+- **Motifs, two so far:** `MOTIFS = { john: flame(), inis: book() }`. The motif is the panel's own background image (a data-URI SVG with its own draw-in and settle, 0 → 0.5 → 0.16 over 6.5 s), `background-attachment: fixed` like the portraits: centred in the part of the panel on screen when it opens, at most two-thirds of the window tall, never wider than the text. A counter id makes each mount a new image so the draw-in replays. Reduced motion gets the settled state. Two-character scenes take the first character that has a motif (Beaten shows John's flame).
+- **Adding one:** write a builder that returns `{ w, h, cap, body }` (body = `<path pathLength="1" …>` strings, the gold stroke set by the wrapper) and add it to MOTIFS under the tag's id. Candidates I proposed to Sam, none ruled on: Lackland the Garrard's rings; the Great Ham a proscenium arch; RED a lyre fan; the novelist a typewriter's typebars; Shana a fanned hand of cards; Aoife and LILY a telephone dial (two interlocking for the dual ring). DAVY, JEFFREY and the `char-salvu` cellar scenes are waiting for Sam's own pick.
+- **Not decorated:** scenes whose words are not in the plain panel: Shana's three (her table frames itself), the cow (canvas), the critic's judgement (stage), Lackland's office (his room's panel, whose `overflow-y: auto` would clip corners hung outside it).
+- Checked live on 127.0.0.1:8732 (pane muted, debug jumps): His round (flame and corners, draw-in and settle), O'Flatterly introduction (book), a real click into O'Flatterly's quest (old frame removed with its veil, new one drawn fresh), His round at 1024x520 scrolled 205px (the flame stays put on screen), the phone preset (corners fit at the screen edges), You speak to the poet (corners only), Dean Street (nothing). No tw-errors, console clean. Synced; another session's 23:05 sync carried the edits too. No git commands.
+- Pane gotcha: animations here only advance while the pane is being drawn; take screenshots to drive a draw-in, or every check reads currentTime 0.
 
 ---
 
@@ -7265,3 +7277,6 @@ Sam requested choosing another small object elsewhere. Selected French bar telep
 
 ## 2026-10-22 — French bottles and phone seating
 Sam requested two items, both completed: (1) bottle helper now continuous lathed profiles with six shoulder/neck variants, muted glass/clearcoat/environment reflections, differing caps and six shared aged curved paper label materials (decorative printing only; no story text). Shelf placement and optics retained. (2) previous phone receiver looked airborne: lowered receiver 0.026, added rounded rear shoulder and broad saddles supporting cup undersides; shortened cord to match. Period intent: 60s black rotary in 70s pub. No interaction/prose/audio changes. Synced; no git. Both source-isolated close-up fixtures visually checked; /tmp/french-bottles.png and /tmp/french-phone-seated.png. Full bar integration/playtest remains unverified.
+
+## 2026-10-22 — French old cash register
+Sam requested worn period till. Replaced two plain blocks/electronic green glow with bevelled charcoal-olive enamel mechanical register: faded non-emissive number flags, nickel trim, round yellowed keys, sloped keyboard, drawer seam/pull/lock and side lever. Procedural scuff map; restrained environment reflections. Same counter footing (1.24) and centre, front rotated toward room (+x). No prose/audio/interaction changes. Synced; no git. Source-isolated live close-up visually checked, scratchpad/chebar-polish/till-preview.html; /tmp/french-till.png. Full bar view not verified.

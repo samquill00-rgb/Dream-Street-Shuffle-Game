@@ -1,0 +1,52 @@
+# Fifty details in previously untouched exteriors
+
+- [x] 1. bookshop: Door knob escutcheon and screws
+- [x] 2. bookshop: Door hinge leaves
+- [x] 3. bookshop: Stone threshold rubbed top
+- [x] 4. bookshop: Canvas awning stitched seams
+- [x] 5. bookshop: Awning support pivot bolts
+- [x] 6. bookshop: Browsing crates slats and end battens
+- [x] 7. bookshop: Stock bench worn rail and pegged joints
+- [x] 8. bookshop: Hanging sign raised narrow rim
+- [x] 9. bookshop: Hanging sign eyelets
+- [x] 10. bookshop: Window glazing edge dust
+- [x] 11. trisha: Knob backplate tiny fixings
+- [x] 12. trisha: Letterbox corner screws
+- [x] 13. trisha: Black door hinge knuckles
+- [x] 14. trisha: Lower door rubbed paint
+- [x] 15. trisha: Number slate recessed fixings
+- [x] 16. trisha: Lantern bracket wall plate
+- [x] 17. trisha: Lantern top ventilation slots
+- [x] 18. trisha: Awning underside support ribs
+- [x] 19. trisha: Stone steps gently worn noses
+- [x] 20. trisha: Kerb block joints
+- [x] 21. colony: Door hinges on both entrances
+- [x] 22. colony: Door knob backplate fixings
+- [x] 23. colony: Letterbox hinged flap edge
+- [x] 24. colony: Drain inset slots and cast frame
+- [x] 25. colony: Bollard turned collars
+- [x] 26. colony: Old railing stumps split tops
+- [x] 27. colony: Cast iron pipe joint collars
+- [x] 28. colony: Hopper dark open throat
+- [x] 29. colony: Drainpipe shoe mouth
+- [x] 30. colony: Streetlamp base anchor bolts
+- [x] 31. lackland: Door knob fixing heads
+- [x] 32. lackland: Letterbox flap rolled edge
+- [x] 33. lackland: Door hinge leaves and knuckles
+- [x] 34. lackland: Drain cast tread and lifting recess
+- [x] 35. lackland: Bollard base collar
+- [x] 36. lackland: Dustbin lid rolled rim
+- [x] 37. lackland: Dustbin lid carry handle
+- [x] 38. lackland: Dustbin pressed body ribs
+- [x] 39. lackland: Dustbin side handles
+- [x] 40. lackland: Streetlamp foot collars and bolts
+- [x] 41. centre: Podium concrete expansion joints
+- [x] 42. centre: Overhang drip groove
+- [x] 43. centre: Colonnade pillar foot collars
+- [x] 44. centre: Podium rain-sill edging
+- [x] 45. centre: Lower block window bottom glazing beads
+- [x] 46. centre: Lower block window side gaskets
+- [x] 47. centre: Roof plant room louvres
+- [x] 48. centre: Warning lamp metal footing
+- [x] 49. centre: Warning lamp guard ring
+- [x] 50. centre: Paving movement joints

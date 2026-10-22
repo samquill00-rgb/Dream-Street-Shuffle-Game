@@ -46,7 +46,7 @@ Dream Street Shuffle
 (set: $hasCoin to false)\
 (set: $hasDrawing to false)\
 (set: $metShana to false)\
-(set: $hasTrishaMatchbook to false)\
+(set: $hasTrishaMatchbook to false)(set: $matchbookFrom to "")\
 (set: $metSalvu to false)\
 (set: $knowsCecilCourt to false)\
 (set: $knowsAboutPage to false)\
@@ -6662,7 +6662,7 @@ var OPENING_NAMES = {
 };
 var ENDING_NAMES = {
   'Alba Complete':1,'Alba Incomplete':1,
-  'Name Your Book':1
+  'Name Your Book':1,'Dedicate Your Book':1
 };
 var PHONECALL_NAMES = {
   'The phone call':1,'Lily phone call 1':1,'The dual ring':1,'Dido':1,
@@ -13518,6 +13518,107 @@ window.dssRefusals = (function() {
   }
   setInterval(function() { scan(); Array.prototype.forEach.call(document.querySelectorAll('.nb-slips:not([data-filled])'), render); }, 300);
   return { list: load, night: night, el: slipEl }; // 2026-10-16: el (a slip element) for the Dawn's record
+})();
+// 2026-10-22 (Sam: "Yes, build the dedication page"): the book's first page. The dedication is chosen on Dedicate Your Book
+// after the naming, shown and changeable on the notebook's FINDS page (.nb-dedication), printed under the title at the Dawn
+// (.dawn-dedication), and kept in localStorage 'dssDedication' like the slips (a list of {n: night, k: key, t: time}), so a
+// return night opens on last night's choice and every earlier choice stays, struck through. The names a night has earned come
+// from the header's hidden #dss-dedic-pool and are banked in 'dssDedicPool', so a name once earned stays offered on later
+// nights. Names only, no prose. Nothing here touches Harlowe state.
+window.dssDedication = (function() {
+  var KEY = 'dssDedication', POOL = 'dssDedicPool', mem = null, poolMem = null;
+  var NAMES = { aoife: 'AOIFE', daughter: 'my daughter', lily: 'LILY', ashton: 'ASHTON GRANGER', john: 'JOHN ST. JOHN', fetch: 'the Fetch', noone: 'no one' };
+  var ORDER = ['aoife', 'daughter', 'lily', 'ashton', 'john', 'fetch', 'noone'], BASE = ['aoife', 'daughter', 'lily', 'noone'];
+  function night() { try { return +localStorage.getItem('dssNightNo') || 0; } catch (e) { return 0; } }
+  function load() { if (mem) return mem; try { return JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { return []; } }
+  function save(a) { try { localStorage.setItem(KEY, JSON.stringify(a)); mem = null; } catch (e) { mem = a; } }
+  function current() { var a = load(); return a.length ? a[a.length - 1] : null; }
+  function label(k) { return NAMES[k] || ''; }
+  function line(k) { return k && NAMES[k] ? 'For ' + NAMES[k] + '.' : ''; }
+  function refill() { Array.prototype.forEach.call(document.querySelectorAll('.nb-dedication[data-filled], .dawn-dedication[data-filled]'), function(el) { el.removeAttribute('data-filled'); }); }
+  function set(k) {
+    if (!NAMES[k]) return;
+    var a = load(), c = a.length ? a[a.length - 1] : null;
+    if (!c || c.k !== k) { a.push({ n: night(), k: k, t: Date.now() }); save(a); }
+    refill();
+  }
+  function pool() {
+    var banked = [];
+    try { banked = JSON.parse(localStorage.getItem(POOL) || '[]') || []; } catch (e) { banked = poolMem || []; }
+    var span = document.getElementById('dss-dedic-pool'), all = banked.slice();
+    (span ? span.textContent.split(',') : []).concat(BASE).forEach(function(k) { k = String(k).trim(); if (k && NAMES[k] && all.indexOf(k) < 0) all.push(k); });
+    if (all.length !== banked.length) { try { localStorage.setItem(POOL, JSON.stringify(all)); } catch (e) { poolMem = all; } }
+    return ORDER.filter(function(k) { return all.indexOf(k) >= 0; });
+  }
+  function history() {
+    // every earlier choice, newest first, each name once, the current name left out, at most six
+    var a = load(), c = a.length ? a[a.length - 1] : null, out = [], seen = {};
+    for (var i = a.length - 2; i >= 0; i--) { var r = a[i]; if (!r || seen[r.k] || (c && r.k === c.k)) continue; seen[r.k] = 1; out.push(r); }
+    return out.slice(0, 6);
+  }
+  function optionRow(onPick) {
+    var c = current(), row = document.createElement('div'); row.className = 'nb-dedic-pool';
+    pool().forEach(function(k) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'nb-dedic-opt' + (c && c.k === k ? ' on' : ''); b.setAttribute('data-k', k); b.textContent = label(k);
+      b.addEventListener('click', function(ev) { ev.preventDefault(); ev.stopPropagation(); set(k); onPick(k); });
+      row.appendChild(b);
+    });
+    return row;
+  }
+  function renderNotebook(box) {
+    box.setAttribute('data-filled', '1'); box.innerHTML = ''; box._pool = null;
+    var c = current(), n = night(), now = document.createElement('div'); now.className = 'nb-dedic-now';
+    now.appendChild(document.createTextNode(c ? line(c.k) : ''));
+    var change = document.createElement('button'); change.type = 'button'; change.className = 'nb-dedic-change'; change.textContent = c ? 'Change' : 'Dedicate';
+    change.addEventListener('click', function(ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (box._pool) { box._pool.parentNode.removeChild(box._pool); box._pool = null; return; }
+      box._pool = optionRow(function() { box.removeAttribute('data-filled'); });
+      box.insertBefore(box._pool, now.nextSibling);
+    });
+    now.appendChild(change); box.appendChild(now);
+    history().forEach(function(r) {
+      var o = document.createElement('div'); o.className = 'nb-dedic-old nb-slip-age' + Math.max(1, Math.min(3, n - r.n + 1)); o.textContent = line(r.k); box.appendChild(o);
+    });
+  }
+  function renderDawn(el) {
+    el.setAttribute('data-filled', '1');
+    var c = current(); if (!c) { el.hidden = true; return; }
+    el.textContent = line(c.k); el.hidden = false;
+    var title = document.querySelector('.dawn-bookname');
+    if (title && title.nextSibling !== el) title.parentNode.insertBefore(el, title.nextSibling);
+  }
+  function typeInto(span, text) {
+    span.textContent = ''; var i = 0, gen = (span._gen = (span._gen || 0) + 1);
+    (function step() {
+      if (!span.isConnected || span._gen !== gen) return;
+      if (i >= text.length) return;
+      span.textContent += text.charAt(i++);
+      if (window.dssAudio && window.dssAudio.typewriterTick) { try { window.dssAudio.typewriterTick(0.14); } catch (e) {} }
+      setTimeout(step, 55 + Math.random() * 45);
+    })();
+  }
+  // Dedicate Your Book: the earned names as buttons; a pick stores it, types "NAME." after For and frees the link
+  function page(root) {
+    if (!root || root._dd) return; root._dd = true;
+    var nameEl = root.querySelector('.nb-dedic-name'), poolEl = root.querySelector('.nb-dedic-pool'), c = current();
+    if (!nameEl || !poolEl) return;
+    function mark(k) { Array.prototype.forEach.call(root.querySelectorAll('.nb-dedic-opt'), function(b) { b.classList.toggle('on', b.getAttribute('data-k') === k); }); }
+    if (c) { nameEl.textContent = label(c.k) + '.'; root.classList.remove('is-empty'); } else { nameEl.textContent = ''; root.classList.add('is-empty'); }
+    pool().forEach(function(k) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'nb-dedic-opt' + (c && c.k === k ? ' on' : ''); b.setAttribute('data-k', k); b.textContent = label(k);
+      b.addEventListener('click', function(ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        set(k); mark(k); root.classList.remove('is-empty'); typeInto(nameEl, label(k) + '.');
+      });
+      poolEl.appendChild(b);
+    });
+  }
+  setInterval(function() {
+    Array.prototype.forEach.call(document.querySelectorAll('.nb-dedication:not([data-filled])'), renderNotebook);
+    Array.prototype.forEach.call(document.querySelectorAll('.dawn-dedication:not([data-filled])'), renderDawn);
+  }, 300);
+  return { current: current, set: set, pool: pool, history: history, line: line, page: page, list: load };
 })();
 // 2026-10-14: the manuscript's other fates (Book Footer, The Deal). dssBookNote puts the footer's note on a slip, with
 // Get Directions to where the book is; dssBookDeal reveals LACKLAND's "Ask him to take it on" only on a later night, after
@@ -55024,7 +55125,7 @@ What have you got to lose?
 
 Mr. Vladimir spoke truly, in an ideal world you’d toss a bomb into the heart of pure mathematics. Yes, Mr. Konrad, THAT is impossible! So why not kill a pub instead?
 
-Kill its sordid history and your own past involving it; they clag like pavement gum on your Cuban heels. That, at least, would end the whole show cleanly. Smash some windows now and clamber in.</div>]](else-if: $coachUrgent is true)[[[·|Coach and Horses lock]]](else:)[(link: "·")[(set: $coachViaGents to false)(set: $afterMidnight to true)(go-to: "Coach and Horses bar")]]
+Kill its sordid history and your own past involving it; they clag like pavement gum on your Cuban heels. That, at least, would end the whole show cleanly. Smash some windows now and clamber in.</div>]](else-if: $coachUrgent is true)[[[·|Coach and Horses lock]]](else:)[(link: "·")[(set: $coachViaGents to false)<!-- 2026-10-22 (ordering audit, pass 3): midnight is parked (StoryInit, 2026-10-09: while $midnightEnabled is false midnight never falls, the date strap stays 23.11.73 and the Ham's rumour is never cut off). This front-door set was unguarded, so every cow or key visit flipped the date, fired the midnight caption and silenced the rumour; the gents' own set has carried this guard since the parking. -->(if: $midnightEnabled is true)[(set: $afterMidnight to true)](go-to: "Coach and Horses bar")]]
 (if: $hutBurnt is true and $coachBurnt is false and $brokenWindows's length >= 3 and $visitedCentrePoint is false)[<div><span data-coach-fire-start>[[Burn it|The Coach Burns]]</span></div>]
 (display: "Stash Point")
 
@@ -56200,7 +56301,7 @@ You did not find the poem. Sometimes the night is its own work, and the dawn wil
 <div class="dawn-stars" aria-hidden="true"><svg viewBox="0 0 1000 340" preserveAspectRatio="xMidYMin slice"><g fill="#e8e4f0"><circle cx="38" cy="42" r="1.1" opacity="0.55"/><circle cx="112" cy="18" r="0.8" opacity="0.4"/><circle cx="183" cy="76" r="1.3" opacity="0.5"/><circle cx="241" cy="30" r="0.7" opacity="0.35"/><circle cx="317" cy="58" r="1.0" opacity="0.5"/><circle cx="389" cy="14" r="0.8" opacity="0.45"/><circle cx="446" cy="83" r="1.2" opacity="0.4"/><circle cx="521" cy="36" r="0.7" opacity="0.5"/><circle cx="587" cy="64" r="1.0" opacity="0.35"/><circle cx="668" cy="22" r="1.3" opacity="0.55"/><circle cx="729" cy="71" r="0.8" opacity="0.4"/><circle cx="804" cy="41" r="1.1" opacity="0.5"/><circle cx="872" cy="12" r="0.7" opacity="0.4"/><circle cx="948" cy="66" r="1.0" opacity="0.45"/><circle cx="76" cy="128" r="0.9" opacity="0.4"/><circle cx="159" cy="151" r="1.2" opacity="0.35"/><circle cx="278" cy="119" r="0.7" opacity="0.45"/><circle cx="352" cy="163" r="1.0" opacity="0.4"/><circle cx="433" cy="132" r="0.8" opacity="0.3"/><circle cx="562" cy="148" r="1.1" opacity="0.45"/><circle cx="641" cy="117" r="0.7" opacity="0.35"/><circle cx="758" cy="156" r="1.0" opacity="0.4"/><circle cx="836" cy="124" r="0.8" opacity="0.45"/><circle cx="921" cy="147" r="1.2" opacity="0.35"/><circle cx="54" cy="214" r="0.8" opacity="0.3"/><circle cx="203" cy="232" r="1.0" opacity="0.3"/><circle cx="331" cy="208" r="0.7" opacity="0.25"/><circle cx="487" cy="228" r="0.9" opacity="0.3"/><circle cx="611" cy="204" r="0.7" opacity="0.25"/><circle cx="772" cy="236" r="1.0" opacity="0.3"/><circle cx="896" cy="211" r="0.8" opacity="0.25"/><circle cx="139" cy="287" r="0.7" opacity="0.2"/><circle cx="415" cy="279" r="0.8" opacity="0.2"/><circle cx="694" cy="292" r="0.7" opacity="0.2"/><circle cx="957" cy="281" r="0.8" opacity="0.2"/></g><g fill="#f4ecd8"><circle class="st-tw" cx="264" cy="47" r="1.4" style="animation-delay:0.6s"/><circle class="st-tw" cx="503" cy="96" r="1.3" style="animation-delay:1.8s"/><circle class="st-tw" cx="713" cy="38" r="1.5" style="animation-delay:2.9s"/><circle class="st-tw" cx="906" cy="93" r="1.3" style="animation-delay:1.2s"/></g><g stroke="#f4ecd8" stroke-width="0.5" opacity="0.5"><path d="M264,41 L264,53 M258,47 L270,47"/><path d="M713,32 L713,44 M707,38 L719,38"/></g></svg></div>
 <div class="ending-pane dawn-lighten"><div class="dawn-art-nouveau" aria-hidden="true"><svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><g id="dawnCornerArt"><path d="M 0,12 Q 22,12 38,28 Q 56,48 60,80" stroke="#caa890" stroke-width="1.1" fill="none" opacity="0.7"/><path d="M 0,4 Q 14,4 26,16" stroke="#caa890" stroke-width="0.45" fill="none" opacity="0.4"/><path d="M 38,28 Q 30,58 36,90 Q 44,108 38,120" stroke="#caa890" stroke-width="0.55" fill="none" opacity="0.4"/><path d="M 60,80 Q 78,86 84,78 Q 84,68 74,72 Q 72,82 80,82" stroke="#caa890" stroke-width="0.55" fill="none" opacity="0.4"/><path d="M 26,16 Q 18,22 14,32 Q 22,28 28,22 Z" fill="rgba(168,148,116,0.30)" stroke="#caa890" stroke-width="0.4"/><ellipse cx="33" cy="62" rx="3.0" ry="4" fill="rgba(228,204,176,0.32)" stroke="#caa890" stroke-width="0.55"/><ellipse cx="37" cy="86" rx="2.8" ry="3.8" fill="rgba(228,204,176,0.30)" stroke="#caa890" stroke-width="0.55"/><ellipse cx="42" cy="108" rx="2.4" ry="3.4" fill="rgba(228,204,176,0.28)" stroke="#caa890" stroke-width="0.55"/><ellipse cx="32" cy="60" rx="1.0" ry="1.4" fill="rgba(244,224,196,0.30)"/><ellipse cx="36" cy="84" rx="0.9" ry="1.2" fill="rgba(244,224,196,0.25)"/><circle cx="84" cy="78" r="1.3" fill="#e4c4a4" opacity="0.55"/></g></defs></svg><svg class="dawn-corner dawn-corner-tl" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg"><use href="#dawnCornerArt"/></svg><svg class="dawn-corner dawn-corner-tr" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg"><use href="#dawnCornerArt"/></svg><svg class="dawn-corner dawn-corner-bl" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg"><use href="#dawnCornerArt"/></svg><svg class="dawn-corner dawn-corner-br" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg"><use href="#dawnCornerArt"/></svg></div><div class="dawn-rule-top">(if: _albaComplete)[(display: "Dawn Rule SVG top")](else:)[(display: "Dawn Rule SVG eclipse")]</div>
 <div class="dawn-title">THE DAWN</div>
-<!-- 2026-10-14 (Sam: the book should affect the dawn, not as a summary): its title marked by its fate, and a line by what is in your bag (pink, provisional) -->(if: $bookSold is true)[<div class="dawn-bookname dawn-book-sold">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">Your bag is light. The book is on a desk on Frith Street, waiting for the office to open.</span></div>](else-if: $bookLent is "lackland")[<div class="dawn-bookname">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is on a shelf in LACKLAND’S office. He said he reads everything fast.</span></div>](else-if: $bookAt is "foyles")[<div class="dawn-bookname dawn-book-gone">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is on a pile outside Foyles, priced for pennies, and the dew is getting into it.</span></div>](else-if: ($bookAt is a string) and ($bookAt is not ""))[<div class="dawn-bookname dawn-book-gone">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is still on a bar in Soho. Someone will sweep it up with the empties.</span></div>](else:)[<div class="dawn-bookname">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is in your bag, heavier than when you set out.</span></div>]
+<!-- 2026-10-14 (Sam: the book should affect the dawn, not as a summary): its title marked by its fate, and a line by what is in your bag (pink, provisional) -->(if: $bookSold is true)[<div class="dawn-bookname dawn-book-sold">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">Your bag is light. The book is on a desk on Frith Street, waiting for the office to open.</span></div>](else-if: $bookLent is "lackland")[<div class="dawn-bookname">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is on a shelf in LACKLAND’S office. He said he reads everything fast.</span></div>](else-if: $bookAt is "foyles")[<div class="dawn-bookname dawn-book-gone">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is on a pile outside Foyles, priced for pennies, and the dew is getting into it.</span></div>](else-if: ($bookAt is a string) and ($bookAt is not ""))[<div class="dawn-bookname dawn-book-gone">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is still on a bar in Soho. Someone will sweep it up with the empties.</span></div>](else:)[<div class="dawn-bookname">// (print: $bookTitle) //</div><div class="dawn-book-fate"><span class="claude-draft">The book is in your bag, heavier than when you set out.</span></div>]<!-- 2026-10-22: the dedication, filled by dssDedication and set under .dawn-bookname --><div class="dawn-dedication" hidden></div>
 <!-- 2026-10-16 (Sam: "I would like the dawn colour bit"): the Dawn's opening paragraph from the 15 April backup, words unchanged -->Here you are, on Dean Street again, watching the light as it peels through its changes.
 
 First cobalt; then the brassic crown that grows rich and gilded; then the antiseptic mint while the corolla rises and blooms through the lobes (frontal, parietal, temporal, occipital), the blue-blooded, hemorrhaging sky. Then the cool white quivering lip of the dawn’s bells and flowers when they’re trying to settle.
@@ -56797,7 +56898,7 @@ It seems, almost, like RED wants to speak to JOHN, who doesn’t want to speak t
 :: Failure: Trisha's [street-night threshold] {"position":"700,1400","size":"100,100"}
 (if: $hasTrishaMatchbook is true)[The doorman’s saying no tonight. You’re about to fuck off, politely, when you think of the matchbook.
 
-(link: "Give him the matchbook")[(if: $opponent is "Jack Curtis")[‘JACK CURTIS,’](else:)[‘PERCY RITSON,’] he says. ‘You should have said. Come in.’
+(unless: $matchbookFrom is a string)[(set: $matchbookFrom to "")](link: "Give him the matchbook")[<!-- 2026-10-22 (ordering audit, pass 3): the doorman names whoever gave the matchbook ($matchbookFrom, set where it is handed over). Before, he named the pong opponent, so a matchbook from COPPER's cellar had him say PERCY RITSON to a player who had never been in LACKLAND's back room; an older save without the flag still falls back to the opponent. COPPER's name is a pink slot for Sam. -->(if: $matchbookFrom is "copper")[<span class="claude-draft">‘COPPER,’</span>](else-if: ($matchbookFrom is "jack") or (($matchbookFrom is not "percy") and ($opponent is "Jack Curtis")))[‘JACK CURTIS,’](else:)[‘PERCY RITSON,’] he says. ‘You should have said. Come in.’
 
 [[Enter Trisha’s|Trisha's]]]]\
 (else:)[(set: $confidence to ($statLoss: $confidence, 11))
@@ -56841,7 +56942,7 @@ COPPER stumbles. This will go no further; though QUIET FRANKIE has begun to feel
 
 <!-- 2026-10-17 (played live): a wrong word at the door still met this branch, since it keyed on knowing the words; it now keys on having said them ($gaveCopperWord, Copper Word Accepted) -->(if: $knowsCopperWord and $gaveCopperWord is true)[‘I’m glad he turned you my way, son,’ says COPPER, now perfectly composed.
 <!-- 2026-10-16 (Sam: restore): from the 15 April backup's Copper accepts, words unchanged (names in the game's capitals); the matchbook opens Trisha's by this road too -->SALVU COPPER’S face droops under the heat of his internal furnace. ‘So someone’s looking after you? That’s enough,’ he says. QUIET FRANKIE lifts his hand without looking. ASHTON GRANGER is happy you’re alive. He presses a book of matches into your hand: ‘Tell TRISHA I sent you.’
-(if: $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)(set: $hasMatches to true)<div class="item-box"><div class="item-header">◈ OBJECT ACQUIRED</div><div class="item-name">Trisha’s Matchbook</div><div class="item-note">An invitation to Trisha’s.</div></div>]
+(if: $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)(set: $matchbookFrom to "copper")(set: $hasMatches to true)<div class="item-box"><div class="item-header">◈ OBJECT ACQUIRED</div><div class="item-name">Trisha’s Matchbook</div><div class="item-note">An invitation to Trisha’s.</div></div>]
 (set: $confidence to ($statGain: $confidence, 12))
 [[Escape up the stairs|Standing]]]
 (else:)[COPPER falls about laughing. ‘Good work, son! I’m sorry you picked the wrong door but that was very enjoyable stuff. Now sod off before I change my mind, but don’t worry; you know me and I always remember a face.’
@@ -56869,7 +56970,7 @@ QUIET FRANKIE’S smiling.
 
 <!-- 2026-10-17: as in Fight Victory, the words said, not merely known -->(if: $knowsCopperWord and $gaveCopperWord is true)[‘Not bad at all,’ says COPPER. ‘Tell whoever sent you that they did a fine job. Very funny.’
 <!-- 2026-10-16 (Sam: restore): as in Fight Victory -->SALVU COPPER’S face droops under the heat of his internal furnace. ‘So someone’s looking after you? That’s enough,’ he says. QUIET FRANKIE lifts his hand without looking. ASHTON GRANGER is happy you’re alive. He presses a book of matches into your hand: ‘Tell TRISHA I sent you.’
-(if: $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)(set: $hasMatches to true)<div class="item-box"><div class="item-header">◈ OBJECT ACQUIRED</div><div class="item-name">Trisha’s Matchbook</div><div class="item-note">An invitation to Trisha’s.</div></div>]
+(if: $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)(set: $matchbookFrom to "copper")(set: $hasMatches to true)<div class="item-box"><div class="item-header">◈ OBJECT ACQUIRED</div><div class="item-name">Trisha’s Matchbook</div><div class="item-note">An invitation to Trisha’s.</div></div>]
 
 (set: $confidence to ($statGain: $confidence, 16))
 (set: $sobriety to ($statGain: $sobriety, 8))
@@ -58155,7 +58256,7 @@ He slaps the manuscript like an arse and says: ‘Page 93 is missing. Find it fo
 </div>
 
 
-(if: $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)(set: $hasMatches to true)
+(if: $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)(set: $matchbookFrom to (cond: $opponent is "Jack Curtis", "jack", "percy"))(set: $hasMatches to true)
 (if: $opponent is "Jack Curtis")[CURTIS tosses you a matchbook.
 
 ‘Trisha’s. Tell them JACK CURTIS sent you.’](else:)[PERCY RITSON tosses you a matchbook.
@@ -58192,7 +58293,7 @@ He slaps the manuscript like an arse and says: ‘Page 93 is missing. Find it fo
 </div>
 
 
-(if: $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)(set: $hasMatches to true)
+(if: $hasTrishaMatchbook is false)[(set: $hasTrishaMatchbook to true)(set: $matchbookFrom to (cond: $opponent is "Jack Curtis", "jack", "percy"))(set: $hasMatches to true)
 (if: $opponent is "Jack Curtis")[CURTIS tosses you a matchbook.
 
 ‘Trisha’s. Tell them JACK CURTIS sent you.’](else:)[PERCY RITSON tosses you a matchbook.
@@ -60097,7 +60198,7 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $hasCoin to false)\
 (set: $hasDrawing to false)\
 (set: $metShana to false)\
-(set: $hasTrishaMatchbook to false)\
+(set: $hasTrishaMatchbook to false)(set: $matchbookFrom to "")\
 (set: $metSalvu to false)\
 (set: $knowsCecilCourt to false)\
 (set: $knowsAboutPage to false)\
@@ -60563,7 +60664,7 @@ You need to find one hidden in the night. To make the dawn, for AOIFE and your d
 (set: $bookTitle to "")\
 <div class="nb-input">(input-box: bind $bookTitle, 1)</div>
 <!-- 2026-10-15 (Sam: the cover story revealed later): the ": A Cover Story" subtitle no longer shows here or joins the title now; Night Ahead Part Two stamps it when the confession comes -->
-<div class="nb-link-row">(link: "Back to Dean Street.")[(if: $bookTitle is "")[(set: $bookTitle to "Untitled Manuscript")](go-to: "Dean Street")]</div>
+<div class="nb-link-row">(link: "On.")[(if: $bookTitle is "")[(set: $bookTitle to "Untitled Manuscript")](go-to: "Dedicate Your Book")]<!-- 2026-10-22: On. to Dedicate Your Book (the book's first page), which goes back to Dean Street --></div>
 </div>
 
 <script>
@@ -60610,6 +60711,22 @@ requestAnimationFrame(function() {
       if (ta) ta.dispatchEvent(new Event('input', {bubbles:true}));
     }
   }, true);
+});
+</script>
+
+:: Dedicate Your Book {"position":"100,420","size":"100,100"}
+<!-- 2026-10-22 (Sam: "Yes, build the dedication page"): the book's first page, one beat after the naming. The title, then "For" and the names the night has earned (the header's #dss-dedic-pool, banked across nights). The choice is kept in localStorage by dssDedication, like the slips, never in Harlowe state; the notebook's FINDS page shows it and can change it, the Dawn prints it under the title, and every old choice stays, struck through. Names only, no prose. The link stays grey until a name is chosen (there is always "no one"); a return night opens on last night's choice. In _hideStats and _backHide with Name Your Book. -->
+<div class="typewriter-page typewriter-static book-naming book-dedicating">
+<div class="nb-dedic-title">(print: $bookTitle)</div>
+<div class="nb-dedic-for"><span class="nb-dedic-word">For</span> <span class="nb-dedic-name"></span></div>
+<div class="nb-dedic-pool"></div>
+<div class="nb-link-row">(link: "Back to Dean Street.")[(go-to: "Dean Street")]</div>
+</div>
+
+<script>
+requestAnimationFrame(function() {
+  var root = document.querySelector('.book-dedicating');
+  if (root && window.dssDedication) window.dssDedication.page(root);
 });
 </script>
 
@@ -62335,6 +62452,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 <div id="dss-lore-greatwork" hidden>(display: "Lore The Great Work")</div>\
 <span id="dss-lily-n" hidden>(if: $lilyCount is a number)[(print: $lilyCount)]</span>\
 <!-- 2026-10-21: the haunts caught before this page, for the gold wheel after a haunt (THE GATE FLASH). Pipe-delimited, as at the Dawn. -->(set: _dssHeld to "")(if: $haunts is an array)[(if: $haunts's length > 0)[(for: each _dssH, ...$haunts)[(set: _dssHeld to _dssHeld + _dssH + "|")]]]<span id="dss-haunts-held" hidden>(print: _dssHeld)</span>\
+<!-- 2026-10-22 (the dedication page): the names tonight has earned for the book's first page, read by dssDedication and banked across nights. Always AOIFE, your daughter, LILY, no one; ASHTON GRANGER once the cellar has named her; JOHN after his round or his rescue; the Fetch after the Sanctum. -->(set: _dssDedicPool to "aoife,daughter,lily,noone")(if: (history:) contains "Turn to Copper")[(set: _dssDedicPool to _dssDedicPool + ",ashton")](if: ((history:) contains "His round") or ($savedBy is "john"))[(set: _dssDedicPool to _dssDedicPool + ",john")](if: $sanctumDone is true)[(set: _dssDedicPool to _dssDedicPool + ",fetch")]<span id="dss-dedic-pool" hidden>(print: _dssDedicPool)</span>\
 (display: "Dream Progress")\
 <!-- 2026-09-16: has the player been INSIDE a venue yet? Gates the dawn door on Dean Street. Old mid-night saves: treat a second hub visit as yes. -->\
 (unless: $enteredVenue is a boolean)[(set: $enteredVenue to ($returns is a number and $returns >= 2))]\
@@ -62349,7 +62467,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 (unless: $drinksTonight is a number)[(set: $drinksTonight to 0)](unless: $blackouts is a number)[(set: $blackouts to 0)](unless: $lostToDrink is an array)[(set: $lostToDrink to (a:))](unless: $blackedOut is a boolean)[(set: $blackedOut to false)]\
 (if: ($knowsCecilCourt is false) and (($metCritic is true) or (($haunts is an array) and ($haunts contains $haunt2))))[(set: $knowsCecilCourt to true)]\
 <!-- INVARIANT: every passage in _hideStats has its WHOLE header suppressed (stats + ← BACK + NOTEBOOK), so its body MUST contain its own exit — a body link or (go-to:) — or be a true terminal ending (e.g. Dawn). There is no sidebar Undo, so a _hideStats passage with no body exit is an unrecoverable hard-trap. Confirm a body exit before adding any passage to this list. -->\
-(set: _hideStats to (a: "The Coach Burns", "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "A Doorway on Dean Street", "Dawn", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "Approach Centre Point", "The Fetch", "PP Pong", "Fight starts", "Fight Victory", "Fight Defeat", "Fight Victory Perfect", "Cecil Court Waltz", "Ride Jeffrey Bernard's cow", "Cow ride success", "Cow ride fail"))\
+(set: _hideStats to (a: "The Coach Burns", "White page", "Black page", "Title", "Start", "The Night Ahead", "Name Your Book", "Dedicate Your Book", "A Doorway on Dean Street", "Dawn", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "Approach Centre Point", "The Fetch", "PP Pong", "Fight starts", "Fight Victory", "Fight Defeat", "Fight Victory Perfect", "Cecil Court Waltz", "Ride Jeffrey Bernard's cow", "Cow ride success", "Cow ride fail"))\
 (if: $returns is a number and $returns >= 1 and not (_hideStats contains (passage:)'s name))[(set: _saved to (savegame: "auto", "Auto save"))(unless: _saved)[(text-colour:#e0a85a)[//Heads up: this browser isn’t saving your progress — most likely private/incognito mode. If you leave now, you’ll lose your place.//]]](if: (passage:)'s name is "Dean Street")[<div id="dss-save-toast" style="position:fixed;bottom:14px;right:16px;z-index:99999;font-family:'Crimson Text',Georgia,serif;font-size:0.8em;letter-spacing:0.06em;color:#c8b89c;background:rgba(10,12,18,0.78);border:1px solid rgba(160,128,96,0.28);border-radius:4px;padding:5px 11px;opacity:0;pointer-events:none;box-shadow:0 2px 12px rgba(0,0,0,0.45);transition:opacity 0.6s ease;">✓ Progress saved</div>]<script>(function(){var el=document.getElementById("dss-save-toast");if(!el)return;var ifid='E3F7C9E2-3617-469A-AE5C-210AFB87B930',found=false;try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i)||'';if(k.indexOf('Saved Game')===-1)continue;if(k.toLowerCase().indexOf('auto')===-1)continue;if(ifid&&k.indexOf(ifid)===-1)continue;var v=localStorage.getItem(k);if(v&&v.length>50){found=true;break;}}}catch(e){}if(!found){if(el.parentNode)el.parentNode.removeChild(el);return;}requestAnimationFrame(function(){el.style.opacity='0.85';});setTimeout(function(){if(el)el.style.opacity='0';},2200);setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el);},3000);})();</script>\
 (unless: _hideStats contains (passage:)'s name)[\
 (if: $confidence is a number and $confidence < 0)[(set: $confidence to 0)](if: $confidence is a number and $confidence > 100)[(set: $confidence to 100)](if: $sobriety is a number and $sobriety < 0)[(set: $sobriety to 0)](if: $sobriety is a number and $sobriety > 100)[(set: $sobriety to 100)]\
@@ -62406,7 +62524,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 <!-- 2026-10-16 (Sam: carry the pick indoors): inside the venue of the person you chose on Dean Street, a hidden span the room reads on build; that figure is lit red and the room's caption says who you came for -->(display: "Who Will Read")(if: ($pitchOn is true) and ($pitchTarget is a string) and ($pitchTarget is not ""))[(set: _cfTags to (dm: "pillars", "venue-pillars", "french", "venue-french", "colony", "venue-colony", "cecil", "venue-cecilcourt", "coach", "venue-coach", "ronnies", "venue-ronnies", "trishas", "venue-trishas", "lackland", "venue-lackland"))(if: (_cfTags contains $pitchTarget) and ((passage:)'s tags contains (_cfTags's ($pitchTarget))))[<span class="dss-came-for" hidden><span class="dss-came-for-name">(print: $pitchName)</span><span class="dss-came-for-link">(print: $pitchLink)</span>(if: ($pitchName is "THE NOVELIST") and ($pitchLink is not "Speak to him"))[<span class="dss-came-for-first"></span>]</span>]]<!-- 2026-10-17 (Sam): the novelist picked while JOHN or BENITO stands before him; the room adds "Talk to others first." under its caption -->\
 <!-- 2026-10-12 (Sam: the next task must be much clearer): the one place to go next, from Next Target; hidden on the hub's map screen's own bar, the endings and the night's opening pages -->(display: "Next Shown")(if: $nextShown)[(display: "Next Target")]|nexthint>[(if: $nextShown and ($nextLabel is not ""))[<div class="next-hint">NEXT · (print: $nextLabel)</div>]]
 (if: $hasLiver is true and ($confidence is a number and $sobriety is a number) and ($confidence < 10 or $sobriety < 10))[<div class="liver-hint">‘You’re running on fumes. Remember: Shelley’s liver in your notebook.’</div>]
-(set: _backHide to (a: "Talk to the critic", "None of us likes it!", "Turn to Copper", "Copper confronts", "Beaten", "St. John's Word", "Standing", "His round", "Talk to the Artists", "The Spanish Artist", "Sketch the Painter", "Shana Looks Again", "O'Flatterly introduction", "Lackland's Back Room", "Watch the decider", "You notice her", "You give him Red", "You give him John", "Title", "Start", "The Night Ahead", "Name Your Book", "Dawn", "White page", "Black page", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "PP Pong", "Ride Jeffrey Bernard's cow", "Fight starts", "Fight Victory", "Fight Defeat", "The phone call", "Lily phone call 1", "The dual ring", "After the call", "After Aoife", "The Painter's Gaze", "The Set", "Shana Reads", "Davy Merkin", "Return the page", "Give him the painting", "Bar Canvas Win", "Bar Canvas Lose", "Shana's Verdict", "Copper Word Accepted", "Stand your ground", "Approach the novelist", "Benito's Hour"))
+(set: _backHide to (a: "Talk to the critic", "None of us likes it!", "Turn to Copper", "Copper confronts", "Beaten", "St. John's Word", "Standing", "His round", "Talk to the Artists", "The Spanish Artist", "Sketch the Painter", "Shana Looks Again", "O'Flatterly introduction", "Lackland's Back Room", "Watch the decider", "You notice her", "You give him Red", "You give him John", "Title", "Start", "The Night Ahead", "Name Your Book", "Dedicate Your Book", "Dawn", "White page", "Black page", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "PP Pong", "Ride Jeffrey Bernard's cow", "Fight starts", "Fight Victory", "Fight Defeat", "The phone call", "Lily phone call 1", "The dual ring", "After the call", "After Aoife", "The Painter's Gaze", "The Set", "Shana Reads", "Davy Merkin", "Return the page", "Give him the painting", "Bar Canvas Win", "Bar Canvas Lose", "Shana's Verdict", "Copper Word Accepted", "Stand your ground", "Approach the novelist", "Benito's Hour"))
 <div class="header-links">(unless: _backHide contains (passage:)'s name)[(set: _exitTo to "")(if: (passage:)'s tags contains "venue-french")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-colony")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-ronnies")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-coach")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-gents")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-trishas")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-lackland")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-lackland-back")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-cecilcourt")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-pillars")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-cellar")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-chippy")[(set: _exitTo to "Dean Street")](unless: _exitTo is "")[<div class="back-one-link dss-exit-reserve">(link-goto: "← Out onto the street", _exitTo)</div><script>(function(){ /* 2026-10-20 (Sam: "I'd rather people used the in-world exits"): this way out stays in the page, hidden, for the rooms' doors to press. It shows only where nothing else leads on: a room whose 3D did not come up, or a page with no link of its own. Lost WebGL shows it by CSS. */ if (window._dssExitGuard) { window._dssExitGuard(); return; } var ROOMS = '#fi-container, #ci-container, #pi-container, #ri-container, #cb-container, #ti-container, #lk-container, #oi-container, #cf-container'; var SKIP = '.header-links, .stat-bars, #stat-bars-lifted, tw-dialog, .notebook-link, .lore-box, #dss-notebook'; var timer = null; function check() { timer = null; var d = document.querySelector('.header-links .back-one-link.dss-exit-reserve'); if (!d) return; var p = document.querySelector('tw-passage'); var room = p && p.querySelector(ROOMS); var need = true; if (room) need = !room.querySelector('canvas'); else { var ls = document.querySelectorAll('tw-passage tw-link, tw-passage .enchantment-link, tw-story > .dss-threshold tw-link, tw-story > .dss-threshold .enchantment-link'); /* a plain page's words move into its panel (.dss-threshold) */ for (var i = 0; i < ls.length; i++) { if (ls[i].closest(SKIP) || !ls[i].getClientRects().length) continue; need = false; break; } } d.classList.toggle('dss-exit-needed', need); } function soon() { if (!timer) timer = setTimeout(check, 700); } window._dssExitGuard = soon; new MutationObserver(soon).observe(document.querySelector('tw-story') || document.body, { childList: true, subtree: true }); soon(); })();</script>]]
 (unless: $notebook is a string)[(set: $notebook to "held")](if: $notebook is "stolen")[<div class="notebook-link notebook-gone" title="Your notebook was taken in Bourchier Street.">NOTEBOOK</div>](else:)[<div class="notebook-link">(link-repeat: "NOTEBOOK")[(display: "Build Notebook")]</div>]
 </div>
@@ -62491,7 +62609,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 (if: _queue is not '')[(set: _nb to '<div class="nb-page" data-pentangle-queue="' + _queue + '">')]\
 (set: _nb to _nb + '<div class="nb-tabs"><div class="nb-tab nb-tab-active" data-tab="notes" onclick="window.nbSwitchTab(this)">FINDS</div><div class="nb-tab" data-tab="inventory" onclick="window.nbSwitchTab(this)">EFFECTS</div><div class="nb-tab" data-tab="lily" onclick="window.nbSwitchTab(this)">LILIES</div><div class="nb-tab" data-tab="alba" onclick="window.nbSwitchTab(this)">POEM</div><div class="nb-tab" data-tab="dreams" onclick="window.nbSwitchTab(this)">DREAMS</div><div class="nb-tab" data-tab="map" onclick="window.nbSwitchTab(this)">MAP</div></div>')\
 (set: _nb to _nb + '<div class="nb-panel nb-panel-notes nb-panel-active">')\
-<!-- 2026-10-14 (Sam: the manuscript's importance): the notebook opens on your book, its title and the slips of those who have read it (dssRefusals fills .nb-slips) -->(if: ($bookTitle is a string) and ($bookTitle is not ""))[(set: _nb to _nb + '<div class="nb-section nb-book"><div class="nb-book-title">' + $bookTitle + '</div><div class="nb-slips"></div></div>')]\
+<!-- 2026-10-14 (Sam: the manuscript's importance): the notebook opens on your book, its title and the slips of those who have read it (dssRefusals fills .nb-slips) -->(if: ($bookTitle is a string) and ($bookTitle is not ""))[(set: _nb to _nb + '<div class="nb-section nb-book"><div class="nb-book-title">' + $bookTitle + '</div><div class="nb-dedication"></div><div class="nb-slips"></div></div>')]\
 <!-- 2026-10-16 (Sam: suggestions, 2, the plan travels with you): under the slips, who is still to see tonight, the same list Dean Street asks about; the picked one marked -->(display: "Who Will Read")(if: ($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($whoList is an array) and ($whoList's length > 0))[(set: _nb to _nb + '<div class="nb-section nb-tosee"><div class="nb-tosee-h">Still to see</div>')(for: each _w, ...$whoList)[(set: _nb to _nb + '<div class="nb-tosee-row' + (cond: (_w's id is $pitchTarget) and ((_w's name is $pitchName) or (_w's id is "french")), ' nb-tosee-on', '') + '">' + (_w's name) + ' · ' + (_w's place) + '</div>')](set: _nb to _nb + '</div>')]\
 (set: _nb to _nb + '<div class="nb-key"><span class="nb-key-item"><span class="hp hp-done">◆</span> haunt caught &middot; <span class="hp">◇</span> still to catch</span><span class="nb-key-item"><span class="pp pp-done">▲</span> word learned &middot; <span class="pp">△</span> still to learn</span><span class="nb-key-item"><span class="al al-done">✦</span> alba line &middot; <span class="al">✧</span> still to find</span><span class="nb-key-item"><span class="qp qp-done">★</span> errand done &middot; <span class="qp">☆</span> still to do</span><span class="nb-key-item"><span class="lp lp-done">❀</span> lily gathered &middot; <span class="lp">❁</span> still to find</span></div>')\
 <!-- 2026-10-12 (the weighting): what the Fetch asks before he leads you on, while it is still owed -->(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](if: $lilyCount < $needLilies or $haunts's length < $needHaunts)[(set: _nb to _nb + '<div class="fetch-owed nb-owed">FOR THE DAWN · ' + (cond: $nightAheadPart2Shown is true, "LILY’S FLOWERS ", "FLOWERS ") + (text: $lilyCount) + ' OF ' + (text: $needLilies) + ' · HAUNTS ' + (text: $haunts's length) + ' OF ' + (text: $needHaunts) + '</div>')]\
@@ -62733,6 +62851,15 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
   color: rgba(74, 40, 16, 0.30) !important;
   background: transparent !important;
 }
+
+/* 2026-10-22: Dedicate Your Book, the beat after the naming: the title, "For", the earned names as typewriter buttons (dssDedication.page) */
+.book-dedicating .nb-dedic-title { text-align: center; font-size: 1.3em; font-weight: 700; letter-spacing: 0.04em; margin: 0.2em auto 1.1em; padding-bottom: 0.35em; border-bottom: 1px dashed rgba(60,30,10,0.35); overflow-wrap: anywhere; }
+.book-dedicating .nb-dedic-for { text-align: center; font-size: 1.45em; letter-spacing: 0.06em; min-height: 1.6em; line-height: 1.6; }
+.book-dedicating .nb-dedic-name { font-weight: 700; }
+.book-dedicating .nb-dedic-pool { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.55em 1.5em; margin: 1.5em auto 0; max-width: 36em; }
+.book-dedicating .nb-dedic-opt { font-size: 0.95em !important; letter-spacing: 0.12em !important; color: #4a2810 !important; background: transparent !important; border: 0 !important; border-bottom: 1px solid rgba(74,40,16,0.45) !important; border-radius: 0 !important; padding: 0.2em 0.3em !important; cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease, background 0.3s ease; }
+.book-dedicating .nb-dedic-opt:hover, .book-dedicating .nb-dedic-opt.on { color: #1a0c00 !important; border-bottom-color: #1a0c00 !important; background: rgba(40,22,12,0.05) !important; }
+.book-dedicating .nb-link-row { margin-top: 2.2em; }
 
 /* ===== PIPS (Dean Street venue links) ===== */
 /* Three states: .hp/.op/.pp/.al = outline (known, not collected); +-done = filled (collected); +-pending = greyed (path exists but undiscovered) */
@@ -66229,6 +66356,16 @@ text-shadow: none;
 .dawn-book-fate { text-align: center; font-style: italic; margin: 0.4em auto 1.2em; max-width: 34em; }
 .nb-slip-age1 { opacity: 0.6; } .nb-slip-age2 { opacity: 0.42; } .nb-slip-age3 { opacity: 0.3; }
 .nb-slip.nb-slip-age1, .nb-slip.nb-slip-age2, .nb-slip.nb-slip-age3 { background: #f1e9d4; }
+/* 2026-10-22: the dedication, the book's first page, under the title on FINDS (dssDedication fills .nb-dedication); old choices struck through; Change opens the names */
+.nb-dedication { margin: -0.3em 0 1em; font: italic 0.98em Georgia, serif; color: #2a2218; line-height: 1.6; }
+.nb-dedic-now { letter-spacing: 0.02em; }
+.nb-dedic-old { display: block; font-size: 0.9em; color: rgba(42,34,24,0.62); text-decoration: line-through; text-decoration-color: rgba(60,40,20,0.6); margin-top: 0.1em; }
+.nb-dedic-change { display: inline-block; margin-left: 0.9em; font: 0.7em Georgia, serif; font-variant: small-caps; letter-spacing: 0.14em; color: #8a6a2a; background: none; border: 0; border-bottom: 1px dotted rgba(138,106,42,0.55); padding: 0; cursor: pointer; }
+.nb-dedic-change:hover { color: #5a4010; border-bottom-color: #5a4010; }
+.nb-dedication .nb-dedic-pool { display: flex; flex-wrap: wrap; gap: 0.3em 0.9em; margin: 0.35em 0 0.3em; }
+.nb-dedication .nb-dedic-opt { font: 0.9em Georgia, serif; letter-spacing: 0.04em; color: #4a3414; background: none; border: 0; border-bottom: 1px solid rgba(74,52,20,0.35); padding: 0 0.1em 0.05em; cursor: pointer; }
+.nb-dedication .nb-dedic-opt:hover { color: #1a0c00; border-bottom-color: #1a0c00; }
+.nb-dedication .nb-dedic-opt.on { color: #8a6a2a; border-bottom-color: #c8a464; }
 
 .dss-voice-again { margin-top: 8px; font: italic 0.95em Georgia, serif; color: rgba(235,225,200,0.7); line-height: 1.45; }
 
@@ -71701,6 +71838,17 @@ tw-story[tags~="dawn-end"] .ending-pane::before {
   from { opacity: 0; letter-spacing: 0.32em; }
   to { opacity: 0.85; letter-spacing: 0.18em; }
 }
+/* 2026-10-22: the dedication under the title at the Dawn (dssDedication fills .dawn-dedication and sets it beneath .dawn-bookname) */
+.dawn-dedication {
+  text-align: center;
+  font-family: 'Special Elite', 'Courier New', Courier, monospace;
+  font-size: 0.88em;
+  color: rgba(208, 192, 156, 0.74);
+  letter-spacing: 0.08em;
+  margin: -1.6em 0 2em;
+  opacity: 0;
+  animation: dawnBookFade 2.4s ease-out 1.8s forwards;
+}
 .dawn-line-fade {
   opacity: 0;
   animation: dawnLineFade 1.4s ease-in forwards;
@@ -72960,6 +73108,7 @@ tw-passage tw-link[data-dss-way="street"]:hover::after { border-bottom-color: rg
 [data-endgame="dawn"] .ending-pane { background:linear-gradient(160deg,rgba(20,27,39,.94),rgba(46,37,42,.92))!important; border:1px solid rgba(210,192,162,.24); padding:clamp(22px,5vw,58px)!important; color:#e0d8ca!important; line-height:1.85; box-shadow:0 24px 80px #13141d66!important; }
 [data-endgame="dawn"] .dawn-title { letter-spacing:.22em; font-size:clamp(21px,4vw,32px); color:#ead9b8; text-shadow:none; }
 [data-endgame="dawn"] .dawn-bookname { color:#c5bab0; letter-spacing:.055em; overflow-wrap:anywhere; }
+[data-endgame="dawn"] .dawn-dedication { color:#b8ada2; letter-spacing:.05em; }
 [data-endgame="dawn"] .alba-final { padding:1.4em clamp(12px,3vw,30px); border-top:1px solid #cbb78635; border-bottom:1px solid #cbb78635; background:linear-gradient(100deg,#c7b18b08,#c7b18b10,#c7b18b08); box-shadow:none; }
 [data-endgame="dawn"] .dawn-record { padding:1.4em 0; border-block:1px solid #cbb78629; gap:1.3em; }
 [data-endgame="dawn"] .dawn-credits { color:#b8b0ad; line-height:1.6; }
@@ -79362,7 +79511,7 @@ Massive earthworms are breaking through the floor!
 
 :: Next Shown [system] {"position":"3200,2750","size":"100,100"}
 {<!-- where the NEXT line shows: not inside the dream worlds, Carthage's shore, the endings or the night's opening pages -->
-(set: $nextShown to not ((passage:)'s tags contains "dream" or (passage:)'s tags contains "night-ahead" or (passage:)'s tags contains "char-red" or (passage:)'s tags contains "green-sea" or (passage:)'s name is "LINE 1" or (passage:)'s name is "LINE 3" or (passage:)'s name is "Things turn up" or (passage:)'s name is "Name Your Book" or (passage:)'s tags contains "carthage-shore" or (passage:)'s tags contains "white-page" or (passage:)'s tags contains "black-page" or (passage:)'s tags contains "dawn-end" or (passage:)'s tags contains "startup" or (passage:)'s name is "Dawn"))
+(set: $nextShown to not ((passage:)'s tags contains "dream" or (passage:)'s tags contains "night-ahead" or (passage:)'s tags contains "char-red" or (passage:)'s tags contains "green-sea" or (passage:)'s name is "LINE 1" or (passage:)'s name is "LINE 3" or (passage:)'s name is "Things turn up" or (passage:)'s name is "Name Your Book" or (passage:)'s name is "Dedicate Your Book" or (passage:)'s tags contains "carthage-shore" or (passage:)'s tags contains "white-page" or (passage:)'s tags contains "black-page" or (passage:)'s tags contains "dawn-end" or (passage:)'s tags contains "startup" or (passage:)'s name is "Dawn"))
 }
 
 :: Next Footer [footer] {"position":"3350,2600","size":"100,100"}

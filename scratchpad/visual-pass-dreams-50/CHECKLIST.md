@@ -1,0 +1,54 @@
+# Dream worlds — 50 visual details
+
+Prose, sign lettering, hit targets and interactions preserved.
+
+- [x] 1. Cantina door hinges and knob backplate
+- [x] 2. Shutter slat relief
+- [x] 3. Beer sign corner fixings
+- [x] 4. Awning fascia rivets
+- [x] 5. Bare bulb socket
+- [x] 6. Plastic chair moulding and rubbed seats
+- [x] 7. Porch table rolled edge
+- [x] 8. Porch bottles with shoulders, lips and faded labels
+- [x] 9. Blue drum rolled hoops and filler cap
+- [x] 10. Broom binding and splayed dry bristles
+- [x] 11. Water butt lip and slack hose
+- [x] 12. Gas cylinder domed shoulder and valve guard
+- [x] 13. Propeller hub fasteners
+- [x] 14. Propeller blade worn leading edges
+- [x] 15. Roof tank lid seam and outlet pipe
+- [x] 16. Wave-softened basalt boulders
+- [x] 17. Rounded waterline shingle
+- [x] 18. Rock pool mineral rims
+- [x] 19. Kelp curved stranded stems
+- [x] 20. Large driftwood split grain
+- [x] 21. Small driftwood broken branch
+- [x] 22. Distant boat gunwale and plank glints
+- [x] 23. Ahu facing stone joints
+- [x] 24. Moai ear inner recesses
+- [x] 25. Moai worn finger grooves and mouth incision
+- [x] 26. Barrier rope thickness and natural sag
+- [x] 27. Barrier post eyelets
+- [x] 28. Post sand-set foot collars
+- [x] 29. Warning sign dull corner rivets
+- [x] 30. Tin sign folded side hems
+- [x] 31. Vehicle track broken tread texture
+- [x] 32. Entrance sill worn edge strata
+- [x] 33. Entrance jamb hairline fissures
+- [x] 34. Weathered rubble at entrance lip
+- [x] 35. Sand-eroded plateau pebbles
+- [x] 36. Trolley worn rubber push grip
+- [x] 37. Trolley platform rails
+- [x] 38. Trolley castor forks and axle caps
+- [x] 39. Large suitcase leather straps
+- [x] 40. Suitcase reinforced corners
+- [x] 41. Suitcase folded carry handle
+- [x] 42. Small travel bag zip and handle
+- [x] 43. Blank luggage tag and string
+- [x] 44. Litter bin rolled lid rim
+- [x] 45. Litter bin dark aperture and lip
+- [x] 46. Bin pressed body ribs
+- [x] 47. Brass threshold inset fixings
+- [x] 48. Ventilation duct joint bands
+- [x] 49. Vent outlet dark louvre slats
+- [x] 50. A-board top hinges and stay chain

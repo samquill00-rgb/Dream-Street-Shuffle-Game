@@ -1,0 +1,456 @@
+<!doctype html><meta charset="utf-8"><base href="/"><style>body{margin:0;background:#15100b}#errors{position:fixed;top:0;left:0;z-index:99999;color:red;background:white;font:18px monospace}#views{position:fixed;bottom:0;left:0;z-index:99998}button{font:12px Georgia;color:#ddc9a7;background:#242018;border:1px solid #544a36}</style><body><div id="errors"></div><tw-passage><div id="py-container"></div></tw-passage><div id="views"></div><script src="vendor/three/three.min.js"></script><script>
+window.onerror=function(m){document.getElementById('errors').textContent+=m+' ';};window.dssSceneFailed=function(e){document.getElementById('errors').textContent+=e.message;};
+window._dssThreeRegistry={};window._dssBindScene=function(id,s,r,c){window._dssThreeRegistry[id]={resize:function(){}};
+var view=null,render=r.render.bind(r);r.render=function(scene,camera){if(view&&camera===c){c.position.fromArray(view.pos);c.lookAt(new THREE.Vector3().fromArray(view.tgt));}return render(scene,camera);};
+[{"name": "Barrier", "pos": [-1, 2, 133], "tgt": [-12, 1, 124]}, {"name": "Mouth", "pos": [-20, 39, 72], "tgt": [-26, 38, 59]}].forEach(function(v){var b=document.createElement('button');b.textContent=v.name;b.onclick=function(){view=v;};document.getElementById('views').appendChild(b);});};window._dssDisposeWrap=function(){};
+</script><script>// Small material and fitting details shared by the dream scenes; no hit targets.
+window.dssDreamDetail = function(scene) {
+ var mats={};
+ function mat(c,metal){var k=c+':'+!!metal;return mats[k]||(mats[k]=new THREE.MeshStandardMaterial({color:c,roughness:metal?0.67:0.94,metalness:metal?0.48:0}));}
+ function put(geo,m,x,y,z,parent){var o=new THREE.Mesh(geo,m);o.position.set(x,y,z);(parent||scene).add(o);return o;}
+ function box(w,h,d,c,x,y,z,p,metal){return put(new THREE.BoxGeometry(w,h,d),mat(c,metal),x,y,z,p);}
+ function ring(r,t,c,x,y,z,p,vertical){var o=put(new THREE.TorusGeometry(r,t,5,24),mat(c,true),x,y,z,p);if(!vertical)o.rotation.x=Math.PI/2;return o;}
+ function wire(points,r,c,p){return put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(function(v){return new THREE.Vector3(v[0],v[1],v[2]);})),20,r,5,false),mat(c,false),0,0,0,p);}
+ function pin(x,y,z,p){return put(new THREE.SphereGeometry(0.018,6,4),mat(0x777268,true),x,y,z,p);}
+ return {mat:mat,put:put,box:box,ring:ring,wire:wire,pin:pin};
+};
+
+// ====== PYRAMID MOUTH SCENE — INLINE ======
+// The pyramid too big for the frame; the mouth a small lit square
+// halfway up. Dust in the air that does not move.
+// Ported 2026-09-14 from pyramid-mouth-3d-static.html, the standalone
+// prototype built on 2026-09-12. Standard lifecycle: py-container / py-wrap /
+// _dssDisposeWrap. The overlay fades in place to reveal the passage prose;
+// each world is entered once, from the Third Pillar Portal.
+(function() {
+var pyActive = false;
+var pyAnimId = null;
+
+function initpy() {
+if (pyActive) return;
+pyActive = true;
+if (typeof THREE === 'undefined') {
+var sc = document.createElement('script');
+sc.src = 'vendor/three/three.min.js';
+sc.onload = function() { (window.dssLoadPost ? window.dssLoadPost(buildpyScene) : buildpyScene()); };
+document.head.appendChild(sc);
+} else {
+(window.dssLoadPost ? window.dssLoadPost(buildpyScene) : buildpyScene());
+}
+}
+
+function buildpyScene() {
+var pyWrap = document.createElement('div');
+pyWrap.id = 'py-wrap';
+pyWrap.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;background:#0a0810;';
+
+// the prototype's fixed labels, re-homed inside the overlay
+var pyStamp = document.createElement('div');
+pyStamp.textContent = 'GIZA';
+pyStamp.style.cssText = 'position:absolute;top:18px;right:24px;font:14px "Courier New",monospace;color:rgba(214,158,96,0.5);letter-spacing:2px;pointer-events:none;z-index:9002;';
+pyWrap.appendChild(pyStamp);
+var pyLoc = document.createElement('div');
+pyLoc.classList.add('dss-room-caption');
+pyLoc.textContent = 'PYRAMID MOUTH';
+pyLoc.style.cssText = 'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font:12px "Courier New",monospace;color:rgba(214,158,96,0.4);letter-spacing:2px;pointer-events:none;z-index:9002;';
+pyWrap.appendChild(pyLoc);
+var pyTip = document.createElement('div');
+pyTip.style.cssText = 'position:fixed;padding:6px 14px;background:rgba(20,17,16,0.94);border:1px solid rgba(214,158,96,0.45);font:italic 13px Georgia,serif;color:#e8d5b7;pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:9003;';
+pyTip.classList.add('py-tip');
+pyWrap.appendChild(pyTip);
+// the prototype toggles the tooltip with a .visible class
+var pyTipObs = new MutationObserver(function() {
+pyTip.style.opacity = pyTip.classList.contains('visible') ? '1' : '0';
+});
+pyTipObs.observe(pyTip, { attributes: true, attributeFilter: ['class'] });
+
+var pyEntered = false;
+function pyEnter() {
+if (pyEntered) return;
+pyEntered = true;
+pyWrap.style.transition = 'opacity 1.6s ease';
+pyWrap.style.opacity = '0';
+setTimeout(function() {
+if (pyAnimId) { cancelAnimationFrame(pyAnimId); pyAnimId = null; }
+try { pyTipObs.disconnect(); } catch(e) {}
+window._dssDisposeWrap('py-wrap');
+}, 1600);
+}
+
+  // ============================================================
+  // SCENE SETUP
+  // ============================================================
+  var scene = new THREE.Scene();
+  var fine = window.dssDreamDetail(scene);
+  scene.background = new THREE.Color(0x0c0a14);
+  scene.fog = new THREE.FogExp2(0x2a2030, 0.0062);
+
+  // LAYOUT: the pyramid is centred on the origin, base half-width B, height H.
+  // Its south face looks down +z. The camera stands at its foot, off toward the
+  // east corner, looking up and across the face: the apex is out of the frame,
+  // the mouth is a small dark square halfway up, off-centre to the left.
+  var B = 115, H = 73;
+  var MY = 36, MX = -26;
+  var camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 900);
+  camera.position.set(52, 2.2, 142);
+  camera.lookAt(-14, 34, 40);
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+  renderer.toneMappingExposure = 0.88; // 2026-09-16: was 0.72; the pyramid face barely read
+  pyWrap.appendChild(renderer.domElement);
+  renderer.domElement.style.display = 'block';
+  window._dssBindScene('py-wrap', scene, renderer, camera);
+
+  // resize is handled by _dssBindScene above.
+
+  // ============================================================
+  // CLICK TO ENTER
+  // ============================================================
+  var clickableObjects = [], venueData = new Map(), mouseNDC = new THREE.Vector2(-2, -2), mouseMoved = false;
+  var raycaster = new THREE.Raycaster(), hoveredVenue = null, tooltip = pyTip;
+  function makeClickable(mesh, info) { clickableObjects.push(mesh); venueData.set(mesh, info); }
+  pyWrap.addEventListener('mousemove', function(e) {
+    mouseMoved = true;
+    mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    tooltip.style.left = (e.clientX + 15) + 'px'; tooltip.style.top = (e.clientY - 30) + 'px';
+  });
+  pyWrap.addEventListener('click', function() { if (hoveredVenue) pyEnter(); });
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+  function canvasTex(w, h, draw, rep) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    draw(c.getContext('2d'), w, h);
+    var t = new THREE.CanvasTexture(c);
+    if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
+    t.anisotropy = 8;
+    return t;
+  }
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function mesh(geo, mat, x, y, z, parent) {
+    var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true; (parent || scene).add(m); return m;
+  }
+  function radialTex(r, g, b, a, mid) {
+    return canvasTex(128, 128, function(ctx) {
+      var gr = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gr.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')');
+      gr.addColorStop(mid || 0.4, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.4) + ')');
+      gr.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ',0)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, 128, 128);
+    });
+  }
+  function halo(r, g, b, size, x, y, z, opacity, noFog) {
+    var m = new THREE.SpriteMaterial({ map: radialTex(r, g, b, 0.9), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: opacity || 0.6 });
+    if (noFog) m.fog = false;
+    var s = new THREE.Sprite(m); s.scale.set(size, size, 1); s.position.set(x, y, z); scene.add(s); return s;
+  }
+
+  // ============================================================
+  // SKY: the last of the light in the west, night coming down from the top
+  // ============================================================
+  var skyTex = canvasTex(1024, 1024, function(ctx, w, h) {
+    var g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#05040c'); g.addColorStop(0.3, '#0e0c22'); g.addColorStop(0.42, '#1e1838'); g.addColorStop(0.49, '#3a2a44'); g.addColorStop(0.53, '#6a3c3a'); g.addColorStop(0.56, '#8a4a2c'); g.addColorStop(0.585, '#5a3020'); g.addColorStop(0.62, '#1a1418'); g.addColorStop(1, '#08060a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    // the glow where the sun went down, to the west (texture x ~ 0.28)
+    var sg = ctx.createRadialGradient(w * 0.28, h * 0.58, 0, w * 0.28, h * 0.58, w * 0.3);
+    sg.addColorStop(0, 'rgba(240,150,70,0.5)'); sg.addColorStop(0.3, 'rgba(200,110,50,0.22)'); sg.addColorStop(1, 'rgba(120,60,30,0)');
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, w, h);
+    // thin dark bars of cloud lit on their undersides
+    for (var i = 0; i < 14; i++) {
+      ctx.fillStyle = 'rgba(30,18,22,0.5)'; ctx.beginPath(); ctx.ellipse(Math.random() * w, h * 0.5 + Math.random() * h * 0.06, 80 + Math.random() * 260, 3 + Math.random() * 7, 0, 0, 6.3); ctx.fill();
+      ctx.fillStyle = 'rgba(220,120,60,0.18)'; ctx.beginPath(); ctx.ellipse(Math.random() * w, h * 0.53 + Math.random() * h * 0.04, 60 + Math.random() * 200, 2 + Math.random() * 4, 0, 0, 6.3); ctx.fill();
+    }
+    // dust in the lower sky: a brown veil
+    var dg = ctx.createLinearGradient(0, h * 0.5, 0, h * 0.62); dg.addColorStop(0, 'rgba(120,80,60,0)'); dg.addColorStop(1, 'rgba(90,60,50,0.35)'); ctx.fillStyle = dg; ctx.fillRect(0, h * 0.5, w, h * 0.12);
+    for (var s = 0; s < 500; s++) {
+      var sy = Math.random() * h * 0.46, br = Math.random() * (1 - sy / (h * 0.5));
+      ctx.fillStyle = 'rgba(255,245,230,' + (0.1 + br * 0.7) + ')';
+      ctx.beginPath(); ctx.arc(Math.random() * w, sy, 0.3 + br * 0.9, 0, 6.3); ctx.fill();
+    }
+  });
+  var sky = new THREE.Mesh(new THREE.SphereGeometry(700, 32, 24), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }));
+  sky.rotation.y = 0.9; scene.add(sky);
+  // the sun's afterglow, a halo sitting on the horizon behind the pyramid's west shoulder
+  var sunGlow = halo(255, 150, 70, 380, -430, 70, -240, 0.42, true);
+  halo(255, 120, 60, 180, -430, 40, -240, 0.3, true);
+
+  // ============================================================
+  // LIGHTING: a low warm rake from the west, a cold sky from above
+  // ============================================================
+  scene.add(new THREE.AmbientLight(0x2c2848, 0.78)); // 2026-09-16: was 0.62
+  scene.add(new THREE.HemisphereLight(0x34347a, 0x3a2418, 0.78)); // 2026-09-16: was 0.62
+  // the sun is down behind the north-west shoulder: the south face is in its own shadow, only the sky lights it
+  var sunRake = new THREE.DirectionalLight(0xff8a40, 1.0);
+  sunRake.position.set(-300, 42, -150); sunRake.castShadow = true;
+  sunRake.shadow.mapSize.set(2048, 2048);
+  sunRake.shadow.camera.left = -180; sunRake.shadow.camera.right = 180; sunRake.shadow.camera.top = 140; sunRake.shadow.camera.bottom = -60;
+  sunRake.shadow.camera.near = 10; sunRake.shadow.camera.far = 800; sunRake.shadow.bias = -0.0008;
+  scene.add(sunRake);
+  var skyLight = new THREE.DirectionalLight(0x3848a8, 0.6); skyLight.position.set(40, 200, 120); scene.add(skyLight);
+
+  // ============================================================
+  // TEXTURES
+  // ============================================================
+  // Core masonry: weathered limestone blocks, joints, sand in the cracks
+  var blockTex = canvasTex(1024, 128, function(ctx, w, h) {
+    ctx.fillStyle = '#5a4c3a'; ctx.fillRect(0, 0, w, h);
+    var x = 0;
+    while (x < w) {
+      var bw = 40 + Math.random() * 60, v = 130 + Math.random() * 50;
+      ctx.fillStyle = 'rgb(' + Math.floor(v) + ',' + Math.floor(v * 0.86) + ',' + Math.floor(v * 0.64) + ')';
+      ctx.fillRect(x + 2, 4, bw - 4, h - 8);
+      // a chipped top edge, a darker weathered face
+      ctx.fillStyle = 'rgba(40,28,18,' + (0.15 + Math.random() * 0.25) + ')'; ctx.fillRect(x + 2, 4, bw - 4, 6 + Math.random() * 10);
+      for (var k = 0; k < 20; k++) { ctx.fillStyle = 'rgba(60,40,24,' + Math.random() * 0.3 + ')'; ctx.beginPath(); ctx.arc(x + Math.random() * bw, Math.random() * h, 1 + Math.random() * 6, 0, 6.3); ctx.fill(); }
+      if (Math.random() < 0.3) { ctx.strokeStyle = 'rgba(30,20,12,0.5)'; ctx.lineWidth = 1.5; ctx.beginPath(); var cx0 = x + Math.random() * bw; ctx.moveTo(cx0, 4); ctx.lineTo(cx0 + (Math.random() - 0.5) * 20, h - 4); ctx.stroke(); }
+      x += bw;
+    }
+    // sand drifted into the joints
+    ctx.fillStyle = 'rgba(200,170,120,0.35)'; ctx.fillRect(0, h - 10, w, 5);
+  }, [1, 1]);
+  var blockMat = new THREE.MeshStandardMaterial({ map: blockTex, roughness: 0.95, color: 0xd8c8a8 });
+  var blockMatB = new THREE.MeshStandardMaterial({ map: blockTex, roughness: 0.95, color: 0xb8a888 });
+
+  // Ground: sand with rubble, the trodden path darker
+  var sandTex = canvasTex(512, 512, function(ctx, w, h) {
+    ctx.fillStyle = '#b09468'; ctx.fillRect(0, 0, w, h);
+    for (var i = 0; i < 300; i++) { var v = 150 + Math.random() * 60; ctx.fillStyle = 'rgba(' + Math.floor(v) + ',' + Math.floor(v * 0.82) + ',' + Math.floor(v * 0.58) + ',0.3)'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 10 + Math.random() * 50, 6 + Math.random() * 30, Math.random() * 3, 0, 6.3); ctx.fill(); }
+    for (var p = 0; p < 900; p++) { var pv = 60 + Math.random() * 100; ctx.fillStyle = 'rgb(' + Math.floor(pv) + ',' + Math.floor(pv * 0.85) + ',' + Math.floor(pv * 0.65) + ')'; ctx.beginPath(); ctx.ellipse(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 1 + Math.random() * 3, Math.random() * 3, 0, 6.3); ctx.fill(); }
+    for (var r = 0; r < 60; r++) { ctx.strokeStyle = 'rgba(80,60,40,' + (0.08 + Math.random() * 0.12) + ')'; ctx.lineWidth = 1 + Math.random() * 2; ctx.beginPath(); var rx = Math.random() * w, ry = Math.random() * h; ctx.moveTo(rx, ry); ctx.quadraticCurveTo(rx + 40, ry + (Math.random() - 0.5) * 30, rx + 90, ry + (Math.random() - 0.5) * 10); ctx.stroke(); }
+  }, [40, 40]);
+  var sandMat = new THREE.MeshStandardMaterial({ map: sandTex, roughness: 0.98, color: 0x8a7a68 });
+
+  // ============================================================
+  // THE PYRAMID: courses of blocks, each a shrinking ring of four long boxes
+  // ============================================================
+  var pyramid = new THREE.Group();
+  var COURSES = 74, ch = H / COURSES;
+  for (var c = 0; c < COURSES; c++) {
+    var y0 = c * ch, hw = B * (1 - (y0 + ch * 0.5) / H);
+    var d = 2.4 + rand(-0.15, 0.15), mat = (c % 7 === 3) ? blockMatB : blockMat;
+    // the four sides; the near (+z) face gets its own texture repeat so the blocks read as blocks
+    var faceLen = hw * 2;
+    if (y0 > MY - 0.05 && y0 < MY + 3.2) {
+      var gl = MX - 1.75, gr = MX + 1.75;
+      mesh(new THREE.BoxGeometry(gl + hw, ch, d), mat, (gl - hw) / 2, y0 + ch / 2, hw - d / 2, pyramid);
+      mesh(new THREE.BoxGeometry(hw - gr, ch, d), mat, (gr + hw) / 2, y0 + ch / 2, hw - d / 2, pyramid);
+    } else mesh(new THREE.BoxGeometry(faceLen, ch, d), mat, 0, y0 + ch / 2, hw - d / 2, pyramid);   // south
+    mesh(new THREE.BoxGeometry(faceLen, ch, d), mat, 0, y0 + ch / 2, -hw + d / 2, pyramid);          // north
+    mesh(new THREE.BoxGeometry(d, ch, faceLen), mat, hw - d / 2, y0 + ch / 2, 0, pyramid);           // east
+    mesh(new THREE.BoxGeometry(d, ch, faceLen), mat, -hw + d / 2, y0 + ch / 2, 0, pyramid);          // west
+    // a fill block so nothing shows through the corners
+    mesh(new THREE.BoxGeometry(faceLen - d, ch, faceLen - 2 * d - 18), blockMatB, 0, y0 + ch / 2, -9, pyramid).castShadow = false;
+  }
+  // scale the block texture so joints repeat with the course height (UVs of BoxGeometry run 0..1 per face)
+  blockTex.repeat.set(24, 1);
+  // scattered casing stones surviving near the base, a few loose blocks on the ledges
+  for (var i = 0; i < 40; i++) {
+    var cy = Math.floor(rand(0, 12)) * ch, chw = B * (1 - (cy + ch * 0.5) / H);
+    var cx = rand(-chw + 4, chw - 4);
+    var cs = mesh(new THREE.BoxGeometry(rand(1.5, 3.2), ch * 0.9, rand(1.2, 2.2)), blockMatB, cx, cy + ch * 0.45 + 0.05, chw + rand(0.1, 0.9), pyramid);
+    cs.rotation.y = rand(-0.2, 0.2);
+  }
+  scene.add(pyramid);
+
+  // ---- THE MOUTH: a small dark square halfway up, a quarter of the way along ----
+  var MZ = B * (1 - MY / H); // depth of the face at that height
+  (function() {
+    // a recess cut into the courses: a black box set into the face
+    var dark = new THREE.MeshStandardMaterial({ color: 0x141008, roughness: 1, side: THREE.BackSide });
+    var mouth = mesh(new THREE.BoxGeometry(3.4, 3.2, 8), dark, MX, MY + 1.6, MZ - 3.2); mouth.castShadow = false;
+    makeClickable(mouth, { name: 'The mouth of the pyramid', passage: 'Pyramid Mouth' });
+    // the gabled relieving stones over the opening: two leaning slabs and a lintel
+    var slabMat = new THREE.MeshStandardMaterial({ map: blockTex, roughness: 0.9, color: 0xe0d0b0 });
+    var sl = mesh(new THREE.BoxGeometry(6.5, 1.4, 1.6), slabMat, MX - 2.4, MY + 5.2, MZ + 0.4); sl.rotation.z = 0.55;
+    var sr = mesh(new THREE.BoxGeometry(6.5, 1.4, 1.6), slabMat, MX + 2.4, MY + 5.2, MZ + 0.4); sr.rotation.z = -0.55;
+    mesh(new THREE.BoxGeometry(6.0, 1.1, 1.5), slabMat, MX, MY + 3.55, MZ + 0.4);
+    mesh(new THREE.BoxGeometry(1.6, 3.2, 1.4), slabMat, MX - 2.5, MY + 1.6, MZ + 0.3);
+    mesh(new THREE.BoxGeometry(1.6, 3.2, 1.4), slabMat, MX + 2.5, MY + 1.6, MZ + 0.3);
+    // the sill: a worn threshold stone, dust spilling down the face below it
+    mesh(new THREE.BoxGeometry(4.4, 0.4, 2.2), slabMat, MX, MY - 0.1, MZ + 0.6);
+    var dustTex = canvasTex(128, 256, function(ctx, w, h) {
+      var g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(200,170,120,0.55)'); g.addColorStop(1, 'rgba(200,170,120,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(w * 0.35, 0); ctx.lineTo(w * 0.65, 0); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+    });
+    var spill = new THREE.Mesh(new THREE.PlaneGeometry(9, 22), new THREE.MeshBasicMaterial({ map: dustTex, transparent: true, depthWrite: false, opacity: 0.7 }));
+    spill.position.set(MX, MY - 11, B * (1 - (MY - 11) / H) + 0.25); spill.rotation.x = -Math.atan2(B, H); scene.add(spill);
+    for(var ss=-1;ss<=1;ss+=2)fine.wire([[MX+ss*1.8,MY+0.12,MZ+1.71],[MX+ss*0.9,MY+0.1,MZ+1.72],[MX+ss*0.2,MY+0.095,MZ+1.72]],0.018,0x95836a);
+    [-1,1].forEach(function(side){fine.wire([[MX+side*2.9,MY+2.8,MZ+1.01],[MX+side*2.65,MY+2.1,MZ+1.015],[MX+side*2.8,MY+1.5,MZ+1.01]],0.012,0x7e6d53);});
+    // a faint light deep in the corridor: it is what draws the eye
+    var outer = new THREE.PointLight(0xffa050, 1.8, 22, 2); outer.position.set(MX, MY + 1.6, MZ + 2.5); scene.add(outer);
+    var inner = new THREE.PointLight(0xffb060, 2.4, 16, 2); inner.position.set(MX, MY + 1.2, MZ - 2.2); scene.add(inner);
+    window.__mouthLight = inner;
+    window.__mouthHalo = halo(255, 170, 90, 8, MX, MY + 1.5, MZ + 0.6, 0.7);
+    halo(255, 150, 70, 24, MX, MY + 1.5, MZ + 1.4, 0.24);
+    var glowPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.6), new THREE.MeshBasicMaterial({ color: 0xc07030, transparent: true, opacity: 0.6, depthWrite: false })); glowPlane.position.set(MX, MY + 1.5, MZ - 6.6); scene.add(glowPlane);
+    window.__mouthGlow = glowPlane;
+    // the mouth's light spilling down the courses below the sill: one
+    // additive plane laid to the face's slope (it rises H over B), a warm
+    // tongue that fades down the face and is cut by the course joints,
+    // breathing with the inner light in animate.
+    var spillTex = canvasTex(64, 128, function(ctx, w, h) {
+      var g2 = ctx.createLinearGradient(0, 0, w, 0);
+      g2.addColorStop(0, 'rgba(255,170,90,0)'); g2.addColorStop(0.3, 'rgba(255,180,100,0.55)'); g2.addColorStop(0.5, 'rgba(255,200,130,0.9)'); g2.addColorStop(0.7, 'rgba(255,180,100,0.55)'); g2.addColorStop(1, 'rgba(255,170,90,0)');
+      ctx.fillStyle = g2; ctx.fillRect(0, 0, w, h);
+      var v2 = ctx.createLinearGradient(0, 0, 0, h);
+      v2.addColorStop(0, 'rgba(0,0,0,0)'); v2.addColorStop(0.3, 'rgba(0,0,0,0.35)'); v2.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = v2; ctx.fillRect(0, 0, w, h);
+      for (var j = 4; j < h; j += 9) { ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, j + Math.random() * 2, w, 1.5); }
+    });
+    var spill = new THREE.Mesh(new THREE.PlaneGeometry(8, 14), new THREE.MeshBasicMaterial({ map: spillTex, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.22, depthWrite: false }));
+    spill.rotation.x = -(Math.PI / 2 - Math.atan(H / B));
+    spill.position.set(MX, MY - 4.1, MZ + 4.1 * B / H + 1.0); scene.add(spill);
+    window.__mouthSpill = spill;
+    // the climb: a scuffed diagonal up the face from the foot to the mouth, and rubble at the lip
+    // the climb: a run of scuffed patches and loose stone up the face from the foot to the mouth
+    var scuff = new THREE.MeshBasicMaterial({ color: 0x2a1c10, transparent: true, opacity: 0.4, depthWrite: false });
+    for (var k = 0; k < 44; k++) {
+      var kt = k / 43, ky = kt * MY, kx = MX + (1 - kt) * 46 + rand(-1.2, 1.2);
+      var sc = new THREE.Mesh(new THREE.PlaneGeometry(rand(1.6, 3.2), rand(0.7, 1.3)), scuff);
+      sc.position.set(kx, ky + 0.02, B * (1 - ky / H) + 0.35); sc.rotation.x = -Math.atan2(B, H); scene.add(sc);
+      if (k % 3 === 0) { var ls = mesh(new THREE.DodecahedronGeometry(rand(0.15, 0.4), 0), blockMatB, kx + rand(-1, 1), ky + 0.3, B * (1 - ky / H) + rand(0.4, 1.2)); ls.rotation.y = rand(0, 3); }
+    }
+    for (var r = 0; r < 14; r++) { var rx = MX + rand(-4, 4), ry = MY + rand(-1.2, 0.2); var rb = mesh(new THREE.DodecahedronGeometry(rand(0.2, 0.7), 1), blockMatB, rx, ry + 0.2, B * (1 - ry / H) + rand(0.2, 1.4)); rb.rotation.set(rand(0, 3), rand(0, 3), 0); }
+  })();
+
+  // ============================================================
+  // GROUND: the plateau, the fallen blocks at the foot, the tourist path
+  // ============================================================
+  var ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), sandMat);
+  ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, 0); ground.receiveShadow = true; scene.add(ground);
+  // drifts of sand banked against the base
+  var driftMat = new THREE.MeshStandardMaterial({ map: sandTex, roughness: 0.98, color: 0xa08a70 });
+  for (var i = 0; i < 40; i++) {
+    var dx = rand(-B, B), dz = B + rand(0.5, 5), ds = rand(3, 12);
+    var dr = mesh(new THREE.SphereGeometry(ds, 10, 6), driftMat, dx, -ds * 0.72, dz); dr.scale.set(1.6, 0.5, 1); dr.castShadow = false;
+  }
+  // tumbled blocks and casing fragments along the foot
+  for (var i = 0; i < 90; i++) {
+    var fx = rand(-B - 10, B + 40), fz = B + rand(2, 26), fs = rand(0.6, 2.6);
+    var fb = mesh(new THREE.BoxGeometry(fs * rand(0.8, 1.6), fs * rand(0.5, 1), fs * rand(0.7, 1.4)), Math.random() < 0.5 ? blockMat : blockMatB, fx, fs * 0.28, fz);
+    fb.rotation.set(rand(-0.25, 0.25), rand(0, 3), rand(-0.3, 0.3));
+  }
+  for (var i = 0; i < 400; i++) { var px = rand(-B - 20, B + 80), pz = B + rand(0, 60), pr = rand(0.08, 0.4); var pb = mesh(new THREE.DodecahedronGeometry(pr, 1), blockMatB, px, pr * 0.4, pz); pb.scale.y = 0.6; pb.rotation.y = rand(0, 3); pb.castShadow = false; }
+  // the path: a darker trodden band coming in from the right toward the foot below the mouth
+  (function() {
+    var pathTex = canvasTex(64, 512, function(ctx, w, h) { ctx.fillStyle = 'rgba(70,52,34,0.5)'; ctx.fillRect(w * 0.2, 0, w * 0.6, h); for (var i = 0; i < 200; i++) { ctx.fillStyle = 'rgba(50,36,22,' + Math.random() * 0.5 + ')'; ctx.fillRect(w * 0.1 + Math.random() * w * 0.8, Math.random() * h, 2 + Math.random() * 10, 2); } var side = ctx.createLinearGradient(0, 0, w, 0); side.addColorStop(0, 'rgba(0,0,0,1)'); side.addColorStop(0.3, 'rgba(0,0,0,0)'); side.addColorStop(0.7, 'rgba(0,0,0,0)'); side.addColorStop(1, 'rgba(0,0,0,1)'); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = side; ctx.fillRect(0, 0, w, h); });
+    var path = new THREE.Mesh(new THREE.PlaneGeometry(6, 140), new THREE.MeshBasicMaterial({ map: pathTex, transparent: true, depthWrite: false }));
+    path.rotation.x = -Math.PI / 2; path.rotation.z = -1.1; path.position.set(30, 0.02, 150); scene.add(path);
+    // a rope on iron posts keeping the foot of the climb, a tin sign facing the path, a tyre track
+    var iron = new THREE.MeshStandardMaterial({ color: 0x1a1612, roughness: 0.6, metalness: 0.5 });
+    var pts = [];
+    for (var i = 0; i < 6; i++) { var qx = MX + 6 + i * 6, qz = B + 4 + i * 0.8; mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.1, 6), iron, qx, 0.55, qz); if (i > 0) { var pm = pts[pts.length - 1]; pts.push(new THREE.Vector3((pm.x + qx) / 2, 0.85, (pm.z + qz) / 2)); } pts.push(new THREE.Vector3(qx, 1.05, qz)); }
+    for(var rf=0;rf<6;rf++){var fx=MX+6+rf*6,fz=B+4+rf*0.8;fine.ring(0.074,0.018,0x51483a,fx,1.04,fz,null,true);}
+    for(var pf=0;pf<6;pf++){var fx=MX+6+pf*6,fz=B+4+pf*0.8;fine.put(new THREE.CylinderGeometry(0.12,0.16,0.045,10),fine.mat(0x66543c),fx,0.025,fz);}
+    var rope = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),60,0.026,6,false),fine.mat(0x8a7a5d));scene.add(rope);
+    var signTex = canvasTex(256, 160, function(ctx, w, h) { ctx.fillStyle = '#c8b890'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#8a1c14'; ctx.fillRect(0, 0, w, 40); ctx.fillStyle = '#e8e0c8'; ctx.font = 'bold 26px Arial'; ctx.textAlign = 'center'; ctx.fillText('NO CLIMBING', w / 2, 30); ctx.fillStyle = '#3a2a1a'; ctx.font = 'bold 30px Arial'; ctx.fillText('ENTRANCE', w / 2, 90); ctx.beginPath(); ctx.moveTo(w * 0.35, 128); ctx.lineTo(w * 0.65, 128); ctx.lineTo(w * 0.5, 100); ctx.fill(); for (var i = 0; i < 300; i++) { ctx.fillStyle = 'rgba(120,80,40,' + Math.random() * 0.3 + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 3, 2); } });
+    var sign = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.8, side: THREE.DoubleSide })); sign.position.set(MX + 14, 1.9, B + 9); sign.rotation.y = 0.5; scene.add(sign);
+    mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.4, 6), iron, MX + 14, 1.2, B + 9.05);
+    var sg=new THREE.Group();sg.position.copy(sign.position);sg.rotation.copy(sign.rotation);scene.add(sg);
+    [[-0.98,-0.58],[0.98,-0.58],[-0.98,0.58],[0.98,0.58]].forEach(function(p){fine.pin(p[0],p[1],0.015,sg);});
+    fine.box(0.035,1.2,0.035,0x6e5d44,-1.08,0,0.006,sg,true);fine.box(0.035,1.2,0.035,0x6e5d44,1.08,0,0.006,sg,true);
+    var treadTex=canvasTex(64,256,function(ctx,w,h){ctx.clearRect(0,0,w,h);ctx.strokeStyle='rgba(62,48,30,0.4)';ctx.lineWidth=5;for(var y=0;y<h;y+=18){ctx.beginPath();ctx.moveTo(5,y);ctx.lineTo(30,y+7);ctx.lineTo(59,y);ctx.stroke();}});
+    var tyre = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 90), new THREE.MeshBasicMaterial({ map:treadTex, transparent:true,opacity:0.55,depthWrite:false })); tyre.rotation.x = -Math.PI / 2; tyre.rotation.z = -0.9; tyre.position.set(48, 0.03, 158); scene.add(tyre);
+    var tyre2 = tyre.clone(); tyre2.position.set(49.6, 0.03, 159.2); scene.add(tyre2);
+  })();
+
+  // Cairo, far off to the left: a low band of warm lights under the dust
+  (function() {
+    for (var i = 0; i < 40; i++) {
+      var lx = -300 - Math.random() * 260, lz = 120 + Math.random() * 120;
+      halo(255, 190, 110, rand(3, 8), lx, rand(0.5, 3), lz, rand(0.25, 0.6), true);
+    }
+    var cityGlow = halo(255, 170, 100, 220, -430, 6, 180, 0.22, true);
+  })();
+
+  // ============================================================
+  // DUST IN THE AIR THAT DOES NOT MOVE: still motes hanging in the last light
+  // ============================================================
+  var moteTex = radialTex(240, 210, 170, 0.9, 0.25);
+  var motes = [];
+  for (var i = 0; i < 260; i++) {
+    var ms = new THREE.Sprite(new THREE.SpriteMaterial({ map: moteTex, transparent: true, depthWrite: false, opacity: rand(0.1, 0.4) }));
+    var sz = rand(0.03, 0.09); ms.scale.set(sz, sz, 1);
+    ms.position.set(camera.position.x + rand(-16, 8), rand(0.3, 9), camera.position.z + rand(-26, 2)); scene.add(ms); motes.push(ms);
+  }
+
+  // ============================================================
+  // FOG LAYERS: sand haze along the ground, a cool dusk band across the face, the plateau blurring off
+  // ============================================================
+  var fogSprites = [];
+  function addFog(tex, n, x0, x1, y0, y1, z0, z1, s0, s1, op0, op1, aspect) {
+    for (var i = 0; i < n; i++) {
+      var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: rand(op0, op1) }));
+      var s = rand(s0, s1); sp.scale.set(s, s * aspect, 1);
+      sp.position.set(rand(x0, x1), rand(y0, y1), rand(z0, z1)); scene.add(sp);
+      fogSprites.push({ sprite: sp, baseX: sp.position.x, drift: rand(0.001, 0.004), sway: rand(0, 6.3), swaySpeed: rand(0.0004, 0.0015), swayAmt: rand(0.5, 2), lo: x0 - 20, hi: x1 + 20 });
+    }
+  }
+  var sandHaze = radialTex(150, 120, 90, 0.2, 0.4), duskBand = radialTex(70, 60, 110, 0.14, 0.45), warmHaze = radialTex(220, 140, 80, 0.12, 0.4);
+  addFog(sandHaze, 40, -160, 160, 0.5, 5, B + 2, B + 90, 20, 60, 0.12, 0.26, 0.28);
+  addFog(duskBand, 26, -120, 120, 14, 50, B * 0.4, B + 10, 30, 80, 0.06, 0.14, 0.3);
+  addFog(warmHaze, 14, MX - 40, MX + 40, MY - 8, MY + 10, MZ - 2, MZ + 14, 12, 30, 0.08, 0.16, 0.4);
+  addFog(sandHaze, 20, -400, -140, 0.5, 8, 40, 300, 40, 120, 0.1, 0.2, 0.25);
+
+  // ============================================================
+  // ANIMATION: the light going, the mouth breathing, nothing in the air moving
+  // ============================================================
+  // Reduced motion: the clock is pinned at 6s and the sand haze stops drifting.
+  var pyStill = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var clock = new THREE.Clock();
+  function animate() {
+    if (!pyActive) return;
+    pyAnimId = requestAnimationFrame(animate);
+    var t = pyStill ? 6 : clock.getElapsedTime();
+    for (var i = 0; i < (pyStill ? 0 : fogSprites.length); i++) { var f = fogSprites[i]; f.sway += f.swaySpeed; f.sprite.position.x = f.baseX + Math.sin(f.sway) * f.swayAmt; f.baseX += f.drift; if (f.baseX > f.hi) f.baseX = f.lo; }
+    window.__mouthLight.intensity = 2.3 + Math.sin(t * 0.9) * 0.2 + Math.sin(t * 3.7) * 0.08;
+    window.__mouthHalo.material.opacity = 0.5 + Math.sin(t * 0.9) * 0.08;
+    window.__mouthGlow.material.opacity = 0.5 + Math.sin(t * 0.9) * 0.06;
+    if (window.__mouthSpill) window.__mouthSpill.material.opacity = 0.2 + Math.sin(t * 0.9) * 0.03 + Math.sin(t * 3.7) * 0.012;
+    sunGlow.material.opacity = 0.46 + Math.sin(t * 0.13) * 0.05;
+    sunRake.intensity = 1.05 + Math.sin(t * 0.1) * 0.08;
+    raycaster.setFromCamera(mouseNDC, camera);
+    var hits = mouseMoved ? raycaster.intersectObjects(clickableObjects) : [];
+    var hv = hits.length ? venueData.get(hits[0].object) : null;
+    if (hv !== hoveredVenue) {
+      hoveredVenue = hv;
+      if (hv) { tooltip.textContent = hv.name; tooltip.classList.add('visible'); pyWrap.style.cursor = 'pointer'; }
+      else { tooltip.classList.remove('visible'); pyWrap.style.cursor = ''; }
+    }
+    renderer.render(scene, camera);
+  }
+  animate();
+
+var pyBtn = document.createElement('div');
+pyBtn.textContent = 'CLIMB TO THE MOUTH';
+pyBtn.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);padding:14px min(36px, 8vw);white-space:nowrap;max-width:calc(100vw - 16px);box-sizing:border-box;font:16px "Courier New",monospace;color:rgba(214,158,96,0.85);border:1px solid rgba(214,158,96,0.3);letter-spacing:min(4px, 0.9vw);cursor:pointer;z-index:9004;background:transparent;opacity:0;transition:opacity 2s ease;';
+setTimeout(function() { pyBtn.style.opacity = '1'; }, 2200);
+pyBtn.addEventListener('mouseenter', function() { pyBtn.style.borderColor = 'rgba(214,158,96,0.6)'; });
+pyBtn.addEventListener('mouseleave', function() { pyBtn.style.borderColor = 'rgba(214,158,96,0.3)'; });
+pyBtn.addEventListener('click', function(e) { e.stopPropagation(); pyEnter(); });
+pyWrap.appendChild(pyBtn);
+document.body.appendChild(pyWrap);
+if (window.dssFilmGrade) window.dssFilmGrade(pyWrap);
+}
+
+setInterval(function() {
+var container = document.getElementById('py-container');
+if (container && !pyActive) {
+initpy();
+} else if (!container && pyActive) {
+pyActive = false;
+if (pyAnimId) { cancelAnimationFrame(pyAnimId); pyAnimId = null; }
+window._dssDisposeWrap('py-wrap');
+}
+}, 300);
+})();</script>

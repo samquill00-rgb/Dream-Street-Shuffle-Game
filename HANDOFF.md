@@ -3,7 +3,7 @@
 **State:**
 - Everything is in the .twee and synced to the html. Sam commits in GitHub Desktop.
 - Several sessions work on the .twee at once. Grep the other sessions' markers after every sync, and never rewrite the whole file.
-- Nothing is open from any playtest batch. One question is still with Sam: note 12 of 2026-10-21, the Dean Street white space, which wasn't reproduced. He was asked where he saw it.
+- Nothing is open from any playtest batch, and nothing from them is with Sam. Note 12 of 2026-10-21 (the Dean Street white space) was answered by Sam later that night: it was the pitch list, each reader drawn as a block; `.book-pitch-opt tw-link` is kept inline now (rulings in HANDOFF-ordering-audit-2026-10-21.md). Confirmed in the source 2026-10-22.
 
 **Recent work, newest first (details in the entries below):**
 - 2026-10-22: THE THIRST's parked line is on Lackland's back door. The repeated déjà line, from the 21 October notes, is checked fixed in all ten rooms.
@@ -67,7 +67,7 @@
 - **9 Critic's order.** The verdict slip rose while the reply ("America, you think…", "You say you've not…") was already on the page. Everything after the hidden verdict is now inside `<div class="dss-refusal-after critic-after-verdict" data-k="ham" hidden>` and shows once the slip is filed (at once on a revisit / reduced motion); the password motes wait for that reveal. Checked live (pane needs frames forced, see note). Sam's second sentence ("he knows it on the first meeting") NOT acted on: unclear whether it means the COPPER password/"I said hello" coming before the rumour introduces COPPER, or something else; asked.
 - **10 Pillars.** "You've no more business here." no longer shows while the lily is still there (`$tookLily2 is false`); "as you cross the threshold" → "as you crossed the threshold" (his instruction).
 - **11 Flagging.** The first low-sobriety slip reads "You’re flagging. You can fix this with a piss or some food. Find a doorway or the chippy." (was "Flagging again.", with no earlier flagging).
-- **12 Dean Street white space.** Not reproduced: open-night hub at 800 and 1440 wide measured; only the usual pitch list + map. Asked Sam where (above/below the map, device).
+- **12 Dean Street white space.** Not reproduced at first: open-night hub at 800 and 1440 wide measured; only the usual pitch list + map. Asked Sam where. Answered later that night (ordering-audit rulings, 2): the pitch list itself, on a laptop; `tw-passage tw-link { display:block }` made each reader an 86px block. Fixed: `.book-pitch-opt tw-link` stays inline.
 - Pane note: in this backgrounded pane the passage fade-in stalls at opacity 0 until a screenshot forces frames; anything keyed on visibility (the rejection slip) looks broken until then. Synced. No git commands.
 
 ## 2026-10-21 — JEFFREY stays in the Coach on every visit (Sam: the vanishing was an issue)

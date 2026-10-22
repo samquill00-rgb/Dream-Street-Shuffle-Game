@@ -61293,20 +61293,96 @@ window._dssDisposeWrap('pc-wrap');
     var wp = wg.attributes.position; for (var i = 0; i < wp.count; i++) window.__wbase.push({ x: wp.getX(i), y: wp.getY(i) });
     var water = new THREE.Mesh(wg, riverMat); water.rotation.x = -Math.PI / 2; water.position.set(0, -1.25, -300); riverGroup.add(water);
     // the far bank drops a little lower than the near, so the water shows its skin against it
-    // mud margins: dark wet bands beside the water, the cracked plain above them
-    var wet = new THREE.MeshStandardMaterial({ color: 0x7a746e, roughness: 0.3, metalness: 0.1 });
-    for (var side = -1; side <= 1; side += 2) { var m = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1400), wet); m.rotation.x = -Math.PI / 2; m.rotation.y = -side * 0.12; m.position.set(side * 12.6, -1.5, -300); riverGroup.add(m); }
-    // reeds, dead, in clumps along the water; driftwood; a snag
-    var reedMat = new THREE.MeshStandardMaterial({ color: 0x8a7e66, roughness: 1, side: THREE.DoubleSide });
-    for (var r = 0; r < 120; r++) {
-      var side2 = Math.random() < 0.5 ? -1 : 1, rz = -rand(-6, 200), rx = side2 * rand(11.5, 14.5);
-      var n = 3 + Math.floor(Math.random() * 6);
-      for (var k = 0; k < n; k++) { var reed = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, rand(0.6, 1.5), 4), reedMat); reed.position.set(rx + rand(-0.3, 0.3), -1.0, rz + rand(-0.3, 0.3)); reed.rotation.set(rand(-0.35, 0.35), 0, rand(-0.35, 0.35)); reed.castShadow = true; riverGroup.add(reed); reeds.push({ m: reed, rx: reed.rotation.x, rz: reed.rotation.z, ph: rand(0, 6.3), sp: rand(0.8, 1.6) }); }
+    // Sparse, scalloped silt margins: wet grey at the water, salt at the lip.
+    var bankTex = canvasTex(128, 512, function(ctx,w,h) {
+      var g=ctx.createLinearGradient(0,0,w,0);
+      g.addColorStop(0,'#706e64');g.addColorStop(0.25,'#858276');g.addColorStop(0.7,'#a69f8e');g.addColorStop(1,'#beb6a4');
+      ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+      for(var i=0;i<260;i++) {
+        var x=(i*47)%w,y=(i*83)%h;
+        ctx.strokeStyle=i%4?'rgba(67,65,56,0.14)':'rgba(231,223,201,0.26)';ctx.lineWidth=0.7;
+        ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+3,y+7);ctx.lineTo(x+1,y+12);ctx.stroke();
+      }
+    },[1,45]);
+    var wet = new THREE.MeshStandardMaterial({ map:bankTex,bumpMap:bankTex,bumpScale:0.025,roughness:0.72,metalness:0.03,side:THREE.DoubleSide });
+    for(var side=-1;side<=1;side+=2) {
+      var bankGeo=new THREE.PlaneGeometry(3.8,1400,6,280),bp=bankGeo.attributes.position;
+      for(var v=0;v<bp.count;v++) {
+        var across=(bp.getX(v)+1.9)/3.8,along=-300-bp.getY(v);
+        var edge=Math.sin(along*0.17)*0.32+Math.sin(along*0.53)*0.13;
+        var localX=side*(10.7+across*3.8+edge);
+        var wx=-22+localX*Math.cos(RIVER_ANGLE)-along*Math.sin(RIVER_ANGLE);
+        var wz=localX*Math.sin(RIVER_ANGLE)+along*Math.cos(RIVER_ANGLE);
+        var outer=plainY(wx,wz)+0.012;
+        bp.setXYZ(v,localX,bp.getY(v),-1.28*(1-across)+outer*across);
+      }
+      bankGeo.computeVertexNormals();
+      var margin=new THREE.Mesh(bankGeo,wet);margin.rotation.x=-Math.PI/2;margin.position.z=-300;riverGroup.add(margin);
     }
-    var wood = new THREE.MeshStandardMaterial({ color: 0xa89c88, roughness: 0.95 });
-    var snag = mesh(new THREE.CylinderGeometry(0.12, 0.3, 4.5, 6), wood, 4, -0.6, -28, riverGroup); snag.rotation.set(0.5, 0.3, 1.1);
-    mesh(new THREE.CylinderGeometry(0.05, 0.1, 1.6, 5), wood, 4.8, 0.1, -27.2, riverGroup).rotation.set(0.9, 0.2, 0.4);
-    var log2 = mesh(new THREE.CylinderGeometry(0.1, 0.16, 3, 6), wood, -13.5, -1.1, -12, riverGroup); log2.rotation.set(Math.PI / 2, 0, 0.3);
+    // Bleached reeds grow in small separated groups; each stem bends from its root.
+    var reedMat = new THREE.MeshStandardMaterial({ color:0xb9af96,roughness:1,side:THREE.DoubleSide });
+    var reedNodeMat = new THREE.MeshStandardMaterial({ color:0x8f8773,roughness:1 });
+    for(var r=0;r<72;r++) {
+      var side2=Math.random()<0.5?-1:1,rz=-rand(-6,200),rx=side2*rand(12.2,14.3);
+      var n=2+Math.floor(Math.random()*3);
+      for(var k=0;k<n;k++) {
+        var height=rand(0.45,1.25),bend=rand(-0.15,0.15),reed=new THREE.Group();
+        var stemGeo=new THREE.CylinderGeometry(0.005,0.014,height,5,5),sp=stemGeo.attributes.position;
+        for(var j=0;j<sp.count;j++) {
+          var u=(sp.getY(j)+height/2)/height;
+          sp.setXYZ(j,sp.getX(j)+bend*u*u,sp.getY(j)+height/2,sp.getZ(j));
+        }
+        stemGeo.computeVertexNormals();reed.add(new THREE.Mesh(stemGeo,reedMat));
+        // Two small joints, an occasional torn leaf: mostly bare straw.
+        for(var joint=1;joint<3;joint++) {
+          var u=joint/3,collar=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,0.012,5),reedNodeMat);
+          collar.position.set(bend*u*u,height*u,0);reed.add(collar);
+        }
+        if(k===0) {
+          var leafGeo=new THREE.BufferGeometry();
+          leafGeo.setAttribute('position',new THREE.Float32BufferAttribute([bend*0.25,height*0.5,0,bend*0.25+0.07,height*0.55,0.01,bend*0.25+0.16,height*0.32,0],3));leafGeo.computeVertexNormals();
+          reed.add(new THREE.Mesh(leafGeo,reedMat));
+        }
+        reed.position.set(rx+rand(-0.25,0.25),-1.13,rz+rand(-0.3,0.3));
+        reed.rotation.set(rand(-0.15,0.15),rand(0,6.3),rand(-0.18,0.18));riverGroup.add(reed);
+        reeds.push({m:reed,rx:reed.rotation.x,rz:reed.rotation.z,ph:rand(0,6.3),sp:rand(0.8,1.6)});
+      }
+    }
+    // Bleached driftwood: longitudinal fibres, exposed splits and wet lower grain.
+    var grainTex = canvasTex(256, 512, function(ctx, w, h) {
+      ctx.fillStyle = '#b4a994'; ctx.fillRect(0, 0, w, h);
+      for (var f = 0; f < 160; f++) {
+        var x = f * w / 160;
+        ctx.strokeStyle = f % 4 ? 'rgba(76,66,52,0.17)' : 'rgba(235,224,200,0.38)';
+        ctx.lineWidth = f % 7 === 0 ? 1.8 : 0.6;
+        ctx.beginPath(); ctx.moveTo(x, 0);
+        for (var y = 0; y <= h; y += 8) ctx.lineTo(x + Math.sin(y * 0.025 + f) * 1.7 + Math.sin(y * 0.009 + f * 2) * 2.2, y);
+        ctx.stroke();
+      }
+      for (var split = 0; split < 9; split++) {
+        var sx = (split * 37 + 18) % w, sy = (split * 83) % h;
+        ctx.strokeStyle = 'rgba(48,42,34,0.55)'; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + 1.7, sy + 23); ctx.lineTo(sx - 0.8, sy + 58); ctx.stroke();
+      }
+      var damp = ctx.createLinearGradient(0, 0, 0, h);
+      damp.addColorStop(0, 'rgba(48,44,38,0.35)'); damp.addColorStop(0.28, 'rgba(48,44,38,0.12)'); damp.addColorStop(0.65, 'rgba(48,44,38,0)');
+      ctx.fillStyle = damp; ctx.fillRect(0, 0, w, h);
+    });
+    var wood = new THREE.MeshStandardMaterial({ map: grainTex, bumpMap: grainTex, bumpScale: 0.025, color: 0xd5cbb9, roughness: 0.96 });
+    function splitWood(top, bottom, length, sides) {
+      var geo = new THREE.CylinderGeometry(top, bottom, length, sides, 8);
+      var pos = geo.attributes.position;
+      for (var v = 0; v < pos.count; v++) {
+        var x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+        var angle = Math.atan2(z, x), bend = Math.sin(y * 1.4) * bottom * 0.13;
+        var end = Math.abs(y) > length * 0.49 ? Math.sin(angle * 3 + 0.8) * bottom * 0.45 : 0;
+        pos.setXYZ(v, x + bend, y + end, z + Math.sin(y * 2.1) * bottom * 0.09);
+      }
+      geo.computeVertexNormals(); return geo;
+    }
+    var snag = mesh(splitWood(0.12, 0.3, 4.5, 9), wood, 4, -0.6, -28, riverGroup); snag.rotation.set(0.5, 0.3, 1.1);
+    mesh(splitWood(0.05, 0.1, 1.6, 7), wood, 4.8, 0.1, -27.2, riverGroup).rotation.set(0.9, 0.2, 0.4);
+    var log2 = mesh(splitWood(0.1, 0.16, 3, 8), wood, -13.5, -1.1, -12, riverGroup); log2.rotation.set(Math.PI / 2, 0, 0.3);
   })();
   scene.add(riverGroup);
   (function() {
@@ -61346,23 +61422,39 @@ window._dssDisposeWrap('pc-wrap');
   // ============================================================
   var washer = null;
   (function() {
-    var tex = canvasTex(128, 160, function(ctx, w, h) {
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(58,50,46,1)'; ctx.strokeStyle = 'rgba(58,50,46,1)';
-      ctx.shadowColor = 'rgba(58,50,46,0.9)'; ctx.shadowBlur = 5;
+    var tex = canvasTex(256, 320, function(ctx) {
+      ctx.scale(2, 2);
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      // the back: a hunched arc from the hips up and over to the shoulders, facing the water (left)
-      ctx.beginPath(); ctx.moveTo(96, 128); ctx.quadraticCurveTo(104, 60, 62, 48); ctx.quadraticCurveTo(40, 46, 34, 70);
-      ctx.lineTo(44, 118); ctx.quadraticCurveTo(70, 138, 96, 128); ctx.closePath(); ctx.fill();
-      // the head, bowed, and the fall of a headcloth down the back
-      ctx.beginPath(); ctx.ellipse(44, 44, 15, 17, -0.35, 0, 6.3); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(52, 36); ctx.quadraticCurveTo(84, 44, 92, 86); ctx.lineWidth = 9; ctx.stroke();
-      // the arms, down to the water, elbows out
-      ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(46, 76); ctx.quadraticCurveTo(26, 96, 20, 134); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(60, 84); ctx.quadraticCurveTo(38, 104, 28, 136); ctx.stroke();
-      // the knees, drawn up, and the feet in the mud
-      ctx.beginPath(); ctx.ellipse(52, 118, 22, 13, 0.2, 0, 6.3); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(70, 140, 20, 7, 0, 0, 6.3); ctx.fill();
+      // A low crouch: shoulder, rounded back and gathered skirt form one quiet mass.
+      var cloth = ctx.createLinearGradient(32, 56, 102, 132);
+      cloth.addColorStop(0, '#716b60'); cloth.addColorStop(0.44, '#58554d'); cloth.addColorStop(1, '#45443e');
+      ctx.fillStyle = cloth;
+      ctx.beginPath(); ctx.moveTo(40, 65); ctx.bezierCurveTo(51, 48, 73, 52, 86, 72);
+      ctx.bezierCurveTo(96, 89, 93, 102, 99, 122); ctx.quadraticCurveTo(86, 140, 52, 133);
+      ctx.quadraticCurveTo(29, 132, 36, 115); ctx.quadraticCurveTo(48, 99, 40, 65); ctx.fill();
+      // Subdued folds follow the bent back and the knee, rather than outlining her.
+      ctx.strokeStyle = 'rgba(177,166,143,0.22)'; ctx.lineWidth = 1.5;
+      [[60,65,82,88,81,116],[53,77,68,99,58,123],[73,92,92,116,84,130]].forEach(function(f) {
+        ctx.beginPath(); ctx.moveTo(f[0], f[1]); ctx.quadraticCurveTo(f[2], f[3], f[4], f[5]); ctx.stroke();
+      });
+      ctx.strokeStyle = 'rgba(31,33,30,0.25)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(41,119); ctx.quadraticCurveTo(61,108,78,126); ctx.stroke();
+      // Bowed head under a weathered headcloth; no facial detail at this distance.
+      ctx.fillStyle = '#827a69'; ctx.beginPath(); ctx.moveTo(30,48);
+      ctx.bezierCurveTo(29,28,52,24,61,41); ctx.quadraticCurveTo(63,56,76,78);
+      ctx.quadraticCurveTo(57,72,48,56); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#625c50'; ctx.beginPath(); ctx.moveTo(32,46); ctx.quadraticCurveTo(40,48,46,57);
+      ctx.lineTo(37,62); ctx.lineTo(30,55); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(200,187,158,0.23)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(40,32); ctx.quadraticCurveTo(55,37,56,51); ctx.quadraticCurveTo(59,65,68,72); ctx.stroke();
+      // Two sleeves reach down separately, small hands turned into the hide.
+      ctx.strokeStyle = '#625f54'; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(47,73); ctx.quadraticCurveTo(27,95,23,123); ctx.stroke();
+      ctx.strokeStyle = '#757062'; ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.moveTo(59,79); ctx.quadraticCurveTo(43,103,33,124); ctx.stroke();
+      ctx.strokeStyle = '#978875'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(23,124); ctx.lineTo(21,131); ctx.moveTo(33,125); ctx.lineTo(28,133); ctx.stroke();
+      ctx.fillStyle = '#494740'; ctx.beginPath(); ctx.ellipse(75,138,17,5,-0.1,0,6.3); ctx.fill();
     });
     var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.78 });
     washer = new THREE.Sprite(mat);
@@ -61373,7 +61465,24 @@ window._dssDisposeWrap('pc-wrap');
     // her dark on the water beside her, and the hide, a pale patch just under the surface at her hands
     var dark = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTex(40, 34, 30, 0.5, 0.4), transparent: true, depthWrite: false, opacity: 0.32 }));
     dark.scale.set(1.5, 0.5, 1); dark.position.set(11.9, -1.16, -9.2); riverGroup.add(dark);
-    var hideTex = canvasTex(64, 32, function(ctx, w, h) { ctx.clearRect(0, 0, w, h); var g = ctx.createRadialGradient(32, 16, 2, 32, 16, 18); g.addColorStop(0, 'rgba(214,186,140,0.95)'); g.addColorStop(0.6, 'rgba(196,164,118,0.7)'); g.addColorStop(1, 'rgba(180,150,110,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(32, 16, 30, 13, 0.3, 0, 6.3); ctx.fill(); });
+    var hideTex = canvasTex(128, 64, function(ctx) {
+      // An uneven fleece edge and folded centre, greyed by the channel water.
+      ctx.beginPath(); ctx.moveTo(9,31); ctx.quadraticCurveTo(17,17,29,18);
+      ctx.lineTo(24,8); ctx.lineTo(40,14); ctx.quadraticCurveTo(65,8,88,18);
+      ctx.lineTo(104,12); ctx.lineTo(101,24); ctx.quadraticCurveTo(121,30,111,42);
+      ctx.lineTo(116,52); ctx.lineTo(96,48); ctx.quadraticCurveTo(67,58,40,47);
+      ctx.lineTo(24,54); ctx.lineTo(26,43); ctx.quadraticCurveTo(10,44,9,31); ctx.closePath();
+      var wool = ctx.createLinearGradient(0,12,0,55);
+      wool.addColorStop(0,'#c4bcaa'); wool.addColorStop(0.5,'#b5ae9c'); wool.addColorStop(1,'#888c81');
+      ctx.fillStyle=wool; ctx.fill(); ctx.save(); ctx.clip();
+      for(var f=0;f<180;f++) {
+        var x=(f*47)%128,y=(f*29)%64;
+        ctx.strokeStyle=f%3?'rgba(232,225,205,0.18)':'rgba(72,76,66,0.14)';ctx.lineWidth=0.8;
+        ctx.beginPath();ctx.arc(x,y,1.5,0,3.8);ctx.stroke();
+      }
+      ctx.strokeStyle='rgba(68,74,65,0.3)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(29,24);ctx.quadraticCurveTo(57,38,95,32);ctx.stroke();ctx.restore();
+    });
     var hide = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.3), new THREE.MeshBasicMaterial({ map: hideTex, transparent: true, depthWrite: false, opacity: 0.75 }));
     hide.rotation.x = -Math.PI / 2; hide.position.set(11.72, -1.2, -9.1); riverGroup.add(hide);
   })();

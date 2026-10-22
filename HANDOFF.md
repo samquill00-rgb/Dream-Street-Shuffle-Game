@@ -7253,3 +7253,9 @@ Sam requested understated refinement. Replaced flat silhouette texture with high
 
 ## 2026-10-22 — Reeds and riverbank
 Sam requested sparse bleached refinement. Reed clumps reduced 120 to 72, stems 3–8 to 2–4; tapered bent geometry rooted at base, two muted joints, occasional torn leaf, straw colouring; existing wind/reduced-motion loop retained. Bank flat strips replaced by segmented scalloped margins rising from water to sampled plain height, shared grey-to-salt procedural silt texture and subtle bump. No prose changes. Synced; no git. Live desktop isolated scene checked, /tmp/chebar-reeds.png; full-game integration not exercised.
+
+## 2026-10-22 — Distant dead tamarisk
+Sam requested sparse weathered refinement. Replaced straight trunk/four disconnected cylinder branches with continuous tapered crooked limbs, few asymmetric forks, short broken stub and two exposed roots. Shared bleached bark grain/bump and pale closed end-grain caps. Position unchanged, silhouette roughly original size (3.42 high). No foliage/prose changes. Synced; no git. Live desktop isolated scene visually checked, tree stays faint at right horizon; /tmp/chebar-tree.png. Full game route not exercised.
+
+## 2026-10-22 — Scattered stones
+Sam requested less angular, weathered, sparse bleached stones. Six shared smooth deformed sphere pebble variants replace faceted dodecahedra; subtle shared mottled map/bump, mostly pale chalk with quieter grey minority, flattened half-buried profiles. Scatter attempts 700→500, dark fraction 20%→10%. Square crust fragments replaced with thin rounded weathered variants, attempts 140→90. Main distant clickable stone unchanged. Synced; no git. Live isolated desktop scene visually checked, /tmp/chebar-stones.png; full-game route not exercised.

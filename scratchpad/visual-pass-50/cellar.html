@@ -1,0 +1,563 @@
+<!doctype html><meta charset="utf-8"><base href="/"><style>body{margin:0;background:#15100b}#errors{position:fixed;top:0;z-index:99999;color:red;background:white;font:20px monospace}</style><body><div id="errors"></div><div id="cu-container"></div><script src="vendor/three/three.min.js"></script><script>
+window.onerror=function(m){document.getElementById('errors').textContent+=m+' ';};window.dssSceneFailed=function(e){document.getElementById('errors').textContent+=e.message;};
+window._dssThreeRegistry={};window._dssBindScene=function(id,s,r,c){window._dssThreeRegistry[id]={resize:function(){}};};window._dssDisposeWrap=function(){};
+window.dssGhostTex=function(tex){return tex(16,16,function(){});};window.dssRoomScope=function(){return document.body;};window.dssStreetExit=function(){return [];};
+window.dssWayOutArrow=function(){};window.dssRoomPlay=function(o){var target=new THREE.Vector3();var nav=document.createElement('div');nav.style.cssText='position:fixed;bottom:0;left:0;z-index:99998;background:#18140f;color:#ddc9a7';document.body.appendChild(nav);(o.HOTSPOTS||[]).forEach(function(h){if(!h.pos||!h.tgt)return;var b=document.createElement('button');b.textContent=h.name;b.style.cssText='font:11px Georgia;color:#ddc9a7;background:#242018;border:1px solid #544a36';b.onclick=function(){o.camera.position.fromArray(h.pos);target.fromArray(h.tgt);o.camera.lookAt(target);};nav.appendChild(b);});return {words:{},halo:{},curTarget:target,frame:function(){},withGlowsHidden:function(fn){fn();}};};
+</script><script>// Shared small-prop construction for the fifty-object visual pass (2026-10-22).
+// Materials are cached per room; no new interactions, text, timers or dependencies.
+window.dssDetailProps=function(mesh,tex,env,scene){
+ var cache={};
+ function material(color,kind){var key=color+'|'+kind;if(cache[key])return cache[key];
+ var map=tex(128,128,function(c,w,h){c.fillStyle=color;c.fillRect(0,0,w,h);
+ for(var i=0;i<650;i++){c.fillStyle=i%4?'rgba(235,225,202,0.09)':'rgba(22,20,16,0.1)';c.fillRect((i*47)%w,(i*71)%h,kind==='cloth'?1:1+i%4,1);}
+ if(kind==='cloth')for(var y=0;y<h;y+=3){c.fillStyle='rgba(0,0,0,0.07)';c.fillRect(0,y,w,1);}
+ if(kind==='paper')for(var y=3;y<h;y+=9){c.fillStyle='rgba(92,76,47,0.16)';c.fillRect(0,y,w,1);}
+ });
+ return cache[key]=new THREE.MeshStandardMaterial({map:map,roughness:kind==='metal'?0.55:kind==='glaze'?0.3:0.92,metalness:kind==='metal'?0.65:0,envMap:env,envMapIntensity:kind==='metal'?0.35:0.12});}
+ function add(g,m,x,y,z,p){return mesh(g,m,x,y,z,p||scene);}
+ function arc(p,r,t,m,x,y,z,span,turn){var o=add(new THREE.TorusGeometry(r,t,6,28,span||Math.PI*2),m,x,y,z,p);o.rotation.x=Math.PI/2;o.rotation.z=turn||0;return o;}
+ function lathe(points,m,x,y,z,p,segments){return add(new THREE.LatheGeometry(points.map(function(v){return new THREE.Vector2(v[0],v[1]);}),segments||28),m,x,y,z,p);}
+ function group(x,y,z,p){var g=new THREE.Group();g.position.set(x,y,z);(p||scene).add(g);return g;}
+ function wire(points,r,m,p){return add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(function(v){return new THREE.Vector3(v[0],v[1],v[2]);})),Math.max(12,points.length*4),r,5,false),m,0,0,0,p);}
+ var glass=new THREE.MeshPhysicalMaterial({color:0xdce4d9,roughness:0.13,metalness:0,envMap:env,envMapIntensity:0.7,clearcoat:0.5,transparent:true,opacity:0.12,depthWrite:false,side:THREE.DoubleSide});
+ var edgeGlass=glass.clone();edgeGlass.opacity=0.26;edgeGlass.roughness=0.22;
+ function cup(p,r,h){var b=r*0.85;lathe([[0,0],[b,0],[b,0.008],[r,h-0.001],[r-0.0012,h],[b-0.0012,0.009],[0,0.009]],glass,0,0,0,p);arc(p,r-0.0006,0.0007,edgeGlass,0,h,0);add(new THREE.CylinderGeometry(b,b,0.005,28),edgeGlass,0,0.003,0,p);}
+ function ash(x,y,z,p,r){r=r||0.05;var g=group(x,y,z,p),m=material('#77796b','glaze');
+ lathe([[0,0],[r*0.84,0],[r,0.006],[r,0.018],[r*0.91,0.021],[r*0.75,0.008],[0,0.008]],m,0,0,0,g);
+ var dust=material('#77736a','paper'),filter=material('#a27b49','paper'),paper=material('#cfc7b3','paper');
+ for(var i=0;i<2;i++){var e=group((i-0.5)*r*0.55,0.011,(i-0.5)*r*0.3,g);e.rotation.y=i*2.3;
+ var b=add(new THREE.CylinderGeometry(0.003,0.0032,0.015,8),paper,0,0,0,e);b.rotation.z=Math.PI/2;
+ b=add(new THREE.CylinderGeometry(0.0032,0.0032,0.008,8),filter,-0.011,0,0,e);b.rotation.z=Math.PI/2;
+ add(new THREE.SphereGeometry(0.0031,6,5),dust,0.008,0,0,e);}
+ for(var i=0;i<18;i++){var a=i*2.4,d=(i*7%29)/29*r*0.7;var f=add(new THREE.SphereGeometry(0.001,5,4),dust,Math.cos(a)*d,0.009,Math.sin(a)*d,g);f.scale.y=0.4;}return g;}
+ function paperBlock(w,h,d,x,y,z,p,color){var g=group(x,y,z,p),paper=material('#d3c9ac','paper'),cover=material(color||'#43382b','cloth');
+ add(new THREE.BoxGeometry(w,h,d),paper,0,h/2,0,g);
+ add(new THREE.BoxGeometry(w+0.008,0.003,d+0.008),cover,0,0,0,g);add(new THREE.BoxGeometry(w+0.008,0.003,d+0.008),cover,0,h,0,g);
+ add(new THREE.BoxGeometry(0.006,h,d+0.008),cover,-w/2,h/2,0,g);return g;}
+ function bottle(g,h,r,col,seed){seed=Math.abs(seed|0)%4;var bm=new THREE.MeshPhysicalMaterial({color:col,roughness:0.23,metalness:0,envMap:env,envMapIntensity:0.65,clearcoat:0.5,transparent:true,opacity:0.92});
+ var sh=0.74+seed*0.045;lathe([[0,0],[r*0.85,0],[r,h*0.04],[r,h*sh],[r*0.8,h*(sh+0.08)],[r*0.32,h*1.04],[r*0.32,h*1.31],[r*0.38,h*1.33],[0,h*1.33]],bm,0,0,0,g);
+ add(new THREE.CylinderGeometry(r*0.38,r*0.38,h*0.05,12),material(seed%2?'#6a593e':'#34332b','metal'),0,h*1.33,0,g);
+ var key='label'+seed,lm=cache[key];if(!lm){var label=tex(128,128,function(c,w,h){c.fillStyle=['#c5b99b','#cfc4aa','#aaa68e','#b7a47f'][seed];c.fillRect(0,0,w,h);c.strokeStyle='#675a42';c.lineWidth=2;c.strokeRect(7,7,w-14,h-14);c.beginPath();c.ellipse(64,35,12,16,0,0,6.3);c.stroke();for(var n=0;n<5;n++)c.fillRect(24+n%2*8,65+n*8,80-n%2*16,2);for(var n=0;n<250;n++){c.fillStyle=n%3?'rgba(240,225,192,0.25)':'rgba(69,51,25,0.1)';c.fillRect(n*47%w,n*71%h,2,1);}});lm=cache[key]=new THREE.MeshStandardMaterial({map:label,roughness:0.94,side:THREE.DoubleSide});}
+ add(new THREE.CylinderGeometry(r*1.012,r*1.012,h*0.4,20,1,true,-1.35,2.7),lm,0,h*0.43,0,g);}
+ function cloth(w,h,x,y,z,p,col){var geo=new THREE.PlaneGeometry(w,h,14,12),pos=geo.attributes.position;for(var v=0;v<pos.count;v++){var px=pos.getX(v),py=pos.getY(v);pos.setZ(v,Math.sin(px/w*26+py*2)*w*0.018+Math.sin(py/h*9)*w*0.012);}geo.computeVertexNormals();var m=material(col||'#4a4537','cloth').clone();m.side=THREE.DoubleSide;return add(geo,m,x,y,z,p);}
+ function button(p,x,y,z,r,col){var o=add(new THREE.SphereGeometry(1,10,6),material(col||'#8a7d63','metal'),x,y,z,p);o.scale.set(r,r*0.28,r);return o;}
+ return {material:material,arc:arc,lathe:lathe,group:group,wire:wire,cup:cup,ash:ash,paperBlock:paperBlock,bottle:bottle,cloth:cloth,button:button,glass:glass};
+};
+// >>>> DSS ROOM KIT BEGIN
+// ====== THE ROOM KIT — what the six later rooms share (2026-09-30) ======
+// The four rooms above (French, Colony, Pillars, Ronnie's) each carry a
+// copy of the same machinery: the wrap sized to the window, the renderer
+// and the outside scenes' composer, the grain, soot and varnish textures,
+// the environment cube, the planar mirror, the ghosts, the hover halo and
+// the resting glow, the card, the words panel, the camera tweens and the
+// pick. The six rooms built on 2026-09-30 (Coach and Horses, Trisha's,
+// Lackland's office, the Chippy, Copper's cellar, O'Flatterly's) take it
+// from here instead, so each of those blocks is only its room and its
+// close-ups. Nothing about the game is decided here: a room only finds the
+// passage's own links by their wording and presses them from the card.
+// spec: { id, caption, captionColor, bg, fog, exposure, bloom, wash, vignette,
+//         cam(portrait), fov [portrait, landscape], hint, card {fg, bg, border, dim, btn, btnBorder},
+//         build(k) -> { hotspots, frame(t, dt, still) } }
+window.dssRoomKit = function(spec) {
+var ID = spec.id, CONT = ID + '-container', WRAP = ID + '-wrap';
+var active = false, animId = null;
+
+function init() {
+if (active) return;
+active = true;
+if (typeof THREE === 'undefined') {
+var s = document.createElement('script');
+s.src = 'vendor/three/three.min.js';
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(build) : build()); };
+document.head.appendChild(s);
+} else {
+(window.dssLoadPost ? window.dssLoadPost(build) : build());
+}
+}
+
+function build() {
+var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var host = document.getElementById(CONT);
+if (!host) { active = false; return; }
+var wrap = document.createElement('div');
+wrap.id = WRAP;
+function size() {
+var w = Math.max(280, document.documentElement.clientWidth || window.innerWidth);
+var vh = window.innerHeight || 800;
+// the room fills the window below its top edge: the passage's words sit inside it, nothing follows underneath
+var top = 0, el = host; while (el) { top += el.offsetTop; el = el.offsetParent; }
+var pad = 0; el = host; while (el && el !== document.body) { var cs = getComputedStyle(el); pad += (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.marginBottom) || 0); el = el.parentNode; }
+var h = Math.round(Math.max(360, vh - top - pad - 2));
+return { w: w, h: h };
+}
+var sz = size();
+var bgHex = '#' + ('000000' + (spec.bg || 0x050304).toString(16)).slice(-6);
+wrap.style.cssText = 'position:relative;width:100vw;margin-left:calc(50% - 50vw);height:' + sz.h + 'px;z-index:0;isolation:isolate;background:' + bgHex + ';overflow:hidden;';
+var canvas = document.createElement('canvas');
+canvas.width = sz.w; canvas.height = sz.h;
+canvas.style.cssText = 'display:block;position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;';
+wrap.appendChild(canvas);
+var wash = document.createElement('div');
+wash.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9000;background:' + (spec.wash || 'linear-gradient(180deg,rgba(10,8,6,0.3) 0%,rgba(6,5,4,0.05) 35%,rgba(6,5,4,0.05) 60%,rgba(3,2,2,0.45) 100%)') + ';';
+wrap.appendChild(wash);
+var vig = document.createElement('div');
+vig.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9001;background:' + (spec.vignette || 'radial-gradient(ellipse at 50% 44%,transparent 24%,rgba(0,0,0,0.74) 100%)') + ';';
+wrap.appendChild(vig);
+var grain = document.createElement('div');
+grain.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9002;opacity:0.06;mix-blend-mode:overlay;background:url(' + (window.dssGetGrainURL ? window.dssGetGrainURL() : '') + ');';
+wrap.appendChild(grain);
+var loc = document.createElement('div');
+loc.className = 'dss-room-caption';
+loc.textContent = spec.caption || '';
+loc.style.cssText = 'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font:12px \'Courier New\',monospace;color:' + (spec.captionColor || 'rgba(200,190,160,0.25)') + ';letter-spacing:3px;white-space:nowrap;z-index:9003;pointer-events:none;';
+wrap.appendChild(loc);
+host.appendChild(wrap);
+sz = size(); wrap.style.height = sz.h + 'px';
+setTimeout(function() { var r = window._dssThreeRegistry && window._dssThreeRegistry[WRAP]; if (r && r.resize) r.resize(); }, 1600);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(spec.bg || 0x050304);
+if (spec.fog) scene.fog = new THREE.FogExp2(spec.fog[0], spec.fog[1]);
+var aspect = sz.w / sz.h;
+var portrait = aspect < 1.4;
+var FOV = spec.fov || [92, 70];
+var camera = new THREE.PerspectiveCamera(portrait ? FOV[0] : FOV[1], aspect, 0.05, 40);
+var CAM = spec.cam(portrait);
+camera.position.set(CAM.x, CAM.y, CAM.z);
+
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+renderer.setSize(sz.w, sz.h);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, sz.w < 600 ? 1.25 : 1.5));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = spec.exposure || 0.66;
+window._dssBindScene(WRAP, scene, renderer, camera);
+var origResize = window._dssThreeRegistry[WRAP].resize;
+window._dssThreeRegistry[WRAP].resize = function() {
+sz = size(); wrap.style.height = sz.h + 'px';
+camera.aspect = sz.w / sz.h;
+camera.fov = camera.aspect < 1.4 ? FOV[0] : FOV[1];
+camera.updateProjectionMatrix();
+renderer.setSize(sz.w, sz.h);
+};
+window.removeEventListener('resize', origResize);
+window.addEventListener('resize', window._dssThreeRegistry[WRAP].resize);
+// The outside scenes' bloom and grade, at the room's own size.
+var composer = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, spec.bloom || { bloomStrength: 0.38, bloomRadius: 0.6, bloomThreshold: 0.7 }) : null;
+if (composer) { composer.setSize(sz.w, sz.h); var rs = window._dssThreeRegistry[WRAP].resize; window._dssThreeRegistry[WRAP].resize = function() { rs(); composer.setSize(sz.w, sz.h); }; window.removeEventListener('resize', rs); window.addEventListener('resize', window._dssThreeRegistry[WRAP].resize); }
+
+function tex(w, h, fn) {
+var c = document.createElement('canvas'); c.width = w; c.height = h;
+var cx = c.getContext('2d'); fn(cx, w, h);
+var t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearMipmapLinearFilter;
+t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+return t;
+}
+function rnd(seed) { var x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function mesh(geo, mat, x, y, z, parent) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); (parent || scene).add(m); return m; }
+
+// ---------- TEXTURES AND MATERIALS: the same grain, soot and varnish as the French ----------
+function woodTex(base, grain, seed) {
+return tex(512, 512, function(cx, w, h) {
+cx.fillStyle = base; cx.fillRect(0, 0, w, h);
+for (var i = 0; i < 420; i++) {
+var y = rnd(seed + i * 7) * h, bend = 2 + rnd(i + seed * 5) * 11;
+cx.strokeStyle = i % 5 ? grain : '#a8743f'; cx.globalAlpha = 0.035 + rnd(i + seed) * 0.1;
+cx.lineWidth = 0.4 + rnd(i * 3) * 1.2; cx.beginPath();
+for (var x = 0; x <= w; x += 8) {
+var yy = y + Math.sin(x * 0.009 + y * 0.018) * bend + Math.sin(x * 0.033 + y) * 0.8;
+if (!x) cx.moveTo(x, yy); else cx.lineTo(x, yy);
+} cx.stroke();
+}
+cx.globalAlpha = 1;
+for (var n = 0; n < 12; n++) {
+var xx = rnd(n + seed * 21) * w, yy = rnd(n + seed * 19) * h;
+var g = cx.createRadialGradient(xx, yy, 0, xx, yy, 90);
+g.addColorStop(0, 'rgba(14,6,2,0.19)'); g.addColorStop(1, 'rgba(14,6,2,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+}
+cx.strokeStyle = 'rgba(216,165,103,0.13)'; cx.lineWidth = 0.6;
+for (var n = 0; n < 65; n++) { var xx = rnd(n * 9 + seed) * w, yy = rnd(n * 17) * h; cx.beginPath(); cx.moveTo(xx, yy); cx.lineTo(xx + 3 + rnd(n) * 48, yy + 0.3); cx.stroke(); }
+});
+}
+function paintTex(base, seed, warm) {
+return tex(512, 512, function(cx, w, h) {
+cx.fillStyle = base; cx.fillRect(0, 0, w, h);
+for (var n = 0; n < 28; n++) {
+var x = rnd(n + seed) * w, y = rnd(n * 3 + seed) * h, r = 30 + rnd(n * 7) * 130;
+var g = cx.createRadialGradient(x, y, 0, x, y, r);
+g.addColorStop(0, n % 3 ? 'rgba(20,12,4,0.15)' : (warm || 'rgba(150,110,50,0.1)')); g.addColorStop(1, 'rgba(60,32,8,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+}
+var soot = cx.createLinearGradient(0, 0, 0, h); soot.addColorStop(0, 'rgba(18,10,4,0.3)'); soot.addColorStop(0.3, 'rgba(38,20,6,0)'); soot.addColorStop(1, 'rgba(18,10,4,0.14)'); cx.fillStyle = soot; cx.fillRect(0, 0, w, h);
+for (var i = 0; i < 9000; i++) { cx.fillStyle = i % 2 ? 'rgba(20,12,4,0.05)' : 'rgba(200,180,140,0.04)'; cx.fillRect(rnd(i + seed) * w, rnd(i * 3 + seed) * h, 1, 1); }
+});
+}
+// A small canvas-made room environment: what the metal, the glass and the varnish reflect.
+function makeEnv(top, mid, low, lamp) {
+var faces = [];
+for (var ef = 0; ef < 6; ef++) {
+var ec = document.createElement('canvas'); ec.width = ec.height = 128;
+var ex = ec.getContext('2d'), eg = ex.createLinearGradient(0, 0, 0, 128);
+eg.addColorStop(0, ef === 2 ? top : mid); eg.addColorStop(0.5, mid); eg.addColorStop(1, low); ex.fillStyle = eg; ex.fillRect(0, 0, 128, 128);
+if (ef !== 3) {
+for (var el = 0; el < 2; el++) {
+var lx = 28 + el * 73, ly = ef === 2 ? 64 : 30;
+var gl = ex.createRadialGradient(lx, ly, 0, lx, ly, 20); gl.addColorStop(0, '#ffe6b8'); gl.addColorStop(0.14, lamp || '#d9b070'); gl.addColorStop(0.4, '#8a5f2c'); gl.addColorStop(1, 'rgba(96,63,25,0)'); ex.fillStyle = gl; ex.fillRect(0, 0, 128, 128);
+} ex.fillStyle = 'rgba(190,120,70,0.14)'; ex.fillRect(4, 84, 120, 10);
+} faces.push(ec);
+}
+var env = new THREE.CubeTexture(faces); env.needsUpdate = true; return env;
+}
+var envSpec = spec.env || ['#5a4028', '#3e2e1e', '#0a0705', '#d9b070'];
+var roomEnv = makeEnv(envSpec[0], envSpec[1], envSpec[2], envSpec[3]);
+var grainA = woodTex('#3d2416', '#150905', 1), grainB = woodTex('#2a1810', '#0e0704', 2), grainC = woodTex('#4a2c1a', '#1a0c06', 3);
+var M = {
+oak: new THREE.MeshStandardMaterial({ map: grainA, bumpMap: grainA, bumpScale: 0.003, roughnessMap: grainA, roughness: 0.62, envMap: roomEnv, envMapIntensity: 0.4, metalness: 0.04 }),
+darkWood: new THREE.MeshStandardMaterial({ map: grainB, bumpMap: grainB, bumpScale: 0.006, roughness: 0.58, envMap: roomEnv, envMapIntensity: 0.22 }),
+shelfWood: new THREE.MeshStandardMaterial({ map: grainC, bumpMap: grainC, bumpScale: 0.002, roughnessMap: grainC, roughness: 0.5, envMap: roomEnv, envMapIntensity: 0.5, metalness: 0.06 }),
+brass: new THREE.MeshStandardMaterial({ color: 0xb99a60, roughness: 0.3, metalness: 0.82, envMap: roomEnv, envMapIntensity: 0.72 }),
+black: new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.15, metalness: 0.2, envMap: roomEnv, envMapIntensity: 0.8 }),
+chrome: new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.22, metalness: 0.95, envMap: roomEnv, envMapIntensity: 1.0 }),
+glass: new THREE.MeshPhysicalMaterial({ color: 0xf0eadc, roughness: 0.09, metalness: 0.04, envMap: roomEnv, envMapIntensity: 1.1, clearcoat: 1, transparent: true, opacity: 0.34 }),
+paper: new THREE.MeshStandardMaterial({ color: 0xe8e0d0, roughness: 0.95 }),
+bakelite: new THREE.MeshStandardMaterial({ color: 0x16120f, roughness: 0.26, metalness: 0.08, envMap: roomEnv, envMapIntensity: 0.55 }),
+hidden: new THREE.MeshBasicMaterial({ visible: false })
+};
+
+// ---------- A PLANAR REFLECTION, drawn only when the view changes ----------
+var mirrors = [];
+function makeMirror(m, normal, sizePx, tint, extra) {
+extra = extra || {};
+var target = new THREE.WebGLRenderTarget(sizePx, sizePx, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+var mcam = camera.clone(), mat4 = new THREE.Matrix4(), n = normal.clone().normalize();
+m.material = new THREE.ShaderMaterial({
+uniforms: { reflection: { value: target.texture }, reflectionMatrix: { value: mat4 }, time: { value: 0 }, tint: { value: tint } },
+transparent: !!extra.transparent, depthWrite: !extra.transparent,
+vertexShader: 'uniform mat4 reflectionMatrix; varying vec4 reflected; varying vec2 faceUV; void main(){ faceUV=uv; vec4 wp=modelMatrix*vec4(position,1.0); reflected=reflectionMatrix*wp; gl_Position=projectionMatrix*viewMatrix*wp; }',
+fragmentShader: 'uniform sampler2D reflection; uniform float time; uniform vec3 tint; varying vec4 reflected; varying vec2 faceUV; void main(){ vec4 r=reflected; ' + (extra.ripple ? 'r.xy+=vec2(sin(faceUV.y*38.0+time*1.1)*0.004+sin(faceUV.x*23.0-time*0.7)*0.003, cos(faceUV.x*31.0+time*0.9)*0.004)*r.w;' : '') + ' vec3 c=texture2DProj(reflection,r).rgb; float edge=smoothstep(0.0,' + (extra.edge || '0.07') + ',min(min(faceUV.x,1.0-faceUV.x),min(faceUV.y,1.0-faceUV.y))); float stain=0.5+0.5*sin(faceUV.x*193.0+sin(faceUV.y*117.0)*3.0); ' + (extra.transparent ? 'c=c*tint; float a=edge*(0.62+0.1*stain); gl_FragColor=vec4(c,a);' : 'c=mix(vec3(0.05,0.033,0.019),c*tint,0.65+0.35*edge); c*=1.0-(1.0-edge)*stain*0.3; gl_FragColor=vec4(c,1.0);') + '\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n}'
+});
+m.geometry.addEventListener('dispose', function() { target.dispose(); });
+var lastAspect = 0, lastP = new THREE.Vector3(999, 999, 999), lastT = new THREE.Vector3(999, 999, 999), p0 = new THREE.Vector3();
+function reflect(v) { var d = v.clone().sub(p0).dot(n); return v.clone().sub(n.clone().multiplyScalar(2 * d)); }
+var o = { mesh: m, update: function(tgt, t) {
+m.material.uniforms.time.value = t;
+if (lastAspect === camera.aspect && lastP.distanceToSquared(camera.position) < 0.0025 && lastT.distanceToSquared(tgt) < 0.0025) return;
+lastAspect = camera.aspect; lastP.copy(camera.position); lastT.copy(tgt);
+m.getWorldPosition(p0);
+mcam.copy(camera); mcam.position.copy(reflect(camera.position)); mcam.up.copy(reflect(camera.position.clone().add(new THREE.Vector3(0, 1, 0))).sub(mcam.position));
+mcam.lookAt(reflect(tgt)); mcam.updateMatrixWorld();
+var clip = new THREE.Plane(n.clone(), -p0.dot(n)).applyMatrix4(mcam.matrixWorldInverse);
+var cp = new THREE.Vector4(clip.normal.x, clip.normal.y, clip.normal.z, clip.constant);
+var pm = mcam.projectionMatrix.elements, cq = new THREE.Vector4((Math.sign(cp.x) + pm[8]) / pm[0], (Math.sign(cp.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
+cp.multiplyScalar(2 / cp.dot(cq)); pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1; pm[14] = cp.w;
+mat4.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mcam.projectionMatrix).multiply(mcam.matrixWorldInverse);
+var oldTarget = renderer.getRenderTarget(), oldTone = renderer.toneMapping;
+mirrors.forEach(function(q) { q.mesh.visible = false; });
+renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(target); renderer.render(scene, mcam);
+renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(q) { q.mesh.visible = true; });
+} };
+mirrors.push(o); return o;
+}
+
+// ---------- LIGHT SPRITES, CONTACT SHADOWS, GHOSTS ----------
+var glowTex = tex(128, 128, function(cx, w, h) { var g = cx.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2); g.addColorStop(0, 'rgba(255,225,160,0.9)'); g.addColorStop(0.3, 'rgba(255,190,100,0.35)'); g.addColorStop(0.7, 'rgba(220,140,50,0.08)'); g.addColorStop(1, 'rgba(180,100,30,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+function glow(x, y, z, sc, op, col, parent) { var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col || 0xffffff, transparent: true, opacity: op || 0.6, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false, toneMapped: false })); sp.scale.set(sc, sc, 1); sp.position.set(x, y, z); (parent || scene).add(sp); return sp; }
+var contactTex = tex(64, 64, function(cx, w, h) { var g = cx.createRadialGradient(32, 32, 3, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,0.36)'); g.addColorStop(0.45, 'rgba(0,0,0,0.2)'); g.addColorStop(1, 'rgba(0,0,0,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+function contact(x, y, z, s) { var sh = mesh(new THREE.PlaneGeometry(s, s), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false }), x, y + 0.004, z); sh.rotation.x = -Math.PI / 2; return sh; }
+function ghostTex(seed, seated, bright) { return window.dssGhostTex(tex, rnd, seed, seated, bright); }
+var ghosts = [];
+function ghost(x, y, z, seed, base, seated, bright, scale) {
+var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ghostTex(seed, seated, bright), transparent: true, opacity: base, depthWrite: false, blending: bright ? THREE.NormalBlending : THREE.AdditiveBlending }));
+var sc = scale || 1; sp.scale.set(0.9 * sc, 1.8 * sc, 1); sp.position.set(x, y + 0.9 * sc, z); scene.add(sp);
+var hit = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * sc, 0.2 * sc, (seated ? 1.1 : 1.5) * sc, 8), M.hidden);
+hit.position.set(x, y + (seated ? 0.7 : 0.95) * sc, z); scene.add(hit);
+var g = { sp: sp, hit: hit, base: base, ph: seed * 2.1 }; ghosts.push(g); return g;
+}
+
+// ---------- THE PASSAGE'S OWN LINKS ----------
+var play = null;
+function passageLinks(sel) {
+var pass = window.dssRoomScope(host);
+if (!pass) return [];
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && !l.closest('.dss-key-offer') && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+}
+function lilyHook(n) { var pass = window.dssRoomScope(host); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
+function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
+function byPrefix(prefix) { return passageLinks('tw-link').filter(function(l) { return l.textContent.trim().indexOf(prefix) === 0; }); }
+function modalProse() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); }
+
+var k = { scene: scene, camera: camera, renderer: renderer, tex: tex, rnd: rnd, mesh: mesh, woodTex: woodTex, paintTex: paintTex, roomEnv: roomEnv, M: M, grain: [grainA, grainB, grainC],
+makeMirror: makeMirror, glow: glow, glowTex: glowTex, contact: contact, ghost: ghost, portrait: portrait, still: still, host: host, wrap: wrap,
+passageLinks: passageLinks, byText: byText, byPrefix: byPrefix, lilyHook: lilyHook, modalProse: modalProse };
+var built = spec.build(k) || {};
+var HOTSPOTS = built.hotspots || [];
+renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
+
+// ---------- THE CLOSE-UPS, AND THE PATHS ----------
+// ---------- THE CLOSE-UPS, AND THE PATHS: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: wrap, canvas: canvas, host: host, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: still,
+card: spec.card, hint: spec.hint, state: function() { return { active: active, animId: animId }; } });
+var words = play.words, curTarget = play.curTarget;
+
+// ---------- FRAMES ----------
+var clock = new THREE.Clock();
+function animate() {
+animId = requestAnimationFrame(animate);
+// a throw in the frame ends the room, not the night (dssSceneFailed)
+try { frameOnce(); } catch (err) { cancelAnimationFrame(animId); animId = null; if (window.dssSceneFailed) window.dssSceneFailed(err, ID); else throw err; }
+}
+function frameOnce() {
+var dt = Math.min(0.1, clock.getDelta());
+var t = still ? 0 : clock.getElapsedTime();
+play.frame(t, dt);
+if (!still) {
+for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
+}
+if (built.frame) built.frame(t, dt, still);
+play.withGlowsHidden(function() { for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t); });
+if (composer) composer.render(); else renderer.render(scene, camera);
+}
+animate();
+}
+
+// 2026-10-12 (the venues audit): a self-link ("Back to the bar" in the Coach) swaps in a fresh container within one tick;
+// a new container rebuilds the room, as the French/Colony/Pillars/Ronnie's watchers now do
+var seenHost = null;
+setInterval(function() {
+var container = document.getElementById(CONT);
+if (container && active && seenHost && container !== seenHost) {
+active = false;
+if (animId) { cancelAnimationFrame(animId); animId = null; }
+window._dssDisposeWrap(WRAP);
+}
+if (container && !active) {
+seenHost = container;
+init();
+} else if (!container) {
+active = false;
+if (animId) { cancelAnimationFrame(animId); animId = null; }
+window._dssDisposeWrap(WRAP);
+}
+}, 300);
+};
+// ====== INSIDE COPPER'S CELLAR — THE ROOM, WITH CLOSE-UPS ======
+// 2026-09-30. Built from the Copper's Lair approach scene (the cellar under
+// the Colony: block walls with their drips, a concrete floor, joists and
+// pipes, one bare bulb on its wire, the table at the far end, the
+// chesterfield on its rug, the puddle) and from what the passage says: Copper
+// in front of you, Quiet Frankie at the table, Ashton Granger opposite him.
+// The room sits at the top of Turn to Copper (#cu-container) and is its
+// navigation: Copper takes "Say nothing" and the two names; Ashton takes
+// the look you are not supposed to give her. Frankie, the bulb, the stairs
+// and the chesterfield are inspections, their card words pink placeholders
+// for Sam. The password, when he knows the words, stays in the panel.
+window.dssRoomKit({
+id: 'cu', caption: 'A CELLAR UNDER DEAN STREET', captionColor: 'rgba(200,190,150,0.22)',
+bg: 0x050506, fog: [0x06060a, 0.05], exposure: 0.74, bloom: { bloomStrength: 0.42, bloomRadius: 0.55, bloomThreshold: 0.6 },
+env: ['#4a4030', '#2a2820', '#08080a', '#e0cfa0'],
+wash: 'linear-gradient(180deg,rgba(8,8,10,0.35) 0%,rgba(6,6,8,0.05) 35%,rgba(6,6,8,0.05) 60%,rgba(2,2,3,0.5) 100%)',
+card: { fg: 'rgba(222,214,190,0.92)', bg: 'rgba(6,6,8,0.82)', border: 'rgba(190,180,140,0.3)', dim: 'rgba(190,185,150,0.5)', btn: 'rgba(230,222,190,0.95)', btnBorder: 'rgba(190,180,140,0.45)' },
+cam: function(portrait) { return portrait ? { x: 0.2, y: 1.5, z: 5.2, tx: 0.0, ty: 1.05, tz: -2.6 } : { x: 0.3, y: 1.45, z: 4.4, tx: 0.0, ty: 1.05, tz: -2.6 }; },
+build: function(k) {
+var THREE_ = THREE, scene = k.scene, mesh = k.mesh, tex = k.tex, rnd = k.rnd, M = k.M;
+var detail=window.dssDetailProps(mesh,tex,k.roomEnv,scene);
+var W = 6.0, D = 12.0, H = 2.8;
+// ---------- MATERIALS: concrete blocks with their drips, the stained floor, the stained ceiling ----------
+function blockTex(seed) {
+return tex(512, 256, function(cx, cw, ch) {
+cx.fillStyle = '#585550'; cx.fillRect(0, 0, cw, ch);
+var blockH = 32, blockW = 64, n = 0;
+for (var row = 0; row < ch / blockH + 1; row++) { var ox = (row % 2 === 0) ? 0 : blockW / 2;
+for (var col = -1; col < cw / blockW + 1; col++) { var bx = col * blockW + ox, by = row * blockH, shade = 72 + Math.floor(rnd(seed + n++) * 22);
+cx.fillStyle = 'rgb(' + shade + ',' + (shade - 2) + ',' + (shade - 6) + ')'; cx.fillRect(bx + 1, by + 1, blockW - 2, blockH - 2);
+cx.strokeStyle = 'rgba(40,38,35,0.7)'; cx.lineWidth = 1.5; cx.strokeRect(bx, by, blockW, blockH); } }
+for (var i = 0; i < 30; i++) { cx.fillStyle = 'rgba(50,45,35,' + (rnd(seed * 3 + i) * 0.3) + ')'; cx.beginPath(); cx.arc(rnd(seed + i * 7) * cw, rnd(seed + i * 11) * ch, rnd(i) * 30 + 5, 0, Math.PI * 2); cx.fill(); }
+for (var d = 0; d < 6; d++) { var dx = 40 + rnd(seed * 5 + d) * (cw - 80), dW = 3 + rnd(d + seed) * 5, dL = ch * (0.4 + rnd(d * 3 + seed) * 0.6);
+var grd = cx.createLinearGradient(dx, 0, dx, dL); grd.addColorStop(0, 'rgba(20,18,12,0.85)'); grd.addColorStop(0.3, 'rgba(25,20,14,0.7)'); grd.addColorStop(0.7, 'rgba(20,18,12,0.4)'); grd.addColorStop(1, 'rgba(20,18,12,0)');
+cx.fillStyle = grd; cx.beginPath(); cx.moveTo(dx - dW / 2, 0); cx.quadraticCurveTo(dx + dW, dL * 0.3, dx - dW * 0.3, dL * 0.6); cx.quadraticCurveTo(dx + dW * 0.5, dL * 0.85, dx, dL); cx.lineTo(dx + dW, dL); cx.quadraticCurveTo(dx + dW * 1.5, dL * 0.85, dx + dW * 1.3, dL * 0.6); cx.quadraticCurveTo(dx - dW * 0.5, dL * 0.3, dx + dW / 2, 0); cx.closePath(); cx.fill();
+cx.fillStyle = 'rgba(80,75,65,0.2)'; cx.fillRect(dx - dW / 2, 0, dW, 8); }
+var soot = cx.createLinearGradient(0, 0, 0, ch); soot.addColorStop(0, 'rgba(10,8,6,0.35)'); soot.addColorStop(0.5, 'rgba(10,8,6,0)'); soot.addColorStop(1, 'rgba(10,8,6,0.3)'); cx.fillStyle = soot; cx.fillRect(0, 0, cw, ch);
+});
+}
+function wallMat(seed, rep) { var t = blockTex(seed); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, 1); return new THREE.MeshStandardMaterial({ map: t, bumpMap: t, bumpScale: 0.012, roughness: 0.92 }); }
+var floorTex = tex(512, 512, function(cx, w, h) {
+cx.fillStyle = '#3a3835'; cx.fillRect(0, 0, w, h);
+for (var i = 0; i < 200; i++) { var shade = Math.floor(rnd(i) * 20) + 45; cx.fillStyle = 'rgba(' + shade + ',' + shade + ',' + (shade - 5) + ',0.4)'; cx.fillRect(rnd(i * 3) * w, rnd(i * 5) * h, rnd(i * 7) * 30 + 5, rnd(i * 9) * 30 + 5); }
+for (var i = 0; i < 8; i++) { cx.strokeStyle = 'rgba(30,28,25,0.5)'; cx.lineWidth = 0.5 + rnd(i); cx.beginPath(); cx.moveTo(rnd(i * 2) * w, rnd(i * 4) * h); cx.lineTo(rnd(i * 6) * w, rnd(i * 8) * h); cx.stroke(); }
+for (var i = 0; i < 12; i++) { var sx = rnd(i * 13) * w, sy = rnd(i * 17) * h, sr = 14 + rnd(i * 19) * 46; var sg = cx.createRadialGradient(sx, sy, 0, sx, sy, sr); sg.addColorStop(0, 'rgba(18,16,13,' + (0.22 + rnd(i) * 0.22).toFixed(2) + ')'); sg.addColorStop(1, 'rgba(18,16,13,0)'); cx.fillStyle = sg; cx.fillRect(sx - sr, sy - sr, sr * 2, sr * 2); }
+for (var i = 0; i < 6; i++) { var gx = rnd(i * 23) * w, gy = rnd(i * 29) * h, gl = 40 + rnd(i * 31) * 90, ga = rnd(i * 37) * Math.PI; cx.strokeStyle = 'rgba(22,20,17,' + (0.18 + rnd(i * 41) * 0.15).toFixed(2) + ')'; cx.lineWidth = 3 + rnd(i * 43) * 5; cx.beginPath(); cx.moveTo(gx, gy); cx.lineTo(gx + Math.cos(ga) * gl, gy + Math.sin(ga) * gl); cx.stroke(); }
+});
+floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(1, 2);
+var ceilTex = tex(512, 256, function(cx, cw, ch) { cx.fillStyle = '#4a4038'; cx.fillRect(0, 0, cw, ch); for (var i = 0; i < 15; i++) { cx.fillStyle = 'rgba(60,50,35,' + (rnd(i) * 0.3 + 0.1) + ')'; cx.beginPath(); cx.ellipse(rnd(i * 3) * cw, rnd(i * 5) * ch, rnd(i * 7) * 50 + 20, rnd(i * 9) * 20 + 10, 0, 0, Math.PI * 2); cx.fill(); } for (var wr = 0; wr < 5; wr++) { var wx = rnd(wr * 11) * cw, wy = rnd(wr * 13) * ch, wrr = 12 + rnd(wr * 17) * 26; cx.strokeStyle = 'rgba(60,48,32,0.35)'; cx.lineWidth = 1.5; cx.beginPath(); cx.arc(wx, wy, wrr, 0, Math.PI * 2); cx.stroke(); cx.fillStyle = 'rgba(52,42,30,0.12)'; cx.fill(); } });
+ceilTex.wrapS = ceilTex.wrapT = THREE.RepeatWrapping; ceilTex.repeat.set(1, 2);
+var woodBeam = new THREE.MeshStandardMaterial({ map: k.grain[2], color: 0x9a7a50, roughness: 0.85 });
+var pipeMat = new THREE.MeshStandardMaterial({ color: 0x555550, roughness: 0.55, metalness: 0.35, envMap: k.roomEnv, envMapIntensity: 0.4 });
+var ironMat = new THREE.MeshStandardMaterial({ color: 0x2a2a28, roughness: 0.7, metalness: 0.4, envMap: k.roomEnv, envMapIntensity: 0.3 });
+var wireMat = new THREE.MeshStandardMaterial({ color: 0x888878, roughness: 0.7 });
+var concrete = new THREE.MeshStandardMaterial({ color: 0x484540, roughness: 0.92 });
+// ---------- THE ROOM ----------
+var floor = mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTex, bumpMap: floorTex, bumpScale: 0.01, roughness: 0.9 }), 0, 0, 0); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+var ceil = mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.9 }), 0, H, 0); ceil.rotation.x = Math.PI / 2;
+var left = mesh(new THREE.PlaneGeometry(D, H), wallMat(1, 3), -W / 2, H / 2, 0); left.rotation.y = Math.PI / 2; left.receiveShadow = true;
+var right = mesh(new THREE.PlaneGeometry(D, H), wallMat(2, 3), W / 2, H / 2, 0); right.rotation.y = -Math.PI / 2; right.receiveShadow = true;
+var far = mesh(new THREE.PlaneGeometry(W, H), wallMat(3, 1.5), 0, H / 2, -D / 2); far.receiveShadow = true;
+var near = mesh(new THREE.PlaneGeometry(W, H), wallMat(4, 1.5), 0, H / 2, D / 2); near.rotation.y = Math.PI;
+// joists, the two long bearers, the posts that hold the house up
+for (var jz = -D / 2 + 1; jz <= D / 2 - 1; jz += 1.8) { var j = mesh(new THREE.BoxGeometry(W - 0.2, 0.12, 0.08), woodBeam, 0, H - 0.06, jz); j.castShadow = true; }
+mesh(new THREE.BoxGeometry(0.15, 0.2, D - 0.4), woodBeam, -1.5, H - 0.1, 0); mesh(new THREE.BoxGeometry(0.15, 0.2, D - 0.4), woodBeam, 1.5, H - 0.1, 0);
+[[-1.2, 1.5], [1.2, -1.5], [-1.3, -4.6]].forEach(function(p) { var post = mesh(new THREE.BoxGeometry(0.13, H, 0.13), woodBeam, p[0], H / 2, p[1]); post.castShadow = true; });
+// pipes along the walls, a junction box, the wire stapled to the joist
+var p1 = mesh(new THREE.CylinderGeometry(0.04, 0.04, D - 1, 8), pipeMat, -W / 2 + 0.15, H - 0.3, 0); p1.rotation.x = Math.PI / 2;
+var p2 = mesh(new THREE.CylinderGeometry(0.05, 0.05, D - 3, 8), pipeMat, W / 2 - 0.2, 2.35, -0.5); p2.rotation.x = Math.PI / 2;
+mesh(new THREE.CylinderGeometry(0.04, 0.04, H, 8), ironMat, W / 2 - 0.15, H / 2, 2.4);
+mesh(new THREE.BoxGeometry(0.3, 0.3, 0.5), ironMat, W / 2 - 0.25, H - 0.5, 1); mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), ironMat, W / 2 - 0.15, H - 0.5, 0.3);
+for (var cp = -4; cp < 5; cp += 4) { var cpipe = mesh(new THREE.CylinderGeometry(0.02, 0.02, W * 0.6, 6), wireMat, 0, H - 0.15, cp); cpipe.rotation.z = Math.PI / 2; }
+// ---------- THE BULB, on its wire, with the air it lights ----------
+var bulbG = new THREE.Group(); bulbG.position.set(0, H - 0.05, 0.6); scene.add(bulbG);
+mesh(new THREE.CylinderGeometry(0.005, 0.005, 1.0, 4), wireMat, 0, -0.5, 0, bulbG);
+mesh(new THREE.CylinderGeometry(0.025, 0.02, 0.08, 8), ironMat, 0, -1.0, 0, bulbG);
+var bulbGlass = new THREE.MeshStandardMaterial({ color: 0xeeeee8, roughness: 0.2, emissive: 0xe8d8b0, emissiveIntensity: 1.4, transparent: true, opacity: 0.9, toneMapped: false });
+mesh(new THREE.SphereGeometry(0.06, 12, 8), bulbGlass, 0, -1.08, 0, bulbG);
+var bulbLight = new THREE.PointLight(0xd8c8a0, 1.35, 16, 1.4); bulbLight.position.set(0, -1.12, 0); bulbLight.castShadow = true; bulbLight.shadow.mapSize.set(512, 512); bulbLight.shadow.radius = 6; bulbLight.shadow.bias = -0.002; bulbG.add(bulbLight);
+var bulbGlow = k.glow(0, -1.08, 0, 0.7, 0.55, 0xf0e0b0, bulbG);
+var shaft = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.9, 20, 1, true), new THREE.MeshBasicMaterial({ color: 0xbbaa90, transparent: true, opacity: 0.045, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })); shaft.position.set(0, -1.12 - 0.95, 0); bulbG.add(shaft);
+var wirePts = [new THREE.Vector3(0, H - 1.0, 0.6), new THREE.Vector3(0.8, H - 0.6, 0.6), new THREE.Vector3(1.8, H - 0.3, 0.6), new THREE.Vector3(W / 2 - 0.1, H - 0.2, 0.6)];
+scene.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wirePts), 20, 0.008, 4, false), wireMat));
+var bulbHit = mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.3, 8), M.hidden, 0, -0.65, 0, bulbG);
+var hazeTex = tex(128, 128, function(cx, w, h) { var g = cx.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(160,150,130,0.3)'); g.addColorStop(0.55, 'rgba(140,130,115,0.12)'); g.addColorStop(1, 'rgba(120,112,100,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+var haze = [];
+for (var hz = 0; hz < 6; hz++) { var hs = new THREE.Sprite(new THREE.SpriteMaterial({ map: hazeTex, transparent: true, opacity: 0.07 + rnd(hz) * 0.05, depthWrite: false })); hs.position.set((rnd(hz * 3) - 0.5) * 5, 0.9 + rnd(hz * 5) * 1.3, -2 + rnd(hz * 7) * 5); var hsc = 3.5 + rnd(hz * 9) * 3; hs.scale.set(hsc, hsc * 0.6, 1); hs.userData = { ph: rnd(hz * 11) * 6.28, sp: 0.12 + rnd(hz * 13) * 0.2, base: hs.material.opacity }; scene.add(hs); haze.push(hs); }
+var moteTex = tex(32, 32, function(cx, w, h) { var g = cx.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, 'rgba(255,240,210,1)'); g.addColorStop(0.35, 'rgba(255,230,190,0.5)'); g.addColorStop(1, 'rgba(255,220,170,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+var MOTES = 70, motePos = new Float32Array(MOTES * 3), moteSeed = [];
+for (var mi = 0; mi < MOTES; mi++) { var mr = rnd(mi * 3 + 50) * 0.9, ma = rnd(mi * 5 + 50) * 6.283, my = 0.25 + rnd(mi * 7 + 50) * 1.4; motePos[mi * 3] = Math.cos(ma) * mr * (0.3 + my * 0.5); motePos[mi * 3 + 1] = my; motePos[mi * 3 + 2] = 0.6 + Math.sin(ma) * mr * (0.3 + my * 0.5); moteSeed.push([rnd(mi * 11 + 50) * 6.28, 0.04 + rnd(mi * 13 + 50) * 0.05, 0.1 + rnd(mi * 17 + 50) * 0.25]); }
+var moteGeo = new THREE.BufferGeometry(); moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+var motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ map: moteTex, color: 0xffe8c0, size: 0.028, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true, fog: false })); scene.add(motes);
+scene.add(new THREE.AmbientLight(0x1a1620, 0.45)); scene.add(new THREE.HemisphereLight(0x3a3630, 0x0a0806, 0.22));
+var farFill = new THREE.PointLight(0x8090aa, 0.45, 8, 1.6); farFill.position.set(0, 2.2, -D / 2 + 0.5); scene.add(farFill);
+var rim = new THREE.PointLight(0x506080, 0.35, 7, 2); rim.position.set(0.3, 1.2, -D / 2 + 3.0); scene.add(rim);
+// ---------- THE TABLE at the far end: Quiet Frankie, Ashton opposite, her notebook, his hands ----------
+var tableG = new THREE.Group(); tableG.position.set(0, 0, -D / 2 + 2.4); scene.add(tableG);
+var tableMat = new THREE.MeshStandardMaterial({ map: k.grain[1], roughness: 0.8, envMap: k.roomEnv, envMapIntensity: 0.2 });
+var top = mesh(new THREE.BoxGeometry(1.5, 0.06, 0.8), tableMat, 0, 0.72, 0, tableG); top.castShadow = true; top.receiveShadow = true;
+[[-0.65, -0.3], [0.65, -0.3], [-0.65, 0.3], [0.65, 0.3]].forEach(function(l) { mesh(new THREE.BoxGeometry(0.06, 0.7, 0.06), M.darkWood, l[0], 0.35, l[1], tableG); });
+// a lamp on the table with a green shade, the only other light in the room
+mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.26, 8), M.brass, 0.45, 0.88, -0.15, tableG);
+var shade = mesh(new THREE.ConeGeometry(0.14, 0.12, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0x1a4a2a, roughness: 0.6, side: THREE.DoubleSide, emissive: 0x0a2a14, emissiveIntensity: 0.4 }), 0.45, 1.02, -0.15, tableG);
+mesh(new THREE.SphereGeometry(0.02, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff0c0, toneMapped: false }), 0.45, 0.98, -0.15, tableG);
+detail.arc(tableG,0.138,0.003,M.brass,0.45,0.96,-0.15);
+mesh(new THREE.CylinderGeometry(0.055,0.07,0.015,24),M.brass,0.45,0.76,-0.15,tableG);detail.button(tableG,0.47,0.78,-0.15,0.006,'#322d24');
+var tableLight = new THREE.PointLight(0xffe0a0, 0.9, 3.2, 1.6); tableLight.position.set(0.45, 0.95, -0.15); tableG.add(tableLight);
+var tableGlow = k.glow(0.45, 0.97, -0.15, 0.45, 0.4, 0xffe0a0, tableG);
+// her notebook and pen, his glass, an ashtray with the night in it, a folded newspaper
+var notebook=detail.paperBlock(0.2,0.014,0.26,-0.35,0.75,0.12,tableG,'#504a38');notebook.rotation.y=0.25;for(var stitch=0;stitch<6;stitch++){var loop=mesh(new THREE.TorusGeometry(0.004,0.0008,4,10),M.chrome,-0.45,0.766,0.035+stitch*0.032,tableG);loop.rotation.y=Math.PI/2;}
+var penG=detail.group(-0.28,0.77,0.06,tableG);penG.rotation.set(Math.PI/2,0,0.6);
+mesh(new THREE.CylinderGeometry(0.004,0.0045,0.12,12),M.black,0,0,0,penG);
+mesh(new THREE.ConeGeometry(0.004,0.017,10),M.brass,0,0.068,0,penG);
+mesh(new THREE.CylinderGeometry(0.0048,0.0048,0.004,12),M.brass,0,-0.035,0,penG);mesh(new THREE.BoxGeometry(0.0015,0.024,0.002),M.brass,0.005,-0.038,0,penG);
+var whiskyGlass=detail.group(0.35,0.75,0.2,tableG);detail.cup(whiskyGlass,0.03,0.08);
+mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.03, 12), new THREE.MeshStandardMaterial({ color: 0xc27a18, roughness: 0.1, transparent: true, opacity: 0.7, emissive: 0x5a3000, emissiveIntensity: 0.3 }), 0.35, 0.765, 0.2, tableG);
+detail.ash(0.05,0.75,-0.2,tableG,0.05);
+var news=detail.paperBlock(0.28,0.006,0.2,-0.5,0.75,-0.22,tableG,'#c5bca4');news.rotation.y=-0.4;
+var newsTex=tex(256,192,function(c,w,h){c.fillStyle='#c9c0a9';c.fillRect(0,0,w,h);c.fillStyle='#67604f';c.fillRect(12,12,232,4);for(var col=0;col<4;col++)for(var line=0;line<35;line++){c.globalAlpha=0.35+(line%3)*0.1;c.fillRect(12+col*60,28+line*4,43+(line*7%11),1);}c.globalAlpha=0.25;c.fillRect(0,94,w,2);});
+var newsFace=mesh(new THREE.PlaneGeometry(0.27,0.19),new THREE.MeshStandardMaterial({map:newsTex,roughness:1}),0,0.010,0,news);newsFace.rotation.x=-Math.PI/2;
+// the two chairs and the two of them
+function chair(x, z, ry, parent) { var c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry; parent.add(c); mesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), M.darkWood, 0, 0.45, 0, c); mesh(new THREE.BoxGeometry(0.42, 0.5, 0.04), M.darkWood, 0, 0.72, -0.19, c); [[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]].forEach(function(l) { mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.45, 6), M.darkWood, l[0], 0.225, l[1], c); }); return c; }
+chair(0.45, -0.55, 0, tableG); chair(-0.45, 0.55, Math.PI, tableG);
+var frankie = k.ghost(0.45, 0, -D / 2 + 2.4 - 0.55, 3, 0.8, true, false, 1.2);      // Quiet Frankie, a planet, the sort of man with moons
+var ashton = k.ghost(-0.45, 0, -D / 2 + 2.4 + 0.55, 5, 0.82, true, true, 0.95);   // Ashton Granger, twirling her hair, scribbling without looking
+// ---------- COPPER, between you and the room ----------
+var copper = k.ghost(-0.85, 0, 2.3, 7, 0.9, false, true, 0.92);                    // a big man in a small body, or the other way round
+copper.hit.scale.set(1.5, 1, 1.5);
+// ---------- THE STAIRS you came down, the door he closed behind you ----------
+var stairG = new THREE.Group(); stairG.position.set(-W / 2 + 0.7, 0, -0.5); stairG.rotation.y = Math.PI; scene.add(stairG);
+var stairMat = new THREE.MeshStandardMaterial({ map: k.grain[1], roughness: 0.85 });
+for (var s = 0; s < 9; s++) { var st = mesh(new THREE.BoxGeometry(1.0, 0.22, 0.28), stairMat, 0, 0.11 + s * 0.22, s * 0.28, stairG); st.castShadow = true; st.receiveShadow = true; }
+mesh(new THREE.BoxGeometry(0.08, 2.4, 2.7), concrete, 0.55, 1.2, 1.15, stairG);
+var stairRail = mesh(new THREE.CylinderGeometry(0.015, 0.015, 2.9, 8), ironMat, -0.45, 1.3, 1.15, stairG); stairRail.rotation.x = -Math.atan2(1.98, 2.5);
+mesh(new THREE.BoxGeometry(0.9, 2.0, 0.08), M.darkWood, 0, 2.0 + 1.0, 2.6, stairG);
+mesh(new THREE.SphereGeometry(0.03, 8, 6), M.brass, 0.32, 3.0, 2.56, stairG);
+// the line of light under the door, and nothing else coming down it
+mesh(new THREE.PlaneGeometry(0.86, 0.03), new THREE.MeshBasicMaterial({ color: 0xffe8c0, toneMapped: false }), 0, 2.0 + 0.02, 2.55, stairG);
+var spillTex = tex(32, 128, function(cx, w, h) { var g = cx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,232,190,0.55)'); g.addColorStop(0.25, 'rgba(255,225,180,0.22)'); g.addColorStop(0.7, 'rgba(240,210,160,0.05)'); g.addColorStop(1, 'rgba(240,210,160,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); var side = cx.createLinearGradient(0, 0, w, 0); side.addColorStop(0, 'rgba(0,0,0,0.6)'); side.addColorStop(0.2, 'rgba(0,0,0,0)'); side.addColorStop(0.8, 'rgba(0,0,0,0)'); side.addColorStop(1, 'rgba(0,0,0,0.6)'); cx.globalCompositeOperation = 'destination-out'; cx.fillStyle = side; cx.fillRect(0, 0, w, h); });
+var spillGeo = new THREE.BufferGeometry(); spillGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.43, 2.03, 2.52, 0.43, 2.03, 2.52, -0.43, 1.08, 0.9, 0.43, 1.08, 0.9], 3)); spillGeo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 1, 1], 2)); spillGeo.setIndex([0, 2, 1, 1, 2, 3]); spillGeo.computeVertexNormals();
+var spill = new THREE.Mesh(spillGeo, new THREE.MeshBasicMaterial({ map: spillTex, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })); stairG.add(spill);
+var doorLine = new THREE.PointLight(0xffe0a0, 0.25, 2.5, 2); doorLine.position.set(0, 2.1, 2.3); stairG.add(doorLine);
+var stairHit = mesh(new THREE.BoxGeometry(1.2, 3.2, 3.0), M.hidden, 0, 1.6, 1.3, stairG);
+// ---------- THE CHESTERFIELD on its rug, against the right wall ----------
+var rugTex = tex(512, 512, function(cx, w, h) {
+cx.fillStyle = '#3a0e0e'; cx.fillRect(0, 0, w, h); cx.strokeStyle = '#1a0505'; cx.lineWidth = 14; cx.strokeRect(10, 10, w - 20, h - 20); cx.strokeStyle = '#7a5a20'; cx.lineWidth = 6; cx.strokeRect(22, 22, w - 44, h - 44);
+for (var i = 35; i < w - 35; i += 18) { cx.fillStyle = '#5a3818'; cx.fillRect(i, 30, 8, 8); cx.fillRect(i, h - 38, 8, 8); cx.fillRect(30, i, 8, 8); cx.fillRect(w - 38, i, 8, 8); }
+cx.strokeStyle = '#5a1818'; cx.lineWidth = 3; cx.strokeRect(45, 45, w - 90, h - 90); cx.strokeStyle = '#8a7a50'; cx.lineWidth = 1.5; cx.strokeRect(50, 50, w - 100, h - 100);
+cx.save(); cx.translate(w / 2, h / 2); cx.rotate(Math.PI / 4); cx.fillStyle = '#4a1510'; cx.fillRect(-65, -65, 130, 130); cx.strokeStyle = '#7a5a28'; cx.lineWidth = 2; cx.strokeRect(-65, -65, 130, 130); cx.fillStyle = '#2a0a08'; cx.fillRect(-40, -40, 80, 80); cx.fillStyle = '#5a2015'; cx.fillRect(-18, -18, 36, 36); cx.restore();
+[[120, 120], [w - 120, 120], [120, h - 120], [w - 120, h - 120]].forEach(function(c) { cx.save(); cx.translate(c[0], c[1]); cx.rotate(Math.PI / 4); cx.fillStyle = '#4a1812'; cx.fillRect(-25, -25, 50, 50); cx.fillStyle = '#3a0e0a'; cx.fillRect(-12, -12, 24, 24); cx.restore(); });
+for (var i = 0; i < 40; i++) { cx.fillStyle = 'rgba(20,10,5,' + (rnd(i * 3) * 0.12) + ')'; cx.fillRect(rnd(i) * w, rnd(i * 5) * h, rnd(i * 7) * 30 + 5, rnd(i * 9) * 30 + 5); }
+});
+// Fine weave and faded crossings preserve the rug's original pattern.
+(function(){var c=rugTex.image.getContext('2d');for(var y=0;y<512;y+=3){c.fillStyle='rgba(15,10,7,0.08)';c.fillRect(0,y,512,1);}for(var x=0;x<512;x+=3){c.fillStyle='rgba(188,157,112,0.05)';c.fillRect(x,0,1,512);}rugTex.needsUpdate=true;})();
+var rug = mesh(new THREE.PlaneGeometry(2.6, 3.6), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 0.92 }), W / 2 - 1.2, 0.003, 0.2); rug.rotation.x = -Math.PI / 2; rug.receiveShadow = true;
+for(var fringe=0;fringe<42;fringe++){var z=0.2+(fringe/41-0.5)*3.5;[-1,1].forEach(function(side){var thread=mesh(new THREE.CylinderGeometry(0.0015,0.0015,0.035,4),detail.material('#866f4b','cloth'),W/2-1.2+side*1.31,0.004,z);thread.rotation.z=Math.PI/2;});}
+var sofaG = new THREE.Group(); sofaG.position.set(W / 2 - 0.55, 0, 0.2); scene.add(sofaG);
+var chesterRed = new THREE.MeshStandardMaterial({ color: 0x6a1818, roughness: 0.7 }), chesterDark = new THREE.MeshStandardMaterial({ color: 0x4a1010, roughness: 0.75 });
+var sofaBody = mesh(new THREE.BoxGeometry(0.7, 0.35, 1.6), chesterRed, 0, 0.175, 0, sofaG); sofaBody.castShadow = true;
+mesh(new THREE.BoxGeometry(0.6, 0.08, 1.5), chesterRed, 0, 0.39, 0, sofaG); mesh(new THREE.BoxGeometry(0.15, 0.5, 1.6), chesterDark, 0.28, 0.6, 0, sofaG);
+mesh(new THREE.BoxGeometry(0.6, 0.35, 0.12), chesterDark, 0, 0.5, -0.8, sofaG); mesh(new THREE.BoxGeometry(0.6, 0.35, 0.12), chesterDark, 0, 0.5, 0.8, sofaG);
+var tuftTex = tex(256, 128, function(cx, cw, ch) { cx.fillStyle = '#5a1515'; cx.fillRect(0, 0, cw, ch); for (var row = 0; row < 5; row++) for (var col = 0; col < 10; col++) { var tx = col * 26 + (row % 2 === 0 ? 0 : 13), ty = row * 26 + 5; cx.fillStyle = '#3a0a0a'; cx.beginPath(); cx.arc(tx + 13, ty + 13, 4, 0, Math.PI * 2); cx.fill(); cx.strokeStyle = '#4a1212'; cx.lineWidth = 0.8; cx.beginPath(); cx.moveTo(tx, ty + 13); cx.lineTo(tx + 13, ty); cx.lineTo(tx + 26, ty + 13); cx.lineTo(tx + 13, ty + 26); cx.closePath(); cx.stroke(); } });
+var tuft = mesh(new THREE.PlaneGeometry(1.5, 0.45), new THREE.MeshStandardMaterial({ map: tuftTex, roughness: 0.75 }), 0.2, 0.6, 0, sofaG); tuft.rotation.y = -Math.PI / 2;
+// a coat thrown over the arm, a folded racing paper, the dent where somebody sat
+mesh(new THREE.BoxGeometry(0.5, 0.08, 0.5), new THREE.MeshStandardMaterial({ color: 0x1a1a20, roughness: 0.95 }), 0.05, 0.7, -0.75, sofaG).rotation.z = 0.2;
+mesh(new THREE.BoxGeometry(0.22, 0.01, 0.3), M.paper, -0.05, 0.44, 0.35, sofaG).rotation.y = 0.3;
+// ---------- STOCK: crates and a barrel by the left wall, a safe, the puddle ----------
+var crateMat = new THREE.MeshStandardMaterial({ map: k.grain[2], roughness: 0.9 });
+[[-2.3, -1.6, 0], [-2.2, -0.9, 0.5], [-2.35, -1.25, 0.3]].forEach(function(c, i) { var cr = mesh(new THREE.BoxGeometry(0.55, 0.42, 0.5), crateMat, c[0], 0.21 + (i === 2 ? 0.42 : 0), c[1], undefined); cr.rotation.y = c[2] * 0.3; cr.castShadow = true;
+var crateG=detail.group(c[0],0.21+(i===2?0.42:0),c[1]);crateG.rotation.y=cr.rotation.y;
+[-1,1].forEach(function(side){for(var slat=0;slat<4;slat++){mesh(new THREE.BoxGeometry(0.5,0.004,0.002),detail.material('#31291c','cloth'),0,-0.15+slat*0.1,side*0.252,crateG);}[-0.22,0.22].forEach(function(x){mesh(new THREE.BoxGeometry(0.042,0.4,0.018),crateMat,x,0,side*0.255,crateG);[-0.16,0.16].forEach(function(y){var nail=mesh(new THREE.SphereGeometry(0.004,6,4),M.chrome,x,y,side*0.267,crateG);nail.scale.z=0.3;});});}); });
+var barrelG=detail.group(-2.3,0,0.4);var staveMat=detail.material('#53402a','cloth'),hoopMat=detail.material('#4b4a40','metal');
+detail.lathe([[0,0],[0.24,0],[0.27,0.08],[0.285,0.35],[0.27,0.62],[0.24,0.7],[0,0.7]],staveMat,0,0,0,barrelG,32);
+[0.07,0.2,0.5,0.63].forEach(function(y){var r=0.247+Math.sin(y/0.7*Math.PI)*0.038;detail.arc(barrelG,r,0.009,hoopMat,0,y,0);});
+for(var seam=0;seam<16;seam++){var angle=seam/16*Math.PI*2;detail.wire([[Math.cos(angle)*0.242,0.01,Math.sin(angle)*0.242],[Math.cos(angle)*0.286,0.35,Math.sin(angle)*0.286],[Math.cos(angle)*0.242,0.69,Math.sin(angle)*0.242]],0.0018,detail.material('#2a261d','cloth'),barrelG);}
+mesh(new THREE.CylinderGeometry(0.025,0.025,0.008,12),M.darkWood,0.08,0.704,0.03,barrelG);
+var safe = mesh(new THREE.BoxGeometry(0.6, 0.8, 0.6), new THREE.MeshStandardMaterial({ color: 0x1e2a1e, roughness: 0.45, metalness: 0.5, envMap: k.roomEnv, envMapIntensity: 0.4 }), -2.4, 0.4, -3.6); safe.castShadow = true;
+mesh(new THREE.BoxGeometry(0.012,0.68,0.48),detail.material('#3b4338','metal'),-2.091,0.4,-3.6);
+[-1,1].forEach(function(side){mesh(new THREE.CylinderGeometry(0.019,0.019,0.09,10),M.chrome,-2.08,0.4+side*0.23,-3.83);});
+var safeDial=mesh(new THREE.CylinderGeometry(0.035,0.035,0.015,24),M.chrome,-2.07,0.6,-3.49);safeDial.rotation.z=Math.PI/2;
+for(var tick=0;tick<12;tick++){var angle=tick*Math.PI/6;mesh(new THREE.SphereGeometry(0.002,5,4),M.black,-2.061,0.6+Math.cos(angle)*0.028,-3.49+Math.sin(angle)*0.028);}
+mesh(new THREE.TorusGeometry(0.06, 0.012, 8, 20), M.brass, -2.09, 0.5, -3.6).rotation.y = Math.PI / 2;
+var puddleTex = tex(256, 256, function(cx, cw, ch) { cx.clearRect(0, 0, cw, ch); var g = cx.createRadialGradient(cw / 2, ch / 2, 0, cw / 2, ch / 2, cw / 2); g.addColorStop(0, 'rgba(60,15,12,0.85)'); g.addColorStop(0.3, 'rgba(70,20,16,0.65)'); g.addColorStop(0.6, 'rgba(50,16,12,0.45)'); g.addColorStop(0.85, 'rgba(40,14,10,0.2)'); g.addColorStop(1, 'rgba(30,10,8,0)'); cx.fillStyle = g; cx.beginPath(); cx.moveTo(cw * 0.3, ch * 0.15); cx.quadraticCurveTo(cw * 0.7, ch * 0.05, cw * 0.8, ch * 0.3); cx.quadraticCurveTo(cw * 0.9, ch * 0.6, cw * 0.7, ch * 0.8); cx.quadraticCurveTo(cw * 0.5, ch * 0.95, cw * 0.25, ch * 0.75); cx.quadraticCurveTo(cw * 0.1, ch * 0.5, cw * 0.15, ch * 0.3); cx.quadraticCurveTo(cw * 0.2, ch * 0.1, cw * 0.3, ch * 0.15); cx.closePath(); cx.fill(); });
+var puddle = mesh(new THREE.PlaneGeometry(1.6, 1.4), new THREE.MeshStandardMaterial({ map: puddleTex, transparent: true, roughness: 0.3, metalness: 0.2, envMap: k.roomEnv, envMapIntensity: 0.5 }), -0.6, 0.006, 2.2); puddle.rotation.x = -Math.PI / 2;
+// the bulb in the puddle: a smear of it on the standing water
+var reflTex = tex(64, 96, function(cx, w, h) { var g = cx.createRadialGradient(w / 2, h * 0.42, 0, w / 2, h * 0.42, w * 0.5); g.addColorStop(0, 'rgba(232,214,180,0.85)'); g.addColorStop(0.35, 'rgba(210,190,150,0.35)'); g.addColorStop(1, 'rgba(180,160,120,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); var tail = cx.createLinearGradient(0, h * 0.4, 0, h); tail.addColorStop(0, 'rgba(210,190,150,0.28)'); tail.addColorStop(1, 'rgba(180,160,120,0)'); cx.fillStyle = tail; cx.fillRect(w * 0.36, h * 0.4, w * 0.28, h * 0.6); });
+var water = mesh(new THREE.PlaneGeometry(1.15, 1.0), M.hidden, -0.6, 0.009, 2.2); water.rotation.x = -Math.PI / 2;
+k.makeMirror(water, new THREE.Vector3(0, 1, 0), 256, new THREE.Vector3(0.72, 0.44, 0.38), { transparent: true, ripple: true, edge: '0.9' });
+// the standing water gives the bulb back, and Copper, and the joists; the painted smear stays for the drip to brighten
+var refl = mesh(new THREE.PlaneGeometry(0.34, 0.62), new THREE.MeshBasicMaterial({ map: reflTex, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }), -0.46, 0.012, 2.0); refl.rotation.x = -Math.PI / 2;
+// a drip from the ceiling into it, now and then
+var drip = mesh(new THREE.SphereGeometry(0.012, 6, 6), new THREE.MeshStandardMaterial({ color: 0xc0c8d0, roughness: 0.1, transparent: true, opacity: 0.8 }), -0.46, H - 0.1, 2.0);
+k.contact(-0.85, 0, 2.3, 1.1); k.contact(W / 2 - 0.55, 0, 0.2, 2.2);
+// ---------- THE CLOSE-UPS ----------
+var SZ = -D / 2 + 2.4;
+var hotspots = [
+{ root: copper.hit, name: 'COPPER', pos: [-0.1, 1.55, 3.5], tgt: [-0.85, 0.75, 2.3], haloAt: [-0.85, 1.3, 2.3], haloSc: 0.9,
+actions: function() { return k.byText(['Say nothing', "Give him Red’s name", "Give him John’s name"]); } },
+{ root: ashton.hit, name: 'ASHTON GRANGER', pos: [-0.9, 1.4, SZ + 2.2], tgt: [-0.45, 0.55, SZ + 0.55], haloAt: [-0.45, 1.05, SZ + 0.55], haloSc: 0.8,
+actions: function() { return k.byText(['Look at ASHTON']); } },
+{ root: frankie.hit, name: 'QUIET FRANKIE', pos: [1.0, 1.45, SZ + 2.0], tgt: [0.45, 0.6, SZ - 0.55], haloAt: [0.45, 1.2, SZ - 0.55], haloSc: 1.0 },
+{ root: bulbHit, name: 'A bulb', pos: [0.3, 1.7, 2.0], tgt: [0, H - 1.1, 0.6], haloAt: [0, H - 1.1, 0.6], haloSc: 0.6 },
+{ root: stairHit, name: 'Stairs', pos: [-0.6, 1.5, 0.4], tgt: [-W / 2 + 0.7, 1.8, -2.0], haloAt: [-W / 2 + 0.7, 1.9, -2.0], haloSc: 1.4 },
+{ root: sofaG, name: 'A chesterfield', pos: [1.2, 1.3, 1.6], tgt: [W / 2 - 0.55, 0.6, 0.2], haloAt: [W / 2 - 0.7, 0.75, 0.2], haloSc: 1.3 }
+];
+return { hotspots: hotspots, frame: function(t, dt, still) {
+if (still) return;
+var sw = Math.sin(t * 0.6) * 0.06; bulbG.rotation.z = sw; bulbG.rotation.x = Math.cos(t * 0.45) * 0.03;
+bulbLight.intensity = 1.35 + 0.08 * Math.sin(t * 9.3) + 0.07 * Math.sin(t * 2.1) + (Math.sin(t * 0.37) > 0.992 ? -0.35 : 0); bulbGlow.material.opacity = 0.55 + 0.03 * Math.sin(t * 9.3);
+tableLight.intensity = 0.9 + 0.04 * Math.sin(t * 1.7);
+for (var i = 0; i < haze.length; i++) { var h = haze[i]; h.position.x += Math.sin(t * h.userData.sp + h.userData.ph) * 0.0015; h.material.opacity = h.userData.base * (0.8 + 0.2 * Math.sin(t * 0.3 + h.userData.ph)); }
+var mp = moteGeo.attributes.position.array; for (var mi2 = 0; mi2 < MOTES; mi2++) { var ms = moteSeed[mi2]; mp[mi2 * 3 + 1] += ms[1] * dt * Math.sin(t * 0.3 + ms[0]) - 0.006 * dt; mp[mi2 * 3] += Math.sin(t * ms[2] + ms[0]) * 0.0006; if (mp[mi2 * 3 + 1] < 0.2) mp[mi2 * 3 + 1] = 1.65; } moteGeo.attributes.position.needsUpdate = true; motes.material.opacity = 0.4 + 0.15 * Math.sin(t * 0.8);
+var cyc = (t % 6) / 6; drip.position.y = cyc < 0.7 ? H - 0.1 : H - 0.1 - (cyc - 0.7) / 0.3 * (H - 0.11); drip.visible = cyc > 0.6;
+refl.material.opacity = 0.1 + (cyc > 0.95 ? 0.12 : 0) + 0.02 * Math.sin(t * 9.3);
+} };
+}
+});
+// <<<< DSS ROOM CU END
+
+// >>>> DSS ROOM CB BEGIN
+</script>

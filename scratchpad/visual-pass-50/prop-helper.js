@@ -24,7 +24,8 @@ window.dssDetailProps=function(mesh,tex,env,scene){
  var b=add(new THREE.CylinderGeometry(0.003,0.0032,0.015,8),paper,0,0,0,e);b.rotation.z=Math.PI/2;
  b=add(new THREE.CylinderGeometry(0.0032,0.0032,0.008,8),filter,-0.011,0,0,e);b.rotation.z=Math.PI/2;
  add(new THREE.SphereGeometry(0.0031,6,5),dust,0.008,0,0,e);}
- for(var i=0;i<18;i++){var a=i*2.4,d=(i*7%29)/29*r*0.7;var f=add(new THREE.SphereGeometry(0.001,5,4),dust,Math.cos(a)*d,0.009,Math.sin(a)*d,g);f.scale.y=0.4;}return g;}
+ var crumbGeo=new THREE.SphereGeometry(0.001,5,4),crumbs=new THREE.InstancedMesh(crumbGeo,dust,18),crumbPose=new THREE.Object3D();
+ for(var i=0;i<18;i++){var a=i*2.4,d=(i*7%29)/29*r*0.7;crumbPose.position.set(Math.cos(a)*d,0.009,Math.sin(a)*d);crumbPose.scale.set(1,0.4,1);crumbPose.updateMatrix();crumbs.setMatrixAt(i,crumbPose.matrix);}crumbs.instanceMatrix.needsUpdate=true;g.add(crumbs);return g;}
  function paperBlock(w,h,d,x,y,z,p,color){var g=group(x,y,z,p),paper=material('#d3c9ac','paper'),cover=material(color||'#43382b','cloth');
  add(new THREE.BoxGeometry(w,h,d),paper,0,h/2,0,g);
  add(new THREE.BoxGeometry(w+0.008,0.003,d+0.008),cover,0,0,0,g);add(new THREE.BoxGeometry(w+0.008,0.003,d+0.008),cover,0,h,0,g);

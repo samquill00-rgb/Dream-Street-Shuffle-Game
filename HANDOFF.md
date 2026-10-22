@@ -1,9 +1,18 @@
 # START HERE — 2026-10-22
 
 **State:**
-- Everything is in the .twee and synced to the html. Sam commits in GitHub Desktop.
+- Everything is in the .twee and synced to the html, and committed: Sam's "updates" at 22:40 on 2026-10-22 holds the whole day's work from every session (read from .git/logs/HEAD; no git commands run). Sam commits in GitHub Desktop; nothing from a session is ever committed by it.
 - Several sessions work on the .twee at once. Grep the other sessions' markers after every sync, and never rewrite the whole file.
 - Nothing is open from any playtest batch, and nothing from them is with Sam. Note 12 of 2026-10-21 (the Dean Street white space) was answered by Sam later that night: it was the pitch list, each reader drawn as a block; `.book-pitch-opt tw-link` is kept inline now (rulings in HANDOFF-ordering-audit-2026-10-21.md). Confirmed in the source 2026-10-22.
+
+**Open, all Sam's (a sweep of this whole file on 2026-10-22; nothing here blocks a playtest):**
+- Pass 3's wording findings A, B and C (HANDOFF-ordering-audit-2026-10-21.md, "Log, pass 3"): LILY named in four places before Night Ahead Part Two can have shown; DAVY, INIS and JEFFREY refusing a book that may not be in the bag; the phone box's "pipe cleaners" without the rumour.
+- The book coin flip: losing the book under 25 sobriety is still `(random: 1, 2)` in Book Footer. The 15 October design note's 5.4 (deterministic and foreshadowed) was never ruled on.
+- COPPER's password refused once in Sam's real night of 14 October; never reproduced; "Sam to try once" still stands.
+- Parked by Sam: midnight (9 October; the switch in StoryInit); the French windowsill plant beside the lily (14 October; no plant object was found in the French scene by name on 2026-10-22, so it may have gone in the 19 October windows pass; look in the room).
+- Unverified fixes: the sepia on the Fetch window and the Watkins looking-glass (note 4 of 21 October; needs two refused calls); the header's alba stars updating a beat before the text in the Cave (14 October, minor).
+- Stale file: HANDOFF_CLAUDE.md still lists Himalayas pass 2 as remaining; passes 2 and 3 are done (20i, 20j below).
+- Not listed here, by Sam's rules: the pink lines (his to redraft) and audio (the sound pass comes after the building).
 
 **Recent work, newest first (details in the entries below):**
 - 2026-10-22, this session: the dedication page. `Dedicate Your Book` follows the naming; the notebook's FINDS page shows and changes it; the Dawn prints it under the title; kept across nights, old choices struck through. See "The dedication page" below.
@@ -36,7 +45,7 @@
 - 127.0.0.1 and [::1] each have their own clean storage.
 - Hard-mute the pane.
 
-**Next:** Sam's next playtest.
+**Next:** Sam's next playtest: the dedication page (the naming, For, the notebook's FINDS page, the Dawn), the critic's rebuilt order, and his word on pass 3's three findings.
 
 ---
 

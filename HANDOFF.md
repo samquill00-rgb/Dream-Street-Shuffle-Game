@@ -15,6 +15,12 @@
 - Not listed here, by Sam's rules: the pink lines (his to redraft) and audio (the sound pass comes after the building).
 
 **Recent work, newest first (details in the entries below):**
+- 2026-10-23, a session: **four CC0 OpenGameArt sounds wired** (SOUND-SOURCES.md), synced:
+  - doorway piss = water drops, the same lead/loop/tail shape;
+  - vomit = sickness, replacing the synthesised retch, which is kept as `startRetchStreamSynth`;
+  - map window smash = glass break (the smash was silent before);
+  - The Climb = snow steps, one every 3 units walked.
+  - Silent-test peaks: glass .35, steps ~.10, vomit .40, drops .54 (the old stream's level). Commit the four new .m4a files with the html.
 - 2026-10-23, a session: **Sam's 12 playtest notes (03:43–03:57) and a 13th**, all synced:
   1. **The Night Ahead fits the window.** No scroll at 1280×800, 1440×900 or 1536×864 (tw-story/tw-passage padding removed for `night-ahead`; the page is 94vh).
   2. **Ginger Light cat:** the head is 1.35× larger, the ears taller, the whiskers fainter.

@@ -71,7 +71,12 @@ AUDIO_EMBEDS = [
     ("__DSS_TR_LEAVE_DATA_URI__",    "french-leave-bar.m4a",                           "audio/mp4"),
     ("__DSS_TR_DOWN_DATA_URI__",     "french-stairs-down.m4a",                         "audio/mp4"),
     ("__DSS_TR_UP_DATA_URI__",       "french-stairs-up.m4a",                           "audio/mp4"),
-    ("__DSS_STREET_DATA_URI__",      "the-street-layered-floor.m4a",                   "audio/mp4"),   # 2026-10-18 night: the street outside any venue (outdoor + street-night passages), Sam's outside-the-French recording under the generated late-night street
+    ("__DSS_STREET_DATA_URI__",      "the-street-layered-floor.m4a",                   "audio/mp4"),
+    # 2026-10-23: CC0 sounds from OpenGameArt (SOUND-SOURCES.md), cut in the session scratchpad
+    ("__DSS_DOORWAY_DROPS_DATA_URI__", "doorway-drops.m4a",                            "audio/mp4"),   # "Water Drops" by CeoxBlackj: the doorway hold (lead, 8 s loop, tail)
+    ("__DSS_VOMIT_DATA_URI__",       "vomit-sickness.m4a",                             "audio/mp4"),   # "Sick Noises" by frosty ham: the retch hold
+    ("__DSS_GLASS_SMASH_DATA_URI__", "glass-window-smash.m4a",                         "audio/mp4"),   # "Glass Break" by Till Behrend: smashed map windows
+    ("__DSS_SNOW_STEPS_DATA_URI__",  "climb-snow-steps.m4a",                           "audio/mp4"),   # "42 Snow and Gravel Footsteps" by Corsica_S: eight steps, one per second, for The Climb   # 2026-10-18 night: the street outside any venue (outdoor + street-night passages), Sam's outside-the-French recording under the generated late-night street
 ]
 
 # ============================================================

@@ -10484,7 +10484,7 @@ window.dssAudio = (function() {
   // made from noise in Python (scratchpad/panel-borders-2026-10-05/make_stream.py): eight
   // seconds of stream that loop while the player holds, then the stream failing and
   // dribbling, played once on release. The retch below keeps its synthesis.
-  var PISS_URL = 'the-doorway-stream.mp3', PISS_LEAD = 0.5, PISS_BODY = 8.0, PISS_LEVEL = 0.8; // the file: half a second of fade-in, eight seconds that loop, then the tail
+  var PISS_URL = 'doorway-drops.m4a', PISS_LEAD = 0.5, PISS_BODY = 8.0, PISS_LEVEL = 0.57; /* 2026-10-23 (Sam: "Waterdrops: I want them to be the sound of the pissing in doorways"): OpenGameArt's CC0 "Water Drops", cut to the same shape (doorway-drops.m4a) */ // the file: half a second of fade-in, eight seconds that loop, then the tail
   var _pissBuf = null, _pissOff = 0, _pissLoading = false, _pissWaiters = [];
   function primePissStream() {
     if (_pissBuf || _pissLoading) return;
@@ -10537,9 +10537,68 @@ window.dssAudio = (function() {
       }
     };
   }
+  // 2026-10-23 (Sam): recorded CC0 sounds from OpenGameArt (SOUND-SOURCES.md) for the vomit, smashed windows and the Climb's
+  // snow steps. One small loader: each file is fetched and decoded once; a cue asked for before it has loaded plays when it has.
+  var _smp = {};
+  function _sample(url, cb) {
+    var e = _smp[url] || (_smp[url] = { buf: null, wait: [], loading: false });
+    if (e.buf) { if (cb) cb(e.buf); return; }
+    if (cb) e.wait.push(cb);
+    if (e.loading) return;
+    var ac = getCtx(); if (!ac) return;
+    e.loading = true;
+    try {
+      fetch(url).then(function(r) { return r.arrayBuffer(); }).then(function(ab) {
+        ac.decodeAudioData(ab, function(buf) { e.buf = buf; e.loading = false; var w = e.wait; e.wait = []; w.forEach(function(fn) { fn(buf); }); }, function() { e.loading = false; });
+      }).catch(function() { e.loading = false; });
+    } catch(err) { e.loading = false; }
+  }
+  // the first sound in a stretch of the buffer (the encoder pads the front with silence)
+  function _onset(buf, from, to) { var d = buf.getChannelData(0), sr = buf.sampleRate, i = Math.floor(from * sr), end = Math.min(d.length, Math.floor(to * sr)); while (i < end && Math.abs(d[i]) < 0.01) i++; return i / sr; }
+  function _playSample(url, level, from, len, tick) {
+    var h = { src: null, g: null, stopped: false };
+    var go = function(fn) { (tick ? _tick : function(f) { f(); })(function() { _play(fn); }); };
+    _sample(url, function(buf) {
+      if (h.stopped) return;
+      go(function(ac) {
+        var now = ac.currentTime, at = from == null ? _onset(buf, 0, 1) : from;
+        var src = ac.createBufferSource(); src.buffer = buf;
+        var g = ac.createGain(); g.gain.setValueAtTime(level, now);
+        src.connect(g); g.connect(ac.destination);
+        src.start(now, at, len == null ? undefined : len);
+        h.src = src; h.g = g;
+      });
+    });
+    h.stop = function(fadeSecs) {
+      if (h.stopped) return; h.stopped = true;
+      var ac = getCtx(); if (!ac || !h.g) return;
+      var t = ac.currentTime, f = fadeSecs || 0.3;
+      try { h.g.gain.cancelScheduledValues(t); h.g.gain.setValueAtTime(h.g.gain.value, t); h.g.gain.linearRampToValueAtTime(0.0001, t + f); } catch(e) {}
+      setTimeout(function() { try { h.src.stop(); } catch(e) {} try { h.g.disconnect(); } catch(e) {} }, f * 1000 + 60);
+    };
+    return h;
+  }
+  var VOMIT_URL = 'vomit-sickness.m4a', GLASS_URL = 'glass-window-smash.m4a', SNOW_URL = 'climb-snow-steps.m4a';
+  function primeRetchStream() { _sample(VOMIT_URL); }
+  // Sam: "Sickness: I want this to be the sound of the vomiting". Plays from the top while held; letting go fades it.
   function startRetchStream() {
+    if (_muted) return { stop: function(){} };
+    var h = _playSample(VOMIT_URL, 0.55, null, null, false);
+    return { stop: function() { h.stop(0.35); } };
+  }
+  // Sam: "Glass breaking. I want this to be the sound of the glass breaking when you smash windows" (the Dean Street map)
+  function windowSmash() { _playSample(GLASS_URL, 0.5, null, null, false); }
+  // Sam: "Walking: I want this to be the sound used in the yeti climb" (The Climb): one of eight snow steps, a second apart in the file
+  var _lastSnow = -1;
+  function snowStep() {
+    if (_muted) return;
+    var k; do { k = Math.floor(Math.random() * 8); } while (k === _lastSnow); _lastSnow = k;
+    _sample(SNOW_URL, function(buf) { _playSample(SNOW_URL, 0.12 + Math.random() * 0.04, _onset(buf, k, k + 0.5), 0.85, true); });
+  }
+  function primeSnowSteps() { _sample(SNOW_URL); }
+  function startRetchStreamSynth() {
     // Wetter, lower-pitched splash (liquid into water), with a gut gurgle
-    // and a brief throaty heave onset.
+    // and a brief throaty heave onset. (Kept, unused, since 2026-10-23.)
     return _startStream({
       bpFreq: 620, bpQ: 2.4,
       wobbleHz: 4.5, wobbleAmt: 180,
@@ -14078,7 +14137,7 @@ window.dssAudio = (function() {
   }
   return {
     pour: pour, sip: sip, phoneRing: phoneRing, pageRustle: pageRustle, pageShuffle: pageShuffle,
-    startPissStream: startPissStream, primePissStream: primePissStream, startRetchStream: startRetchStream,
+    startPissStream: startPissStream, primePissStream: primePissStream, startRetchStream: startRetchStream, primeRetchStream: primeRetchStream, windowSmash: windowSmash, snowStep: snowStep, primeSnowSteps: primeSnowSteps,
     typewriterTick: typewriterTick, typewriterClack: typewriterClack,
     itemFound: itemFound,
     penScratch: penScratch, heartbeat: heartbeat,
@@ -15706,7 +15765,7 @@ function init(container) {
   var shardBurst=[],wasBroken={};
   function broken(w){var el=passage.querySelector('[data-window-state="'+w.id+'"]');return !!passage.querySelector('[data-window-broken="'+w.id+'"]') || !!(el&&el.textContent.trim()==='broken');}
   function nearWindow(){if(!passage.querySelector('[data-window-action]'))return null;return BREAKABLE_WINDOWS.find(function(w){return !broken(w)&&Math.abs(S.c-w.fc)+Math.abs(S.r-w.fr)<=1;})||null;}
-  function smashWindow(){var w=nearWindow();if(!w||busy()||S.moving||S.entering)return;var link=passage.querySelector('[data-window-action="'+w.id+'"] tw-link');if(!link)return;link.click();if(!broken(w))return;S.held={};refreshBar();}
+  function smashWindow(){var w=nearWindow();if(!w||busy()||S.moving||S.entering)return;var link=passage.querySelector('[data-window-action="'+w.id+'"] tw-link');if(!link)return;link.click();if(!broken(w))return;if(window.dssAudio&&window.dssAudio.windowSmash)window.dssAudio.windowSmash();/* 2026-10-23 (Sam): the glass goes */S.held={};refreshBar();}
   smashButton.addEventListener('click',smashWindow);
   BREAKABLE_WINDOWS.forEach(function(w){wasBroken[w.id]=broken(w);});
   var hintSeen = false; try { hintSeen = sessionStorage.getItem('dssMapHintDone') === '1'; } catch(e) {}
@@ -24169,6 +24228,7 @@ constructor(mode) {
   this.mode = (mode === 'doorway' || mode === 'doorway-spew') ? mode : 'gents'; /* 2026-10-19: 'doorway-spew', retching in a doorway when drunk */
   // the doorway's stream is a file: fetch and decode it as the popup opens, so the hold plays at once
   if (this.mode === 'doorway' && window.dssAudio && window.dssAudio.primePissStream) { try { window.dssAudio.primePissStream(); } catch(e) {} }
+  if (this.mode !== 'doorway' && window.dssAudio && window.dssAudio.primeRetchStream) { try { window.dssAudio.primeRetchStream(); } catch(e) {} } /* 2026-10-23: the recorded retch, loaded before the hold */
   this.done = false;
   this.closing = false;
   this.retching = false;
@@ -75921,7 +75981,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
   var started=false, paused=false, finished=false, ending=-1, turned=false;
   var keys={}, pointerKeys={}, bufferT=0, coyoteT=.20, jumpCut=false;
   var hcTouch=!!(window.matchMedia&amp;&amp;window.matchMedia(&#x27;(hover: none) and (pointer: coarse)&#x27;).matches);
-  var s=2, u=0, y=0, vy=0, grounded=true, breath=1, slips=0, prints=0, checkpoint=2;
+  var s=2, u=0, y=0, vy=0, grounded=true, breath=1, slips=0, prints=0, checkpoint=2, snowWalk=0; /* snowWalk: distance since the last snow step (2026-10-23) */
   var time=0, yetiS=13, nextPrint=3, printList=[], collected=new Set(), flagObjects=[];
   var climber, yeti, eyeMaterial, cameraReady=false, lastHUD=&#x27;&#x27;, running=0;
   var LENGTH=440, GRAV=18, JUMP=7.6, SPEED=8.4, COYOTE=.20, BUFFER=.22;
@@ -75981,7 +76041,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
   window._hcCleanup=cleanup;
   observer=new MutationObserver(function(){if(!canvas.isConnected)cleanup();});
   observer.observe(document.querySelector(&#x27;tw-story&#x27;) || document.body,{childList:true,subtree:true});
-  function startGame(){if(!renderer || disposed || finished)return;started=true;paused=false;lastNow=null;accumulator=0;clearInput();cover.hidden=true;pauseButton.textContent=&#x27;Pause&#x27;;canvas.focus({preventScroll:true});if(!eng)makeAudio();if(eng)eng.resume();}
+  function startGame(){if(!renderer || disposed || finished)return;started=true;if(window.dssAudio&amp;&amp;window.dssAudio.primeSnowSteps)window.dssAudio.primeSnowSteps();paused=false;lastNow=null;accumulator=0;clearInput();cover.hidden=true;pauseButton.textContent=&#x27;Pause&#x27;;canvas.focus({preventScroll:true});if(!eng)makeAudio();if(eng)eng.resume();}
   function setPaused(value){if(!started || finished)return;paused=value;clearInput();lastNow=null;accumulator=0;cover.hidden=!value;beginButton.textContent=&#x27;Resume ascent&#x27;;pauseButton.textContent=value?&#x27;Resume&#x27;:&#x27;Pause&#x27;;if(eng)eng.silence();if(!value){canvas.focus({preventScroll:true});if(eng)eng.resume();}}
   function releaseJump(){if(!held(&#x27; &#x27;) &amp;&amp; vy&gt;0 &amp;&amp; !jumpCut){vy*=.55;jumpCut=true;}}
   function kd(e){
@@ -76530,6 +76590,8 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
     var top=height(s),supported=support(s,u);
     if(grounded &amp;&amp; supported &amp;&amp; top-oldY&gt;.16){s=oldS;top=height(s);supported=support(s,u);}
     if(grounded &amp;&amp; supported){y=top;vy=0;}
+    /* 2026-10-23 (Sam: &quot;Walking: I want this to be the sound used in the yeti climb&quot;): a recorded snow step every 3 units walked on the ground (not on the ladders) */
+    if(grounded &amp;&amp; !climbing &amp;&amp; !chant){snowWalk+=Math.abs(s-oldS)+Math.abs(u-oldU)*.6;if(snowWalk&gt;=3){snowWalk=0;if(window.dssAudio&amp;&amp;window.dssAudio.snowStep)window.dssAudio.snowStep();}}
     else{
       grounded=false;vy-=GRAV*dt;y+=vy*dt;
       // Resolve the solid riser BEFORE testing the landing. A jump below its

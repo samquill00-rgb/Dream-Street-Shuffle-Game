@@ -32,6 +32,32 @@
 - Not listed here, by Sam's rules: the pink lines (his to redraft) and audio (the sound pass comes after the building).
 
 **Recent work, newest first (details in the entries below):**
+- 2026-10-23, a session: **dream-world palettes re-graded** (Sam: "make the whole art style more depressing"; each world its own palette with gold or silver; Soho kept as is; Carthage "dreamy and intense"). Synced, not committed. Each scene's edit carries a `2026-10-23 (Sam)` comment.
+  - Carthage: violet/wine/molten sky, violet sea with gold glints, gold rim and fill light, plus a rose page tint (Carthage had none).
+  - India airport pub: nicotine fluorescent with silver fill light. The mandala is silver.
+  - The Climb: slate night, bruised dawn, silver rim. sRGB scene, so the bg values are linear. The blue footprints and gap lips are untouched.
+  - Nazca and the Nazca Race: rust and bone under brown smog, gold sun. The Race is kept light enough to drive.
+  - Easter and the Reclamation: bottle-green with a silver moon. The Easter glyph is silver. The Reclamation's turquoise spirits and amber targets (gameplay) are untouched.
+  - Pyramid: mauve/umber with gold torches. The Pyramid Run walls are mauve.
+  - Ezekiel: ash/pewter with a sick-yellow blot. The wheel stays gold.
+  - Page tints (`--dss-dream-tint`) are re-graded to match.
+  - Seen in the pane: every world. The prototype `*-3d-static.html` files were NOT changed.
+  - Proposed but not approved: a slight colour drain per rejection slip.
+- 2026-10-23, a session: **the early Fetch** (Sam: "first rejection slip brings him onto the map, and each setback makes him come more often and closer"). Synced.
+  - A new hub flag `fetch-setbacks` on Dean Street counts refused calls (up to 2), a beating, each blackout and the book lost. It prints empty once `$fetchMet >= 1`.
+  - The map adds tonight's non-yes slips (`dssRefusals`) to make `fgL`. If `fgL >= 1` he can come before midnight.
+  - Each setback past the first raises the odds (.4 +.15, cap .9), brings him sooner (wait ÷ 1+.25n), stands him closer (7 tiles, down to 3) and lets him hold nearer before turning (4, down to 2).
+  - Tested on a scratch build with fixed randomness:
+    - L1 before midnight: on, appeared 7 tiles off along the long row, then turned off the line.
+    - L4: 4 tiles, 279 frames, appeared straight below. The vertical view was too short for him before, so close glimpses now also come down side streets.
+  - **Creep and sprint**, the same day (Sam: "does he get closer and closer?", "a little freaky sprint?", "yeah"). In `fetchGlimpse`:
+    - Creep: from L2, while you stand still he edges one tile toward you every 100 frames, two tiles from L4. He stops at the turning distance, which then sets him off.
+    - Leaving, from L3: a chance (.15 per setback past the second, capped at .45) that he sprints straight at you at 2.4 px/frame. He stops a tile short and vanishes in 6 frames.
+    - Leaving, from L2: otherwise a .3 chance he darts sideways at 2.6 px/frame and fades in 24 frames.
+    - Everything else is the old .55 walk-off. Sprites step faster while running.
+    - Tested on a scratch build with fixed randomness:
+      - L4: appeared 4 below, crept 1, sprinted 2 tiles in 0.3 s, gone.
+      - L2: appeared 6 along the row, crept 1, darted off in 0.4 s.
 - 2026-10-23, a session: **four CC0 OpenGameArt sounds wired** (SOUND-SOURCES.md), synced:
   - doorway piss = water drops, the same lead/loop/tail shape;
   - vomit = sickness, replacing the synthesised retch, which is kept as `startRetchStreamSynth`;

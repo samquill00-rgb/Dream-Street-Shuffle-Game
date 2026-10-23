@@ -2055,7 +2055,7 @@ window.dssAudio = (function() {
   // with a base64 data URI of the audio file at sync time. To change which
   // file is embedded, edit MUSIC_SOURCE_FILE near the top of sync_html.py.
   var MUSIC_FILE = '__DSS_MUSIC_DATA_URI__';
-  var MUSIC_VOLUME_BASE = 0.55;     // resting volume (0-1) — tweak here to set overall level
+  var MUSIC_VOLUME_BASE = 0.72;     // resting volume (0-1) — tweak here to set overall level. 2026-10-23 overnight (Sam, playtest on Dean Street: "The wind/background noise is too loud and the music is too quiet"): was 0.55, now about 2.3 dB up
   var MUSIC_VOLUME_DUCK = 0.10;     // dipped volume during SFX
   var MUSIC_DUCK_HOLD_MS = 350;     // hold the duck for this long before recovering (ms)
   var MUSIC_DUCK_RAMP_S  = 0.6;     // smooth ramp back to base (seconds, for Web Audio)
@@ -2775,7 +2775,7 @@ window.dssAudio = (function() {
       var src = ac.createBufferSource(); src.buffer = _noiseBuf(ac, dur, true);
       var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240; lp.Q.value = 0.8;
       var g = ac.createGain(); g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(0.075, now + 2.8); g.gain.setValueAtTime(0.075, now + 3.6); g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      g.gain.exponentialRampToValueAtTime(0.04, now + 2.8); g.gain.setValueAtTime(0.04, now + 3.6); /* 2026-10-23 overnight: the cab's brown-noise rush read as wind over the theme; 0.075 -> 0.04, about 5.5 dB down */ g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
       src.connect(lp); lp.connect(g); g.connect(ac.destination); src.start(now); src.stop(now + dur + 0.05);
       // tyres on wet tarmac: a thin hiss riding the same swell
       var hs = ac.createBufferSource(); hs.buffer = _noiseBuf(ac, dur, false);
@@ -5705,6 +5705,34 @@ function init(container) {
   wrap.appendChild(stage); wrap.appendChild(bar); wrap.appendChild(dpad);
   container.appendChild(wrap);
   passage.classList.add('soho-map-on');
+  /* 2026-10-23 overnight (Sam, playtest: "HERE is where there is massive space, a big gap after 'the novelist' and before the walkable
+     map"): the hub's links move onto the map, and the line breaks that stood between them stayed behind as empty lines above it.
+     Any line break, or any empty block with no named hook in it, lying wholly between the last words and the map is folded away;
+     checked again as the page settles. */
+  (function tidyGap() {
+    function run() {
+      if (!container.isConnected) return;
+      var top = container.getBoundingClientRect().top, last = -1e9;
+      var tw = document.createTreeWalker(passage, NodeFilter.SHOW_TEXT, null);
+      for (var n = tw.nextNode(); n; n = tw.nextNode()) {
+        if (!n.nodeValue.trim() || container.contains(n)) continue;
+        var pe = n.parentElement; if (!pe || !pe.getClientRects().length || pe.closest('.soho-hub-dock, [hidden], script, style')) continue;
+        var cs = getComputedStyle(pe); if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue;
+        var rg = document.createRange(); rg.selectNodeContents(n); var rr = rg.getBoundingClientRect();
+        if (rr.height && rr.bottom <= top + 1 && rr.bottom > last) last = rr.bottom;
+      }
+      if (top - last < 40) return;
+      Array.prototype.forEach.call(passage.querySelectorAll('br, tw-consecutive-br, tw-hook, tw-expression, div, span'), function(el) {
+        if (container.contains(el) || el.contains(container) || el.closest('.soho-hub-dock')) return;
+        if (el.tagName !== 'BR' && el.tagName !== 'TW-CONSECUTIVE-BR') {
+          if ((el.textContent || '').trim() || el.hasAttribute('name') || el.querySelector('tw-hook[name], svg, canvas, img, input, tw-link')) return;
+        }
+        var r = el.getBoundingClientRect(); if (!r.height) return;
+        if (r.top >= last - 1 && r.bottom <= top + 1) el.style.display = 'none';
+      });
+    }
+    setTimeout(run, 60); setTimeout(run, 900); setTimeout(run, 2500);
+  })();
   var x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
   // how many rows of street fit under the top of the map (see VR_MIN above).
   // Measured against the document, not the scroll, so it is the same answer
@@ -13559,6 +13587,10 @@ window.dssRumourCard = function() {
   function watch() {
     poll = setInterval(function() {
       if (!src.isConnected || (gen !== null && window._passageGen !== gen)) { clearInterval(poll); return; }
+      /* 2026-10-23 overnight (Sam, playtest at the Ham: "The rumour here overwhelms and distracts from the O'Flatterly quest. Both need
+         to be heard, if anything O'Flatterly more"): a quest line on the page (.dss-quest-line) is given 9 s on screen first */
+      var ql = document.querySelector('.dss-quest-line');
+      if (ql && seen(ql)) { if (!ql._seenAt) ql._seenAt = Date.now(); if (Date.now() - ql._seenAt < 9000) return; } else if (ql && ql.isConnected && ql.getClientRects().length === 0 && !ql.closest('[hidden]')) return;
       if (seen(opener) && !document.querySelector('.dss-slip-fly, .dss-refusal:not(.dss-filed)') && !busy()) { clearInterval(poll); setTimeout(function() { if (!src.isConnected) return; if (busy()) watch(); else show(); }, 1200); } /* after the rejection slip is filed */
     }, 300);
   }
@@ -13615,6 +13647,14 @@ window.dssRefusals = (function() {
     var rec = { n: n, k: k, who: m.getAttribute('data-who') || '', line: m.textContent, near: m.hasAttribute('data-near'), yes: m.hasAttribute('data-yes') };
     a.push(rec); save(a);
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { m.classList.add('dss-filed'); after(m); return; }
+    /* 2026-10-23 overnight (Sam, playtest: INIS "these responses that flash up distract from the main text, I want rid of them";
+       Coach "'I don't want that book' etc. This is just confusing. Get rid of these little things"; the Ham's America words
+       "shouldn't be happening twice in one scene"): the reader's words are already in the prose, so the slip no longer flies
+       over the page; it is filed quietly (the notebook, the Dawn's record and the Fetch still count it) and the NOTEBOOK
+       gives one soft pulse. fly() is kept, unused. */
+    if (true) { m.classList.add('dss-filed'); after(m); window._dssSlipFiledAt = Date.now();
+      var nb = notebookLink(); if (nb) { nb.classList.add('dss-nb-took'); setTimeout(function() { nb.classList.remove('dss-nb-took'); }, 1600); }
+      return; }
     fly(rec, m);
   }
   function scan() {
@@ -13827,6 +13867,51 @@ window.dssRingHold = (function() {
       if (poke) poke.click();
     }, 160);
   }, true);
+})();
+// 2026-10-23 overnight (Sam, playtest at The Reclamation: "You should not need to scroll down here. In full screen laptop you should
+// never need to scroll down"; the night's sweep at 1440x900 found the same in most of the minigames): when a passage holds a game
+// canvas in the page's flow and the page runs past the window, the canvas (or the frame wrapped tight round it) is narrowed, keeping
+// its shape, until the page fits, to no less than 55% of its size. Fullscreen ("Expand") and the 3D rooms are left alone.
+(function() {
+  var gen = -1, tries = 0, boxes = [];
+  function inFlow(el) { for (var e = el; e && e.tagName !== 'TW-STORY'; e = e.parentElement) { var ps = getComputedStyle(e).position; if (ps === 'fixed' || ps === 'absolute' || ps === 'sticky') return false; if (e.tagName === 'TW-PASSAGE') return true; } return false; }
+  function fit() {
+    if (window._passageGen !== gen) { gen = window._passageGen; tries = 0; boxes = []; settle = Date.now() + 1600; /* the page leaving is still in the DOM for a moment */ var st0 = document.querySelector('tw-story'); if (st0 && st0._dssFitPad) { st0._dssFitPad = 0; st0.style.paddingBottom = ''; } }
+    if (tries > 14 || document.fullscreenElement || Date.now() < settle) return; tries++;
+    var over = document.scrollingElement.scrollHeight - window.innerHeight;
+    if (over <= 4) return;
+    var cvs = Array.prototype.filter.call(document.querySelectorAll('tw-passage canvas'), function(c) { var r = c.getBoundingClientRect(); return r.height > 220 && r.width > 220 && inFlow(c) && !c.closest('.soho-map-wrap'); }); /* not the Soho map: pixel art at its own scale */
+    var dom = document.getElementById('dss-worm-game'); /* the worm hut's game is laid out in the page, not on a canvas */
+    if (!cvs.length && !(dom && inFlow(dom))) return;
+    cvs.sort(function(a, b) { return b.getBoundingClientRect().height - a.getBoundingClientRect().height; });
+    var c = cvs.length ? cvs[0] : dom;
+    /* first the slack under the game: the story's foot padding and the line breaks left after the game's block */
+    var st = document.querySelector('tw-story'), top = c; while (top.parentElement && top.parentElement.tagName !== 'TW-PASSAGE') top = top.parentElement;
+    if (st && !st._dssFitPad) { st._dssFitPad = 1; st.style.paddingBottom = '4px'; }
+    for (var sib = top.nextElementSibling; sib; sib = sib.nextElementSibling) if ((sib.tagName === 'BR' || sib.tagName === 'TW-CONSECUTIVE-BR') && sib.style.display !== 'none') sib.style.display = 'none';
+    over = document.scrollingElement.scrollHeight - window.innerHeight;
+    if (over <= 4) return;
+    if (c === dom) { /* CSS zoom scales its layout and its clicks together */
+      var dh = dom.getBoundingClientRect().height, z0 = parseFloat(dom.style.zoom) || 1, z = Math.max(0.6, z0 * (dh - over - 6) / dh);
+      if (z < z0 - 0.01) { if (dom._dssFit == null) { dom._dssFit = { zoom: dom.style.zoom }; boxes.push(dom); } dom.style.zoom = z.toFixed(3); settle = Date.now() + 500; }
+      return;
+    }
+    var cr = c.getBoundingClientRect(), box = c;
+    for (var i = 0; i < 2; i++) { var pa = box.parentElement; if (!pa) break; var pr = pa.getBoundingClientRect(); if (Math.abs(pr.width - cr.width) < 6 && Math.abs(pr.height - cr.height) < 6) box = pa; else break; }
+    var h = cr.height, target = Math.max(h * 0.55, h - over - 6);
+    if (target >= h - 2) return;
+    var bw = box.getBoundingClientRect().width;
+    if (box._dssFit == null) { box._dssFit = { mw: box.style.maxWidth, ml: box.style.marginLeft, mr: box.style.marginRight }; boxes.push(box); }
+    box.style.maxWidth = Math.floor(bw * target / h) + 'px'; box.style.marginLeft = 'auto'; box.style.marginRight = 'auto'; settle = Date.now() + 900; /* let the game redraw at the new size before looking again */
+    if (c.getBoundingClientRect().height > h - 2) {
+      /* a game that sizes its canvas's height from its width on resize: ask it to, then check */
+      self = true; try { window.dispatchEvent(new Event('resize')); } catch (e) {} self = false;
+      setTimeout(function() { if (c.getBoundingClientRect().height > h - 2) { box.style.maxWidth = box._dssFit.mw; box.style.marginLeft = box._dssFit.ml; box.style.marginRight = box._dssFit.mr; tries = 99; } }, 250); /* a canvas of fixed height: leave it */
+    }
+  }
+  var self = false, settle = 0;
+  setInterval(fit, 600);
+  window.addEventListener('resize', function() { if (self) return; boxes.forEach(function(b) { if (b._dssFit) { if ('zoom' in b._dssFit) b.style.zoom = b._dssFit.zoom; else { b.style.maxWidth = b._dssFit.mw; b.style.marginLeft = b._dssFit.ml; b.style.marginRight = b._dssFit.mr; } b._dssFit = null; } }); boxes = []; tries = 0; });
 })();
 window._passageGen = 0;
 (function() {
@@ -14047,8 +14132,8 @@ window._passageGen = 0;
                   window.dssAudio.windFarnell();
                 } else if (inOutdoor) {
                   window.dssAudio.distantTraffic(hasRevelation ? 0.22 : 1);
-                } else if (window._wasInDream || window._wasInPyre || window._wasOutdoor) {
-                  window.dssAudio.ambientOff();
+                } else if (window._wasInDream || window._wasInPyre || window._wasOutdoor || tags.indexOf('hub') !== -1) {
+                  window.dssAudio.ambientOff(); /* 2026-10-23 overnight: Dean Street (hub) always clears the procedural wind/traffic slot, so the theme is heard alone */
                 }
                 window._wasInDream = inDream;
                 window._wasInPyre = inPyre;
@@ -20008,7 +20093,7 @@ window.dssMakeComposer = function(scene, camera, renderer, opts) {
   var dssPR = Math.min(window.devicePixelRatio || 1, window.innerWidth < 600 ? 1.25 : 1.5), msTarget = null;
   try {
     if (renderer.capabilities && renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) {
-      msTarget = new THREE.WebGLMultisampleRenderTarget(Math.round(window.innerWidth * dssPR), Math.round(window.innerHeight * dssPR), { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat });
+      msTarget = new THREE.WebGLMultisampleRenderTarget(Math.round(window.innerWidth * dssPR), Math.round(window.innerHeight * dssPR), { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, stencilBuffer: true }); /* 2026-10-23 overnight (Sam, the French approach twice: "crystaline", "the weird effect in the windows"): r128 gives a multisampled target a 16-bit depth buffer unless it has a stencil too, and 16 bits cannot part the frame, glass and glazing bars 2-3 cm apart at 16 m, so they z-fought into sawtooth frames and dashed bars in every composer scene; with the stencil it is 24-bit (DEPTH24_STENCIL8) */
       msTarget.samples = 4;
     }
   } catch (e) { msTarget = null; }
@@ -21807,9 +21892,9 @@ var catFurTex=makeCanvasTexture(512,256,function(cx,w,h){
  for(var stripe=0;stripe<12;stripe++){cx.strokeStyle='rgba(70,39,23,.5)';cx.lineWidth=5+stripe%4;cx.beginPath();for(var fy=0;fy<h;fy+=5){var fx=stripe*w/12+Math.sin(fy*.035+stripe*2)*7;if(!fy)cx.moveTo(fx,fy);else cx.lineTo(fx,fy);}cx.stroke();}
  var seed=1973;for(var hair=0;hair<2600;hair++){seed=(seed*1664525+1013904223)>>>0;var x=seed/4294967296*w;seed=(seed*1664525+1013904223)>>>0;var y=seed/4294967296*h;cx.strokeStyle=hair%2?'#edcb8a25':'#33251a20';cx.lineWidth=.5;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+1,y+3);cx.stroke();}
 });
-var catFurMat = new THREE.MeshStandardMaterial({ map:catFurTex, roughness:.92 });
+var catFurMat = new THREE.MeshStandardMaterial({ map:catFurTex, roughness:.92, emissive:0xffffff, emissiveMap:catFurTex, emissiveIntensity:.22 }); /* 2026-10-23 overnight (Sam: "It should look more like a cat"): under the overhead lamp the muzzle and chest fell into black, a mask across the face; a little of its own warmth fills them */
 var catDarkMat = new THREE.MeshStandardMaterial({ color:0x694026,roughness:.9 });
-var catCreamMat=new THREE.MeshStandardMaterial({color:0xc5ab7c,roughness:.95});
+var catCreamMat=new THREE.MeshStandardMaterial({color:0xc5ab7c,roughness:.95,emissive:0x6a5236,emissiveIntensity:.55});
 function catPart(geo, mat, x, y, z) {var m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);gingerCat.add(m);return m;}
 // Rounded haunches, a narrow chest and the shoulder line of a resting cat.
 catPart(new THREE.SphereGeometry(.15,20,14),catFurMat,0,.155,-.025).scale.set(1,1.06,1.26);
@@ -21822,7 +21907,7 @@ catPart(new THREE.SphereGeometry(.085,16,12),catCreamMat,0,.28,.153).scale.set(.
  for(var toe=0;toe<2;toe++){var line=new THREE.Mesh(new THREE.BoxGeometry(.001,.006,.014),catDarkMat);line.position.set(side*.05+(toe-.5)*.012,.033,.184);gingerCat.add(line);}
 });
 var catHead=new THREE.Group();
-var catFaceMat=catFurMat.clone();catFaceMat.map=null;catFaceMat.color.setHex(0xa97341);
+var catFaceMat=catFurMat.clone();catFaceMat.map=null;catFaceMat.emissiveMap=null;catFaceMat.emissive.setHex(0x3a2412);catFaceMat.emissiveIntensity=.6;catFaceMat.color.setHex(0xa97341);
 var chSk=new THREE.Mesh(new THREE.SphereGeometry(.083,24,18),catFaceMat);chSk.scale.set(1.03,.93,.93);catHead.add(chSk);
 function headPart(geo,mat,x,y,z,sx,sy,sz){var m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(sx||1,sy||1,sz||1);catHead.add(m);return m;}
 // Ears have triangular faces, soft inner planes and a slight outward cant.
@@ -21834,9 +21919,9 @@ function headPart(geo,mat,x,y,z,sx,sy,sz){var m=new THREE.Mesh(geo,mat);m.positi
 headPart(new THREE.SphereGeometry(.027,16,10),catCreamMat,-.022,-.025,.071,1,.76,.74);headPart(new THREE.SphereGeometry(.027,16,10),catCreamMat,.022,-.025,.071,1,.76,.74);
 headPart(new THREE.SphereGeometry(.022,14,10),catCreamMat,0,-.044,.063,1,.5,.7);
 var noseGeo=new THREE.BufferGeometry();noseGeo.setAttribute('position',new THREE.Float32BufferAttribute([-.009,-.013,.093,.009,-.013,.093,0,-.023,.098],3));noseGeo.computeVertexNormals();catHead.add(new THREE.Mesh(noseGeo,new THREE.MeshStandardMaterial({color:0x6a4943,roughness:.7,side:THREE.DoubleSide})));
-var catEyeMat=new THREE.MeshStandardMaterial({color:0xbca965,roughness:.3,metalness:.12,emissive:0x4e3713,emissiveIntensity:.15});
-var eyeL=headPart(new THREE.SphereGeometry(.014,16,10),catEyeMat,-.035,.007,.068,1.25,.62,.45);
-var eyeR=headPart(new THREE.SphereGeometry(.014,16,10),catEyeMat,.035,.007,.068,1.25,.62,.45);
+var catEyeMat=new THREE.MeshStandardMaterial({color:0xd8b860,roughness:.3,metalness:.12,emissive:0xa87818,emissiveIntensity:.95}); /* 2026-10-23 overnight (Sam: "It should look more like a cat"): the flat dim eyes read at street distance as a dark mask across the face; rounder, and lit amber as a cat's eyes catch a lamp */
+var eyeL=headPart(new THREE.SphereGeometry(.014,16,10),catEyeMat,-.033,.009,.07,1.12,.9,.45);
+var eyeR=headPart(new THREE.SphereGeometry(.014,16,10),catEyeMat,.033,.009,.07,1.12,.9,.45);
 [eyeL,eyeR].forEach(function(eye){var pupil=new THREE.Mesh(new THREE.SphereGeometry(.006,10,8),new THREE.MeshBasicMaterial({color:0x10120d}));pupil.position.z=.012;pupil.scale.set(.25,1,.3);eye.add(pupil);var glint=new THREE.Mesh(new THREE.SphereGeometry(.002,6,6),new THREE.MeshBasicMaterial({color:0xf3dfac}));glint.position.set(-.004,.003,.013);eye.add(glint);});
 var whiskerMat=new THREE.LineBasicMaterial({color:0xc9bc94,transparent:true,opacity:.2}); /* 2026-10-23: taller ears, fainter whiskers (at street distance they read as a pale band across the face) */
 [-1,1].forEach(function(side){for(var wi=0;wi<3;wi++){var pts=[new THREE.Vector3(side*.025,-.028,.087),new THREE.Vector3(side*.064,-.024+(wi-1)*.008,.096),new THREE.Vector3(side*.102,-.02+(wi-1)*.014,.082)];catHead.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),whiskerMat));}});
@@ -25821,9 +25906,34 @@ function keyLying(key) { var v = vstate('data-lying'); return v === null || (' '
 // the trail a path stands on: { key, trail, i } or null
 function stepAt(p) {
 if (!trailsOpen()) return null;
-for (var k in V.trails) { var st = V.trails[k].steps; for (var i = 0; i < st.length; i++) if (st[i].at === p) return (!keyLying(k) || ((i === st.length - 1 || (k === 'eye' && i > 0)) && !keysOpen(k))) ? null : { key: k, trail: V.trails[k], i: i }; }
+var fk = followed();
+for (var k in V.trails) { var st = V.trails[k].steps; for (var i = 0; i < st.length; i++) if (st[i].at === p) return (!keyLying(k) || (fk && k !== fk) || ((i === st.length - 1 || (k === 'eye' && i > 0)) && !keysOpen(k))) ? null : { key: k, trail: V.trails[k], i: i }; }
 return null;
 }
+// 2026-10-23 overnight (Sam, playtest: "What happens when you get 1/3 steps in the same room? Is the first cancelled?" and at the chippy
+// "The 1 2 3 step paths need to be made much clearer. Maybe some sort of 'accept quest' button that shuts out other possibilities, at
+// least for the first one. Then some sort of indicator as to which stage you are on"): a trail's first step offers FOLLOW THIS TRAIL.
+// Once one is followed (for the night, localStorage 'dssTrailFollow'), the other trails go quiet until its key is taken (or set down
+// elsewhere, or spent), and the header shows where you are on it. Before any is followed every trail runs side by side, as before.
+var KEYF = 'dssTrailFollow';
+function nightNo() { try { return +localStorage.getItem('dssNightNo') || 0; } catch (e) { return 0; } }
+function followed() { try { var f = JSON.parse(localStorage.getItem(KEYF) || 'null'); if (f && f.n === nightNo() && V.trails[f.k] && keyLying(f.k)) return f.k; } catch (e) {} return null; }
+function follow(k) { try { localStorage.setItem(KEYF, JSON.stringify({ n: nightNo(), k: k })); } catch (e) {} }
+function trailStage() { var k = followed(); if (!k) return null; var st = V.trails[k].steps, w = 0; st.forEach(function(s) { if (walked(s.at)) w++; }); return { key: k, walked: w, n: st.length }; }
+document.addEventListener('click', function(e) {
+var b = e.target && e.target.closest && e.target.closest('.dss-trail-follow'); if (!b) return;
+e.preventDefault(); e.stopPropagation(); follow(b.getAttribute('data-k')); b.textContent = 'Following'; b.disabled = true; b.classList.add('on'); trailChip();
+}, true);
+function trailChip() {
+var strip = Array.prototype.find.call(document.querySelectorAll('#stat-bars-lifted .stat-bars, #stat-bars-lifted, .stat-bars'), function(x) { return x.getClientRects().length; });
+if (!strip) return;
+var chip = strip.querySelector('.dss-trail-chip'), t = trailStage();
+if (!t) { if (chip) chip.remove(); return; }
+if (!chip) { chip = document.createElement('span'); chip.className = 'dss-trail-chip'; strip.appendChild(chip); }
+var txt = 'Trail · ' + Math.max(1, t.walked) + ' of ' + t.n; if (chip.textContent !== txt) chip.textContent = txt;
+chip.title = t.walked ? (t.walked + ' of ' + t.n + ' steps walked; the next one is warmer when you see it.') : 'The first step is walked when you look at it.';
+}
+setInterval(trailChip, 800);
 // A room closed to you for the rest of the night (COPPER's cellar once left, O'Flatterly's shop once the page is
 // back, the Colony once its business is done): a trail step lying there counts as walked, so the trail can still
 // be followed from its next step (2026-10-11, structure pass 3).
@@ -25872,7 +25982,7 @@ if (co) return ORDER.filter(function(v) { return co[v] && (window.DSS_DEV || !un
 if (base.chorus) return ORDER.filter(function(v) { return base[v] && (window.DSS_DEV || !unwritten(base[v])); }).map(function(v) { return { voice: v, text: base[v] }; });
 var pick = {};
 ORDER.forEach(function(v) { if (base[v] != null) pick[v] = base[v]; });
-if (SW.callbacksBothWays) (V.callbacks || []).forEach(function(c) { if (c.after === p && has(c.at) && (c.back != null || window.DSS_DEV)) pick.now = backLine(c, name); }); /* 2026-10-23 (Sam, playtest at the French: pink "[Sam: now / A window, back after A window…]"): a callback with no back line of its own no longer speaks backwards in play; the pink slot shows only with DSS_DEV */
+if (SW.callbacksBothWays) (V.callbacks || []).forEach(function(c) { if (c.after === p && has(c.at) && (c.back != null)) pick.now = backLine(c, name); }); /* 2026-10-23 overnight: no DSS_DEV exception, localhost is where Sam plays; 2026-10-23 (Sam, playtest at the French: pink "[Sam: now / A window, back after A window…]"): a callback with no back line of its own no longer speaks backwards in play; the pink slot shows only with DSS_DEV */
 (V.callbacks || []).forEach(function(c) { if (c.at === p && has(c.after)) ORDER.forEach(function(v) { if (c[v] != null) pick[v] = c[v]; }); });
 var s = stepAt(p), step = s && s.trail.steps[s.i];
 if (s && trailOpen(s)) ORDER.forEach(function(v) { if (step[v] != null) pick[v] = step[v]; });
@@ -25974,7 +26084,9 @@ h += '<div class="dss-voice dss-voice-' + l.voice + '" style="margin:' + (inBox 
 (c.label ? '<span class="dss-voice-label" style="font:bold 13.5px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;font-style:normal;color:' + mark + ';' + (inBox ? '' : 'text-shadow:0 0 8px rgba(0,0,0,0.9);') + '">' + esc(c.label) + '</span>' : '') + '</div><span class="dss-voice-text">' + esc(l.text) + '</span>';
 // 2026-10-11 (Sam, structure pass 3: "make more of the trails when you get them. put a sign that says '1 of 3 steps'
 // in green"): under a trail step's line, in green, where you stand on that trail
-if (st && l.voice === 'then' && l.text === st.trail.steps[st.i].then) h += '<div class="dss-trail-sign" style="margin:5px 0 0 15px;font:bold 11.5px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;font-style:normal;color:' + (inBox ? '#2f8a3c' : '#8fe49a') + ';' + (inBox ? '' : 'text-shadow:0 0 8px rgba(0,0,0,0.9);') + '">' + (st.i + 1) + ' of ' + st.trail.steps.length + ' steps</div>';
+if (st && l.voice === 'then' && l.text === st.trail.steps[st.i].then) h += '<div class="dss-trail-sign" style="margin:5px 0 0 15px;font:bold 11.5px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;font-style:normal;color:' + (inBox ? '#2f8a3c' : '#8fe49a') + ';' + (inBox ? '' : 'text-shadow:0 0 8px rgba(0,0,0,0.9);') + '">' + (st.i + 1) + ' of ' + st.trail.steps.length + ' steps' + (followed() === st.key ? ' · following' : '') + '</div>' +
+/* 2026-10-23 overnight: the first step of a trail, while no trail is followed, offers to follow it */
+(st.i === 0 && !followed() ? '<button type="button" class="dss-trail-follow" data-k="' + st.key + '" style="margin:7px 0 0 15px;padding:5px 11px;font:bold 11px \'Courier New\',monospace;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;border-radius:2px;background:transparent;color:' + (inBox ? '#2f8a3c' : '#8fe49a') + ';border:1px solid ' + (inBox ? 'rgba(47,138,60,0.6)' : 'rgba(143,228,154,0.6)') + ';">Follow this trail</button>' : '');
 // the first time this voice ever speaks: who it is, in its own colour, small
 if (c.about && !met[l.voice]) h += '<div class="dss-voice-about" style="font-size:12px;line-height:1.35;opacity:0.85;margin:2px 0 0 12px;font-style:italic;letter-spacing:0;' + (c.about.indexOf('[Sam:') >= 0 ? pink : '') + '">' + esc(c.about) + '</div>';
 h += '</div>';
@@ -30632,6 +30744,7 @@ mesh(new THREE.BoxGeometry(0.37,0.46,0.003),pushWear,0,0.5,0.047,doorG);
 [-1,1].forEach(function(side){[-1,1].forEach(function(up){var fixing=mesh(new THREE.SphereGeometry(0.004,8,5),M.brass,side*0.165,0.5+up*0.205,0.05,doorG);fixing.scale.z=0.3;});});
 var doorLight = new THREE.PointLight(0xc0d8b0, 0.4, 3, 1.8); doorLight.position.set(-5.8, 1.6, 0.15); scene.add(doorLight);
 var doorHit = mesh(new THREE.BoxGeometry(1.2, 2.5, 0.5), M.hidden, 0, 1.2, 0.15, doorG);
+var cbWayOut = window.dssWayOutArrow(scene, -2.0, 0.2, -6.15, 0.15); /* 2026-10-23 overnight: the door is off the frame to the left */
 var gentsG = new THREE.Group(); gentsG.position.set(W / 2 - 0.58, 0, -D / 2 + 0.08); scene.add(gentsG);
 mesh(new THREE.BoxGeometry(0.85, 2.1, 0.06), new THREE.MeshStandardMaterial({ color: 0x3a3a30, roughness: 0.85 }), 0, 1.05, 0, gentsG);
 mesh(new THREE.BoxGeometry(1.0, 0.1, 0.12), M.darkWood, 0, 2.15, 0, gentsG); mesh(new THREE.BoxGeometry(0.08, 2.2, 0.12), M.darkWood, -0.5, 1.1, 0, gentsG); mesh(new THREE.BoxGeometry(0.08, 2.2, 0.12), M.darkWood, 0.5, 1.1, 0, gentsG);
@@ -30728,8 +30841,11 @@ keepProse: true, prose: function() { return "He resumes a conversation he hadn�
 { root: optics, name: 'Optics', pos: [0.2, 1.7, -0.5], tgt: [0.2, 2.2, -D / 2 + 0.2], haloAt: [-0.5, 2.58, -D / 2 + 0.3], haloSc: 0.65 },
 { root: phoneHit, name: 'A telephone', pos: [-1.6, 1.6, -0.6], tgt: [-2.35, 1.45, -D / 2 + 0.3], haloAt: [-2.35, 1.5, -D / 2 + 0.3], haloSc: 0.5,
 actions: function() { return k.passageLinks('.phone-ringing tw-link'); }, prose: function() { return k.modalProse(); } },
-{ root: doorHit, name: 'A door', pos: [-3.8, 1.5, 0.7], tgt: [-6.1, 1.3, 0.15], haloAt: [-5.95, 1.2, 0.15], haloSc: 0.6,
+{ root: cbWayOut, name: 'A door', label: 'WAY OUT', pos: [-3.8, 1.5, 0.7], tgt: [-6.1, 1.3, 0.15], haloAt: [-1.72, 0.14, 0.2], haloSc: 0.55,
 actions: function() { return window.dssStreetExit(); }, // Bernard said find your own way out: the door offers the page's own exit (it stays in the header too)
+/* 2026-10-23 overnight (Sam, playtest: "I am stuck in the coach and horses"): the door stands on the left wall, off the frame
+   (x -1.25 on screen at 1440x900), so the room had no way out to see; the chalk arrow on the floor points to it, as in the
+   Colony and LACKLAND's office, and the close-up still turns to the door */
 },
 { root: gentsHit, name: 'The Gents', pos: [W / 2 - 1.0, 1.4, -1.45], tgt: [W / 2 - 0.58, 1.1, -D / 2 + 0.08], haloAt: [W / 2 - 0.58, 1.2, -D / 2 + 0.22], haloSc: 1.3,
 actions: function() { return window._dssGentsGrafDone ? [] : [grafLink]; }, keepLine: true, notAWay: true,
@@ -32477,6 +32593,57 @@ new THREE.MeshStandardMaterial({ color: 0x4a3a30, roughness: 0.9 })
 romFarB.position.set(-19, 6, -3);
 romFarB.castShadow = true;
 scene.add(romFarB);
+
+// 2026-10-23 overnight (Sam, playtest: "This 3d render feels a bit more basic than the others. Need improvement."): the two far
+// buildings were bare boxes and both streets ran off into black, so the pub stood alone in a void. Each now has dressed sash
+// windows (a few lit), the next-door ground floors carry warm shop glass, and every lit pane has a soft additive glow that holds
+// through the fog, so both streets read as lived-in Soho going on into the murk. No new lights (the scene's budget is spent).
+(function() {
+var dw = window.dssScene && window.dssScene.makeDressedWindow;
+var gc = document.createElement('canvas'); gc.width = gc.height = 64;
+var gx = gc.getContext('2d'), gg = gx.createRadialGradient(32, 32, 0, 32, 32, 32);
+gg.addColorStop(0, 'rgba(255,214,150,1)'); gg.addColorStop(0.35, 'rgba(255,180,100,0.45)'); gg.addColorStop(1, 'rgba(255,160,80,0)');
+gx.fillStyle = gg; gx.fillRect(0, 0, 64, 64);
+var glowTex = new THREE.CanvasTexture(gc);
+function glow(x, y, z, sc, op) {
+var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffc887, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+sp.position.set(x, y, z); sp.scale.set(sc, sc, 1); scene.add(sp); return sp;
+}
+function frame(w, h, d) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), windowFrame); }
+// Greek St, the far building (face at x = 0, facing +X)
+var gLit = [[false, true, false], [true, false, false], [false, false, true]];
+for (var r = 0; r < 3; r++) for (var c = 0; c < 3; c++) {
+var lit = gLit[r][c], y = 3.6 + r * 3.1, z = -12.2 - c * 2.3;
+var g = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.25), dw ? dw(lit, (r + c) % 3, (r * 3 + c) % 4) : darkGlass);
+g.rotation.y = Math.PI / 2; g.position.set(0.04, y, z); scene.add(g);
+var f = frame(0.06, 1.38, 0.82); f.position.set(0.005, y, z); scene.add(f); /* its face stays behind the glass */
+if (lit) glow(0.6, y, z, 2.2, 0.32);
+}
+// Romilly St, the far building (face at z = 0, facing +Z)
+var rLit = [[true, false, false], [false, false, true], [false, true, false]];
+for (var r2 = 0; r2 < 3; r2++) for (var c2 = 0; c2 < 3; c2++) {
+var lit2 = rLit[r2][c2], y2 = 3.4 + r2 * 3.0, x2 = -16.3 - c2 * 2.4;
+var g2 = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.25), dw ? dw(lit2, (r2 * 2 + c2) % 3, (r2 + c2 * 2) % 4) : darkGlass);
+g2.position.set(x2, y2, 0.04); scene.add(g2);
+var f2 = frame(0.82, 1.38, 0.06); f2.position.set(x2, y2, 0.005); scene.add(f2);
+if (lit2) glow(x2, y2, 0.6, 2.2, 0.32);
+}
+// the next-door ground floors: a lit shop window each, with its glow on the pavement side
+var sc = document.createElement('canvas'); sc.width = 256; sc.height = 160; var sx = sc.getContext('2d');
+var sg = sx.createRadialGradient(128, 60, 8, 128, 80, 170); sg.addColorStop(0, '#d9a25a'); sg.addColorStop(0.55, '#7a4a1e'); sg.addColorStop(1, '#2a160a');
+sx.fillStyle = sg; sx.fillRect(0, 0, 256, 160);
+sx.fillStyle = 'rgba(30,16,6,0.75)'; sx.fillRect(0, 112, 256, 48); /* a counter */
+sx.fillStyle = 'rgba(40,22,8,0.55)'; for (var sh = 0; sh < 3; sh++) sx.fillRect(14, 22 + sh * 26, 228, 4); /* shelves */
+sx.fillStyle = 'rgba(20,10,4,0.85)'; sx.beginPath(); sx.ellipse(176, 70, 9, 11, 0, 0, Math.PI * 2); sx.fill(); sx.fillRect(164, 80, 24, 34); /* someone at the counter */
+sx.fillStyle = 'rgba(255,240,210,0.08)'; sx.fillRect(0, 0, 256, 4);
+var shopMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), fog: true }); /* a lit shop, someone at the counter */
+var gs = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.7), shopMat); gs.rotation.y = Math.PI / 2; gs.position.set(0.05, 1.45, -7.6); scene.add(gs);
+var gsf = frame(0.08, 1.9, 2.8); gsf.position.set(0.005, 1.45, -7.6); scene.add(gsf);
+glow(0.9, 1.4, -7.6, 3.6, 0.28);
+var rs = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.7), shopMat); rs.position.set(-12.2, 1.45, 0.05); scene.add(rs);
+var rsf = frame(2.8, 1.9, 0.08); rsf.position.set(-12.2, 1.45, 0.005); scene.add(rsf);
+glow(-12.2, 1.4, 0.9, 3.6, 0.28);
+})();
 
 // --- BUILDINGS ACROSS THE STREETS ---
 // Across Greek St (east side — well behind camera so it doesn't block the view)
@@ -37985,11 +38152,12 @@ function buildCaScene() {
   hullMesh.position.set(0.35, 0.04, 0);
   caSail.add(hullMesh);
   caSail.rotation.y = 0.35;
-  caSail.position.set(30, -0.1, -52);
+  caSail.scale.setScalar(1.75); /* 2026-10-23 overnight: larger, so it reads at once */
+  caSail.position.set(14, -0.1, -52);
   scene.add(caSail);
   // The ship's dark smudge of reflection on the water beneath it
   var sailReflMat = new THREE.MeshBasicMaterial({ color: 0x100a10, transparent: true, opacity: 0, depthWrite: false, fog: false });
-  var sailRefl = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), sailReflMat);
+  var sailRefl = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.85), sailReflMat);
   sailRefl.rotation.x = -Math.PI / 2;
   sailRefl.position.set(30, -0.13, -51.2);
   scene.add(sailRefl);
@@ -41800,8 +41968,11 @@ function buildCaScene() {
 
     // The departing ship — crossing right to left over four minutes,
     // fading in from nothing and out again at the far end
-    var sailCycle = (t * 0.24) % 68;
-    var sailFade = Math.sin((sailCycle / 68) * Math.PI);
+    /* 2026-10-23 overnight (Sam, playtest: "the boat doesn't appear till too late because it is hidden behind the pillar, it should be
+       moved to the right so it is visible straight away and made more visible"): it starts in the open water right of the columns
+       (x 14, on screen at once) at full strength, and is drawn larger; it still crosses, fades at the far end and comes round again */
+    var sailCycle = (16 + t * 0.24) % 68;
+    var sailFade = Math.min(1, Math.sin((sailCycle / 68) * Math.PI) * 1.6);
     caSail.position.x = 30 - sailCycle;
     caSail.position.y = -0.1 + tide * 0.6 + Math.sin(t * 0.5) * 0.03;
     caSail.rotation.z = Math.sin(t * 0.4) * 0.02;
@@ -57854,6 +58025,8 @@ Better not tomorrow.
 <span class="dss-hub-flag" data-k="notebook" style="display:none">(print: $notebook)</span>\
 <!-- 2026-09-28 drink route: the stage the map can read. blackout / far / loose / empty. -->\
 <span class="dss-hub-flag" data-k="drunk" style="display:none">(cond: $sobriety < 10, "blackout", $sobriety < 30, "far", $sobriety < 60, "loose", "")</span>\
+<!-- 2026-10-23 overnight (Sam, playtest: "You should still get the slip that prompts you to get directions to cecil court"): once THE GREAT HAM has named INIS, the next street visit with no other slip carries one, with Get Directions -->(if: $knowsCecilCourt is true and $knowsAboutPage is not true and $cecilTipShown is not true and $streetTipLap is not $returns)[(set: $cecilTipShown to true)(set: $streetTipLap to $returns)<script>setTimeout(function(){ if(window.dssInlineHint) window.dssInlineHint("THE GREAT HAM told you to look for INIS O&#39;FLATTERLY in Cecil Court.", { go: "cecil" }); }, 1100);</script>]\
+<!-- 2026-10-23 overnight (Sam, playtest: "Now I have the errand the path should light up back to the pillars so I can go to carthage"): taking on Page 93 is a chosen path, so the way to the Pillars is lit once, as a slip's Get Directions would light it, until you get there -->(if: $knowsAboutPage is true and $hasMissingPage is not true and $returnedPage is not true and $pillarsDirLit is not true)[(set: $pillarsDirLit to true)<script>if(window.dssDirections) window.dssDirections.set("pillars");</script>]\
 (if: $hasMissingPage is true and $returnedPage is false and $pageReminderShown is false)[(set: $pageReminderShown to true)(set: $streetTipLap to $returns)<script>setTimeout(function(){ if(window.dssInlineHint) window.dssInlineHint("Page 93 is in your pocket. INIS O&#39;FLATTERLY is waiting for it in Cecil Court.", { go: "cecil" }); }, 1100);</script>]\
 <span class="dss-hub-flag" data-k="thread-cecil" style="display:none">(if: $knowsCecilCourt is true and $returnedPage is false)[on]</span>\
 (set: _ronSeen to false)(if: $visited is a datamap and $visited contains "Ronnies" and $visited's Ronnies is true)[(set: _ronSeen to true)]\
@@ -59492,9 +59665,9 @@ Do you keep going?
 <!-- RESTORED FORK (2026-07-22): both destinations always on offer — press on to the pub, or answer NE PLUS ULTRA and cross early. Early crossing is safe: Green Sea/LINE 2 is gated behind the page quest at Carthage shore, and The Interval self-guards. The lap is the price. --><!-- NARROWED 2026-09-14 (Sam: "I was able to go straight to Carthage from my first visit to the Pillars, I thought it was meant to be gated"). The gate he asked for went on the in-pub "I can walk on water" link; this interlude was the other way through and had none. The sea-road now opens once he has been inside the pub once, which lines up with the pub link's own gate: on the first trip you go to the Pillars, and both routes open from the second. Delete the (if:) to put the fork back as it was. --><!-- 2026-10-21 (Sam, playtest: "this page should fit on a laptop screen"): the comments here are on one line each and glued to what follows, and the scene's own tags end in \, so the blank lines that stood between them no longer print as empty lines -->\
 (unless: $pillarsVisits is a num)[(set: $pillarsVisits to 0)]\
 (unless: $inisToldOfPillars is a boolean)[(set: $inisToldOfPillars to false)]\
-<!-- PHASES (2026-09-14). The pub itself is only open in two of the night's three Pillars phases: before the critic, and again once page 93 is back with Inis and the third column has been named. In between, the door is shut and the only thing out here is the sea. --><!-- 2026-10-09 (evening), Sam: "I want it gated until you meet Inis and get the little quest for page 93. Otherwise it should take you to the pub." The pub door is open in every phase now; the sea-road waits for O'Flatterly's quest ($knowsAboutPage), not for the critic. -->[[Yes|Approach The Pillars]]
+<!-- PHASES (2026-09-14). The pub itself is only open in two of the night's three Pillars phases: before the critic, and again once page 93 is back with Inis and the third column has been named. In between, the door is shut and the only thing out here is the sea. --><!-- 2026-10-09 (evening), Sam: "I want it gated until you meet Inis and get the little quest for page 93. Otherwise it should take you to the pub." The pub door is open in every phase now; the sea-road waits for O'Flatterly's quest ($knowsAboutPage), not for the critic. --><!-- 2026-10-23 overnight (Sam, playtest: "when you have the key 'seek the shore' should not be emphasised. It should also encourage you to try the third pillar"): with a key in the pocket after INIS's word, Yes (the way to the third pillar) leads and the shore steps back -->(if: $inisToldOfPillars is true and $dreamKey is a string and $dreamKey is not "")[<span class="mar-lead">[[Yes|Approach The Pillars]]<span class="mar-key-chip" aria-hidden="true">⚲ The third pillar</span></span>](else:)[[[Yes|Approach The Pillars]]]
 <!-- 2026-10-11 structure pass 3: once Carthage is finished (the page found and the Green Sea's table sat at), the shore only says "You have what you came for" and wakes you, so the sea road closes, as the Carthage shore itself decides. -->(if: $knowsAboutPage is true and not (((history:) contains "LINE 2") and ($hasMissingPage is true or $returnedPage is true)))[//Somewhere out past the breakers, an older shore. //
-[[Seek the shore|The coast of Carthage]]]
+(if: $inisToldOfPillars is true and $dreamKey is a string and $dreamKey is not "")[<span class="mar-quiet">[[Seek the shore|The coast of Carthage]]</span>](else:)[[[Seek the shore|The coast of Carthage]]]]
 <!-- A WAY BACK (2026-09-14, Sam: "so you don't have to loop loads"). In the middle phase the pub is shut and the shore was the only thing on offer, so answering NE PLUS ULTRA meant crossing whether you wanted to or not. The storm always lets you turn round now. -->[[Back to Soho|Dean Street]]\
 </div>
 
@@ -59611,7 +59784,7 @@ INIS O’FLATTERLY clocks you, first with his eyes still downcast, then eventual
 
 O’Flatterly coughs, disturbing the dust on the cover before him, agitating its thousand motes into flight, which hang over his desk like the clouds over Willesden Junction.
 
-He slaps the manuscript like an arse and says: ‘Page 93 is missing. Find it for me!’<span class="dss-refusal-after" data-k="inis" hidden>You can swallow that; he’s neither publisher nor agent, and besides he’ll give you more than he could if he were. You’ll take the book and chance your arm elsewhere.</span>
+He slaps the manuscript like an arse and says: <span class="dss-quest-line">‘Page 93 is missing. Find it for me!’</span><!-- 2026-10-23 overnight: the errand itself, in the quest-line gold, now that its card waits for "I’ll look for it" --><span class="dss-refusal-after" data-k="inis" hidden>You can swallow that; he’s neither publisher nor agent, and besides he’ll give you more than he could if he were. You’ll take the book and chance your arm elsewhere.</span>
 
 (set: $knowsAboutPage to true)
 
@@ -59634,7 +59807,21 @@ He slaps the manuscript like an arse and says: ‘Page 93 is missing. Find it fo
 <div class="dss-quest-title">PAGE 93</div>
 <div class="dss-quest-body">INIS O’FLATTERLY is searching for a missing page; page 93 in his manuscript. You’ll need to leave Soho to find it. Return it to him.</div>
 </div>
-<script>(function(){setTimeout(function(){if(window.dssQuestPopup)window.dssQuestPopup();},1500);})();</script>
+<script>(function(){
+  /* 2026-10-23 overnight (Sam, playtest: "this errand popup shouldn't be triggered till you click 'I'll look for it'"): the
+     errand card now comes on that click and its button takes you out; dismissed, the link just leaves. On window, so it
+     hears the click before the departure fade's document listener. */
+  var gen = window._passageGen;
+  function onGo(e) {
+    if (window._passageGen !== gen) { window.removeEventListener('click', onGo, true); return; }
+    var l = e.target && e.target.closest && e.target.closest('tw-link');
+    if (!l || (l.textContent || '').trim() !== 'I’ll look for it') return;
+    if (window._dssQuestPopupSeenGen === window._passageGen || !window.dssQuestPopup) { window.removeEventListener('click', onGo, true); return; }
+    e.preventDefault(); e.stopImmediatePropagation();
+    window._dssSlipFiledAt = 0; window.dssQuestPopup();
+  }
+  setTimeout(function() { gen = window._passageGen; window.addEventListener('click', onGo, true); }, 0);
+})();</script>
 
 [[I’ll look for it|Dean Street]]
 
@@ -61415,7 +61602,7 @@ A little warm milk plashes on your lips. It tastes of grass and moonlight and so
 
 ‘This,’ you think, ‘is why he is unwell.’
 
-[[Get up and try again|Coach and Horses bar]]
+<!-- 2026-10-23 overnight (Sam, playtest: "'Milk her' should throw you out of the pub, not back to the bar. Then you can reenter"): you are on the pavement, so the link leaves you outside the Coach -->[[Get up and try again|Approach The Coach]]
 
 :: Cow ride success {"position":"1200,1200","size":"100,100"}
 (set: $cowRideWon to true)\
@@ -62720,7 +62907,7 @@ He pulls //(print: $bookTitle)// close.
 
 You say you’ve not, thank him, and make to leave when he calls you back.
 
-<!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="himalayas" hidden>‘Looks like you found thunder on the mountain. It still won’t sell but, if it’s any consolation, it’ll keep.’<br><br></span>(if: $mantraComplete is true)[<span class="dss-gift-now" data-gift="himalayas" hidden></span>]‘When you’re next in Cecil Court, look for INIS O’FLATTERLY. Quare fellow, knows a lot about books. I think he’d like to meet you. He’s been trying to get to Carthage, on his way to The Pillars of Hercules.’
+<!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="himalayas" hidden>‘Looks like you found thunder on the mountain. It still won’t sell but, if it’s any consolation, it’ll keep.’<br><br></span>(if: $mantraComplete is true)[<span class="dss-gift-now" data-gift="himalayas" hidden></span>]<span class="dss-quest-line">‘When you’re next in Cecil Court, look for INIS O’FLATTERLY. Quare fellow, knows a lot about books. I think he’d like to meet you. He’s been trying to get to Carthage, on his way to The Pillars of Hercules.’</span>
 <!-- 2026-10-11, Sam: the venue-opens line wherever a new venue opens. The header back-fills $knowsCecilCourt as soon as $metCritic is true, so this keys on its own once-flag; the novelist carries his own line inside the haunt box. -->
 (if: $cecilOpensSaid is not true)[(if: not ($haunts contains $haunt2))[(set: $cecilOpensSaid to true)<div class="haunt-opens">Cecil Court opens.</div>]]
 (set: $knowsCecilCourt to true)
@@ -63199,7 +63386,7 @@ tw-passage:has(#dss-title){transform:none!important;animation:dst-arrive 1.4s ea
 <div class="dst-fog" style="position:absolute;top:35%;left:-10%;width:120%;height:18%;background:linear-gradient(to right,transparent 5%,rgba(100,130,180,0.03) 25%,rgba(100,130,180,0.05) 50%,rgba(100,130,180,0.03) 75%,transparent 95%);animation:dst-fog1 22s ease-in-out infinite;"></div>
 <div class="dst-fog" style="position:absolute;top:55%;left:-10%;width:120%;height:14%;background:linear-gradient(to right,transparent 10%,rgba(90,120,160,0.025) 30%,rgba(90,120,160,0.04) 55%,rgba(90,120,160,0.025) 80%,transparent 95%);animation:dst-fog2 28s ease-in-out infinite;"></div>
 <div class="dst-fog" style="position:absolute;top:70%;left:-10%;width:120%;height:10%;background:linear-gradient(to right,transparent 15%,rgba(80,110,150,0.02) 40%,rgba(80,110,150,0.035) 60%,transparent 90%);animation:dst-fog1 35s ease-in-out infinite;animation-delay:-10s;"></div>
-<svg class="dst-an-top" style="position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:1;opacity:0.78;" viewBox="0 0 420 68" preserveAspectRatio="xMidYMin meet" aria-hidden="true"><defs><linearGradient id="dstAnFadeL" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="white"/><stop offset="50%" stop-color="white"/><stop offset="85%" stop-color="white" stop-opacity="0.3"/><stop offset="100%" stop-color="black"/></linearGradient><linearGradient id="dstAnFadeR" x1="1" y1="0" x2="0" y2="0"><stop offset="0%" stop-color="white"/><stop offset="50%" stop-color="white"/><stop offset="85%" stop-color="white" stop-opacity="0.3"/><stop offset="100%" stop-color="black"/></linearGradient><mask id="dstAnMaskL" maskUnits="userSpaceOnUse" x="0" y="0" width="210" height="68"><rect x="0" y="0" width="210" height="68" fill="url(#dstAnFadeL)"/></mask><mask id="dstAnMaskR" maskUnits="userSpaceOnUse" x="210" y="0" width="210" height="68"><rect x="210" y="0" width="210" height="68" fill="url(#dstAnFadeR)"/></mask><g id="dstAnLily"><!-- Main stem --><path d="M40,-4 Q45,8 52,20 Q60,34 72,42 Q88,52 110,56 Q135,60 165,58 Q185,54 210,48" fill="none" stroke="#6a94c8" stroke-width="3.5" stroke-linecap="round"/><path d="M72,42 Q68,50 62,58 Q58,64 54,72" fill="none" stroke="#6a94c8" stroke-width="2.8" stroke-linecap="round"/><!-- Left leaf --><path d="M38,-2 Q28,6 18,18 Q10,30 8,40 Q6,50 14,56 Q24,60 36,54 Q46,46 50,34 Q52,24 48,14 Q44,6 38,-2 Z" fill="#2a4878" fill-opacity="0.28" stroke="#6a94c8" stroke-width="3.2" stroke-linejoin="round"/><path d="M38,-2 Q30,14 22,30 Q16,42 14,56" fill="none" stroke="#6a94c8" stroke-width="2" opacity="0.6"/><path d="M30,10 Q24,14 18,20" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.35"/><path d="M26,22 Q20,28 14,34" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.3"/><path d="M22,34 Q18,40 14,46" fill="none" stroke="#6a94c8" stroke-width="1" opacity="0.25"/><!-- Right leaf --><path d="M44,0 Q56,8 66,20 Q74,32 76,42 Q78,52 72,58 Q62,64 50,60 Q42,54 40,44 Q38,34 40,22 Q42,12 44,0 Z" fill="#1e3860" fill-opacity="0.22" stroke="#6a94c8" stroke-width="3.2" stroke-linejoin="round"/><path d="M44,0 Q56,16 66,32 Q72,44 72,58" fill="none" stroke="#6a94c8" stroke-width="2" opacity="0.55"/><path d="M50,10 Q58,16 64,22" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.3"/><path d="M54,22 Q62,28 68,34" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.28"/><path d="M58,34 Q66,40 72,46" fill="none" stroke="#6a94c8" stroke-width="1" opacity="0.22"/><!-- Flower 1 --><path d="M80,38 Q76,42 72,50 Q70,56 74,60 Q78,64 84,62 Q90,58 88,50 Q86,42 80,38 Z" fill="#c0d8ec" fill-opacity="0.45" stroke="#6a94c8" stroke-width="2.8" stroke-linejoin="round"/><path d="M76,50 L80,60" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.4"/><path d="M84,48 L82,60" fill="none" stroke="#6a94c8" stroke-width="1" opacity="0.35"/><path d="M80,38 Q82,34 86,30 Q90,26 92,22" fill="none" stroke="#6a94c8" stroke-width="2.2" stroke-linecap="round"/><!-- Flower 2 --><path d="M102,34 Q98,38 96,44 Q94,50 98,54 Q102,56 106,52 Q110,48 108,42 Q106,36 102,34 Z" fill="#b0ccdc" fill-opacity="0.4" stroke="#6a94c8" stroke-width="2.6" stroke-linejoin="round"/><path d="M100,44 L100,54" fill="none" stroke="#6a94c8" stroke-width="1" opacity="0.35"/><path d="M102,34 Q104,30 108,26" fill="none" stroke="#6a94c8" stroke-width="2" stroke-linecap="round"/><!-- Flower 3 --><path d="M126,30 Q122,34 120,40 Q118,46 122,48 Q126,50 130,46 Q132,40 130,34 Q128,30 126,30 Z" fill="#a8c4dc" fill-opacity="0.35" stroke="#6a94c8" stroke-width="2.4" stroke-linejoin="round"/><path d="M126,30 Q128,26 132,22" fill="none" stroke="#6a94c8" stroke-width="1.8" stroke-linecap="round"/><!-- Flower 4 --><path d="M152,26 Q148,30 148,36 Q150,40 154,38 Q158,34 156,28 Q154,26 152,26 Z" fill="#a0bcd8" fill-opacity="0.3" stroke="#6a94c8" stroke-width="2.2" stroke-linejoin="round"/><path d="M152,26 Q154,22 158,18" fill="none" stroke="#6a94c8" stroke-width="1.6" stroke-linecap="round"/><!-- Flower 5 --><path d="M170,22 Q168,26 168,30 Q170,34 174,30 Q176,26 172,22 Z" fill="#98b4d4" fill-opacity="0.28" stroke="#6a94c8" stroke-width="2" stroke-linejoin="round"/><path d="M170,22 Q172,18 176,14" fill="none" stroke="#6a94c8" stroke-width="1.4" stroke-linecap="round"/><!-- Small leaf --><path d="M110,56 Q118,52 124,56 Q128,62 122,66 Q114,68 110,62 Q108,58 110,56 Z" fill="#2e4a78" fill-opacity="0.18" stroke="#6a94c8" stroke-width="2" stroke-linejoin="round" opacity="0.6"/><!-- Background lead --><path d="M0,20 Q10,18 20,22 Q30,26 36,30" fill="none" stroke="#6a94c8" stroke-width="1.5" opacity="0.25"/><path d="M0,50 Q8,46 16,48 Q24,52 30,50" fill="none" stroke="#6a94c8" stroke-width="1.3" opacity="0.2"/><path d="M160,58 Q172,54 186,56 Q200,60 210,56" fill="none" stroke="#6a94c8" stroke-width="1.4" opacity="0.15"/></g></defs><g filter="url(#dss-ink-fine)"><use href="#dstAnLily" mask="url(#dstAnMaskL)"/><g mask="url(#dstAnMaskR)" transform="translate(420,0) scale(-1,1)"><use href="#dstAnLily"/></g></g></svg>
+<svg class="dst-an-top" style="position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:1;opacity:0.78;" viewBox="0 0 420 68" preserveAspectRatio="xMidYMin meet" aria-hidden="true"><defs><linearGradient id="dstAnFadeL" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="white"/><stop offset="50%" stop-color="white"/><stop offset="85%" stop-color="white" stop-opacity="0.3"/><stop offset="100%" stop-color="black"/></linearGradient><linearGradient id="dstAnFadeR" x1="1" y1="0" x2="0" y2="0"><stop offset="0%" stop-color="white"/><stop offset="50%" stop-color="white"/><stop offset="85%" stop-color="white" stop-opacity="0.3"/><stop offset="100%" stop-color="black"/></linearGradient><mask id="dstAnMaskL" maskUnits="userSpaceOnUse" x="0" y="0" width="210" height="68"><rect x="0" y="0" width="210" height="68" fill="url(#dstAnFadeL)"/></mask><mask id="dstAnMaskR" maskUnits="userSpaceOnUse" x="210" y="0" width="210" height="68"><rect x="210" y="0" width="210" height="68" fill="url(#dstAnFadeR)"/></mask><g id="dstAnLily"><!-- Main stem --><path d="M40,-4 Q45,8 52,20 Q60,34 72,42 Q88,52 110,56 Q135,60 165,58 Q185,54 210,48" fill="none" stroke="#6a94c8" stroke-width="3.5" stroke-linecap="round"/><path d="M72,42 Q68,50 62,58 Q58,64 54,72" fill="none" stroke="#6a94c8" stroke-width="2.8" stroke-linecap="round"/><!-- Left leaf --><path d="M38,-2 Q28,6 18,18 Q10,30 8,40 Q6,50 14,56 Q24,60 36,54 Q46,46 50,34 Q52,24 48,14 Q44,6 38,-2 Z" fill="#2a4878" fill-opacity="0.28" stroke="#6a94c8" stroke-width="3.2" stroke-linejoin="round"/><path d="M38,-2 Q30,14 22,30 Q16,42 14,56" fill="none" stroke="#6a94c8" stroke-width="2" opacity="0.6"/><path d="M30,10 Q24,14 18,20" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.35"/><path d="M26,22 Q20,28 14,34" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.3"/><path d="M22,34 Q18,40 14,46" fill="none" stroke="#6a94c8" stroke-width="1" opacity="0.25"/><!-- Right leaf --><path d="M44,0 Q56,8 66,20 Q74,32 76,42 Q78,52 72,58 Q62,64 50,60 Q42,54 40,44 Q38,34 40,22 Q42,12 44,0 Z" fill="#1e3860" fill-opacity="0.22" stroke="#6a94c8" stroke-width="3.2" stroke-linejoin="round"/><path d="M44,0 Q56,16 66,32 Q72,44 72,58" fill="none" stroke="#6a94c8" stroke-width="2" opacity="0.55"/><path d="M50,10 Q58,16 64,22" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.3"/><path d="M54,22 Q62,28 68,34" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.28"/><path d="M58,34 Q66,40 72,46" fill="none" stroke="#6a94c8" stroke-width="1" opacity="0.22"/><!-- Flower 1 --><path d="M80,38 Q76,42 72,50 Q70,56 74,60 Q78,64 84,62 Q90,58 88,50 Q86,42 80,38 Z" fill="#c0d8ec" fill-opacity="0.45" stroke="#6a94c8" stroke-width="2.8" stroke-linejoin="round"/><path d="M76,50 L80,60" fill="none" stroke="#6a94c8" stroke-width="1.2" opacity="0.4"/><path d="M84,48 L82,60" fill="none" stroke="#6a94c8" stroke-width="1" opacity="0.35"/><path d="M80,38 Q82,34 86,30 Q90,26 92,22" fill="none" stroke="#6a94c8" stroke-width="2.2" stroke-linecap="round"/><!-- Flower 2 --><path d="M102,34 Q98,38 96,44 Q94,50 98,54 Q102,56 106,52 Q110,48 108,42 Q106,36 102,34 Z" fill="#b0ccdc" fill-opacity="0.4" stroke="#6a94c8" stroke-width="2.6" stroke-linejoin="round"/><path d="M100,44 L100,54" fill="none" stroke="#6a94c8" stroke-width="1" opacity="0.35"/><path d="M102,34 Q104,30 108,26" fill="none" stroke="#6a94c8" stroke-width="2" stroke-linecap="round"/><!-- Flower 3 --><path d="M126,30 Q122,34 120,40 Q118,46 122,48 Q126,50 130,46 Q132,40 130,34 Q128,30 126,30 Z" fill="#a8c4dc" fill-opacity="0.35" stroke="#6a94c8" stroke-width="2.4" stroke-linejoin="round"/><path d="M126,30 Q128,26 132,22" fill="none" stroke="#6a94c8" stroke-width="1.8" stroke-linecap="round"/><!-- Flower 4 --><path d="M152,26 Q148,30 148,36 Q150,40 154,38 Q158,34 156,28 Q154,26 152,26 Z" fill="#a0bcd8" fill-opacity="0.3" stroke="#6a94c8" stroke-width="2.2" stroke-linejoin="round"/><path d="M152,26 Q154,22 158,18" fill="none" stroke="#6a94c8" stroke-width="1.6" stroke-linecap="round"/><!-- Flower 5 --><path d="M170,22 Q168,26 168,30 Q170,34 174,30 Q176,26 172,22 Z" fill="#98b4d4" fill-opacity="0.28" stroke="#6a94c8" stroke-width="2" stroke-linejoin="round"/><path d="M170,22 Q172,18 176,14" fill="none" stroke="#6a94c8" stroke-width="1.4" stroke-linecap="round"/><!-- Small leaf --><path d="M110,56 Q118,52 124,56 Q128,62 122,66 Q114,68 110,62 Q108,58 110,56 Z" fill="#2e4a78" fill-opacity="0.18" stroke="#6a94c8" stroke-width="2" stroke-linejoin="round" opacity="0.6"/><!-- Background lead --><path d="M0,20 Q10,18 20,22 Q30,26 36,30" fill="none" stroke="#6a94c8" stroke-width="1.5" opacity="0.25"/><path d="M0,50 Q8,46 16,48 Q24,52 30,50" fill="none" stroke="#6a94c8" stroke-width="1.3" opacity="0.2"/><path d="M160,58 Q172,54 186,56 Q200,60 210,56" fill="none" stroke="#6a94c8" stroke-width="1.4" opacity="0.15"/></g></defs><!-- no ink filter: this art is drawn at 420 wide and stretched across the screen, which blows the fibre grain up into visible pixels (Sam 2026-10-23) --><g><use href="#dstAnLily" mask="url(#dstAnMaskL)"/><g mask="url(#dstAnMaskR)" transform="translate(420,0) scale(-1,1)"><use href="#dstAnLily"/></g></g></svg>
 <!-- Drifting petals — lily-of-the-valley petals sway and rotate as they
      drift down the page. Two drift patterns alternate so the motion feels
      organic rather than synchronised. -->
@@ -64706,6 +64893,9 @@ tw-story:has(.nazca-race-stage, .pr-stage, .pyr-run-stage, .hc-stage, .rc-stage,
 .nazca-race-stage .nz-touch { display:none; gap:8px; margin-top:12px; }
 .nazca-race-stage .nz-touch button { flex:1; min-height:52px; touch-action:none; user-select:none; -webkit-user-select:none; }
 @media (pointer:coarse) { .nazca-race-stage .nz-touch { display:flex; } }
+/* 2026-10-23 overnight (Sam: "In full screen laptop you should never need to scroll down"): as the Nazca Race already does, the other
+   games' on-screen pads show only on a touch screen; with a mouse and keys they cost the page its last 55px */
+@media (pointer:fine) { .rc-pad, .hc-pad, .pr-pad { display: none !important; } }
 @media (max-width:520px) { .nazca-race-stage .nz-dashboard { padding:8px 10px; gap:10px; } .nz-dashboard strong { font-size:17px; } .nz-dashboard small { font-size:8px; } .nz-dashboard .nz-charge { max-width:160px; } }
 #nazca-race-canvas { width: 100%; height: auto; display: block; border: 1px solid rgba(212,174,106,0.25); background: #d9c6a0; }
 #nazca-race-map { position: absolute; top: 10px; right: 10px; width: 150px; height: 100px; pointer-events: none; }
@@ -67271,6 +67461,7 @@ text-align: right;
    alchemy and the count live in the NOTEBOOK. The parts stay in the page (the NOTEBOOK tutorial reads the count, the wheel the work). */
 .haunt-box .haunt-header, .haunt-box .haunt-work, .haunt-box .haunt-progress { display: none !important; }
 .haunt-box > br { display: none; } /* the passage's line breaks between the box's (block) lines, which stood empty once the lines went */
+.item-box > br { display: none; } /* 2026-10-23 overnight: the same in the PASSWORD LEARNED / OBJECT ACQUIRED boxes, whose lines are all blocks; each break stood an empty line tall */
 /* and the flowers: no "Gather flowers. There are five to find." */
 .lily-glimpse-hint { display: none !important; }
 .haunt-box strong {
@@ -67768,7 +67959,27 @@ max-width: 30em;
 border-left: 1px solid rgba(140, 100, 50, 0.35);
 text-shadow: none;
 }
+/* 2026-10-23 overnight (Sam, playtest at the Pillars: "Make the emphasis on the text here more obvious"): the quoted verse read as
+   a muted aside; it now stands out from the prose round it in a brighter gold, italic and a size up, on a firmer rule */
+.verse:not(.typewriter-page .verse) {
+color: #e2b665;
+font-style: italic;
+font-weight: 400;
+font-size: 1.12em;
+letter-spacing: 0.03em;
+border-left: 2px solid rgba(226, 182, 101, 0.7);
+text-shadow: 0 0 12px rgba(230, 180, 90, 0.28);
+}
 
+/* 2026-10-23 overnight (Maritime interlude with a key in the pocket): the lead and the quiet road swap places */
+.maritime-scene .mar-lead tw-link { font-size: 1.35em !important; color: #f0c870 !important; letter-spacing: 0.04em; text-shadow: 0 0 12px rgba(240,200,110,0.45) !important; border-bottom: 0 !important; }
+.maritime-scene .mar-key-chip { display: inline-block; margin-left: 0.9em; font: 600 0.72em/1 'Courier New', monospace; letter-spacing: 0.22em; text-transform: uppercase; color: #8fd0e8; text-shadow: 0 0 8px rgba(140,200,230,0.5); vertical-align: middle; }
+.maritime-scene .mar-quiet tw-link { font-size: 0.82em !important; color: #b8a890 !important; text-shadow: none !important; letter-spacing: 0.12em; font-variant: small-caps; }
+/* 2026-10-23 overnight: the trail you follow, in the header's alba row (dssVoices trailChip) */
+.dss-trail-chip { position: absolute; right: 14px; top: calc(100% + 5px); z-index: 5; pointer-events: auto; padding: 3px 8px; background: rgba(10,14,10,0.72); border: 1px solid rgba(143,228,154,0.35); border-radius: 2px; font: bold 10px/1 'Courier New', monospace; letter-spacing: 2.2px; text-transform: uppercase; color: #8fe49a; text-shadow: 0 0 6px rgba(0,0,0,0.8); white-space: nowrap; }
+tw-story:has(.typewriter-page) .dss-trail-chip { display: none; } /* it would hang over the sheet */
+.dss-trail-follow:hover { background: rgba(143,228,154,0.12) !important; }
+.dss-trail-follow.on { opacity: 0.7; cursor: default !important; }
 /* ===== LORE BOX ===== */
 /* 2026-10-13: the LORE as footnotes (dssLore): the hidden link, the dagger in the prose and the note card */
 .lore-hidden-link { display: none !important; }
@@ -71421,6 +71632,17 @@ border-right: 1px solid rgba(107,32,32,0.25);
 }
 .dss-room-prose .lily-glimpse:not(.claude-draft), tw-passage .lily-glimpse:not(.claude-draft) { --ls-base: #d4b8e0; }
 @keyframes dssLilyStory { 0% { background-position: 100% 0; } 55%, 100% { background-position: 0% 0; } }
+/* 2026-10-23 overnight (Sam, at the Ham: the O'Flatterly line should be heard over THE RUMOUR, "if anything O'Flatterly more"): an
+   errand given in speech (.dss-quest-line) is set in warm gold with the same slow band of light as the flower's story line */
+.dss-quest-line {
+  --ls-base: #ecd29a;
+  background-image: linear-gradient(100deg, var(--ls-base) 0%, var(--ls-base) 32%, #fff1c8 42%, #ffd76a 50%, #fff1c8 58%, var(--ls-base) 68%, var(--ls-base) 100%);
+  background-size: 300% 100%; background-position: 100% 0;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: none; filter: drop-shadow(0 0 7px rgba(240, 200, 110, 0.35));
+  animation: dssLilyStory 5.5s ease-in-out 0.6s infinite;
+}
+@media (prefers-reduced-motion: reduce) { .dss-quest-line { animation: none !important; background-position: 50% 0 !important; } }
 @media (prefers-reduced-motion: reduce) { .dss-lily-story, .lily-glimpse { animation: none !important; background-position: 50% 0 !important; } }
 .dss-lily-hint { font-size: 0.86em; opacity: 0.8; }
 .dss-lily-pent { margin-top: 1.1em; padding-top: 1em; border-top: 1px solid rgba(200,168,106,0.2); }
@@ -72193,6 +72415,16 @@ tw-passage[tags~="street-night"]::before, tw-passage[tags~="outdoor"]:not([tags~
 /* 2026-09-12: the strip is a drawn neon Deco rule (Trisha Strip SVG) in currentColor, so the teal pulse still runs through it */
 .trishas-strip-svg { display:block; width:min(100%, 420px); height:auto; margin:0 auto; filter:drop-shadow(0 0 4px rgba(0,215,190,0.55)); }
 .trishas-marquee { display:block; width:100%; margin:-0.4em 0 0.3em; opacity:0.92; }
+/* 2026-10-23 overnight (Sam: "In full screen laptop you should never need to scroll down"; the sweep found SHANA's pages 64–167 px over):
+   inside the Trisha frame, a line break standing next to a block (the strip, the knocks, the spread, the hint) only adds an empty
+   line, and seven of them were the overflow; they fold away. Breaks between lines of text are untouched. */
+.trishas-frame > br:has(+ div), .trishas-frame > br:has(+ .trishas-strip), .trishas-frame > div + br, .trishas-frame > .trishas-strip + br { display: none; }
+/* the same in the venues' scene frames (the cellar, the Pillars, the Colony, the airport pub and the rest) */
+tw-passage [class$="-scene"] > br:has(+ div), tw-passage [class$="-scene"] > div + br { display: none; }
+/* and the result banners (GAME WON / VICTORY / DOWN): the box holds only blocks, so its breaks were empty lines (it stood 170 px for
+   one line); in the scene frames the second break of each blank line goes, so a run of blank lines is half as tall */
+.pp-arena > br { display: none; }
+tw-passage [class$="-scene"] > tw-consecutive-br { display: none; }
 /* ── TAROT CARD SPREAD ───────────────────────────────────────────── */
 .tarot-spread { display:flex; justify-content:center; align-items:flex-start; gap:clamp(10px, 3vw, 16px); margin:1.6em 0 1.2em; perspective:1100px; }
 /* 2026-09-11 overnight: slots share the column (flex) so three cards always fit inside the Trisha frame on a phone — 29vw overflowed and was clipped at 375px. */
@@ -72808,6 +73040,13 @@ background-repeat: no-repeat;
 tw-story[tags~="night-ahead"] { padding-top: 0 !important; padding-bottom: 0 !important; min-height: 100vh; overflow: hidden; }
 tw-story[tags~="night-ahead"] > tw-passage { padding-top: 0 !important; padding-bottom: 0 !important; }
 tw-story[tags~="night-ahead"] .typewriter-page { height: calc(100vh - 6vh) !important; max-height: none !important; min-height: 0 !important; margin: 3vh auto !important; }
+/* 2026-10-23 overnight (Sam, After Aoife: "like the first one should have no room or need to scroll down. Make that the case for
+   every typewriter bit"): every other typewriter page sits under the 92px header, so it starts just below it and stops 2vh
+   short of the window's foot (it ran 166px past a 1440x900 window) */
+tw-story:has(.typewriter-page):not([tags~="night-ahead"]) { padding-top: 0 !important; padding-bottom: 0 !important; }
+tw-story:has(.typewriter-page):not([tags~="night-ahead"]) > tw-passage { padding-top: 104px !important; padding-bottom: 0 !important; }
+tw-story:has(.typewriter-page):not([tags~="night-ahead"]) > tw-passage > br, tw-story:has(.typewriter-page):not([tags~="night-ahead"]) > tw-passage > tw-consecutive-br { display: none; }
+tw-story:has(.typewriter-page):not([tags~="night-ahead"]) .typewriter-page { height: calc(100vh - 104px - 2vh) !important; max-height: none !important; min-height: 0 !important; margin: 0 auto 2vh !important; }
 tw-story[tags~="night-ahead"] .typewriter-page::after {
 background:
   radial-gradient(circle 14px at 4% 18%,
@@ -74217,6 +74456,10 @@ body:has(#coin-overlay, #match-overlay, #cig-overlay, #eat-overlay, #dss-key-ove
 /* The hub's own link hooks are parked off-screen while the map is up: no
    layout gap, but layout boxes KEPT so their links still take a JS click
    (Harlowe drops clicks on display:none links). */
+/* 2026-10-23 overnight (Sam: "In full screen laptop you should never need to scroll down"): the hub ends at the map, so the story's
+   72px foot and the line break after the map are dropped there */
+tw-story[tags~="hub"]:has(tw-passage.soho-map-on) { padding-bottom: 6px !important; }
+tw-passage.soho-map-on #soho-map-container ~ br, tw-passage.soho-map-on #soho-map-container ~ tw-consecutive-br { display: none; }
 tw-passage.soho-map-on tw-hook.soho-hub-dock { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 
 /* ===== REDUCED MOTION (2026-09-01, audit A3/R1) =====

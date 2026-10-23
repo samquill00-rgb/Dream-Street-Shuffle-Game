@@ -26,6 +26,13 @@
     - **NEXT is gone everywhere.** The header line and its redraw are removed. The `next`/`next2` hub flags print nothing, so the map's NEXT glow, edge pointer, "Next:" bar note and dimming are off.
       - Next Target still runs, because `$venueRest`, the rest flag and the primer's `$nextShown` read it.
       - The red path for a pitch pick (`pitch` flag) and a slip's GET DIRECTIONS thread are unchanged.
+      - **The quieter alba** (Sam: "the alba is the WAY OUT", keep it but quieter): the header line's running counts ("One line is caught…", "Two lines, now…") and the JS live swap at ~18028 are gone. The ALBA strip, the line-caught flash, and the "complete" and "notebook gone" variants stay. Synced. 
+      - **Quieter haunts and flowers**, synced (Sam: "name and my line only, no header, work line, count or gold flash"):
+        - CSS hides `.haunt-header`, `.haunt-work` and `.haunt-progress` inside `.haunt-box`, plus the box's direct `<br>`s. The parts stay in the DOM, because the NOTEBOOK tutorial and the wheel read them.
+        - The gate flash is off (`var ON = false` in its IIFE).
+        - The tutorial checks the box's visibility, not the count line.
+        - The flower card has no "FLOWER n OF 5" and no five-to-find line, and `.lily-glimpse-hint` is hidden. The Lily SVG's "n of 5 caught" title is gone.
+        - Kept: the "opens" lines, the NOT GATHERED note, the Pentacle, the NOTEBOOK counts and the Fetch tally.
       - The errand threads (thread-cecil, thread-ronnies, thread-coach) were removed too, on Sam's ruling. The draw loop in drawCecilThread is off; the THREADS list and the hub flags are kept.
     - **The "YOU CAME FOR … / Talk to others first." caption** is not written while that venue rests.
     - **The matches overlay's own busy list** now matches dssOverlayBusy, so it no longer lands on THE RUMOUR.

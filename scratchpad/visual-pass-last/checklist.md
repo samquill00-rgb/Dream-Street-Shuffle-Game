@@ -12,3 +12,8 @@
 - [x] 10. Portal column foot water-worn stone lip
 - [x] 11. Portal broken crowns irregular fracture surfaces
 - [x] 12. Portal half-drowned rubble water-rounded profiles
+- [x] 13. Green Sea café furniture subtle paint wear
+- [x] 14. Café tabletops rolled lips
+- [x] 15. Café chair back slat fixings
+- [x] 16. Café chair lower cross braces
+- [x] 17. Café ashtrays hollow ceramic profiles seated on tables

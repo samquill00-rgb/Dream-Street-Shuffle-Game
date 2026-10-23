@@ -16,7 +16,10 @@
 
 **Recent work, newest first (details in the entries below):**
 - 2026-10-23, a session: the first-night notices map, in `HANDOFF-first-night-notices-2026-10-23.md`. It lists every meter, slip, hint, popup and prompt in order, with triggers. Part was walked live on a fresh profile (BEGIN to Copper's cellar); the rest comes from the source. Nothing was changed (Sam: "Don't change anything yet."). Top findings:
-  - AOIFE's first ring can be walked past by leaving the Pillars before it arrives, and then LILY never rings.
+  - AOIFE's first ring could be walked past by leaving the Pillars before it arrived, and then LILY never rang.
+    - **Fixed and synced the same day** (Sam: "fix the missable Aoife call first"), in the ring script at the end of `The critic's judgement`. While the ring is due, "← Out onto the street" or "Leave the pub." brings it in instead of leaving.
+    - The listener sits on `window` capture, because the departure fade's document-capture listener (18575) otherwise holds the press and replays it after the ring.
+    - Tested on a scratch build, then on the real build: leave right after the rumour; header exit during the slip; no exit (still rings at 1.4 s); accept then hang up. No errors.
   - NEXT changed label 18 times in 13 minutes, and contradicts the room's "YOU CAME FOR" caption while a venue rests.
   - MOE is missing from the pitch ordering list.
 - 2026-10-23, a session: the Commem. Ball easter egg. Sam's Oxford ball photo, graded to match the Overlook photograph in The Shining (neutral silver, crushed blacks, white copperplate caption "Christ Church / Commem. Ball / 1912", his crop), is `colony-ball-photo.jpg` beside the html (commit it with the html). It hangs in a gilt frame above the Colony's piano on the right wall (`BALL` in the Colony room; the generated pictures leave its patch bare), with its own close-up `A photograph` (camera push-in, a brass picture lamp that warms up via onLook, so it takes a click with no words). Its DSS_VOICES.objects.ci entry is empty, for Sam if he wants lines. The grading script and source are in that session's scratchpad only. Checked live: button and in-room click both push in, console clean.

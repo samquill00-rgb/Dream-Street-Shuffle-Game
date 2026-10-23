@@ -21,7 +21,23 @@
     - The listener sits on `window` capture, because the departure fade's document-capture listener (18575) otherwise holds the press and replays it after the ring.
     - Tested on a scratch build, then on the real build: leave right after the rumour; header exit during the slip; no exit (still rings at 1.4 s); accept then hang up. No errors.
   - NEXT changed label 18 times in 13 minutes, and contradicts the room's "YOU CAME FOR" caption while a venue rests.
-  - MOE is missing from the pitch ordering list.
+  - MOE missing from the pitch order is **not a bug**: Sam's 19 October ruling says he is not a reader.
+  - **Clean-up, synced the same day** (Sam: "Sure, clean up", then "get rid of the next for now, unless you choose an option and get the highlighted path. Otherwise it is over determined"):
+    - **NEXT is gone everywhere.** The header line and its redraw are removed. The `next`/`next2` hub flags print nothing, so the map's NEXT glow, edge pointer, "Next:" bar note and dimming are off.
+      - Next Target still runs, because `$venueRest`, the rest flag and the primer's `$nextShown` read it.
+      - The red path for a pitch pick (`pitch` flag) and a slip's GET DIRECTIONS thread are unchanged.
+      - The errand threads (thread-cecil, thread-ronnies, thread-coach) were removed too, on Sam's ruling. The draw loop in drawCecilThread is off; the THREADS list and the hub flags are kept.
+    - **The "YOU CAME FOR … / Talk to others first." caption** is not written while that venue rests.
+    - **The matches overlay's own busy list** now matches dssOverlayBusy, so it no longer lands on THE RUMOUR.
+    - **The rumour card waits its turn** behind other popups.
+    - **The first-haunt notebook** waits for any slip on screen, not only long ones.
+    - **STATS can no longer be lost:** it waits across pages until nothing else is up.
+    - **Dean Street slips:**
+      - New lap stamps `$streetTipLap` / `$liverTipLap`, reset in StoryInit and Start.
+      - The liver tip and the eat tips no longer fire on the same lap.
+      - The ledger lesson moved after the flagging tips and waits for a lap when no other street slip fired. Doorway returns don't count as laps.
+    - **Dead overlay IDs** were dropped from the busy lists.
+    - Tested on a scratch build (BEGIN to the French and back) and on the real build. No errors.
 - 2026-10-23, a session: the Commem. Ball easter egg. Sam's Oxford ball photo, graded to match the Overlook photograph in The Shining (neutral silver, crushed blacks, white copperplate caption "Christ Church / Commem. Ball / 1912", his crop), is `colony-ball-photo.jpg` beside the html (commit it with the html). It hangs in a gilt frame above the Colony's piano on the right wall (`BALL` in the Colony room; the generated pictures leave its patch bare), with its own close-up `A photograph` (camera push-in, a brass picture lamp that warms up via onLook, so it takes a click with no words). Its DSS_VOICES.objects.ci entry is empty, for Sam if he wants lines. The grading script and source are in that session's scratchpad only. Checked live: button and in-room click both push in, console clean.
 - 2026-10-22, late, a session: character deco. Every character's plain-page panel gets stepped Art Deco corners; JOHN ST. JOHN (a stepped Zippo flame) and INIS O'FLATTERLY (a fanned open book) also get a faint motif behind the words. Later that night the rest went in (Lackland, the Ham, RED, the novelist, Shana, Aoife and LILY); DAVY, JEFFREY and the `char-salvu` scenes still wait for Sam's picks. See "Character deco" below.
 - 2026-10-22, this session: the dedication page. `Dedicate Your Book` follows the naming; the notebook's FINDS page shows and changes it; the Dawn prints it under the title; kept across nights, old choices struck through. See "The dedication page" below.

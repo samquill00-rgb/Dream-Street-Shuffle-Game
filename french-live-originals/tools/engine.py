@@ -53,6 +53,32 @@ def eq_bell(x, f0, db, octaves=1.0):
 def lowpass(x, fc, order=4):
     return sosfiltfilt(butter(order, fc, "low", fs=SR, output="sos"), x)
 
+def smear(x, win=4096, hold=0.25, seed=0):
+    """Keep the spectrum's shape, lose the words: magnitudes averaged over `hold` seconds, phases thrown away."""
+    from scipy.signal import istft
+    f, t, Z = stft(x, SR, nperseg=win, noverlap=win * 3 // 4); k = max(1, int(hold * SR / (win // 4)))
+    M = np.abs(Z); ker = np.hanning(2 * k + 1); ker /= ker.sum()
+    M = np.apply_along_axis(lambda m: np.convolve(np.r_[m[:k][::-1], m, m[-k:][::-1]], ker, "valid"), 1, M)
+    ph = np.exp(2j * np.pi * np.random.default_rng(seed).random(M.shape))
+    y = istft(M * ph, SR, nperseg=win, noverlap=win * 3 // 4)[1][: len(x)]
+    y = np.r_[y, np.zeros(len(x) - len(y))]
+    return y * np.sqrt(np.mean(x ** 2) / (np.mean(y ** 2) + 1e-20))
+
+def blur_speech(x, amount, seed=0):
+    """amount 0 = as recorded, 1 = a wash of voices with no words. Dips the consonant band (1-4 kHz) and blends in
+    a smeared copy, both in proportion, so the crowd keeps its size and colour while the talk stops being followable."""
+    if amount <= 0: return x
+    dry = eq_bell(x, 2500, -10.0 * amount, 2.0)
+    return np.sqrt(1 - amount) * dry + np.sqrt(amount) * eq_bell(smear(x, seed=seed), 2500, -4.0 * amount, 2.0)
+
+def speech_clarity(x):
+    """How followable the talk is: share of the 500-4000 Hz envelope's modulation that sits at syllable rate (2-8 Hz).
+    Higher = clearer words. A comparison number only (same material before and after)."""
+    f, t, Z = stft(x, SR, nperseg=1024, noverlap=1024 - 240)
+    env = np.sqrt((np.abs(Z[(f >= 500) & (f < 4000)]) ** 2).sum(0)); env = env - env.mean()
+    F = np.abs(np.fft.rfft(env)) ** 2; fm = np.fft.rfftfreq(len(env), t[1] - t[0])
+    return float(F[(fm >= 2) & (fm < 8)].sum() / F[(fm >= 0.5) & (fm < 30)].sum())
+
 # ---------------------------------------------------------------- ring
 class Ring:
     def __init__(self, sec):
@@ -190,6 +216,15 @@ def write(ring, name, target_lufs, outdir):
     os.replace(wav, f"{outdir}/{name}.f32.wav")  # keep the pre-encode master for scoring
     i, pk = meas(dst)
     print(f"  wrote {name}.m4a  {ring.n / SR:.3f}s  I={i} LUFS peak={pk} dBFS")
+
+def mp3_uri(x):
+    """A short mono clip as an embedded MP3 data URI, so a listening page plays in any browser with no files beside it."""
+    import base64, tempfile
+    w = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name; m = w[:-4] + ".mp3"
+    wavfile.write(w, SR, (np.clip(x, -1, 1) * 32767).astype(np.int16))
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", w, "-c:a", "libmp3lame", "-b:a", "128k", m], check=True)
+    uri = "data:audio/mpeg;base64," + base64.b64encode(open(m, "rb").read()).decode(); os.unlink(w); os.unlink(m)
+    return uri
 
 def click_times(x, factor=10.0):
     m = x.mean(1) if x.ndim == 2 else x; dd = np.diff(m)

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bar Hits Sorter</title>
+<style>
+:root {
+  --bg: #f6f2ea; --card: #fffdf8; --ink: #231f1a; --muted: #6d655a; --line: #ddd4c4;
+  --glass: #2e5f7a; --laugh: #7a2e2e; --other: #6d655a; --on-ink: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17140f; --card: #211d17; --ink: #efe8db; --muted: #a59b8b; --line: #3a332a;
+    --glass: #6fa8c8; --laugh: #c46a5a; --other: #a59b8b; --on-ink: #17140f;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17140f; --card: #211d17; --ink: #efe8db; --muted: #a59b8b; --line: #3a332a;
+  --glass: #6fa8c8; --laugh: #c46a5a; --other: #a59b8b; --on-ink: #17140f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 Georgia, "Times New Roman", serif; }
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6em; margin: 0 0 4px; }
+p.note { color: var(--muted); margin: 4px 0 12px; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; z-index: 2; }
+.counts span { margin-right: 12px; }
+button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.row { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.play { width: 40px; height: 32px; }
+.id { font-variant-numeric: tabular-nums; }
+.feat { color: var(--muted); font-size: .85em; }
+.changed .id::after { content: " (changed)"; color: var(--muted); font-size: .85em; }
+.pick button.on[data-k="glass"] { background: var(--glass); color: var(--on-ink); border-color: var(--glass); }
+.pick button.on[data-k="laugh"] { background: var(--laugh); color: var(--on-ink); border-color: var(--laugh); }
+.pick button.on[data-k="other"] { background: var(--other); color: var(--on-ink); border-color: var(--other); }
+.filters button.on { outline: 2px solid var(--ink); }
+@media (max-width: 520px) { .row { grid-template-columns: 44px 1fr; } .pick { grid-column: 1 / -1; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Bar hits</h1>
+<p class="note">Every one-shot found in the French bar recordings, with the machine's first guess. Play each one and set it to Glass, Laugh or Other. Other is left out of both pools. Keys: space plays the next hit, g, l and o set the one last played. When you're done, press Copy labels and paste the result to Claude.</p>
+<div class="bar">
+  <div class="counts" id="counts"></div>
+  <div class="filters" id="filters"></div>
+  <button id="copy">Copy labels</button>
+</div>
+<div id="list"></div>
+</main>
+<script>
+const HITS = __HITS__;
+const AUDIO = __AUDIO__;
+const KEY = "dss-hit-labels";
+let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+HITS.forEach(h => { if (saved[h.id]) h.label = saved[h.id]; });
+let filter = "all", last = -1; const audio = new Audio();
+function store() { const o = {}; HITS.forEach(h => { if (h.label !== h.auto) o[h.id] = h.label; }); try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} return o; }
+function render() {
+  const n = { glass: 0, laugh: 0, other: 0 }; HITS.forEach(h => n[h.label]++);
+  document.getElementById("counts").innerHTML = `<span>Glass ${n.glass}</span><span>Laugh ${n.laugh}</span><span>Other ${n.other}</span>`;
+  document.getElementById("filters").innerHTML = ["all", "glass", "laugh", "other"].map(k => `<button data-f="${k}" class="${filter === k ? "on" : ""}">${k[0].toUpperCase() + k.slice(1)}</button>`).join(" ");
+  document.getElementById("list").innerHTML = HITS.map((h, i) => (filter !== "all" && h.label !== filter) ? "" :
+    `<div class="row${h.label !== h.auto ? " changed" : ""}" data-i="${i}">
+      <button class="play" data-p="${i}" aria-label="Play">▶</button>
+      <div><div class="id">${h.id.replace("_BAR@", " at ")} s</div>
+      <div class="feat">guess ${h.auto} · high jump ${h.jh} dB · voice jump ${h.jm} dB · attack ${h.att} ms · decay ${h.t10} ms</div></div>
+      <div class="pick">${["glass", "laugh", "other"].map(k => `<button data-k="${k}" data-i="${i}" class="${h.label === k ? "on" : ""}">${k[0].toUpperCase() + k.slice(1)}</button>`).join(" ")}</div>
+    </div>`).join("");
+}
+function play(i) { last = i; audio.src = AUDIO[HITS[i].id]; audio.currentTime = 0; audio.play(); }
+function set(i, k) { HITS[i].label = k; store(); render(); }
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.p) play(+b.dataset.p);
+  else if (b.dataset.k) set(+b.dataset.i, b.dataset.k);
+  else if (b.dataset.f) { filter = b.dataset.f; render(); }
+  else if (b.id === "copy") {
+    const t = JSON.stringify(store(), null, 1);
+    navigator.clipboard.writeText(t).then(() => { b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy labels", 1500); }, () => prompt("Copy this:", t));
+  }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === " ") { e.preventDefault(); const vis = [...document.querySelectorAll(".row")].map(r => +r.dataset.i); const nx = vis.find(i => i > last); if (nx !== undefined) play(nx); }
+  else if (last >= 0 && "glo".includes(e.key)) set(last, { g: "glass", l: "laugh", o: "other" }[e.key]);
+});
+render();
+</script>
+</body>
+</html>

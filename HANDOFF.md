@@ -43,6 +43,18 @@
   - Page tints (`--dss-dream-tint`) are re-graded to match.
   - Seen in the pane: every world. The prototype `*-3d-static.html` files were NOT changed.
   - Proposed but not approved: a slight colour drain per rejection slip.
+  - Green Sea (`green-sea-3d-static.html`, loaded by the game as an iframe, so it is live with no sync):
+    - Sam: "it should seem more like it is at the same time of night as the rest of carthage".
+    - Changes: sky #1c0a3a → #4a1a5a → #9a3a62 → #e8704a; fog 0x7a4a6a; sun 0xffa850, lowered to y 4; ambient and hemi violet, eased to .3/.38.
+    - Everything else is his look, kept. Seen in the pane.
+    - **Stars and atmosphere** (Sam: "add some stars to the sky and generally more atmosphere"), in a new "NIGHT SKY AND AIR" block before the loop:
+      - About 900 faint painted stars in the sky texture (now 1024², was 16×256).
+      - Three twinkling Points sets at z -60, y 22–42, additive, breathing out of step.
+      - A gold shooting star every 14–36 s (first at 6–16 s), crossing the strip above the roofline.
+      - Seven wine-tinted mist sprites crawling low over the court.
+      - Four dark moth specks circling each lantern.
+      - Reduced motion still freezes the scene.
+      - Checks: stars, mist and moths seen; no console errors; the shooting star seen firing, and its new path projected (screen y 29–156 of 768) after it was lowered from the top edge.
 - 2026-10-23, a session: **the early Fetch** (Sam: "first rejection slip brings him onto the map, and each setback makes him come more often and closer"). Synced.
   - A new hub flag `fetch-setbacks` on Dean Street counts refused calls (up to 2), a beating, each blackout and the book lost. It prints empty once `$fetchMet >= 1`.
   - The map adds tonight's non-yes slips (`dssRefusals`) to make `fgL`. If `fgL >= 1` he can come before midnight.

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Venue Glasses</title>
+<style>
+:root {
+  --bg: #f6f2ea; --card: #fffdf8; --ink: #231f1a; --muted: #6d655a; --line: #ddd4c4;
+  --glass: #2e5f7a; --laugh: #7a2e2e; --other: #6d655a; --on-ink: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17140f; --card: #211d17; --ink: #efe8db; --muted: #a59b8b; --line: #3a332a;
+    --glass: #6fa8c8; --laugh: #c46a5a; --other: #a59b8b; --on-ink: #17140f;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17140f; --card: #211d17; --ink: #efe8db; --muted: #a59b8b; --line: #3a332a;
+  --glass: #6fa8c8; --laugh: #c46a5a; --other: #a59b8b; --on-ink: #17140f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 Georgia, "Times New Roman", serif; }
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6em; margin: 0 0 4px; }
+p.note { color: var(--muted); margin: 4px 0 12px; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; z-index: 2; }
+.counts span { margin-right: 12px; }
+button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.row { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.play { width: 40px; height: 32px; }
+.id { font-variant-numeric: tabular-nums; }
+.feat { color: var(--muted); font-size: .85em; }
+.changed .id::after { content: " (changed)"; color: var(--muted); font-size: .85em; }
+.x { background: var(--glass); color: var(--on-ink); border-color: var(--glass); }
+.x { background: var(--laugh); color: var(--on-ink); border-color: var(--laugh); }
+.x { background: var(--other); color: var(--on-ink); border-color: var(--other); }
+.filters button.on { outline: 2px solid var(--ink); }
+@media (max-width: 520px) { .row { grid-template-columns: 44px 1fr; } .pick { grid-column: 1 / -1; } }
+h2 { font-size: 1.15em; margin: 28px 0 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--muted); font-size: .8em; font-weight: normal; }
+select { font: inherit; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.row.playing { background: var(--card); }
+.ticks { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.ticks label { white-space: nowrap; cursor: pointer; }
+.tag { font-size: .75em; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; color: var(--muted); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Venue glasses</h1>
+<p class="note">Your glass recordings, cut at their natural pauses. Tick the venues each piece belongs in; a piece can go in several. New recordings dropped into this folder appear marked new. Play these plays every piece in the current view, one after another, so you can hear a venue's whole palette. When you're done, press Copy labels and paste the result to Claude.</p>
+<div class="bar">
+  <div class="counts" id="counts"></div>
+  <div class="filters" id="filters"></div>
+  <button id="all">Play these</button>
+  <button id="copy">Copy labels</button>
+</div>
+<div id="list"></div>
+</main>
+<script>
+const HITS = __HITS__;
+const AUDIO = __AUDIO__;
+const VENUES = __VENUES__;
+const KEY = "dss-glass-venues";
+let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+HITS.forEach(h => { if (saved[h.id]) h.venues = saved[h.id]; });
+let filter = "all", last = -1, queue = []; const audio = new Audio();
+audio.onended = () => { if (queue.length) play(queue.shift(), true); };
+function store() { const o = {}; HITS.forEach(h => { o[h.id] = h.venues; }); try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} return o; }
+function shown() { return HITS.map((h, i) => [h, i]).filter(([h]) => filter === "all" || (filter === "new" ? h.new && !h.venues.length : h.venues.includes(filter))); }
+function render() {
+  const per = Object.keys(VENUES).map(k => `${VENUES[k]} ${HITS.filter(h => h.venues.includes(k)).length}`).join(" · ");
+  document.getElementById("counts").textContent = `${HITS.length} pieces · ${per}`;
+  const fs = [["all", "All"], ["new", "New"]].concat(Object.entries(VENUES));
+  document.getElementById("filters").innerHTML = fs.map(([k, n]) => `<button data-f="${k}" class="${filter === k ? "on" : ""}">${n}</button>`).join("");
+  document.getElementById("list").innerHTML = shown().map(([h, i]) =>
+    `<div class="row${i === last ? " playing" : ""}" data-i="${i}">
+      <button class="play" data-p="${i}" aria-label="Play">▶</button>
+      <div><div class="id">${h.id.split("@")[0]}, ${h.t.toFixed(1)} to ${h.end.toFixed(1)} s${h.new && !h.venues.length ? '<span class="tag">new</span>' : ""}</div>
+      <div class="feat">${(h.end - h.t).toFixed(1)} s long · strongest note ${h.dom} Hz</div></div>
+      <div class="ticks">${Object.entries(VENUES).map(([k, n]) => `<label><input type="checkbox" data-i="${i}" data-v="${k}"${h.venues.includes(k) ? " checked" : ""}> ${n}</label>`).join("")}</div>
+    </div>`).join("") || '<p class="note">Nothing here yet.</p>';
+}
+function play(i, keepQueue) { if (!keepQueue) queue = []; last = i; audio.src = AUDIO[HITS[i].id]; audio.play(); render(); }
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.p) play(+b.dataset.p);
+  else if (b.dataset.f) { filter = b.dataset.f; render(); }
+  else if (b.id === "all") { const ids = shown().map(([, i]) => i); if (ids.length) { play(ids.shift()); queue = ids; } }
+  else if (b.id === "copy") {
+    const t = JSON.stringify(store());
+    navigator.clipboard.writeText(t).then(() => { b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy labels", 1500); }, () => prompt("Copy this:", t));
+  }
+});
+document.addEventListener("change", e => {
+  const c = e.target; if (!c.dataset.v) return; const h = HITS[+c.dataset.i];
+  h.venues = c.checked ? [...new Set(h.venues.concat(c.dataset.v))] : h.venues.filter(v => v !== c.dataset.v);
+  store(); render();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === " " && e.target.tagName !== "INPUT") { e.preventDefault(); const vis = shown().map(([, i]) => i); const at = vis.indexOf(last); if (at + 1 < vis.length) play(vis[at + 1]); }
+});
+render();
+</script>
+</body>
+</html>

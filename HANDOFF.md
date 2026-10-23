@@ -15,6 +15,27 @@
 - Not listed here, by Sam's rules: the pink lines (his to redraft) and audio (the sound pass comes after the building).
 
 **Recent work, newest first (details in the entries below):**
+- 2026-10-23, a session: **Sam's 12 playtest notes (03:43–03:57) and a 13th**, all synced:
+  1. **The Night Ahead fits the window.** No scroll at 1280×800, 1440×900 or 1536×864 (tw-story/tw-passage padding removed for `night-ahead`; the page is 94vh).
+  2. **Ginger Light cat:** the head is 1.35× larger, the ears taller, the whiskers fainter.
+  3. **Character deco motif is fainter:** peak .5→.26, settled .16→.09.
+  4. **No redraw for the same person:** on consecutive pages with the same `char-` tags (`lastWho` in dssCharDeco), the motif and corners appear already settled.
+  5. **"THE FIRST LINE OF THREE"** at LINE 1 is kept on purpose; it's part of the line-caught moment.
+  6. **French approach:**
+     - The left and far-left stucco now uses `repeat [x,1]`; its streaks restarted every third of the wall and faceted it (the "crystalline" look).
+     - The left building's string courses moved to 4.5/7.5/10.5; at 3.6/6.6/9.6 they cut through the window heads.
+  7. **Fairy sound rewritten** (`fairyTwinkle`): a thin whole-tone figure (C or C# scale), soft swells, flutter, an octave ghost and a dim echo. The peak level matches the old one.
+  8. **The first-haunt notebook** fades and closes itself at ~7 s unless touched.
+  9. **The pink "[Sam: now / A window, back after A window…]"** came from callbacksBothWays: the French window spoke an unwritten back line after the chippy window. Callbacks without a `back` no longer speak in play (they still do under DSS_DEV).
+  10. **Flower story lines get a slow gold sweep** (`.dss-lily-story` in the card, `.lily-glimpse` inline).
+  11. **The Ham's third America line** ("Perhaps you’ll try America after all.") is kept but hidden (`.dss-ham-america-echo`).
+  12. **Dean Street gap:** NOT reproduced (13px on a fresh first night, with "Last night" lines, and after the Ham). Needs Sam's screenshot or state.
+  13. **"Last night:" under a reader** is the 16 Oct feature reading `dssRefusals`. Sam ruled it should reset with a fresh game, and that's synced:
+      - The Dawn's "Another night" button sets localStorage `dssRunCarry`.
+      - Start (where `dssNightNo` increments) begins a new run at this night (`dssRunFirst`) unless the carry flag is there.
+      - The Pitch Question shows only refusals with `n >= dssRunFirst`.
+      - The NOTEBOOK's fading slips from earlier nights are unchanged.
+      - Tested: a fresh BEGIN shows no lines; a carried night shows them.
 - 2026-10-23, a session: the first-night notices map, in `HANDOFF-first-night-notices-2026-10-23.md`. It lists every meter, slip, hint, popup and prompt in order, with triggers. Part was walked live on a fresh profile (BEGIN to Copper's cellar); the rest comes from the source. Nothing was changed (Sam: "Don't change anything yet."). Top findings:
   - AOIFE's first ring could be walked past by leaving the Pillars before it arrived, and then LILY never rang.
     - **Fixed and synced the same day** (Sam: "fix the missable Aoife call first"), in the ring script at the end of `The critic's judgement`. While the ring is due, "← Out onto the street" or "Leave the pub." brings it in instead of leaving.

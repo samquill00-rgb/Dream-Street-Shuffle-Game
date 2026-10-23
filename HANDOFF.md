@@ -1,9 +1,26 @@
-# START HERE — 2026-10-22
+# START HERE — 2026-10-23
 
 **State:**
-- Everything is in the .twee and synced to the html, and committed: Sam's "updates" at 22:40 on 2026-10-22 holds the whole day's work from every session (read from .git/logs/HEAD; no git commands run). Sam commits in GitHub Desktop; nothing from a session is ever committed by it.
-- Several sessions work on the .twee at once. Grep the other sessions' markers after every sync, and never rewrite the whole file.
-- Nothing is open from any playtest batch, and nothing from them is with Sam. Note 12 of 2026-10-21 (the Dean Street white space) was answered by Sam later that night: it was the pitch list, each reader drawn as a block; `.book-pitch-opt tw-link` is kept inline now (rulings in HANDOFF-ordering-audit-2026-10-21.md). Confirmed in the source 2026-10-22.
+- Everything from 2026-10-23 is in the .twee and synced to the html, but **NOT committed**. Sam commits in GitHub Desktop.
+- Commit these new files with the html:
+  - `colony-ball-photo.jpg`
+  - `doorway-drops.m4a`
+  - `vomit-sickness.m4a`
+  - `glass-window-smash.m4a`
+  - `climb-snow-steps.m4a`
+- Several sessions work on the .twee at once (another added `window.dssExteriorDetail` on 23 Oct). Grep the other sessions' markers after every sync, and never rewrite the whole file.
+- **The direction set on 2026-10-23:** fewer systems on screen.
+  - The first-night screen now carries only the meters, the alba strip and the book.
+  - NEXT is gone (header and map) and the errand threads are gone. Only chosen paths draw: a pitch pick's red path, or GET DIRECTIONS.
+  - The alba keeps its strip and line-caught flash, but has no running count under the header.
+  - Haunt boxes show only the name and Sam's line, with no gold flash. Flowers have no count.
+  - The full map of every notice is HANDOFF-first-night-notices-2026-10-23.md.
+- **Open from 2026-10-23, Sam's:**
+  - The Dean Street gap before the map (note 12) did not reproduce. Wait for his screenshot.
+  - Should the NOTEBOOK's fading slips from earlier nights also clear with a fresh game? "Last night:" in the pitch list already does.
+  - Listen-check: the new fairy whole-tone figure and the four OpenGameArt sounds. They were measured, not heard.
+  - Possible next quieting, only if the playtest still feels busy: the STATS/HAUNTS/ledger explainer slips; INIS's page (haunt, slip and errand card in one visit); "LOOK CLOSER" over rooms where most objects do nothing (O'Flatterly's). The PRIME/OLDBOY distinction is his writing.
+  - `water.ogg` (Claude work folder): its OpenGameArt page was not found, so don't use it.
 
 **Open, all Sam's (a sweep of this whole file on 2026-10-22; nothing here blocks a playtest):**
 - Pass 3's wording findings A, B and C (HANDOFF-ordering-audit-2026-10-21.md, "Log, pass 3"): LILY named in four places before Night Ahead Part Two can have shown; DAVY, INIS and JEFFREY refusing a book that may not be in the bag; the phone box's "pipe cleaners" without the rumour.

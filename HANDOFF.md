@@ -1,6 +1,6 @@
 # PARKED 2026-10-24 — route sweep (paused by Sam at ~02:40, to resume overnight)
 
-Sam's brief: play as many routes as possible with the headless harness, fix small bugs and order-of-play problems, list prose/design calls for him. Paused mid-sweep; nothing committed.
+Sam's brief: play as many routes as possible with the headless harness, fix small bugs and order-of-play problems, list prose/design calls for him. Paused mid-sweep. After the pause, the same day: F6 applied, a quieting pass and four focus rulings (below). All synced, nothing committed.
 
 **Fixed and synced (each carries a `2026-10-24 sweep` comment):**
 - F1 Colony Reentry: "The room is as you left it" showed on the first real Colony visit when the first door-pass went to COPPER's cellar; now also wants $visited's Colony. Seen live.
@@ -10,22 +10,32 @@ Sam's brief: play as many routes as possible with the headless harness, fix smal
 - F5 Dean Street / Book Footer: the book-lost roll ran in the footer after the hub printed "In your bag, you have your novel" and the pitch question; Dean Street now displays Book Footer first (once a lap, $bookRollLap) and the bag line shows only while the book is in the bag. Synced, NOT yet seen live.
 
 **Applied after the pause (2026-10-24, synced, checked by source only):**
-- F6 Dean Street: the slip "THE GREAT HAM told you to look for INIS O'FLATTERLY in Cecil Court" fires when Cecil Court was opened by the novelist and the Ham never met. Fix: add `$metCritic is true` to that slip's (if:) (the `$cecilTipShown` block near the top of Dean Street).
+- F6 Dean Street: the slip "THE GREAT HAM told you to look for INIS O'FLATTERLY in Cecil Court" fired when Cecil Court was opened by the novelist and the Ham never met. Applied: `$metCritic is true` added to that slip's (if:) (the `$cecilTipShown` block near the top of Dean Street).
 
 **Quieting pass, 2026-10-24 (after the pause, synced):**
 - The drink, retch/piss and eat holds (`showDrinkPopupSafe`, `showSpewPopupSafe`, `showEatPopupSafe`) now wait through `dssDeferIfBusy` behind a lore card, gate flash or another hold. Seen in the pane: the eat hold waited under a fake gate flash and opened once it cleared.
 - Checked, no change: the "once a night" items in the notices map. The Colony and Empty Glass drinks are reached only by drinking; the dark pass comes once; resting keys re-offer a choice by design. O'Flatterly's nine objects all have voice lines, so their glow is honest (the 16 Oct rule).
 
+**Focus rulings, 2026-10-24 (Sam, one by one; synced):**
 - Ledger cut (Sam's ruling): `glyphsAfter` returns nothing (`LEDGER_ON = false`), so no marks on the map's door plates or caption bar; the ledger slip on Dean Street is gated `(if: false and …)`. STATS and HAUNTS kept. Script loads, no errors; the map itself NOT seen (no save in the pane). The docked hub list still carries its pips off-screen.
-
 - Trail tag cut (Sam's ruling): `CHIP_ON = false` above `trailChip()`; the header's "TRAIL · n OF 3" no longer draws. FOLLOW THIS TRAIL, the step cards' green sign and the one-trail quieting kept. Script loads, no errors; not seen with a followed trail.
-
+- Flowers next to haunts: kept as they are (Sam agreed). They carry the pentangle, the Fetch's gate and the dawn switchboard; neither count shows on screen since 23 Oct.
 - INIS's visit (Sam's ruling): in `O'Flatterly's quest` a script holds THE FEEDING's haunt box (display none) until 9 s of visible page, then replays its reveal; the gate flash follows the box. Passage snapshot taken after render (the dark pass trap). Tested in the pane on a stand-in box (hidden at 4 s, shown by 10 s, gate watcher took it); NOT walked to INIS for real.
 
 **Routes covered:** night 1 end to end (Ham, Cecil Court, French ×3, chippy, doorway, Colony/DAVY/agent, cellar lost fight + JOHN, Lackland + pong, Trisha's/SHANA, Ronnie's, LILY call 1, Carthage/page 93, INIS gift, ticket key, Easter Island, Coach/cow/LINE 3, Fetch, Centre Point, white dawn); night 2 (refused AOIFE ×2, Fetch pane, coin call-back, cellar KO with the word, COPPER's matchbook, book left/Foyles, two blackouts, Square fire, Coach fire, black dawn); night 3 to INIS (no-word cellar, ASHTON rescue, ship call sunk, the Woman, Bourchier mugging, barbershop open).
 **Not yet reached:** Himalayas/Nazca/Pyramid/Ezekiel, Sanctum/Synthesis, Lackland "Not yet"/lend/Deal, LILY call refused, Foyles trade with a key, "Give up on the night", waltz won, cellar names given (RED/JOHN), afloat ship call.
 
-**Questions for Sam** are in the scratchpad notes (Q1–Q9: lily box shown under 30 sobriety; resting figures' empty card; drink popup over the DEBT haunt box; OPUS 100% vs flagging slips at 12 haunts; coin call-back not counting as answered; cellar/alleys not lifting the one-person rest; cow's 150 s bail under its own THROWN card).
+**Questions for Sam** (copied 2026-10-24 from the sweep's scratchpad notes.md, which is temporary; no change made for any):
+- Q1 Entering the Pillars: STATS slip arrives while the bars still read 70/70 (the entry's -9/+12 draw on the next page). Known from the first-night map.
+- Q2 Lily box "There is a lily in this room. Gather it." shows at sobriety < 30, when the gather fails (LET IT GO). Should it hide (or say "come back sober") under 30?
+- Q3 Resting venue: a figure's card offers nothing and says only "click anywhere to step back"; no word on why (first-night map item: "inside the room nothing says so").
+- Q4 Empty Glass: the hold-to-drink popup opens over the HAUNT COLLECTED box (first-night map 5, not yet addressed).
+- Q5 The Woman from the Line and the phone box ring both open the moment the cellar is left (history contains Turn to Copper); her source comment says "after midnight only", which is parked. Design, not changed.
+- Q6 Hub dock text lists two links for one door (The Chippy key door + Back to the chippy; Trisha's [CLOSED] + Trisha's key door). The map dedupes (first open link wins, grey only if shut) and the list is off-screen, so nothing shows; noted only.
+- Q7 (design) With 12 haunts the header reads OPUS/STATE at 100% whatever the real stats; street slips ("You're seriously flagging") still fire from the real numbers. Reachable after a real Fetch meeting + "Not yet". Leave or hide the flagging slips at 12?
+- Q8 (design) The Phone Box call-back ("It rings twice. AOIFE answers.") only lowers $refusedCalls; $hadPhoneCall stays false, so her phone keeps ringing at the Pillars afterwards and Part Two / LILY read her as never answered. Intended as the omen-only trade (2026-09-13 note); flagging in case the answered line should count.
+- Q9 (note) cow ride: a lost ride ends on an in-canvas THROWN card with RIDE AGAIN / CONTINUE (no auto-nav); the 150 s stall bail "The beast tires of you..." then also appears under the card: two ways out on one screen, cosmetic.
+- Not in the notes file, named only in this section's earlier summary: the cellar and alleys not lifting the one-person rest ($venueRest).
 
 **Harness:** scratchpad `dss.py` + `step.py` (Playwright venv `pwvenv`, Chrome for Testing on CDP 9333, profile `profiles/n1`, muted). Notes file: `notes.md` in the same scratchpad: /private/tmp/claude-501/-Users-samquill--claude-spares-spare-UQ5MZP/2c6aa298-5de5-4233-9cfa-5c531453523d/scratchpad/
 
@@ -52,7 +62,7 @@ Sam's brief: play as many routes as possible with the headless harness, fix smal
   - The Dean Street gap before the map (note 12) did not reproduce. Wait for his screenshot.
   - Should the NOTEBOOK's fading slips from earlier nights also clear with a fresh game? "Last night:" in the pitch list already does.
   - Listen-check: the new fairy whole-tone figure and the four OpenGameArt sounds. They were measured, not heard.
-  - Possible next quieting, only if the playtest still feels busy: the STATS/HAUNTS/ledger explainer slips; INIS's page (haunt, slip and errand card in one visit); "LOOK CLOSER" over rooms where most objects do nothing (O'Flatterly's). The PRIME/OLDBOY distinction is his writing.
+  - Possible next quieting: RULED 2026-10-24 (see the top section). Ledger slip and map marks cut, STATS/HAUNTS kept; INIS's haunt held 9 s; "LOOK CLOSER" needs nothing (O'Flatterly's objects all have voice lines). Sweep question Q4 (drink popup over the Empty Glass haunt box, in the top section) is still open: the holds now wait behind overlays, not behind a haunt box in the prose. The PRIME/OLDBOY distinction is his writing.
   - `water.ogg` (Claude work folder): its OpenGameArt page was not found, so don't use it.
 
 **Open, all Sam's (a sweep of this whole file on 2026-10-22; nothing here blocks a playtest):**
@@ -7559,3 +7569,7 @@ Sam explicitly deferred the suggested start-to-finish in-game playtest to conser
 ## 2026-10-24 — Selective wear on small room props
 Sam asked to use remaining usage on wear to last night's props, clarifying to choose small room objects that benefit most rather than blanket every prop. Shared ceramic ashtrays gain tar/ash beds, burnt rests, worn rims, three charred ends and 38 instanced pale ash clumps; rim decals conform to sloping ceramic. French custom glass ashtray has denser uneven dust and brown tar. Working towels at Colony/Ronnie/Coach gain spill patches, partial rings and worn weave; tablecloths/phone cloth unchanged. Shared bottle labels have rubbed edges and handling smudges without extra meshes. Chippy matchbox has softened sleeve edges/crease and spent striker; salt cap dull/perforation dirt/crust; vinegar cap residue/dried drips; folded clean white paper now aged newsprint with fold/partial cup ring (no new readable words).
 QA: actual-source isolated previews for chippy/Coach/Ronnie/French render without reported errors. Chippy same-camera ashtray before/after compared; matchbox/condiments, Ronnie ash/towel, Coach towel/labels, French glass ash inspected. Chippy scene/plate interaction additionally checked in compiled game. Chippy names/actions/printed text compare unchanged; no new lights/animation loops. No full mobile/performance suite. Snapshots/generator/verification.json in scratchpad/prop-wear-selected; screenshots /tmp/dss-worn-ashtray.png and /tmp/dss-worn-bar-towel.png. Synced 254 passages. No git commands. DAVY's parked full playtest was not run during this work.
+
+## 2026-10-24 — Selected handling wear: telephones and glasses
+Sam asked for a few more small props, particularly phones/glasses: wear from use rather than dirt. Selected French House and Coach rotary phones, Jeffrey's tumbler, and empty tumblers at Ronnie's. New window.dssHandledPhoneMaterials before French scene: linear-encoded roughness maps give cases dulled fine scuffs, receivers smoother hand-polished sheen, brushed dial bases and brighter finger-hole rims/stops. Only those two phone scenes use factory; other Bakelite props unchanged. Shared cup factory now accepts optional handled flag; only Jeffrey's cup and Ronnie's fill===0 tumblers opt in. Clear areas keep original transparency; fine washing scuffs in roughness plus one conforming transparent trace surface gives partial drying marks near foot and faint finger arcs. Other glasses unchanged. No new lights/animation loops.
+QA: actual-source isolated French, Coach and Ronnie scenes rendered without reported errors; inspected both phones, Jeffrey's glass, Ronnie empty bar tumbler in existing room lighting. Scoped hotspot names/actions and existing canvas lettering compare unchanged with before snapshots. No full route/mobile/performance playthrough. Snapshots/preview generator/verification.json in scratchpad/handling-wear. Screenshots /tmp/dss-handled-telephone.png and /tmp/dss-used-tumbler.png. Synced successfully, 254 passages. No git commands; DAVY full playtest remains parked.

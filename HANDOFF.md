@@ -1,3 +1,26 @@
+# PARKED 2026-10-24 — route sweep (paused by Sam at ~02:40, to resume overnight)
+
+Sam's brief: play as many routes as possible with the headless harness, fix small bugs and order-of-play problems, list prose/design calls for him. Paused mid-sweep; nothing committed.
+
+**Fixed and synced (each carries a `2026-10-24 sweep` comment):**
+- F1 Colony Reentry: "The room is as you left it" showed on the first real Colony visit when the first door-pass went to COPPER's cellar; now also wants $visited's Colony. Seen live.
+- F2 The dark pass: the cigarette popup never came (pgGen snapshot before the MutationObserver counted the passage); wrapped in setTimeout(0). Verified live on night 2 (overlay at 5 s).
+- F3 Coach and Horses bar: the dual ring (AOIFE then LILY) took the Coach's first visit in place of JEFFREY, his cow and THE BEAST; guarded on $sawJeffrey like LILY's ring. Checked by source only.
+- F4 The Fetch: THE CROWN was awarded on a glimpse (not ready); now needs _ready. Seen live (header went OPUS/STATE 100% while a flagging slip fired).
+- F5 Dean Street / Book Footer: the book-lost roll ran in the footer after the hub printed "In your bag, you have your novel" and the pitch question; Dean Street now displays Book Footer first (once a lap, $bookRollLap) and the bag line shows only while the book is in the bag. Synced, NOT yet seen live.
+
+**Found, NOT applied (the edit was stopped with the pause):**
+- F6 Dean Street: the slip "THE GREAT HAM told you to look for INIS O'FLATTERLY in Cecil Court" fires when Cecil Court was opened by the novelist and the Ham never met. Fix: add `$metCritic is true` to that slip's (if:) (the `$cecilTipShown` block near the top of Dean Street).
+
+**Routes covered:** night 1 end to end (Ham, Cecil Court, French ×3, chippy, doorway, Colony/DAVY/agent, cellar lost fight + JOHN, Lackland + pong, Trisha's/SHANA, Ronnie's, LILY call 1, Carthage/page 93, INIS gift, ticket key, Easter Island, Coach/cow/LINE 3, Fetch, Centre Point, white dawn); night 2 (refused AOIFE ×2, Fetch pane, coin call-back, cellar KO with the word, COPPER's matchbook, book left/Foyles, two blackouts, Square fire, Coach fire, black dawn); night 3 to INIS (no-word cellar, ASHTON rescue, ship call sunk, the Woman, Bourchier mugging, barbershop open).
+**Not yet reached:** Himalayas/Nazca/Pyramid/Ezekiel, Sanctum/Synthesis, Lackland "Not yet"/lend/Deal, LILY call refused, Foyles trade with a key, "Give up on the night", waltz won, cellar names given (RED/JOHN), afloat ship call.
+
+**Questions for Sam** are in the scratchpad notes (Q1–Q9: lily box shown under 30 sobriety; resting figures' empty card; drink popup over the DEBT haunt box; OPUS 100% vs flagging slips at 12 haunts; coin call-back not counting as answered; cellar/alleys not lifting the one-person rest; cow's 150 s bail under its own THROWN card).
+
+**Harness:** scratchpad `dss.py` + `step.py` (Playwright venv `pwvenv`, Chrome for Testing on CDP 9333, profile `profiles/n1`, muted). Notes file: `notes.md` in the same scratchpad: /private/tmp/claude-501/-Users-samquill--claude-spares-spare-UQ5MZP/2c6aa298-5de5-4233-9cfa-5c531453523d/scratchpad/
+
+---
+
 # START HERE — 2026-10-23
 
 **State:**

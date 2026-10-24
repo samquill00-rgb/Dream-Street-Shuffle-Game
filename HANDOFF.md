@@ -12,6 +12,14 @@ Sam's brief: play as many routes as possible with the headless harness, fix smal
 **Applied after the pause (2026-10-24, synced, checked by source only):**
 - F6 Dean Street: the slip "THE GREAT HAM told you to look for INIS O'FLATTERLY in Cecil Court" fires when Cecil Court was opened by the novelist and the Ham never met. Fix: add `$metCritic is true` to that slip's (if:) (the `$cecilTipShown` block near the top of Dean Street).
 
+**Quieting pass, 2026-10-24 (after the pause, synced):**
+- The drink, retch/piss and eat holds (`showDrinkPopupSafe`, `showSpewPopupSafe`, `showEatPopupSafe`) now wait through `dssDeferIfBusy` behind a lore card, gate flash or another hold. Seen in the pane: the eat hold waited under a fake gate flash and opened once it cleared.
+- Checked, no change: the "once a night" items in the notices map. The Colony and Empty Glass drinks are reached only by drinking; the dark pass comes once; resting keys re-offer a choice by design. O'Flatterly's nine objects all have voice lines, so their glow is honest (the 16 Oct rule).
+
+- Ledger cut (Sam's ruling): `glyphsAfter` returns nothing (`LEDGER_ON = false`), so no marks on the map's door plates or caption bar; the ledger slip on Dean Street is gated `(if: false and …)`. STATS and HAUNTS kept. Script loads, no errors; the map itself NOT seen (no save in the pane). The docked hub list still carries its pips off-screen.
+
+- Trail tag cut (Sam's ruling): `CHIP_ON = false` above `trailChip()`; the header's "TRAIL · n OF 3" no longer draws. FOLLOW THIS TRAIL, the step cards' green sign and the one-trail quieting kept. Script loads, no errors; not seen with a followed trail.
+
 **Routes covered:** night 1 end to end (Ham, Cecil Court, French ×3, chippy, doorway, Colony/DAVY/agent, cellar lost fight + JOHN, Lackland + pong, Trisha's/SHANA, Ronnie's, LILY call 1, Carthage/page 93, INIS gift, ticket key, Easter Island, Coach/cow/LINE 3, Fetch, Centre Point, white dawn); night 2 (refused AOIFE ×2, Fetch pane, coin call-back, cellar KO with the word, COPPER's matchbook, book left/Foyles, two blackouts, Square fire, Coach fire, black dawn); night 3 to INIS (no-word cellar, ASHTON rescue, ship call sunk, the Woman, Bourchier mugging, barbershop open).
 **Not yet reached:** Himalayas/Nazca/Pyramid/Ezekiel, Sanctum/Synthesis, Lackland "Not yet"/lend/Deal, LILY call refused, Foyles trade with a key, "Give up on the night", waltz won, cellar names given (RED/JOHN), afloat ship call.
 
@@ -7544,3 +7552,8 @@ Sam asked to save the other suggestions from the DAVY discussion for later acces
 
 ### PARKED by Sam — full DAVY ticket playtest
 Sam explicitly deferred the suggested start-to-finish in-game playtest to conserve usage. Do not run until he asks to resume. Exact request and scope saved under “Parked playtest request: DAVY’s ticket” in HANDOFF-miniature-problems-ideas.md. No testing or game changes performed for this request.
+
+
+## 2026-10-24 — Selective wear on small room props
+Sam asked to use remaining usage on wear to last night's props, clarifying to choose small room objects that benefit most rather than blanket every prop. Shared ceramic ashtrays gain tar/ash beds, burnt rests, worn rims, three charred ends and 38 instanced pale ash clumps; rim decals conform to sloping ceramic. French custom glass ashtray has denser uneven dust and brown tar. Working towels at Colony/Ronnie/Coach gain spill patches, partial rings and worn weave; tablecloths/phone cloth unchanged. Shared bottle labels have rubbed edges and handling smudges without extra meshes. Chippy matchbox has softened sleeve edges/crease and spent striker; salt cap dull/perforation dirt/crust; vinegar cap residue/dried drips; folded clean white paper now aged newsprint with fold/partial cup ring (no new readable words).
+QA: actual-source isolated previews for chippy/Coach/Ronnie/French render without reported errors. Chippy same-camera ashtray before/after compared; matchbox/condiments, Ronnie ash/towel, Coach towel/labels, French glass ash inspected. Chippy scene/plate interaction additionally checked in compiled game. Chippy names/actions/printed text compare unchanged; no new lights/animation loops. No full mobile/performance suite. Snapshots/generator/verification.json in scratchpad/prop-wear-selected; screenshots /tmp/dss-worn-ashtray.png and /tmp/dss-worn-bar-towel.png. Synced 254 passages. No git commands. DAVY's parked full playtest was not run during this work.

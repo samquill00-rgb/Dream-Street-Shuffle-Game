@@ -7502,3 +7502,9 @@ Sam's exact approved three paragraphs added as card-only lore in The French, wit
 
 ### Enlightenment book lore
 Added standard LORE footnote immediately after book mention in Airport Pub. Both French card and airport footnote now display shared system passage Lore Chariots of the Gods, preserving Sam's exact approved wording. Actual game: entered Enlightenment, opened footnote, verified all three paragraphs. Screenshot /tmp/dss-enlightenment-book-lore.png. Synced 249 passages. No git commands.
+
+### Monastery book lore
+Added standard LORE footnote after the paperback paragraph in The Cave, displaying the same shared Lore Chariots of the Gods passage as French and Enlightenment. Verified in actual game: footnote opens all three approved paragraphs. Synced 249 passages. No git commands.
+
+### All three book lore cards consistency/readability check
+Opened French, Enlightenment and Cave lore in actual game. Found duplicate heading from nested display and extra French wrapper newlines. Removed redundant body heading (standard card heading retained), explicit shared three paragraphs with 18px upright cream text, 1.6 line spacing and consistent paragraph gaps; wording unchanged. Removed French wrapper newlines. Rechecked screenshots and DOM: all three exactly 560 x 426.76 px, 18px body/28.8px line height, three paragraphs, no overflow at 1280x720. Screenshot /tmp/dss-lore-consistent.png. Synced 249 passages; no git commands. Smaller viewport not tested.

@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brydges Place — behind the Harp, 1973</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+#location {
+  position: absolute; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  font: 12px 'Courier New', monospace; color: rgba(200,180,140,0.4);
+  letter-spacing: 2px; pointer-events: none; z-index: 10;
+  width: calc(100% - 36px); text-align: center; font-size: clamp(9px, 1vw, 12px);
+}
+</style>
+</head>
+<body>
+<div id="location">BRYDGES PLACE, BEHIND THE HARP, CHANDOS PLACE</div>
+<script src="vendor/three/three.min.js"></script>
+<script src="vendor/three/shaders/CopyShader.js"></script>
+<script src="vendor/three/shaders/LuminosityHighPassShader.js"></script>
+<script src="vendor/three/postprocessing/EffectComposer.js"></script>
+<script src="vendor/three/postprocessing/RenderPass.js"></script>
+<script src="vendor/three/postprocessing/ShaderPass.js"></script>
+<script src="vendor/three/postprocessing/UnrealBloomPass.js"></script>
+<script>
+// ============================================================
+// BRYDGES PLACE, 1973. The alley the Harp's back door opens onto,
+// between the pub and the Coliseum's flank. The camera stands at the
+// Bedfordbury end and looks down the passage to where it narrows to a
+// slit and lets out onto St Martin's Lane. No figures: what happens
+// here is still to be decided (Sam, 2026-10-24).
+// Alley runs along -z. Left wall (x < 0) is the Coliseum; right wall
+// (x > 0) is the back of the Harp and its neighbours.
+// ============================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d14);
+scene.fog = new THREE.FogExp2(0x0d0f16, 0.045);
+var motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+var CAM_Z0 = 13.2, CAM_Z1 = 11.4;
+var camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.05, 120);
+camera.position.set(-0.4, 1.66, CAM_Z0);
+camera.lookAt(0.15, 1.9, -20);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 600 ? 1.25 : 1.5));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+document.body.appendChild(renderer.domElement);
+
+// Bloom composer + film grade, the same recipe as the other approach scenes.
+// The render target carries a stencil so r128 gives it 24-bit depth (a 16-bit
+// buffer z-fights the door reveals and window bars).
+var composer = null;
+if (typeof THREE.EffectComposer === 'function' && typeof THREE.UnrealBloomPass === 'function') {
+  var rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { stencilBuffer: true });
+  composer = new THREE.EffectComposer(renderer, rt);
+  composer.setPixelRatio(1);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  composer.addPass(new THREE.UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight), 0.36, 0.55, 0.78));
+  window.addEventListener('resize', function() { composer.setSize(window.innerWidth, window.innerHeight); });
+}
+(function() {
+  var fgV = document.createElement('div');
+  fgV.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:3;' +
+    'background:radial-gradient(ellipse at 50% 46%, transparent 46%, rgba(8,5,4,0.2) 78%, rgba(6,3,2,0.45) 100%);';
+  document.body.appendChild(fgV);
+  var fgC = document.createElement('canvas'); fgC.width = 128; fgC.height = 128;
+  var fgX = fgC.getContext('2d'); var fgD = fgX.createImageData(128, 128);
+  for (var fgI = 0; fgI < fgD.data.length; fgI += 4) {
+    var fgVal = 118 + Math.floor(Math.random() * 20);
+    fgD.data[fgI] = fgD.data[fgI + 1] = fgD.data[fgI + 2] = fgVal;
+    fgD.data[fgI + 3] = 255;
+  }
+  fgX.putImageData(fgD, 0, 0);
+  var fgG = document.createElement('div');
+  fgG.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:4;' +
+    'background:url(' + fgC.toDataURL() + ');opacity:0.05;mix-blend-mode:overlay;';
+  document.body.appendChild(fgG);
+})();
+window.addEventListener('resize', function() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderScene();
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function makeCanvasTexture(w, h, drawFunc) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  drawFunc(cx, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function tiled(tex, rx, ry) {
+  var t = tex.clone(); t.needsUpdate = true;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry);
+  return t;
+}
+
+// London stock brick, a century of soot. One texture tile = 8 bricks by
+// 20 courses, about 1.8 m by 1.7 m. `tone` shifts the base colour so the
+// Coliseum and the pub's rear do not read as the same wall.
+function brickTextures(tone) {
+  var draw = function(bump) {
+    return function(cx, w, h) {
+      var cols = 8, rows = 20, bw = w / cols, bh = h / rows, m = 3;
+      cx.fillStyle = bump ? '#202020' : '#1b1712';
+      cx.fillRect(0, 0, w, h);
+      for (var r = 0; r < rows; r++) {
+        var off = (r % 2) * bw / 2;
+        for (var c = -1; c <= cols; c++) {
+          var x = c * bw + off, y = r * bh;
+          if (bump) {
+            var g = 150 + Math.floor(rnd(-25, 25));
+            cx.fillStyle = 'rgb(' + g + ',' + g + ',' + g + ')';
+          } else {
+            var k = rnd(0.55, 1.05) * (r > rows * 0.65 ? 0.82 : 1);
+            var rr = Math.floor(tone[0] * k), gg = Math.floor(tone[1] * k), bb = Math.floor(tone[2] * k);
+            if (Math.random() < 0.08) { rr = Math.floor(rr * 0.55); gg = Math.floor(gg * 0.55); bb = Math.floor(bb * 0.55); }
+            cx.fillStyle = 'rgb(' + rr + ',' + gg + ',' + bb + ')';
+          }
+          cx.fillRect(x + m / 2, y + m / 2, bw - m, bh - m);
+        }
+      }
+      if (!bump) {
+        // Soot runs down from the courses and a damp tide-mark near the ground.
+        for (var s = 0; s < 70; s++) {
+          var sx = rnd(0, w), sw = rnd(2, 14);
+          var grd = cx.createLinearGradient(0, 0, 0, h);
+          grd.addColorStop(0, 'rgba(0,0,0,0)');
+          grd.addColorStop(rnd(0.2, 0.8), 'rgba(0,0,0,' + rnd(0.1, 0.3).toFixed(2) + ')');
+          grd.addColorStop(1, 'rgba(0,0,0,0)');
+          cx.fillStyle = grd; cx.fillRect(sx, 0, sw, h);
+        }
+        for (var p = 0; p < 900; p++) {
+          cx.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '0,0,0' : '120,110,90') + ',' + rnd(0.04, 0.12).toFixed(2) + ')';
+          cx.fillRect(rnd(0, w), rnd(0, h), rnd(1, 3), rnd(1, 3));
+        }
+      }
+    };
+  };
+  return { map: makeCanvasTexture(512, 512, draw(false)), bump: makeCanvasTexture(512, 512, draw(true)) };
+}
+var COLISEUM_BRICK = brickTextures([92, 74, 52]);
+var HARP_BRICK = brickTextures([104, 66, 48]);
+var BRICK_TILE_W = 1.8, BRICK_TILE_H = 1.7;
+function brickMat(set, len, h) {
+  return new THREE.MeshStandardMaterial({
+    map: tiled(set.map, len / BRICK_TILE_W, h / BRICK_TILE_H),
+    bumpMap: tiled(set.bump, len / BRICK_TILE_W, h / BRICK_TILE_H),
+    bumpScale: 0.025, roughness: 0.92, metalness: 0, side: THREE.DoubleSide
+  });
+}
+
+// A wall plane along the alley. side -1 = left wall facing +x, +1 = right wall facing -x.
+function wallZ(set, x, z0, z1, y0, y1, side) {
+  var len = Math.abs(z1 - z0), h = y1 - y0;
+  var mesh = new THREE.Mesh(new THREE.PlaneGeometry(len, h), brickMat(set, len, h));
+  mesh.position.set(x, (y0 + y1) / 2, (z0 + z1) / 2);
+  mesh.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  return mesh;
+}
+// A wall plane across the alley, facing the camera (+z).
+function wallX(set, z, x0, x1, y0, y1) {
+  var len = Math.abs(x1 - x0), h = y1 - y0;
+  var mesh = new THREE.Mesh(new THREE.PlaneGeometry(len, h), brickMat(set, len, h));
+  mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, z);
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  return mesh;
+}
+
+function glowTexture(inner, outer) {
+  return makeCanvasTexture(128, 128, function(cx, w, h) {
+    var g = cx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, inner); g.addColorStop(0.35, outer); g.addColorStop(1, 'rgba(0,0,0,0)');
+    cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+  });
+}
+// Additive, so a near glow reads as light and not as grey fog.
+function glowSprite(tex, x, y, z, sx, sy, opacity) {
+  var s = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false, opacity: opacity,
+    blending: THREE.AdditiveBlending, fog: false
+  }));
+  s.position.set(x, y, z); s.scale.set(sx, sy, 1);
+  scene.add(s);
+  return s;
+}
+var WARM_GLOW = glowTexture('rgba(255,214,150,1)', 'rgba(230,140,60,0.35)');
+var GAS_GLOW = glowTexture('rgba(235,250,215,1)', 'rgba(150,190,140,0.3)');
+var SODIUM_GLOW = glowTexture('rgba(255,190,110,1)', 'rgba(220,120,40,0.3)');
+
+// ============================================================
+// THE PASSAGE
+// ============================================================
+var HW = 0.82;               // half-width of the main run
+var Z_NEAR = 15, Z_JOG = -13.5, Z_SLIT_END = -24;
+var SLIT_L = -0.3, SLIT_R = 0.24;  // the slit by the Coliseum, a little over half a metre
+
+// Flagstones with a sunk gutter down the middle, wet.
+var flagTex = makeCanvasTexture(512, 1024, function(cx, w, h) {
+  cx.fillStyle = '#16140f'; cx.fillRect(0, 0, w, h);
+  var y = 0;
+  while (y < h) {
+    var rh = rnd(90, 170), x = 0;
+    while (x < w) {
+      var rw = rnd(120, 260);
+      var v = Math.floor(rnd(52, 84));
+      cx.fillStyle = 'rgb(' + v + ',' + Math.floor(v * 0.94) + ',' + Math.floor(v * 0.86) + ')';
+      cx.fillRect(x + 3, y + 3, rw - 6, rh - 6);
+      for (var sp = 0; sp < 40; sp++) {
+        cx.fillStyle = 'rgba(0,0,0,' + rnd(0.05, 0.2).toFixed(2) + ')';
+        cx.fillRect(x + rnd(0, rw), y + rnd(0, rh), rnd(2, 10), rnd(1, 4));
+      }
+      x += rw;
+    }
+    y += rh;
+  }
+  // The gutter: a dark run of setts down the centre line.
+  cx.fillStyle = 'rgba(10,9,7,0.9)'; cx.fillRect(w / 2 - 22, 0, 44, h);
+  for (var gy = 0; gy < h; gy += 22) {
+    cx.fillStyle = 'rgba(70,66,58,0.55)'; cx.fillRect(w / 2 - 19, gy + 2, 38, 18);
+  }
+});
+var flagRough = makeCanvasTexture(256, 512, function(cx, w, h) {
+  cx.fillStyle = '#d8d8d8'; cx.fillRect(0, 0, w, h);
+  // Puddles: low-roughness pools, the gutter wettest.
+  for (var i = 0; i < 18; i++) {
+    var g = cx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    var px = rnd(0, w), py = rnd(0, h), pr = rnd(30, 80);
+    g = cx.createRadialGradient(px, py, 0, px, py, pr);
+    g.addColorStop(0, '#202020'); g.addColorStop(1, 'rgba(216,216,216,0)');
+    cx.fillStyle = g; cx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+  }
+  cx.fillStyle = '#383838'; cx.fillRect(w / 2 - 12, 0, 24, h);
+});
+(function() {
+  var len = Z_NEAR - Z_SLIT_END + 2, wid = 2 * HW;
+  var reps = len / 4;
+  var floor = new THREE.Mesh(new THREE.PlaneGeometry(wid, len), new THREE.MeshStandardMaterial({
+    map: tiled(flagTex, 1, reps), roughnessMap: tiled(flagRough, 1, reps),
+    roughness: 0.72, metalness: 0.15
+  }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, 0, (Z_NEAR + Z_SLIT_END - 2) / 2);
+  floor.receiveShadow = true;
+  scene.add(floor);
+})();
+
+// The Coliseum's flank: sheer, the full height of the strip of sky.
+var COL_H = 19;
+wallZ(COLISEUM_BRICK, -HW, Z_NEAR, Z_JOG, 0, COL_H, -1);
+wallX(COLISEUM_BRICK, Z_JOG, -HW, SLIT_L, 0, COL_H);
+wallZ(COLISEUM_BRICK, SLIT_L, Z_JOG, Z_SLIT_END, 0, COL_H, -1);
+// A stone plinth course along its foot.
+(function() {
+  var m = new THREE.MeshStandardMaterial({ color: 0x3a3730, roughness: 0.95 });
+  var p = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, Z_NEAR - Z_JOG), m);
+  p.position.set(-HW + 0.03, 0.275, (Z_NEAR + Z_JOG) / 2);
+  p.receiveShadow = true; scene.add(p);
+  var c = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, Z_NEAR - Z_JOG), m);
+  c.position.set(-HW + 0.05, 4.6, (Z_NEAR + Z_JOG) / 2);
+  scene.add(c);
+})();
+
+// The Harp's rear. The back door is flush in the wall at z 4.0–4.9, so the
+// wall is built round the opening; the walls beside it cast shadow, so the
+// door's light falls across the alley as a wedge.
+var HARP_H = 11.5, DOOR_Z0 = 4.0, DOOR_Z1 = 4.9, DOOR_H = 2.15;
+var DOOR_ZC = (DOOR_Z0 + DOOR_Z1) / 2;
+wallZ(HARP_BRICK, HW, Z_NEAR, DOOR_Z1, 0, HARP_H, 1).castShadow = true;
+wallZ(HARP_BRICK, HW, DOOR_Z0, -6, 0, HARP_H, 1).castShadow = true;
+wallZ(HARP_BRICK, HW, DOOR_Z1, DOOR_Z0, DOOR_H, HARP_H, 1).castShadow = true;
+// Beyond the pub, a lower run of backs, then the slit's own wall.
+wallZ(COLISEUM_BRICK, HW, -6, Z_JOG, 0, 8.5, 1);
+wallX(HARP_BRICK, Z_JOG, SLIT_R, HW, 0, 8.5);
+wallZ(HARP_BRICK, SLIT_R, Z_JOG, Z_SLIT_END, 0, 8.5, 1);
+// The Harp's parapet and a gutter line against the sky.
+(function() {
+  var m = new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 0.9 });
+  var cap = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, Z_NEAR + 6), m);
+  cap.position.set(HW - 0.05, HARP_H, (Z_NEAR - 6) / 2); scene.add(cap);
+})();
+
+// Narrow sky between the parapets: deep blue, a few hard stars.
+(function() {
+  var sky = makeCanvasTexture(256, 1024, function(cx, w, h) {
+    var g = cx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#1b2236'); g.addColorStop(1, '#0c0f1a');
+    cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+    for (var i = 0; i < 26; i++) {
+      cx.fillStyle = 'rgba(220,225,240,' + rnd(0.3, 0.9).toFixed(2) + ')';
+      cx.fillRect(rnd(0, w), rnd(0, h), 1.5, 1.5);
+    }
+  });
+  var m = new THREE.Mesh(new THREE.PlaneGeometry(6, 60), new THREE.MeshBasicMaterial({ map: sky, fog: false }));
+  m.rotation.x = Math.PI / 2;
+  m.position.set(0, COL_H + 0.5, -10);
+  scene.add(m);
+})();
+
+// ============================================================
+// THE HARP'S BACK DOOR — ajar, warm light out across the flags
+// ============================================================
+(function() {
+  var revealD = 0.24, dz = DOOR_Z1 - DOOR_Z0;
+  var revealMat = new THREE.MeshStandardMaterial({ color: 0x2b2018, roughness: 0.9, side: THREE.DoubleSide });
+  // Reveals and head of the opening.
+  [DOOR_Z0, DOOR_Z1].forEach(function(z) {
+    var r = new THREE.Mesh(new THREE.PlaneGeometry(revealD, DOOR_H), revealMat);
+    r.position.set(HW + revealD / 2, DOOR_H / 2, z); r.castShadow = true; scene.add(r);
+  });
+  var head = new THREE.Mesh(new THREE.PlaneGeometry(revealD, dz), revealMat);
+  head.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+  head.position.set(HW + revealD / 2, DOOR_H, DOOR_ZC); scene.add(head);
+  // Stone step.
+  var step = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, dz + 0.16),
+    new THREE.MeshStandardMaterial({ color: 0x4a463e, roughness: 0.8 }));
+  step.position.set(HW + 0.02, 0.06, DOOR_ZC); step.receiveShadow = true; scene.add(step);
+  // The passage inside: cream gloss gone yellow, oxblood lino, a bulb out of sight.
+  var inMat = new THREE.MeshStandardMaterial({ color: 0x9a7448, emissive: 0x4a2a10, emissiveIntensity: 0.8, roughness: 0.7, side: THREE.DoubleSide });
+  var back = new THREE.Mesh(new THREE.PlaneGeometry(dz + 0.6, DOOR_H + 0.4), inMat);
+  back.rotation.y = -Math.PI / 2; back.position.set(HW + 2.2, DOOR_H / 2, DOOR_ZC); scene.add(back);
+  [DOOR_Z0 - 0.3, DOOR_Z1 + 0.3].forEach(function(z) {
+    var s = new THREE.Mesh(new THREE.PlaneGeometry(2, DOOR_H + 0.4), inMat);
+    s.position.set(HW + 1.2, DOOR_H / 2, z); scene.add(s);
+  });
+  var lino = new THREE.Mesh(new THREE.PlaneGeometry(2, dz + 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x5a2a1c, emissive: 0x2a1006, roughness: 0.4 }));
+  lino.rotation.x = -Math.PI / 2; lino.position.set(HW + 1.2, 0.01, DOOR_ZC); scene.add(lino);
+  // Door leaf: oxblood gloss gone matt, four panels, hung on the far jamb
+  // and swung in, so the near side of the doorway shows its light.
+  var leafTex = makeCanvasTexture(128, 256, function(cx, w, h) {
+    cx.fillStyle = '#4a1612'; cx.fillRect(0, 0, w, h);
+    cx.strokeStyle = 'rgba(0,0,0,0.5)'; cx.lineWidth = 5;
+    [[14, 14, 44, 100], [70, 14, 44, 100], [14, 130, 44, 110], [70, 130, 44, 110]].forEach(function(p) {
+      cx.strokeRect(p[0], p[1], p[2], p[3]);
+    });
+    for (var i = 0; i < 300; i++) {
+      cx.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '0,0,0' : '160,90,70') + ',0.1)';
+      cx.fillRect(rnd(0, w), rnd(0, h), rnd(1, 4), rnd(1, 6));
+    }
+  });
+  var lw = dz - 0.04;
+  var leaf = new THREE.Mesh(new THREE.BoxGeometry(0.045, DOOR_H - 0.03, lw),
+    new THREE.MeshStandardMaterial({ map: leafTex, roughness: 0.75 }));
+  leaf.geometry.translate(0, 0, lw / 2);   // hinge at local z 0
+  leaf.castShadow = true;
+  var hinge = new THREE.Group();
+  hinge.position.set(HW + revealD - 0.03, DOOR_H / 2, DOOR_Z0 + 0.02);
+  hinge.rotation.y = 0.75;
+  hinge.add(leaf);
+  var knob = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8),
+    new THREE.MeshStandardMaterial({ color: 0x8a6a3a, metalness: 0.8, roughness: 0.35 }));
+  knob.position.set(-0.04, -0.08, lw - 0.08); leaf.add(knob);
+  scene.add(hinge);
+})();
+var doorLight = new THREE.PointLight(0xffb066, 2.6, 8, 2);
+doorLight.position.set(HW + 1.0, 1.9, DOOR_ZC);
+doorLight.castShadow = true;
+doorLight.shadow.mapSize.set(512, 512);
+doorLight.shadow.bias = -0.002;
+scene.add(doorLight);
+var doorSpill = new THREE.PointLight(0xe08a40, 0.6, 4, 2);
+doorSpill.position.set(HW - 0.3, 1.2, DOOR_ZC + 0.2);
+scene.add(doorSpill);
+var doorGlow = glowSprite(WARM_GLOW, HW + 0.1, 1.15, DOOR_ZC + 0.15, 0.9, 2.2, 0.28);
+
+// Fanlight over the door, lit from the passage.
+(function() {
+  var fan = new THREE.Mesh(new THREE.PlaneGeometry(DOOR_Z1 - DOOR_Z0 - 0.08, 0.32),
+    new THREE.MeshBasicMaterial({ color: 0xc89058 }));
+  fan.rotation.y = -Math.PI / 2;
+  fan.position.set(HW - 0.004, DOOR_H + 0.24, DOOR_ZC); scene.add(fan);
+  var barMat = new THREE.MeshStandardMaterial({ color: 0x2c2a24, roughness: 0.8 });
+  for (var i = -2; i <= 2; i++) {
+    var bar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.32, 0.025), barMat);
+    bar.position.set(HW - 0.012, DOOR_H + 0.24, DOOR_ZC + i * 0.16); scene.add(bar);
+  }
+  var sill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, DOOR_Z1 - DOOR_Z0 + 0.1), barMat);
+  sill.position.set(HW - 0.03, DOOR_H + 0.06, DOOR_ZC); scene.add(sill);
+})();
+
+// A tin sign by the door. Its words are left blank on purpose.
+(function() {
+  var sign = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.28), new THREE.MeshStandardMaterial({
+    map: makeCanvasTexture(128, 96, function(cx, w, h) {
+      cx.fillStyle = '#c8b890'; cx.fillRect(0, 0, w, h);
+      cx.strokeStyle = '#3a2a1a'; cx.lineWidth = 4; cx.strokeRect(5, 5, w - 10, h - 10);
+      for (var i = 0; i < 120; i++) {
+        cx.fillStyle = 'rgba(90,50,20,' + rnd(0.1, 0.4).toFixed(2) + ')';
+        cx.fillRect(rnd(0, w), rnd(0, h), rnd(2, 8), rnd(2, 8));
+      }
+    }), roughness: 0.6, metalness: 0.3
+  }));
+  sign.rotation.y = -Math.PI / 2;
+  sign.position.set(HW - 0.006, 1.6, DOOR_Z1 + 0.45);
+  scene.add(sign);
+})();
+
+// Frosted gents' window, lit, high on the wall past the door.
+var GENTS_Z = 2.4;
+(function() {
+  var frost = makeCanvasTexture(64, 96, function(cx, w, h) {
+    var g = cx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#f2d9a8'); g.addColorStop(1, '#c8995a');
+    cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+    for (var i = 0; i < 400; i++) {
+      cx.fillStyle = 'rgba(255,255,255,' + rnd(0.02, 0.1).toFixed(2) + ')';
+      cx.fillRect(rnd(0, w), rnd(0, h), 2, 2);
+    }
+  });
+  var glass = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.75),
+    new THREE.MeshBasicMaterial({ map: frost, color: 0xb88a50 }));
+  glass.rotation.y = -Math.PI / 2;
+  glass.position.set(HW - 0.004, 2.75, GENTS_Z);
+  scene.add(glass);
+  var frameMat = new THREE.MeshStandardMaterial({ color: 0x2c2a24, roughness: 0.8 });
+  [[0.6, 0.05, 0, 0.4], [0.6, 0.05, 0, -0.4], [0.04, 0.8, 0.29, 0], [0.04, 0.8, -0.29, 0], [0.04, 0.75, 0, 0], [0.55, 0.035, 0, 0]].forEach(function(b) {
+    var bar = new THREE.Mesh(new THREE.BoxGeometry(0.03, b[1], b[0]), frameMat);
+    bar.position.set(HW - 0.02, 2.75 + b[3], GENTS_Z + b[2]);
+    scene.add(bar);
+  });
+  var sill = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.7),
+    new THREE.MeshStandardMaterial({ color: 0x4a463e, roughness: 0.9 }));
+  sill.position.set(HW - 0.05, 2.34, GENTS_Z); scene.add(sill);
+})();
+var gentsLight = new THREE.PointLight(0xe0b070, 0.7, 4, 2);
+gentsLight.position.set(HW - 0.4, 2.7, GENTS_Z);
+scene.add(gentsLight);
+glowSprite(WARM_GLOW, HW - 0.05, 2.75, GENTS_Z, 1.1, 1.3, 0.2);
+
+// Upper windows: dark sashes, one with a dim lamp behind a blind.
+(function() {
+  var darkGlass = new THREE.MeshStandardMaterial({ color: 0x0a0c10, roughness: 0.15, metalness: 0.6 });
+  var dimGlass = new THREE.MeshBasicMaterial({ map: makeCanvasTexture(64, 128, function(cx, w, h) {
+    var g = cx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#2a1a0c"); g.addColorStop(0.6, "#4a2e14"); g.addColorStop(1, "#3a220e");
+    cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+    cx.fillStyle = "rgba(0,0,0,0.35)"; for (var y = 4; y < h * 0.62; y += 6) cx.fillRect(0, y, w, 2);
+  }) });
+  var frameMat = new THREE.MeshStandardMaterial({ color: 0x302c26, roughness: 0.85 });
+  [[5.0, 7.6], [8.0, 7.6], [5.0, DOOR_ZC], [8.0, DOOR_ZC], [5.0, 1.2], [5.0, -2.4]].forEach(function(w, i) {
+    var y = w[0], z = w[1];
+    var g = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.4), i === 2 ? dimGlass : darkGlass);
+    g.rotation.y = -Math.PI / 2; g.position.set(HW - 0.005, y, z); scene.add(g);
+    var f = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.9), frameMat);
+    f.position.set(HW - 0.02, y, z); scene.add(f);
+    var lintel = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 1.0), frameMat);
+    lintel.position.set(HW - 0.03, y + 0.76, z); scene.add(lintel);
+  });
+})();
+var dimWindowLight = new THREE.PointLight(0x9a6a3a, 0.35, 3, 2);
+dimWindowLight.position.set(HW - 0.5, 5, DOOR_ZC);
+scene.add(dimWindowLight);
+
+// Drainpipe and a steaming extract vent.
+var VENT = { x: HW - 0.06, y: 3.5, z: 8.8 };
+(function() {
+  var pipeMat = new THREE.MeshStandardMaterial({ color: 0x1c1d1c, roughness: 0.6, metalness: 0.4 });
+  var pz = 6.4;
+  var pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, HARP_H, 10), pipeMat);
+  pipe.position.set(HW - 0.07, HARP_H / 2, pz); scene.add(pipe);
+  for (var b = 0.8; b < HARP_H; b += 1.8) {
+    var band = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 10), pipeMat);
+    band.position.set(HW - 0.07, b, pz); scene.add(band);
+  }
+  var shoe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.12), pipeMat);
+  shoe.position.set(HW - 0.1, 0.05, pz); scene.add(shoe);
+  var vent = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.35),
+    new THREE.MeshStandardMaterial({ color: 0x3a3a36, roughness: 0.5, metalness: 0.6 }));
+  vent.position.set(VENT.x, VENT.y, VENT.z); scene.add(vent);
+})();
+
+// Crates of empties and two kegs along the wall past the door, a
+// galvanised bin across the way.
+(function() {
+  var crateTex = makeCanvasTexture(128, 64, function(cx, w, h) {
+    cx.fillStyle = '#5a3e22'; cx.fillRect(0, 0, w, h);
+    cx.fillStyle = '#2a1c0e';
+    for (var y = 14; y < h; y += 16) cx.fillRect(0, y, w, 3);
+    for (var i = 0; i < 160; i++) {
+      cx.fillStyle = 'rgba(0,0,0,' + rnd(0.05, 0.2).toFixed(2) + ')';
+      cx.fillRect(rnd(0, w), rnd(0, h), rnd(4, 20), 1);
+    }
+  });
+  var crateMat = new THREE.MeshStandardMaterial({ map: crateTex, roughness: 0.9 });
+  var bottleMat = new THREE.MeshStandardMaterial({ color: 0x1e3018, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.85 });
+  var cx0 = HW - 0.2;
+  var stack = [[2.4, 0.15, 0], [2.4, 0.45, 0.05], [1.9, 0.15, -0.03], [2.4, 0.75, -0.04]];
+  stack.forEach(function(c) {
+    var crate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.29, 0.46), crateMat);
+    crate.position.set(cx0, c[1], c[0]); crate.rotation.y = c[2];
+    crate.castShadow = true; crate.receiveShadow = true; scene.add(crate);
+    for (var bx = 0; bx < 2; bx++) for (var bz = 0; bz < 3; bz++) {
+      var bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 0.2, 6), bottleMat);
+      bottle.position.set(cx0 - 0.08 + bx * 0.15, c[1] + 0.15, c[0] - 0.14 + bz * 0.14);
+      scene.add(bottle);
+    }
+  });
+  var kegMat = new THREE.MeshStandardMaterial({ color: 0x8a8c8a, roughness: 0.35, metalness: 0.85 });
+  [[HW - 0.24, 3.45], [HW - 0.22, 3.0]].forEach(function(k) {
+    var keg = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.56, 16), kegMat);
+    keg.position.set(k[0], 0.28, k[1]); keg.castShadow = true; scene.add(keg);
+    [0.08, 0.48].forEach(function(r) {
+      var ring = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.012, 6, 20), kegMat);
+      ring.rotation.x = Math.PI / 2; ring.position.set(k[0], r, k[1]); scene.add(ring);
+    });
+  });
+  var binMat = new THREE.MeshStandardMaterial({ color: 0x5a5c5a, roughness: 0.55, metalness: 0.7, side: THREE.DoubleSide });
+  var bin = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.22, 0.7, 18, 1, true), binMat);
+  bin.position.set(-HW + 0.32, 0.35, -1.6); bin.castShadow = true; scene.add(bin);
+  var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.04, 18), binMat);
+  lid.position.set(-HW + 0.36, 0.06, -0.95); lid.rotation.set(1.35, 0, 0.4); scene.add(lid);
+})();
+
+// ============================================================
+// THE COLISEUM SIDE — scene-dock door, caged bulb, iron rungs
+// ============================================================
+(function() {
+  var doorTex = makeCanvasTexture(128, 256, function(cx, w, h) {
+    cx.fillStyle = '#1e2c22'; cx.fillRect(0, 0, w, h);
+    cx.strokeStyle = 'rgba(0,0,0,0.6)'; cx.lineWidth = 3;
+    for (var y = 20; y < h; y += 40) { cx.beginPath(); cx.moveTo(0, y); cx.lineTo(w, y); cx.stroke(); }
+    for (var i = 0; i < 500; i++) {
+      cx.fillStyle = 'rgba(' + (Math.random() < 0.6 ? '120,70,40' : '0,0,0') + ',' + rnd(0.05, 0.25).toFixed(2) + ')';
+      cx.fillRect(rnd(0, w), rnd(0, h), rnd(1, 5), rnd(1, 5));
+    }
+  });
+  var door = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.6),
+    new THREE.MeshStandardMaterial({ map: doorTex, roughness: 0.6, metalness: 0.5 }));
+  door.rotation.y = Math.PI / 2;
+  door.position.set(-HW + 0.005, 1.3, -4.6);
+  scene.add(door);
+  var lintel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 1.7),
+    new THREE.MeshStandardMaterial({ color: 0x3a3730, roughness: 0.9 }));
+  lintel.position.set(-HW + 0.04, 2.68, -4.6); scene.add(lintel);
+  // Caged bulb on a bracket above it.
+  var cage = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0x222018, wireframe: true }));
+  cage.position.set(-HW + 0.14, 3.0, -4.6); scene.add(cage);
+  var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffd9a0 }));
+  bulb.position.copy(cage.position); scene.add(bulb);
+  var rungMat = new THREE.MeshStandardMaterial({ color: 0x1a1a18, roughness: 0.6, metalness: 0.7 });
+  for (var y = 3.6; y < 12; y += 0.32) {
+    var rung = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.42, 6), rungMat);
+    rung.rotation.x = Math.PI / 2; rung.position.set(-HW + 0.12, y, -6.4); scene.add(rung);
+  }
+  [-6.6, -6.2].forEach(function(z) {
+    var rail = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 8.4, 6), rungMat);
+    rail.position.set(-HW + 0.12, 7.8, z); scene.add(rail);
+  });
+})();
+var cageLight = new THREE.PointLight(0xffc88a, 0.9, 5, 2);
+cageLight.position.set(-HW + 0.3, 2.9, -4.6);
+scene.add(cageLight);
+glowSprite(WARM_GLOW, -HW + 0.14, 3.0, -4.6, 0.55, 0.55, 0.55);
+
+// ============================================================
+// GAS LAMP AT THE NARROWS, AND ST MARTIN'S LANE BEYOND
+// ============================================================
+var gasPanes;
+(function() {
+  var iron = new THREE.MeshStandardMaterial({ color: 0x141412, roughness: 0.5, metalness: 0.7 });
+  var arm = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.55, 6), iron);
+  arm.rotation.z = Math.PI / 2; arm.position.set(-HW + 0.27, 3.35, -11.2); scene.add(arm);
+  var lamp = new THREE.Group(); lamp.position.set(-HW + 0.5, 3.1, -11.2);
+  gasPanes = new THREE.MeshStandardMaterial({ color: 0xdfe8c8, emissive: 0xc8dca0, emissiveIntensity: 1.3,
+    transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+  for (var i = 0; i < 4; i++) {
+    var pane = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.3), gasPanes);
+    var a = i * Math.PI / 2;
+    pane.position.set(Math.sin(a) * 0.1, 0, Math.cos(a) * 0.1); pane.rotation.y = a;
+    lamp.add(pane);
+  }
+  var cap = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.14, 4), iron);
+  cap.rotation.y = Math.PI / 4; cap.position.y = 0.22; lamp.add(cap);
+  var base = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.1, 4), iron);
+  base.rotation.set(Math.PI, Math.PI / 4, 0); base.position.y = -0.2; lamp.add(base);
+  var hook = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.2, 6), iron);
+  hook.position.y = 0.36; lamp.add(hook);
+  scene.add(lamp);
+})();
+var gasLight = new THREE.PointLight(0xc8dcb0, 2.0, 9, 2);
+gasLight.position.set(-HW + 0.5, 3.0, -11.0);
+scene.add(gasLight);
+var gasGlow = glowSprite(GAS_GLOW, -HW + 0.5, 3.1, -11.2, 1.0, 1.0, 0.6);
+
+// The far mouth: sodium light off St Martin's Lane, seen through the slit.
+(function() {
+  var lane = makeCanvasTexture(128, 256, function(cx, w, h) {
+    var g = cx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#2a1c14'); g.addColorStop(0.55, '#c07a34'); g.addColorStop(1, '#6a4020');
+    cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+  });
+  var m = new THREE.Mesh(new THREE.PlaneGeometry(3, 9), new THREE.MeshBasicMaterial({ map: lane, fog: false, color: 0x9a6a3a }));
+  m.position.set(0, 4.5, Z_SLIT_END - 0.6);
+  scene.add(m);
+})();
+var laneLight = new THREE.PointLight(0xe0903a, 1.6, 14, 2);
+laneLight.position.set(0, 3, Z_SLIT_END + 1);
+scene.add(laneLight);
+glowSprite(SODIUM_GLOW, -0.03, 2.6, Z_SLIT_END + 0.4, 1.2, 4.5, 0.35);
+
+// Bedfordbury behind the camera, a little street-light on the near flags.
+var entranceGlow = new THREE.PointLight(0xd88830, 1.3, 16, 2);
+entranceGlow.position.set(0, 2.8, Z_NEAR + 1.5);
+scene.add(entranceGlow);
+
+scene.add(new THREE.AmbientLight(0x2a2630, 0.9));
+scene.add(new THREE.HemisphereLight(0x6a7ea4, 0x2a2018, 0.5));
+
+// ============================================================
+// STEAM FROM THE VENT, LOW FOG
+// ============================================================
+var steamTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var g = cx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+  g.addColorStop(0, 'rgba(220,210,200,0.5)'); g.addColorStop(1, 'rgba(220,210,200,0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+});
+var steam = [];
+for (var si = 0; si < 14; si++) {
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: steamTex, transparent: true, depthWrite: false, opacity: 0 }));
+  sp.userData.phase = si / 14;
+  scene.add(sp); steam.push(sp);
+}
+var fogPlanes = [];
+for (var fi = 0; fi < 6; fi++) {
+  var fp = new THREE.Sprite(new THREE.SpriteMaterial({ map: steamTex, transparent: true, depthWrite: false, opacity: 0.22, color: 0x8a8070 }));
+  fp.position.set(rnd(-0.3, 0.3), 0.35, 8 - fi * 4.2);
+  fp.scale.set(3.2, 1.0, 1);
+  fp.userData = { baseX: fp.position.x, phase: rnd(0, 6), speed: rnd(0.15, 0.3) };
+  scene.add(fp); fogPlanes.push(fp);
+}
+
+// ============================================================
+// RENDER LOOP
+// ============================================================
+var clock = new THREE.Clock();
+var frameId = null;
+var sceneDisposed = false;
+function renderScene() {
+  if (sceneDisposed) return;
+  if (composer) { composer.render(); } else { renderer.render(scene, camera); }
+}
+
+function animate() {
+  frameId = null;
+  if (sceneDisposed || document.hidden) return;
+  var still = motionPreference.matches;
+  var t = still ? 0 : clock.getElapsedTime();
+  // A slow walk-in over twelve seconds, then a held breath; a faint sway.
+  var k = Math.min(1, t / 12); k = k * k * (3 - 2 * k);
+  camera.position.z = CAM_Z0 + (CAM_Z1 - CAM_Z0) * k;
+  camera.position.x = -0.4 + Math.sin(t * 0.4) * 0.015;
+  camera.position.y = 1.66 + Math.sin(t * 0.9) * 0.008;
+  camera.lookAt(0.15 + 0.02 * Math.sin(t * 0.21), 1.9, -20);
+
+  // The gas mantle breathes; the door light is steady, with the odd dip
+  // as someone passes inside.
+  var gasF = 1 + Math.sin(t * 7.1) * 0.03 + Math.sin(t * 13.3) * 0.02;
+  gasLight.intensity = 2.0 * gasF;
+  gasPanes.emissiveIntensity = 1.3 * gasF;
+  gasGlow.material.opacity = 0.6 * gasF;
+  var dip = Math.max(0, Math.sin(t * 0.37 - 1.2)); dip = Math.pow(dip, 40);
+  doorLight.intensity = 2.0 * (1 - 0.55 * dip);
+  doorSpill.intensity = 0.4 * (1 - 0.55 * dip);
+  doorGlow.material.opacity = 0.32 * (1 - 0.5 * dip);
+
+  for (var i = 0; i < steam.length; i++) {
+    var s = steam[i], p = (s.userData.phase + t * 0.09) % 1;
+    s.position.set(VENT.x - 0.2 - p * 0.6, VENT.y + p * 2.4, VENT.z + Math.sin(p * 6 + i) * 0.12);
+    var sc = 0.4 + p * 1.6; s.scale.set(sc, sc, 1);
+    s.material.opacity = (still ? 0.12 : 0.3) * Math.sin(p * Math.PI);
+  }
+  for (var f = 0; f < fogPlanes.length; f++) {
+    var fp = fogPlanes[f];
+    fp.position.x = fp.userData.baseX + Math.sin(t * fp.userData.speed + fp.userData.phase) * 0.25;
+  }
+
+  renderScene();
+  if (!still) frameId = requestAnimationFrame(animate);
+}
+function resumeScene() {
+  if (frameId !== null) cancelAnimationFrame(frameId);
+  animate();
+}
+document.addEventListener('visibilitychange', resumeScene);
+motionPreference.addEventListener('change', resumeScene);
+window.addEventListener('pagehide', function() {
+  sceneDisposed = true;
+  cancelAnimationFrame(frameId);
+  document.removeEventListener('visibilitychange', resumeScene);
+  motionPreference.removeEventListener('change', resumeScene);
+  var released = new Set();
+  function release(x) { if (x && x.dispose && !released.has(x)) { released.add(x); x.dispose(); } }
+  scene.traverse(function(o) {
+    release(o.geometry);
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(function(m) {
+      if (!m) return;
+      Object.keys(m).forEach(function(k) { if (m[k] && m[k].isTexture) release(m[k]); });
+      release(m);
+    });
+  });
+  if (composer) {
+    composer.passes.forEach(release);
+    release(composer.renderTarget1); release(composer.renderTarget2); release(composer.copyPass);
+  }
+  renderer.dispose();
+});
+animate();
+</script>
+</body>
+</html>

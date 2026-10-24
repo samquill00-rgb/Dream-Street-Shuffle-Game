@@ -9,7 +9,7 @@ Sam's brief: play as many routes as possible with the headless harness, fix smal
 - F4 The Fetch: THE CROWN was awarded on a glimpse (not ready); now needs _ready. Seen live (header went OPUS/STATE 100% while a flagging slip fired).
 - F5 Dean Street / Book Footer: the book-lost roll ran in the footer after the hub printed "In your bag, you have your novel" and the pitch question; Dean Street now displays Book Footer first (once a lap, $bookRollLap) and the bag line shows only while the book is in the bag. Synced, NOT yet seen live.
 
-**Found, NOT applied (the edit was stopped with the pause):**
+**Applied after the pause (2026-10-24, synced, checked by source only):**
 - F6 Dean Street: the slip "THE GREAT HAM told you to look for INIS O'FLATTERLY in Cecil Court" fires when Cecil Court was opened by the novelist and the Ham never met. Fix: add `$metCritic is true` to that slip's (if:) (the `$cecilTipShown` block near the top of Dean Street).
 
 **Routes covered:** night 1 end to end (Ham, Cecil Court, French ×3, chippy, doorway, Colony/DAVY/agent, cellar lost fight + JOHN, Lackland + pong, Trisha's/SHANA, Ronnie's, LILY call 1, Carthage/page 93, INIS gift, ticket key, Easter Island, Coach/cow/LINE 3, Fetch, Centre Point, white dawn); night 2 (refused AOIFE ×2, Fetch pane, coin call-back, cellar KO with the word, COPPER's matchbook, book left/Foyles, two blackouts, Square fire, Coach fire, black dawn); night 3 to INIS (no-word cellar, ASHTON rescue, ship call sunk, the Woman, Bourchier mugging, barbershop open).

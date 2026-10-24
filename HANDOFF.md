@@ -22,6 +22,17 @@ Picked up the parked sweep. Played a fresh night 1 and most of a night 2 with th
 - Q12 Strangers: no change needed. The names were only ever in the off-screen dock the map reads; on screen they are figures on the map's corners you walk into, met once and gone (screenshot checked). Sam's "you just encounter them" is how it already works.
 - Q13 Nazca blur: .12 → .038, the widest the 20-sample cap allows; the console warning is gone on a cold jump into the race.
 
+**Rulings on the standing nine (2026-10-24 morning, applied and synced, not committed; each edit carries a `2026-10-24 (Sam, Qn)` comment):**
+- Q1 STATS slip vs bars: `(display: "Bars Now")` after the Pillars entry draw, so the bars move on the page the primer fires on. Seen live on a fresh night: slip lands beside 77/57, not 70/70.
+- Q2 lily line under 30: left as is (Sam).
+- Q3 resting figure's card: the French and the Colony print the hub's `rest` flag; a figure with nothing to offer in a resting room gets "Look elsewhere; try again later." on its card (room kit, showCard). Seen live at the French after JOHN.
+- Q4 Empty Glass: THE DEBT's haunt box waits until the drink hold has opened and closed (12 s at most), then plays its reveal; the gate wheel follows the box. Seen live on a fresh night (no wheel there only because it was the night's first haunt, which opens the notebook instead).
+- Q5 cellar aftermaths: the hub stamps `$cellarHubLap` on the first hub after the cellar; the Woman from the Line now needs a later lap than that (alleys and the box do not count). Source and a clean hub render; not walked.
+- Q6 off-screen double links: left as is (Sam).
+- Q7 twelve haunts: `wordToTheWisePopup` (the street's flagging and hungry slips, its only callers) returns at once while the header carries `.stat-label-opus`. Proved live with a faked label.
+- Q8 phone box call-back: left as is, the omen-only trade stands (Sam).
+- Q9 cow ride: one way out per screen. A throw removes the 150 s stall bail if it comes; a bail already up suppresses the card's buttons and their clicks. Source checked; the ride boots clean on a cold jump; the crash path itself not played.
+
 **Questions for Sam (new, no change made):**
 - Q10 The Wall arithmetic: the third pillar wants sobriety ≥30 on the pub page, but the Pillars entry costs 9 (and the storm 6), so a player at 30 to 38 on the street is turned away after walking in. A doorway (+9) cannot outpace it; only the chippy (+18) or the liver (+40) can. Raise the street figure the hint names, or check the gate before the entry draw?
 - Q11 Foyles: with the coin in hand only "Pay with the coin" shows; the key trade is the else branch. Intended that the coin always goes first?

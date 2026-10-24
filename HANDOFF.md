@@ -16,6 +16,12 @@ Picked up the parked sweep. Played a fresh night 1 and most of a night 2 with th
 - Foyles trade of a key for the book: the coin is offered first while held; spend the coin (Colony door toss or the phone box) and lose the book again to see the key trade. The notebook trade needs the Bourchier mugging.
 - The Colony lily by the `lily4` hook click gave no card at 44% (the old s43 recipe); not chased.
 
+**Rulings on the new questions (2026-10-24 morning, applied and synced, not committed):**
+- Q10 The Wall: the Pillars entry now records what it cost (`$pillarsToll`) and the third pillar's gate forgives it, so a player at 30 or more on the street gets through; drinks inside still count. Seen live: toll 8 recorded, gate renders, no tw-error. Sam said only "clearly it needs fixing", so if he meant something else (say, check before the draw, or a different figure), the two gate lines in Entering The Pillars are the place.
+- Q11 Foyles: coin and key are both offered while both are held (Sam: "show both"). Checked by source only (no book at Foyles in the live state).
+- Q12 Strangers: no change needed. The names were only ever in the off-screen dock the map reads; on screen they are figures on the map's corners you walk into, met once and gone (screenshot checked). Sam's "you just encounter them" is how it already works.
+- Q13 Nazca blur: .12 → .038, the widest the 20-sample cap allows; the console warning is gone on a cold jump into the race.
+
 **Questions for Sam (new, no change made):**
 - Q10 The Wall arithmetic: the third pillar wants sobriety ≥30 on the pub page, but the Pillars entry costs 9 (and the storm 6), so a player at 30 to 38 on the street is turned away after walking in. A doorway (+9) cannot outpace it; only the chippy (+18) or the liver (+40) can. Raise the street figure the hint names, or check the gate before the entry draw?
 - Q11 Foyles: with the coin in hand only "Pay with the coin" shows; the key trade is the else branch. Intended that the coin always goes first?

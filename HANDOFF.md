@@ -1,3 +1,5 @@
+**Nightwork prompt parked:** HANDOFF-nightwork-prompt.md holds the overnight route-sweep brief. Sam triggers it with "Run the nightwork in HANDOFF-nightwork-prompt.md".
+
 # OVERNIGHT 2026-10-24 (05:10 to 07:40 BST) — route sweep resumed, three fixes, all synced, nothing committed
 
 Picked up the parked sweep. Played a fresh night 1 and most of a night 2 with the headless harness (scripts in this session's scratchpad: `/private/tmp/claude-501/-Users-samquill--claude-spares-spare-Rsjrhn/848f8cc6-48b3-4417-a627-cd9c22d93933/scratchpad/`, `dss.py` + `step.py` + `s_*.py`, run muted). Each edit carries a `2026-10-24 sweep` comment. Commit the .twee and the .html together.

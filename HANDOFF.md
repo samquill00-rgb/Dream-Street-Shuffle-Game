@@ -1,3 +1,32 @@
+# OVERNIGHT 2026-10-24 (05:10 to 07:40 BST) — route sweep resumed, three fixes, all synced, nothing committed
+
+Picked up the parked sweep. Played a fresh night 1 and most of a night 2 with the headless harness (scripts in this session's scratchpad: `/private/tmp/claude-501/-Users-samquill--claude-spares-spare-Rsjrhn/848f8cc6-48b3-4417-a627-cd9c22d93933/scratchpad/`, `dss.py` + `step.py` + `s_*.py`, run muted). Each edit carries a `2026-10-24 sweep` comment. Commit the .twee and the .html together.
+
+**Fixed and synced (seen live after a reload of the rebuilt html):**
+- F7 LILY's refused ring came straight back. "I'm not here" at the French/Pillars (and the other three venues) set `$ringSnoozed`, but "Back to the bar" re-rendered the ring, which hid every figure in the room until the call was taken. Cause: Harlowe 3.3 mis-reads the long and-chain `(A) and (B) and $lilyCount >= 2 and …` as true when A is false (proved in a scratch build; see the new memory note). The ten `_lilyRing`/`_dualRing` lines (Coach, Pillars, Ronnie's, Colony, French) now bracket every term. Seen live: refusal, Back to the bar, no ring, room free, at the Pillars and the French.
+- F8 A hint slip that never left. "Your book is still at the French" (the Book Footer's note) rode through the Pillars, the cellar, the fight and the phone box. Two causes, both fixed: `dssBookNote` found the hub's hidden `.book-note-src` again inside the after-image's `.dss-ghost` clone and raised it a second time on the next page; and `__dssHintPassage` used `tw-story > tw-passage`, which finds nothing on the Maritime interlude (the header wraps that passage in `(enchant: ?passage, …)`), so that second slip belonged to no page and stayed up. Clones are skipped; the lookup now takes any tw-passage under tw-story, preferring one with no div ancestor. Seen live: a test note leaves with its page and is not re-raised on the Maritime interlude.
+- F5 (from the parked list) seen live: the book-lost roll at the French (sobriety 18) showed the slip first, with no "In your bag" line and no pitch question on that hub; two laps later the "gone too long" note sent it to Foyles; "Pay with the coin" bought it back.
+
+**Routes reached this run (all with no console errors):** waltz won (forced via `window._waltzOutcome`, Waltz Result Up +14/+6); INIS's 9 s haunt hold (box hidden at 6 s, shown at 15 s); Carthage page 93 and the Gift; lighter → Himalayas (Climb skipped, mantra, the petal gives LINE 2); slip → Pyramid (harmony hit by holding 3.9 s, PROPORTION); cocaine → Nazca (tracing); ticket → Easter Island (Reclamation lost twice, glyph); glass eye at Lackland's after four worlds + LINE 3 → Ezekiel → The Synthesis (all five gifts) → The Sanctum → the Fetch forced → white Dawn (0/5 lilies, 7/12 haunts). Night 2: LILY's call refused (the glass pane at two refusals), JOHN's name given in the cellar (fight lost, Beaten, straight to the street by the 9 Oct ruling), the ship call (sunk again), the Woman from the Line, the Colony door's Toss the Donkey, SHANA, the agent ("not working tonight"), Ronnie's bar game lost, Mister Jimmy's (new today: +5/+5 once, "You've had your lot" after). Lackland's "Not yet." keeps the book and clears the offer; the pong and matchbook after it.
+
+**Not reached, with what they need:**
+- Lackland's near-yes / "Leave it with him" / The Deal: the office shuts (`$lkOpen`, "NOT NOW") once THE GAME is caught, until the glass-eye window. So lay the book down with 3 lilies and 6 haunts BEFORE playing the pong. The Deal also wants night ≥2, SHANA's slip from an earlier night and four refusals.
+- Afloat ship call: 1 in 3 per night; sunk both nights.
+- "Give up on the night": morale ≤5; never got below 26.
+- Foyles trade of a key for the book: the coin is offered first while held; spend the coin (Colony door toss or the phone box) and lose the book again to see the key trade. The notebook trade needs the Bourchier mugging.
+- The Colony lily by the `lily4` hook click gave no card at 44% (the old s43 recipe); not chased.
+
+**Questions for Sam (new, no change made):**
+- Q10 The Wall arithmetic: the third pillar wants sobriety ≥30 on the pub page, but the Pillars entry costs 9 (and the storm 6), so a player at 30 to 38 on the street is turned away after walking in. A doorway (+9) cannot outpace it; only the chippy (+18) or the liver (+40) can. Raise the street figure the hint names, or check the gate before the entry draw?
+- Q11 Foyles: with the coin in hand only "Pay with the coin" shows; the key trade is the else branch. Intended that the coin always goes first?
+- Q12 Strangers pile up on the hub: after a few laps the hub listed Helvellyn Gooch, Devon Truze, Tom Longshanks and Guilliam Songstrong together. Map events, each once; is four at once wanted?
+- Q13 Nazca Race console warning from three.js (`sigmaRadians, 0.12, is too large and will clip`, PMREM env blur at line ~77837). Harmless; lowering to .04 changes the sheen slightly, so left.
+- The Q1 to Q9 list below still stands. Q3 seen again: the resting French's painter card says only "CLICK ANYWHERE TO STEP BACK".
+
+**Audit of the and-chain quirk:** only the ten ring lines had the failing shape; the other long chains (Next Target, the eye offer, the matches gate, the flower-only marker) were tested in the scratch build and evaluate correctly. Rule for new code: bracket every comparison in a chain of three or more. Four other `tw-story > tw-passage` lookups remain (playtest notes, the after-image sampler, the threshold panel, line ~18484); they only misfire on the Maritime interlude and fail quietly; not changed.
+
+---
+
 # PARKED 2026-10-24 — route sweep (paused by Sam at ~02:40, to resume overnight)
 
 Sam's brief: play as many routes as possible with the headless harness, fix small bugs and order-of-play problems, list prose/design calls for him. Paused mid-sweep. After the pause, the same day: F6 applied, a quieting pass and four focus rulings (below). All synced, nothing committed.
@@ -40,6 +69,16 @@ Sam's brief: play as many routes as possible with the headless harness, fix smal
 **Harness:** scratchpad `dss.py` + `step.py` (Playwright venv `pwvenv`, Chrome for Testing on CDP 9333, profile `profiles/n1`, muted). Notes file: `notes.md` in the same scratchpad: /private/tmp/claude-501/-Users-samquill--claude-spares-spare-UQ5MZP/2c6aa298-5de5-4233-9cfa-5c531453523d/scratchpad/
 
 ---
+
+## 2026-10-24 — Ginger Light cat: long-haired, majestic, face rearranged (synced, not committed)
+
+Three rounds, all in the cat block of the UserScript (search `dss-ginger-cat`) plus one line in the idle animation (`THE GINGER CAT`). Each change carries a `2026-10-24` comment.
+- **Round 1 (Sam: the cat "looked a bit weird"):** pupils sat inside the flattened eyeballs (blank pale discs), so they were brought to the surface. The forehead strokes read as shut, frowning lids and became upright tabby-M bars. The 1.35× head had made the ears tall dark horns, so they are now shorter and broader, on a double-sided face-toned `catEarMat`. The body stripes ran pole to pole like a pumpkin and are now soft broken flecks. A throat (`catRuff`) was added under the head.
+- **Round 2 (Sam: "more majestic and less silly. Maybe longer hair"):** shell fur. `catFurShells(mesh,len,droop,xzOnly)` adds `CAT_SHELLS` (10) larger copies with `catStrandTex`, combed strands down the sphere meridians, brightening toward the tips so the outer shells droop. Materials are shared per base material and layer (`catShellMat`). It covers the body, chest, haunches, front legs and ruff (the ruff is longest, the mane). The tail is a plume wrapped round the front paws, and its sway is cut to a slow stir (±.035). The head is tilted up (`rotation.x=-.1`) and the eyes are almond, deeper amber.
+- **Round 3 (Sam: the facial features "look insane"):** the eyes had sunk inside the skull and head fur cut them ragged, and the nose floated in front of a flat face. The head now has no fur shells. Eyes sit on the surface (±.028, .007, .072), turned with the skull (rotation.y ±.3). A small muzzle sphere carries the smaller pads, the nose (`catNose`, offset back) and the chin. Two furred cheek ruffs frame the face.
+- Kept: the head at 1.35×, the breath/blink/head-turn animation and the cat's spot by the phone box. About 90 extra meshes on the cat, sharing ~12 materials. The scene loads with no console errors. Frame rate not measured; if the Ginger Light feels slower, lower `CAT_SHELLS`.
+- Before/after renders went to Sam in chat. Close-ups were made by hooking `THREE.Object3D.prototype.updateMatrixWorld` to capture the scene, then rendering with a separate renderer and camera on an overlay canvas (the cat is ~20 px tall from the game camera).
+- **Open:** Sam said round 2 was "nearly there". Round 3 (the face) awaits his verdict.
 
 # START HERE — 2026-10-23
 

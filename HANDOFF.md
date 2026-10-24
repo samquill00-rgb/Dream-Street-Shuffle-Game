@@ -20,6 +20,8 @@ Sam's brief: play as many routes as possible with the headless harness, fix smal
 
 - Trail tag cut (Sam's ruling): `CHIP_ON = false` above `trailChip()`; the header's "TRAIL · n OF 3" no longer draws. FOLLOW THIS TRAIL, the step cards' green sign and the one-trail quieting kept. Script loads, no errors; not seen with a followed trail.
 
+- INIS's visit (Sam's ruling): in `O'Flatterly's quest` a script holds THE FEEDING's haunt box (display none) until 9 s of visible page, then replays its reveal; the gate flash follows the box. Passage snapshot taken after render (the dark pass trap). Tested in the pane on a stand-in box (hidden at 4 s, shown by 10 s, gate watcher took it); NOT walked to INIS for real.
+
 **Routes covered:** night 1 end to end (Ham, Cecil Court, French ×3, chippy, doorway, Colony/DAVY/agent, cellar lost fight + JOHN, Lackland + pong, Trisha's/SHANA, Ronnie's, LILY call 1, Carthage/page 93, INIS gift, ticket key, Easter Island, Coach/cow/LINE 3, Fetch, Centre Point, white dawn); night 2 (refused AOIFE ×2, Fetch pane, coin call-back, cellar KO with the word, COPPER's matchbook, book left/Foyles, two blackouts, Square fire, Coach fire, black dawn); night 3 to INIS (no-word cellar, ASHTON rescue, ship call sunk, the Woman, Bourchier mugging, barbershop open).
 **Not yet reached:** Himalayas/Nazca/Pyramid/Ezekiel, Sanctum/Synthesis, Lackland "Not yet"/lend/Deal, LILY call refused, Foyles trade with a key, "Give up on the night", waltz won, cellar names given (RED/JOHN), afloat ship call.
 

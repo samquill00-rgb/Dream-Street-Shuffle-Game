@@ -7499,3 +7499,6 @@ Sam requested nearer framing. Changed only bookG interaction camera to [bp.x + 0
 
 ### Orange paperback lore wired
 Sam's exact approved three paragraphs added as card-only lore in The French, with paperback hotspot action. Verified in actual compiled game: paperback close-up > LORE button opens card with all approved wording. Screenshot /tmp/dss-paperback-lore.png. Synced 248 passages. No git commands.
+
+### Enlightenment book lore
+Added standard LORE footnote immediately after book mention in Airport Pub. Both French card and airport footnote now display shared system passage Lore Chariots of the Gods, preserving Sam's exact approved wording. Actual game: entered Enlightenment, opened footnote, verified all three paragraphs. Screenshot /tmp/dss-enlightenment-book-lore.png. Synced 249 passages. No git commands.

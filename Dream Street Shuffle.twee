@@ -222,7 +222,7 @@ Dream Street Shuffle
 (set: $keyLighter to "seed")\
 (set: $nazcaRaceWon to false)\
 (set: $pyramidRunWon to false)\
-(set: $pyramidHarmony to false)(set: $jeffreyTune to false)(set: $benitoDrawing to false)\
+(set: $pyramidHarmony to false)(set: $jeffreyTune to false)(set: $benitoDrawing to false)(set: $helpedBevan to false)\
 (set: $himalayaClimbWon to false)\
 \
 \
@@ -13902,7 +13902,7 @@ window.dssRingHold = (function() {
   document.addEventListener('click', function(ev) {
     if (!ev.target || !ev.target.closest) return; // a room's object cards and strip press the real link by script, so untrusted clicks count too
     if (!ev.target.closest('tw-link, tw-enchantment, tw-hook, .enchantment-link, [data-raw]')) return;
-    if (ev.target.closest('.next-poke')) return;
+    if (ev.target.closest('.next-poke, .bevan-waiting-clock')) return;
     var gen = window._passageGen;
     setTimeout(function() {
       if (window._passageGen !== gen) return;
@@ -20042,6 +20042,13 @@ window.dssSceneFailed = function(err, where) {
   // a key that lay on one of this room's objects goes back to the popup
   if (anyRoom && window.dssKeyPopup) setTimeout(function() { window.dssKeyPopup(); }, 300);
   if (!anyRoom && where === 'build') {
+    // 2026-10-25: the chippy now has choices outside. A graphics failure must
+    // leave BEVAN / waiting accessible instead of automatically entering.
+    if (document.querySelector('.bevan-chippy-choices')) {
+      var chippyOutside = document.getElementById('fc-container');
+      if (chippyOutside) chippyOutside.remove();
+      return;
+    }
     // an exterior scene: go on through its door, as its own button would
     var links = document.querySelectorAll('tw-passage tw-link');
     for (var k = 0; k < links.length; k++) { if (links[k].textContent.trim() === '\u00b7') { try { links[k].click(); } catch (e) {} break; } }
@@ -50048,9 +50055,11 @@ window._dssDisposeWrap('cp-wrap');
 (function() {
 var fcActive = false;
 var fcAnimId = null;
+var fcSource = null;
 
 function initFc() {
   if (fcActive) return; fcActive = true;
+  fcSource = document.getElementById("fc-container");
   if (typeof THREE === 'undefined') {
     var s = document.createElement('script');
     s.src = 'vendor/three/three.min.js';
@@ -50060,8 +50069,12 @@ function initFc() {
 }
 
 function buildFcScene() {
+  if (!fcSource || !fcSource.isConnected) return;
+  var fcWaitRoot = document.querySelector(".bevan-waiting-clock");
+  var fcWaiting = !!fcWaitRoot;
   var fcWrap = document.createElement('div');
   fcWrap.id = 'fc-wrap';
+  if (fcWaiting) fcWrap.classList.add('bw-street-scene');
   fcWrap.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;background:#040408;overflow:hidden;';
   var fcStill = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -50081,6 +50094,10 @@ scene.add(new THREE.AmbientLight(0x18182a, 0.26)); // added 2026-09-13: no ambie
   // ============================================================
 camera.position.set(-5.0, 1.7, 10.5);
   camera.lookAt(1.2, 3.2, -1);
+  if (fcWaiting) {
+    if(window.innerWidth<600){camera.position.set(-4,1.8,15);camera.lookAt(-4,2.5,0);}
+    else {camera.position.set(-2,1.7,11);camera.lookAt(-3,2.5,0);}
+  }
 
   var renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -50091,7 +50108,7 @@ camera.position.set(-5.0, 1.7, 10.5);
   renderer.toneMappingExposure = 0.65;
   fcWrap.appendChild(renderer.domElement);
   window._dssBindScene('fc-wrap', scene, renderer, camera);
-var dssComposerLocal = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 10 }) : null;
+var dssComposerLocal = !fcWaiting && window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, { focus: 10 }) : null;
 if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'));
 
   // ============================================================
@@ -52390,12 +52407,35 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
   // ============================================================
   // ANIMATION LOOP
   // ============================================================
+  // 2026-10-25: intermittent rain exists only while waiting; the street stays wet afterwards.
+  var waitRain=null,waitRainPositions=null,waitRainGeo=null;
+  if(fcWaiting){
+    waitRainPositions=new Float32Array(240*6);
+    for(var wr=0;wr<240;wr++){var wi=wr*6,x=(wr*1.731%18)-10,y=(wr*2.317%11),z=(wr*3.719%16)-5;waitRainPositions[wi]=x;waitRainPositions[wi+1]=y;waitRainPositions[wi+2]=z;waitRainPositions[wi+3]=x+.025;waitRainPositions[wi+4]=y-.22;waitRainPositions[wi+5]=z;}
+    waitRainGeo=new THREE.BufferGeometry();waitRainGeo.setAttribute('position',new THREE.BufferAttribute(waitRainPositions,3));
+    waitRain=new THREE.LineSegments(waitRainGeo,new THREE.LineBasicMaterial({color:0xbac5cf,transparent:true,opacity:.38,depthWrite:false}));
+    waitRain.visible=false;waitRain.frustumCulled=false;scene.add(waitRain);
+  }
   var clock = new THREE.Clock();
   var neonFlickerPhase = 0;
+  var lastWaitFrame=0;
 
   function fcAnimate() {
     fcAnimId = requestAnimationFrame(fcAnimate);
     var t = fcStill ? 5 : clock.getElapsedTime();
+    if(fcWaiting){
+      var active=fcWaitRoot.isConnected&&fcWaitRoot.dataset.waitActive==='true';
+      var progress=active?Number(fcWaitRoot.dataset.waitProgress||0):0;
+      renderer.domElement.style.filter=active?'blur('+(progress*8).toFixed(2)+'px)':'none';
+      renderer.domElement.style.transform=active?'scale(1.035)':'none';
+      waitRain.visible=active;
+      if(active){
+        waitRain.material.opacity=.16+.25*(.5+.5*Math.sin(t*1.7));
+        var wd=lastWaitFrame?Math.min(.06,t-lastWaitFrame):.016;
+        if(!fcStill){for(var wi=0;wi<waitRainPositions.length;wi+=6){var wy=waitRainPositions[wi+1]-wd*6;if(wy<0)wy+=11;waitRainPositions[wi+1]=wy;waitRainPositions[wi+4]=wy-.22;}waitRainGeo.attributes.position.needsUpdate=true;}
+      }
+      lastWaitFrame=t;
+    }
 
     // Fog drift
     for (var i = 0; i < (fcStill ? 0 : fogSprites.length); i++) {
@@ -52555,13 +52595,14 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
       }
     }, 1500);
   });
-  fcWrap.appendChild(fcBtn);
+  if(!fcWaiting) fcWrap.appendChild(fcBtn);
   document.body.appendChild(fcWrap);
   fcAnimate();
 }
 
 setInterval(function() {
   var container = document.getElementById('fc-container');
+  if(container && fcActive && container!==fcSource){if(fcAnimId)cancelAnimationFrame(fcAnimId);window._dssDisposeWrap('fc-wrap');fcActive=false;}
   if (container && !fcActive) { initFc(); }
   else if (!container) {
     fcActive = false;
@@ -57854,6 +57895,11 @@ INIS O’FLATTERLY sits at the thick wooden counter, reading what he’s reading
 :: Approach Chinese Fish and Chips [outdoor] {"position":"50,1300","size":"100,100"}
 <div class="approach-back">[[← Back to Dean Street|Dean Street]]</div>
 <div id="fc-container"></div>[[·|Chinese Fish and Chips]]
+<!-- 2026-10-25 (Sam): the pigeon favour stays available after declining; Lily's name waits for her introduction. -->
+(if: $nightAheadPart2Shown is true)[<div class="bevan-chippy-choices">
+(if: $helpedBevan is not true)[[[BEVAN GLYNDŴR|BEVAN’s pigeon]]](else:)[[[Wait for LILY|Waiting outside the chippy]]]
+</div>]
+<style>.bevan-chippy-choices{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);z-index:9010;max-width:90vw;padding:10px 16px;background:rgba(0,0,0,.8);border:1px solid rgba(232,180,80,.3);text-align:center;font:14px Georgia,serif;}</style>
 (display: "Stash Point")
 
 :: Chinese Fish and Chips [venue-chippy] {"position":"100,1300","size":"100,100"}
@@ -58412,7 +58458,7 @@ Someone’s on the corner.
 <div id="soho-map-container"></div>\
 <!-- SOHO MAP alleys and corners (2026-09-11): each fires ONCE a night when the figure walks onto its tile; the links are read by the map like the doors and parked off-screen -->
 (if: $metRed is true)[\
-<!-- 2026-10-09 (Sam, decision card "Cut all six"): the mood-only alleys (Meard Street, St Anne's Court, Richmond Buildings, Bateman's Buildings, Walker's Court, Greek Court) are cut from the map; the plot alleys stay. --><div class="soho-alley-links soho-hub-dock">[[Livonia Street|Doorway: Livonia Street]][[Diadem Court|Doorway: Diadem Court]][[Ham Yard|Doorway: Ham Yard]][[Romilly Street|Doorway: Romilly Street]]<!-- 2026-10-19 (Sam: gate the barber till later in the night): open from night phase 1, the night's own first deepening (four haunts, two lines, or midnight if it is ever unparked) -->(if: $nightPhase >= 1)[[[The barbershop|The Barbershop]]]<!-- 2026-10-24 (Sam): Mister Jimmy's opens later than the barber, at night phase 2 (eight haunts or three lines) -->(if: $nightPhase >= 2)[[[Mister Jimmy’s|Mister Jimmy’s Drug Store]]](unless: $alleys contains "bourchier")[[[Bourchier Street|Alley: Bourchier Street]]][[Soho Square|Alley: Soho Square]](if: $stashSites contains "Approach The French")[[[The French|Approach The French]]](if: $stashSites contains "Approach The Coach")[[[The Coach and Horses|Approach The Coach]]](if: $stashSites contains "Approach Lacklands Office")[[[Lackland’s Office|Approach Lacklands Office]]](if: $stashSites contains "Approach Chinese Fish and Chips")[[[The Chippy|Approach Chinese Fish and Chips]]](if: $stashSites contains "Approach Trisha's")[[[Trisha’s|Approach Trisha's]]](if: ($notebook is "stolen") or ($bookAt is "foyles") or ((($bookAt is a string) and ($bookAt is not "") and ($bookLeftLap is a number)) and ($returns >= $bookLeftLap + 2)) or ($stashSites contains "Alley: Charing Cross Road"))[[[Charing Cross Road|Alley: Charing Cross Road]]]</div>\
+<!-- 2026-10-09 (Sam, decision card "Cut all six"): the mood-only alleys (Meard Street, St Anne's Court, Richmond Buildings, Bateman's Buildings, Walker's Court, Greek Court) are cut from the map; the plot alleys stay. --><div class="soho-alley-links soho-hub-dock"><!-- 2026-10-25: food does not remove the route back to BEVAN or waiting for LILY. -->(if: ($nightAheadPart2Shown is true) and ($hadChippy is true))[[[The Chippy|Approach Chinese Fish and Chips]]][[Livonia Street|Doorway: Livonia Street]][[Diadem Court|Doorway: Diadem Court]][[Ham Yard|Doorway: Ham Yard]][[Romilly Street|Doorway: Romilly Street]]<!-- 2026-10-19 (Sam: gate the barber till later in the night): open from night phase 1, the night's own first deepening (four haunts, two lines, or midnight if it is ever unparked) -->(if: $nightPhase >= 1)[[[The barbershop|The Barbershop]]]<!-- 2026-10-24 (Sam): Mister Jimmy's opens later than the barber, at night phase 2 (eight haunts or three lines) -->(if: $nightPhase >= 2)[[[Mister Jimmy’s|Mister Jimmy’s Drug Store]]](unless: $alleys contains "bourchier")[[[Bourchier Street|Alley: Bourchier Street]]][[Soho Square|Alley: Soho Square]](if: $stashSites contains "Approach The French")[[[The French|Approach The French]]](if: $stashSites contains "Approach The Coach")[[[The Coach and Horses|Approach The Coach]]](if: $stashSites contains "Approach Lacklands Office")[[[Lackland’s Office|Approach Lacklands Office]]](if: $stashSites contains "Approach Chinese Fish and Chips")[[[The Chippy|Approach Chinese Fish and Chips]]](if: $stashSites contains "Approach Trisha's")[[[Trisha’s|Approach Trisha's]]](if: ($notebook is "stolen") or ($bookAt is "foyles") or ((($bookAt is a string) and ($bookAt is not "") and ($bookLeftLap is a number)) and ($returns >= $bookLeftLap + 2)) or ($stashSites contains "Alley: Charing Cross Road"))[[[Charing Cross Road|Alley: Charing Cross Road]]]</div>\
 
 (if: $coachUrgent is true)[<div class="choice-box">‘[Noises off. Blackout.]’
 
@@ -62140,7 +62186,7 @@ comments, so never write example macro syntax in here. -->\
 (set: $ezekielVision to false)\
 (set: $himalayaClimbWon to false)\
 (set: $nazcaRaceWon to false)(set: $nazcaTracing to false)\
-(set: $pyramidNumber to false)(set: $pyramidRunWon to false)(set: $pyramidHarmony to false)(set: $jeffreyTune to false)(set: $benitoDrawing to false)\
+(set: $pyramidNumber to false)(set: $pyramidRunWon to false)(set: $pyramidHarmony to false)(set: $jeffreyTune to false)(set: $benitoDrawing to false)(set: $helpedBevan to false)\
 (set: $inisToldOfPillars to false)\
 (set: $mantraComplete to false)(set: $mantraHalf1 to false)(set: $mantraHalf2 to false)\
 (set: $sawHexagram to false)(set: $sanctumDone to false)(set: $sawThirdPillar to false)(set: $tonightsWorld to "")\
@@ -81765,3 +81811,83 @@ You put it in your notebook.</div>]
 
 :: BENITO Drawing Art [system]
 (set: $benitoDrawingArt to '<svg viewBox="0 0 320 230" width="320" height="230" role="img" aria-label="BENITO’s pencil drawing of four creatures, each with four faces and four wings" style="display:block;max-width:100%;height:auto;background:#e7dcc3;border:1px solid #887c64"><g fill="none" stroke="#4b4842" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(85 65)"><path d="M-5 2 Q-56 -44 -47 -9 Q-34 8 -5 12 M5 2 Q56 -44 47 -9 Q34 8 5 12 M-5 11 Q-52 12 -37 32 Q-17 31 -2 17 M5 11 Q52 12 37 32 Q17 31 2 17 M-6 8 L-9 34 L0 40 L9 34 L6 8 M-6 34 L-10 45 M6 34 L10 45"/><g transform="translate(-18 -12)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(-6 -20)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(6 -20)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(18 -12)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g></g><g transform="translate(235 65)"><path d="M-5 2 Q-56 -44 -47 -9 Q-34 8 -5 12 M5 2 Q56 -44 47 -9 Q34 8 5 12 M-5 11 Q-52 12 -37 32 Q-17 31 -2 17 M5 11 Q52 12 37 32 Q17 31 2 17 M-6 8 L-9 34 L0 40 L9 34 L6 8 M-6 34 L-10 45 M6 34 L10 45"/><g transform="translate(-18 -12)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(-6 -20)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(6 -20)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(18 -12)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g></g><g transform="translate(85 170)"><path d="M-5 2 Q-56 -44 -47 -9 Q-34 8 -5 12 M5 2 Q56 -44 47 -9 Q34 8 5 12 M-5 11 Q-52 12 -37 32 Q-17 31 -2 17 M5 11 Q52 12 37 32 Q17 31 2 17 M-6 8 L-9 34 L0 40 L9 34 L6 8 M-6 34 L-10 45 M6 34 L10 45"/><g transform="translate(-18 -12)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(-6 -20)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(6 -20)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(18 -12)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g></g><g transform="translate(235 170)"><path d="M-5 2 Q-56 -44 -47 -9 Q-34 8 -5 12 M5 2 Q56 -44 47 -9 Q34 8 5 12 M-5 11 Q-52 12 -37 32 Q-17 31 -2 17 M5 11 Q52 12 37 32 Q17 31 2 17 M-6 8 L-9 34 L0 40 L9 34 L6 8 M-6 34 L-10 45 M6 34 L10 45"/><g transform="translate(-18 -12)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(-6 -20)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(6 -20)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g><g transform="translate(18 -12)"><ellipse rx="6" ry="9"/><path d="M-3 -2 L-2 -2 M2 -2 L3 -2 M0 0 L-1 3 L1 3 M-2 5 L2 5"/></g></g></g></svg>')
+
+
+:: BEVAN’s pigeon [outdoor]
+<!-- 2026-10-25: Sam's approved text with the listed typo fixes. No completion flag on leaving. -->
+(unless: $helpedBevan is true)[<div class="bevan-pigeon-request">Bevan Glyndŵr opens his coat and shows you a pigeon in his pocket, with one wing broken.<br>
+‘I should guess it was hit by a car,’ he mumbles, looking down at it with such love and pity in his eyes that you could imagine, for a moment, that his own soul took the place of the pigeon’s, through sheer force of his empathetic will.<br>
+‘I can’t do it. Will you?’</div>
+[[Take the bird|Helping BEVAN]]
+[[Leave it with him|Approach Chinese Fish and Chips]]
+](else:)[[[Back outside the chippy|Approach Chinese Fish and Chips]]]
+
+:: Helping BEVAN [outdoor]
+(unless: $helpedBevan is true)[(set: $helpedBevan to true)<div class="bevan-pigeon-result">You take the bird from him.<br>
+Afterwards, he wraps it in a newspaper. You stay while he folds the sheets carefully.<br>
+‘You’re looking for LILY, I think?’<br>
+You ask how he knows her.<br>
+‘Wales is not a big place. Give or take a tide, it's about as big as Wales. She stops by here, you know, on her way home; she'll probably be passing by later.’<br>
+He puts the wrapped bird in the bin among the other things abandoned, fishes and chips, in their newspaper coats.<br>
+‘You might catch her,’ he says.</div>]
+[[Back outside the chippy|Approach Chinese Fish and Chips]]
+
+:: Waiting outside the chippy [outdoor]
+<!-- 2026-10-25 (Sam): LILY never comes. Waits are client-side only: no passage refresh,
+     Harlowe writes, stat changes, calls, night clock or event progression. Five narrated
+     minutes take five real seconds; each successive interval adds five of each.
+     Elapsed waiting is labelled without a clock time. Rain and blur run only while waiting. -->
+(if: $helpedBevan is true)[<section class="bevan-waiting-clock" aria-label="Waiting outside the chippy">
+<div id="fc-container"></div>
+<div class="bevan-waiting">WAITING FOR LILY</div>
+
+<p class="bw-elapsed" aria-live="off">0 minutes waiting.</p>
+<p class="bw-status" role="status">LILY has not come.</p>
+<button class="bw-wait" type="button">Keep waiting · 5 minutes</button>
+<span class="bw-leave">[[Leave|Approach Chinese Fish and Chips]]</span>
+</section>
+<style>
+.dss-threshold:has(.bevan-waiting-clock){z-index:9011;background:transparent;pointer-events:none;}
+.dss-room-prose:has(.bevan-waiting-clock){background:transparent!important;border:0!important;box-shadow:none!important;pointer-events:none;}
+.bevan-waiting-clock{text-align:center;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);width:min(520px,92vw);margin:0;padding:20px 12px;box-sizing:border-box;z-index:9012;background:linear-gradient(transparent,rgba(4,4,8,.82) 35%);pointer-events:auto;text-shadow:0 2px 6px #000;}
+.bevan-waiting{font:16px Georgia,serif;letter-spacing:.18em;color:#ead8b4;}
+.bevan-waiting-clock p{margin:10px 0;}
+.bevan-waiting-clock br{display:none;}
+.bw-street-scene canvas{will-change:filter;transform-origin:center;}
+@media(max-width:600px){.bevan-waiting-clock{bottom:12px;padding:16px 8px;}}
+.bw-wait{font:inherit;color:#d4b37c;background:transparent;border:1px solid #8b744d;padding:10px 18px;cursor:pointer;}
+.bw-wait:disabled{opacity:.65;cursor:wait;}
+.bw-wait:focus-visible{outline:2px solid #e0c493;outline-offset:4px;}
+.bw-leave{display:block;margin-top:20px;}
+.bw-status{min-height:1.5em;}
+</style>
+<script>
+(function(){
+  var root=document.querySelector('.bevan-waiting-clock');if(!root)return;
+  var button=root.querySelector('.bw-wait');
+  var elapsed=root.querySelector('.bw-elapsed'),status=root.querySelector('.bw-status');
+  var rounds=0,total=0,running=false,raf=0,alive=true;
+  root.dataset.waitActive='false';root.dataset.waitProgress='0';
+  function stop(){alive=false;root.dataset.waitActive='false';root.dataset.waitProgress='0';cancelAnimationFrame(raf);observer.disconnect();}
+  button.addEventListener('click',function(e){
+    e.stopPropagation();if(running||!alive)return;
+    running=true;rounds++;var minutes=5*rounds,duration=minutes*1000,start=performance.now(),before=total;
+    button.disabled=true;button.textContent='Waiting…';
+    status.textContent=minutes+' minutes pass.';root.dataset.waitActive='true';root.dataset.waitProgress='0';
+    function tick(now){
+      if(!alive||!root.isConnected){stop();return;}
+      var progress=Math.min(1,Math.max(0,(now-start)/duration)),shown=before+minutes*progress;
+      root.dataset.waitProgress=String(progress);
+      if(progress<1){raf=requestAnimationFrame(tick);return;}
+      total=before+minutes;running=false;button.disabled=false;root.dataset.waitActive='false';root.dataset.waitProgress='0';
+      elapsed.textContent=total+' minutes waiting.';
+      status.textContent='LILY has not come.';
+      button.textContent='Keep waiting · '+(5*(rounds+1))+' minutes';
+    }
+    raf=requestAnimationFrame(tick);
+  });
+  var observer=new MutationObserver(function(){if(!root.isConnected)stop();});
+  observer.observe(document.querySelector('tw-story'),{childList:true,subtree:true});
+})();
+</script>
+](else:)[[[Leave|Approach Chinese Fish and Chips]]]

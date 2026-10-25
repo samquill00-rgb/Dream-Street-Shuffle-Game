@@ -13972,30 +13972,39 @@ window.dssRingHold = (function() {
 })();
 /* 2026-10-25 (Sam, item 5: "tighten the layout on the scrolling pages without touching any words"): a page of words with no game
    or 3D room on it that still runs past the window gives up its foot padding and half of each blank line, then its contents shrink
-   evenly, to no less than 88%, until it fits. The hub and the Dawn are left alone; a resize starts again from full size. */
+   evenly, to no less than 82% (Sam: 88% left three pages over at 1280x800), until it fits. The hub and the Dawn are left alone; a resize starts again from full size. */
 (function() {
-  var MIN = 0.88, gen = -1, settle = 0, until = 0, step = 0, z = 1, cur = null;
+  var MIN = 0.82, gen = -1, settle = 0, until = 0, step = 0, z = 1, cur = null, base = null;
   var css = document.createElement('style');
   css.textContent = 'tw-story.dss-pf { padding-bottom: 4px !important; } tw-story.dss-pf tw-passage { padding-bottom: 8px !important; } tw-story.dss-pf tw-passage tw-consecutive-br { height: .38em !important; }';
   document.head.appendChild(css);
   function page() { var ps = Array.prototype.filter.call(document.querySelectorAll('tw-story tw-passage'), function(p) { return !p.closest('.dss-ghost'); }); return ps.filter(function(p) { return !p.parentElement.closest('div'); })[0] || ps[0] || null; }
-  function undo() { var st = document.querySelector('tw-story'); if (st) st.classList.remove('dss-pf'); if (cur) cur.style.zoom = ''; cur = null; step = 0; z = 1; }
+  var brs = [];
+  function undo() { var st = document.querySelector('tw-story'); if (st) st.classList.remove('dss-pf'); if (cur && base) { cur.style.zoom = base.zoom; cur.style.paddingTop = base.pt; cur.style.marginLeft = base.ml; cur.style.marginRight = base.mr; cur.style.width = base.w; cur.style.maxWidth = base.mxw; } cur = null; base = null; step = 0; z = 1; brs.forEach(function(b) { b.style.display = ''; }); brs = []; }
+  /* the passage itself is zoomed (Harlowe unwraps its transition container a few seconds in, so that cannot carry it); its top padding
+     (the header's room) and its side margins and width are divided back out, so the words neither slide under the header nor change their column */
+  function zoomTo(p, nz) {
+    if (!base) { var cs = getComputedStyle(p); base = { zoom: p.style.zoom, pt: p.style.paddingTop, ml: p.style.marginLeft, mr: p.style.marginRight, w: p.style.width, mxw: p.style.maxWidth, wPx: parseFloat(cs.width) || 0, ptPx: parseFloat(cs.paddingTop) || 0, mlPx: parseFloat(cs.marginLeft) || 0, mrPx: parseFloat(cs.marginRight) || 0 }; cur = p; }
+    z = nz; p.style.zoom = z.toFixed(3); p.style.paddingTop = (base.ptPx / z).toFixed(1) + 'px'; p.style.marginLeft = (base.mlPx / z).toFixed(1) + 'px'; p.style.marginRight = (base.mrPx / z).toFixed(1) + 'px'; if (base.wPx) { p.style.width = (base.wPx / z).toFixed(1) + 'px'; p.style.maxWidth = p.style.width; }
+  }
+  function isBlock(e) { if (!e || e.tagName === 'BR' || e.tagName === 'TW-CONSECUTIVE-BR') return false; var d = getComputedStyle(e).display; return /^(block|flex|grid|table|list-item)$/.test(d) && e.getBoundingClientRect().height > 0; }
+  /* a line break standing straight after a block only adds an empty line (as folded in the venue frames on 2026-10-23) */
+  function pinned(b, root) { for (var e = b.parentElement; e && e !== root; e = e.parentElement) { var ps = getComputedStyle(e).position; if (ps === 'fixed' || ps === 'absolute') return true; } return false; } /* the header and overlays keep their breaks */
+  function foldBreaks(root) { Array.prototype.forEach.call(root.querySelectorAll('br'), function(b) { if (pinned(b, root)) return; var pv = b.previousElementSibling; while (pv && pv.getBoundingClientRect().height === 0 && pv.tagName !== 'BR') pv = pv.previousElementSibling; if (isBlock(pv) && b.style.display !== 'none') { b.style.display = 'none'; brs.push(b); } }); }
   function fit() {
     if (window._passageGen !== gen) { gen = window._passageGen; undo(); settle = Date.now() + 1600; until = Date.now() + 20000; }
     if (document.fullscreenElement || Date.now() < settle || Date.now() > until) return;
     var st = document.querySelector('tw-story'), p = page(); if (!st || !p) return;
-    var tc = p.querySelector(':scope > tw-transition-container') || p;
-    if (cur && cur !== tc) { cur.style.zoom = ''; cur = null; } /* Harlowe swapped the wrapper: carry the size over */
-    if (z < 1 && tc !== p && !cur) { cur = tc; tc.style.zoom = z.toFixed(3); }
     var over = document.scrollingElement.scrollHeight - window.innerHeight;
     if (over <= 4) return;
     if (/(^|\s)(hub|dawn-end)(\s|$)/.test(st.getAttribute('tags') || '')) return;
     if (document.getElementById('dss-worm-game') || Array.prototype.some.call(p.querySelectorAll('canvas'), function(c) { var r = c.getBoundingClientRect(); return r.height > 220 && r.width > 220; })) return; /* games and rooms have their own fit */
     if (step === 0) { st.classList.add('dss-pf'); step = 1; return; }
-    if (tc === p || z <= MIN) return;
-    var h = tc.getBoundingClientRect().height; if (h < 100) return;
+    if (step === 1) { foldBreaks(p); step = 2; return; }
+    if (z <= MIN) return;
+    var h = p.getBoundingClientRect().height - (base ? base.ptPx : parseFloat(getComputedStyle(p).paddingTop) || 0); if (h < 100) return;
     var nz = Math.max(MIN, z * (h - over - 6) / h);
-    if (nz < z - 0.005) { z = nz; cur = tc; tc.style.zoom = z.toFixed(3); }
+    if (nz < z - 0.005) zoomTo(p, nz);
   }
   setInterval(fit, 500);
   window.addEventListener('resize', function() { undo(); until = Date.now() + 20000; });

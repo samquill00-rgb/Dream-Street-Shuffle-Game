@@ -18,7 +18,8 @@
 - Old item 11, the Cave's alba-star timing: skipped (Sam).
 - Old item 12, fixes checked only in source: three now seen in scratch builds, each with a control. F3: the Coach's dual ring stays off while `$sawJeffrey` is false and rings when true. F6: the Cecil Court slip stays off with `$metCritic` false and shows when true. Q11: Foyles with the book there, the coin and the ticket offers "Pay with the coin" and "Trade the chippy order ticket for the book" together. Still unseen: Q9 (the cow ride's crash path) and the Deal walked in a real night.
 - Old item 13: HANDOFF_CLAUDE.md now carries a SUPERSEDED banner (Himalayas passes 2 and 3 done); its body kept as history.
-- Old item 8, COPPER's password: still Sam's to try once in a real night. In the pane a page's fade-in stalls at opacity 0 (pre-existing, untouched pages too); forced visible, PP Victory looked right.
+- Old item 8, COPPER's password: still Sam's to try once in a real night.
+- Foyles page tidy (Sam: "a bit of a mess"): "Pay with the coin" and "Trade the … for the book" ran together on one line (the <br> between them was folded away); each now sits in its own div. Three empty lines above "Leave the … here" cut to one by line-joins (`\`): after the bookfence line in Alley: Charing Cross Road, after Stash Point's opening comment, Key Guards line 81363 (`$keyNames`), and Resting Keys' five (if:) lines and its trailing comment. Key Guards, Resting Keys and Stash Point are shared, so other key venues and stash sites lose the same stray blank lines; Approach The French, the chippy and Trisha's checked: no tw-error. Seen in a scratch build: offers on two lines, one empty line, then the ticket and the way out. In the pane a page's fade-in stalls at opacity 0 (pre-existing, untouched pages too); forced visible, PP Victory looked right.
 
 # OVERNIGHT 2026-10-25 (02:46 to 04:55 GMT) — route sweep, night 1 end to end plus most of night 2, one fix, synced, nothing committed
 

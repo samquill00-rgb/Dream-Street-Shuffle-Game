@@ -13722,8 +13722,9 @@ window.dssRefusals = (function() {
   }
   function render(box) {
     box.setAttribute('data-filled', '1');
-    var a = load(), n = night();
-    var tonight = a.filter(function(r) { return r.n === n; }), before = a.filter(function(r) { return r.n !== n; }).reverse().slice(0, 12);
+    var a = load(), n = night(), first = 0;
+    try { first = +localStorage.getItem('dssRunFirst') || 0; } catch (e) {} /* 2026-10-25 (Sam, item 3): earlier nights' slips only from this run, the "Last night:" rule; a fresh game opens a clean notebook */
+    var tonight = a.filter(function(r) { return r.n === n; }), before = a.filter(function(r) { return r.n !== n && r.n >= first; }).reverse().slice(0, 12);
     tonight.forEach(function(r) { box.appendChild(slipEl(r, 0)); });
     if (before.length) { var hr = document.createElement('div'); hr.className = 'nb-slips-before'; box.appendChild(hr); before.forEach(function(r) { box.appendChild(slipEl(r, Math.max(1, Math.min(3, n - r.n)))); }); }
   }
@@ -13845,7 +13846,8 @@ window.dssBookNote = function() {
 };
 window.dssBookDeal = function() {
   var box = document.querySelector('.book-deal'); if (!box || box._bd) return; box._bd = true;
-  var list = (window.dssRefusals && window.dssRefusals.list()) || [], n = window.dssRefusals ? window.dssRefusals.night() : 0;
+  var list = (window.dssRefusals && window.dssRefusals.list()) || [], n = window.dssRefusals ? window.dssRefusals.night() : 0, first = 0;
+  try { first = +localStorage.getItem('dssRunFirst') || 0; } catch (e) {} list = list.filter(function(r) { return r.n >= first; }); /* 2026-10-25 (Sam): the Deal counts this run's refusals only, the "Last night:" rule */
   var shanaBefore = list.some(function(r) { return r.k === 'shana' && r.n < n; });
   var refused = list.filter(function(r) { return !r.near && !r.yes; }).length;
   if (n >= 2 && shanaBefore && refused >= 4) box.hidden = false;
@@ -13967,6 +13969,36 @@ window.dssRingHold = (function() {
   var self = false, settle = 0;
   setInterval(fit, 600);
   window.addEventListener('resize', function() { if (self) return; boxes.forEach(function(b) { if (b._dssFit) { if ('zoom' in b._dssFit) b.style.zoom = b._dssFit.zoom; else { b.style.maxWidth = b._dssFit.mw; b.style.marginLeft = b._dssFit.ml; b.style.marginRight = b._dssFit.mr; } b._dssFit = null; } }); boxes = []; tries = 0; });
+})();
+/* 2026-10-25 (Sam, item 5: "tighten the layout on the scrolling pages without touching any words"): a page of words with no game
+   or 3D room on it that still runs past the window gives up its foot padding and half of each blank line, then its contents shrink
+   evenly, to no less than 88%, until it fits. The hub and the Dawn are left alone; a resize starts again from full size. */
+(function() {
+  var MIN = 0.88, gen = -1, settle = 0, until = 0, step = 0, z = 1, cur = null;
+  var css = document.createElement('style');
+  css.textContent = 'tw-story.dss-pf { padding-bottom: 4px !important; } tw-story.dss-pf tw-passage { padding-bottom: 8px !important; } tw-story.dss-pf tw-passage tw-consecutive-br { height: .38em !important; }';
+  document.head.appendChild(css);
+  function page() { var ps = Array.prototype.filter.call(document.querySelectorAll('tw-story tw-passage'), function(p) { return !p.closest('.dss-ghost'); }); return ps.filter(function(p) { return !p.parentElement.closest('div'); })[0] || ps[0] || null; }
+  function undo() { var st = document.querySelector('tw-story'); if (st) st.classList.remove('dss-pf'); if (cur) cur.style.zoom = ''; cur = null; step = 0; z = 1; }
+  function fit() {
+    if (window._passageGen !== gen) { gen = window._passageGen; undo(); settle = Date.now() + 1600; until = Date.now() + 20000; }
+    if (document.fullscreenElement || Date.now() < settle || Date.now() > until) return;
+    var st = document.querySelector('tw-story'), p = page(); if (!st || !p) return;
+    var tc = p.querySelector(':scope > tw-transition-container') || p;
+    if (cur && cur !== tc) { cur.style.zoom = ''; cur = null; } /* Harlowe swapped the wrapper: carry the size over */
+    if (z < 1 && tc !== p && !cur) { cur = tc; tc.style.zoom = z.toFixed(3); }
+    var over = document.scrollingElement.scrollHeight - window.innerHeight;
+    if (over <= 4) return;
+    if (/(^|\s)(hub|dawn-end)(\s|$)/.test(st.getAttribute('tags') || '')) return;
+    if (document.getElementById('dss-worm-game') || Array.prototype.some.call(p.querySelectorAll('canvas'), function(c) { var r = c.getBoundingClientRect(); return r.height > 220 && r.width > 220; })) return; /* games and rooms have their own fit */
+    if (step === 0) { st.classList.add('dss-pf'); step = 1; return; }
+    if (tc === p || z <= MIN) return;
+    var h = tc.getBoundingClientRect().height; if (h < 100) return;
+    var nz = Math.max(MIN, z * (h - over - 6) / h);
+    if (nz < z - 0.005) { z = nz; cur = tc; tc.style.zoom = z.toFixed(3); }
+  }
+  setInterval(fit, 500);
+  window.addEventListener('resize', function() { undo(); until = Date.now() + 20000; });
 })();
 window._passageGen = 0;
 (function() {
@@ -81861,7 +81893,7 @@ Massive earthworms are breaking through the floor!
 (unless: $lastVenueId is a string)[(set: $lastVenueId to "")](set: _here to "")(set: _vh to (dm: "pillars", "venue-pillars", "cecil", "venue-cecilcourt", "french", "venue-french", "colony", "venue-colony", "ronnies", "venue-ronnies", "coach", "venue-coach", "trishas", "venue-trishas", "lackland", "venue-lackland", "chippy", "venue-chippy"))(for: each _vk, ...(dm-names: _vh))[(if: (passage:)'s tags contains (_vh's (_vk)))[(set: _here to _vk)]](if: _here is not "")[(set: $lastVenueId to _here)]
 (set: _a1 to ($alba is an array and $alba contains $alba1))(set: _a2 to ($alba is an array and $alba contains $alba2))(set: _a3 to ($alba is an array and $alba contains $alba3))
 (set: _hn to 0)(if: $haunts is an array)[(set: _hn to $haunts's length)]
-<!-- 2026-10-17 (Sam: "once you meet one character in a venue you should be directed elsewhere before you return"): a meeting (a haunt caught inside a venue, or DAVY or the agent met in the Colony) rests that venue ($venueRest, its door id); the rest lifts inside any other venue. While a venue rests, its waiting people are hidden there, NEXT and the pitch question pass it by, and NEXT does not hold HERE inside it. -->(unless: $venueRest is a string)[(set: $venueRest to "")](set: _met to _hn + (cond: $metDavy is true, 1, 0) + (cond: ($knowsRonnies is true) or ($pitchedAgent is true), 1, 0))(unless: $restMet is a number)[(set: $restMet to _met)](if: (_here is not "") and (_here is not $venueRest))[(set: $venueRest to "")](if: (_met > $restMet) and (_here is not ""))[(set: $venueRest to _here)](set: $restMet to _met)
+<!-- 2026-10-17 (Sam: "once you meet one character in a venue you should be directed elsewhere before you return"): a meeting (a haunt caught inside a venue, or DAVY or the agent met in the Colony) rests that venue ($venueRest, its door id); the rest lifts inside any other venue. While a venue rests, its waiting people are hidden there, NEXT and the pitch question pass it by, and NEXT does not hold HERE inside it. -->(unless: $venueRest is a string)[(set: $venueRest to "")]<!-- 2026-10-25 (Sam, item 4): COPPER's cellar lifts the rest too (a real meeting elsewhere); the alleys still do not -->(if: (passage:)'s tags contains "venue-cellar")[(set: $venueRest to "")](set: _met to _hn + (cond: $metDavy is true, 1, 0) + (cond: ($knowsRonnies is true) or ($pitchedAgent is true), 1, 0))(unless: $restMet is a number)[(set: $restMet to _met)](if: (_here is not "") and (_here is not $venueRest))[(set: $venueRest to "")](if: (_met > $restMet) and (_here is not ""))[(set: $venueRest to _here)](set: $restMet to _met)
 (set: _lived to ($lilyCount is a number and $lilyCount >= $needLilies and _hn >= $needHaunts))
 <!-- 2026-10-15: the book is in the bag and unsold (the readers' rungs below want it) -->(unless: $bookLent is a string)[(set: $bookLent to "")](set: _bookIn to (($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($bookLent is "")))
 (set: _sober to ($sobriety is a number and $sobriety >= 30))

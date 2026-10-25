@@ -6,6 +6,10 @@
 - Q18 Harp variables: left until something needs to read who was named (Sam). Nothing outside the Harp's pages reads them.
 - Old item 1, the book coin flip (design note 5.4): no coin now; under 25 after a venue the book is always left behind. Two pink slots for Sam in Book Footer: in the venue under 25 (the book will stay here), and on the street at 25 to 34 once a night (`$bookWarned`, set false in StoryInit and Start). Seen in a scratch build: French at 20 shows the venue slot, the next hub loses the book, Dean Street at 30 shows the street slot. No tw-error.
 - Old item 2A (ordering audit pass 3, A): LILY → her/she in the Pillars flower ("You hear her laugh."), Ronnie's flower ("that she is sitting behind you") and both of Dido's lines ("She is in her valley"). The Interval keeps "It's LILY." (Sam).
+- Old item 2B (ordering audit pass 3, B): JEFFREY's, DAVY's and INIS's refusal sentences and their `.dss-refusal` slips now sit in `(if: _bagBook)`; the rest of each scene stands, no words added. Seen in scratch builds with and without the book (`$bookSold` forced): Coach, Davy Merkin and O'Flatterly's quest all read cleanly both ways, no tw-error.
+- Old item 2C (the phone box's "pipe cleaners" without the rumour): his sentence, left for him.
+- Old item 3: the NOTEBOOK's earlier-night slips now follow the "Last night:" rule (only `n >= dssRunFirst`), in `dssRefusals` render. Seen in the pane with a faked older-run record: hidden, this run's kept. `dssBookDeal` (Lackland's Deal) now counts this run's refusals only too (Sam); source-checked, synced.
+- Old item 4: COPPER's cellar (`venue-cellar` tag) now lifts `$venueRest` in Next Target; the alleys still don't (Sam). Seen in a scratch build with the Colony resting: Dean Street keeps it, the cellar clears it, no tw-error.
 
 # OVERNIGHT 2026-10-25 (02:46 to 04:55 GMT) — route sweep, night 1 end to end plus most of night 2, one fix, synced, nothing committed
 

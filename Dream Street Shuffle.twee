@@ -4984,6 +4984,7 @@ var W = VC*T, H = (VR+SKY)*T;         // the canvas: the view plus the sky band
 var VR_FULL = 26, VR_MIN = 11;
 var WW = COLS*T, WH = ROWS*T;         // the world in pixels
 var WIN_BLINK = [], CHIMNEYS = [], WARM_WINS = []; // WARM_WINS (2026-09-12): lit windows that go dark as the night runs down
+var RED_WINS = []; // RED_WINS (2026-10-25, Sam: "sexy airs of night"): red-lit first-floor rooms off Walker's Court, Old Compton and the Wardour end; they stay on when Soho goes to bed
 
 // ---- the streets -------------------------------------------------------------
 // vertical roads (two lanes each): Wardour 5-6, Dean 17-18, Frith 29-30, Greek 41-42, Charing Cross 49-50
@@ -5087,7 +5088,7 @@ var PAL = {
   alley:'#1f2027', alleyLine:'#17181e', garden:'#151d16', gardenLight:'#1b261c', rail:'#3a3a44',
   brick:'#2a1f1c', brick2:'#241b19', stucco:'#27242a', stucco2:'#221f25', soot:'#1a1517',
   roof:'#17161b', roofSeam:'#121116', roofLight:'#1d1c22', chimney:'#221f24',
-  winDark:'#0f1018', winWarm:'#b8843a', winGlass:'#1b2030',
+  winDark:'#0f1018', winWarm:'#b8843a', winGlass:'#1b2030', winRed:'#a3302a',
   doorDark:'#0c0b10', doorWood:'#3a2a1c', lintel:'#3b3540', step:'#3f4049',
   lampPost:'#0d0d12', lampHead:'#e6b95a', ginger:'#e8862a'
 };
@@ -5253,10 +5254,13 @@ function drawFacade(x, c, r, litCol) {
   if (v < 0.34 || v >= 0.67) { x.fillStyle = PAL.soot; for (var i = 0; i < 4; i++) x.fillRect((i*4 + (r%2)*2) % T, i*4, 3, 1); }
   else { x.fillStyle = PAL.stucco2; x.fillRect(0, 5, T, 1); x.fillRect(0, 11, T, 1); }
   var w = litCol ? (seeded(c,r,5) > 0.45 ? lighten(litCol, 0.35) : lighten(litCol, 0.1)) : (seeded(c,r,6) > 0.74 ? PAL.winWarm : PAL.winDark);
+  // the red rooms: only on the old trade's streets, never a venue front, a few to a block
+  var redZone = (c <= 8 && r >= 24 && r <= 40) || ((r === 26 || r === 29) && c >= 7 && c <= 40) || (r >= 29 && r <= 34 && c >= 19 && c <= 28);
+  if (!litCol && redZone && !doorAt(c, r) && seeded(c, r, 11) > 0.8) { w = PAL.winRed; RED_WINS.push({ x: c*T + (seeded(c,r,12) > 0.5 ? 3 : 10), y: r*T + 3, k: RED_WINS.length }); }
   x.fillStyle = w; x.fillRect(3, 3, 3, 4); x.fillRect(10, 3, 3, 4);
   if (w === PAL.winWarm && WIN_BLINK.length < 24 && seeded(c,r,7) > 0.5) WIN_BLINK.push({x: c*T + (seeded(c,r,8) > 0.5 ? 3 : 10), y: r*T + 3, k: WIN_BLINK.length});
   if (w === PAL.winWarm) WARM_WINS.push({ x: c*T, y: r*T, u: seeded(c, r, 9) }); // bedtime: this window goes dark once the night is u of the way through
-  x.fillStyle = w === PAL.winDark ? PAL.winGlass : w; x.fillRect(3, 10, 3, 4); x.fillRect(10, 10, 3, 4);
+  x.fillStyle = (w === PAL.winDark || w === PAL.winRed) ? PAL.winGlass : w; x.fillRect(3, 10, 3, 4); x.fillRect(10, 10, 3, 4);
   x.fillStyle = PAL.soot; x.fillRect(3, 5, 3, 1); x.fillRect(10, 5, 3, 1);
 }
 function drawDoorTile(x, c, r, door, status) {
@@ -5532,7 +5536,7 @@ function drawSky(x, doors, camX) {
 function buildBase(doors) {
   var cv = document.createElement('canvas'); cv.width = WW; cv.height = WH;
   var x = cv.getContext('2d');
-  WIN_BLINK.length = 0; CHIMNEYS.length = 0; WARM_WINS.length = 0;
+  WIN_BLINK.length = 0; CHIMNEYS.length = 0; WARM_WINS.length = 0; RED_WINS.length = 0;
   for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
     x.save(); x.translate(c*T, r*T);
     var d = doorAt(c, r), t = tileAt(c, r);
@@ -6663,6 +6667,13 @@ function init(container) {
         x.fillStyle = PAL.winGlass; x.fillRect(wn.x + 3, wn.y + 10, 3, 4); x.fillRect(wn.x + 10, wn.y + 10, 3, 4);
         x.fillStyle = PAL.soot; x.fillRect(wn.x + 3, wn.y + 5, 3, 1); x.fillRect(wn.x + 10, wn.y + 5, 3, 1);
       }
+    }
+    // the red rooms glow a little stronger as the ordinary windows go dark round them; each breathes on its own clock
+    for (var rw = 0; rw < RED_WINS.length; rw++) {
+      var rn = RED_WINS[rw]; if (rn.x < cx - T || rn.x > cx + W + T || rn.y < cy - T || rn.y > cy + VR*T + T) continue;
+      var rga = (0.10 + bed * 0.22) * (0.8 + 0.2 * Math.sin(S.t / 40 + rn.k * 2.1));
+      x.fillStyle = 'rgba(214,52,44,' + rga.toFixed(3) + ')'; x.fillRect(rn.x - 1, rn.y - 1, 5, 6);
+      x.fillStyle = 'rgba(214,52,44,' + (rga * 0.45).toFixed(3) + ')'; x.fillRect(rn.x - 2, rn.y + 4, 7, 3);
     }
     for (var wi = 0; wi < WIN_BLINK.length; wi++) { var wb = WIN_BLINK[wi]; if (((S.t / 60 + wb.k * 3.7) % 11) < 0.9) { x.fillStyle = '#1b1810'; x.fillRect(wb.x, wb.y, 3, 4); } }
     for (var ci = 0; ci < CHIMNEYS.length; ci++) { var ch = CHIMNEYS[ci]; for (var pi = 0; pi < 5; pi++) { var ph = ((S.t * 0.35 + pi * 24 + ch.k * 40) % 120) / 120; var sx2 = ch.x + Math.sin(ph * 6 + ch.k) * 3 + ph * 6, sy2 = ch.y - ph * 30; x.fillStyle = 'rgba(120,118,130,' + (0.22 * (1 - ph)) + ')'; x.fillRect(Math.round(sx2), Math.round(sy2), 2 + Math.round(ph * 3), 2); } }
@@ -15419,6 +15430,26 @@ _draw() {
     for (i = 0; i < 5; i++) {
       c.beginPath(); c.moveTo(46 + i * 17, 26); c.lineTo(46 + i * 17, 170); c.stroke();
     }
+    /* 2026-10-25 (Sam: "sexy airs of night"): a red bulb on the stair inside, the glow behind the figure, with a slow flutter */
+    var rb = 0.85 + Math.sin(t * 2.3) * 0.06 + Math.sin(t * 7.1) * 0.04;
+    g = c.createRadialGradient(104, 34, 1, 104, 40, 70);
+    g.addColorStop(0, 'rgba(190,34,30,' + (0.34 * rb).toFixed(3) + ')'); g.addColorStop(0.45, 'rgba(120,16,18,' + (0.16 * rb).toFixed(3) + ')'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(34, 24, 92, 148);
+    c.strokeStyle = 'rgba(40,30,26,0.9)'; c.lineWidth = 0.7;
+    c.beginPath(); c.moveTo(104, 26); c.lineTo(104, 31); c.stroke();
+    g = c.createRadialGradient(104, 33.5, 0, 104, 33.5, 7);
+    g.addColorStop(0, 'rgba(255,120,96,' + (0.95 * rb).toFixed(3) + ')'); g.addColorStop(0.35, 'rgba(214,40,34,' + (0.6 * rb).toFixed(3) + ')'); g.addColorStop(1, 'rgba(120,10,10,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(104, 33.5, 7, 0, Math.PI * 2); c.fill();
+    // The bell card on the right jamb, biro on a white card, Sellotaped above the push
+    c.save(); c.translate(141, 82); c.rotate(-0.07);
+    c.fillStyle = 'rgba(214,208,190,0.78)'; c.fillRect(-12, -7, 24, 14);
+    c.fillStyle = 'rgba(230,226,210,0.22)'; c.fillRect(-4, -8.5, 8, 3);
+    c.fillStyle = 'rgba(150,22,26,0.9)'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = 'italic 600 5.4px Georgia,serif'; c.fillText('Model', 0, -1.6);
+    c.fillStyle = 'rgba(40,44,90,0.85)'; c.font = '3.4px Georgia,serif'; c.fillText('1st FLOOR', 0, 3.6);
+    c.restore();
+    c.fillStyle = 'rgba(150,126,72,0.8)'; c.beginPath(); c.arc(141, 95, 2.2, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(232,214,160,0.5)'; c.beginPath(); c.arc(140.4, 94.4, 0.8, 0, Math.PI * 2); c.fill();
     // Lintel
     c.fillStyle = 'rgba(52,48,40,0.8)'; c.fillRect(30, 18, 100, 8);
     c.fillStyle = 'rgba(150,136,104,0.10)'; c.fillRect(30, 18, 100, 2);
@@ -36337,6 +36368,19 @@ doorGroup.add(label);
 addBuzzerRow(1.32, 'M. LACKLAND');
 addBuzzerRow(1.5, '');
 addBuzzerRow(1.68, '');
+/* 2026-10-25 (Sam: "sexy airs of night"): somebody else's trade, a white card in biro Sellotaped to the wall above the bells */
+var modelCardTex = makeCanvasTexture(256, 96, function(cx, w, h) {
+cx.fillStyle = '#ece6d4'; cx.fillRect(0, 0, w, h);
+cx.fillStyle = 'rgba(120, 100, 60, 0.10)'; cx.fillRect(0, h - 14, w, 14);
+cx.fillStyle = 'rgba(240, 236, 220, 0.55)'; cx.fillRect(w * 0.36, 0, w * 0.28, 12);
+cx.fillStyle = '#9a1c22'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+cx.font = 'italic 600 34px Georgia'; cx.fillText('Model', w / 2, h * 0.42);
+cx.fillStyle = '#26306a'; cx.font = '18px Georgia'; cx.fillText('2nd FLOOR', w / 2, h * 0.78);
+});
+var modelCard = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.11), new THREE.MeshStandardMaterial({ map: modelCardTex, roughness: 0.7 }));
+modelCard.position.set(1.25, 1.97, 0.1);
+modelCard.rotation.z = 0.06;
+doorGroup.add(modelCard);
 
 var stepTex = makeCanvasTexture(512, 128, function(cx, w, h) {
 cx.fillStyle = '#8a8878';
@@ -36846,6 +36890,29 @@ var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.03, 24), binMa
 lid.position.set(-3.8, 0.9, 1.2);
 lid.rotation.z = 0.08;
 scene.add(lid);
+/* 2026-10-25: a bundle of magazines out for collection under the right-hand window, in the lamp's light, brown paper and string, a glossy corner where the paper has torn */
+var magTex = makeCanvasTexture(256, 256, function(cx, w, h) {
+cx.fillStyle = '#6e5233'; cx.fillRect(0, 0, w, h);
+for (var mi = 0; mi < 40; mi++) { cx.fillStyle = 'rgba(30, 20, 10, ' + (0.05 + Math.random() * 0.08) + ')'; cx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 30, 1 + Math.random() * 2); }
+cx.fillStyle = '#c83a5a'; cx.beginPath(); cx.moveTo(w, h * 0.62); cx.lineTo(w, h); cx.lineTo(w * 0.6, h); cx.closePath(); cx.fill();
+cx.fillStyle = '#e8b49a'; cx.beginPath(); cx.moveTo(w, h * 0.76); cx.lineTo(w, h); cx.lineTo(w * 0.78, h); cx.closePath(); cx.fill();
+cx.strokeStyle = 'rgba(210, 190, 160, 0.7)'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(w, h * 0.62); cx.lineTo(w * 0.86, h * 0.78); cx.lineTo(w * 0.6, h); cx.stroke();
+cx.strokeStyle = '#c9b48a'; cx.lineWidth = 5; cx.beginPath(); cx.moveTo(w * 0.5, 0); cx.lineTo(w * 0.5, h); cx.moveTo(0, h * 0.5); cx.lineTo(w, h * 0.5); cx.stroke();
+});
+var magTop = new THREE.MeshStandardMaterial({ map: magTex, roughness: 0.75 });
+var magSide = new THREE.MeshStandardMaterial({ color: 0x8a7a64, roughness: 0.9 });
+var magBundle = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 0.26), [magSide, magSide, magTop, magSide, magSide, magSide]);
+magBundle.position.set(1.62, 0.22, 0.5);
+magBundle.rotation.y = 0.35;
+scene.add(magBundle);
+var magBundle2 = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.12, 0.25), [magSide, magSide, magTop, magSide, magSide, magSide]);
+magBundle2.position.set(1.64, 0.38, 0.48);
+magBundle2.rotation.y = 0.12;
+scene.add(magBundle2);
+var magBundle3 = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.24), [magSide, magSide, magTop, magSide, magSide, magSide]);
+magBundle3.position.set(1.61, 0.51, 0.5);
+magBundle3.rotation.y = 0.42;
+scene.add(magBundle3);
 
 for (var i = 0; i < 3; i++) {
 var stump = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.25, 6), ironMat);
@@ -50486,7 +50553,7 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
   // Lackland's office: emissive redGlass + red point light.
   var upWinXs = [-0.8, 0.8, 2.4];
   var redBrothelGlass = new THREE.MeshStandardMaterial({
-    color: 0x4a0505, roughness: 0.2, emissive: 0xff1515, emissiveIntensity: 0.7
+    color: 0x260e17, roughness: 0.35, emissive: 0x802039, emissiveIntensity: 0.32
   });
   for (var row = 0; row < 2; row++) {
     for (var col = 0; col < 3; col++) {
@@ -50510,11 +50577,11 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
         placeMesh(shop, new THREE.PlaneGeometry(0.68, 1.28), uwGlassMat, uwx, uwy, 0.11);
       }
       // Sash bar
-      placeMesh(shop, new THREE.BoxGeometry(0.75, 0.04, 0.04), windowFrame, uwx, uwy + 0.1, 0.11);
+      placeMesh(shop, new THREE.BoxGeometry(0.75, 0.04, 0.04), windowFrame, uwx, uwy + 0.1, uwRed ? 0.16 : 0.11);
       // Glazing bars
-      placeMesh(shop, new THREE.BoxGeometry(0.02, 1.28, 0.02), windowFrame, uwx, uwy, 0.12);
-      placeMesh(shop, new THREE.BoxGeometry(0.68, 0.02, 0.02), windowFrame, uwx, uwy + 0.35, 0.12);
-      placeMesh(shop, new THREE.BoxGeometry(0.68, 0.02, 0.02), windowFrame, uwx, uwy - 0.35, 0.12);
+      if (!uwRed) placeMesh(shop, new THREE.BoxGeometry(0.02, 1.28, 0.02), windowFrame, uwx, uwy, 0.12);
+      if (!uwRed) placeMesh(shop, new THREE.BoxGeometry(0.68, 0.02, 0.02), windowFrame, uwx, uwy + 0.35, 0.12);
+      if (!uwRed) placeMesh(shop, new THREE.BoxGeometry(0.68, 0.02, 0.02), windowFrame, uwx, uwy - 0.35, 0.12);
       // Sill
       placeMesh(shop, new THREE.BoxGeometry(0.95, 0.07, 0.16), sillMat, uwx, uwy - 0.78, 0.13);
       // Lintel
@@ -50523,50 +50590,57 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
     }
   }
   // Red point light spilling out of the brothel window
-  var redBrothelLight = new THREE.PointLight(0xff2020, 0.7, 7);
+  var redBrothelLight = new THREE.PointLight(0xcb5360, 0.32, 5);
   // shop is positioned at (0,0,0); upper window col 2 is at uwx=2.4
   // row 1 puts it at uwy = 6.5 + 1*3 = 9.5; spilling forward to z ≈ 1.3
   redBrothelLight.position.set(2.4, 9.5, 1.3);
   scene.add(redBrothelLight);
 
-  // ---- The woman at the red window ----
-  // A flat black figure between the red pane and the glazing bars: she
-  // fades in, stands watching the street, once per visit leans closer
-  // (a hand appears against the glass), then withdraws. While she is
-  // there she blocks a little of the red spill.
-  var rwMat = new THREE.MeshBasicMaterial({ color: 0x0d0507, transparent: true, opacity: 0 });
-  var rwHandMat = new THREE.MeshBasicMaterial({ color: 0x0d0507, transparent: true, opacity: 0 });
-  var rwWoman = new THREE.Group();
-  rwWoman.position.set(2.33, 9.5, 0.127);
-  shop.add(rwWoman);
-  // Figure drawn as one dress-shaped outline: sloped shoulders, narrow
-  // waist, skirt flaring to the sill (the frame masks the hem).
-  var rwShape = new THREE.Shape();
-  rwShape.moveTo(-0.14, -0.66);
-  rwShape.quadraticCurveTo(-0.115, -0.48, -0.085, -0.28);
-  rwShape.quadraticCurveTo(-0.10, -0.16, -0.115, -0.08);
-  rwShape.quadraticCurveTo(-0.135, 0.0, -0.10, 0.05);
-  rwShape.quadraticCurveTo(-0.05, 0.09, -0.035, 0.10);
-  rwShape.lineTo(0.035, 0.10);
-  rwShape.quadraticCurveTo(0.05, 0.09, 0.10, 0.05);
-  rwShape.quadraticCurveTo(0.135, 0.0, 0.115, -0.08);
-  rwShape.quadraticCurveTo(0.10, -0.16, 0.085, -0.28);
-  rwShape.quadraticCurveTo(0.115, -0.48, 0.14, -0.66);
-  rwShape.lineTo(-0.14, -0.66);
-  var rwBody = new THREE.Mesh(new THREE.ShapeGeometry(rwShape, 10), rwMat);
-  rwWoman.add(rwBody);
-  var rwNeck = new THREE.Mesh(new THREE.PlaneGeometry(0.065, 0.12), rwMat);
-  rwNeck.position.set(0, 0.13, 0); rwWoman.add(rwNeck);
-  var rwHead = new THREE.Mesh(new THREE.CircleGeometry(0.082, 16), rwMat);
-  rwHead.position.set(0, 0.235, 0.001); rwWoman.add(rwHead);
-  var rwHair = new THREE.Mesh(new THREE.CircleGeometry(0.096, 16), rwMat);
-  rwHair.position.set(-0.02, 0.258, -0.001); rwWoman.add(rwHair);
-  // Long hair falling over the near shoulder
-  var rwHairFall = new THREE.Mesh(new THREE.CircleGeometry(0.055, 12), rwMat);
-  rwHairFall.scale.set(0.7, 2.2, 1); rwHairFall.position.set(-0.095, 0.06, -0.001); rwWoman.add(rwHairFall);
-  var rwHand = new THREE.Mesh(new THREE.CircleGeometry(0.045, 12), rwHandMat);
-  rwHand.position.set(0.19, 0.10, 0.002); rwWoman.add(rwHand);
-  var rwState = { mode: 'away', start: 0, until: 2, leanAt: 0 };
+  // 2026-10-25 (Sam): textured game-style cutout, animated separately from its room.
+  var rwRoomTexture=makeCanvasTexture(256,512,function(cx,w,h){
+    var g=cx.createLinearGradient(0,0,w,0);g.addColorStop(0,'#170e19');g.addColorStop(0.35,'#513034');g.addColorStop(1,'#21101c');cx.fillStyle=g;cx.fillRect(0,0,w,h);
+    cx.strokeStyle='rgba(169,109,79,0.10)';cx.lineWidth=1;
+    for(var y=10;y<h;y+=35)for(var x=8;x<w;x+=28){cx.beginPath();cx.moveTo(x,y-9);cx.quadraticCurveTo(x+12,y,x,y+9);cx.quadraticCurveTo(x-12,y,x,y-9);cx.stroke();}
+    // A dim amber pool on patterned plaster; it stays still when the figure moves.
+    var pool=cx.createRadialGradient(w*0.2,h*0.38,0,w*0.2,h*0.38,w*0.65);pool.addColorStop(0,'rgba(207,129,67,.26)');pool.addColorStop(1,'rgba(78,36,26,0)');cx.fillStyle=pool;cx.fillRect(0,0,w,h);
+    cx.fillStyle='#251218';cx.fillRect(0,h*0.74,w,h*0.26);cx.fillStyle='#6c4432';cx.fillRect(0,h*0.74,w,2);
+    // Painted velvet folds, kept restrained like the other street window textures.
+    for(var side=0;side<2;side++)for(var i=0;i<8;i++){cx.fillStyle=i%2?'#3e1425':'#250e1b';cx.fillRect(side?w-31+i*4:i*4,0,4,h);}
+  });
+  var rwRoomMat=new THREE.MeshBasicMaterial({map:rwRoomTexture,color:0xa88b92,toneMapped:false});
+  placeMesh(shop,new THREE.PlaneGeometry(0.68,1.28),rwRoomMat,2.4,9.5,0.131);
+  var rwPortraitTexture=new THREE.TextureLoader().load('assets/halibut-window-woman-game.png');
+  if ('colorSpace' in rwPortraitTexture) rwPortraitTexture.colorSpace=renderer.outputColorSpace || THREE.SRGBColorSpace;
+  else rwPortraitTexture.encoding=renderer.outputEncoding || THREE.LinearEncoding;
+  rwPortraitTexture.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+  renderer.localClippingEnabled=true;
+  var rwMat=new THREE.MeshBasicMaterial({map:rwPortraitTexture,color:0xb5a0a5,transparent:true,opacity:0,
+    depthWrite:false,toneMapped:false,clippingPlanes:[
+      new THREE.Plane(new THREE.Vector3(1,0,0),-2.06),new THREE.Plane(new THREE.Vector3(-1,0,0),2.74),
+      new THREE.Plane(new THREE.Vector3(0,1,0),-8.86),new THREE.Plane(new THREE.Vector3(0,-1,0),10.14)]});
+  var rwWoman=new THREE.Group();rwWoman.position.set(2.4,9.5,0.15);shop.add(rwWoman);
+  // A fine mesh allows the head, shoulders and body to move by different amounts.
+  var rwGeometry=new THREE.PlaneGeometry(0.74,1.24,20,36);
+  var rwPortrait=new THREE.Mesh(rwGeometry,rwMat);rwPortrait.name='halibut-window-woman';rwWoman.add(rwPortrait);
+  var rwVertices=rwGeometry.attributes.position,rwRest=new Float32Array(rwVertices.array);
+  var rwState={mode:'away',start:0,until:2,leanAt:0};
+  var rwClose=false, rwBlend=0, rwStreetPos=camera.position.clone();
+  var rwStreetTarget=new THREE.Vector3(1.2,3.2,-1), rwStreetFov=camera.fov;
+  var rwTarget=new THREE.Vector3(2.4,9.5,0.1),rwProjected=new THREE.Vector3();
+  var rwHotspot=document.createElement('button');rwHotspot.type='button';
+  rwHotspot.setAttribute('aria-label','Look closer at the woman in the red window');rwHotspot.title='Look closer';
+  rwHotspot.style.cssText='position:absolute;z-index:9003;min-width:32px;min-height:42px;background:transparent;border:1px solid transparent;border-radius:2px;cursor:zoom-in;padding:0;';
+  rwHotspot.onmouseenter=rwHotspot.onfocus=function(){rwHotspot.style.borderColor='rgba(240,151,139,.7)';};
+  rwHotspot.onmouseleave=rwHotspot.onblur=function(){rwHotspot.style.borderColor='transparent';};
+  var rwBack=document.createElement('button');rwBack.type='button';rwBack.textContent='BACK TO THE STREET';
+  rwBack.style.cssText='position:absolute;bottom:60px;left:50%;transform:translateX(-50%);z-index:9005;padding:12px 22px;background:rgba(12,3,10,.88);color:#ecc9b4;border:1px solid #9c5964;font:13px "Courier New",monospace;letter-spacing:2px;display:none;cursor:pointer;white-space:nowrap;';
+  function rwSetClose(value){rwClose=value;rwBack.style.display=value?'block':'none';rwHotspot.style.display=value?'none':'block';
+    fcBtn.style.visibility=value?'hidden':'visible';if(typeof choicesDock!=='undefined'&&choicesDock)choicesDock.style.visibility=value?'hidden':'visible';
+    if(value){rwState.mode='present';rwState.start=clock.getElapsedTime();rwState.until=Infinity;rwState.leanAt=rwState.start+2;rwBack.focus();}
+    else{rwState.until=clock.getElapsedTime()+5;rwHotspot.focus();}}
+  rwHotspot.onclick=function(){rwSetClose(true);};rwBack.onclick=function(){rwSetClose(false);};
+  fcWrap.addEventListener('keydown',function(e){if(e.key==='Escape'&&rwClose){e.preventDefault();rwSetClose(false);}});
+  if(!fcWaitRoot){fcWrap.appendChild(rwHotspot);fcWrap.appendChild(rwBack);}
 
   // String course between floors
   placeMesh(shop, new THREE.BoxGeometry(6.1, 0.1, 0.14), whiteTrim, 0.5, 5.6, 0.12);
@@ -52558,23 +52632,47 @@ if (window.dssFilmGrade) window.dssFilmGrade(document.getElementById('fc-wrap'))
       else { rwState.mode = 'away'; rwState.until = t + 8 + Math.random()*10; }
       rwState.start = t;
     }
+    if(fcStill){rwState.mode='present';rwState.until=Infinity;rwState.start=0;}
     var rwP = Math.min((t - rwState.start) / (rwState.mode === 'in' ? 0.85 : 0.7), 1);
     var rwQ = rwP*rwP*(3 - 2*rwP);
     rwMat.opacity = rwState.mode === 'present' ? 0.94 : rwState.mode === 'in' ? rwQ*0.94 : rwState.mode === 'out' ? (1 - rwQ)*0.94 : 0;
-    // She steps up to the glass rather than materialising: a quick rise
-    // paired with the short fade
-    rwWoman.position.y = 9.5 - 0.12*(rwState.mode === 'in' ? (1 - rwQ) : rwState.mode === 'out' ? rwQ : rwState.mode === 'away' ? 1 : 0);
-    var rwLean = 0;
-    if (rwState.mode === 'present') {
-      var rwDl = (t - rwState.leanAt)/4;
-      if (rwDl > 0 && rwDl < 1) rwLean = Math.sin(rwDl*Math.PI);
+    var rwLean=0;
+    if(rwState.mode==='present'){
+      var rwDl=(t-rwState.leanAt)/4;
+      if(rwDl>0&&rwDl<1)rwLean=Math.sin(rwDl*Math.PI);
     }
-    rwWoman.position.x = 2.33 + Math.sin(t*0.35)*0.01;
-    rwWoman.scale.set(1 + rwLean*0.05, 1 + rwLean*0.03, 1);
-    rwHead.rotation.z = Math.sin(t*0.15)*0.06;
-    rwHandMat.opacity = rwLean*0.9*rwMat.opacity;
-    redBrothelLight.intensity = 0.7 - rwMat.opacity*0.18;
+    var rwEntering=rwState.mode==='in'?1-rwQ:rwState.mode==='out'?rwQ:rwState.mode==='away'?1:0;
+    // Step in/out, then watch and lean; only the figure moves, never the wallpaper.
+    rwWoman.position.set(2.4+rwEntering*0.11,9.5-rwEntering*0.055,0.15);
+    var rwSway=fcStill?0:Math.sin(t*0.35)*0.008;
+    var rwTilt=fcStill?0:Math.sin(t*0.3)*0.035+rwLean*0.045;
+    for(var rvi=0;rvi<rwVertices.count;rvi++){
+      var rvx=rwRest[rvi*3],rvy=rwRest[rvi*3+1];
+      var rwUpper=Math.max(0,Math.min(1,(rvy+0.48)/0.9));
+      var rwHeadWeight=Math.max(0,Math.min(1,(rvy-0.12)/0.17));
+      var rwa=rwTilt*rwHeadWeight, rwp=rvy-0.30;
+      rwVertices.setXYZ(rvi,
+        rvx*Math.cos(rwa)-rwp*Math.sin(rwa)+rwSway*rwUpper+rwLean*0.009*rwUpper,
+        rvy+rvx*Math.sin(rwa)+rwp*(Math.cos(rwa)-1)+rwLean*0.008*rwUpper,
+        rwLean*0.009*rwUpper);
+    }
+    rwVertices.needsUpdate=true;
+    redBrothelLight.intensity=0.32-rwMat.opacity*0.05;
 
+    if(!fcWaitRoot){
+      rwBlend=fcStill?(rwClose?1:0):rwBlend+((rwClose?1:0)-rwBlend)*0.065;
+      if(Math.abs(rwBlend-(rwClose?1:0))<0.001)rwBlend=rwClose?1:0;
+      var rwDistance=window.innerWidth<600?2.35:1.95;
+      camera.position.copy(rwStreetPos).lerp(new THREE.Vector3(2.25,9.46,rwDistance),rwBlend);
+      camera.fov=rwStreetFov+(42-rwStreetFov)*rwBlend;camera.updateProjectionMatrix();
+      camera.lookAt(rwStreetTarget.clone().lerp(rwTarget,rwBlend));camera.updateMatrixWorld();
+      rwProjected.copy(rwTarget).project(camera);
+      var rwTop=new THREE.Vector3(2.4,10.2,0.15).project(camera),rwBottom=new THREE.Vector3(2.4,8.8,0.15).project(camera);
+      var rwHeight=Math.max(42,Math.abs(rwTop.y-rwBottom.y)*window.innerHeight/2),rwWidth=Math.max(32,rwHeight*0.64);
+      rwHotspot.style.left=((rwProjected.x+1)*window.innerWidth/2-rwWidth/2)+'px';
+      rwHotspot.style.top=((1-rwProjected.y)*window.innerHeight/2-rwHeight/2)+'px';
+      rwHotspot.style.width=rwWidth+'px';rwHotspot.style.height=rwHeight+'px';
+    }
     if (typeof dssComposerLocal !== 'undefined' && dssComposerLocal) { dssComposerLocal.render(); } else { renderer.render(scene, camera); }
   }
 

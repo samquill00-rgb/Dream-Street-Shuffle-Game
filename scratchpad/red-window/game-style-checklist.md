@@ -1,0 +1,12 @@
+# Game-style woman revision
+- [x] Match the portrait to the game's dark textured 3D aesthetic.
+- [x] Restore visibly separate figure movement, retaining window close-up and exit.
+- [x] Verify desktop/phone and animation; sync and show preview.
+
+Built-in image generator used to create assets/halibut-window-woman-game.png. Prior photographic asset retained as reference, no longer consumed by this scene.
+
+Final generation prompt: Create a TRANSPARENT PNG game character cutout, not a photograph. Use the original portrait only for identity, pose and fully covering period costume; use the game screenshot for mood and coarse textured environment. Radically simplify the woman into a hand-built LOW-POLYGON 3D adventure-game character: obvious broad angular polygon planes on cheekbones, nose, forehead, hands, dress and hair. Flat-shaded planar mesh surfaces with subtle hand-painted distressed textures. Hair consists of sculpted geometric locks. Skin is matte painted terracotta with broad shadows, no pores, no individual hairs, no photographic detail. Gown folds become broad angular sculpted shapes and sparse painted embroidery. Adult human proportions, sophisticated face, burgundy high-neck long-sleeved gown, gold brooch. Retain poised expression and slight smile, not a caricature, anime or cute. Dark handmade theatrical miniature rendered in Three.js with low ambient light, muted warm side light and limited earthy burgundy palette. Single figure only, head to mid thigh, including hands at waist, transparent margins, no scenery, black background, glow, floor, text or watermark.
+
+Movement: separate alpha figure over static procedural room; grid deformation creates upper-body sway, weighted head tilt and one lean; original stepped fade-in/out timing retained. Close-up holds her present, return resumes departure cycle. No independent hand-against-glass gesture or full human rig. Reduced-motion now shows a stationary present figure (previous pinned clock could strand the appearance fade).
+
+QA: isolated actual-source browser fixture, actual shared fitting helper; reduced renderer resolution/shadows disabled for software WebGL. Verified changing figure vertices with unchanged room material; figure opacity .94 while present; forced cycle transition reaches away/0 then present/.94; desktop Escape return and phone Back return passed; no page errors. Both final screenshots inspected. Full game route/postprocessing not exercised.

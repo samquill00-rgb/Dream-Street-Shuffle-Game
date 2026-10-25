@@ -1,3 +1,10 @@
+# RULINGS 2026-10-25 morning on Q14 to Q18 (synced, not committed)
+- Q14 Colony lily: no change. The lily sits on the "Pictures" card (`lilyHook(4)`); taken from the card it shows the FLOWER card. The sweep clicked the raw hook, which skips the card.
+- Q15 Lackland's "Your book" card now carries "Lay it down" and "Not yet." (`2026-10-25 (Sam, Q15)` comment on the hotspot). Seen live by debug jump: both work from the card, no tw-error. The follow-ups ("Leave it with him", "Ask him to take it on") stay in the words panel; not walked.
+- Q16 LILY's first call after THE DEBT: left as is (Sam).
+- Q17 cow ride: note only.
+- Q18 Harp variables: left until something needs to read who was named (Sam). Nothing outside the Harp's pages reads them.
+
 # OVERNIGHT 2026-10-25 (02:46 to 04:55 GMT) — route sweep, night 1 end to end plus most of night 2, one fix, synced, nothing committed
 
 Ran the nightwork brief. Played a fresh night 1 from BEGIN to the white Dawn and a night 2 to Lackland's refusal, plus a third fresh-origin night to the cellar for the fix's live check, with the headless harness (this session's scratchpad: `/private/tmp/claude-501/-Users-samquill--claude-spares-spare-o1QcAZ/c0bbf728-4d4c-42f7-9758-14bf2bb0e925/scratchpad/`, `dss.py` + `step.py` + `s_n1*.py` / `s_n2*.py`, Chrome for Testing on CDP 9333, profile `profiles/n1`, muted, 1440×900). No console errors and no tw-error on any page all night. Commit the .twee and the .html together.

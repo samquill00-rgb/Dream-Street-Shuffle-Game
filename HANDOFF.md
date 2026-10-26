@@ -7795,3 +7795,6 @@ Sam requested longer slithering before curling. Open phase7 ->12 seconds; curl r
 
 ## 2026-10-26 — Slower curl into ouroboros
 Sam requested slower curl. Curl7 ->11 seconds after existing12s free slither; exact circle at23s. Wheel fade/removal shifted +4s to25.5/28.5s to preserve settled viewing time. Synced; no git commands. Preview sky=17.
+
+## 2026-10-26 — Longer finished-circle hold
+Sam requested finished ouroboros stay longer before fading. Auto fade now29s/removal32s; circle finishes at23s, giving6 seconds fully visible (formerly2.5). Free slither/curl/fade duration unchanged. Synced; no git commands. Preview sky=18.

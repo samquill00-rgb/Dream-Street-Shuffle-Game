@@ -53185,7 +53185,7 @@ document.addEventListener('keydown', function(e) {
     document.body.appendChild(finis);
     var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var width = 0, height = 0, ratio = 1, frame = 0, last = 0, elapsed = 0, carry = 0;
-    var particles = [], sprites = [], stopped = false;
+    var particles = [], sprites = [], stopped = false, dawnLight = null;
     var TAU = Math.PI * 2;
 
     // Painted once: irregular cupped silhouettes, a shaded fold and a fine
@@ -53195,8 +53195,9 @@ document.addEventListener('keydown', function(e) {
       var tile = document.createElement('canvas'); tile.width = 80; tile.height = 100;
       var g = tile.getContext('2d');
       var pearl = g.createLinearGradient(17, 10, 61, 78);
-      pearl.addColorStop(0, '#fffdf2'); pearl.addColorStop(0.38, '#ffffff');
-      pearl.addColorStop(0.72, '#e0e7ed'); pearl.addColorStop(1, '#aebbbd');
+      pearl.addColorStop(0, '#fff4de'); pearl.addColorStop(0.38, '#fffefa');
+      pearl.addColorStop(0.65, '#f1e6e9'); pearl.addColorStop(0.84, '#d6dce9');
+      pearl.addColorStop(1, '#aebbc9');
       g.beginPath();
       if (variant === 0) {
         g.moveTo(40, 87); g.bezierCurveTo(12, 68, 6, 39, 23, 18);
@@ -53215,6 +53216,8 @@ document.addEventListener('keydown', function(e) {
       g.strokeStyle = 'rgba(255,255,245,0.65)'; g.lineWidth = 1; g.stroke();
       g.beginPath(); g.moveTo(41, 80); g.bezierCurveTo(32, 61, 43, 40, 38, 23);
       g.strokeStyle = 'rgba(145,160,149,0.27)'; g.lineWidth = 1.1; g.stroke();
+      g.beginPath(); g.moveTo(42, 77); g.bezierCurveTo(47, 57, 44, 35, 40, 24);
+      g.strokeStyle = 'rgba(255,255,248,0.62)'; g.lineWidth = 1.5; g.stroke();
       sprites.push(tile);
     }
     function resize() {
@@ -53223,6 +53226,14 @@ document.addEventListener('keydown', function(e) {
       canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
       canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      // 2026-10-26: a broad pearly opening in the sky, painted behind the
+      // flowers. No opaque wash: the existing slate/rose dawn stays visible.
+      dawnLight = ctx.createRadialGradient(width * 0.64, height * 0.12, 0,
+        width * 0.64, height * 0.12, Math.max(width, height) * 0.78);
+      dawnLight.addColorStop(0, 'rgba(255,241,211,0.24)');
+      dawnLight.addColorStop(0.24, 'rgba(249,218,210,0.13)');
+      dawnLight.addColorStop(0.6, 'rgba(219,205,230,0.045)');
+      dawnLight.addColorStop(1, 'rgba(219,205,230,0)');
       if (reduced) paint();
     }
     function spawn(scattered) {
@@ -53238,7 +53249,7 @@ document.addEventListener('keydown', function(e) {
         lean: Math.random() * TAU, flutter: 0.9 + Math.random() * 1.6,
         alpha: near ? 0.86 : far ? 0.34 : 0.72,
         sprite: sprites[Math.floor(Math.random() * sprites.length)],
-        depth: depth
+        depth: depth, origin: Math.random() * TAU
       };
       // kept in depth order as they arrive (far first), so paint never re-sorts thousands of petals a frame
       var lo = 0, hi = particles.length;
@@ -53249,19 +53260,26 @@ document.addEventListener('keydown', function(e) {
       if (!ctx) return;
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.clearRect(0, 0, width, height);
+      ctx.globalAlpha = reduced ? 0.7 : Math.min(1, elapsed / 14);
+      ctx.fillStyle = dawnLight; ctx.fillRect(0, 0, width, height);
+      ctx.globalAlpha = 1;
       // Far-to-near rendering makes overlapping translucent petals read as depth (spawn keeps them in that order).
       particles.forEach(function(p) {
         var sway = Math.sin(p.age * 0.75 + p.phase) * (18 + p.depth * 42);
-        var thermal = Math.sin(elapsed * 0.34 + p.y / height * 2.3) * (28 + p.depth * 48);
-        var x = p.x + sway + thermal;
-        var fade = Math.min(1, p.age / 0.9, Math.max(0, (p.y + p.size) / 90));
+        // Broad rising ribbons share a current, with small individual eddies.
+        // The upward taper is deliberately slight: the whole screen still floods.
+        var lift = Math.max(0, Math.min(1, 1 - p.y / height));
+        var thermal = Math.sin(elapsed * 0.22 + p.y / height * 3.2) * (30 + p.depth * 56);
+        var eddy = Math.sin(p.age * 0.46 + p.origin) * 16 * p.depth;
+        var x = p.x + (width * 0.64 - p.x) * lift * lift * 0.16 + sway + thermal + eddy;
+        var fade = Math.min(1, p.age / 1.4, Math.max(0, (p.y + p.size) / (height * 0.19)));
         var ang = p.lean + p.age * p.spin + Math.sin(p.age * 1.1 + p.phase) * 0.28;
         // A thin profile between two broad faces: the petal turns in the air.
         var face = Math.cos(p.age * p.flutter + p.phase);
         var sx = 0.18 + Math.abs(face) * 0.82, co = Math.cos(ang) * ratio, si = Math.sin(ang) * ratio;
         // one transform per petal (translate, rotate, then squash on x), in place of save/translate/rotate/scale/restore
         ctx.setTransform(co * sx, si * sx, -si, co, x * ratio, p.y * ratio);
-        ctx.globalAlpha = p.alpha * (reduced ? 0.6 : fade);
+        ctx.globalAlpha = p.alpha * (reduced ? 0.6 : fade) * (0.78 + Math.abs(face) * 0.22);
         ctx.drawImage(p.sprite, -p.size * 0.4, -p.size * 0.5, p.size * 0.8, p.size);
       });
       ctx.globalAlpha = 1;
@@ -53279,7 +53297,10 @@ document.addEventListener('keydown', function(e) {
       var cap = Math.min(3000, Math.max(1300, Math.round(width * height / 400)));
       carry += rate * dt;
       while (carry >= 1) { if (particles.length < cap) spawn(false); carry--; }
-      particles.forEach(function(p){ p.age += dt; p.y -= p.speed * dt; });
+      particles.forEach(function(p){
+        p.age += dt;
+        p.y -= p.speed * (0.9 + 0.13 * Math.sin(p.age * 0.65 + p.phase)) * dt;
+      });
       particles = particles.filter(function(p){ return p.y > -p.size; });
       paint();
       frame = requestAnimationFrame(tick);
@@ -82281,3 +82302,41 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 })();
 </script>
 ](else:)[[[Leave|Approach Chinese Fish and Chips]]]
+
+:: Preview Himalayas [system]
+<!-- PREVIEW LINKS (2026-09-23; carried over from the unmerged preview-launcher branch 2026-10-26, Sam). The game URL with ?start=himalayas (or nazca,
+     easter, pyramid, ezekiel) lands on the matching Preview passage below; the
+     boot hook that reads the URL lives in sync_html.py, the launcher page is
+     preview.html. Each Preview passage seeds only what the story would have
+     set by the time the third pillar opened that world: Inis has told of the
+     pillars, the threshold is crossed, the world's own key is spent. Then it
+     goes straight to the world's first passage. Nothing else about the night
+     is invented, so a preview night otherwise starts fresh. -->
+(display: "Key Guards")\
+(set: $inisToldOfPillars to true)(set: $crossedThreshold to true)\
+(set: $keyLighter to "spent")(set: $dreamKey to "")\
+(go-to: "Airport Pub")
+
+:: Preview Nazca [system]
+(display: "Key Guards")\
+(set: $inisToldOfPillars to true)(set: $crossedThreshold to true)\
+(set: $keyCocaine to "spent")(set: $dreamKey to "")\
+(go-to: "Nazca Approach")
+
+:: Preview Easter Island [system]
+(display: "Key Guards")\
+(set: $inisToldOfPillars to true)(set: $crossedThreshold to true)\
+(set: $keyTicket to "spent")(set: $dreamKey to "")\
+(go-to: "Easter Island Shore")
+
+:: Preview Pyramid [system]
+(display: "Key Guards")\
+(set: $inisToldOfPillars to true)(set: $crossedThreshold to true)\
+(set: $keySlip to "spent")(set: $dreamKey to "")\
+(go-to: "Pyramid Mouth")
+
+:: Preview Ezekiel [system]
+(display: "Key Guards")\
+(set: $inisToldOfPillars to true)(set: $crossedThreshold to true)\
+(set: $keyEye to "spent")(set: $dreamKey to "")\
+(go-to: "The Plain of Chebar")

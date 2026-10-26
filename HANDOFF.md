@@ -7782,3 +7782,12 @@ Sam requested petals rise a bit more slowly. All depth layers' upward speed mult
 
 ## 2026-10-26 — Ouroboros redesign
 Sam requested much more interesting snake/ouroboros. Replaced wheel's near-circular two rails/38 chevrons and disconnected head/tail with gently undulating tapered body, shaded silver/antique-gold metal fill, 90 curved overlapping scales, alternate glints, sculpted larger head with brow/slit eye/nostril/jaw plates/fang, tail curving into jaws at six o'clock. Original rail draw-on/flesh reveal/breathing classes retained; wheel gates/labels/interaction unchanged. Source only, synced, no git commands. QA screenshot /tmp/dss-ouroboros.png.
+
+## 2026-10-26 — Ouroboros writhes before settling
+Sam proposed snake snaking around screen before settling onto final path. Added shared smoothly animated SVG displacement to entire serpent (head/scales/tail stay together), plus a small wandering translation/rotation/scale over 10.5 seconds, ending exactly at original circle with filter removed. Existing rail draw/flesh reveal retained. Automatic wheel now starts fading at 12.5s, removes at15.5s (formerly7.5/10.5) to allow settled shape to be seen. Reduced-motion wrapper bypasses wandering/displacement. Synced; no git commands. Screenshots /tmp/dss-serpent-wandering.png and /tmp/dss-serpent-settled.png.
+
+## 2026-10-26 — Open snake slithers before ouroboros
+Sam clarified prior ring wobble wasn't free slithering. Replaced displacement/rigid wander with real shared-spine posing: body rails/fill/scales/glints map onto open travelling S-curve for first7s, then ease into exact authored final circle over next7s; head follows leading spine tangent and tail follows rear. Coordinates updated at30fps; original paths/head transform restored precisely on completion. Stops updates when modal disconnected; clock pauses hidden; reduced motion retains final circle. Early flesh/rail reveal makes open snake visible promptly. Automatic wheel now fades16.5s/removes19.5s. Prose unchanged; synced; no git commands. Screenshots /tmp/dss-snake-free.png and /tmp/dss-snake-circle.png.
+
+## 2026-10-26 — Longer free slither
+Sam requested longer slithering before curling. Open phase7 ->12 seconds; curl remains7 seconds, final circle restored at19s. Auto wheel fade/removal shifted +5s to21.5/24.5s, preserving settled viewing time. Synced; no git commands. Preview sky=16.

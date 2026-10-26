@@ -7763,3 +7763,22 @@ Further integration: final Dawn skyline now paints roofs/cathedral onto transpar
 
 ## 2026-10-26 — Remove remaining Dawn reading panel
 Sam explicitly requested removal of dark rectangle behind text: whole should feel like one scene. Dawn ending-pane background now fully transparent, mask removed, subtle per-letter dark text shadow for readability. Alba block background transparent too. Existing disabled pane pseudo-layers remain disabled. All words unchanged; synced, no git commands. Preview sky=7.
+
+## 2026-10-26 — Text darkens with sunrise
+Sam requested text darkening as sky brightens. Petal sunrise's eased 36-second progress now also sets local --dawn-ink-progress on Dawn pane; cream reading text, title, book/dedication, poem and credits interpolate to dark blue ink. Text shadow shifts from dark to a light fine shadow; provisional pink text deepens to burgundy. No panel restored or prose changed. Reduced motion uses same settled progress; cleanup resets property. Synced; no git commands. Verification screenshot /tmp/dss-dawn-dark-ink.png.
+
+## 2026-10-26 — Prose swallowed by petals; restart stays visible
+Sam accepted proposal for prose to fade under petal flood and THE END to emerge after, requiring play again visible. Petal clock now eases entire Dawn pane opacity 1->0 over seconds 9–24, sets inert when vanished; THE END fades in seconds 36–42. Real existing Another night control is moved to fixed body-level dock above canvas immediately at petal start, preserving handler/label, visible/clickable throughout and distinct from THE END. Cleanup restores button to original placeholder, opacity and inert state. Reduced motion preserves prose, shows end without animation and keeps restart. Synced; no git commands.
+QA actual full-game mobile: flood pane opacity0/inert, THE END0, restart opacity1 and top hit target; after ebb THE END1, restart still top hit target. Real restart click navigated to original game pathname (no preview query) and overlay removed. No JS/Harlowe errors. Screenshot /tmp/dss-dawn-finale-phone.png inspected; preview sky=9 opened.
+
+## 2026-10-26 — Longer reading before final petals
+Sam requested more time to read before prose fades into petals. Trigger's reading pause increased 3 -> 18 seconds after final paragraph enters view; fallback also grants 18 seconds rather than starting immediately. Petal/fade/sunrise/end sequence timings otherwise unchanged, so prose starts fading 27 seconds after final paragraph comes into view, finishes at 42 seconds. Synced; no git commands. Preview sky=10.
+
+## 2026-10-26 — Slower prose dissolve
+Sam requested text fade a bit slower. Dissolve duration 15 -> 24 seconds; start remains petal second 9, complete at second 33, before THE END begins at second 36. Extra reading pause retained. Synced; no git commands. Preview sky=11.
+
+## 2026-10-26 — Slower rising petals
+Sam requested petals rise a bit more slowly. All depth layers' upward speed multiplied by .8 (20% slower), preserving sway/flutter, flood rates/caps and agreed reading/fade timing. Synced; no git commands. Preview sky=12.
+
+## 2026-10-26 — Ouroboros redesign
+Sam requested much more interesting snake/ouroboros. Replaced wheel's near-circular two rails/38 chevrons and disconnected head/tail with gently undulating tapered body, shaded silver/antique-gold metal fill, 90 curved overlapping scales, alternate glints, sculpted larger head with brow/slit eye/nostril/jaw plates/fang, tail curving into jaws at six o'clock. Original rail draw-on/flesh reveal/breathing classes retained; wheel gates/labels/interaction unchanged. Source only, synced, no git commands. QA screenshot /tmp/dss-ouroboros.png.

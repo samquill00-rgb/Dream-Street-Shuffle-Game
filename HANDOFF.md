@@ -7791,3 +7791,6 @@ Sam clarified prior ring wobble wasn't free slithering. Replaced displacement/ri
 
 ## 2026-10-26 — Longer free slither
 Sam requested longer slithering before curling. Open phase7 ->12 seconds; curl remains7 seconds, final circle restored at19s. Auto wheel fade/removal shifted +5s to21.5/24.5s, preserving settled viewing time. Synced; no git commands. Preview sky=16.
+
+## 2026-10-26 — Slower curl into ouroboros
+Sam requested slower curl. Curl7 ->11 seconds after existing12s free slither; exact circle at23s. Wheel fade/removal shifted +4s to25.5/28.5s to preserve settled viewing time. Synced; no git commands. Preview sky=17.

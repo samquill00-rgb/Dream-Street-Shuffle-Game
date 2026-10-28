@@ -1,0 +1,655 @@
+// 2026-10-28: restrained, material-specific surface detail for the indoor rooms.
+// Paint into each room's existing canvas: no extra geometry, texture allocations or frame work.
+window.dssInteriorSurface = function(t, kind, seed) {
+if (!t || !t.image || !t.image.getContext) return t;
+var c=t.image, x=c.getContext('2d'), w=c.width, h=c.height;
+var key='_dssSurface_'+kind; if(c[key]) return t; c[key]=true;
+function r(n){var v=Math.sin(n*127.1+(seed||1)*311.7)*43758.5453;return v-Math.floor(v);}
+function line(a,b,d,e,col,width){x.strokeStyle=col;x.lineWidth=width||0.65;x.beginPath();x.moveTo(a,b);x.lineTo(d,e);x.stroke();}
+x.save();
+if(kind==='wood' || kind==='boards') {
+  // Fine pores follow the existing horizontal grain; occasional broken fibres catch light.
+  for(var i=0;i<650;i++){var px=r(i)*w,py=r(i+1700)*h;
+    line(px,py,px+2+r(i+300)*17,py+r(i+900)*0.7,'rgba(9,5,2,0.13)',0.45);
+    if(i%7===0)line(px,py+0.8,px+5+r(i+300)*13,py+1,'rgba(235,190,128,0.08)',0.5);
+  }
+  if(kind==='boards')for(var b=0;b<4;b++){
+    var y=b*h/4,join=(0.18+r(b+9)*0.62)*w;
+    line(0,y,w,y,'rgba(10,6,3,0.42)',1.2);
+    line(0,y+1.4,w,y+1.4,'rgba(207,163,108,0.14)',0.7);
+    line(join,y,join,y+h/4,'rgba(10,6,3,0.35)',1);
+    for(var n=0;n<2;n++){x.fillStyle='rgba(15,9,5,0.42)';x.beginPath();x.arc(join+(n?4:-4),y+7,0.9,0,6.283);x.fill();}
+  }
+} else if(kind==='plaster' || kind==='stone') {
+  // Broken trowel marks and mineral flecks rather than uniform digital noise.
+  for(var i=0;i<1050;i++){var px=r(i)*w,py=r(i+2300)*h;
+    x.fillStyle=i%3?'rgba(17,12,8,0.055)':'rgba(244,230,203,0.075)';
+    x.fillRect(px,py,0.5+r(i+700)*2.2,0.5+r(i+900)*1.3);
+  }
+  for(var i=0;i<30;i++){var px=r(i+80)*w,py=r(i+180)*h;
+    line(px,py,px+3+r(i+400)*13,py-1+r(i+500)*2,'rgba(234,219,191,0.045)',0.8);
+  }
+} else if(kind==='cloth') {
+  // Crossed, irregular threads sit underneath the existing folds and pile.
+  for(var y=1;y<h;y+=3)line(0,y,w,y,'rgba(225,192,158,0.045)',0.55);
+  for(var a=1;a<w;a+=4)line(a,0,a,h,'rgba(8,5,5,0.075)',0.7);
+  for(var i=0;i<500;i++){x.fillStyle='rgba(238,206,176,0.06)';x.fillRect(r(i)*w,r(i+400)*h,0.7,1.5);}
+} else if(kind==='tile' || kind==='lino') {
+  for(var i=0;i<85;i++){var px=r(i)*w,py=r(i+500)*h;
+    line(px,py,px+2+r(i+800)*9,py+r(i+900)*2,kind==='tile'?'rgba(92,81,62,0.085)':'rgba(213,203,177,0.09)',0.55);
+  }
+  if(kind==='lino')for(var i=0;i<18;i++){x.strokeStyle='rgba(12,10,9,0.085)';x.lineWidth=1.2;x.beginPath();x.ellipse(r(i+33)*w,r(i+66)*h,3+r(i+44)*7,2+r(i+77)*3,r(i)*3,0.2,2.1);x.stroke();}
+} else if(kind==='metal') {
+  for(var i=0;i<200;i++){var y=r(i)*h;line(r(i+200)*w,y,w,y,'rgba(229,222,196,0.065)',0.45);}
+}
+x.restore();t.needsUpdate=true;return t;
+};
+window.dssHandledPhoneMaterials=function(tex,env){
+ var shellRough=tex(256,128,function(c,w,h){c.fillStyle='#a0a0a0';c.fillRect(0,0,w,h);for(var n=0;n<360;n++){c.strokeStyle=n%4?'rgba(234,234,234,0.23)':'rgba(48,48,48,0.2)';c.lineWidth=0.5;c.beginPath();var x=n*47%w,y=n*71%h;c.moveTo(x,y);c.lineTo(x+2+n%9,y-1-n%3);c.stroke();}var g=c.createRadialGradient(157,70,4,157,70,55);g.addColorStop(0,'rgba(48,48,48,0.35)');g.addColorStop(1,'rgba(48,48,48,0)');c.fillStyle=g;c.fillRect(90,10,130,118);});
+ var gripRough=tex(256,128,function(c,w,h){c.fillStyle='#858585';c.fillRect(0,0,w,h);var g=c.createLinearGradient(0,0,w,0);g.addColorStop(0,'rgba(36,36,36,0)');g.addColorStop(0.25,'rgba(36,36,36,0.75)');g.addColorStop(0.72,'rgba(36,36,36,0.75)');g.addColorStop(1,'rgba(36,36,36,0)');c.fillStyle=g;c.fillRect(0,0,w,h);for(var n=0;n<95;n++){c.strokeStyle='rgba(211,211,211,0.28)';c.lineWidth=0.5;c.beginPath();var x=n*61%w,y=n*43%h;c.moveTo(x,y);c.lineTo(x+3+n%8,y+1);c.stroke();}});
+ var metalRough=tex(128,128,function(c,w,h){c.fillStyle='#999999';c.fillRect(0,0,w,h);for(var n=0;n<120;n++){c.strokeStyle='rgba(224,224,224,0.22)';c.lineWidth=0.5;c.beginPath();c.moveTo(0,n*31%h);c.lineTo(w,n*31%h+2);c.stroke();}});
+ shellRough.encoding=gripRough.encoding=metalRough.encoding=THREE.LinearEncoding;
+ return {shell:new THREE.MeshStandardMaterial({color:0x191511,roughness:0.65,roughnessMap:shellRough,metalness:0.04,envMap:env,envMapIntensity:0.55}),grip:new THREE.MeshStandardMaterial({color:0x17130f,roughness:0.55,roughnessMap:gripRough,metalness:0.04,envMap:env,envMapIntensity:0.65}),metal:new THREE.MeshStandardMaterial({color:0x9a9384,roughness:0.67,roughnessMap:metalRough,metalness:0.65,envMap:env,envMapIntensity:0.4}),touchMetal:new THREE.MeshStandardMaterial({color:0xb1aa98,roughness:0.31,metalness:0.65,envMap:env,envMapIntensity:0.4})};
+};
+
+window.dssOrangePaperbackCover = function() {
+  var c = document.createElement('canvas'); c.width = 512; c.height = 768;
+  var x = c.getContext('2d');
+  x.fillStyle = '#d8641c'; x.fillRect(0, 0, 512, 768);
+  x.fillStyle = '#a84416'; x.fillRect(0, 0, 22, 768);
+  x.strokeStyle = '#f4dfac'; x.lineWidth = 3; x.strokeRect(38, 28, 444, 710);
+  x.fillStyle = '#fff0cf'; x.textAlign = 'center';
+  x.font = 'bold 64px Georgia'; x.fillText('CHARIOTS', 260, 114);
+  x.font = 'bold 44px Georgia'; x.fillText('OF THE', 260, 170);
+  x.font = 'bold 78px Georgia'; x.fillText('GODS?', 260, 253);
+  // Screen-printed saucer, stars and ancient stone silhouettes.
+  x.strokeStyle = '#f4dfac'; x.lineWidth = 3;
+  x.beginPath(); x.arc(260, 437, 139, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = '#352b26';
+  x.beginPath(); x.ellipse(260, 406, 104, 23, -0.16, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(258, 391, 46, 29, -0.16, Math.PI, Math.PI * 2); x.fill();
+  x.strokeStyle = '#fff0cf'; x.beginPath(); x.moveTo(174, 407); x.lineTo(338, 382); x.stroke();
+  x.fillStyle = '#f4dfac';
+  [[119,340],[386,319],[367,478],[155,476]].forEach(function(p) {
+    x.fillRect(p[0]-5,p[1]-1,10,2); x.fillRect(p[0]-1,p[1]-5,2,10);
+  });
+  x.fillStyle = '#352b26'; x.beginPath();
+  x.moveTo(57,638); x.lineTo(193,466); x.lineTo(321,638);
+  x.lineTo(372,535); x.lineTo(467,638); x.closePath(); x.fill();
+  x.fillStyle = '#7c391e'; x.beginPath(); x.moveTo(193,466); x.lineTo(221,638); x.lineTo(321,638); x.closePath(); x.fill();
+  x.fillStyle = '#fff0cf'; x.font = '25px Georgia'; x.fillText('ERICH VON DÄNIKEN', 260, 701);
+  // Restrained rubbed edges, deterministic so every copy matches.
+  x.fillStyle = 'rgba(245,218,169,0.28)';
+  for (var i=0;i<65;i++) x.fillRect(28+(i*73)%458, 731+(i%5), 3+i%9, 1);
+  var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  t.anisotropy = 4;
+  return new THREE.MeshStandardMaterial({map:t, roughness:0.86});
+};
+window.dssDetailProps=function(mesh,tex,env,scene){
+ var cache={};
+ function material(color,kind){var key=color+'|'+kind;if(cache[key])return cache[key];
+ var map=tex(128,128,function(c,w,h){c.fillStyle=color;c.fillRect(0,0,w,h);
+ for(var i=0;i<650;i++){c.fillStyle=i%4?'rgba(235,225,202,0.09)':'rgba(22,20,16,0.1)';c.fillRect((i*47)%w,(i*71)%h,kind==='cloth'?1:1+i%4,1);}
+ if(kind==='cloth')for(var y=0;y<h;y+=3){c.fillStyle='rgba(0,0,0,0.07)';c.fillRect(0,y,w,1);}
+ if(kind==='paper')for(var y=3;y<h;y+=9){c.fillStyle='rgba(92,76,47,0.16)';c.fillRect(0,y,w,1);}
+ });
+ return cache[key]=new THREE.MeshStandardMaterial({map:map,roughness:kind==='metal'?0.55:kind==='glaze'?0.3:0.92,metalness:kind==='metal'?0.65:0,envMap:env,envMapIntensity:kind==='metal'?0.35:0.12});}
+ function add(g,m,x,y,z,p){return mesh(g,m,x,y,z,p||scene);}
+ function arc(p,r,t,m,x,y,z,span,turn){var o=add(new THREE.TorusGeometry(r,t,6,28,span||Math.PI*2),m,x,y,z,p);o.rotation.x=Math.PI/2;o.rotation.z=turn||0;return o;}
+ function lathe(points,m,x,y,z,p,segments){return add(new THREE.LatheGeometry(points.map(function(v){return new THREE.Vector2(v[0],v[1]);}),segments||28),m,x,y,z,p);}
+ function group(x,y,z,p){var g=new THREE.Group();g.position.set(x,y,z);(p||scene).add(g);return g;}
+ function wire(points,r,m,p){return add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(function(v){return new THREE.Vector3(v[0],v[1],v[2]);})),Math.max(12,points.length*4),r,5,false),m,0,0,0,p);}
+ var glass=new THREE.MeshPhysicalMaterial({color:0xdce4d9,roughness:0.13,metalness:0,envMap:env,envMapIntensity:0.7,clearcoat:0.5,transparent:true,opacity:0.12,depthWrite:false,side:THREE.DoubleSide});
+ var edgeGlass=glass.clone();edgeGlass.opacity=0.26;edgeGlass.roughness=0.22;
+ function cup(p,r,h,handled){var b=r*0.85,cupGlass=glass;
+ // Selected used glasses: the untouched areas remain clear; washing scuffs alter the reflections.
+ if(handled){if(!cache.handledGlass){var rough=tex(256,256,function(c,w,hh){c.fillStyle='#303030';c.fillRect(0,0,w,hh);for(var n=0;n<170;n++){var x=n*47%w,y=n*71%hh;c.strokeStyle='rgba(204,204,204,0.3)';c.lineWidth=0.5;c.beginPath();c.moveTo(x,y);c.lineTo(x+2+n%7,y-1);c.stroke();}for(var n=0;n<4;n++){var y=hh-13-n*3;c.strokeStyle='rgba(178,178,178,0.25)';c.beginPath();c.moveTo(27+n*21,y);c.lineTo(100+n*28,y+1);c.stroke();}var g=c.createRadialGradient(187,137,4,187,137,30);g.addColorStop(0,'rgba(149,149,149,0.28)');g.addColorStop(1,'rgba(149,149,149,0)');c.fillStyle=g;c.fillRect(150,100,74,74);});rough.encoding=THREE.LinearEncoding;var used=glass.clone();used.roughness=0.65;used.roughnessMap=rough;cache.handledGlass=used;
+ var traces=tex(256,256,function(c,w,hh){c.clearRect(0,0,w,hh);for(var n=0;n<5;n++){c.strokeStyle='rgba(220,217,202,0.14)';c.lineWidth=0.7;c.beginPath();c.moveTo(20+n*37,hh-12-n%3);c.lineTo(43+n*37,hh-13-n%3);c.stroke();}for(var n=0;n<5;n++){c.strokeStyle='rgba(220,217,206,0.08)';c.lineWidth=0.65;c.beginPath();c.ellipse(187,137,7+n*3,10+n*4,-0.4,0.2,4.6);c.stroke();}});cache.glassTraces=new THREE.MeshStandardMaterial({map:traces,transparent:true,opacity:0.28,roughness:0.9,depthWrite:false});}
+ cupGlass=cache.handledGlass;lathe([[b+0.00022,0.008],[r+0.00022,h-0.001]],cache.glassTraces,0,0,0,p);}
+ lathe([[0,0],[b,0],[b,0.008],[r,h-0.001],[r-0.0012,h],[b-0.0012,0.009],[0,0.009]],cupGlass,0,0,0,p);arc(p,r-0.0006,0.0007,edgeGlass,0,h,0);add(new THREE.CylinderGeometry(b,b,0.005,28),edgeGlass,0,0.003,0,p);}
+ // 2026-10-24: selected prop wear — accumulated ash, tar and scorched cigarette rests.
+ function ash(x,y,z,p,r){r=r||0.05;var g=group(x,y,z,p),m=material('#77796b','glaze').clone();m.roughness=0.57;
+ lathe([[0,0],[r*0.84,0],[r,0.006],[r,0.018],[r*0.91,0.021],[r*0.75,0.008],[0,0.008]],m,0,0,0,g);
+ var bed=cache.ashBed;if(!bed){var bedTex=tex(256,256,function(c,w,h){c.clearRect(0,0,w,h);
+ var haze=c.createRadialGradient(119,139,9,128,128,123);haze.addColorStop(0,'rgba(53,46,36,0.75)');haze.addColorStop(0.65,'rgba(91,76,53,0.48)');haze.addColorStop(1,'rgba(97,75,43,0)');c.fillStyle=haze;c.fillRect(0,0,w,h);
+ for(var n=0;n<1100;n++){var a=n*2.39996,d=Math.sqrt((n*67%1103)/1103)*115;c.fillStyle=['rgba(34,31,26,0.7)','rgba(177,169,147,0.65)','rgba(118,112,99,0.7)','rgba(209,202,180,0.42)'][n%4];c.fillRect(128+Math.cos(a)*d,128+Math.sin(a)*d,1+n%5,1+n%3);}
+ for(var n=0;n<4;n++){var a=n*1.7+0.3,px=128+Math.cos(a)*64,py=128+Math.sin(a)*64,sm=c.createRadialGradient(px,py,1,px,py,24);sm.addColorStop(0,'rgba(32,24,17,0.82)');sm.addColorStop(1,'rgba(57,39,21,0)');c.fillStyle=sm;c.fillRect(px-24,py-24,48,48);}});bed=cache.ashBed=new THREE.MeshStandardMaterial({map:bedTex,transparent:true,roughness:1,depthWrite:false});}
+ var ashFloor=add(new THREE.CircleGeometry(r*0.74,28),bed,0,0.0086,0,g);ashFloor.rotation.x=-Math.PI/2;
+ var rim=cache.ashRim;if(!rim){var rimTex=tex(256,256,function(c,w,h){c.clearRect(0,0,w,h);for(var n=0;n<4;n++){var a=n*Math.PI/2+0.2;c.save();c.translate(128+Math.cos(a)*119,128+Math.sin(a)*119);c.rotate(a);var stain=c.createRadialGradient(0,0,1,0,0,17);stain.addColorStop(0,'rgba(63,37,15,0.8)');stain.addColorStop(1,'rgba(82,53,24,0)');c.fillStyle=stain;c.fillRect(-19,-19,38,38);c.restore();}c.fillStyle='rgba(194,185,155,0.75)';for(var n=0;n<9;n++){var a=n*2.4;c.fillRect(128+Math.cos(a)*124,128+Math.sin(a)*124,2+n%3,2);}});rim=cache.ashRim=new THREE.MeshStandardMaterial({map:rimTex,transparent:true,roughness:0.9,depthWrite:false});}
+ var lipGeo=new THREE.RingGeometry(r*0.91,r,36),lipPos=lipGeo.attributes.position;for(var v=0;v<lipPos.count;v++){var dist=Math.hypot(lipPos.getX(v),lipPos.getY(v));lipPos.setZ(v,-0.003*Math.max(0,Math.min(1,(dist/r-0.91)/0.09)));}lipGeo.computeVertexNormals();
+ var ashLip=add(lipGeo,rim,0,0.0213,0,g);ashLip.rotation.x=-Math.PI/2;
+ var dust=material('#a69e8b','ash'),filter=material('#a27b49','paper'),paper=material('#cfc7b3','paper');
+ for(var i=0;i<3;i++){var e=group((i-1)*r*0.48,0.011,(i%2-0.5)*r*0.32,g);e.rotation.y=i*2.3;
+ var b=add(new THREE.CylinderGeometry(0.003,0.0032,0.015,8),paper,0,0,0,e);b.rotation.z=Math.PI/2;
+ b=add(new THREE.CylinderGeometry(0.0032,0.0032,0.008,8),filter,-0.011,0,0,e);b.rotation.z=Math.PI/2;
+ var burnt=add(new THREE.SphereGeometry(0.0031,6,5),material('#39332b','paper'),0.008,0,0,e);burnt.scale.set(0.6,0.85,1);}
+ var crumbGeo=new THREE.SphereGeometry(0.001,5,4),crumbs=new THREE.InstancedMesh(crumbGeo,dust,38),crumbPose=new THREE.Object3D();
+ for(var i=0;i<38;i++){var a=i*2.4,d=(i*7%41)/41*r*0.66;crumbPose.position.set(Math.cos(a)*d,0.0094,Math.sin(a)*d);crumbPose.scale.set(1+i%4*0.6,0.35+i%3*0.12,1+i%3*0.4);crumbPose.updateMatrix();crumbs.setMatrixAt(i,crumbPose.matrix);}crumbs.instanceMatrix.needsUpdate=true;g.add(crumbs);return g;}
+ function paperBlock(w,h,d,x,y,z,p,color){var g=group(x,y,z,p),paper=material('#d3c9ac','paper'),cover=material(color||'#43382b','cloth');
+ add(new THREE.BoxGeometry(w,h,d),paper,0,h/2,0,g);
+ add(new THREE.BoxGeometry(w+0.008,0.003,d+0.008),cover,0,0,0,g);add(new THREE.BoxGeometry(w+0.008,0.003,d+0.008),cover,0,h,0,g);
+ add(new THREE.BoxGeometry(0.006,h,d+0.008),cover,-w/2,h/2,0,g);return g;}
+ function bottle(g,h,r,col,seed){seed=Math.abs(seed|0)%4;var bm=new THREE.MeshPhysicalMaterial({color:col,roughness:0.23,metalness:0,envMap:env,envMapIntensity:0.65,clearcoat:0.5,transparent:true,opacity:0.92});
+ var sh=0.74+seed*0.045;lathe([[0,0],[r*0.85,0],[r,h*0.04],[r,h*sh],[r*0.8,h*(sh+0.08)],[r*0.32,h*1.04],[r*0.32,h*1.31],[r*0.38,h*1.33],[0,h*1.33]],bm,0,0,0,g);
+ add(new THREE.CylinderGeometry(r*0.38,r*0.38,h*0.05,12),material(seed%2?'#6a593e':'#34332b','metal'),0,h*1.33,0,g);
+ var key='label'+seed,lm=cache[key];if(!lm){var label=tex(128,128,function(c,w,h){c.fillStyle=['#c5b99b','#cfc4aa','#aaa68e','#b7a47f'][seed];c.fillRect(0,0,w,h);c.strokeStyle='#675a42';c.lineWidth=2;c.strokeRect(7,7,w-14,h-14);c.beginPath();c.ellipse(64,35,12,16,0,0,6.3);c.stroke();for(var n=0;n<5;n++)c.fillRect(24+n%2*8,65+n*8,80-n%2*16,2);for(var n=0;n<250;n++){c.fillStyle=n%3?'rgba(240,225,192,0.25)':'rgba(69,51,25,0.1)';c.fillRect(n*47%w,n*71%h,2,1);}});lm=cache[key]=new THREE.MeshStandardMaterial({map:label,roughness:0.94,side:THREE.DoubleSide});}
+ // Local handling wear on the paper label, leaving its printed design readable; no extra mesh.
+ if(!lm.userData.handledLabel){var lc=lm.map.image.getContext('2d'),lw=lm.map.image.width,lh=lm.map.image.height;
+ var age=lc.createLinearGradient(0,0,0,lh);age.addColorStop(0,'rgba(102,73,32,0.25)');age.addColorStop(0.19,'rgba(102,73,32,0)');age.addColorStop(0.82,'rgba(73,57,33,0.04)');age.addColorStop(1,'rgba(73,57,33,0.3)');lc.fillStyle=age;lc.fillRect(0,0,lw,lh);
+ var smudge=lc.createRadialGradient(20+seed*21,88,2,20+seed*21,88,26);smudge.addColorStop(0,'rgba(60,47,29,0.18)');smudge.addColorStop(1,'rgba(60,47,29,0)');lc.fillStyle=smudge;lc.fillRect(0,50,lw,78);
+ for(var nick=0;nick<35;nick++){lc.fillStyle=nick%4?'rgba(223,209,172,0.8)':'rgba(109,87,52,0.35)';lc.fillRect((nick*47+seed*13)%lw,nick%2?lh-2-nick%5:nick%4,2+nick%6,1+nick%2);}lm.map.needsUpdate=true;lm.userData.handledLabel=true;}
+ add(new THREE.CylinderGeometry(r*1.012,r*1.012,h*0.4,20,1,true,-1.35,2.7),lm,0,h*0.43,0,g);}
+ function cloth(w,h,x,y,z,p,col,worn){var geo=new THREE.PlaneGeometry(w,h,14,12),pos=geo.attributes.position;for(var v=0;v<pos.count;v++){var px=pos.getX(v),py=pos.getY(v);pos.setZ(v,Math.sin(px/w*26+py*2)*w*0.018+Math.sin(py/h*9)*w*0.012);}geo.computeVertexNormals();var m=material(col||'#4a4537','cloth').clone();
+ // Only the working bar towels get spill marks; tablecloths and the telephone cloth retain their own finish.
+ if(worn){var key='used-towel|'+col;if(!cache[key])cache[key]=tex(256,256,function(c,tw,th){c.fillStyle=col||'#4a4537';c.fillRect(0,0,tw,th);for(var n=0;n<4;n++){var px=40+(n*79%169),py=39+(n*61%174),g=c.createRadialGradient(px,py,3,px,py,33+n*5);g.addColorStop(0,n%2?'rgba(49,39,23,0.39)':'rgba(99,64,29,0.34)');g.addColorStop(0.72,'rgba(67,47,26,0.13)');g.addColorStop(1,'rgba(67,47,26,0)');c.fillStyle=g;c.fillRect(px-60,py-60,120,120);}c.strokeStyle='rgba(66,47,28,0.24)';c.lineWidth=2;c.beginPath();c.ellipse(179,94,31,28,0.2,0.3,5.8);c.stroke();for(var q=0;q<tw;q+=3){c.fillStyle='rgba(229,222,198,0.09)';c.fillRect(q,0,1,th);c.fillStyle='rgba(16,19,18,0.1)';c.fillRect(0,q,tw,1);}for(var n=0;n<75;n++){c.fillStyle='rgba(225,214,183,0.2)';c.fillRect(n*47%tw,n%2?2:th-3,2+n%4,1);}});m.map=cache[key];m.roughness=1;}
+ m.side=THREE.DoubleSide;return add(geo,m,x,y,z,p);}
+ function button(p,x,y,z,r,col){var o=add(new THREE.SphereGeometry(1,10,6),material(col||'#8a7d63','metal'),x,y,z,p);o.scale.set(r,r*0.28,r);return o;}
+ return {material:material,arc:arc,lathe:lathe,group:group,wire:wire,cup:cup,ash:ash,paperBlock:paperBlock,bottle:bottle,cloth:cloth,button:button,glass:glass};
+};
+
+// >>>> DSS ROOM KIT BEGIN
+// ====== THE ROOM KIT — what the six later rooms share (2026-09-30) ======
+// The four rooms above (French, Colony, Pillars, Ronnie's) each carry a
+// copy of the same machinery: the wrap sized to the window, the renderer
+// and the outside scenes' composer, the grain, soot and varnish textures,
+// the environment cube, the planar mirror, the ghosts, the hover halo and
+// the resting glow, the card, the words panel, the camera tweens and the
+// pick. The six rooms built on 2026-09-30 (Coach and Horses, Trisha's,
+// Lackland's office, the Chippy, Copper's cellar, O'Flatterly's) take it
+// from here instead, so each of those blocks is only its room and its
+// close-ups. Nothing about the game is decided here: a room only finds the
+// passage's own links by their wording and presses them from the card.
+// spec: { id, caption, captionColor, bg, fog, exposure, bloom, wash, vignette,
+//         cam(portrait), fov [portrait, landscape], hint, card {fg, bg, border, dim, btn, btnBorder},
+//         build(k) -> { hotspots, frame(t, dt, still) } }
+window.dssRoomKit = function(spec) {
+var ID = spec.id, CONT = ID + '-container', WRAP = ID + '-wrap';
+var active = false, animId = null;
+
+function init() {
+if (active) return;
+active = true;
+if (typeof THREE === 'undefined') {
+var s = document.createElement('script');
+s.src = 'vendor/three/three.min.js';
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(build) : build()); };
+document.head.appendChild(s);
+} else {
+(window.dssLoadPost ? window.dssLoadPost(build) : build());
+}
+}
+
+function build() {
+var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var host = document.getElementById(CONT);
+if (!host) { active = false; return; }
+var wrap = document.createElement('div');
+wrap.id = WRAP;
+function size() {
+var w = Math.max(280, document.documentElement.clientWidth || window.innerWidth);
+var vh = window.innerHeight || 800;
+// the room fills the window below its top edge: the passage's words sit inside it, nothing follows underneath
+var top = 0, el = host; while (el) { top += el.offsetTop; el = el.offsetParent; }
+var pad = 0; el = host; while (el && el !== document.body) { var cs = getComputedStyle(el); pad += (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.marginBottom) || 0); el = el.parentNode; }
+var h = Math.round(Math.max(360, vh - top - pad - 2));
+return { w: w, h: h };
+}
+var sz = size();
+var bgHex = '#' + ('000000' + (spec.bg || 0x050304).toString(16)).slice(-6);
+wrap.style.cssText = 'position:relative;width:100vw;margin-left:calc(50% - 50vw);height:' + sz.h + 'px;z-index:0;isolation:isolate;background:' + bgHex + ';overflow:hidden;';
+var canvas = document.createElement('canvas');
+canvas.width = sz.w; canvas.height = sz.h;
+canvas.style.cssText = 'display:block;position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;';
+wrap.appendChild(canvas);
+var wash = document.createElement('div');
+wash.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9000;background:' + (spec.wash || 'linear-gradient(180deg,rgba(10,8,6,0.3) 0%,rgba(6,5,4,0.05) 35%,rgba(6,5,4,0.05) 60%,rgba(3,2,2,0.45) 100%)') + ';';
+wrap.appendChild(wash);
+var vig = document.createElement('div');
+vig.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9001;background:' + (spec.vignette || 'radial-gradient(ellipse at 50% 44%,transparent 24%,rgba(0,0,0,0.74) 100%)') + ';';
+wrap.appendChild(vig);
+var grain = document.createElement('div');
+grain.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9002;opacity:0.06;mix-blend-mode:overlay;background:url(' + (window.dssGetGrainURL ? window.dssGetGrainURL() : '') + ');';
+wrap.appendChild(grain);
+var loc = document.createElement('div');
+loc.className = 'dss-room-caption';
+loc.textContent = spec.caption || '';
+loc.style.cssText = 'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font:12px \'Courier New\',monospace;color:' + (spec.captionColor || 'rgba(200,190,160,0.25)') + ';letter-spacing:3px;white-space:nowrap;z-index:9003;pointer-events:none;';
+wrap.appendChild(loc);
+host.appendChild(wrap);
+sz = size(); wrap.style.height = sz.h + 'px';
+setTimeout(function() { var r = window._dssThreeRegistry && window._dssThreeRegistry[WRAP]; if (r && r.resize) r.resize(); }, 1600);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(spec.bg || 0x050304);
+if (spec.fog) scene.fog = new THREE.FogExp2(spec.fog[0], spec.fog[1]);
+var aspect = sz.w / sz.h;
+var portrait = aspect < 1.4;
+var FOV = spec.fov || [92, 70];
+var camera = new THREE.PerspectiveCamera(portrait ? FOV[0] : FOV[1], aspect, 0.05, 40);
+var CAM = spec.cam(portrait);
+camera.position.set(CAM.x, CAM.y, CAM.z);
+
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+renderer.setSize(sz.w, sz.h);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, sz.w < 600 ? 1.25 : 1.5));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = spec.exposure || 0.66;
+window._dssBindScene(WRAP, scene, renderer, camera);
+var origResize = window._dssThreeRegistry[WRAP].resize;
+window._dssThreeRegistry[WRAP].resize = function() {
+sz = size(); wrap.style.height = sz.h + 'px';
+camera.aspect = sz.w / sz.h;
+camera.fov = camera.aspect < 1.4 ? FOV[0] : FOV[1];
+camera.updateProjectionMatrix();
+renderer.setSize(sz.w, sz.h);
+};
+window.removeEventListener('resize', origResize);
+window.addEventListener('resize', window._dssThreeRegistry[WRAP].resize);
+// The outside scenes' bloom and grade, at the room's own size.
+var composer = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, spec.bloom || { bloomStrength: 0.38, bloomRadius: 0.6, bloomThreshold: 0.7 }) : null;
+if (composer) { composer.setSize(sz.w, sz.h); var rs = window._dssThreeRegistry[WRAP].resize; window._dssThreeRegistry[WRAP].resize = function() { rs(); composer.setSize(sz.w, sz.h); }; window.removeEventListener('resize', rs); window.addEventListener('resize', window._dssThreeRegistry[WRAP].resize); }
+
+function tex(w, h, fn) {
+var c = document.createElement('canvas'); c.width = w; c.height = h;
+var cx = c.getContext('2d'); fn(cx, w, h);
+var t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearMipmapLinearFilter;
+t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+return t;
+}
+function rnd(seed) { var x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function mesh(geo, mat, x, y, z, parent) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); (parent || scene).add(m); return m; }
+
+// ---------- TEXTURES AND MATERIALS: the same grain, soot and varnish as the French ----------
+function woodTex(base, grain, seed) {
+return window.dssInteriorSurface(tex(512, 512, function(cx, w, h) {
+cx.fillStyle = base; cx.fillRect(0, 0, w, h);
+for (var i = 0; i < 420; i++) {
+var y = rnd(seed + i * 7) * h, bend = 2 + rnd(i + seed * 5) * 11;
+cx.strokeStyle = i % 5 ? grain : '#a8743f'; cx.globalAlpha = 0.035 + rnd(i + seed) * 0.1;
+cx.lineWidth = 0.4 + rnd(i * 3) * 1.2; cx.beginPath();
+for (var x = 0; x <= w; x += 8) {
+var yy = y + Math.sin(x * 0.009 + y * 0.018) * bend + Math.sin(x * 0.033 + y) * 0.8;
+if (!x) cx.moveTo(x, yy); else cx.lineTo(x, yy);
+} cx.stroke();
+}
+cx.globalAlpha = 1;
+for (var n = 0; n < 12; n++) {
+var xx = rnd(n + seed * 21) * w, yy = rnd(n + seed * 19) * h;
+var g = cx.createRadialGradient(xx, yy, 0, xx, yy, 90);
+g.addColorStop(0, 'rgba(14,6,2,0.19)'); g.addColorStop(1, 'rgba(14,6,2,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+}
+cx.strokeStyle = 'rgba(216,165,103,0.13)'; cx.lineWidth = 0.6;
+for (var n = 0; n < 65; n++) { var xx = rnd(n * 9 + seed) * w, yy = rnd(n * 17) * h; cx.beginPath(); cx.moveTo(xx, yy); cx.lineTo(xx + 3 + rnd(n) * 48, yy + 0.3); cx.stroke(); }
+}), 'wood', seed);
+}
+function paintTex(base, seed, warm) {
+return window.dssInteriorSurface(tex(512, 512, function(cx, w, h) {
+cx.fillStyle = base; cx.fillRect(0, 0, w, h);
+for (var n = 0; n < 28; n++) {
+var x = rnd(n + seed) * w, y = rnd(n * 3 + seed) * h, r = 30 + rnd(n * 7) * 130;
+var g = cx.createRadialGradient(x, y, 0, x, y, r);
+g.addColorStop(0, n % 3 ? 'rgba(20,12,4,0.15)' : (warm || 'rgba(150,110,50,0.1)')); g.addColorStop(1, 'rgba(60,32,8,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+}
+var soot = cx.createLinearGradient(0, 0, 0, h); soot.addColorStop(0, 'rgba(18,10,4,0.3)'); soot.addColorStop(0.3, 'rgba(38,20,6,0)'); soot.addColorStop(1, 'rgba(18,10,4,0.14)'); cx.fillStyle = soot; cx.fillRect(0, 0, w, h);
+for (var i = 0; i < 9000; i++) { cx.fillStyle = i % 2 ? 'rgba(20,12,4,0.05)' : 'rgba(200,180,140,0.04)'; cx.fillRect(rnd(i + seed) * w, rnd(i * 3 + seed) * h, 1, 1); }
+}), 'plaster', seed);
+}
+// A small canvas-made room environment: what the metal, the glass and the varnish reflect.
+function makeEnv(top, mid, low, lamp) {
+var faces = [];
+for (var ef = 0; ef < 6; ef++) {
+var ec = document.createElement('canvas'); ec.width = ec.height = 128;
+var ex = ec.getContext('2d'), eg = ex.createLinearGradient(0, 0, 0, 128);
+eg.addColorStop(0, ef === 2 ? top : mid); eg.addColorStop(0.5, mid); eg.addColorStop(1, low); ex.fillStyle = eg; ex.fillRect(0, 0, 128, 128);
+if (ef !== 3) {
+for (var el = 0; el < 2; el++) {
+var lx = 28 + el * 73, ly = ef === 2 ? 64 : 30;
+var gl = ex.createRadialGradient(lx, ly, 0, lx, ly, 20); gl.addColorStop(0, '#ffe6b8'); gl.addColorStop(0.14, lamp || '#d9b070'); gl.addColorStop(0.4, '#8a5f2c'); gl.addColorStop(1, 'rgba(96,63,25,0)'); ex.fillStyle = gl; ex.fillRect(0, 0, 128, 128);
+} ex.fillStyle = 'rgba(190,120,70,0.14)'; ex.fillRect(4, 84, 120, 10);
+} faces.push(ec);
+}
+var env = new THREE.CubeTexture(faces); env.needsUpdate = true; return env;
+}
+var envSpec = spec.env || ['#5a4028', '#3e2e1e', '#0a0705', '#d9b070'];
+var roomEnv = makeEnv(envSpec[0], envSpec[1], envSpec[2], envSpec[3]);
+var grainA = woodTex('#3d2416', '#150905', 1), grainB = woodTex('#2a1810', '#0e0704', 2), grainC = woodTex('#4a2c1a', '#1a0c06', 3);
+var M = {
+oak: new THREE.MeshStandardMaterial({ map: grainA, bumpMap: grainA, bumpScale: 0.003, roughnessMap: grainA, roughness: 0.62, envMap: roomEnv, envMapIntensity: 0.4, metalness: 0.04 }),
+darkWood: new THREE.MeshStandardMaterial({ map: grainB, bumpMap: grainB, bumpScale: 0.006, roughness: 0.58, envMap: roomEnv, envMapIntensity: 0.22 }),
+shelfWood: new THREE.MeshStandardMaterial({ map: grainC, bumpMap: grainC, bumpScale: 0.002, roughnessMap: grainC, roughness: 0.5, envMap: roomEnv, envMapIntensity: 0.5, metalness: 0.06 }),
+brass: new THREE.MeshStandardMaterial({ color: 0xb99a60, roughness: 0.3, metalness: 0.82, envMap: roomEnv, envMapIntensity: 0.72 }),
+black: new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.15, metalness: 0.2, envMap: roomEnv, envMapIntensity: 0.8 }),
+chrome: new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.22, metalness: 0.95, envMap: roomEnv, envMapIntensity: 1.0 }),
+glass: new THREE.MeshPhysicalMaterial({ color: 0xf0eadc, roughness: 0.09, metalness: 0.04, envMap: roomEnv, envMapIntensity: 1.1, clearcoat: 1, transparent: true, opacity: 0.34 }),
+paper: new THREE.MeshStandardMaterial({ color: 0xe8e0d0, roughness: 0.95 }),
+bakelite: new THREE.MeshStandardMaterial({ color: 0x16120f, roughness: 0.26, metalness: 0.08, envMap: roomEnv, envMapIntensity: 0.55 }),
+hidden: new THREE.MeshBasicMaterial({ visible: false })
+};
+
+// ---------- A PLANAR REFLECTION, drawn only when the view changes ----------
+var mirrors = [];
+function makeMirror(m, normal, sizePx, tint, extra) {
+extra = extra || {};
+var target = new THREE.WebGLRenderTarget(sizePx, sizePx, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+var mcam = camera.clone(), mat4 = new THREE.Matrix4(), n = normal.clone().normalize();
+m.material = new THREE.ShaderMaterial({
+uniforms: { reflection: { value: target.texture }, reflectionMatrix: { value: mat4 }, time: { value: 0 }, tint: { value: tint } },
+transparent: !!extra.transparent, depthWrite: !extra.transparent,
+vertexShader: 'uniform mat4 reflectionMatrix; varying vec4 reflected; varying vec2 faceUV; void main(){ faceUV=uv; vec4 wp=modelMatrix*vec4(position,1.0); reflected=reflectionMatrix*wp; gl_Position=projectionMatrix*viewMatrix*wp; }',
+fragmentShader: 'uniform sampler2D reflection; uniform float time; uniform vec3 tint; varying vec4 reflected; varying vec2 faceUV; void main(){ vec4 r=reflected; ' + (extra.ripple ? 'r.xy+=vec2(sin(faceUV.y*38.0+time*1.1)*0.004+sin(faceUV.x*23.0-time*0.7)*0.003, cos(faceUV.x*31.0+time*0.9)*0.004)*r.w;' : '') + ' vec3 c=texture2DProj(reflection,r).rgb; float edge=smoothstep(0.0,' + (extra.edge || '0.07') + ',min(min(faceUV.x,1.0-faceUV.x),min(faceUV.y,1.0-faceUV.y))); float stain=0.5+0.5*sin(faceUV.x*193.0+sin(faceUV.y*117.0)*3.0); ' + (extra.transparent ? 'c=c*tint; float a=edge*(0.62+0.1*stain); gl_FragColor=vec4(c,a);' : 'c=mix(vec3(0.05,0.033,0.019),c*tint,0.65+0.35*edge); c*=1.0-(1.0-edge)*stain*0.3; gl_FragColor=vec4(c,1.0);') + '\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n}'
+});
+m.geometry.addEventListener('dispose', function() { target.dispose(); });
+var lastAspect = 0, lastP = new THREE.Vector3(999, 999, 999), lastT = new THREE.Vector3(999, 999, 999), p0 = new THREE.Vector3();
+function reflect(v) { var d = v.clone().sub(p0).dot(n); return v.clone().sub(n.clone().multiplyScalar(2 * d)); }
+var o = { mesh: m, update: function(tgt, t) {
+m.material.uniforms.time.value = t;
+if (lastAspect === camera.aspect && lastP.distanceToSquared(camera.position) < 0.0025 && lastT.distanceToSquared(tgt) < 0.0025) return;
+lastAspect = camera.aspect; lastP.copy(camera.position); lastT.copy(tgt);
+m.getWorldPosition(p0);
+mcam.copy(camera); mcam.position.copy(reflect(camera.position)); mcam.up.copy(reflect(camera.position.clone().add(new THREE.Vector3(0, 1, 0))).sub(mcam.position));
+mcam.lookAt(reflect(tgt)); mcam.updateMatrixWorld();
+var clip = new THREE.Plane(n.clone(), -p0.dot(n)).applyMatrix4(mcam.matrixWorldInverse);
+var cp = new THREE.Vector4(clip.normal.x, clip.normal.y, clip.normal.z, clip.constant);
+var pm = mcam.projectionMatrix.elements, cq = new THREE.Vector4((Math.sign(cp.x) + pm[8]) / pm[0], (Math.sign(cp.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
+cp.multiplyScalar(2 / cp.dot(cq)); pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1; pm[14] = cp.w;
+mat4.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mcam.projectionMatrix).multiply(mcam.matrixWorldInverse);
+var oldTarget = renderer.getRenderTarget(), oldTone = renderer.toneMapping;
+mirrors.forEach(function(q) { q.mesh.visible = false; });
+renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(target); renderer.render(scene, mcam);
+renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(q) { q.mesh.visible = true; });
+} };
+mirrors.push(o); return o;
+}
+
+// ---------- LIGHT SPRITES, CONTACT SHADOWS, GHOSTS ----------
+var glowTex = tex(128, 128, function(cx, w, h) { var g = cx.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2); g.addColorStop(0, 'rgba(255,225,160,0.9)'); g.addColorStop(0.3, 'rgba(255,190,100,0.35)'); g.addColorStop(0.7, 'rgba(220,140,50,0.08)'); g.addColorStop(1, 'rgba(180,100,30,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+function glow(x, y, z, sc, op, col, parent) { var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col || 0xffffff, transparent: true, opacity: op || 0.6, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false, toneMapped: false })); sp.scale.set(sc, sc, 1); sp.position.set(x, y, z); (parent || scene).add(sp); return sp; }
+var contactTex = tex(64, 64, function(cx, w, h) { var g = cx.createRadialGradient(32, 32, 3, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,0.36)'); g.addColorStop(0.45, 'rgba(0,0,0,0.2)'); g.addColorStop(1, 'rgba(0,0,0,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+function contact(x, y, z, s) { var sh = mesh(new THREE.PlaneGeometry(s, s), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false }), x, y + 0.004, z); sh.rotation.x = -Math.PI / 2; return sh; }
+function ghostTex(seed, seated, bright) { return window.dssGhostTex(tex, rnd, seed, seated, bright); }
+var ghosts = [];
+function ghost(x, y, z, seed, base, seated, bright, scale) {
+var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ghostTex(seed, seated, bright), transparent: true, opacity: base, depthWrite: false, blending: bright ? THREE.NormalBlending : THREE.AdditiveBlending }));
+var sc = scale || 1; sp.scale.set(0.9 * sc, 1.8 * sc, 1); sp.position.set(x, y + 0.9 * sc, z); scene.add(sp);
+var hit = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * sc, 0.2 * sc, (seated ? 1.1 : 1.5) * sc, 8), M.hidden);
+hit.position.set(x, y + (seated ? 0.7 : 0.95) * sc, z); scene.add(hit);
+var g = { sp: sp, hit: hit, base: base, ph: seed * 2.1 }; ghosts.push(g); return g;
+}
+
+// ---------- THE PASSAGE'S OWN LINKS ----------
+var play = null;
+function passageLinks(sel) {
+var pass = window.dssRoomScope(host);
+if (!pass) return [];
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && !l.closest('.dss-key-offer') && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+}
+function lilyHook(n) { var pass = window.dssRoomScope(host); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
+function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
+function byPrefix(prefix) { return passageLinks('tw-link').filter(function(l) { return l.textContent.trim().indexOf(prefix) === 0; }); }
+function modalProse() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); }
+
+var k = { scene: scene, camera: camera, renderer: renderer, tex: tex, rnd: rnd, mesh: mesh, woodTex: woodTex, paintTex: paintTex, roomEnv: roomEnv, M: M, grain: [grainA, grainB, grainC],
+makeMirror: makeMirror, glow: glow, glowTex: glowTex, contact: contact, ghost: ghost, portrait: portrait, still: still, host: host, wrap: wrap,
+passageLinks: passageLinks, byText: byText, byPrefix: byPrefix, lilyHook: lilyHook, modalProse: modalProse };
+var built = spec.build(k) || {};
+var HOTSPOTS = built.hotspots || [];
+renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
+
+// ---------- THE CLOSE-UPS, AND THE PATHS ----------
+// ---------- THE CLOSE-UPS, AND THE PATHS: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: wrap, canvas: canvas, host: host, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: still,
+card: spec.card, hint: spec.hint, state: function() { return { active: active, animId: animId }; } });
+var words = play.words, curTarget = play.curTarget;
+
+// ---------- FRAMES ----------
+var clock = new THREE.Clock();
+function animate() {
+animId = requestAnimationFrame(animate);
+// a throw in the frame ends the room, not the night (dssSceneFailed)
+try { frameOnce(); } catch (err) { cancelAnimationFrame(animId); animId = null; if (window.dssSceneFailed) window.dssSceneFailed(err, ID); else throw err; }
+}
+function frameOnce() {
+var dt = Math.min(0.1, clock.getDelta());
+var t = still ? 0 : clock.getElapsedTime();
+play.frame(t, dt);
+if (!still) {
+for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
+}
+if (built.frame) built.frame(t, dt, still);
+play.withGlowsHidden(function() { for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t); });
+if (composer) composer.render(); else renderer.render(scene, camera);
+}
+animate();
+}
+
+// 2026-10-12 (the venues audit): a self-link ("Back to the bar" in the Coach) swaps in a fresh container within one tick;
+// a new container rebuilds the room, as the French/Colony/Pillars/Ronnie's watchers now do
+var seenHost = null;
+setInterval(function() {
+var container = document.getElementById(CONT);
+if (container && active && seenHost && container !== seenHost) {
+active = false;
+if (animId) { cancelAnimationFrame(animId); animId = null; }
+window._dssDisposeWrap(WRAP);
+}
+if (container && !active) {
+seenHost = container;
+init();
+} else if (!container) {
+active = false;
+if (animId) { cancelAnimationFrame(animId); animId = null; }
+window._dssDisposeWrap(WRAP);
+}
+}, 300);
+};
+// ====== INSIDE LACKLAND'S OFFICE — THE ROOM, WITH CLOSE-UPS ======
+// 2026-09-30. Built from what the passage says of Martin Lackland's rooms
+// up two doglegs on Frith Street: an agent's office, a desk with a green
+// blotter and a dish of paperclips, manuscripts in their piles, the
+// Garrard 401 screwed into the wall with its SME arm, the record found at
+// Dobell's, his glass sunk and topped up, a window over Frith Street, and
+// the door at the back you had not seen before. The room sits at the top
+// of the Martin Lackland's Office passage (#lk-container) and is its
+// navigation: the turntable opens the passage's own lore link, the door at
+// the back opens Linger. Lackland, the manuscript, the window, the drinks
+// and the dish are inspections, their card words pink placeholders for Sam.
+// Nothing about the game is decided in JS.
+window.dssRoomKit({
+id: 'lk', caption: 'M. LACKLAND, FRITH STREET, TWO FLOORS UP', captionColor: 'rgba(200,180,140,0.25)',
+bg: 0x080604, fog: [0x0c0906, 0.05], exposure: 0.74, bloom: { bloomStrength: 0.36, bloomRadius: 0.6, bloomThreshold: 0.7 },
+env: ['#5a4a30', '#3a2e1c', '#0a0806', '#e0c080'],
+wash: 'linear-gradient(180deg,rgba(16,12,6,0.3) 0%,rgba(8,6,4,0.05) 35%,rgba(8,6,4,0.05) 60%,rgba(3,2,1,0.45) 100%)',
+card: { fg: 'rgba(228,216,190,0.92)', bg: 'rgba(10,7,4,0.82)', border: 'rgba(200,170,110,0.3)', dim: 'rgba(200,185,150,0.5)', btn: 'rgba(240,225,185,0.95)', btnBorder: 'rgba(200,170,110,0.45)' },
+cam: function(portrait) { return portrait ? { x: 0.3, y: 1.5, z: 2.75, tx: -0.2, ty: 1.1, tz: -1.6 } : { x: 0.5, y: 1.5, z: 2.4, tx: -0.2, ty: 1.15, tz: -1.6 }; }, /* 2026-10-20: the phone camera stood at z 3.3, outside the front wall (z 3), and the back of the door you came in by filled the right half of the screen; it stands just inside now */
+build: function(k) {
+var scene = k.scene, mesh = k.mesh, tex = k.tex, rnd = k.rnd, M = k.M;
+var detail=window.dssDetailProps(mesh,tex,k.roomEnv,scene);
+var W = 5.6, D = 6.0, H = 3.0;
+// ---------- THE ROOM: distempered walls, a picture rail, boards under a Turkey rug, a plaster rose ----------
+var wallPaint = k.paintTex('#6a5a3c', 41, 'rgba(140,100,40,0.14)');
+var wallMat = new THREE.MeshStandardMaterial({ map: wallPaint, bumpMap: wallPaint, bumpScale: 0.008, roughness: 0.95 });
+var boardsTex = k.woodTex('#3a2a1a', '#160c06', 12); window.dssInteriorSurface(boardsTex, 'boards', 123);
+boardsTex.wrapS = boardsTex.wrapT = THREE.RepeatWrapping; boardsTex.repeat.set(5, 5);
+var floor = mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: boardsTex, bumpMap: boardsTex, bumpScale: 0.01, roughness: 0.6, envMap: k.roomEnv, envMapIntensity: 0.3 }), 0, 0, 0); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+var ceil = mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: k.paintTex('#d8d0b8', 43, 'rgba(120,100,60,0.12)'), roughness: 1 }), 0, H, 0); ceil.rotation.x = Math.PI / 2;
+mesh(new THREE.TorusGeometry(0.28, 0.03, 8, 32), new THREE.MeshStandardMaterial({ color: 0xd0c8b0, roughness: 0.9 }), 0, H - 0.02, -0.4).rotation.x = Math.PI / 2;
+var back = mesh(new THREE.PlaneGeometry(W, H), wallMat, 0, H / 2, -D / 2); back.receiveShadow = true;
+var front = mesh(new THREE.PlaneGeometry(W, H), wallMat, 0, H / 2, D / 2); front.rotation.y = Math.PI;
+var left = mesh(new THREE.PlaneGeometry(D, H), wallMat, -W / 2, H / 2, 0); left.rotation.y = Math.PI / 2; left.receiveShadow = true;
+var right = mesh(new THREE.PlaneGeometry(D, H), wallMat, W / 2, H / 2, 0); right.rotation.y = -Math.PI / 2; right.receiveShadow = true;
+var railMat = new THREE.MeshStandardMaterial({ color: 0x9a8a60, roughness: 0.9 });
+[[W, 0, -D / 2 + 0.03, 0], [W, 0, D / 2 - 0.03, 0], [D, -W / 2 + 0.03, 0, Math.PI / 2], [D, W / 2 - 0.03, 0, Math.PI / 2]].forEach(function(c) { var m = mesh(new THREE.BoxGeometry(c[0], 0.05, 0.06), railMat, c[1], 2.3, c[2]); m.rotation.y = c[3]; var sk = mesh(new THREE.BoxGeometry(c[0], 0.16, 0.05), M.darkWood, c[1], 0.08, c[2]); sk.rotation.y = c[3]; });
+var rugTex = tex(512, 512, function(cx, w, h) { cx.fillStyle = '#5a2020'; cx.fillRect(0, 0, w, h); cx.strokeStyle = '#2a1010'; cx.lineWidth = 16; cx.strokeRect(12, 12, w - 24, h - 24); cx.strokeStyle = '#a08040'; cx.lineWidth = 4; cx.strokeRect(30, 30, w - 60, h - 60); cx.fillStyle = '#1a3a4a'; cx.save(); cx.translate(w / 2, h / 2); cx.rotate(Math.PI / 4); cx.fillRect(-80, -80, 160, 160); cx.fillStyle = '#a08040'; cx.fillRect(-50, -50, 100, 100); cx.fillStyle = '#5a2020'; cx.fillRect(-24, -24, 48, 48); cx.restore(); for (var i = 0; i < 60; i++) { cx.fillStyle = 'rgba(20,10,5,' + (rnd(i) * 0.14) + ')'; cx.fillRect(rnd(i * 3) * w, rnd(i * 5) * h, rnd(i * 7) * 30 + 5, rnd(i * 9) * 30 + 5); } for (var i = 0; i < 12000; i++) { cx.fillStyle = i % 2 ? 'rgba(0,0,0,0.08)' : 'rgba(255,220,180,0.05)'; cx.fillRect(rnd(i * 11) * w, rnd(i * 13) * h, 1, 1.5); } });
+var rug = mesh(new THREE.PlaneGeometry(3.2, 2.6), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 0.95 }), -0.2, 0.004, -0.6); rug.rotation.x = -Math.PI / 2; rug.receiveShadow = true;
+// ---------- THE DESK, and LACKLAND behind it ----------
+var deskG = new THREE.Group(); deskG.position.set(-0.3, 0, -1.7); scene.add(deskG);
+var deskMat = new THREE.MeshStandardMaterial({ map: k.grain[0], bumpMap: k.grain[0], bumpScale: 0.003, roughness: 0.45, envMap: k.roomEnv, envMapIntensity: 0.4 });
+var deskTop = mesh(new THREE.BoxGeometry(2.0, 0.05, 0.95), deskMat, 0, 0.76, 0, deskG); deskTop.castShadow = true; deskTop.receiveShadow = true;
+[[-0.8, 0], [0.8, 0]].forEach(function(p) { var ped = mesh(new THREE.BoxGeometry(0.42, 0.72, 0.85), deskMat, p[0], 0.37, p[1], deskG); ped.castShadow = true; for (var d = 0; d < 3; d++) { mesh(new THREE.BoxGeometry(0.36, 0.2, 0.02), M.darkWood, p[0], 0.15 + d * 0.23, 0.435, deskG); mesh(new THREE.BoxGeometry(0.08, 0.02, 0.02), M.brass, p[0], 0.15 + d * 0.23, 0.45, deskG); } });
+// 2026-10-24: selected desk wear — compressed working area and rubbed edges, without spill stains.
+var blotterWear=tex(256,192,function(c,w,h){c.fillStyle='#254b30';c.fillRect(0,0,w,h);var press=c.createRadialGradient(132,100,12,132,100,116);press.addColorStop(0,'rgba(113,130,82,0.16)');press.addColorStop(1,'rgba(113,130,82,0)');c.fillStyle=press;c.fillRect(0,0,w,h);for(var n=0;n<180;n++){c.strokeStyle=n%3?'rgba(126,142,99,0.12)':'rgba(17,47,26,0.18)';c.lineWidth=0.6;var x=n*47%w,y=n*61%h;c.beginPath();c.moveTo(x,y);c.lineTo(x+2+n%8,y+1);c.stroke();}c.strokeStyle='rgba(148,153,111,0.28)';c.lineWidth=2;c.strokeRect(3,3,w-6,h-6);});
+var blotter = mesh(new THREE.BoxGeometry(0.7, 0.012, 0.48), new THREE.MeshStandardMaterial({map:blotterWear,roughness:0.94}), 0.05, 0.79, 0.05, deskG);
+mesh(new THREE.BoxGeometry(0.74, 0.006, 0.06), M.darkWood, 0.05, 0.797, -0.19, deskG); mesh(new THREE.BoxGeometry(0.74, 0.006, 0.06), M.darkWood, 0.05, 0.797, 0.29, deskG);
+// the lamp, green glass, on its brass stem
+mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.02, 16), M.brass, -0.7, 0.8, -0.25, deskG); mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.36, 8), M.brass, -0.7, 0.98, -0.25, deskG);
+var lampShade = mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.34, 16, 1, true, Math.PI, Math.PI), new THREE.MeshPhysicalMaterial({ color: 0x1a5a30, roughness: 0.4, emissive: 0x0e3a1e, emissiveIntensity: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.92 }), -0.7, 1.16, -0.2, deskG); lampShade.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff0c8, toneMapped: false }), -0.7, 1.12, -0.2, deskG);
+var deskLight = new THREE.PointLight(0xffe0a0, 1.5, 4.5, 1.6); deskLight.position.set(-0.7, 1.1, -0.15); deskLight.castShadow = true; deskLight.shadow.mapSize.set(512, 512); deskLight.shadow.bias = -0.002; deskG.add(deskLight);
+var deskGlow = k.glow(-0.7, 1.12, -0.18, 0.7, 0.45, 0xffe0a0, deskG);
+// your book, laid down; his glass, sunk and topped up; the dish with paperclips and one green glass eye
+var msMat = new THREE.MeshStandardMaterial({ color: 0xe8e0cc, roughness: 0.95 });
+var manuscript = mesh(new THREE.BoxGeometry(0.22, 0.03, 0.3), msMat, 0.1, 0.81, 0.02, deskG); manuscript.rotation.y = -0.08;
+var pageEdges=tex(256,128,function(c,w,h){c.fillStyle='#d6cdb6';c.fillRect(0,0,w,h);for(var row=0;row<h;row+=6){c.fillStyle=row%18?'rgba(103,95,76,0.27)':'rgba(103,95,76,0.4)';c.fillRect(0,row,w,1.1);}var edge=c.createLinearGradient(0,0,w,0);edge.addColorStop(0,'rgba(132,115,78,0.2)');edge.addColorStop(0.14,'rgba(132,115,78,0)');edge.addColorStop(0.86,'rgba(132,115,78,0)');edge.addColorStop(1,'rgba(132,115,78,0.22)');c.fillStyle=edge;c.fillRect(0,0,w,h);});
+var handledPaper=new THREE.MeshStandardMaterial({map:pageEdges,roughness:0.97});
+var paperBlockFaces=[handledPaper,handledPaper,msMat,handledPaper,handledPaper,handledPaper];
+manuscript.material=paperBlockFaces;for(var sheet=0;sheet<7;sheet++){mesh(new THREE.BoxGeometry(0.218,0.0008,0.298),detail.material('#c7bda4','paper'),0.1+Math.sin(sheet)*0.001,0.798+sheet*0.0038,0.02,deskG).rotation.y=-0.08;}
+var msPageGeo=new THREE.PlaneGeometry(0.2,0.28,4,6),msPagePos=msPageGeo.attributes.position;for(var v=0;v<msPagePos.count;v++){var px=msPagePos.getX(v),py=msPagePos.getY(v);msPagePos.setZ(v,Math.pow(Math.max(0,(px-0.055)/0.045),2)*Math.max(0,(py-0.085)/0.055)*0.004);}msPageGeo.computeVertexNormals();
+mesh(msPageGeo, new THREE.MeshStandardMaterial({ map: tex(128, 180, function(cx, w, h) { cx.fillStyle = '#ece4d0'; cx.fillRect(0, 0, w, h); cx.fillStyle = '#2a2420'; for (var l = 0; l < 22; l++) { cx.fillRect(14, 30 + l * 6, 20 + rnd(l * 3) * 80, 1.2); } cx.fillStyle = '#4a1a1a'; cx.font = '8px Georgia,serif'; cx.fillText('1', 60, 172);cx.strokeStyle='rgba(131,119,87,0.22)';cx.lineWidth=0.6;cx.beginPath();cx.moveTo(w-18,2);cx.lineTo(w-2,20);cx.stroke();for(var n=0;n<35;n++){cx.fillStyle='rgba(207,195,164,0.4)';cx.fillRect(n*47%w,n%2?1:h-2,2+n%4,1);} }), roughness: 0.95,side:THREE.DoubleSide }), 0.1, 0.826, 0.02, deskG).rotation.set(-Math.PI / 2, 0, -0.08);
+var msHit = mesh(new THREE.BoxGeometry(0.34, 0.16, 0.4), M.hidden, 0.1, 0.85, 0.02, deskG);
+var whisky = new THREE.MeshStandardMaterial({ color: 0xc27a18, roughness: 0.1, transparent: true, opacity: 0.7, emissive: 0x5a3000, emissiveIntensity: 0.35 });
+var glassG = new THREE.Group(); glassG.position.set(0.7, 0.785, 0.25); deskG.add(glassG);
+mesh(new THREE.CylinderGeometry(0.034, 0.03, 0.09, 14, 1, true), M.glass.clone(), 0, 0.045, 0, glassG).material.side = THREE.DoubleSide; mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.006, 14), M.glass, 0, 0.003, 0, glassG);
+var whiskyLevel = mesh(new THREE.CylinderGeometry(0.029, 0.028, 0.055, 14), whisky, 0, 0.033, 0, glassG);
+var decanter = new THREE.Group(); decanter.position.set(0.55, 0.785, -0.25); deskG.add(decanter);
+mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.16, 12), new THREE.MeshPhysicalMaterial({ color: 0xd8b060, roughness: 0.1, transparent: true, opacity: 0.7, envMap: k.roomEnv, envMapIntensity: 1, clearcoat: 1 }), 0, 0.08, 0, decanter); mesh(new THREE.CylinderGeometry(0.02, 0.035, 0.1, 10), M.glass, 0, 0.2, 0, decanter); mesh(new THREE.SphereGeometry(0.03, 8, 6), M.glass, 0, 0.27, 0, decanter);
+detail.arc(decanter,0.059,0.0017,detail.glass,0,0.025,0);detail.arc(decanter,0.054,0.0013,detail.glass,0,0.145,0);
+for(var cut=0;cut<12;cut++){var angle=cut*Math.PI/6;mesh(new THREE.CylinderGeometry(0.0015,0.0015,0.1,5),detail.glass,Math.cos(angle)*0.064,0.08,Math.sin(angle)*0.064,decanter);}
+var stopper=mesh(new THREE.DodecahedronGeometry(0.025,1),detail.glass,0,0.278,0,decanter);stopper.scale.y=0.75;
+var drinksHit = mesh(new THREE.BoxGeometry(0.4, 0.4, 0.7), M.hidden, 0.62, 0.95, 0.0, deskG);
+var dishG = new THREE.Group(); dishG.position.set(-0.35, 0.785, 0.3); deskG.add(dishG);
+mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.025, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0xd8d0c0, roughness: 0.5, side: THREE.DoubleSide }), 0, 0.012, 0, dishG); mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.004, 16), new THREE.MeshStandardMaterial({ color: 0xd8d0c0, roughness: 0.5 }), 0, 0.002, 0, dishG);
+for(var pc=0;pc<7;pc++){var clip=detail.group((rnd(pc)-0.5)*0.07,0.009,(rnd(pc+5)-0.5)*0.07,dishG);clip.rotation.y=pc*1.7;
+detail.wire([[-0.003,0,0.003],[-0.003,0,-0.008],[0,0,-0.012],[0.004,0,-0.008],[0.004,0,0.009],[0,0,0.014],[-0.006,0,0.009],[-0.006,0,-0.007]],0.0008,M.chrome,clip);}
+var eye = mesh(new THREE.SphereGeometry(0.014, 10, 8), new THREE.MeshPhysicalMaterial({ color: 0xf0f0e8, roughness: 0.1, clearcoat: 1, envMap: k.roomEnv, envMapIntensity: 1 }), 0.01, 0.018, -0.01, dishG);
+mesh(new THREE.CircleGeometry(0.007, 10), new THREE.MeshStandardMaterial({ color: 0x2f8a4a, roughness: 0.3 }), 0.01, 0.024, 0.002, dishG).rotation.x = -Math.PI / 2 + 0.6;
+var dishHit = mesh(new THREE.BoxGeometry(0.2, 0.14, 0.2), M.hidden, 0, 0.05, 0, dishG);
+// a typewriter, more manuscripts, a telephone, an ashtray, the day's post
+var typeEnamel=tex(256,256,function(c,w,h){c.fillStyle='#242523';c.fillRect(0,0,w,h);for(var n=0;n<160;n++){var x=n*47%w,y=n%2?2+n%8:h-3-n%7;c.fillStyle=n%4?'rgba(113,116,106,0.42)':'rgba(182,181,161,0.35)';c.fillRect(x,y,1+n%5,1);}for(var n=0;n<55;n++){var x=n*61%w,y=n*71%h;c.strokeStyle='rgba(148,149,136,0.17)';c.lineWidth=0.55;c.beginPath();c.moveTo(x,y);c.lineTo(x+3+n%8,y+1);c.stroke();}});
+var wornEnamel=new THREE.MeshStandardMaterial({map:typeEnamel,roughness:0.48,metalness:0.22,envMap:k.roomEnv,envMapIntensity:0.4});
+mesh(new THREE.BoxGeometry(0.34,0.14,0.3),wornEnamel,-0.55,0.85,0.15,deskG);
+var keyPolish=tex(128,128,function(c,w,h){c.fillStyle='#b6b6b6';c.fillRect(0,0,w,h);var g=c.createRadialGradient(62,61,9,64,64,56);g.addColorStop(0,'#414141');g.addColorStop(0.7,'#777777');g.addColorStop(1,'#b6b6b6');c.fillStyle=g;c.fillRect(0,0,w,h);});keyPolish.encoding=THREE.LinearEncoding;
+var keyIvory=['#c7bfa8','#c2baa4','#d0c7b1'].map(function(col){return new THREE.MeshStandardMaterial({color:col,roughness:0.7,roughnessMap:keyPolish,envMap:k.roomEnv,envMapIntensity:0.35});});
+var keyRim=new THREE.MeshStandardMaterial({color:0x98998d,roughness:0.43,metalness:0.72,envMap:k.roomEnv,envMapIntensity:0.35});
+for(var tk=0;tk<28;tk++){var key=mesh(new THREE.CylinderGeometry(0.007,0.008,0.009,12),keyIvory[(tk*7%11===0)?2:tk%2],-0.68+(tk%10)*0.028+(tk>19?0.014:0),0.931,0.17+Math.floor(tk/10)*0.035,deskG);detail.arc(deskG,0.007,0.0006,keyRim,key.position.x,0.936,key.position.z);}
+// Platen, carriage rail, paper guides and a typewriter's worn ribbon cover.
+var platenRub=tex(128,128,function(c,w,h){c.fillStyle='#c5c5c5';c.fillRect(0,0,w,h);c.fillStyle='#777777';c.fillRect(0,26,w,7);c.fillRect(0,94,w,7);for(var n=0;n<65;n++){c.fillStyle='rgba(55,55,55,0.15)';c.fillRect(0,n*47%h,w,0.4);}});platenRub.encoding=THREE.LinearEncoding;
+var usedRubber=new THREE.MeshStandardMaterial({color:0x252521,roughness:0.86,roughnessMap:platenRub,envMap:k.roomEnv,envMapIntensity:0.2});
+var platen=mesh(new THREE.CylinderGeometry(0.022,0.022,0.35,20),usedRubber,-0.55,0.966,0.037,deskG);platen.rotation.z=Math.PI/2;
+var railRub=tex(64,128,function(c,w,h){c.fillStyle='#858585';c.fillRect(0,0,w,h);for(var n=0;n<30;n++){c.fillStyle=n%3?'rgba(52,52,52,0.3)':'rgba(215,215,215,0.25)';c.fillRect(n*17%w,4,0.7,h-8);}});railRub.encoding=THREE.LinearEncoding;
+var travelledSteel=new THREE.MeshStandardMaterial({color:0xaaa99d,roughness:0.52,roughnessMap:railRub,metalness:0.8,envMap:k.roomEnv,envMapIntensity:0.45});
+var carriage=mesh(new THREE.CylinderGeometry(0.004,0.004,0.4,10),travelledSteel,-0.55,0.956,0.052,deskG);carriage.rotation.z=Math.PI/2;
+[-1,1].forEach(function(side){var knob=mesh(new THREE.CylinderGeometry(0.017,0.017,0.017,14),M.black,-0.55+side*0.19,0.966,0.037,deskG);knob.rotation.z=Math.PI/2;mesh(new THREE.BoxGeometry(0.008,0.035,0.006),M.chrome,-0.55+side*0.115,0.983,0.02,deskG);});
+[[0.72, 0.09, -0.02], [0.78, 0.05, 0.05]].forEach(function(p,i){var stack=detail.group(p[0],0.785+p[1]/2+(i?0.09:0),-0.12+p[2],deskG);stack.rotation.y=(rnd(i)-0.5)*0.3;mesh(new THREE.BoxGeometry(0.22,p[1],0.3),paperBlockFaces,0,0,0,stack);
+ var topPaper=tex(128,180,function(c,w,h){c.fillStyle=i?'#e5ddc8':'#ded5bd';c.fillRect(0,0,w,h);for(var row=0;row<23;row++){c.fillStyle='rgba(65,60,47,0.38)';c.fillRect(13,23+row*6,48+(row*23%54),1);}c.strokeStyle='rgba(122,111,82,0.2)';c.lineWidth=0.6;c.beginPath();c.moveTo(w-16,1);c.lineTo(w-1,18);c.stroke();});
+ var topGeo=new THREE.PlaneGeometry(0.222,0.302,4,6),tp=topGeo.attributes.position;for(var v=0;v<tp.count;v++){var x=tp.getX(v),y=tp.getY(v);tp.setZ(v,Math.max(0,(x-0.065)/0.042)*Math.max(0,(y-0.09)/0.057)*(i?0.004:0.0025));}topGeo.computeVertexNormals();var leaf=mesh(topGeo,new THREE.MeshStandardMaterial({map:topPaper,roughness:0.97,side:THREE.DoubleSide}),i?0.002:-0.001,p[1]/2+0.0005,i?-0.001:0.001,stack);leaf.rotation.x=-Math.PI/2;
+});
+mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.016, 14), new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.3, metalness: 0.2 }), -0.15, 0.795, 0.32, deskG);
+// his chair, and him in it, turned to the desk with both his elbows
+var chairG = new THREE.Group(); chairG.position.set(-0.3, 0, -2.4); scene.add(chairG);
+var leather=detail.material('#593626','cloth');leather.roughness=0.6;
+mesh(new THREE.BoxGeometry(0.55, 0.1, 0.55), leather, 0, 0.5, 0, chairG); mesh(new THREE.BoxGeometry(0.55, 0.6, 0.1), leather, 0, 0.85, -0.25, chairG); [[-0.25, 0], [0.25, 0]].forEach(function(a) { mesh(new THREE.BoxGeometry(0.06, 0.25, 0.5), leather, a[0], 0.65, 0, chairG); }); mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 8), M.chrome, 0, 0.23, 0, chairG); for (var lg = 0; lg < 5; lg++) { var leg = mesh(new THREE.BoxGeometry(0.02, 0.02, 0.3), M.chrome, Math.cos(lg * 1.257) * 0.14, 0.02, Math.sin(lg * 1.257) * 0.14, chairG); leg.rotation.y = -lg * 1.257 + Math.PI / 2; }
+var seamMat=detail.material('#87664b','cloth');
+[-1,1].forEach(function(side){detail.wire([[side*0.255,0.55,0.24],[side*0.255,0.55,-0.23],[side*0.255,1.12,-0.194]],0.0015,seamMat,chairG);});
+for(var button=0;button<6;button++)detail.button(chairG,(button%3-1)*0.15,0.72+Math.floor(button/3)*0.23,-0.195,0.009,'#3c2b20');
+var lackland = k.ghost(-0.3, 0.1, -2.35, 31, 0.5, true, true, 1.05);
+// ---------- THE GARRARD 401 screwed into the wall, the SME arm, the record going round, the shelf of records ----------
+var ttG = new THREE.Group(); ttG.position.set(W / 2 - 0.35, 1.1, -1.0); ttG.rotation.y = -Math.PI / 2; scene.add(ttG);
+mesh(new THREE.BoxGeometry(0.7, 0.1, 0.5), M.shelfWood, 0, 0, 0, ttG); [[-0.3, 0.2], [0.3, 0.2]].forEach(function(b) { mesh(new THREE.BoxGeometry(0.05, 0.3, 0.05), M.brass, b[0], -0.2, b[1], ttG).rotation.x = 0.7; });
+var plinth = mesh(new THREE.BoxGeometry(0.62, 0.08, 0.44), new THREE.MeshStandardMaterial({ color: 0xd8d0c0, roughness: 0.5, metalness: 0.2, envMap: k.roomEnv, envMapIntensity: 0.4 }), 0, 0.09, 0, ttG);
+// Aged enamel deck with recessed fixings and a narrow plinth lip.
+plinth.material=detail.material('#b6ae98','metal');
+[[-0.27,-0.18],[0.27,-0.18],[-0.27,0.18],[0.27,0.18]].forEach(function(p){detail.button(ttG,p[0],0.133,p[1],0.004,'#5c5a4d');});
+mesh(new THREE.BoxGeometry(0.64,0.008,0.46),detail.material('#48392b','cloth'),0,0.052,0,ttG);
+var platter = mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.02, 32), M.chrome, -0.08, 0.14, 0, ttG);
+var recordTex = tex(256, 256, function(cx, w, h) { cx.fillStyle = '#0a0a0a'; cx.beginPath(); cx.arc(128, 128, 126, 0, 6.3); cx.fill(); for (var r = 50; r < 124; r += 2) { cx.strokeStyle = 'rgba(60,60,60,' + (0.2 + 0.3 * Math.sin(r)) + ')'; cx.lineWidth = 0.6; cx.beginPath(); cx.arc(128, 128, r, 0, 6.3); cx.stroke(); } cx.fillStyle = '#c04020'; cx.beginPath(); cx.arc(128, 128, 46, 0, 6.3); cx.fill(); cx.fillStyle = '#f0e0c0'; cx.font = 'bold 9px Arial'; cx.textAlign = 'center'; cx.fillText('2+2+1', 128, 118); cx.font = '7px Arial'; cx.fillText('PONDEROSA TWINS PLUS ONE', 128, 132); cx.fillText('BOUND', 128, 146); cx.fillStyle = '#0a0a0a'; cx.beginPath(); cx.arc(128, 128, 4, 0, 6.3); cx.fill(); });
+var record = mesh(new THREE.CircleGeometry(0.15, 40), new THREE.MeshStandardMaterial({ map: recordTex, roughness: 0.25, envMap: k.roomEnv, envMapIntensity: 0.9 }), -0.08, 0.152, 0, ttG); record.rotation.x = -Math.PI / 2;
+mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.03, 8), M.chrome, -0.08, 0.16, 0, ttG);
+var armG = new THREE.Group(); armG.position.set(0.2, 0.15, -0.14); ttG.add(armG);
+mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.06, 12), M.chrome, 0, 0.02, 0, armG); var arm = mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.3, 8), M.chrome, -0.12, 0.05, 0.1, armG); arm.rotation.z = Math.PI / 2; arm.rotation.y = -0.6; mesh(new THREE.BoxGeometry(0.03, 0.015, 0.02), M.black, -0.24, 0.05, 0.18, armG);
+mesh(new THREE.BoxGeometry(0.06, 0.02, 0.02), new THREE.MeshStandardMaterial({ color: 0xd8d0c0, roughness: 0.5 }), 0.24, 0.13, 0.15, ttG); mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.01, 12), M.black, 0.2, 0.135, -0.16, ttG);
+var ttHit = mesh(new THREE.BoxGeometry(0.9, 0.5, 0.7), M.hidden, 0, 0.2, 0, ttG);
+// the records in their sleeves on a shelf under it, the amplifier with its valves glowing, the speaker
+mesh(new THREE.BoxGeometry(0.7, 0.04, 0.4), M.shelfWood, 0, -0.55, 0.05, ttG);
+for (var rv = 0; rv < 18; rv++) { var sleeve = mesh(new THREE.BoxGeometry(0.02, 0.31, 0.31), new THREE.MeshStandardMaterial({ color: [0xe8e0d0, 0x2a2a2a, 0xc04020, 0x3a5a8a, 0xd8c060, 0x1a3a2a][rv % 6], roughness: 0.9 }), -0.3 + rv * 0.033, -0.37, 0.05, ttG); sleeve.rotation.z = (rnd(rv) - 0.5) * 0.08;
+sleeve.material.map=detail.material('#c2b69e','paper').map;sleeve.material.needsUpdate=true;
+mesh(new THREE.BoxGeometry(0.0015,0.28,0.002),detail.material('#87785c','paper'),-0.31+rv*0.033,-0.37,0.206,ttG); }
+var ampG = new THREE.Group(); ampG.position.set(W / 2 - 0.4, 0.3, -1.9); ampG.rotation.y = -Math.PI / 2; scene.add(ampG);
+mesh(new THREE.BoxGeometry(0.5, 0.18, 0.36), new THREE.MeshStandardMaterial({ color: 0x8a8a80, roughness: 0.4, metalness: 0.5, envMap: k.roomEnv, envMapIntensity: 0.4 }), 0, 0.09, 0, ampG);
+var valves = []; for (var v = 0; v < 4; v++) { mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.07, 10), new THREE.MeshPhysicalMaterial({ color: 0xe0d8c0, roughness: 0.1, transparent: true, opacity: 0.5, envMap: k.roomEnv, envMapIntensity: 1 }), -0.15 + v * 0.1, 0.215, -0.08, ampG); valves.push(k.glow(-0.15 + v * 0.1, 0.22, -0.08, 0.14, 0.55, 0xff8030, ampG)); }
+for(var knob=0;knob<4;knob++){var control=mesh(new THREE.CylinderGeometry(0.012,0.012,0.009,14),M.black,-0.17+knob*0.09,0.095,0.185,ampG);control.rotation.x=Math.PI/2;mesh(new THREE.BoxGeometry(0.001,0.007,0.001),M.chrome,-0.17+knob*0.09,0.1,0.191,ampG);}
+for(var vent=0;vent<12;vent++)mesh(new THREE.BoxGeometry(0.003,0.001,0.07),M.black,-0.21+vent*0.038,0.181,0.09,ampG);
+var ampLight = new THREE.PointLight(0xff8030, 0.3, 1.2, 2); ampLight.position.set(0, 0.3, -0.05); ampG.add(ampLight);
+mesh(new THREE.BoxGeometry(0.5, 0.8, 0.3), new THREE.MeshStandardMaterial({ map: k.grain[1], roughness: 0.7 }), W / 2 - 0.35, 0.4, 0.6); mesh(new THREE.PlaneGeometry(0.44, 0.7), detail.material('#574a37','cloth'), W / 2 - 0.51, 0.4, 0.6).rotation.y = -Math.PI / 2;
+[-1,1].forEach(function(side){mesh(new THREE.BoxGeometry(0.008,0.72,0.012),M.darkWood,W/2-0.517,0.4,0.6+side*0.22);mesh(new THREE.BoxGeometry(0.008,0.012,0.44),M.darkWood,W/2-0.517,0.4+side*0.355,0.6);});
+// ---------- THE SHELVES of other people's books, floor to rail, along the left wall ----------
+var shelfG = new THREE.Group(); shelfG.position.set(-W / 2 + 0.18, 0, -0.6); shelfG.rotation.y = Math.PI / 2; scene.add(shelfG);
+mesh(new THREE.BoxGeometry(4.0, 2.3, 0.36), M.shelfWood, 0, 1.15, 0, shelfG);
+var bookCols = [0x6a2a1a, 0x2a3a5a, 0x1a4a2a, 0xa08030, 0xe8e0d0, 0x3a2a4a, 0x8a1a1a, 0x2a2a2a, 0xc8b070];
+for (var sh = 0; sh < 6; sh++) { mesh(new THREE.BoxGeometry(4.0, 0.03, 0.34), M.shelfWood, 0, 0.12 + sh * 0.38, 0.0, shelfG); var bx = -1.9; while (bx < 1.9) { var bw = 0.03 + rnd(sh * 100 + bx * 37) * 0.05, bh = 0.2 + rnd(sh * 7 + bx * 13) * 0.14; if (rnd(sh * 3 + bx * 5) < 0.06) { bx += 0.12; continue; } var bk = mesh(new THREE.BoxGeometry(bw, bh, 0.22 + rnd(bx) * 0.08), new THREE.MeshStandardMaterial({ color: bookCols[Math.floor(rnd(sh * 11 + bx * 17) * bookCols.length)], roughness: 0.85 }), bx + bw / 2, 0.135 + sh * 0.38 + bh / 2, 0.04, shelfG); bk.rotation.x = rnd(bx * 3) < 0.08 ? 0.15 : 0; bx += bw + 0.004; } }
+var shelfHit = mesh(new THREE.BoxGeometry(4.0, 2.4, 0.5), M.hidden, 0, 1.2, 0.05, shelfG);
+// ---------- THE WINDOW over Frith Street, sash, the neon and the rain on it ----------
+var winG = new THREE.Group(); winG.position.set(1.4, 1.7, -D / 2 + 0.02); scene.add(winG);
+mesh(new THREE.BoxGeometry(1.4, 1.9, 0.12), new THREE.MeshStandardMaterial({ color: 0xd8d0c0, roughness: 0.8 }), 0, 0, 0, winG);
+var nightTex = tex(256, 384, function(cx, w, h) { var g = cx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#0a0c18'); g.addColorStop(0.6, '#141220'); g.addColorStop(1, '#2a1a20'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); cx.fillStyle = '#1a1614'; cx.fillRect(0, h * 0.35, w, h * 0.65); for (var wi = 0; wi < 12; wi++) { cx.fillStyle = rnd(wi) < 0.5 ? 'rgba(255,200,120,0.6)' : 'rgba(40,40,60,0.8)'; cx.fillRect(20 + (wi % 4) * 60, h * 0.42 + Math.floor(wi / 4) * 70, 26, 40); } cx.shadowColor = '#ff40a0'; cx.shadowBlur = 18; cx.fillStyle = '#ff60b0'; cx.font = 'bold 22px Arial'; cx.fillText('GIRLS', 60, h * 0.7); cx.shadowColor = '#40ff80'; cx.fillStyle = '#60ffa0'; cx.font = 'bold 16px Arial'; cx.fillText('OPEN', 150, h * 0.82); cx.shadowBlur = 0; for (var r = 0; r < 400; r++) { cx.fillStyle = 'rgba(200,220,255,0.18)'; cx.fillRect(rnd(r * 3) * w, rnd(r * 5) * h, 1, 3 + rnd(r) * 6); } });
+mesh(new THREE.PlaneGeometry(1.2, 1.7), new THREE.MeshBasicMaterial({ map: nightTex, toneMapped: false }), 0, 0, 0.065, winG);
+mesh(new THREE.BoxGeometry(1.26, 0.05, 0.04), new THREE.MeshStandardMaterial({ color: 0xd8d0c0, roughness: 0.8 }), 0, 0.02, 0.09, winG); mesh(new THREE.BoxGeometry(0.05, 1.7, 0.04), new THREE.MeshStandardMaterial({ color: 0xd8d0c0, roughness: 0.8 }), 0, 0, 0.09, winG);
+mesh(new THREE.BoxGeometry(1.5, 0.08, 0.2), new THREE.MeshStandardMaterial({ color: 0xd8d0c0, roughness: 0.8 }), 0, -0.98, 0.06, winG);
+var winLight = new THREE.PointLight(0xff80c0, 0.7, 4.5, 1.7); winLight.position.set(1.4, 1.5, -D / 2 + 0.6); scene.add(winLight);
+var winGlow = k.glow(1.4, 1.5, -D / 2 + 0.1, 1.6, 0.25, 0xff70b0);
+var curtain=detail.material('#583e29','cloth');
+for (var f = 0; f < 5; f++) { mesh(new THREE.CylinderGeometry(0.06, 0.07, 2.0, 8, 1, false, 0, Math.PI), curtain, 0.62 + f * 0.09, 0, 0.1, winG); }
+mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.9, 8), M.brass, 0.1, 1.02, 0.14, winG).rotation.z = Math.PI / 2;
+for(var hem=0;hem<5;hem++)mesh(new THREE.BoxGeometry(0.07,0.008,0.002),detail.material('#826544','cloth'),0.62+hem*0.09,-0.96,0.162,winG);
+// ---------- THE DOOR AT THE BACK you had not seen, and the door you came in by ----------
+var backDoorG = new THREE.Group(); backDoorG.position.set(-1.6, 0, -D / 2 + 0.03); scene.add(backDoorG);
+mesh(new THREE.BoxGeometry(0.85, 2.05, 0.06), new THREE.MeshStandardMaterial({ map: wallPaint, roughness: 0.95, color: 0xbab0a0 }), 0, 1.025, 0, backDoorG);
+mesh(new THREE.BoxGeometry(0.95, 0.08, 0.1), railMat, 0, 2.1, 0, backDoorG); mesh(new THREE.BoxGeometry(0.06, 2.1, 0.1), railMat, -0.45, 1.05, 0, backDoorG); mesh(new THREE.BoxGeometry(0.06, 2.1, 0.1), railMat, 0.45, 1.05, 0, backDoorG);
+mesh(new THREE.SphereGeometry(0.03, 8, 6), M.brass, 0.3, 1.0, 0.05, backDoorG);
+mesh(new THREE.PlaneGeometry(0.8, 0.015), new THREE.MeshBasicMaterial({ color: 0xffe8c0, toneMapped: false }), 0, 0.01, 0.04, backDoorG);
+var backDoorHit = mesh(new THREE.BoxGeometry(1.0, 2.3, 0.5), M.hidden, 0, 1.1, 0.15, backDoorG);
+var inDoorG = new THREE.Group(); inDoorG.position.set(0.8, 0, D / 2 - 0.03); inDoorG.rotation.y = Math.PI; scene.add(inDoorG);
+mesh(new THREE.BoxGeometry(0.9, 2.1, 0.06), M.darkWood, 0, 1.05, 0, inDoorG); mesh(new THREE.BoxGeometry(1.0, 0.08, 0.1), M.darkWood, 0, 2.14, 0, inDoorG); mesh(new THREE.SphereGeometry(0.03, 8, 6), M.brass, -0.32, 1.0, 0.05, inDoorG);
+var wayOut = window.dssWayOutArrow(scene, 1.75, -0.65, 3.38, 0.5);
+mesh(new THREE.PlaneGeometry(0.8, 0.015), new THREE.MeshBasicMaterial({ color: 0xffe8c0, toneMapped: false }), 0, 0.01, 0.04, inDoorG); var landingLight = new THREE.PointLight(0xffd8a0, 0.75, 3.2, 2); landingLight.position.set(0.8, 1.9, 2.4); scene.add(landingLight); /* 2026-10-20: the landing's light under and round the door, so the way out reads when the camera turns to it */ /* 2026-10-20: the door you came in by is behind you; the arrow is turned off the camera's line so it reads as an arrow, not a tick */
+var hatStand = mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.8, 8), M.darkWood, 2.2, 0.9, 2.4); for (var hk = 0; hk < 3; hk++) mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.2, 6), M.darkWood, 2.2 + Math.cos(hk * 2.1) * 0.1, 1.7, 2.4 + Math.sin(hk * 2.1) * 0.1).rotation.set(Math.sin(hk * 2.1) * 1.2, 0, -Math.cos(hk * 2.1) * 1.2);
+mesh(new THREE.BoxGeometry(0.3, 0.6, 0.2), new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.95 }), 2.15, 1.3, 2.45);
+// ---------- LIGHT, and the smoke of the room ----------
+scene.add(new THREE.AmbientLight(0x3a2c18, 0.7));
+scene.add(new THREE.HemisphereLight(0x6a5030, 0x0c0804, 0.4));
+var ceilLight = new THREE.PointLight(0xffd8a0, 0.5, 6, 1.8); ceilLight.position.set(0, H - 0.4, -0.4); scene.add(ceilLight);
+var hazeTex = tex(128, 128, function(cx, w, h) { var g = cx.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(220,190,150,0.2)'); g.addColorStop(0.4, 'rgba(170,130,90,0.1)'); g.addColorStop(1, 'rgba(100,70,40,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+var haze = new THREE.Sprite(new THREE.SpriteMaterial({ map: hazeTex, transparent: true, opacity: 0.14, depthWrite: false, blending: THREE.AdditiveBlending })); haze.position.set(-0.6, 1.5, -1.5); haze.scale.set(3.0, 1.8, 1); scene.add(haze);
+k.contact(-0.3, 0, -1.7, 2.6);
+// ---------- THE CLOSE-UPS ----------
+var hotspots = [
+{ root: ttHit, name: 'A turntable', pos: [1.2, 1.5, -0.2], tgt: [W / 2 - 0.35, 1.25, -1.0], haloAt: [W / 2 - 0.5, 1.3, -1.0], haloSc: 1.0,
+actions: function() { return k.byPrefix("What’s he listening to?"); } },
+{ root: backDoorHit, name: 'A door at the back', pos: [-0.9, 1.4, -1.2], tgt: [-1.6, 1.1, -D / 2], haloAt: [-1.6, 1.15, -D / 2 + 0.15], haloSc: 1.3,
+actions: function() { return k.byText(['Linger']); } },
+{ root: lackland.hit, name: 'LACKLAND', pos: [0.3, 1.5, -0.6], tgt: [-0.3, 0.7, -2.35], haloAt: [-0.3, 1.25, -2.35], haloSc: 1.0 },
+{ root: msHit, name: 'Your book', pos: [-0.2, 1.4, -0.8], tgt: [-0.2, 0.82, -1.68], haloAt: [-0.2, 0.9, -1.68], haloSc: 0.6,
+actions: function() { /* 2026-10-25 (Sam, Q15): the pitch's two choices on the book's card */ return k.byText(['Lay it down', 'Not yet.']); } },
+{ root: drinksHit, name: 'LACKLAND’S glass', pos: [0.9, 1.35, -0.9], tgt: [0.35, 0.85, -1.6], haloAt: [0.4, 0.9, -1.55], haloSc: 0.7 },
+{ root: dishHit, name: 'A dish', pos: [-0.9, 1.3, -0.7], tgt: [-0.65, 0.8, -1.4], haloAt: [-0.65, 0.86, -1.4], haloSc: 0.45,
+// 2026-10-09, Sam: "some hint in the prose that it is possible to interact in the future once you have seen four worlds". Shown while the eye lies in the dish before the fourth dream world (the office passage sets the flag).
+hint: function() { var f = document.querySelector('.dss-hub-flag[data-k="eye-hint"]'); return f && f.textContent.trim() === 'on' ? 'You cannot take the glass eye yet, but come back once you’ve had the fourfold vision and with all three lines of Alba, then it’ll give you a fifth. Come back once you’ve been through the third pillar all four times.' : ''; } },
+{ root: winG, name: 'A window', pos: [0.9, 1.6, -1.0], tgt: [1.4, 1.7, -D / 2], haloAt: [1.4, 1.7, -D / 2 + 0.15], haloSc: 1.6 },
+{ root: shelfHit, name: 'Shelves', pos: [-0.9, 1.5, 0.6], tgt: [-W / 2, 1.3, -0.6], haloAt: [-W / 2 + 0.4, 1.3, -0.6], haloSc: 2.2 },
+{ root: wayOut, name: 'The way out', label: 'WAY OUT', pos: [-0.8, 1.5, 0.8], tgt: [0.8, 1.1, D / 2 - 0.03], haloAt: [1.5, 0.14, -0.82], haloSc: 0.55, /* the camera steps left as it turns, so it swings round to the right, the way the arrow points */
+actions: function() { return window.dssStreetExit(); } }
+];
+return { hotspots: hotspots, frame: function(t, dt, still) {
+if (still) return;
+record.rotation.z = -t * 3.49;
+deskLight.intensity = 1.5 + 0.03 * Math.sin(t * 1.3); deskGlow.material.opacity = 0.45 + 0.02 * Math.sin(t * 1.3);
+for (var v = 0; v < valves.length; v++) valves[v].material.opacity = 0.5 + 0.08 * Math.sin(t * 2.1 + v);
+winLight.intensity = 0.7 + (Math.sin(t * 1.7) > 0.3 ? 0.15 : 0); winGlow.material.opacity = 0.25 + (Math.sin(t * 1.7) > 0.3 ? 0.06 : 0);
+haze.material.opacity = 0.14 + 0.03 * Math.sin(t * 0.31);
+} };
+}
+});
+// <<<< DSS ROOM LK END
+
+// >>>> DSS ROOM CF BEGIN

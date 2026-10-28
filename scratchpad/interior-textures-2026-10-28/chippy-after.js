@@ -1,0 +1,639 @@
+// 2026-10-28: restrained, material-specific surface detail for the indoor rooms.
+// Paint into each room's existing canvas: no extra geometry, texture allocations or frame work.
+window.dssInteriorSurface = function(t, kind, seed) {
+if (!t || !t.image || !t.image.getContext) return t;
+var c=t.image, x=c.getContext('2d'), w=c.width, h=c.height;
+var key='_dssSurface_'+kind; if(c[key]) return t; c[key]=true;
+function r(n){var v=Math.sin(n*127.1+(seed||1)*311.7)*43758.5453;return v-Math.floor(v);}
+function line(a,b,d,e,col,width){x.strokeStyle=col;x.lineWidth=width||0.65;x.beginPath();x.moveTo(a,b);x.lineTo(d,e);x.stroke();}
+x.save();
+if(kind==='wood' || kind==='boards') {
+  // Fine pores follow the existing horizontal grain; occasional broken fibres catch light.
+  for(var i=0;i<650;i++){var px=r(i)*w,py=r(i+1700)*h;
+    line(px,py,px+2+r(i+300)*17,py+r(i+900)*0.7,'rgba(9,5,2,0.13)',0.45);
+    if(i%7===0)line(px,py+0.8,px+5+r(i+300)*13,py+1,'rgba(235,190,128,0.08)',0.5);
+  }
+  if(kind==='boards')for(var b=0;b<4;b++){
+    var y=b*h/4,join=(0.18+r(b+9)*0.62)*w;
+    line(0,y,w,y,'rgba(10,6,3,0.42)',1.2);
+    line(0,y+1.4,w,y+1.4,'rgba(207,163,108,0.14)',0.7);
+    line(join,y,join,y+h/4,'rgba(10,6,3,0.35)',1);
+    for(var n=0;n<2;n++){x.fillStyle='rgba(15,9,5,0.42)';x.beginPath();x.arc(join+(n?4:-4),y+7,0.9,0,6.283);x.fill();}
+  }
+} else if(kind==='plaster' || kind==='stone') {
+  // Broken trowel marks and mineral flecks rather than uniform digital noise.
+  for(var i=0;i<1050;i++){var px=r(i)*w,py=r(i+2300)*h;
+    x.fillStyle=i%3?'rgba(17,12,8,0.055)':'rgba(244,230,203,0.075)';
+    x.fillRect(px,py,0.5+r(i+700)*2.2,0.5+r(i+900)*1.3);
+  }
+  for(var i=0;i<30;i++){var px=r(i+80)*w,py=r(i+180)*h;
+    line(px,py,px+3+r(i+400)*13,py-1+r(i+500)*2,'rgba(234,219,191,0.045)',0.8);
+  }
+} else if(kind==='cloth') {
+  // Crossed, irregular threads sit underneath the existing folds and pile.
+  for(var y=1;y<h;y+=3)line(0,y,w,y,'rgba(225,192,158,0.045)',0.55);
+  for(var a=1;a<w;a+=4)line(a,0,a,h,'rgba(8,5,5,0.075)',0.7);
+  for(var i=0;i<500;i++){x.fillStyle='rgba(238,206,176,0.06)';x.fillRect(r(i)*w,r(i+400)*h,0.7,1.5);}
+} else if(kind==='tile' || kind==='lino') {
+  for(var i=0;i<85;i++){var px=r(i)*w,py=r(i+500)*h;
+    line(px,py,px+2+r(i+800)*9,py+r(i+900)*2,kind==='tile'?'rgba(92,81,62,0.085)':'rgba(213,203,177,0.09)',0.55);
+  }
+  if(kind==='lino')for(var i=0;i<18;i++){x.strokeStyle='rgba(12,10,9,0.085)';x.lineWidth=1.2;x.beginPath();x.ellipse(r(i+33)*w,r(i+66)*h,3+r(i+44)*7,2+r(i+77)*3,r(i)*3,0.2,2.1);x.stroke();}
+} else if(kind==='metal') {
+  for(var i=0;i<200;i++){var y=r(i)*h;line(r(i+200)*w,y,w,y,'rgba(229,222,196,0.065)',0.45);}
+}
+x.restore();t.needsUpdate=true;return t;
+};
+window.dssHandledPhoneMaterials=function(tex,env){
+ var shellRough=tex(256,128,function(c,w,h){c.fillStyle='#a0a0a0';c.fillRect(0,0,w,h);for(var n=0;n<360;n++){c.strokeStyle=n%4?'rgba(234,234,234,0.23)':'rgba(48,48,48,0.2)';c.lineWidth=0.5;c.beginPath();var x=n*47%w,y=n*71%h;c.moveTo(x,y);c.lineTo(x+2+n%9,y-1-n%3);c.stroke();}var g=c.createRadialGradient(157,70,4,157,70,55);g.addColorStop(0,'rgba(48,48,48,0.35)');g.addColorStop(1,'rgba(48,48,48,0)');c.fillStyle=g;c.fillRect(90,10,130,118);});
+ var gripRough=tex(256,128,function(c,w,h){c.fillStyle='#858585';c.fillRect(0,0,w,h);var g=c.createLinearGradient(0,0,w,0);g.addColorStop(0,'rgba(36,36,36,0)');g.addColorStop(0.25,'rgba(36,36,36,0.75)');g.addColorStop(0.72,'rgba(36,36,36,0.75)');g.addColorStop(1,'rgba(36,36,36,0)');c.fillStyle=g;c.fillRect(0,0,w,h);for(var n=0;n<95;n++){c.strokeStyle='rgba(211,211,211,0.28)';c.lineWidth=0.5;c.beginPath();var x=n*61%w,y=n*43%h;c.moveTo(x,y);c.lineTo(x+3+n%8,y+1);c.stroke();}});
+ var metalRough=tex(128,128,function(c,w,h){c.fillStyle='#999999';c.fillRect(0,0,w,h);for(var n=0;n<120;n++){c.strokeStyle='rgba(224,224,224,0.22)';c.lineWidth=0.5;c.beginPath();c.moveTo(0,n*31%h);c.lineTo(w,n*31%h+2);c.stroke();}});
+ shellRough.encoding=gripRough.encoding=metalRough.encoding=THREE.LinearEncoding;
+ return {shell:new THREE.MeshStandardMaterial({color:0x191511,roughness:0.65,roughnessMap:shellRough,metalness:0.04,envMap:env,envMapIntensity:0.55}),grip:new THREE.MeshStandardMaterial({color:0x17130f,roughness:0.55,roughnessMap:gripRough,metalness:0.04,envMap:env,envMapIntensity:0.65}),metal:new THREE.MeshStandardMaterial({color:0x9a9384,roughness:0.67,roughnessMap:metalRough,metalness:0.65,envMap:env,envMapIntensity:0.4}),touchMetal:new THREE.MeshStandardMaterial({color:0xb1aa98,roughness:0.31,metalness:0.65,envMap:env,envMapIntensity:0.4})};
+};
+
+window.dssOrangePaperbackCover = function() {
+  var c = document.createElement('canvas'); c.width = 512; c.height = 768;
+  var x = c.getContext('2d');
+  x.fillStyle = '#d8641c'; x.fillRect(0, 0, 512, 768);
+  x.fillStyle = '#a84416'; x.fillRect(0, 0, 22, 768);
+  x.strokeStyle = '#f4dfac'; x.lineWidth = 3; x.strokeRect(38, 28, 444, 710);
+  x.fillStyle = '#fff0cf'; x.textAlign = 'center';
+  x.font = 'bold 64px Georgia'; x.fillText('CHARIOTS', 260, 114);
+  x.font = 'bold 44px Georgia'; x.fillText('OF THE', 260, 170);
+  x.font = 'bold 78px Georgia'; x.fillText('GODS?', 260, 253);
+  // Screen-printed saucer, stars and ancient stone silhouettes.
+  x.strokeStyle = '#f4dfac'; x.lineWidth = 3;
+  x.beginPath(); x.arc(260, 437, 139, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = '#352b26';
+  x.beginPath(); x.ellipse(260, 406, 104, 23, -0.16, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(258, 391, 46, 29, -0.16, Math.PI, Math.PI * 2); x.fill();
+  x.strokeStyle = '#fff0cf'; x.beginPath(); x.moveTo(174, 407); x.lineTo(338, 382); x.stroke();
+  x.fillStyle = '#f4dfac';
+  [[119,340],[386,319],[367,478],[155,476]].forEach(function(p) {
+    x.fillRect(p[0]-5,p[1]-1,10,2); x.fillRect(p[0]-1,p[1]-5,2,10);
+  });
+  x.fillStyle = '#352b26'; x.beginPath();
+  x.moveTo(57,638); x.lineTo(193,466); x.lineTo(321,638);
+  x.lineTo(372,535); x.lineTo(467,638); x.closePath(); x.fill();
+  x.fillStyle = '#7c391e'; x.beginPath(); x.moveTo(193,466); x.lineTo(221,638); x.lineTo(321,638); x.closePath(); x.fill();
+  x.fillStyle = '#fff0cf'; x.font = '25px Georgia'; x.fillText('ERICH VON DÄNIKEN', 260, 701);
+  // Restrained rubbed edges, deterministic so every copy matches.
+  x.fillStyle = 'rgba(245,218,169,0.28)';
+  for (var i=0;i<65;i++) x.fillRect(28+(i*73)%458, 731+(i%5), 3+i%9, 1);
+  var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  t.anisotropy = 4;
+  return new THREE.MeshStandardMaterial({map:t, roughness:0.86});
+};
+window.dssDetailProps=function(mesh,tex,env,scene){
+ var cache={};
+ function material(color,kind){var key=color+'|'+kind;if(cache[key])return cache[key];
+ var map=tex(128,128,function(c,w,h){c.fillStyle=color;c.fillRect(0,0,w,h);
+ for(var i=0;i<650;i++){c.fillStyle=i%4?'rgba(235,225,202,0.09)':'rgba(22,20,16,0.1)';c.fillRect((i*47)%w,(i*71)%h,kind==='cloth'?1:1+i%4,1);}
+ if(kind==='cloth')for(var y=0;y<h;y+=3){c.fillStyle='rgba(0,0,0,0.07)';c.fillRect(0,y,w,1);}
+ if(kind==='paper')for(var y=3;y<h;y+=9){c.fillStyle='rgba(92,76,47,0.16)';c.fillRect(0,y,w,1);}
+ });
+ return cache[key]=new THREE.MeshStandardMaterial({map:map,roughness:kind==='metal'?0.55:kind==='glaze'?0.3:0.92,metalness:kind==='metal'?0.65:0,envMap:env,envMapIntensity:kind==='metal'?0.35:0.12});}
+ function add(g,m,x,y,z,p){return mesh(g,m,x,y,z,p||scene);}
+ function arc(p,r,t,m,x,y,z,span,turn){var o=add(new THREE.TorusGeometry(r,t,6,28,span||Math.PI*2),m,x,y,z,p);o.rotation.x=Math.PI/2;o.rotation.z=turn||0;return o;}
+ function lathe(points,m,x,y,z,p,segments){return add(new THREE.LatheGeometry(points.map(function(v){return new THREE.Vector2(v[0],v[1]);}),segments||28),m,x,y,z,p);}
+ function group(x,y,z,p){var g=new THREE.Group();g.position.set(x,y,z);(p||scene).add(g);return g;}
+ function wire(points,r,m,p){return add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(function(v){return new THREE.Vector3(v[0],v[1],v[2]);})),Math.max(12,points.length*4),r,5,false),m,0,0,0,p);}
+ var glass=new THREE.MeshPhysicalMaterial({color:0xdce4d9,roughness:0.13,metalness:0,envMap:env,envMapIntensity:0.7,clearcoat:0.5,transparent:true,opacity:0.12,depthWrite:false,side:THREE.DoubleSide});
+ var edgeGlass=glass.clone();edgeGlass.opacity=0.26;edgeGlass.roughness=0.22;
+ function cup(p,r,h,handled){var b=r*0.85,cupGlass=glass;
+ // Selected used glasses: the untouched areas remain clear; washing scuffs alter the reflections.
+ if(handled){if(!cache.handledGlass){var rough=tex(256,256,function(c,w,hh){c.fillStyle='#303030';c.fillRect(0,0,w,hh);for(var n=0;n<170;n++){var x=n*47%w,y=n*71%hh;c.strokeStyle='rgba(204,204,204,0.3)';c.lineWidth=0.5;c.beginPath();c.moveTo(x,y);c.lineTo(x+2+n%7,y-1);c.stroke();}for(var n=0;n<4;n++){var y=hh-13-n*3;c.strokeStyle='rgba(178,178,178,0.25)';c.beginPath();c.moveTo(27+n*21,y);c.lineTo(100+n*28,y+1);c.stroke();}var g=c.createRadialGradient(187,137,4,187,137,30);g.addColorStop(0,'rgba(149,149,149,0.28)');g.addColorStop(1,'rgba(149,149,149,0)');c.fillStyle=g;c.fillRect(150,100,74,74);});rough.encoding=THREE.LinearEncoding;var used=glass.clone();used.roughness=0.65;used.roughnessMap=rough;cache.handledGlass=used;
+ var traces=tex(256,256,function(c,w,hh){c.clearRect(0,0,w,hh);for(var n=0;n<5;n++){c.strokeStyle='rgba(220,217,202,0.14)';c.lineWidth=0.7;c.beginPath();c.moveTo(20+n*37,hh-12-n%3);c.lineTo(43+n*37,hh-13-n%3);c.stroke();}for(var n=0;n<5;n++){c.strokeStyle='rgba(220,217,206,0.08)';c.lineWidth=0.65;c.beginPath();c.ellipse(187,137,7+n*3,10+n*4,-0.4,0.2,4.6);c.stroke();}});cache.glassTraces=new THREE.MeshStandardMaterial({map:traces,transparent:true,opacity:0.28,roughness:0.9,depthWrite:false});}
+ cupGlass=cache.handledGlass;lathe([[b+0.00022,0.008],[r+0.00022,h-0.001]],cache.glassTraces,0,0,0,p);}
+ lathe([[0,0],[b,0],[b,0.008],[r,h-0.001],[r-0.0012,h],[b-0.0012,0.009],[0,0.009]],cupGlass,0,0,0,p);arc(p,r-0.0006,0.0007,edgeGlass,0,h,0);add(new THREE.CylinderGeometry(b,b,0.005,28),edgeGlass,0,0.003,0,p);}
+ // 2026-10-24: selected prop wear — accumulated ash, tar and scorched cigarette rests.
+ function ash(x,y,z,p,r){r=r||0.05;var g=group(x,y,z,p),m=material('#77796b','glaze').clone();m.roughness=0.57;
+ lathe([[0,0],[r*0.84,0],[r,0.006],[r,0.018],[r*0.91,0.021],[r*0.75,0.008],[0,0.008]],m,0,0,0,g);
+ var bed=cache.ashBed;if(!bed){var bedTex=tex(256,256,function(c,w,h){c.clearRect(0,0,w,h);
+ var haze=c.createRadialGradient(119,139,9,128,128,123);haze.addColorStop(0,'rgba(53,46,36,0.75)');haze.addColorStop(0.65,'rgba(91,76,53,0.48)');haze.addColorStop(1,'rgba(97,75,43,0)');c.fillStyle=haze;c.fillRect(0,0,w,h);
+ for(var n=0;n<1100;n++){var a=n*2.39996,d=Math.sqrt((n*67%1103)/1103)*115;c.fillStyle=['rgba(34,31,26,0.7)','rgba(177,169,147,0.65)','rgba(118,112,99,0.7)','rgba(209,202,180,0.42)'][n%4];c.fillRect(128+Math.cos(a)*d,128+Math.sin(a)*d,1+n%5,1+n%3);}
+ for(var n=0;n<4;n++){var a=n*1.7+0.3,px=128+Math.cos(a)*64,py=128+Math.sin(a)*64,sm=c.createRadialGradient(px,py,1,px,py,24);sm.addColorStop(0,'rgba(32,24,17,0.82)');sm.addColorStop(1,'rgba(57,39,21,0)');c.fillStyle=sm;c.fillRect(px-24,py-24,48,48);}});bed=cache.ashBed=new THREE.MeshStandardMaterial({map:bedTex,transparent:true,roughness:1,depthWrite:false});}
+ var ashFloor=add(new THREE.CircleGeometry(r*0.74,28),bed,0,0.0086,0,g);ashFloor.rotation.x=-Math.PI/2;
+ var rim=cache.ashRim;if(!rim){var rimTex=tex(256,256,function(c,w,h){c.clearRect(0,0,w,h);for(var n=0;n<4;n++){var a=n*Math.PI/2+0.2;c.save();c.translate(128+Math.cos(a)*119,128+Math.sin(a)*119);c.rotate(a);var stain=c.createRadialGradient(0,0,1,0,0,17);stain.addColorStop(0,'rgba(63,37,15,0.8)');stain.addColorStop(1,'rgba(82,53,24,0)');c.fillStyle=stain;c.fillRect(-19,-19,38,38);c.restore();}c.fillStyle='rgba(194,185,155,0.75)';for(var n=0;n<9;n++){var a=n*2.4;c.fillRect(128+Math.cos(a)*124,128+Math.sin(a)*124,2+n%3,2);}});rim=cache.ashRim=new THREE.MeshStandardMaterial({map:rimTex,transparent:true,roughness:0.9,depthWrite:false});}
+ var lipGeo=new THREE.RingGeometry(r*0.91,r,36),lipPos=lipGeo.attributes.position;for(var v=0;v<lipPos.count;v++){var dist=Math.hypot(lipPos.getX(v),lipPos.getY(v));lipPos.setZ(v,-0.003*Math.max(0,Math.min(1,(dist/r-0.91)/0.09)));}lipGeo.computeVertexNormals();
+ var ashLip=add(lipGeo,rim,0,0.0213,0,g);ashLip.rotation.x=-Math.PI/2;
+ var dust=material('#a69e8b','ash'),filter=material('#a27b49','paper'),paper=material('#cfc7b3','paper');
+ for(var i=0;i<3;i++){var e=group((i-1)*r*0.48,0.011,(i%2-0.5)*r*0.32,g);e.rotation.y=i*2.3;
+ var b=add(new THREE.CylinderGeometry(0.003,0.0032,0.015,8),paper,0,0,0,e);b.rotation.z=Math.PI/2;
+ b=add(new THREE.CylinderGeometry(0.0032,0.0032,0.008,8),filter,-0.011,0,0,e);b.rotation.z=Math.PI/2;
+ var burnt=add(new THREE.SphereGeometry(0.0031,6,5),material('#39332b','paper'),0.008,0,0,e);burnt.scale.set(0.6,0.85,1);}
+ var crumbGeo=new THREE.SphereGeometry(0.001,5,4),crumbs=new THREE.InstancedMesh(crumbGeo,dust,38),crumbPose=new THREE.Object3D();
+ for(var i=0;i<38;i++){var a=i*2.4,d=(i*7%41)/41*r*0.66;crumbPose.position.set(Math.cos(a)*d,0.0094,Math.sin(a)*d);crumbPose.scale.set(1+i%4*0.6,0.35+i%3*0.12,1+i%3*0.4);crumbPose.updateMatrix();crumbs.setMatrixAt(i,crumbPose.matrix);}crumbs.instanceMatrix.needsUpdate=true;g.add(crumbs);return g;}
+ function paperBlock(w,h,d,x,y,z,p,color){var g=group(x,y,z,p),paper=material('#d3c9ac','paper'),cover=material(color||'#43382b','cloth');
+ add(new THREE.BoxGeometry(w,h,d),paper,0,h/2,0,g);
+ add(new THREE.BoxGeometry(w+0.008,0.003,d+0.008),cover,0,0,0,g);add(new THREE.BoxGeometry(w+0.008,0.003,d+0.008),cover,0,h,0,g);
+ add(new THREE.BoxGeometry(0.006,h,d+0.008),cover,-w/2,h/2,0,g);return g;}
+ function bottle(g,h,r,col,seed){seed=Math.abs(seed|0)%4;var bm=new THREE.MeshPhysicalMaterial({color:col,roughness:0.23,metalness:0,envMap:env,envMapIntensity:0.65,clearcoat:0.5,transparent:true,opacity:0.92});
+ var sh=0.74+seed*0.045;lathe([[0,0],[r*0.85,0],[r,h*0.04],[r,h*sh],[r*0.8,h*(sh+0.08)],[r*0.32,h*1.04],[r*0.32,h*1.31],[r*0.38,h*1.33],[0,h*1.33]],bm,0,0,0,g);
+ add(new THREE.CylinderGeometry(r*0.38,r*0.38,h*0.05,12),material(seed%2?'#6a593e':'#34332b','metal'),0,h*1.33,0,g);
+ var key='label'+seed,lm=cache[key];if(!lm){var label=tex(128,128,function(c,w,h){c.fillStyle=['#c5b99b','#cfc4aa','#aaa68e','#b7a47f'][seed];c.fillRect(0,0,w,h);c.strokeStyle='#675a42';c.lineWidth=2;c.strokeRect(7,7,w-14,h-14);c.beginPath();c.ellipse(64,35,12,16,0,0,6.3);c.stroke();for(var n=0;n<5;n++)c.fillRect(24+n%2*8,65+n*8,80-n%2*16,2);for(var n=0;n<250;n++){c.fillStyle=n%3?'rgba(240,225,192,0.25)':'rgba(69,51,25,0.1)';c.fillRect(n*47%w,n*71%h,2,1);}});lm=cache[key]=new THREE.MeshStandardMaterial({map:label,roughness:0.94,side:THREE.DoubleSide});}
+ // Local handling wear on the paper label, leaving its printed design readable; no extra mesh.
+ if(!lm.userData.handledLabel){var lc=lm.map.image.getContext('2d'),lw=lm.map.image.width,lh=lm.map.image.height;
+ var age=lc.createLinearGradient(0,0,0,lh);age.addColorStop(0,'rgba(102,73,32,0.25)');age.addColorStop(0.19,'rgba(102,73,32,0)');age.addColorStop(0.82,'rgba(73,57,33,0.04)');age.addColorStop(1,'rgba(73,57,33,0.3)');lc.fillStyle=age;lc.fillRect(0,0,lw,lh);
+ var smudge=lc.createRadialGradient(20+seed*21,88,2,20+seed*21,88,26);smudge.addColorStop(0,'rgba(60,47,29,0.18)');smudge.addColorStop(1,'rgba(60,47,29,0)');lc.fillStyle=smudge;lc.fillRect(0,50,lw,78);
+ for(var nick=0;nick<35;nick++){lc.fillStyle=nick%4?'rgba(223,209,172,0.8)':'rgba(109,87,52,0.35)';lc.fillRect((nick*47+seed*13)%lw,nick%2?lh-2-nick%5:nick%4,2+nick%6,1+nick%2);}lm.map.needsUpdate=true;lm.userData.handledLabel=true;}
+ add(new THREE.CylinderGeometry(r*1.012,r*1.012,h*0.4,20,1,true,-1.35,2.7),lm,0,h*0.43,0,g);}
+ function cloth(w,h,x,y,z,p,col,worn){var geo=new THREE.PlaneGeometry(w,h,14,12),pos=geo.attributes.position;for(var v=0;v<pos.count;v++){var px=pos.getX(v),py=pos.getY(v);pos.setZ(v,Math.sin(px/w*26+py*2)*w*0.018+Math.sin(py/h*9)*w*0.012);}geo.computeVertexNormals();var m=material(col||'#4a4537','cloth').clone();
+ // Only the working bar towels get spill marks; tablecloths and the telephone cloth retain their own finish.
+ if(worn){var key='used-towel|'+col;if(!cache[key])cache[key]=tex(256,256,function(c,tw,th){c.fillStyle=col||'#4a4537';c.fillRect(0,0,tw,th);for(var n=0;n<4;n++){var px=40+(n*79%169),py=39+(n*61%174),g=c.createRadialGradient(px,py,3,px,py,33+n*5);g.addColorStop(0,n%2?'rgba(49,39,23,0.39)':'rgba(99,64,29,0.34)');g.addColorStop(0.72,'rgba(67,47,26,0.13)');g.addColorStop(1,'rgba(67,47,26,0)');c.fillStyle=g;c.fillRect(px-60,py-60,120,120);}c.strokeStyle='rgba(66,47,28,0.24)';c.lineWidth=2;c.beginPath();c.ellipse(179,94,31,28,0.2,0.3,5.8);c.stroke();for(var q=0;q<tw;q+=3){c.fillStyle='rgba(229,222,198,0.09)';c.fillRect(q,0,1,th);c.fillStyle='rgba(16,19,18,0.1)';c.fillRect(0,q,tw,1);}for(var n=0;n<75;n++){c.fillStyle='rgba(225,214,183,0.2)';c.fillRect(n*47%tw,n%2?2:th-3,2+n%4,1);}});m.map=cache[key];m.roughness=1;}
+ m.side=THREE.DoubleSide;return add(geo,m,x,y,z,p);}
+ function button(p,x,y,z,r,col){var o=add(new THREE.SphereGeometry(1,10,6),material(col||'#8a7d63','metal'),x,y,z,p);o.scale.set(r,r*0.28,r);return o;}
+ return {material:material,arc:arc,lathe:lathe,group:group,wire:wire,cup:cup,ash:ash,paperBlock:paperBlock,bottle:bottle,cloth:cloth,button:button,glass:glass};
+};
+
+// >>>> DSS ROOM KIT BEGIN
+// ====== THE ROOM KIT — what the six later rooms share (2026-09-30) ======
+// The four rooms above (French, Colony, Pillars, Ronnie's) each carry a
+// copy of the same machinery: the wrap sized to the window, the renderer
+// and the outside scenes' composer, the grain, soot and varnish textures,
+// the environment cube, the planar mirror, the ghosts, the hover halo and
+// the resting glow, the card, the words panel, the camera tweens and the
+// pick. The six rooms built on 2026-09-30 (Coach and Horses, Trisha's,
+// Lackland's office, the Chippy, Copper's cellar, O'Flatterly's) take it
+// from here instead, so each of those blocks is only its room and its
+// close-ups. Nothing about the game is decided here: a room only finds the
+// passage's own links by their wording and presses them from the card.
+// spec: { id, caption, captionColor, bg, fog, exposure, bloom, wash, vignette,
+//         cam(portrait), fov [portrait, landscape], hint, card {fg, bg, border, dim, btn, btnBorder},
+//         build(k) -> { hotspots, frame(t, dt, still) } }
+window.dssRoomKit = function(spec) {
+var ID = spec.id, CONT = ID + '-container', WRAP = ID + '-wrap';
+var active = false, animId = null;
+
+function init() {
+if (active) return;
+active = true;
+if (typeof THREE === 'undefined') {
+var s = document.createElement('script');
+s.src = 'vendor/three/three.min.js';
+s.onload = function() { (window.dssLoadPost ? window.dssLoadPost(build) : build()); };
+document.head.appendChild(s);
+} else {
+(window.dssLoadPost ? window.dssLoadPost(build) : build());
+}
+}
+
+function build() {
+var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var host = document.getElementById(CONT);
+if (!host) { active = false; return; }
+var wrap = document.createElement('div');
+wrap.id = WRAP;
+function size() {
+var w = Math.max(280, document.documentElement.clientWidth || window.innerWidth);
+var vh = window.innerHeight || 800;
+// the room fills the window below its top edge: the passage's words sit inside it, nothing follows underneath
+var top = 0, el = host; while (el) { top += el.offsetTop; el = el.offsetParent; }
+var pad = 0; el = host; while (el && el !== document.body) { var cs = getComputedStyle(el); pad += (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.marginBottom) || 0); el = el.parentNode; }
+var h = Math.round(Math.max(360, vh - top - pad - 2));
+return { w: w, h: h };
+}
+var sz = size();
+var bgHex = '#' + ('000000' + (spec.bg || 0x050304).toString(16)).slice(-6);
+wrap.style.cssText = 'position:relative;width:100vw;margin-left:calc(50% - 50vw);height:' + sz.h + 'px;z-index:0;isolation:isolate;background:' + bgHex + ';overflow:hidden;';
+var canvas = document.createElement('canvas');
+canvas.width = sz.w; canvas.height = sz.h;
+canvas.style.cssText = 'display:block;position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;';
+wrap.appendChild(canvas);
+var wash = document.createElement('div');
+wash.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9000;background:' + (spec.wash || 'linear-gradient(180deg,rgba(10,8,6,0.3) 0%,rgba(6,5,4,0.05) 35%,rgba(6,5,4,0.05) 60%,rgba(3,2,2,0.45) 100%)') + ';';
+wrap.appendChild(wash);
+var vig = document.createElement('div');
+vig.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9001;background:' + (spec.vignette || 'radial-gradient(ellipse at 50% 44%,transparent 24%,rgba(0,0,0,0.74) 100%)') + ';';
+wrap.appendChild(vig);
+var grain = document.createElement('div');
+grain.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9002;opacity:0.06;mix-blend-mode:overlay;background:url(' + (window.dssGetGrainURL ? window.dssGetGrainURL() : '') + ');';
+wrap.appendChild(grain);
+var loc = document.createElement('div');
+loc.className = 'dss-room-caption';
+loc.textContent = spec.caption || '';
+loc.style.cssText = 'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font:12px \'Courier New\',monospace;color:' + (spec.captionColor || 'rgba(200,190,160,0.25)') + ';letter-spacing:3px;white-space:nowrap;z-index:9003;pointer-events:none;';
+wrap.appendChild(loc);
+host.appendChild(wrap);
+sz = size(); wrap.style.height = sz.h + 'px';
+setTimeout(function() { var r = window._dssThreeRegistry && window._dssThreeRegistry[WRAP]; if (r && r.resize) r.resize(); }, 1600);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(spec.bg || 0x050304);
+if (spec.fog) scene.fog = new THREE.FogExp2(spec.fog[0], spec.fog[1]);
+var aspect = sz.w / sz.h;
+var portrait = aspect < 1.4;
+var FOV = spec.fov || [92, 70];
+var camera = new THREE.PerspectiveCamera(portrait ? FOV[0] : FOV[1], aspect, 0.05, 40);
+var CAM = spec.cam(portrait);
+camera.position.set(CAM.x, CAM.y, CAM.z);
+
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+renderer.setSize(sz.w, sz.h);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, sz.w < 600 ? 1.25 : 1.5));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping || THREE.LinearToneMapping;
+renderer.toneMappingExposure = spec.exposure || 0.66;
+window._dssBindScene(WRAP, scene, renderer, camera);
+var origResize = window._dssThreeRegistry[WRAP].resize;
+window._dssThreeRegistry[WRAP].resize = function() {
+sz = size(); wrap.style.height = sz.h + 'px';
+camera.aspect = sz.w / sz.h;
+camera.fov = camera.aspect < 1.4 ? FOV[0] : FOV[1];
+camera.updateProjectionMatrix();
+renderer.setSize(sz.w, sz.h);
+};
+window.removeEventListener('resize', origResize);
+window.addEventListener('resize', window._dssThreeRegistry[WRAP].resize);
+// The outside scenes' bloom and grade, at the room's own size.
+var composer = window.dssMakeComposer ? window.dssMakeComposer(scene, camera, renderer, spec.bloom || { bloomStrength: 0.38, bloomRadius: 0.6, bloomThreshold: 0.7 }) : null;
+if (composer) { composer.setSize(sz.w, sz.h); var rs = window._dssThreeRegistry[WRAP].resize; window._dssThreeRegistry[WRAP].resize = function() { rs(); composer.setSize(sz.w, sz.h); }; window.removeEventListener('resize', rs); window.addEventListener('resize', window._dssThreeRegistry[WRAP].resize); }
+
+function tex(w, h, fn) {
+var c = document.createElement('canvas'); c.width = w; c.height = h;
+var cx = c.getContext('2d'); fn(cx, w, h);
+var t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearMipmapLinearFilter;
+t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+return t;
+}
+function rnd(seed) { var x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function mesh(geo, mat, x, y, z, parent) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); (parent || scene).add(m); return m; }
+
+// ---------- TEXTURES AND MATERIALS: the same grain, soot and varnish as the French ----------
+function woodTex(base, grain, seed) {
+return window.dssInteriorSurface(tex(512, 512, function(cx, w, h) {
+cx.fillStyle = base; cx.fillRect(0, 0, w, h);
+for (var i = 0; i < 420; i++) {
+var y = rnd(seed + i * 7) * h, bend = 2 + rnd(i + seed * 5) * 11;
+cx.strokeStyle = i % 5 ? grain : '#a8743f'; cx.globalAlpha = 0.035 + rnd(i + seed) * 0.1;
+cx.lineWidth = 0.4 + rnd(i * 3) * 1.2; cx.beginPath();
+for (var x = 0; x <= w; x += 8) {
+var yy = y + Math.sin(x * 0.009 + y * 0.018) * bend + Math.sin(x * 0.033 + y) * 0.8;
+if (!x) cx.moveTo(x, yy); else cx.lineTo(x, yy);
+} cx.stroke();
+}
+cx.globalAlpha = 1;
+for (var n = 0; n < 12; n++) {
+var xx = rnd(n + seed * 21) * w, yy = rnd(n + seed * 19) * h;
+var g = cx.createRadialGradient(xx, yy, 0, xx, yy, 90);
+g.addColorStop(0, 'rgba(14,6,2,0.19)'); g.addColorStop(1, 'rgba(14,6,2,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+}
+cx.strokeStyle = 'rgba(216,165,103,0.13)'; cx.lineWidth = 0.6;
+for (var n = 0; n < 65; n++) { var xx = rnd(n * 9 + seed) * w, yy = rnd(n * 17) * h; cx.beginPath(); cx.moveTo(xx, yy); cx.lineTo(xx + 3 + rnd(n) * 48, yy + 0.3); cx.stroke(); }
+}), 'wood', seed);
+}
+function paintTex(base, seed, warm) {
+return window.dssInteriorSurface(tex(512, 512, function(cx, w, h) {
+cx.fillStyle = base; cx.fillRect(0, 0, w, h);
+for (var n = 0; n < 28; n++) {
+var x = rnd(n + seed) * w, y = rnd(n * 3 + seed) * h, r = 30 + rnd(n * 7) * 130;
+var g = cx.createRadialGradient(x, y, 0, x, y, r);
+g.addColorStop(0, n % 3 ? 'rgba(20,12,4,0.15)' : (warm || 'rgba(150,110,50,0.1)')); g.addColorStop(1, 'rgba(60,32,8,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+}
+var soot = cx.createLinearGradient(0, 0, 0, h); soot.addColorStop(0, 'rgba(18,10,4,0.3)'); soot.addColorStop(0.3, 'rgba(38,20,6,0)'); soot.addColorStop(1, 'rgba(18,10,4,0.14)'); cx.fillStyle = soot; cx.fillRect(0, 0, w, h);
+for (var i = 0; i < 9000; i++) { cx.fillStyle = i % 2 ? 'rgba(20,12,4,0.05)' : 'rgba(200,180,140,0.04)'; cx.fillRect(rnd(i + seed) * w, rnd(i * 3 + seed) * h, 1, 1); }
+}), 'plaster', seed);
+}
+// A small canvas-made room environment: what the metal, the glass and the varnish reflect.
+function makeEnv(top, mid, low, lamp) {
+var faces = [];
+for (var ef = 0; ef < 6; ef++) {
+var ec = document.createElement('canvas'); ec.width = ec.height = 128;
+var ex = ec.getContext('2d'), eg = ex.createLinearGradient(0, 0, 0, 128);
+eg.addColorStop(0, ef === 2 ? top : mid); eg.addColorStop(0.5, mid); eg.addColorStop(1, low); ex.fillStyle = eg; ex.fillRect(0, 0, 128, 128);
+if (ef !== 3) {
+for (var el = 0; el < 2; el++) {
+var lx = 28 + el * 73, ly = ef === 2 ? 64 : 30;
+var gl = ex.createRadialGradient(lx, ly, 0, lx, ly, 20); gl.addColorStop(0, '#ffe6b8'); gl.addColorStop(0.14, lamp || '#d9b070'); gl.addColorStop(0.4, '#8a5f2c'); gl.addColorStop(1, 'rgba(96,63,25,0)'); ex.fillStyle = gl; ex.fillRect(0, 0, 128, 128);
+} ex.fillStyle = 'rgba(190,120,70,0.14)'; ex.fillRect(4, 84, 120, 10);
+} faces.push(ec);
+}
+var env = new THREE.CubeTexture(faces); env.needsUpdate = true; return env;
+}
+var envSpec = spec.env || ['#5a4028', '#3e2e1e', '#0a0705', '#d9b070'];
+var roomEnv = makeEnv(envSpec[0], envSpec[1], envSpec[2], envSpec[3]);
+var grainA = woodTex('#3d2416', '#150905', 1), grainB = woodTex('#2a1810', '#0e0704', 2), grainC = woodTex('#4a2c1a', '#1a0c06', 3);
+var M = {
+oak: new THREE.MeshStandardMaterial({ map: grainA, bumpMap: grainA, bumpScale: 0.003, roughnessMap: grainA, roughness: 0.62, envMap: roomEnv, envMapIntensity: 0.4, metalness: 0.04 }),
+darkWood: new THREE.MeshStandardMaterial({ map: grainB, bumpMap: grainB, bumpScale: 0.006, roughness: 0.58, envMap: roomEnv, envMapIntensity: 0.22 }),
+shelfWood: new THREE.MeshStandardMaterial({ map: grainC, bumpMap: grainC, bumpScale: 0.002, roughnessMap: grainC, roughness: 0.5, envMap: roomEnv, envMapIntensity: 0.5, metalness: 0.06 }),
+brass: new THREE.MeshStandardMaterial({ color: 0xb99a60, roughness: 0.3, metalness: 0.82, envMap: roomEnv, envMapIntensity: 0.72 }),
+black: new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.15, metalness: 0.2, envMap: roomEnv, envMapIntensity: 0.8 }),
+chrome: new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.22, metalness: 0.95, envMap: roomEnv, envMapIntensity: 1.0 }),
+glass: new THREE.MeshPhysicalMaterial({ color: 0xf0eadc, roughness: 0.09, metalness: 0.04, envMap: roomEnv, envMapIntensity: 1.1, clearcoat: 1, transparent: true, opacity: 0.34 }),
+paper: new THREE.MeshStandardMaterial({ color: 0xe8e0d0, roughness: 0.95 }),
+bakelite: new THREE.MeshStandardMaterial({ color: 0x16120f, roughness: 0.26, metalness: 0.08, envMap: roomEnv, envMapIntensity: 0.55 }),
+hidden: new THREE.MeshBasicMaterial({ visible: false })
+};
+
+// ---------- A PLANAR REFLECTION, drawn only when the view changes ----------
+var mirrors = [];
+function makeMirror(m, normal, sizePx, tint, extra) {
+extra = extra || {};
+var target = new THREE.WebGLRenderTarget(sizePx, sizePx, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+var mcam = camera.clone(), mat4 = new THREE.Matrix4(), n = normal.clone().normalize();
+m.material = new THREE.ShaderMaterial({
+uniforms: { reflection: { value: target.texture }, reflectionMatrix: { value: mat4 }, time: { value: 0 }, tint: { value: tint } },
+transparent: !!extra.transparent, depthWrite: !extra.transparent,
+vertexShader: 'uniform mat4 reflectionMatrix; varying vec4 reflected; varying vec2 faceUV; void main(){ faceUV=uv; vec4 wp=modelMatrix*vec4(position,1.0); reflected=reflectionMatrix*wp; gl_Position=projectionMatrix*viewMatrix*wp; }',
+fragmentShader: 'uniform sampler2D reflection; uniform float time; uniform vec3 tint; varying vec4 reflected; varying vec2 faceUV; void main(){ vec4 r=reflected; ' + (extra.ripple ? 'r.xy+=vec2(sin(faceUV.y*38.0+time*1.1)*0.004+sin(faceUV.x*23.0-time*0.7)*0.003, cos(faceUV.x*31.0+time*0.9)*0.004)*r.w;' : '') + ' vec3 c=texture2DProj(reflection,r).rgb; float edge=smoothstep(0.0,' + (extra.edge || '0.07') + ',min(min(faceUV.x,1.0-faceUV.x),min(faceUV.y,1.0-faceUV.y))); float stain=0.5+0.5*sin(faceUV.x*193.0+sin(faceUV.y*117.0)*3.0); ' + (extra.transparent ? 'c=c*tint; float a=edge*(0.62+0.1*stain); gl_FragColor=vec4(c,a);' : 'c=mix(vec3(0.05,0.033,0.019),c*tint,0.65+0.35*edge); c*=1.0-(1.0-edge)*stain*0.3; gl_FragColor=vec4(c,1.0);') + '\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n}'
+});
+m.geometry.addEventListener('dispose', function() { target.dispose(); });
+var lastAspect = 0, lastP = new THREE.Vector3(999, 999, 999), lastT = new THREE.Vector3(999, 999, 999), p0 = new THREE.Vector3();
+function reflect(v) { var d = v.clone().sub(p0).dot(n); return v.clone().sub(n.clone().multiplyScalar(2 * d)); }
+var o = { mesh: m, update: function(tgt, t) {
+m.material.uniforms.time.value = t;
+if (lastAspect === camera.aspect && lastP.distanceToSquared(camera.position) < 0.0025 && lastT.distanceToSquared(tgt) < 0.0025) return;
+lastAspect = camera.aspect; lastP.copy(camera.position); lastT.copy(tgt);
+m.getWorldPosition(p0);
+mcam.copy(camera); mcam.position.copy(reflect(camera.position)); mcam.up.copy(reflect(camera.position.clone().add(new THREE.Vector3(0, 1, 0))).sub(mcam.position));
+mcam.lookAt(reflect(tgt)); mcam.updateMatrixWorld();
+var clip = new THREE.Plane(n.clone(), -p0.dot(n)).applyMatrix4(mcam.matrixWorldInverse);
+var cp = new THREE.Vector4(clip.normal.x, clip.normal.y, clip.normal.z, clip.constant);
+var pm = mcam.projectionMatrix.elements, cq = new THREE.Vector4((Math.sign(cp.x) + pm[8]) / pm[0], (Math.sign(cp.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
+cp.multiplyScalar(2 / cp.dot(cq)); pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1; pm[14] = cp.w;
+mat4.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mcam.projectionMatrix).multiply(mcam.matrixWorldInverse);
+var oldTarget = renderer.getRenderTarget(), oldTone = renderer.toneMapping;
+mirrors.forEach(function(q) { q.mesh.visible = false; });
+renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(target); renderer.render(scene, mcam);
+renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTone; mirrors.forEach(function(q) { q.mesh.visible = true; });
+} };
+mirrors.push(o); return o;
+}
+
+// ---------- LIGHT SPRITES, CONTACT SHADOWS, GHOSTS ----------
+var glowTex = tex(128, 128, function(cx, w, h) { var g = cx.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2); g.addColorStop(0, 'rgba(255,225,160,0.9)'); g.addColorStop(0.3, 'rgba(255,190,100,0.35)'); g.addColorStop(0.7, 'rgba(220,140,50,0.08)'); g.addColorStop(1, 'rgba(180,100,30,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+function glow(x, y, z, sc, op, col, parent) { var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col || 0xffffff, transparent: true, opacity: op || 0.6, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false, toneMapped: false })); sp.scale.set(sc, sc, 1); sp.position.set(x, y, z); (parent || scene).add(sp); return sp; }
+var contactTex = tex(64, 64, function(cx, w, h) { var g = cx.createRadialGradient(32, 32, 3, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,0.36)'); g.addColorStop(0.45, 'rgba(0,0,0,0.2)'); g.addColorStop(1, 'rgba(0,0,0,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+function contact(x, y, z, s) { var sh = mesh(new THREE.PlaneGeometry(s, s), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false }), x, y + 0.004, z); sh.rotation.x = -Math.PI / 2; return sh; }
+function ghostTex(seed, seated, bright) { return window.dssGhostTex(tex, rnd, seed, seated, bright); }
+var ghosts = [];
+function ghost(x, y, z, seed, base, seated, bright, scale) {
+var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ghostTex(seed, seated, bright), transparent: true, opacity: base, depthWrite: false, blending: bright ? THREE.NormalBlending : THREE.AdditiveBlending }));
+var sc = scale || 1; sp.scale.set(0.9 * sc, 1.8 * sc, 1); sp.position.set(x, y + 0.9 * sc, z); scene.add(sp);
+var hit = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * sc, 0.2 * sc, (seated ? 1.1 : 1.5) * sc, 8), M.hidden);
+hit.position.set(x, y + (seated ? 0.7 : 0.95) * sc, z); scene.add(hit);
+var g = { sp: sp, hit: hit, base: base, ph: seed * 2.1 }; ghosts.push(g); return g;
+}
+
+// ---------- THE PASSAGE'S OWN LINKS ----------
+var play = null;
+function passageLinks(sel) {
+var pass = window.dssRoomScope(host);
+if (!pass) return [];
+return Array.prototype.slice.call(pass.querySelectorAll(sel)).filter(function(l) { return !(play && play.card.contains(l)) && !l.closest('.dss-key-offer') && (l.classList.contains('dss-claimed') || l.getClientRects().length > 0); });
+}
+function lilyHook(n) { var pass = window.dssRoomScope(host); if (!pass) return []; var h = pass.querySelector('tw-hook[name="lily' + n + '"]'); return (h && h.querySelector('svg') && !h.querySelector('.lily-glimpse') && (h.classList.contains('dss-claimed') || h.getClientRects().length > 0)) ? [h] : []; }
+function byText(texts) { return passageLinks('tw-link').filter(function(l) { return texts.indexOf(l.textContent.trim()) >= 0; }); }
+function byPrefix(prefix) { return passageLinks('tw-link').filter(function(l) { return l.textContent.trim().indexOf(prefix) === 0; }); }
+function modalProse() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); }
+
+var k = { scene: scene, camera: camera, renderer: renderer, tex: tex, rnd: rnd, mesh: mesh, woodTex: woodTex, paintTex: paintTex, roomEnv: roomEnv, M: M, grain: [grainA, grainB, grainC],
+makeMirror: makeMirror, glow: glow, glowTex: glowTex, contact: contact, ghost: ghost, portrait: portrait, still: still, host: host, wrap: wrap,
+passageLinks: passageLinks, byText: byText, byPrefix: byPrefix, lilyHook: lilyHook, modalProse: modalProse };
+var built = spec.build(k) || {};
+var HOTSPOTS = built.hotspots || [];
+renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
+
+// ---------- THE CLOSE-UPS, AND THE PATHS ----------
+// ---------- THE CLOSE-UPS, AND THE PATHS: shared with every room (window.dssRoomPlay) ----------
+var play = window.dssRoomPlay({ wrap: wrap, canvas: canvas, host: host, scene: scene, camera: camera, CAM: CAM, HOTSPOTS: HOTSPOTS, tex: tex, still: still,
+card: spec.card, hint: spec.hint, state: function() { return { active: active, animId: animId }; } });
+var words = play.words, curTarget = play.curTarget;
+
+// ---------- FRAMES ----------
+var clock = new THREE.Clock();
+function animate() {
+animId = requestAnimationFrame(animate);
+// a throw in the frame ends the room, not the night (dssSceneFailed)
+try { frameOnce(); } catch (err) { cancelAnimationFrame(animId); animId = null; if (window.dssSceneFailed) window.dssSceneFailed(err, ID); else throw err; }
+}
+function frameOnce() {
+var dt = Math.min(0.1, clock.getDelta());
+var t = still ? 0 : clock.getElapsedTime();
+play.frame(t, dt);
+if (!still) {
+for (var gi = 0; gi < ghosts.length; gi++) { var g = ghosts[gi]; g.sp.material.opacity = g.base * (0.7 + 0.3 * Math.sin(t * 0.23 + g.ph)); }
+}
+if (built.frame) built.frame(t, dt, still);
+play.withGlowsHidden(function() { for (var mr = 0; mr < mirrors.length; mr++) mirrors[mr].update(curTarget, t); });
+if (composer) composer.render(); else renderer.render(scene, camera);
+}
+animate();
+}
+
+// 2026-10-12 (the venues audit): a self-link ("Back to the bar" in the Coach) swaps in a fresh container within one tick;
+// a new container rebuilds the room, as the French/Colony/Pillars/Ronnie's watchers now do
+var seenHost = null;
+setInterval(function() {
+var container = document.getElementById(CONT);
+if (container && active && seenHost && container !== seenHost) {
+active = false;
+if (animId) { cancelAnimationFrame(animId); animId = null; }
+window._dssDisposeWrap(WRAP);
+}
+if (container && !active) {
+seenHost = container;
+init();
+} else if (!container) {
+active = false;
+if (animId) { cancelAnimationFrame(animId); animId = null; }
+window._dssDisposeWrap(WRAP);
+}
+}, 300);
+};
+// ====== INSIDE THE CHINESE FISH AND CHIPS — THE ROOM, WITH CLOSE-UPS ======
+// 2026-09-30. Built from what is written of the Chinese Fish and Chips on
+// Greek Street: a narrow shop under strip lights, the stainless range with
+// its fryers and its hot cabinet, a menu board, a formica counter you eat
+// at with a stool or two, salt and vinegar and the vinegar-brown paper, the
+// window onto the street and the street going past it. The room sits at
+// the top of the Chinese Fish and Chips passage (#cf-container) and is its
+// navigation: the plate on the counter opens "Eat." and the window holds
+// the lily while the passage offers it. The range, the menu, the ticket on
+// the table and the door are inspections, their card words pink
+// placeholders for Sam. Nothing about the game is decided in JS.
+window.dssRoomKit({
+id: 'cf', caption: 'THE HALIBUT (FISH AND CHIPS), GREEK STREET', captionColor: 'rgba(190,215,255,0.28)',
+bg: 0x0a0c10, fog: [0x10141a, 0.04], exposure: 0.66, bloom: { bloomStrength: 0.32, bloomRadius: 0.6, bloomThreshold: 0.8 },
+env: ['#c0d0e0', '#5a6270', '#101418', '#e8f0ff'],
+wash: 'linear-gradient(180deg,rgba(180,210,255,0.06) 0%,rgba(10,12,16,0.02) 30%,rgba(10,12,16,0.02) 60%,rgba(4,5,8,0.42) 100%)',
+vignette: 'radial-gradient(ellipse at 50% 40%,transparent 30%,rgba(0,0,4,0.66) 100%)',
+card: { fg: 'rgba(225,232,245,0.92)', bg: 'rgba(8,10,14,0.82)', border: 'rgba(170,200,240,0.3)', dim: 'rgba(180,200,230,0.5)', btn: 'rgba(225,235,255,0.95)', btnBorder: 'rgba(170,200,240,0.45)' },
+cam: function(portrait) { return portrait ? { x: 0.4, y: 1.55, z: -2.6, tx: -0.1, ty: 1.1, tz: 2.2 } : { x: 0.6, y: 1.55, z: -2.3, tx: -0.2, ty: 1.15, tz: 2.2 }; },
+build: function(k) {
+var scene = k.scene, mesh = k.mesh, tex = k.tex, rnd = k.rnd, M = k.M;
+var detail=window.dssDetailProps(mesh,tex,k.roomEnv,scene);
+var W = 4.2, D = 6.4, H = 2.9;
+// ---------- THE SHOP: white tiles to the shoulder, cream paint above, a lino floor, a suspended ceiling ----------
+var tileTex = tex(512, 256, function(cx, w, h) { cx.fillStyle = '#b3ab97'; cx.fillRect(0, 0, w, h); var tw = 64, th = 32; for (var r = 0; r < h / th; r++) for (var c = -1; c < w / tw + 1; c++) { var x = c * tw + (r % 2 ? tw / 2 : 0), y = r * th, sh = 222 + Math.floor(rnd(r * 31 + c * 7) * 18); cx.fillStyle = 'rgb(' + sh + ',' + (sh - 2) + ',' + (sh - 10) + ')'; cx.fillRect(x + 1.5, y + 1.5, tw - 3, th - 3); var g = cx.createLinearGradient(x, y, x + tw, y + th); g.addColorStop(0, 'rgba(255,255,255,0.25)'); g.addColorStop(1, 'rgba(0,0,0,0.08)'); cx.fillStyle = g; cx.fillRect(x + 1.5, y + 1.5, tw - 3, th - 3); } for (var i = 0; i < 40; i++) { cx.fillStyle = 'rgba(120,100,60,' + (rnd(i) * 0.15) + ')'; cx.beginPath(); cx.arc(rnd(i * 3) * w, h * 0.7 + rnd(i * 5) * h * 0.3, 4 + rnd(i * 7) * 14, 0, 6.3); cx.fill(); } });
+window.dssInteriorSurface(tileTex, 'tile', 140);
+tileTex.wrapS = tileTex.wrapT = THREE.RepeatWrapping;
+function tiles(len, x, z, ry) { var t = tileTex.clone(); t.needsUpdate = true; t.repeat.set(len / 2, 1); var m = new THREE.MeshStandardMaterial({ map: t, bumpMap: t, bumpScale: 0.0015, roughness: 0.3, envMap: k.roomEnv, envMapIntensity: 0.5 }); var p = mesh(new THREE.PlaneGeometry(len, 1.5), m, x, 0.75, z); p.rotation.y = ry; p.receiveShadow = true; return p; }
+var creamPaint = k.paintTex('#c8c0a8', 51, 'rgba(150,130,80,0.12)');
+var wallMat = new THREE.MeshStandardMaterial({ map: creamPaint, roughness: 0.9 });
+var linoTex = tex(512, 512, function(cx, w, h) { for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) { cx.fillStyle = (r + c) % 2 ? '#2a2a30' : '#8a8478'; cx.fillRect(c * 64, r * 64, 64, 64); } for (var i = 0; i < 6000; i++) { cx.fillStyle = i % 2 ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,240,0.06)'; cx.fillRect(rnd(i) * w, rnd(i * 3) * h, 1.5, 1.5); } for (var s = 0; s < 14; s++) { cx.fillStyle = 'rgba(60,40,20,' + (rnd(s) * 0.25) + ')'; cx.beginPath(); cx.ellipse(rnd(s * 3) * w, rnd(s * 5) * h, 10 + rnd(s * 7) * 30, 6 + rnd(s * 9) * 18, rnd(s) * 3, 0, 6.3); cx.fill(); } });
+window.dssInteriorSurface(linoTex, 'lino', 141);
+linoTex.wrapS = linoTex.wrapT = THREE.RepeatWrapping; linoTex.repeat.set(2, 3);
+var floor = mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: linoTex, roughness: 0.35, envMap: k.roomEnv, envMapIntensity: 0.45 }), 0, 0, 0); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+var ceilTex = tex(256, 256, function(cx, w, h) { cx.fillStyle = '#d8d4c8'; cx.fillRect(0, 0, w, h); cx.strokeStyle = '#8a8a80'; cx.lineWidth = 3; for (var i = 0; i <= 2; i++) { cx.beginPath(); cx.moveTo(i * 128, 0); cx.lineTo(i * 128, h); cx.stroke(); cx.beginPath(); cx.moveTo(0, i * 128); cx.lineTo(w, i * 128); cx.stroke(); } for (var i = 0; i < 3000; i++) { cx.fillStyle = 'rgba(0,0,0,0.06)'; cx.fillRect(rnd(i) * w, rnd(i * 3) * h, 1, 1); } cx.fillStyle = 'rgba(120,90,40,0.25)'; cx.beginPath(); cx.arc(60, 190, 40, 0, 6.3); cx.fill(); });
+ceilTex.wrapS = ceilTex.wrapT = THREE.RepeatWrapping; ceilTex.repeat.set(4, 6);
+var ceil = mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.95 }), 0, H, 0); ceil.rotation.x = Math.PI / 2;
+var back = mesh(new THREE.PlaneGeometry(W, H), wallMat, 0, H / 2, -D / 2); var front = mesh(new THREE.PlaneGeometry(W, H), wallMat, 0, H / 2, D / 2); front.rotation.y = Math.PI;
+var left = mesh(new THREE.PlaneGeometry(D, H), wallMat, -W / 2, H / 2, 0); left.rotation.y = Math.PI / 2; var right = mesh(new THREE.PlaneGeometry(D, H), wallMat, W / 2, H / 2, 0); right.rotation.y = -Math.PI / 2;
+tiles(W, 0, -D / 2 + 0.01, 0); tiles(D, -W / 2 + 0.01, 0, Math.PI / 2); tiles(D, W / 2 - 0.01, 0, -Math.PI / 2);
+// ---------- THE STRIP LIGHTS: two tubes, one of them thinking about it ----------
+var tubes = [];
+[-1.6, 1.0].forEach(function(tz, i) { var g = new THREE.Group(); g.position.set(0, H - 0.08, tz); scene.add(g); mesh(new THREE.BoxGeometry(1.6, 0.06, 0.16), new THREE.MeshStandardMaterial({ color: 0xd8d8d0, roughness: 0.5, metalness: 0.3 }), 0, 0.02, 0, g); var tube = mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.4, 12), new THREE.MeshBasicMaterial({ color: 0xe8f0ff, toneMapped: false }), 0, -0.03, 0, g); tube.rotation.z = Math.PI / 2; var l = new THREE.PointLight(0xdce8ff, 0.7, 6, 1.6); l.position.set(0, -0.15, 0); g.add(l); if (i === 0) { l.castShadow = true; l.shadow.mapSize.set(512, 512); l.shadow.bias = -0.002; } var gl = k.glow(0, -0.03, 0, 2.4, 0.4, 0xd8e8ff, g); gl.scale.set(2.4, 0.6, 1); tubes.push({ tube: tube, l: l, gl: gl, ph: i * 2 }); });
+// ---------- THE RANGE: stainless, the fryers, the hot cabinet with its lamp, the chips under it ----------
+var steel = new THREE.MeshStandardMaterial({ color: 0xc8ccd0, roughness: 0.28, metalness: 0.85, envMap: k.roomEnv, envMapIntensity: 1.0 });
+var steelDull = new THREE.MeshStandardMaterial({ color: 0x9a9ea2, roughness: 0.45, metalness: 0.7, envMap: k.roomEnv, envMapIntensity: 0.6 });
+var rangeG = new THREE.Group(); rangeG.position.set(-W / 2 + 0.55, 0, 0.0); rangeG.rotation.y = Math.PI / 2; scene.add(rangeG);
+var rangeBody = mesh(new THREE.BoxGeometry(3.4, 0.95, 0.9), steel, 0, 0.475, 0, rangeG); rangeBody.castShadow = true;
+mesh(new THREE.BoxGeometry(3.5, 0.05, 1.0), steel, 0, 0.975, 0, rangeG);
+// two fryers with their baskets, the oil dark and moving
+[-1.1, -0.3].forEach(function(fx, i) { mesh(new THREE.BoxGeometry(0.62, 0.02, 0.62), steelDull, fx, 1.0, 0, rangeG); var oil = mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshPhysicalMaterial({ color: 0x3a2a10, roughness: 0.05, metalness: 0.1, envMap: k.roomEnv, envMapIntensity: 1.2, clearcoat: 1 }), fx, 0.99, 0, rangeG); oil.rotation.x = -Math.PI / 2; var basket=detail.group(fx,1.08,0,rangeG),wirePositions=[];
+function segment(x,y,z,xx,yy,zz){wirePositions.push(x,y,z,xx,yy,zz);}
+for(var w=0;w<=12;w++){var v=-0.2+w/12*0.4;
+segment(v,-0.07,-0.2,v,-0.07,0.2);segment(-0.2,-0.07,v,0.2,-0.07,v);
+segment(v,-0.07,-0.2,v,0.07,-0.2);segment(v,-0.07,0.2,v,0.07,0.2);
+segment(-0.2,-0.07,v,-0.2,0.07,v);segment(0.2,-0.07,v,0.2,0.07,v);}
+for(var level=0;level<4;level++){var y=-0.07+level*0.047;segment(-0.2,y,-0.2,0.2,y,-0.2);segment(-0.2,y,0.2,0.2,y,0.2);segment(-0.2,y,-0.2,-0.2,y,0.2);segment(0.2,y,-0.2,0.2,y,0.2);}
+var meshGeo=new THREE.BufferGeometry();meshGeo.setAttribute('position',new THREE.Float32BufferAttribute(wirePositions,3));basket.add(new THREE.LineSegments(meshGeo,new THREE.LineBasicMaterial({color:0x8e9186})));
+var grip=mesh(new THREE.CylinderGeometry(0.014,0.014,0.13,12),detail.material('#38352b','glaze'),fx,1.345,0.405,rangeG);grip.rotation.x=0.9;
+ mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 6), steel, fx, 1.25, 0.28, rangeG).rotation.x = 0.9; for (var b = 0; b < 4; b++) mesh(new THREE.SphereGeometry(0.02, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff0d0, transparent: true, opacity: 0.35 }), fx + (rnd(b + i * 9) - 0.5) * 0.4, 1.0, (rnd(b * 3 + i) - 0.5) * 0.4, rangeG); });
+[-1.1,-0.3].forEach(function(fx){
+var knob=mesh(new THREE.CylinderGeometry(0.025,0.025,0.014,20),detail.material('#37382f','glaze'),fx,0.79,0.46,rangeG);knob.rotation.x=Math.PI/2;
+mesh(new THREE.BoxGeometry(0.002,0.014,0.002),M.chrome,fx,0.8,0.468,rangeG);
+var lamp=mesh(new THREE.SphereGeometry(0.006,10,6),detail.material('#98642d','glaze'),fx+0.08,0.79,0.461,rangeG);lamp.scale.z=0.35;
+[-1,1].forEach(function(side){var screw=mesh(new THREE.SphereGeometry(0.003,6,4),M.chrome,fx+side*0.16,0.86,0.455,rangeG);screw.scale.z=0.3;});
+});
+// the hot cabinet: glass front, the lamp inside, the fish and the chips under it
+var cabG = new THREE.Group(); cabG.position.set(0.95, 1.0, 0); rangeG.add(cabG);
+mesh(new THREE.BoxGeometry(1.2, 0.6, 0.7), steel, 0, 0.3, 0, cabG); mesh(new THREE.PlaneGeometry(1.1, 0.5), new THREE.MeshPhysicalMaterial({ color: 0xf0f4f8, roughness: 0.05, transparent: true, opacity: 0.25, envMap: k.roomEnv, envMapIntensity: 1, clearcoat: 1 }), 0, 0.32, 0.36, cabG);
+var chipTex = tex(128, 128, function(cx, w, h) { cx.fillStyle = '#c8901a'; cx.fillRect(0, 0, w, h); for (var i = 0; i < 90; i++) { cx.save(); cx.translate(rnd(i) * w, rnd(i * 3) * h); cx.rotate(rnd(i * 5) * 3); cx.fillStyle = ['#e8b040', '#d89a28', '#f0c860', '#b87818'][i % 4]; cx.fillRect(-14, -3, 28, 6); cx.restore(); } });
+mesh(new THREE.BoxGeometry(0.5, 0.14, 0.5), new THREE.MeshStandardMaterial({ map: chipTex, roughness: 0.6 }), -0.28, 0.14, 0, cabG);
+for (var fs = 0; fs < 4; fs++) { var fish = mesh(new THREE.BoxGeometry(0.28, 0.05, 0.12), new THREE.MeshStandardMaterial({ color: [0xd8a040, 0xc89030, 0xe0b050, 0xb88028][fs], roughness: 0.55 }), 0.3, 0.1 + fs * 0.03, -0.18 + fs * 0.12, cabG); fish.rotation.y = (rnd(fs) - 0.5) * 0.5; }
+var cabLamp = mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.0, 8), new THREE.MeshBasicMaterial({ color: 0xff7030, toneMapped: false }), 0, 0.52, 0, cabG); cabLamp.rotation.z = Math.PI / 2;
+var cabLight = new THREE.PointLight(0xff8040, 1.2, 2.4, 1.6); cabLight.position.set(0, 0.45, 0.1); cabG.add(cabLight);
+var cabGlow = k.glow(0, 0.5, 0.05, 1.3, 0.45, 0xff8040, cabG); cabGlow.scale.set(1.4, 0.5, 1);
+// the extractor hood with its grease, the wok burner at the end, the vinegar bottles and the salt
+mesh(new THREE.BoxGeometry(3.0, 0.5, 0.8), steelDull, 0, 2.5, -0.1, rangeG); mesh(new THREE.BoxGeometry(2.9, 0.04, 0.7), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.9 }), 0, 2.24, -0.1, rangeG);
+mesh(new THREE.CylinderGeometry(0.22, 0.14, 0.14, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8, metalness: 0.5, side: THREE.DoubleSide }), -1.5, 1.06, 0.1, rangeG); var wokFlame = k.glow(-1.5, 1.0, 0.1, 0.36, 0.6, 0x4080ff);
+[[1.55, 0.2, 0xc8b080], [1.62, 0.32, 0x3a2a10], [1.48, 0.36, 0xe8e8e0]].forEach(function(b, i) { mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.14, 8), new THREE.MeshStandardMaterial({ color: b[2], roughness: 0.4, transparent: i === 1, opacity: 0.85 }), b[0], 1.07, b[1], rangeG); });
+// the man at the range, a trace in the steam, with his back to you
+var cook = k.ghost(-W / 2 + 1.3, 0, 0.4, 41, 0.3, false, false, 1.0);
+var steamTex = tex(128, 128, function(cx, w, h) { var g = cx.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(240,244,255,0.25)'); g.addColorStop(0.4, 'rgba(200,210,230,0.1)'); g.addColorStop(1, 'rgba(160,170,190,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+var steam = []; for (var s = 0; s < 4; s++) { var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: steamTex, transparent: true, opacity: 0.16, depthWrite: false })); sp.position.set(-W / 2 + 0.55, 1.3 + rnd(s) * 0.4, -1.1 + s * 0.35); sp.scale.set(0.8, 0.8, 1); sp.userData = { ph: s * 1.7, y0: sp.position.y }; scene.add(sp); steam.push(sp); }
+var rangeHit = mesh(new THREE.BoxGeometry(3.6, 1.5, 1.1), M.hidden, 0, 0.75, 0, rangeG);
+// ---------- THE MENU BOARD over the range, the prices in plastic letters ----------
+var menuTex = tex(768, 256, function(cx, w, h) { cx.fillStyle = '#1a1a1a'; cx.fillRect(0, 0, w, h); cx.strokeStyle = '#8a8a80'; cx.lineWidth = 4; cx.strokeRect(6, 6, w - 12, h - 12); cx.fillStyle = '#f0f0e8'; cx.font = 'bold 26px Arial,sans-serif'; cx.textAlign = 'left'; var L = [['COD', '38p'], ['ROCK SALMON', '35p'], ['SAVELOY', '8p'], ['WALLY', '3p'], ['CHOW MEIN', '45p'], ['CHOP SUEY', '40p'], ['FOO YUNG', '42p']]; /* 2026-10-16: the board reads as THE PRIME's menu line does; the chow mein stays 45p for THE OLDBOY's nine shillings */ for (var i = 0; i < L.length; i++) { var col = i < 4 ? 0 : 1, row = i % 4; cx.fillStyle = i % 2 ? '#f0f0e8' : '#ffd040'; cx.fillText(L[i][0], 30 + col * 380, 60 + row * 46); cx.textAlign = 'right'; cx.fillText(L[i][1], 350 + col * 380, 60 + row * 46); cx.textAlign = 'left'; } for (var g = 0; g < 700; g++) { cx.fillStyle = 'rgba(0,0,0,0.25)'; cx.fillRect(rnd(g) * w, rnd(g * 3) * h, 2, 1); } });
+var menu = mesh(new THREE.PlaneGeometry(3.0, 1.0), new THREE.MeshStandardMaterial({ map: menuTex, roughness: 0.6 }), -W / 2 + 0.03, 1.72, 0.0); menu.rotation.y = Math.PI / 2; /* 2026-10-16: lowered from 2.05, the hood hid the top row (COD, the 45p CHOW MEIN) */
+var menuLight = new THREE.PointLight(0xfff0d0, 0.5, 3, 2); menuLight.position.set(-W / 2 + 0.8, 2.5, 0.0); scene.add(menuLight);
+// ---------- THE COUNTER you eat at, along the right wall, your plate on it ----------
+var counterG = new THREE.Group(); counterG.position.set(W / 2 - 0.35, 0, 0.2); scene.add(counterG);
+var formica=detail.material('#c6a38e','glaze');formica.roughness=0.42;
+mesh(new THREE.BoxGeometry(0.5, 0.05, 3.2), formica, 0, 0.98, 0, counterG); mesh(new THREE.BoxGeometry(0.5, 0.06, 3.2), M.chrome, 0, 0.94, 0, counterG); [[-1.4], [0], [1.4]].forEach(function(b) { mesh(new THREE.BoxGeometry(0.06, 0.9, 0.06), M.chrome, -0.2, 0.45, b[0], counterG); });
+function stool(z) { var g = new THREE.Group(); g.position.set(-0.45, 0, z); counterG.add(g); var seat=mesh(new THREE.SphereGeometry(1,24,10),detail.material('#9c3f37','cloth'),0,0.7,0,g);seat.scale.set(0.17,0.037,0.17);detail.arc(g,0.164,0.002,detail.material('#c68067','cloth'),0,0.699,0);mesh(new THREE.CylinderGeometry(0.033,0.033,0.025,16),M.chrome,0,0.65,0,g); mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.66, 8), M.chrome, 0, 0.35, 0, g); mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.03, 16), M.chrome, 0, 0.02, 0, g); return g; }
+stool(-0.9); stool(0.1); var yourStool = stool(1.0);
+for(var scratch=0;scratch<14;scratch++){var line=mesh(new THREE.BoxGeometry(0.012+scratch%3*0.011,0.0003,0.0004),detail.material('#a78e7a','paper'),-0.1+scratch%4*0.07,1.005,-1.2+scratch*0.17,counterG);line.rotation.y=scratch*0.7;}
+// your plate: fish, chips, the paper it came in, salt, vinegar, a fork
+var plateG = new THREE.Group(); plateG.position.set(0.02, 1.005, 1.0); counterG.add(plateG);
+var paperTex = tex(256, 256, function(cx, w, h) { cx.fillStyle = '#e8e0c8'; cx.fillRect(0, 0, w, h); cx.fillStyle = '#2a2a2a'; for (var l = 0; l < 30; l++) { cx.fillRect(10, 8 + l * 8, 20 + rnd(l * 3) * 200, 1.5); } cx.fillStyle = 'rgba(140,100,40,0.35)'; cx.beginPath(); cx.ellipse(130, 130, 90, 70, 0.3, 0, 6.3); cx.fill(); });
+var paper = mesh(new THREE.PlaneGeometry(0.42, 0.36), new THREE.MeshStandardMaterial({ map: paperTex, roughness: 0.95 }), 0, 0.002, 0, plateG); paper.rotation.x = -Math.PI / 2; paper.rotation.z = 0.2;
+detail.lathe([[0,0],[0.09,0],[0.125,0.004],[0.15,0.012],[0.15,0.016],[0.14,0.017],[0.12,0.007],[0,0.007]],detail.material('#dedbca','glaze'),0,0.004,0,plateG);detail.arc(plateG,0.146,0.0014,detail.material('#bdbda9','glaze'),0,0.021,0);
+var chipMat = new THREE.MeshStandardMaterial({ color: 0xd9a63a, roughness: 0.75 });
+for (var ch = 0; ch < 14; ch++) { var chip = mesh(new THREE.BoxGeometry(0.012, 0.012, 0.07 + k.rnd(ch) * 0.05), chipMat, -0.05 + (k.rnd(ch * 7) - 0.5) * 0.17, 0.028 + (ch % 3) * 0.011, 0.03 + (k.rnd(ch * 3) - 0.5) * 0.2, plateG); chip.rotation.y = k.rnd(ch * 11) * 3.1; chip.rotation.z = (k.rnd(ch * 13) - 0.5) * 0.4; }
+var batterTex = tex(128, 64, function(cx, w, h) { cx.fillStyle = '#c99438'; cx.fillRect(0, 0, w, h); for (var i = 0; i < 400; i++) { cx.fillStyle = i % 3 ? 'rgba(90,50,10,0.35)' : 'rgba(240,200,120,0.4)'; cx.fillRect(k.rnd(i) * w, k.rnd(i * 5) * h, 1 + k.rnd(i * 2) * 3, 1 + k.rnd(i * 4) * 2); } });
+var fishOn = mesh(new THREE.SphereGeometry(1, 18, 12), new THREE.MeshStandardMaterial({ map: batterTex, bumpMap: batterTex, bumpScale: 0.004, roughness: 0.8 }), 0.02, 0.055, -0.06, plateG); fishOn.scale.set(0.13, 0.028, 0.055); fishOn.rotation.y = 0.3;
+detail.lathe([[0,0],[0.017,0],[0.018,0.008],[0.014,0.078],[0.012,0.084],[0,0.084]],detail.glass,0.2,0.015,0.12,plateG);
+mesh(new THREE.CylinderGeometry(0.012,0.015,0.05,20),detail.material('#d2cebd','paper'),0.2,0.043,0.12,plateG);
+// 2026-10-24: this handled salt lid has grease in the perforations and a dull rolled edge.
+mesh(new THREE.CylinderGeometry(0.0145,0.0145,0.01,20),detail.material('#7d8074','metal'),0.2,0.101,0.12,plateG);
+var saltLidWear=tex(128,128,function(c,w,h){c.clearRect(0,0,w,h);for(var n=0;n<7;n++){var a=n*Math.PI/3,r=n===6?0:35,px=64+Math.cos(a)*r,py=64+Math.sin(a)*r,g=c.createRadialGradient(px,py,1,px,py,13);g.addColorStop(0,'rgba(71,53,28,0.65)');g.addColorStop(1,'rgba(108,85,45,0)');c.fillStyle=g;c.fillRect(px-14,py-14,28,28);}c.strokeStyle='rgba(72,65,47,0.65)';c.lineWidth=4;c.beginPath();c.arc(64,64,60,0.2,5.7);c.stroke();for(var n=0;n<80;n++){var a=n*2.4,r=40+(n*11%20);c.fillStyle=n%3?'rgba(223,218,194,0.7)':'rgba(92,75,48,0.4)';c.fillRect(64+Math.cos(a)*r,64+Math.sin(a)*r,1+n%2,1);}});
+var saltWearTop=mesh(new THREE.CircleGeometry(0.0143,24),new THREE.MeshStandardMaterial({map:saltLidWear,transparent:true,roughness:0.88,depthWrite:false}),0.2,0.1063,0.12,plateG);saltWearTop.rotation.x=-Math.PI/2;
+for(var hole=0;hole<7;hole++){var angle=hole*Math.PI/3,r=hole===6?0:0.008;detail.button(plateG,0.2+Math.cos(angle)*r,0.107,0.12+Math.sin(angle)*r,0.0012,'#383c35');} var vinegarG=detail.group(0.25,0.015,0.05,plateG);detail.bottle(vinegarG,0.082,0.019,0x66502a,2);
+mesh(new THREE.CylinderGeometry(0.008,0.008,0.01,16),detail.material('#aaaca1','metal'),0,0.115,0,vinegarG);
+mesh(new THREE.CylinderGeometry(0.0025,0.0035,0.008,10),M.chrome,0.003,0.123,0,vinegarG);
+// Dried vinegar collects beneath the cap and runs down one side, rather than rusting the whole bottle.
+detail.arc(vinegarG,0.0081,0.0007,detail.material('#66502f','paper'),0,0.1103,0,4.6,0.5);
+var vinegarDrip=mesh(new THREE.CylinderGeometry(0.0193,0.0193,0.039,20,1,true,-0.3,0.65),new THREE.MeshStandardMaterial({map:tex(64,128,function(c,w,h){c.clearRect(0,0,w,h);for(var n=0;n<3;n++){var px=20+n*11;c.strokeStyle='rgba(79,49,20,'+(0.38-n*0.07)+')';c.lineWidth=2+n%2;c.beginPath();c.moveTo(px,0);c.bezierCurveTo(px-4,23,px+5,54,px-2,80+n*17);c.stroke();}}),transparent:true,roughness:0.8,depthWrite:false}),0,0.049,0,vinegarG);
+var forkG=detail.group(0.12,0.023,0.06,plateG);forkG.rotation.y=-0.4;
+var handle=mesh(new THREE.SphereGeometry(1,16,8),M.chrome,0,0,0.025,forkG);handle.scale.set(0.006,0.002,0.055);
+mesh(new THREE.BoxGeometry(0.006,0.003,0.035),M.chrome,0,0,-0.035,forkG);mesh(new THREE.BoxGeometry(0.027,0.003,0.012),M.chrome,0,0.001,-0.055,forkG);
+for(var tine=0;tine<4;tine++)mesh(new THREE.BoxGeometry(0.0025,0.002,0.024),M.chrome,(tine-1.5)*0.007,0.002,-0.072,forkG);
+var plateHit = mesh(new THREE.BoxGeometry(0.55, 0.3, 0.5), M.hidden, 0.05, 0.1, 0, plateG);
+// the ticket, the number on it, on the counter beside your elbow, and the tea
+var ticket = mesh(new THREE.PlaneGeometry(0.06, 0.09), new THREE.MeshStandardMaterial({ map: tex(64, 96, function(cx, w, h) { cx.fillStyle = '#f0e8d8'; cx.fillRect(0, 0, w, h); cx.fillStyle = '#1a1a1a'; cx.font = 'bold 26px Arial'; cx.textAlign = 'center'; cx.fillText('47', 32, 40); cx.font = '10px Arial'; cx.fillText('魚 薯條', 32, 62); cx.fillStyle = 'rgba(120,80,30,0.5)'; cx.beginPath(); cx.arc(46, 78, 8, 0, 6.3); cx.fill(); }), roughness: 0.95 }), -0.1, 1.008, 0.55, counterG); ticket.rotation.x = -Math.PI / 2; ticket.rotation.z = -0.5;
+var ticketHit = mesh(new THREE.BoxGeometry(0.2, 0.1, 0.2), M.hidden, -0.1, 1.03, 0.55, counterG);
+mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.08, 14), new THREE.MeshStandardMaterial({ color: 0xf0f0e8, roughness: 0.3 }), 0.12, 1.045, 0.5, counterG); mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.005, 14), new THREE.MeshStandardMaterial({ color: 0x7a4a20, roughness: 0.3 }), 0.12, 1.08, 0.5, counterG);
+// the newly-empty table by the door with its matchbox, its ashtray and its paper
+var tableG = new THREE.Group(); tableG.position.set(-1.15, 0, 2.5); scene.add(tableG); mesh(new THREE.BoxGeometry(0.9, 1.0, 0.9), M.hidden, 0, 0.5, 0, tableG);
+mesh(new THREE.BoxGeometry(0.7, 0.04, 0.6), formica, 0, 0.74, 0, tableG); mesh(new THREE.BoxGeometry(0.7, 0.05, 0.6), M.chrome, 0, 0.7, 0, tableG); mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.68, 8), M.chrome, 0, 0.35, 0, tableG); mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 16), M.chrome, 0, 0.01, 0, tableG);
+var matchG=detail.group(0.18,0.77,0.1,tableG);matchG.rotation.y=0.5;
+// 2026-10-24: pocket-softened match sleeve and a striker used repeatedly at the same angle.
+var matchSleeve=new THREE.MeshStandardMaterial({map:tex(256,128,function(c,w,h){c.fillStyle='#b59c63';c.fillRect(0,0,w,h);var edge=c.createLinearGradient(0,0,w,0);edge.addColorStop(0,'rgba(66,47,26,0.55)');edge.addColorStop(0.13,'rgba(66,47,26,0)');edge.addColorStop(0.82,'rgba(66,47,26,0)');edge.addColorStop(1,'rgba(66,47,26,0.5)');c.fillStyle=edge;c.fillRect(0,0,w,h);for(var n=0;n<120;n++){c.fillStyle=n%4?'rgba(232,215,173,0.5)':'rgba(76,55,30,0.25)';var y=n%2?1+n%8:h-2-n%7;c.fillRect(n*47%w,y,2+n%9,1+n%2);}c.strokeStyle='rgba(74,54,29,0.32)';c.lineWidth=2;c.beginPath();c.moveTo(12,17);c.lineTo(225,105);c.stroke();}),roughness:0.98});
+mesh(new THREE.BoxGeometry(0.06,0.017,0.04),matchSleeve,0,0,0,matchG);
+mesh(new THREE.BoxGeometry(0.002,0.012,0.034),detail.material('#d8ccb0','paper'),0.031,0,0,matchG);
+var usedStriker=new THREE.MeshStandardMaterial({map:tex(256,64,function(c,w,h){c.fillStyle='#654b37';c.fillRect(0,0,w,h);for(var n=0;n<500;n++){c.fillStyle=n%2?'#765942':'#483b30';c.fillRect(n*47%w,n*31%h,2,1);}for(var n=0;n<9;n++){c.strokeStyle=n%3?'rgba(37,28,23,0.8)':'rgba(179,149,107,0.6)';c.lineWidth=2+n%3;c.beginPath();c.moveTo(30+n*21,53);c.lineTo(56+n*20,8+n%7);c.stroke();}}),roughness:1});
+mesh(new THREE.BoxGeometry(0.052,0.009,0.001),usedStriker,0,0,0.0205,matchG);
+mesh(new THREE.BoxGeometry(0.035,0.0005,0.021),detail.material('#8a4933','paper'),0,0.009,0,matchG); detail.ash(-0.15,0.76,-0.1,tableG,0.04);
+// Folded newsprint: faded columns, a rubbed fold and one partial cup mark. No new legible text.
+var oldNews=tex(512,384,function(c,w,h){c.fillStyle='#c3bba6';c.fillRect(0,0,w,h);c.fillStyle='rgba(54,51,42,0.6)';c.fillRect(25,22,462,10);c.fillRect(25,39,340,4);for(var col=0;col<4;col++){var left=26+col*119;for(var row=0;row<45;row++){var len=72+((row*19+col*37)%34);c.fillStyle='rgba(51,49,42,'+(0.26+(row%4)*0.06)+')';c.fillRect(left,66+row*6,len,1.5);}}var edge=c.createLinearGradient(0,0,w,h);edge.addColorStop(0,'rgba(94,70,36,0.25)');edge.addColorStop(0.2,'rgba(94,70,36,0)');edge.addColorStop(0.8,'rgba(94,70,36,0)');edge.addColorStop(1,'rgba(94,70,36,0.2)');c.fillStyle=edge;c.fillRect(0,0,w,h);c.fillStyle='rgba(69,57,39,0.13)';c.fillRect(252,0,4,h);c.fillStyle='rgba(224,215,190,0.5)';c.fillRect(250,0,2,h);c.strokeStyle='rgba(108,75,35,0.23)';c.lineWidth=3;c.beginPath();c.ellipse(437,306,54,44,-0.2,0.3,5.6);c.stroke();for(var n=0;n<120;n++){c.fillStyle='rgba(224,215,190,0.4)';c.fillRect(n*47%w,n%2?h-2-n%5:n%6,2+n%8,1);}});
+var newsEdge=detail.material('#bcb39b','paper'),newsFace=new THREE.MeshStandardMaterial({map:oldNews,roughness:1});
+mesh(new THREE.BoxGeometry(0.3,0.0035,0.2),[newsEdge,newsEdge,newsFace,newsEdge,newsEdge,newsEdge],-0.05,0.763,0.15,tableG).rotation.y=-0.3;
+[[0.45, 0], [-0.45, 0]].forEach(function(c) { var ch = new THREE.Group(); ch.position.set(c[0], 0, c[1]); ch.rotation.y = c[0] > 0 ? -Math.PI / 2 : Math.PI / 2; tableG.add(ch); mesh(new THREE.BoxGeometry(0.38, 0.05, 0.38), new THREE.MeshStandardMaterial({ color: 0xc03030, roughness: 0.35 }), 0, 0.46, 0, ch); mesh(new THREE.BoxGeometry(0.38, 0.32, 0.04), new THREE.MeshStandardMaterial({ color: 0xc03030, roughness: 0.35 }), 0, 0.68, -0.17, ch); [[-0.16, -0.16], [0.16, -0.16], [-0.16, 0.16], [0.16, 0.16]].forEach(function(l) { mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.44, 6), M.chrome, l[0], 0.22, l[1], ch); }); });
+k.contact(-1.35, 0, 1.9, 1.3);
+// ---------- THE WINDOW onto Greek Street and THE DOOR beside it: the street going past, and her ----------
+var winG = new THREE.Group(); winG.position.set(-0.6, 1.55, D / 2 - 0.03); winG.rotation.y = Math.PI; scene.add(winG);
+mesh(new THREE.BoxGeometry(2.2, 2.2, 0.1), new THREE.MeshStandardMaterial({ color: 0x2a3a2a, roughness: 0.7 }), 0, 0, 0, winG);
+var streetTex = tex(512, 512, function(cx, w, h) { var g = cx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#0a0c14'); g.addColorStop(0.55, '#141420'); g.addColorStop(1, '#1e1a1e'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); cx.fillStyle = '#1a1614'; cx.fillRect(0, h * 0.2, w, h * 0.5); for (var wi = 0; wi < 10; wi++) { cx.fillStyle = rnd(wi) < 0.4 ? 'rgba(255,200,120,0.55)' : 'rgba(30,30,50,0.9)'; cx.fillRect(30 + (wi % 5) * 95, h * 0.26 + Math.floor(wi / 5) * 90, 40, 60); } cx.fillStyle = '#2a2a30'; cx.fillRect(0, h * 0.7, w, h * 0.3); var lg = cx.createRadialGradient(400, h * 0.3, 0, 400, h * 0.3, 120); lg.addColorStop(0, 'rgba(255,220,150,0.9)'); lg.addColorStop(0.2, 'rgba(255,200,120,0.4)'); lg.addColorStop(1, 'rgba(255,200,120,0)'); cx.fillStyle = lg; cx.fillRect(0, 0, w, h); cx.fillStyle = '#0a0a0a'; cx.fillRect(396, h * 0.3, 6, h * 0.42); var rg = cx.createLinearGradient(0, h * 0.7, 0, h); rg.addColorStop(0, 'rgba(255,220,150,0.25)'); rg.addColorStop(1, 'rgba(255,220,150,0)'); cx.fillStyle = rg; cx.fillRect(360, h * 0.7, 80, h * 0.3); for (var r = 0; r < 600; r++) { cx.fillStyle = 'rgba(200,220,255,0.15)'; cx.fillRect(rnd(r * 3) * w, rnd(r * 5) * h, 1, 3 + rnd(r) * 5); } });
+mesh(new THREE.PlaneGeometry(2.0, 2.0), new THREE.MeshBasicMaterial({ map: streetTex, toneMapped: false }), 0, 0, 0.055, winG);
+mesh(new THREE.PlaneGeometry(2.0, 2.0), new THREE.MeshPhysicalMaterial({ color: 0xf0f4ff, roughness: 0.05, transparent: true, opacity: 0.12, envMap: k.roomEnv, envMapIntensity: 1, clearcoat: 1 }), 0, 0, 0.06, winG);
+var letterTex = tex(512, 96, function(cx, w, h) { cx.clearRect(0, 0, w, h); cx.save(); cx.translate(w, 0); cx.scale(-1, 1); cx.fillStyle = 'rgba(240,60,50,0.9)'; cx.font = 'bold 44px Arial,sans-serif'; cx.textAlign = 'center'; cx.fillText('FISH & CHIPS', w / 2, 62); cx.fillStyle = 'rgba(240,200,60,0.9)'; cx.font = 'bold 30px Arial'; cx.fillText('中國', 70, 60); cx.restore(); });
+mesh(new THREE.PlaneGeometry(2.0, 0.375), new THREE.MeshBasicMaterial({ map: letterTex, transparent: true, toneMapped: false }), 0, 0.72, 0.065, winG);
+mesh(new THREE.BoxGeometry(0.05, 2.0, 0.04), new THREE.MeshStandardMaterial({ color: 0x2a3a2a, roughness: 0.7 }), 0.4, 0, 0.08, winG);
+// Lily, passing the window: a tall trace in the street light, articulated the way you remember
+var lily = k.ghost(-0.55, 0.1, D / 2 + 0.25, 43, 0.5, false, true, 1.18); lily.sp.material.depthTest = false;
+var lilyHit = mesh(new THREE.BoxGeometry(2.3, 2.3, 0.4), M.hidden, 0, 0, 0.2, winG);
+var doorG = new THREE.Group(); doorG.position.set(1.3, 0, D / 2 - 0.03); doorG.rotation.y = Math.PI; scene.add(doorG);
+mesh(new THREE.BoxGeometry(0.9, 2.2, 0.06), new THREE.MeshStandardMaterial({ color: 0x2a3a2a, roughness: 0.7 }), 0, 1.1, 0, doorG); mesh(new THREE.PlaneGeometry(0.6, 1.2), new THREE.MeshBasicMaterial({ map: streetTex, toneMapped: false }), 0, 1.4, 0.035, doorG);
+mesh(new THREE.BoxGeometry(0.3, 0.04, 0.05), M.chrome, 0.2, 1.0, 0.05, doorG); mesh(new THREE.PlaneGeometry(0.3, 0.12), new THREE.MeshStandardMaterial({ map: tex(128, 48, function(cx, w, h) { cx.fillStyle = '#e8e0d0'; cx.fillRect(0, 0, w, h); cx.fillStyle = '#1a1a1a'; cx.font = 'bold 26px Arial'; cx.textAlign = 'center'; cx.fillText('OPEN', 64, 34); }), roughness: 0.8 }), -0.15, 1.6, 0.04, doorG);
+var doorHit = mesh(new THREE.BoxGeometry(1.1, 2.4, 0.5), M.hidden, 0, 1.2, 0.15, doorG);
+var streetLight = new THREE.PointLight(0xffd8a0, 0.9, 5, 1.7); streetLight.position.set(0.4, 1.7, D / 2 - 0.5); scene.add(streetLight);
+var winGlow = k.glow(-0.6, 1.6, D / 2 - 0.1, 2.6, 0.2, 0xffd8a0);
+// ---------- LIGHT ----------
+scene.add(new THREE.AmbientLight(0x8a94a8, 0.22));
+scene.add(new THREE.HemisphereLight(0xc8d4e8, 0x30281c, 0.26));
+k.ghost(W / 2 - 0.9, 0, -0.9, 45, 0.16, true, false);
+// ---------- THE CLOSE-UPS ----------
+var hotspots = [
+{ root: plateHit, name: 'Your plate', pos: [1.0, 1.55, 1.8], tgt: [W / 2 - 0.33, 1.0, 1.2], haloAt: [W / 2 - 0.33, 1.1, 1.2], haloSc: 0.7,
+actions: function() { return k.byText(['Eat.']); } },
+{ root: lilyHit, name: 'A window', pos: [0.2, 1.5, 2.0], tgt: [-0.6, 1.45, D / 2], haloAt: [-0.6, 1.5, D / 2 - 0.15], haloSc: 2.2,
+actions: function() { return k.lilyHook(1); } },
+{ root: rangeHit, name: 'A range', pos: [0.5, 1.5, 0.0], tgt: [-W / 2 + 0.55, 1.2, 0.0], haloAt: [-W / 2 + 0.7, 1.3, 0.0], haloSc: 2.4 },
+{ root: menu, name: 'A menu', pos: [0.5, 1.95, 0.0], tgt: [-W / 2, 1.72, 0.0], haloAt: [-W / 2 + 0.15, 1.72, 0.0], haloSc: 2.6 },
+{ root: ticketHit, name: 'A ticket', pos: [W / 2 - 0.8, 1.2, 1.02], tgt: [W / 2 - 0.45, 1.0, 0.75], haloAt: [W / 2 - 0.45, 1.06, 0.75], haloSc: 0.45 },
+{ root: tableG, name: 'An empty table', pos: [-0.3, 1.4, 1.2], tgt: [-1.15, 0.75, 2.5], haloAt: [-1.15, 0.85, 2.5], haloSc: 1.2 },
+{ root: doorHit, name: 'A door', pos: [0.6, 1.5, 1.6], tgt: [1.3, 1.2, D / 2], haloAt: [1.3, 1.2, D / 2 - 0.15], haloSc: 1.3,
+actions: function() { return window.dssStreetExit(); }, // 2026-10-06: the door offers the page's own "Exit to the street" (it stays in the header too), as the Coach's door does
+}
+];
+var lilyX0 = -0.55;
+return { hotspots: hotspots, frame: function(t, dt, still) {
+if (still) return;
+for (var i = 0; i < tubes.length; i++) { var fl = i === 1 && Math.sin(t * 7.3) > 0.92 ? 0.35 : 1; tubes[i].l.intensity = 1.5 * fl + 0.03 * Math.sin(t * 60 + i); tubes[i].gl.material.opacity = 0.4 * fl; tubes[i].tube.material.color.setScalar(0.7 + 0.3 * fl); }
+cabLight.intensity = 1.2 + 0.05 * Math.sin(t * 2.3); wokFlame.material.opacity = 0.4 + 0.25 * Math.sin(t * 17) * Math.sin(t * 5);
+for (var s = 0; s < steam.length; s++) { var sp = steam[s]; sp.position.y = sp.userData.y0 + ((t * 0.15 + sp.userData.ph) % 1.2); sp.material.opacity = 0.16 * (1 - ((t * 0.15 + sp.userData.ph) % 1.2) / 1.2); sp.position.x += Math.sin(t + sp.userData.ph) * 0.001; }
+// she passes, slowly, and comes back round, the way a memory does
+var pass = ((t * 0.09) % 1); lily.sp.position.x = lilyX0 + (pass - 0.5) * 3.0; lily.hit.position.x = lily.sp.position.x; lily.sp.material.opacity = 0.5 * Math.max(0, 1 - Math.abs(pass - 0.5) * 3.2);
+winGlow.material.opacity = 0.2 + 0.03 * Math.sin(t * 0.7);
+} };
+}
+});
+// <<<< DSS ROOM CF END
+
+// >>>> DSS ROOM OI BEGIN

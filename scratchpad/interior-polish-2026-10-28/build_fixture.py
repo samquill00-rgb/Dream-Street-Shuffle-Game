@@ -12,6 +12,7 @@ var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(60,wrap.clientWid
 var CAM={x:0,y:1.5,z:5,tx:0,ty:1.2,tz:0};camera.position.set(0,1.5,5);camera.lookAt(0,1.2,0);camera.updateMatrixWorld();
 function tex(w,h,draw){var c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);return new THREE.CanvasTexture(c);}
 var a=document.createElement('button');a.textContent='Inspect the object';a.onclick=function(){window.actionCount=(window.actionCount||0)+1};
+a.style.display='none';host.appendChild(a);
 var roots=[-1,1].map(function(x){var root=new THREE.Mesh(new THREE.BoxGeometry(.6,1.2,.6),new THREE.MeshBasicMaterial());root.position.set(x,1.2,0);scene.add(root);return root;});
 var HOTSPOTS=roots.map(function(root,i){return{root:root,name:i?'Right object':'Left object',pos:[i?.8:-.8,1.4,2.5],tgt:[i?1:-1,1.2,0],prose:function(){return 'A little room detail, held in warm light. This text can be selected and read without closing the view.';},actions:function(){return[a]}}});
 window.play=dssRoomPlay({wrap:wrap,canvas:canvas,host:host,scene:scene,camera:camera,CAM:CAM,HOTSPOTS:HOTSPOTS,tex:tex,still:location.search.includes('still')});

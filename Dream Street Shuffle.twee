@@ -126,7 +126,7 @@ Dream Street Shuffle
 (set: $nightAheadPart2Shown to false)\
 (set: $sawMemory1 to false)\
 (set: $sawMemory2 to false)\
-(set: $metGreenSeaFriend to false)(set: $harpRouteOn to false)\
+(set: $metGreenSeaFriend to false)(set: $harpRouteOn to false)(set: $loreRead to (a:))<!-- 2026-10-28 (notes 34/35): the lore notes read, for the NOTEBOOK -->\
 (set: $killedMugger to false)\
 (set: $harpMet to false)(set: $harpNamed to "")(set: $harpOutcome to "")\
 (set: $sawMemory3 to false)\
@@ -12969,21 +12969,62 @@ window.dssLore = (function() {
   function isLore(t) { return RX.test(t || ''); }
   function titleOf(t) { return String(t || '').replace(RX, '').replace(/\s*⟡\s*$/, '').trim(); }
   var notes = {};
+  /* 2026-10-28 (Sam, playtest notes 34/35; his ruling: "the lore front and centre", the rumour treatment): the words of every note
+     opened are kept (localStorage dssLoreText) so the NOTEBOOK's LORE section can print them in full; and a note opens on its own the
+     first time its sentence is on screen (dssLoreAuto, once per browser), after a reading beat, with the darker scrim and a button at
+     its foot. Its ⟡ LORE mark still reopens it. A note that only a room card carries keeps to the card. */
+  var KEYT = 'dssLoreText', KEYA = 'dssLoreAuto', autoFirst = null;
+  function kept() { try { return JSON.parse(localStorage.getItem(KEYT) || '{}') || {}; } catch (e) { return {}; } }
+  function remember(t, html) { try { var k = kept(); if (k[t]) return; k[t] = html; localStorage.setItem(KEYT, JSON.stringify(k)); } catch (e) {} }
+  function autoDone(t) { try { return (JSON.parse(localStorage.getItem(KEYA) || '[]') || []).indexOf(t) >= 0; } catch (e) { return true; } }
+  function autoMark(t) { try { var a = JSON.parse(localStorage.getItem(KEYA) || '[]') || []; if (a.indexOf(t) < 0) a.push(t); localStorage.setItem(KEYA, JSON.stringify(a)); } catch (e) {} }
+  function seen(el) { if (!el || !el.isConnected || !el.getClientRects().length) return false; var r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return false; for (var e = el; e && e.nodeType === 1; e = e.parentElement) { var cs = getComputedStyle(e); if (cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.6) return false; } return true; }
+  function held_busy() { return !!((window.dssOverlayBusy && window.dssOverlayBusy()) || document.querySelector('#dss-lore-overlay, tw-dialog, .phone-ringing:not(.ring-wait), .phone-scene, .dss-slip-fly, .dss-refusal:not(.dss-filed), .dss-rules-overlay')); }
+  function autoOpen(l, t, fn) {
+    if (autoDone(t)) return;
+    var gen = null, at = 0; setTimeout(function() { gen = window._passageGen; }, 150);
+    var poll = setInterval(function() {
+      if (!fn.isConnected || (gen !== null && window._passageGen !== gen) || autoDone(t)) { clearInterval(poll); return; }
+      if (!seen(fn) || held_busy()) { at = 0; return; }
+      if (!at) { at = Date.now(); return; }
+      var para = fn.parentNode ? (fn.parentNode.textContent || '') : '', beat = Math.min(7000, 2500 + 25 * para.length);
+      if (Date.now() - at < beat) return;
+      clearInterval(poll); autoMark(t); autoFirst = t; fn.click();
+    }, 300);
+  }
+  setInterval(function() {
+    Array.prototype.forEach.call(document.querySelectorAll('.nb-lore-notes:not([data-filled])'), function(b) {
+      b.setAttribute('data-filled', '1'); var k = kept(), gw = document.getElementById('dss-lore-greatwork');
+      (b.getAttribute('data-read') || '').split('|').filter(Boolean).forEach(function(t) {
+        var html = k[t] || (t === 'The Great Work' && gw ? gw.innerHTML : null); if (!html) return;
+        var n = document.createElement('div'); n.className = 'nb-lore-note';
+        n.innerHTML = '<div class="nb-lore-title">\u27e1 ' + t.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div><div class="nb-lore-text dss-lore-body"></div>';
+        var body = n.lastChild; body.innerHTML = html;
+        Array.prototype.forEach.call(body.querySelectorAll('script, style'), function(e) { e.parentNode.removeChild(e); });
+        Array.prototype.forEach.call(body.querySelectorAll('[style]'), function(e) { e.style.removeProperty('opacity'); e.style.removeProperty('transition'); e.style.removeProperty('display'); });
+        if (body.querySelector('.lore-box > strong')) n.firstChild.style.display = 'none';
+        b.appendChild(n);
+      });
+    });
+  }, 300);
   function close() { var o = document.getElementById('dss-lore-overlay'); if (o) { o.classList.add('out'); setTimeout(function() { if (o.parentNode) o.parentNode.removeChild(o); }, 250); } }
   function show(title) {
     var held = notes[title]; if (!held) return;
     close();
-    var o = document.createElement('div'); o.id = 'dss-lore-overlay';
+    var auto = (autoFirst === title); autoFirst = null;
+    var o = document.createElement('div'); o.id = 'dss-lore-overlay'; if (auto) o.className = 'dss-lore-auto';
     var c = document.createElement('div'); c.className = 'dss-lore-card'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', title);
     var x = document.createElement('button'); x.type = 'button'; x.className = 'dss-lore-x'; x.setAttribute('aria-label', 'Close'); x.textContent = '×';
     var h = document.createElement('div'); h.className = 'dss-lore-title'; h.textContent = '⟡ ' + title;
     var b = document.createElement('div'); b.className = 'dss-lore-body'; b.appendChild(held);
     if (held.querySelector('.lore-box > strong')) h.style.display = 'none'; // the note carries its own heading (his): no second one
-    c.appendChild(x); c.appendChild(h); c.appendChild(b); o.appendChild(c); document.body.appendChild(o);
+    c.appendChild(x); c.appendChild(h); c.appendChild(b);
     function done() { if (held.parentNode === b) b.removeChild(held); close(); document.removeEventListener('keydown', onKey, true); }
+    if (auto) { var on = document.createElement('button'); on.type = 'button'; on.className = 'dss-lore-on'; on.textContent = 'On.'; on.addEventListener('click', function(ev) { ev.stopPropagation(); done(); }); c.appendChild(on); setTimeout(function() { try { on.scrollIntoView({ block: 'nearest' }); } catch (e) {} }, 60); }
+    o.appendChild(c); document.body.appendChild(o);
     function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); done(); } }
     x.addEventListener('click', done);
-    o.addEventListener('click', function(ev) { if (ev.target === o) done(); });
+    o.addEventListener('click', function(ev) { if (ev.target === o && !auto) done(); });
     document.addEventListener('keydown', onKey, true);
     requestAnimationFrame(function() { o.classList.add('in'); try { x.focus({ preventScroll: true }); } catch (e) {} });
   }
@@ -12998,7 +13039,7 @@ window.dssLore = (function() {
       var frag = document.createElement('div'); frag.className = 'dss-lore-held';
       Array.prototype.slice.call(hook.childNodes).forEach(function(n) { if (!(n.nodeType === 1 && n.tagName === 'TW-LINK')) frag.appendChild(n); });
       hook.style.display = 'none';
-      notes[t] = frag; show(t);
+      notes[t] = frag; remember(t, frag.innerHTML); show(t);
     }, 80);
   }, true);
   function placeDagger(l) {
@@ -13021,6 +13062,7 @@ window.dssLore = (function() {
     if (spot) spot.parentNode.insertBefore(fn, spot.nextSibling);
     else wrap.parentNode.insertBefore(fn, wrap);
     wrap.classList.add('lore-hidden-link');
+    if (!fn.closest('.dss-ghost')) autoOpen(l, t, fn);
   }
   function scan() { Array.prototype.forEach.call(document.querySelectorAll('tw-link'), function(l) { if (isLore(l.textContent)) placeDagger(l); }); }
   var q = false;
@@ -13029,7 +13071,7 @@ window.dssLore = (function() {
   // 2026-10-19 (Sam, playtest): a room card's lore button opens the note and leaves the card up, so closing the note goes back to the card
   function open(l) { var t = titleOf(l.textContent); if (notes[t]) show(t); else if (l.isConnected) l.click(); }
   /* 2026-10-19: a note held in the page rather than behind a link (THE GREAT WORK, printed hidden by the header) */
-  function showFrom(title, src) { if (!notes[title] && src) { var frag = document.createElement('div'); frag.className = 'dss-lore-held'; frag.innerHTML = src.innerHTML; Array.prototype.forEach.call(frag.querySelectorAll('[style]'), function(e) { e.style.removeProperty('opacity'); e.style.removeProperty('transition'); }); notes[title] = frag; } show(title); } /* (overnight: no inline opacity carried into the card) */
+  function showFrom(title, src) { if (!notes[title] && src) { var frag = document.createElement('div'); frag.className = 'dss-lore-held'; frag.innerHTML = src.innerHTML; Array.prototype.forEach.call(frag.querySelectorAll('[style]'), function(e) { e.style.removeProperty('opacity'); e.style.removeProperty('transition'); }); remember(title, frag.innerHTML); notes[title] = frag; } show(title); } /* (overnight: no inline opacity carried into the card) */
   return { scan: scan, show: show, isLore: isLore, open: open, showFrom: showFrom };
 })();
 /* 2026-10-19 (Sam: explain the alchemy, "4 plus 3"). THE WHEEL IN THE NOTEBOOK and THE GREAT WORK NOTE.
@@ -13041,7 +13083,7 @@ window.dssLore = (function() {
   var GATES = [['Calcinatio', 'The Sketch'], ['Solutio', 'The Refusal'], ['Separatio', 'The Sorting'], ['Coniunctio', 'The Debt'], ['Putrefactio', 'The Beast'], ['Congelatio', 'The Head'], ['Cibatio', 'The Feeding'], ['Sublimatio', 'The Delivery'], ['Fermentatio', 'The Game'], ['Exaltatio', 'The Crown'], ['Multiplicatio', 'The Spread'], ['Projectio', 'The Wound']]; /* dssOpusReveal's order */
   var ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
   var NOTE = 'The Great Work';
-  function openNote() { var src = document.getElementById('dss-lore-greatwork'); if (src && window.dssLore && window.dssLore.showFrom) window.dssLore.showFrom(NOTE, src); }
+  function openNote() { var src = document.getElementById('dss-lore-greatwork'); if (src && window.dssLore && window.dssLore.showFrom) window.dssLore.showFrom(NOTE, src); try { var gw = Array.prototype.filter.call(document.querySelectorAll('.dss-gw-read tw-link'), function(l) { return !l.closest('.dss-ghost'); }).pop(); if (gw) gw.click(); } catch (e) {} /* 2026-10-28 (notes 34/35): the read is stamped through the header's hidden link */ }
   function mark() {
     var fn = document.createElement('span'); fn.className = 'lore-fn dss-gw-fn'; fn.innerHTML = '⟡<span class="lore-fn-word">LORE</span>';
     fn.title = NOTE; fn.setAttribute('role', 'button'); fn.tabIndex = 0; fn.setAttribute('aria-label', 'Note: ' + NOTE);
@@ -26583,8 +26625,8 @@ g.addColorStop(0, 'rgba(200,230,150,0.16)'); g.addColorStop(0.5, 'rgba(180,215,1
 cx.fillStyle = g; cx.fillRect(0, 0, 256, 256);
 // 2026-10-14 (Sam: the leaves and stalk greener): the edge glow is a deeper green (it was near white), and the sprig is
 // drawn with its greens saturated; the white bells stay white (saturation leaves white alone)
-cx.save(); cx.shadowColor = 'rgba(110,170,80,0.75)'; cx.shadowBlur = 8; cx.filter = 'saturate(1.9)'; cx.drawImage(img, 25, 13, 206, 230); cx.restore();
-cx.save(); cx.filter = 'saturate(2.1) contrast(1.08)'; cx.drawImage(img, 25, 13, 206, 230); cx.restore();
+cx.save(); cx.shadowColor = 'rgba(110,170,80,0.75)'; cx.shadowBlur = 8; cx.filter = 'brightness(1.4) saturate(1.9)'; cx.drawImage(img, 25, 13, 206, 230); cx.restore();
+cx.save(); cx.filter = 'brightness(1.45) saturate(1.8) contrast(1.08)'; cx.drawImage(img, 25, 13, 206, 230); cx.restore();
 t.needsUpdate = true;
 };
 img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(c));
@@ -26633,7 +26675,7 @@ if (vis) g.sp.material.opacity = Math.min(1, Math.max(restLevel, 0.92) * (g.next
 if (g.core) { g.core.visible = vis && !g.lilyOn; if (g.core.visible) g.core.material.opacity = 0.75 * g.sp.material.opacity; }
 var lv = idle && g.on && g.lilyOn;
 g.lily.visible = lv;
-if (lv) g.lily.material.opacity = still ? 1 : 0.9 + 0.1 * Math.sin(t * 1.1 + g.ph);
+if (lv) g.lily.material.opacity = still ? 1 : 0.97 + 0.03 * Math.sin(t * 1.1 + g.ph);
 if (g.lilyHalo) { g.lilyHalo.visible = lv; if (lv) g.lilyHalo.material.opacity = still ? 0.3 : 0.22 + 0.12 * (0.5 + 0.5 * Math.sin(t * 0.9 + g.ph)); /* (Sam: too bright, the flower was lost: a wide, faint ring of light now) */ }
 });
 }
@@ -57776,7 +57818,7 @@ A light’s on late in Cecil Court, leaching its scrumpy amber into the fog that
 
 On your way to the amber light you pass by Watkins, longtime tenants at numbers 19-21; hoary purveyor of the occult and the esoteric.
 
-(link: "⟡ LORE: Watkins ⟡")[<div class="lore-box">
+(link: "⟡ LORE: Watkins ⟡")[(set: _lore to "Watkins")(display: "Lore Read")<div class="lore-box">
 John Watkins, an ecumenical occultist bookseller and associate of Madame Blavatsky, opened the shop in 1901. His son Geoffrey ran it after him and, as of 1973, has only just retired; though he still haunts the place, like his father does.
 
 Cecil Court is known in the trade as Death Row.
@@ -59184,7 +59226,7 @@ The scent of her sour embers means something about lily of the valley.
 (if: $hasMissingPage is false and $returnedPage is false)[‘Stay,’ she says, ‘My Carthage is meant for you. She is in her valley and will not return. Rest here and think no more about England.’]\
 (else:)[‘You’re back,’ she says. ‘Carthage was always meant for you. What you took from the fire is yours; there is nothing else here. She is in her valley. Lie down beside me, now.’]
 
-(link: "⟡ LORE: Her Dying Words ⟡")[<div class="dido-words"><span class="latin">Littora littoribus contraria, fluctibus undas<br>
+(link: "⟡ LORE: Her Dying Words ⟡")[(set: _lore to "Her Dying Words")(display: "Lore Read")<div class="dido-words"><span class="latin">Littora littoribus contraria, fluctibus undas<br>
 Imprecor: arma armis: pugnent ipsique nepotes:<br>
 Liue false Æneas, truest Dido dyes,<br>
 Sic sic iuuat ire sub umbras.</span>
@@ -59333,7 +59375,7 @@ The (print: $keyNames's ($dreamKey)) in your pocket seems to heat with some occu
 [[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]
 (if: $metCritic is false)[Through the fumes, vapours and drink, you recognise a man.
 
-<span class="lore-card-only">(link: "⟡ LORE: The Great Ham ⟡")[<div class="lore-box">
+<span class="lore-card-only">(link: "⟡ LORE: The Great Ham ⟡")[(set: _lore to "The Great Ham")(display: "Lore Read")<div class="lore-box">
 <strong>⟡ THE GREAT HAM ⟡</strong>
 
 <div class="editors-note">
@@ -59907,7 +59949,7 @@ You say you wouldn’t know. He’s gracious and decides to press no further.
 
 JOHN ST. JOHN (if: $savedBy is not "john")[(for that is his name) ]is another poet.<!-- 2026-10-21 (ordering audit): a player beaten in the cellar before this scene has already been rescued by him, and named, there --> He hates RED. His rancour took seed in the days when they both used the same upstairs room in a Bloomsbury pub as their makeshift office.
 
-(link: "⟡ LORE: On Red and John St. John ⟡")[<div class="lore-box"><p>There is a cleaving-apart in English poetics, much as there is in philosophy, which derives from a difference of opinion about the French and the Germans. Where RED isn’t English, he is mostly French. He is Arthur Rimbaud on Charing Cross Road and his poems enact their dérive among the fragments of Mallarmé and Laforgue that Eliot shored up against the ruins in which the Great War left Europe.</p>
+(link: "⟡ LORE: On Red and John St. John ⟡")[(set: _lore to "On Red and John St. John")(display: "Lore Read")<div class="lore-box"><p>There is a cleaving-apart in English poetics, much as there is in philosophy, which derives from a difference of opinion about the French and the Germans. Where RED isn’t English, he is mostly French. He is Arthur Rimbaud on Charing Cross Road and his poems enact their dérive among the fragments of Mallarmé and Laforgue that Eliot shored up against the ruins in which the Great War left Europe.</p>
 
 <p>In //Socialism: Utopian and Scientific// (1880), Friedrich Engels differentiates between socialists for whom socialism is mostly about acting to make the world better for those who live in it, who are often English, and those whose socialism is rooted in a scientific understanding of ‘will’, as an abstract, impersonal force, subject to the laws of dialectics, not Christian morality.</p>
 
@@ -62669,7 +62711,7 @@ The beast throws you onto the pissant cobblestones, trots off and never looks ba
 (if: $tookLily3 is false)[|lily3>[(display: "Lily SVG")]\
 (click-replace: ?lily3)[(if: $sobriety < 30)[(display: "Lily SVG")(unless: $lostToDrink contains "lily3")[(set: $lostToDrink to $lostToDrink + (a: "lily3"))]<span class="lily-glimpse lily-fade">She was leaving town the day after PIERS GAV. She found you and your mates in a pub garden; you hadn’t slept and the acid was still funny. This is the flower you tried to give her. The one you picked in the ha-ha of some big house and kept in your buttonhole all night, and which she wouldn’t take.</span>](else:)[(set: $lostToDrink to $lostToDrink - (a: "lily3"))(set: $lilyCount to $lilyCount + 1)(set: $tookLily3 to true)(display: "Next Redraw")<span class="dss-lily-count" style="display:none">(print: $lilyCount)</span>(display: "Lily SVG")<span class="lily-glimpse lily-fade">You’ve the sense, distinct and cordial, that she is sitting behind you, and will not look,</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">Gather flowers. There are five to find.</div>](if: $lilyCount is 5)[(set: $confidence to ($statGain: $confidence, 25))(set: $sobriety to ($statGain: $sobriety, 15))<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">MORALE +25 | SOBRIETY +15</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
 
-<span id="ronnies-lore-entry" class="dss-claimed">(link: "⟡ LORE: Ronnie Scott’s ⟡")[<div class="lore-box">
+<span id="ronnies-lore-entry" class="dss-claimed">(link: "⟡ LORE: Ronnie Scott’s ⟡")[(set: _lore to "Ronnie Scott’s")(display: "Lore Read")<div class="lore-box">
 You hear four stories about Ronnie Scott’s and half of them are true.
 
 1. My mother and father went one night in the eighties. No particular occasion and they didn’t know who was playing. They sat behind the piano; too close for anyone who really wanted to hear it. Nina Simone played that night.
@@ -63147,7 +63189,7 @@ Opposite him is the only man who clocks you, who is thin like verdaccio and hard
 
 <div class="prose-tilde">~</div>
 <!-- 2026-10-24: Sam's approved book lore, offered from the paperback close-up. -->
-<span class="lore-card-only dss-claimed">(link: "⟡ LORE: Chariots of the Gods? ⟡")[<div class="lore-box">(display: "Lore Chariots of the Gods")</div>]</span>
+<span class="lore-card-only dss-claimed">(link: "⟡ LORE: Chariots of the Gods? ⟡")[(set: _lore to "Chariots of the Gods?")(display: "Lore Read")<div class="lore-box">(display: "Lore Chariots of the Gods")</div>]</span>
 
 (if: _fc >= 2 and not (($haunts contains $haunt1) and ($haunts contains $haunt2) and ($haunts contains $haunt4)))[[[Get a drink at the bar|Which drink at the French?]]
 ]\
@@ -63857,7 +63899,7 @@ Last time you were here, you recall only SCIPIO AEMILIANUS, who was your friend 
 And Priam and his people shall be slain.’
 </div>
 
-(link: "⟡ LORE: Carthago Delenda Est ⟡")[<div class="lore-box">
+(link: "⟡ LORE: Carthago Delenda Est ⟡")[(set: _lore to "Carthago Delenda Est")(display: "Lore Read")<div class="lore-box">
 Just north of Tunis and still given succour by the natural exposition of geographies, though piecemeal these days as if it had passed through a grinder, is Carthage harbour.
 
 A levelled motte with all Africa as its bailey, the little islet lies flat as a landed coin: the downward face is Hannibal’s; that lodged against the sky is inscribed ROMA.
@@ -65070,6 +65112,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 :: header header [header] {"position":"700,50","size":"100,100"}
 <span id="dss-pn" style="display:none;">(print: (passage:)'s name)</span>\
 <div id="dss-lore-greatwork" hidden>(display: "Lore The Great Work")</div>\
+<span class="dss-gw-read" hidden>(link: "gw-read")[(set: _lore to "The Great Work")(display: "Lore Read")]</span>\
 <span id="dss-lily-n" hidden>(if: $lilyCount is a number)[(print: $lilyCount)]</span>\
 <!-- 2026-10-21: the haunts caught before this page, for the gold wheel after a haunt (THE GATE FLASH). Pipe-delimited, as at the Dawn. -->(set: _dssHeld to "")(if: $haunts is an array)[(if: $haunts's length > 0)[(for: each _dssH, ...$haunts)[(set: _dssHeld to _dssHeld + _dssH + "|")]]]<span id="dss-haunts-held" hidden>(print: _dssHeld)</span>\
 <!-- 2026-10-22 (the dedication page): the names tonight has earned for the book's first page, read by dssDedication and banked across nights. Always AOIFE, your daughter, LILY, no one; ASHTON GRANGER once the cellar has named her; JOHN after his round or his rescue; the Fetch after the Sanctum. -->(set: _dssDedicPool to "aoife,daughter,noone")<!-- 2026-10-24 (Sam: "keep LILY off the dedication page until Night Ahead Part Two has shown") -->(if: $nightAheadPart2Shown is true)[(set: _dssDedicPool to _dssDedicPool + ",lily")](if: (history:) contains "Turn to Copper")[(set: _dssDedicPool to _dssDedicPool + ",ashton")](if: ((history:) contains "His round") or ($savedBy is "john"))[(set: _dssDedicPool to _dssDedicPool + ",john")](if: $sanctumDone is true)[(set: _dssDedicPool to _dssDedicPool + ",fetch")]<span id="dss-dedic-pool" hidden>(print: _dssDedicPool)</span>\
@@ -65258,6 +65301,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 (else:)[(set: _nb to _nb + '<div class="nb-item"><span class="qp">☆</span> Find Page 93 for INIS O&#39;FLATTERLY. Leave Soho to look.</div>')]\
 (set: _nb to _nb + '</div>')]\
 <!-- 2026-10-28 (note 24): the rumour's who's-who, names only, once heard (dssRumourSketch fills it) -->(if: $hamRumour is true)[(set: _nb to _nb + '<div class="nb-section nb-rumour-section"><strong class="nb-heading">THE RUMOUR</strong><div class="nb-rumour-sketch"></div></div>')]\
+<!-- 2026-10-28 (notes 34/35): every lore note read, in full, in the order read (dssLore fills it from the words it kept) -->(if: ($loreRead is an array) and ($loreRead's length > 0))[(set: _lr to "")(for: each _l, ...$loreRead)[(set: _lr to _lr + _l + "|")](set: _nb to _nb + '<div class="nb-section nb-lore-section"><strong class="nb-heading">LORE</strong><div class="nb-lore-notes" data-read="' + _lr + '"></div></div>')]\
 (set: _nb to _nb + '</div>')\
 (set: _nb to _nb + '<div class="nb-panel nb-panel-lily">')\
 (set: _nb to _nb + '<div class="nb-section nb-lily-section">')\
@@ -69096,6 +69140,16 @@ tw-story:has(.typewriter-page) .dss-trail-chip { display: none; } /* it would ha
 @media (max-height: 560px) { #dss-lore-overlay .dss-rumour-sketch { width: 190px; } }
 .nb-rumour-sketch .dss-rumour-sketch { width: 260px; max-width: 100%; color: rgba(60, 42, 22, 0.78); margin: 0.3em 0 0.1em; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .dss-rumour-sketch .rs-g { transition: none; } }
+/* 2026-10-28 (notes 34/35): a lore note opening on its own, and the NOTEBOOK's LORE section */
+#dss-lore-overlay.dss-lore-auto { background: rgba(0, 0, 0, 0.88); }
+.dss-lore-on { display: block; margin: 1.1em auto 0.2em; padding: 0.5em 1.6em; background: rgba(184, 154, 96, 0.12); border: 1px solid rgba(216, 184, 112, 0.6); color: #ecd9b0; font: italic 1em Georgia, 'Crimson Text', serif; letter-spacing: 0.04em; cursor: pointer; border-radius: 3px; }
+.dss-lore-on:hover, .dss-lore-on:focus-visible { background: rgba(184, 154, 96, 0.26); outline: none; }
+.nb-lore-note { margin: 0.4em 0 1.2em; }
+.nb-lore-title { font: bold 0.95em 'Courier New', Courier, monospace; letter-spacing: 0.1em; color: rgba(90, 65, 40, 0.72); margin-bottom: 0.3em; }
+.nb-lore-text { font-family: 'Courier New', Courier, monospace; font-size: 0.92em; line-height: 1.5; color: rgba(42, 32, 20, 0.74); }
+.nb-lore-text .lore-box { margin: 0; background: none; box-shadow: none; padding: 0; color: inherit; font-family: inherit; font-size: inherit; }
+.nb-lore-text .lore-box::before { display: none; }
+.nb-lore-text p { margin: 0 0 0.7em; }
 /* 2026-10-28: a sticky hint slip (the STATS primer) sat over the rumour card and its sketch; slips wait out of sight while a lore or rumour card is open */
 body:has(#dss-lore-overlay) .dss-hint-slip { visibility: hidden; }
 
@@ -76041,7 +76095,7 @@ The Enlightenment has been in the Departure Lounge for as long as anyone can rem
 The best drink is the drink-in-transit and this is the Wembley Stadium of such boozing. No point talking to strangers; anyone you meet will be half the world away come sun-up, somewhere. No, here we keep time to ourselves and watch for ‘Go to Gate’.
 
 A man sits in a booth reading //Chariots of the Gods?//
-(link: "⟡ LORE: Chariots of the Gods? ⟡")[<div class="lore-box">(display: "Lore Chariots of the Gods")</div>]
+(link: "⟡ LORE: Chariots of the Gods? ⟡")[(set: _lore to "Chariots of the Gods?")(display: "Lore Read")<div class="lore-box">(display: "Lore Chariots of the Gods")</div>]
 
 He doesn’t introduce himself. His eyes are slate, and kind.
 
@@ -76104,7 +76158,7 @@ You crest another ridge (which must be but isn’t the last) and something is mo
 The cave is lucid and warm and feels somehow lived-in, not only by its present occupant but by a thousand generations of upright apes, most unknown and unknowable to Western science.
 
 A butter lamp burns in a niche and near it, sitting in the lotus with the paperback, //Chariots of the Gods?// open on his knees, which were recently departed by a small black cat, is the slate-eyed man who you met a long while ago in The Enlightenment.
-(link: "⟡ LORE: Chariots of the Gods? ⟡")[<div class="lore-box">(display: "Lore Chariots of the Gods")</div>]
+(link: "⟡ LORE: Chariots of the Gods? ⟡")[(set: _lore to "Chariots of the Gods?")(display: "Lore Read")<div class="lore-box">(display: "Lore Chariots of the Gods")</div>]
 
 ‘Sorry about all the mess,’ he says. ‘Say it!’
 </div>
@@ -82395,6 +82449,10 @@ Massive earthworms are breaking through the floor!
      the script below presses this hidden link, which runs Next Redraw again in place. -->
 <span class="next-poke" hidden aria-hidden="true">(link-repeat: "next-poke")[(replace: ?nextpokeout)[(display: "Next Redraw")]]|nextpokeout>[]</span>
 }
+
+:: Lore Read [system] {"position":"3350,2850","size":"100,100"}
+{<!-- 2026-10-28 (Sam, playtest notes 34 and 35, ruled "the lore front and centre"): a lore note opened is kept in $loreRead, and the
+     NOTEBOOK's LORE section prints every note read, in full (dssLore keeps the words). The link sets _lore before it displays this. -->(unless: $loreRead is an array)[(set: $loreRead to (a:))](unless: $loreRead contains _lore)[(set: $loreRead to $loreRead + (a: _lore))]}
 
 :: Next Redraw [system] {"position":"3350,2750","size":"100,100"}
 {<!-- recompute NEXT (its line is gone, 2026-10-23; the state it sets is still read): the footer runs it after every passage, and a flower taken

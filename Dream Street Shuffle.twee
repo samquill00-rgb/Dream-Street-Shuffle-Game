@@ -26705,7 +26705,7 @@ card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translate
 'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.7,.2,1), border-color 1.6s ease, box-shadow 1.6s ease;' +
 // 2026-10-07: with the voices a card can outgrow a phone's room; it stops short of the room's top and scrolls
 'max-height:calc(100% - 64px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;';
-card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-hidden', 'true'); card.tabIndex = -1;
+card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-hidden', 'true'); card.inert=true; card.tabIndex = -1;
 wrap.appendChild(card);
 // THE VOICES BESIDE THE OBJECT (Sam, 2026-10-07: "more attached to the actual object. More like disco
 // elysium style"). In a room wide enough the card stands to the left and the voices sit in a small box
@@ -26832,11 +26832,12 @@ if (acts.length) html += '<div class="fi-actions"></div>';
 // when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
 // 2026-10-14 (Sam): no "A CHOICE WAITS AT" list; you step back into the room and find the choice yourself
 var wayOn = [];
-if (wayOn.length) html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:rgba(200,180,140,0.5);margin-top:10px;text-transform:uppercase;">A CHOICE WAITS AT</div><div class="fi-wayon"></div>';
+if (wayOn.length) html += '<div class="dss-room-back-row"><button type="button" class="dss-room-back">Back to the room<span class="dss-room-back-key" aria-hidden="true">Esc</span></button></div>';
 html += '<div style="font:10px \'Courier New\',monospace;letter-spacing:2px;color:' + cDim + ';opacity:0.7;margin-top:8px;">' + (function() { var tap = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches, v = tap ? 'TAP' : 'CLICK'; return (acts.length || wayOn.length) ? 'OR ' + v + ' ANYWHERE ELSE TO STEP BACK' : v + ' ANYWHERE TO STEP BACK'; })() /* 2026-10-12: touch screens tap */ + '</div>';
 // the card is live for screen readers before its words change, so the change is announced
-card.setAttribute('aria-hidden', 'false');
+card.setAttribute('aria-hidden', 'false'); card.inert = false;
 card.innerHTML = html;
+card.querySelector('.dss-room-back').addEventListener('click',function(ev){ev.stopPropagation();byKey=openedByKey;stepBack();});
 voicePrep(card.querySelector('.dss-voices'));
 // a narrow room (a phone) gets a tighter card (the rules live in dssVoices' stylesheet)
 card.classList.toggle('dss-card-narrow', wrap.clientWidth < 520);
@@ -26865,7 +26866,7 @@ card.style.pointerEvents = 'auto'; cardShownAt = Date.now();
 card.style.opacity = '1';
 // opened from the keyboard: the focus goes to the card's first choice, or the card itself
 openedByKey = byKey;
-if (byKey) { var fb = card.querySelector('.fi-action'); try { (fb || card).focus({ preventScroll: true }); } catch (e) { (fb || card).focus(); } }
+if (byKey) { var fb = card.querySelector('.fi-action, .dss-room-back'); try { (fb || card).focus({ preventScroll: true }); } catch (e) { (fb || card).focus(); } }
 if (keysRow) keysRefresh();
 card.style.transform = 'translate(' + cardX() + ', 0)';
 if (VOICE) { VOICE.meet(ROOM, spot.name); VOICE.look(ROOM, spot.name); }
@@ -26901,7 +26902,7 @@ if (words) words.setMode('idle');
 capAway(false);
 if (activeSpot && activeSpot.onLook) activeSpot.onLook(false);
 card.style.transform = 'translate(' + cardX() + ', 8px)'; hideVoiceBox();
-activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; card.setAttribute('aria-hidden', 'true');
+activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; card.setAttribute('aria-hidden', 'true'); card.inert=true;
 Array.prototype.forEach.call(card.querySelectorAll('.fi-action'), function(b) { b.tabIndex = -1; });
 // focus never stays inside the closed card: back to the object's button for a card opened by key, else off the card
 var fa = document.activeElement, inCard = fa && card.contains(fa);
@@ -26932,27 +26933,43 @@ return best;
 }
 function glowFor(spot) { for (var i = 0; i < restGlows.length; i++) if (restGlows[i].spot === spot && restGlows[i].sp) return restGlows[i]; return null; }
 var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(wrap) : function() {};
+var roomPress=null;
 canvas.addEventListener('pointermove', function(ev) {
+if(roomPress && ev.pointerId===roomPress.id && Math.hypot(ev.clientX-roomPress.x,ev.clientY-roomPress.y)>12)roomPress.moved=true;
 if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
 var spot = pick(ev); hoverSpot = spot;
 if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; var hg = glowFor(spot); hoverName(roomObjectLabel(spot), ev, hg && hg.on ? glowAt(hg) : null); }
 else { halo.visible = false; canvas.style.cursor = 'default'; hoverName(null); }
 });
-canvas.addEventListener('pointerleave', function() { hoverName(null); });
+canvas.addEventListener('pointerleave', function() { roomPress=null;hoverSpot=null;halo.visible=false;canvas.style.cursor='default';hoverName(null); });
+canvas.addEventListener('pointercancel',function(){roomPress=null;});
 canvas.addEventListener('pointerdown', function(ev) {
-if (camMode === 'tween') return;
-if (camMode === 'inspect') { stepBack(); return; }
-var spot = ev.pointerType === 'touch' ? pick(ev) : (hoverSpot || pick(ev));
-if (!spot) { if (words) words.down(ev); return; }
-activeSpot = spot; halo.visible = false; canvas.style.cursor = 'default';
-showCard(spot);
-if (window.dssAudio && window.dssAudio.spotSound) { try { window.dssAudio.spotSound(spot.name); } catch(e) {} } // 2026-10-18 night: a sound for what you reach for
-beginTween(spot.pos, spot.tgt, 'inspect');
-if (spot.onLook) spot.onLook(true);
+if(ev.isPrimary===false || (ev.pointerType==='mouse' && ev.button!==0) || camMode==='tween')return;
+var spot=camMode==='idle'?pick(ev):null;
+if(!spot && camMode==='idle'){if(words)words.down(ev);return;}
+roomPress={id:ev.pointerId,x:ev.clientX,y:ev.clientY,moved:false,spot:spot,mode:camMode};
 });
+canvas.addEventListener('pointerup',function(ev){
+var press=roomPress;roomPress=null;
+if(!press || press.id!==ev.pointerId || press.moved || Math.hypot(ev.clientX-press.x,ev.clientY-press.y)>12 || camMode==='tween')return;
+if(press.mode==='inspect' && camMode==='inspect'){stepBack();return;}
+if(camMode!=='idle')return;
+var spot=pick(ev);if(!spot || spot!==press.spot)return;
+activeSpot=spot;halo.visible=false;hoverSpot=null;hoverName(null);canvas.style.cursor='default';
+showCard(spot);
+if(window.dssAudio && window.dssAudio.spotSound){try{window.dssAudio.spotSound(spot.name);}catch(e){}}
+beginTween(spot.pos,spot.tgt,'inspect');if(spot.onLook)spot.onLook(true);
+});
+var cardPress=null;
+card.addEventListener('pointerdown',function(ev){cardPress={x:ev.clientX,y:ev.clientY,scroll:card.scrollTop};});
 // a click, not a press, steps back from the card, so a finger can scroll a long card without closing it
 // (the click a tap makes just after opening the card is not a step back)
-card.addEventListener('click', function(ev) { if (camMode === 'inspect' && Date.now() - cardShownAt > 450 && !ev.target.classList.contains('fi-action')) stepBack(); });
+card.addEventListener('click', function(ev) {
+if(camMode!=='inspect' || Date.now()-cardShownAt<=450 || ev.target.closest('.fi-action,button,a,tw-link,input,textarea,select'))return;
+if(cardPress && (Math.hypot(ev.clientX-cardPress.x,ev.clientY-cardPress.y)>12 || Math.abs(card.scrollTop-cardPress.scroll)>3))return;
+var selection=window.getSelection();if(selection && !selection.isCollapsed && card.contains(selection.anchorNode))return;
+stepBack();
+});
 function roomObjectLabel(sp) { return sp.label || (/^a bar$/i.test(sp.name) ? 'THE BAR' : sp.name); }
 // 2026-10-07 THE ROOM BY KEYBOARD: Tab walks the objects (each lights as a pointer's hover would and its name
 // shows), Enter or Space looks closer, Tab reaches the card's choices, Escape steps back to the object
@@ -76063,6 +76080,19 @@ tw-passage tw-link[data-dss-way="street"]:hover::after { border-bottom-color: rg
 @media (prefers-reduced-motion: reduce) {
   tw-passage tw-link[data-dss-way], tw-passage .dss-choice-rule { animation: none !important; opacity: 1; transform: none; }
 }
+
+/* Clear, shared return control for every interior close-up. */
+.dss-room-back-row { margin-top:12px; }
+.dss-room-card .dss-room-back {
+  display:inline-flex; align-items:center; justify-content:center; gap:12px;
+  min-height:40px; padding:7px 14px; border:1px solid rgba(210,187,144,.38);
+  border-radius:2px; background:rgba(12,9,7,.35); color:#ddd1b9;
+  font:11px/1.4 'Courier New',monospace; letter-spacing:.08em; cursor:pointer;
+}
+.dss-room-card .dss-room-back:hover { border-color:#cfb582; background:rgba(70,52,29,.5); }
+.dss-room-card .dss-room-back:focus-visible { outline:2px solid #e8d6a6; outline-offset:3px; }
+.dss-room-back-key { font-size:9px; opacity:.55; border:1px solid currentColor; padding:1px 3px; border-radius:2px; }
+@media(hover:none),(pointer:coarse) { .dss-room-back-key { display:none; } .dss-room-card .dss-room-back { min-height:44px; } }
 
 /* ===== ENDGAME CONTINUITY POLISH ===== */
 [data-endgame] { --end-paper:#ded8c9; --end-edge:rgba(194,179,145,.22); }

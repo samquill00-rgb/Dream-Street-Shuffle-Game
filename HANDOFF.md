@@ -7831,3 +7831,6 @@ QA all eleven isolated actual-source scenes render with no runtime errors (verif
 
 ## 2026-10-28 — Slower finished-circle fade
 Sam requested finished circle fade more slowly. Auto wheel exit now explicitly transitions opacity over5 seconds, beginning at29s after same6s completed-circle hold; removal34s (formerly32). Entrance/hold-mode close unchanged. Synced; no git commands. Preview sky=19.
+
+## 2026-10-28 — Separate stat slips; brighter lily stalks
+Sam requested Morale/Sobriety explained on different slips, then clarified little stalks to brighten were lily stalks (not stats). Primer now chains MORALE -> SOBRIETY -> HAUNTS using existing prose split at sentence boundary; no words rewritten, once-night guard and sticky queue retained. Shared Lily SVG main stalk green #6f8a58 -> #b0d980, width1.2 ->1.6, opacity1; bell stems #7f8f5e -> #bddb8a. Shared source feeds all interior lily sprites/prompts. Bells/leaves unchanged. Isolated actual-source primer execution verified all three callbacks/order and retained wording; targeted shared-stem source assertions passed. Synced; no git commands.

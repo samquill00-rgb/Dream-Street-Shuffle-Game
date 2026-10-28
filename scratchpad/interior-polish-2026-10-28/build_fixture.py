@@ -14,7 +14,11 @@ function tex(w,h,draw){var c=document.createElement('canvas');c.width=w;c.height
 var a=document.createElement('button');a.textContent='Inspect the object';a.onclick=function(){window.actionCount=(window.actionCount||0)+1};
 a.style.display='none';host.appendChild(a);
 var roots=[-1,1].map(function(x){var root=new THREE.Mesh(new THREE.BoxGeometry(.6,1.2,.6),new THREE.MeshBasicMaterial());root.position.set(x,1.2,0);scene.add(root);return root;});
-var HOTSPOTS=roots.map(function(root,i){return{root:root,name:i?'Right object':'Left object',pos:[i?.8:-.8,1.4,2.5],tgt:[i?1:-1,1.2,0],prose:function(){return 'A little room detail, held in warm light. This text can be selected and read without closing the view.';},actions:function(){return[a]}}});
+var HOTSPOTS=roots.map(function(root,i){return{root:root,name:i?'Right object':'Left object',pos:[i?.8:-.8,1.4,2.5],tgt:[i?1:-1,1.2,0],prose:function(){return ('A little room detail, held in warm light. This text can be selected and read without closing the view. ').repeat(location.search.includes('long')?25:1);},actions:function(){return[a]}}});
+if(location.search.includes('voices')){
+window.DSS_VOICES={objects:{qa:{'Left object':{now:'test'},'Right object':{now:'test'}}}};
+window.dssVoices={enter:function(){},see:function(){},keySpots:function(){return{}},lines:function(){return[{text:'fixture voice'}]},isNext:function(){return false},spent:function(){return false},meet:function(){},look:function(){},html:function(room,name,inBox){return '<div class="dss-voices"><span class="dss-voice-text" style="color:'+(inBox?'#2a2118':'#e0d7c1')+'">The same voice, in the place that fits the room.</span></div>'}};
+}
 window.play=dssRoomPlay({wrap:wrap,canvas:canvas,host:host,scene:scene,camera:camera,CAM:CAM,HOTSPOTS:HOTSPOTS,tex:tex,still:location.search.includes('still')});
 function advance(){play.frame(performance.now()/1000,1/60);scene.updateMatrixWorld(true);camera.updateMatrixWorld();requestAnimationFrame(advance)}advance();
 window.project=function(i){var p=roots[i].position.clone().project(camera),r=canvas.getBoundingClientRect();return{x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2}};

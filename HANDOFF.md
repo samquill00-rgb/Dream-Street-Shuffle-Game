@@ -1,3 +1,38 @@
+# NIGHTWORK 2026-10-28/29 (03:41 to about 06:35 GMT, then the machine slept; stopped at 11:00) — synced, NOT committed
+
+Brief: HANDOFF-nightwork-prompt.md. Harness and scripts: this session's scratchpad (`/private/tmp/claude-501/-Users-samquill-Claude-work-Dream-Street-Shuffle---Game-Files/33fb6d7a-40ff-470e-80a3-e0c8cfd75e4f/scratchpad/`): `sweep2.py`, `n1.py`, `room.py`, `hold.py`, `out.py`, `scratch28.py`, `inisno.py`, `nightwork_notes.md`. Every edit carries a `2026-10-29 nightwork` comment (9 of them); the 44 `2026-10-28` markers are intact.
+
+**Sweep (234 pages, 1440×900 and 1280×800):** no tw-error and no script error at either size. Pages taller than the window settle to 0 once their fit runs, except "Tarot Card Back" (a component SHANA's spread draws, never a page) and one unrepeatable 89 px reading on The French. The old sweep stalled twice (threads, then a process pool hanging on shutdown); `sweep2.py` writes a line per page and exits hard.
+
+**Fixed and synced (all seen live or on a scratch build):**
+1. INIS's "Not tonight." also erased his refusal of the book, the second "no" Night Ahead Part Two waits for, so the cover story never came that night. `$inisRefusedErrand` (StoryInit, Start) now counts. Scratch: refuse, then the next street is Part Two.
+2. The cow's "Not tonight." sat on the Coach's loose-links strip; it is on the cow's card now. Scratch: card shows Ride / Not tonight. / Milk; the ride returns next visit.
+3. Escape on an open room card closed a slip hidden behind it, so the first VOICES slip could be thrown away unseen. An open card keeps its Escape; only a visible slip closes. Seen: first Esc steps back and the slip shows, second Esc closes it.
+4. LORE did not carry to night 2 (`$loreRead` restarts each night). Reads are logged in localStorage `dssLoreReadLog` with their night; the NOTEBOOK shows every note read since the run's first night. Seen on night 2. Notes read before this fix aren't in the log.
+5. THE GREAT HAM's note in the NOTEBOOK kept its dark-card colours and read faint on the paper; LORE text takes the notebook's ink.
+6. The skip-93 link left `$visitedCarthage` false, which keeps the voices' key trails shut all night and drops a line of SHANA's reading. The skip now sets it. **One line; reverse it if a skip night should stay trail-less.**
+7. BEVAN GLYNDŴR's choice outside the chippy was a bare white system button; it takes the ENTER THE HALIBUT look.
+8. "No one yet." read as one more reader's name; it is quieter italic now.
+
+**The 28 Oct list:**
+1. RUMOUR, live: sketch stages 100/110/111 at paragraphs 2–4, primer slip hidden under it, NOTEBOOK copy, AOIFE rings after the close; again on night 2.
+2. LINE 1, live: the morning-song sentences under THE FIRST LINE OF THREE; Part Two ends on "Soho’s rain…" and fits.
+3. Book, scratch: nothing at sobriety 30, the warning at 20, the loss at 10.
+4. Chippy approach, live: 54 fps. Wait-for-LILY view, live: 60 fps, renders well.
+5. VOICES, live: met on the first look, card lines only, slip on stepping back. THE THIRST: by source only (not woken).
+6. LORE: Ham, Watkins, paperback, Red & St. John, Carthago, Dido live (2 to 9 s); Airport Pub, Cave, Ronnie’s by test. Once per browser, confirmed live. NOTEBOOK in reading order.
+7. Refusals: INIS and BENITO live; pitch "No one yet." live on night 2 (path to the Colony drawn, then cleared; question back next render); cow by scratch.
+8. Red path, scratch: no path while the French rests.
+9. Interval radio: by file only (1,168,384 samples, served at the new size); not heard.
+10. Waltz retry live; skip-93 live on night 2; "your wife, AOIFE" live.
+
+**Questions for Sam:**
+1. **Room panels scroll.** COPPER's cellar panel at 1440×900 is 1217 px tall in a 900 px window: the text runs under the pinned INTO THE CELLAR button and the password box sits below the fold. Room panels have scrolled by design since 5 Oct; the 23 Oct rule says nothing should scroll on a laptop. The survey of every panel was cut off when the machine slept. Options: (a) a layout-only fit for panels like the page fit (zoom to 80% at least, no words touched), (b) leave panels scrolling, (c) you trim the long panels.
+2. **The skip-93 trails (fix 6 above):** keep it, or should a skip night stay without trails?
+3. **The rumour on later nights:** the Ham tells it again every night while the ship is undecided (night 2 had the full staged card again). Keep, or once per run?
+
+**Not reached:** the cellar's password box (below the fold, see Q1); THE THIRST's first slip; a full Dawn and the real Another night button (night 2 began from the button's own code); the panel survey (cut off by the machine's sleep).
+
 # PLAYTEST NOTES 2026-10-27 (40 notes; 1–21 were the 21/24 Oct batches, already fixed) — synced, NOT committed
 
 **Lackland's Deal walked in a real night (2026-10-26 run, before these notes):** continued the 25 Oct night-2 save to Dawn ("The book is in your bag." live), Another night, then night 3 from BEGIN: three lilies (Pillars, chippy, French), six haunts (Feeding, Debt, Delivery via Carthage and INIS's Gift, Sketch, Beast, Refusal), DAVY's password, no pong; office: the "Your book" card's LAY IT DOWN (Q15 live) → near-yes → Ask him to take it on → The Deal (Sam's lines) → Shake his hand → Dean Street with no bag line or pitch question; then Easter Island → Head towards dawn → Dawn showed the sold line. No console or Harlowe error all run. Harness: this session's scratchpad (dss.py with hvars(), which reads Harlowe's {"via":…} save form; s_c*/s_d*.py; profile profiles/n3).
@@ -7863,3 +7898,9 @@ Sam requested A man at the bar sprite disappear during first round, leaving famo
 
 ## 2026-10-28 — Camera diversion to St John
 Sam requested camera swing to bar man when artists approach is diverted. First-JOHN Approach link now intercepted locally in French: card steps back, hidden bar sprite becomes visible, camera eases1.8s from current artists view to(.05,1.5,2.8), looking at bar man's actual x/z at eye height1.35. After2.05s real unchanged Harlowe link fires into StJohn prose. Repeated clicks blocked; abandoned host cancels delayed navigation. Reduced-motion sets view directly and navigates after100ms. No prose/state edits. Synced; no git commands. French preview=11.
+
+## 2026-10-28 — Iterative interior exploration polish; timed dream-world follow-up saved
+Sam authorised autonomous iteration until usage nearly exhausted. Chose shared interior exploration. Details/checks in HANDOFF-interior-polish-2026-10-28.md; test helpers scratchpad/interior-polish-2026-10-28/. Changes: completed-tap interaction instead of swipe-on-press, explicit Back to room, independent scrolling card body, selection/drag safety, modal/prose input gating, bounded hover labels, keyboard focus/halo restoration and entry handoff, responsive voice placement preserving buttons/focus, notes hidden intact while close-ups open, phone-safe captions, locked StJohn camera diversion, small guard for pre-existing fresh-Colony stash error. No authored prose/plot/stats/rewards/puzzle changes. Synced, no git commands.
+Sam also requested a3-hour iterative dream-world aesthetic session after reset. ACTIVE accepted heartbeat dream-worlds-three-hour-aesthetic-pass, this chat,28 Oct07:16–10:16 Europe/London, hard UNTIL prevents later runs. Schedule persisted/verified. Brief+log HANDOFF-dream-aesthetics-2026-10-28.md. Earlier rejected COUNT-only schedule superseded by finite accepted schedule; no approval pending.
+Final fixtures passed touch/mouse/keyboard/text selection/labels/modal controls, wide-phone-wide voice reflow, and long-card return visibility across desktop/portrait/landscape. Live French/Colony/Pillars passed latest controls+phone+focus+note behaviour. Ronnie's initially tripped test's assumption of an opening modal (it already opened in room mode); corrected test conditions, not game logic. Final Ronnie's rerun pending below.
+Final Ronnie's rerun passed: Stage close-up, narrow card fit, Back/focus restored, slips hidden/resumed, no JS/Harlowe errors. All four live rooms complete. Usage at99%; stopping current pass as Sam requested. Dedicated scheduled dream-world heartbeat remains active.

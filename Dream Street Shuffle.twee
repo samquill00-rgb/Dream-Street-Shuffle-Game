@@ -126,7 +126,7 @@ Dream Street Shuffle
 (set: $nightAheadPart2Shown to false)\
 (set: $sawMemory1 to false)\
 (set: $sawMemory2 to false)\
-(set: $metGreenSeaFriend to false)(set: $harpRouteOn to false)(set: $loreRead to (a:))<!-- 2026-10-28 (notes 34/35): the lore notes read, for the NOTEBOOK -->\
+(set: $metGreenSeaFriend to false)(set: $harpRouteOn to false)(set: $inisRefusedErrand to false)(set: $loreRead to (a:))<!-- 2026-10-28 (notes 34/35): the lore notes read, for the NOTEBOOK -->\
 (set: $killedMugger to false)\
 (set: $harpMet to false)(set: $harpNamed to "")(set: $harpOutcome to "")\
 (set: $sawMemory3 to false)\
@@ -8345,8 +8345,9 @@ window.wordToTheWisePopup = function(message, go) {
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
   if (window.dssOverlayBusy && window.dssOverlayBusy()) return;
-  if (Array.prototype.some.call(document.querySelectorAll('tw-dialog, .dss-lore-card, .dss-rules-overlay, .phone-ringing:not(.ring-wait), tw-story > .dss-room-veil.dss-room-veil-on, .nb-tab'), function(n) { return n.getClientRects().length; })) return;
-  var xs = Array.prototype.filter.call(document.querySelectorAll('.dss-hint-slip .dss-hint-x'), function(x) { return x.getClientRects().length; });
+  if (Array.prototype.some.call(document.querySelectorAll('tw-dialog, .dss-lore-card, .dss-rules-overlay, .phone-ringing:not(.ring-wait), tw-story > .dss-room-veil.dss-room-veil-on, .nb-tab, .dss-room-card[aria-hidden="false"]'), function(n) { return n.getClientRects().length; })) return;
+  /* 2026-10-29 nightwork, played live: Escape meant to step back from a room card pressed the × of a slip hidden behind that card (slips hide while a card is open), so the first VOICES slip was thrown away unseen. An open card now keeps its Escape, and only a slip the player can see is closed. */
+  var xs = Array.prototype.filter.call(document.querySelectorAll('.dss-hint-slip .dss-hint-x'), function(x) { return x.getClientRects().length && getComputedStyle(x).visibility === 'visible'; });
   if (xs.length) xs[xs.length - 1].click();
 }, true);
 // the place a slip has directed you to: a list of map door ids ('chippy,doorway'); the map lights the way to the nearest open one
@@ -12976,6 +12977,14 @@ window.dssLore = (function() {
   var KEYT = 'dssLoreText', KEYA = 'dssLoreAuto', autoFirst = null;
   function kept() { try { return JSON.parse(localStorage.getItem(KEYT) || '{}') || {}; } catch (e) { return {}; } }
   function remember(t, html) { try { var k = kept(); if (k[t]) return; k[t] = html; localStorage.setItem(KEYT, JSON.stringify(k)); } catch (e) {} }
+  /* 2026-10-29 nightwork: $loreRead starts empty each night (a night restarts the story), so on night 2 the NOTEBOOK's LORE was bare. Each
+     opening is also logged with its night (dssLoreReadLog), and the notebook shows every note read since the run's first night, as the
+     rejection slips do (dssRunFirst). */
+  var KEYL = 'dssLoreReadLog';
+  function nightNow() { try { return +localStorage.getItem('dssNightNo') || 0; } catch (e) { return 0; } }
+  function runFirst() { try { return +localStorage.getItem('dssRunFirst') || 0; } catch (e) { return 0; } }
+  function readLog() { try { return (JSON.parse(localStorage.getItem(KEYL) || '[]') || []).filter(function(r) { return r && r.t; }); } catch (e) { return []; } }
+  function logRead(t) { try { var a = readLog(), f = runFirst(); if (a.some(function(r) { return r.t === t && r.n >= f; })) return; a.push({ t: t, n: nightNow() }); localStorage.setItem(KEYL, JSON.stringify(a)); } catch (e) {} }
   function autoDone(t) { try { return (JSON.parse(localStorage.getItem(KEYA) || '[]') || []).indexOf(t) >= 0; } catch (e) { return true; } }
   function autoMark(t) { try { var a = JSON.parse(localStorage.getItem(KEYA) || '[]') || []; if (a.indexOf(t) < 0) a.push(t); localStorage.setItem(KEYA, JSON.stringify(a)); } catch (e) {} }
   function seen(el) { if (!el || !el.isConnected || !el.getClientRects().length) return false; var r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return false; for (var e = el; e && e.nodeType === 1; e = e.parentElement) { var cs = getComputedStyle(e); if (cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.6) return false; } return true; }
@@ -13011,8 +13020,11 @@ window.dssLore = (function() {
   }
   setInterval(function() {
     Array.prototype.forEach.call(document.querySelectorAll('.nb-lore-notes:not([data-filled])'), function(b) {
-      b.setAttribute('data-filled', '1'); var k = kept(), gw = document.getElementById('dss-lore-greatwork');
-      (b.getAttribute('data-read') || '').split('|').filter(Boolean).forEach(function(t) {
+      b.setAttribute('data-filled', '1'); var k = kept(), gw = document.getElementById('dss-lore-greatwork'), f = runFirst(), names = [];
+      readLog().filter(function(r) { return r.n >= f; }).forEach(function(r) { if (names.indexOf(r.t) < 0) names.push(r.t); });
+      (b.getAttribute('data-read') || '').split('|').filter(Boolean).forEach(function(t) { if (names.indexOf(t) < 0) names.push(t); });
+      var sec = b.closest('.nb-lore-section'); if (sec) sec.hidden = !names.some(function(t) { return k[t] || (t === 'The Great Work' && gw); });
+      names.forEach(function(t) {
         var html = k[t] || (t === 'The Great Work' && gw ? gw.innerHTML : null); if (!html) return;
         var n = document.createElement('div'); n.className = 'nb-lore-note';
         n.innerHTML = '<div class="nb-lore-title">\u27e1 ' + t.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div><div class="nb-lore-text dss-lore-body"></div>';
@@ -13028,7 +13040,7 @@ window.dssLore = (function() {
   function close() { var o = document.getElementById('dss-lore-overlay'); if (o) { o.classList.add('out'); setTimeout(function() { if (o.parentNode) o.parentNode.removeChild(o); }, 250); } }
   function show(title) {
     var held = notes[title]; if (!held) return;
-    close();
+    close(); logRead(title);
     var auto = (autoFirst === title); autoFirst = null;
     var o = document.createElement('div'); o.id = 'dss-lore-overlay'; if (auto) o.className = 'dss-lore-auto';
     var c = document.createElement('div'); c.className = 'dss-lore-card'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', title);
@@ -25373,7 +25385,7 @@ dismiss.addEventListener('click', function(ev) { ev.stopPropagation(); if (!full
 // (Tab to it, Enter or Space), and Escape closes the panel too, unless a field or another modal holds the keyboard.
 dismiss.setAttribute('role', 'button'); dismiss.tabIndex = 0;
 // closed from the keyboard, the focus lands on the strip's Look again button, not back at the top of the page
-function keyClose() { close(); setTimeout(function() { var a = document.querySelector('.dss-room-strip-btn'); if (a && a.getClientRects().length) { try { a.focus({ preventScroll: true }); } catch (e) {} } }, 0); }
+function keyClose() { close(); setTimeout(function() { var a = wrap.querySelector('.dss-room-strip-on .dss-room-strip-btn'); if (a && a.getClientRects().length) { try { a.focus({ preventScroll: true }); } catch (e) {} } else wrap.dispatchEvent(new CustomEvent('dss-room-key-entry')); }, 0); }
 dismiss.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); if (!full) keyClose(); } });
 function onPanelEsc(ev) {
 if (!veil.isConnected) { document.removeEventListener('keydown', onPanelEsc); return; }
@@ -25835,11 +25847,16 @@ var shown = null;
 wrap.addEventListener('pointerdown', function() { if (shown !== null) { shown = null; el.style.opacity = '0'; } }, true);
 return function(name, ev, at) {
 if (!name || !ev) { if (shown !== null) { shown = null; el.style.opacity = '0'; } return; }
-var r = wrap.getBoundingClientRect();
-// 2026-10-14 (Sam): one name at a time, set directly over the object's glow (else by the pointer, as before)
-if (at) { el.style.left = at.x + 'px'; el.style.top = (at.y - 16) + 'px'; el.style.transform = 'translate(-50%, -100%)'; }
-else { el.style.left = (ev.clientX - r.left + 16) + 'px'; el.style.top = (ev.clientY - r.top + 20) + 'px'; el.style.transform = ''; }
-if (shown !== name) { shown = name; el.textContent = name; el.style.opacity = '1'; }
+if(at && (at.z < -1 || at.z > 1)){shown=null;el.style.opacity='0';return;}
+var r=wrap.getBoundingClientRect();
+if(shown!==name){shown=name;el.textContent=name;el.style.opacity='1';}
+el.style.maxWidth=Math.max(40,r.width-16)+'px';
+var width=el.offsetWidth,height=el.offsetHeight;
+var x=at?at.x-width/2:ev.clientX-r.left+16;
+var y=at?at.y-16-height:ev.clientY-r.top+20;
+if(at && y<8)y=at.y+20;
+x=Math.max(8,Math.min(r.width-width-8,x));y=Math.max(8,Math.min(r.height-height-8,y));
+el.style.left=x+'px';el.style.top=y+'px';el.style.transform='none';
 };
 };
 
@@ -26013,7 +26030,7 @@ objects: {
 'A man at the bar': { now: '', then: '' },
 'A novelist': { now: '', then: '' },
 'A window': { now: '', then: '' },
-'A painter': { now: '', then: '' }
+'The famous artists': { now: '', then: '' }
 },
 // The Colony Room
 'ci': {
@@ -26685,7 +26702,7 @@ halo.position.copy(keepP); halo.scale.copy(keepS); halo.material.color.copy(keep
 }
 function restTick(t) {
 if (t >= restNext || still) { restRefresh(); restNext = t + 1; }
-var idle = camMode === 'idle';
+var idle = camMode === 'idle' && !interactionBlocked;
 restGlows.forEach(function(g) {
 var vis = idle && g.on && g.spot !== hoverSpot;
 g.sp.visible = vis && !g.lilyOn;
@@ -26704,8 +26721,8 @@ card.style.cssText = 'position:absolute;left:50%;bottom:44px;transform:translate
 'background:' + cBg + ';border:1px solid ' + cBorder + ';padding:14px 22px 12px;border-radius:2px;' +
 'pointer-events:none;z-index:9004;opacity:0;transition:opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.7,.2,1), border-color 1.6s ease, box-shadow 1.6s ease;' +
 // 2026-10-07: with the voices a card can outgrow a phone's room; it stops short of the room's top and scrolls
-'max-height:calc(100% - 64px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;';
-card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-hidden', 'true'); card.inert=true; card.tabIndex = -1;
+'max-height:calc(100% - 64px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+card.setAttribute('role','group');card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-hidden', 'true'); card.inert=true; card.tabIndex = -1;
 wrap.appendChild(card);
 // THE VOICES BESIDE THE OBJECT (Sam, 2026-10-07: "more attached to the actual object. More like disco
 // elysium style"). In a room wide enough the card stands to the left and the voices sit in a small box
@@ -26753,6 +26770,28 @@ var side = sideLayout() && vboxOn;
 card.style.left = side ? '16px' : '50%';
 card.style.width = side ? 'min(400px,38%)' : 'min(560px,86%)';
 }
+// Reflow the existing close-up when a window narrows or a phone rotates.
+// Only the voice placement changes; choices, focus and prose stay in place.
+function reflowCard(){
+if(!activeSpot)return;
+var wantsBox=sideLayout(),hasVoice=VOICE?VOICE.html(ROOM,activeSpot.name,wantsBox):'';
+wantsBox=wantsBox&&!!hasVoice;
+if(wantsBox!==vboxOn){
+  var scrollHost=card.querySelector('.dss-room-card-body')||card,scroll=scrollHost.scrollTop;
+  vSeq++;vStarted=false;vFaded=false;
+  var oldVoice=card.querySelector('.dss-voices');if(oldVoice)oldVoice.remove();
+  vbox.innerHTML='';vboxOn=wantsBox;
+  [vbox,vtail,vdot].forEach(function(n){n.style.opacity='0';});
+  vbox.setAttribute('aria-hidden',wantsBox?'false':'true');
+  if(hasVoice){
+    if(wantsBox){vbox.innerHTML=hasVoice;voicePrep(vbox);}
+    else {var temp=document.createElement('div');temp.innerHTML=hasVoice;var inlineVoice=temp.firstElementChild;var voiceHost=card.querySelector('.dss-room-card-body')||card;voiceHost.insertBefore(inlineVoice,voiceHost.querySelector('.fi-actions'));voicePrep(inlineVoice);}
+  }
+  scrollHost.scrollTop=scroll;
+}
+placeCard();card.classList.toggle('dss-card-narrow',wrap.clientWidth<520);
+card.style.transform='translate('+cardX()+', 0)';
+}
 function hideVoiceBox() { vSeq++; vboxOn = false; vbox.style.opacity = '0'; vtail.style.opacity = '0'; vdot.style.opacity = '0'; vbox.setAttribute('aria-hidden', 'true'); setTimeout(function() { if (!vboxOn) vbox.innerHTML = ''; }, 700); }
 // where the object is on the screen, in the room's own pixels
 function anchorPx(spot) {
@@ -26782,7 +26821,7 @@ var wordsNext = 0;
 function claimedLinks() { return HOTSPOTS.reduce(function(a, sp) { return a.concat(spotActions(sp)); }, []); }
 var BTN = 'display:inline-block;margin:6px 6px 0;font:12px \'Courier New\',monospace;letter-spacing:3px;text-transform:uppercase;color:' + cBtn + ';padding:9px 18px;border:1px solid ' + cBtnBorder + ';background:rgba(0,0,0,0.35);cursor:pointer;white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.5;';
 /* 2026-10-17 (Sam, full screen: the paperback's card sat over the room's caption, "overlapping and messy"): while a close-up card is up, the caption (the room's name, who you came for) fades; it comes back on stepping back. Every room built by dssRoomPlay. */
-function roomCap() { if (roomCap.el && roomCap.el.isConnected) return roomCap.el; var pick = function(root) { return root.querySelector('.dss-room-caption') || Array.prototype.slice.call(root.querySelectorAll('div')).filter(function(d) { if (!d.textContent || d.textContent.length > 160) return false; var cs = getComputedStyle(d); return cs.position === 'absolute' && cs.bottom === '18px' && cs.letterSpacing === '3px'; }).pop() || null; }; roomCap.el = pick(wrap) || pick(document); return roomCap.el; }
+function roomCap() { if (roomCap.el && roomCap.el.isConnected) return roomCap.el; var pick = function(root) { return root.querySelector('.dss-room-caption') || Array.prototype.slice.call(root.querySelectorAll('div')).filter(function(d) { if (!d.textContent || d.textContent.length > 160) return false; var cs = getComputedStyle(d); return cs.position === 'absolute' && cs.bottom === '18px' && cs.letterSpacing === '3px'; }).pop() || null; }; roomCap.el = pick(wrap) || pick(document); if(roomCap.el)roomCap.el.classList.add('dss-room-caption'); return roomCap.el; }
 function capAway(away) { var rc = roomCap(); if (!rc) return; if (away) { if (rc.dataset.capOp == null) rc.dataset.capOp = rc.style.opacity || ''; rc.style.transition = 'opacity 0.35s ease'; rc.style.opacity = '0'; } else if (rc.dataset.capOp != null) { rc.style.opacity = rc.dataset.capOp; delete rc.dataset.capOp; } }
 function showCard(spot) {
 if (words) words.setMode('inspect');
@@ -26832,12 +26871,13 @@ if (acts.length) html += '<div class="fi-actions"></div>';
 // when this close-up holds no choice, the card names the objects in the room that do (the passage's claimed links live there), and pressing a name zooms to it
 // 2026-10-14 (Sam): no "A CHOICE WAITS AT" list; you step back into the room and find the choice yourself
 var wayOn = [];
-html += '<div class="dss-room-back-row"><button type="button" class="dss-room-back">Back to the room<span class="dss-room-back-key" aria-hidden="true">Esc</span></button></div>';
+var backHTML = '<div class="dss-room-back-row"><button type="button" class="dss-room-back">Back to the room<span class="dss-room-back-key" aria-hidden="true">Esc</span></button></div>';
 
 // the card is live for screen readers before its words change, so the change is announced
 card.setAttribute('aria-hidden', 'false'); card.inert = false;
-card.innerHTML = html;
-card.querySelector('.dss-room-back').addEventListener('click',function(ev){ev.stopPropagation();byKey=openedByKey;stepBack();});
+card.setAttribute('aria-label',roomObjectLabel(spot));
+card.innerHTML = '<div class="dss-room-card-body" tabindex="0" role="region" aria-label="Object details">'+html+'</div>'+backHTML;
+card.querySelector('.dss-room-back').addEventListener('click',function(ev){ev.stopPropagation();if(roomBlocked())return;byKey=openedByKey;stepBack();});
 voicePrep(card.querySelector('.dss-voices'));
 // a narrow room (a phone) gets a tighter card (the rules live in dssVoices' stylesheet)
 card.classList.toggle('dss-card-narrow', wrap.clientWidth < 520);
@@ -26884,7 +26924,7 @@ if (msg && window.dssInlineHint) window.dssInlineHint(msg);
 if (window.dssAudio && window.dssAudio.paperRustle) { try { window.dssAudio.paperRustle(); } catch (e) {} }
 }, 160);
 }
-var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null, cardShownAt = 0, byKey = false, lastKeyBtn = null, openedByKey = false, keysRow = null;
+var camMode = 'idle', camK = 0, camNext = 'idle', activeSpot = null, hoverSpot = null, cardShownAt = 0, byKey = false, lastKeyBtn = null, openedByKey = false, keysRow = null, returnFocusSpot = null;
 // a span that acts as a button: reachable by Tab, pressed by Enter or Space
 function keyable(b) {
 b.setAttribute('role', 'button'); b.tabIndex = 0;
@@ -26898,6 +26938,7 @@ camToP.set(toP[0], toP[1], toP[2]); camToT.set(toT[0], toT[1], toT[2]);
 camK = still ? 1 : 0; camNext = next; camMode = 'tween';
 }
 function stepBack() {
+var steppingFrom=activeSpot;
 if (words) words.setMode('idle');
 capAway(false);
 if (activeSpot && activeSpot.onLook) activeSpot.onLook(false);
@@ -26906,7 +26947,7 @@ activeSpot = null; card.style.opacity = '0'; card.style.pointerEvents = 'none'; 
 Array.prototype.forEach.call(card.querySelectorAll('.fi-action'), function(b) { b.tabIndex = -1; });
 // focus never stays inside the closed card: back to the object's button for a card opened by key, else off the card
 var fa = document.activeElement, inCard = fa && card.contains(fa);
-if (byKey && lastKeyBtn && lastKeyBtn.isConnected) { try { lastKeyBtn.focus({ preventScroll: true }); } catch (e) { lastKeyBtn.focus(); } }
+if (byKey && lastKeyBtn && lastKeyBtn.isConnected) { returnFocusSpot=steppingFrom; try { lastKeyBtn.focus({ preventScroll: true }); } catch (e) { lastKeyBtn.focus(); } }
 else if (inCard) { try { fa.blur(); } catch (e) {} }
 byKey = false; lastKeyBtn = null; openedByKey = false;
 if (keysRow) keysRefresh();
@@ -26928,15 +26969,18 @@ var glowV = new THREE.Vector3();
 function glowAt(g) { var r = canvas.getBoundingClientRect(), wr = wrap.getBoundingClientRect(); glowV.copy(g.sp.position).project(camera); return { x: r.left - wr.left + (glowV.x + 1) / 2 * r.width, y: r.top - wr.top + (1 - glowV.y) / 2 * r.height, z: glowV.z }; }
 function glowNear(ev) {
 var wr = wrap.getBoundingClientRect(), px = ev.clientX - wr.left, py = ev.clientY - wr.top, best = null, bd = 26 * 26;
-restGlows.forEach(function(g) { if (!g.on || !g.sp) return; var a = glowAt(g); if (a.z >= 1) return; var d = (a.x - px) * (a.x - px) + (a.y - py) * (a.y - py); if (d < bd) { bd = d; best = g; } });
+restGlows.forEach(function(g) { if (!g.on || !g.sp) return; var a = glowAt(g); if(a.z < -1 || a.z >= 1 || a.x < 0 || a.y < 0 || a.x > wr.width || a.y > wr.height)return; var d = (a.x - px) * (a.x - px) + (a.y - py) * (a.y - py); if (d < bd) { bd = d; best = g; } });
 return best;
 }
 function glowFor(spot) { for (var i = 0; i < restGlows.length; i++) if (restGlows[i].spot === spot && restGlows[i].sp) return restGlows[i]; return null; }
 var hoverName = window.dssRoomHoverName ? window.dssRoomHoverName(wrap) : function() {};
+// Menus, pickup cards and the opening prose own the interaction while visible.
+var interactionBlocked=false;
+function roomBlocked(){return wrap.dataset.interactionLocked==='1' || /^(modal|full)$/.test(wrap.dataset.words||'') || !!document.querySelector('tw-dialog') || !!(window.dssOverlayBusy && window.dssOverlayBusy());}
 var roomPress=null;
 canvas.addEventListener('pointermove', function(ev) {
 if(roomPress && ev.pointerId===roomPress.id && Math.hypot(ev.clientX-roomPress.x,ev.clientY-roomPress.y)>12)roomPress.moved=true;
-if (camMode !== 'idle' || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
+if (camMode !== 'idle' || roomBlocked() || ev.pointerType === 'touch') { hoverSpot = null; halo.visible = false; hoverName(null); return; }
 var spot = pick(ev); hoverSpot = spot;
 if (spot) { haloAt(spot); halo.visible = true; canvas.style.cursor = 'pointer'; var hg = glowFor(spot); hoverName(roomObjectLabel(spot), ev, hg && hg.on ? glowAt(hg) : null); }
 else { halo.visible = false; canvas.style.cursor = 'default'; hoverName(null); }
@@ -26944,14 +26988,14 @@ else { halo.visible = false; canvas.style.cursor = 'default'; hoverName(null); }
 canvas.addEventListener('pointerleave', function() { roomPress=null;hoverSpot=null;halo.visible=false;canvas.style.cursor='default';hoverName(null); });
 canvas.addEventListener('pointercancel',function(){roomPress=null;});
 canvas.addEventListener('pointerdown', function(ev) {
-if(ev.isPrimary===false || (ev.pointerType==='mouse' && ev.button!==0) || camMode==='tween')return;
+if(roomBlocked() || ev.isPrimary===false || (ev.pointerType==='mouse' && ev.button!==0) || camMode==='tween')return;
 var spot=camMode==='idle'?pick(ev):null;
 if(!spot && camMode==='idle'){if(words)words.down(ev);return;}
 roomPress={id:ev.pointerId,x:ev.clientX,y:ev.clientY,moved:false,spot:spot,mode:camMode};
 });
 canvas.addEventListener('pointerup',function(ev){
 var press=roomPress;roomPress=null;
-if(!press || press.id!==ev.pointerId || press.moved || Math.hypot(ev.clientX-press.x,ev.clientY-press.y)>12 || camMode==='tween')return;
+if(roomBlocked() || !press || press.id!==ev.pointerId || press.moved || Math.hypot(ev.clientX-press.x,ev.clientY-press.y)>12 || camMode==='tween')return;
 if(press.mode==='inspect' && camMode==='inspect'){stepBack();return;}
 if(camMode!=='idle')return;
 var spot=pick(ev);if(!spot || spot!==press.spot)return;
@@ -26961,12 +27005,12 @@ if(window.dssAudio && window.dssAudio.spotSound){try{window.dssAudio.spotSound(s
 beginTween(spot.pos,spot.tgt,'inspect');if(spot.onLook)spot.onLook(true);
 });
 var cardPress=null;
-card.addEventListener('pointerdown',function(ev){cardPress={x:ev.clientX,y:ev.clientY,scroll:card.scrollTop};});
+card.addEventListener('pointerdown',function(ev){cardPress={x:ev.clientX,y:ev.clientY,scroll:(card.querySelector('.dss-room-card-body')||card).scrollTop};});
 // a click, not a press, steps back from the card, so a finger can scroll a long card without closing it
 // (the click a tap makes just after opening the card is not a step back)
 card.addEventListener('click', function(ev) {
 if(camMode!=='inspect' || Date.now()-cardShownAt<=450 || ev.target.closest('.fi-action,button,a,tw-link,input,textarea,select'))return;
-if(cardPress && (Math.hypot(ev.clientX-cardPress.x,ev.clientY-cardPress.y)>12 || Math.abs(card.scrollTop-cardPress.scroll)>3))return;
+if(cardPress && (Math.hypot(ev.clientX-cardPress.x,ev.clientY-cardPress.y)>12 || Math.abs((card.querySelector('.dss-room-card-body')||card).scrollTop-cardPress.scroll)>3))return;
 var selection=window.getSelection();if(selection && !selection.isCollapsed && card.contains(selection.anchorNode))return;
 stepBack();
 });
@@ -26978,30 +27022,45 @@ keysRow.className = 'dss-room-keys'; keysRow.setAttribute('role', 'group'); keys
 keysRow.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;';
 HOTSPOTS.forEach(function(sp) {
 var kb = document.createElement('button'); kb.type = 'button'; kb.textContent = roomObjectLabel(sp);
-kb.addEventListener('focus', function() { if (camMode !== 'idle' || !available(sp)) return; hoverSpot = sp; haloAt(sp); halo.visible = true; var r = canvas.getBoundingClientRect(), v = halo.position.clone().project(camera); hoverName(roomObjectLabel(sp), { clientX: r.left + (v.x + 1) / 2 * r.width, clientY: r.top + (1 - v.y) / 2 * r.height }); });
+kb.addEventListener('focus', function() { if (camMode !== 'idle' || roomBlocked() || !available(sp)) return; hoverSpot = sp; haloAt(sp); halo.visible = true; var r = canvas.getBoundingClientRect(), v = halo.position.clone().project(camera); hoverName(roomObjectLabel(sp), { clientX: r.left + (v.x + 1) / 2 * r.width, clientY: r.top + (1 - v.y) / 2 * r.height }); });
 kb.addEventListener('blur', function() { if (hoverSpot === sp) { hoverSpot = null; halo.visible = false; hoverName(null); } });
 kb.addEventListener('click', function() {
-if (camMode !== 'idle' || !available(sp)) return;
+if (camMode !== 'idle' || roomBlocked() || !available(sp)) return;
 byKey = true; lastKeyBtn = kb; activeSpot = sp; halo.visible = false; hoverName(null);
-showCard(sp); beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(true);
+showCard(sp); if(window.dssAudio && window.dssAudio.spotSound){try{window.dssAudio.spotSound(sp.name);}catch(e){}} beginTween(sp.pos, sp.tgt, 'inspect'); if (sp.onLook) sp.onLook(true);
 });
 keysRow.appendChild(kb);
 });
 wrap.appendChild(keysRow);
+function enterRoomByKey(){keysRefresh();if(roomBlocked())return;var first=keysRow.querySelector('button[tabindex="0"]');if(first)first.focus({preventScroll:true});}
+wrap.addEventListener('dss-room-key-entry',enterRoomByKey);
 // only objects that can be looked at now are in the Tab order (a ghost figure waits for its choice), and none while a card is open
-function keysRefresh() { var open = !!activeSpot; Array.prototype.forEach.call(keysRow.children, function(kb, i) { var ok = !open && available(HOTSPOTS[i]); kb.tabIndex = ok ? 0 : -1; kb.setAttribute('aria-hidden', ok ? 'false' : 'true'); }); }
+var keyCheckAt=0,keyOpenLast=null,keyBlockedLast=null;
+function keysRefresh() {
+interactionBlocked=roomBlocked();
+var open=!!activeSpot;
+keysRow.inert=interactionBlocked;keysRow.setAttribute('aria-hidden',interactionBlocked?'true':'false');
+card.inert=!open || interactionBlocked;
+if(interactionBlocked){roomPress=null;hoverSpot=null;halo.visible=false;hoverName(null);}
+var keyNow=Date.now();if(open===keyOpenLast && interactionBlocked===keyBlockedLast && keyNow<keyCheckAt)return;
+keyOpenLast=open;keyBlockedLast=interactionBlocked;keyCheckAt=keyNow+1500;
+Array.prototype.forEach.call(keysRow.children,function(kb,i){var ok=!open&&!interactionBlocked&&available(HOTSPOTS[i]);kb.tabIndex=ok?0:-1;kb.setAttribute('aria-hidden',ok?'false':'true');});
+}
 // Escape steps back from a card, unless something else holds the keyboard (a modal, the dev panel, a field)
 function onEsc(ev) {
 if (ev.key !== 'Escape' || ev.defaultPrevented || !wrap.isConnected) return;
 if (!(camMode === 'inspect' || (camMode === 'tween' && camNext === 'inspect'))) return;
 var f = document.activeElement;
 if (f && f !== document.body && f !== document.documentElement && !wrap.contains(f)) return;
-if (document.querySelector('tw-dialog')) return; // the NOTEBOOK takes this Escape (structure pass 3)
-byKey = openedByKey; stepBack();
+if (roomBlocked()) return; // the active overlay takes this Escape (structure pass 3)
+ev.preventDefault();byKey = openedByKey; stepBack();
 }
 document.addEventListener('keydown', onEsc);
 keysRefresh();
-var keysTimer = setInterval(function() { if (!wrap.isConnected) { clearInterval(keysTimer); document.removeEventListener('keydown', onEsc); return; } keysRefresh(); }, 1500);
+var keysTimer = setInterval(function() { if (!wrap.isConnected) { clearInterval(keysTimer); document.removeEventListener('keydown', onEsc); wrap.removeEventListener('dss-room-key-entry',enterRoomByKey); if(roomLayoutObserver)roomLayoutObserver.disconnect(); else window.removeEventListener('resize',reflowCard); return; } keysRefresh(); }, 250);
+var roomLayoutObserver=null;
+if(window.ResizeObserver){roomLayoutObserver=new ResizeObserver(function(){if(wrap.isConnected)reflowCard();});roomLayoutObserver.observe(wrap);}
+else window.addEventListener('resize',reflowCard);
 var hint = document.createElement('div');
 hint.textContent = o.hint || 'LOOK CLOSER AT WHAT CATCHES YOUR EYE';
 // 2026-10-12 (Sam: "much more clear when there is ... a little to take in a venue"): a room holding one of LILY's
@@ -27062,6 +27121,15 @@ if (camK >= 1) camMode = camNext;
 camera.position.x = camToP.x + Math.sin(t * 0.3) * 0.008; camera.position.y = camToP.y + Math.sin(t * 0.45) * 0.005;
 }
 camera.lookAt(curTarget);
+if(returnFocusSpot && camMode==='idle'){
+  var returned=returnFocusSpot;returnFocusSpot=null;
+  var objectButton=keysRow && keysRow.children[HOTSPOTS.indexOf(returned)];
+  if(objectButton===document.activeElement && !roomBlocked() && available(returned)){
+    hoverSpot=returned;haloAt(returned);halo.visible=true;
+    var rect=canvas.getBoundingClientRect(),point=halo.position.clone().project(camera);
+    hoverName(roomObjectLabel(returned),{clientX:rect.left+(point.x+1)*rect.width/2,clientY:rect.top+(1-point.y)*rect.height/2});
+  }
+}
 if (wrap.dataset.cam !== camMode) wrap.dataset.cam = camMode;
 if (vboxOn) layoutVoiceBox(camMode !== 'tween');
 if (activeSpot && !vStarted && camMode !== 'tween') { vStarted = true; voiceSequence(vboxOn ? vbox : card.querySelector('.dss-voices'), vboxOn); }
@@ -28502,12 +28570,12 @@ if(firstArtistApproach){
     if(johnLinkReady)return;
     ev.preventDefault();ev.stopImmediatePropagation();
     if(fiDiversion)return;
-    play.stepBack();ghosts[0].sp.visible=true;
+    play.stepBack();ghosts[0].sp.visible=true;fiWrap.dataset.interactionLocked='1';
     var john=ghosts[0].hit.position;
     fiDiversion={at:performance.now(),duration:fiStill?0:1800,fromP:camera.position.clone(),fromT:curTarget.clone(),
       toP:new THREE.Vector3(.05,1.5,2.8),toT:new THREE.Vector3(john.x,1.35,john.z)};
     setTimeout(function(){
-      if(!fiHost.isConnected||!johnApproach.isConnected)return;
+      if(!fiHost.isConnected||!johnApproach.isConnected){delete fiWrap.dataset.interactionLocked;fiDiversion=null;return;}
       johnLinkReady=true;johnApproach.click();
     },fiStill?100:2050);
   },true);
@@ -31370,7 +31438,7 @@ k.ghost(-4.7, 0, -0.6, 17, 0.14, true, false); k.ghost(3.1, 0, 2.7, 19, 0.12, tr
 // ---------- THE CLOSE-UPS ----------
 var hotspots = [
 { root: cowG, name: 'A cow', pos: [0.15, 1.6, 2.1], tgt: [1.1, 1.05, -0.55], haloAt: [0.85, 1.95, -0.8], haloSc: 0.65,
-actions: function() { return k.byText(['Ride the beast', 'Milk her']); } }, // 2026-10-16: the restored milking is the cow's other action
+actions: function() { return k.byText(['Ride the beast', 'Milk her', 'Not tonight.']); } }, // 2026-10-16: the restored milking is the cow's other action /* 2026-10-29 nightwork (note 40's cow refusal sat on the loose-links strip, away from the cow): it joins the cow's card */
 { root: bernard.hit, name: 'JEFFREY BERNARD', pos: [0.4, 1.5, 0.3], tgt: [-0.3, 0.7, barZ + 0.9], haloAt: [-0.85, 1.0, barZ + 1.0], haloSc: 0.55,
 actions: function() { return k.byText(['Give JEFFREY a light']); },
 keepProse: true, prose: function() { return "He resumes a conversation he hadn’t begun:\n\n‘I’d very much like to wake up one morning with a cow of the Friesian variety and walk her down to Soho to the Coach and Horses, stopping on the way to buy twenty Players, ply her with vodkas until closing time, whip her off to an Indian restaurant, take her up to the Colony Room till 5.30 and then to the Yorkminster, Swiss Tavern, Three Greyhounds, get beaten up by Chinese waiters at midnight, have a row with the taxi driver, set the bed on fire, put it out with tears and then wake up on the floor. Could you then milk said cow? I doubt it.’"; } }, /* 2026-10-21 (Sam): his Friesian speech (15 April words, restored 2026-10-16 into the passage) now speaks on his click; first visit only, since he has gone to Bohemia after it */
@@ -58668,7 +58736,7 @@ INIS O’FLATTERLY sits at the thick wooden counter, reading. He does not look u
 (if: $nightAheadPart2Shown is true)[<div class="bevan-chippy-choices">
 (if: $helpedBevan is not true)[[[BEVAN GLYNDŴR|BEVAN’s pigeon]]](else:)[[[Wait for LILY|Waiting outside the chippy]]]
 </div>]
-<style>.bevan-chippy-choices{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);z-index:9010;max-width:90vw;padding:10px 16px;background:rgba(0,0,0,.8);border:1px solid rgba(232,180,80,.3);text-align:center;font:14px Georgia,serif;}</style>
+<style>.bevan-chippy-choices{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);z-index:9010;max-width:90vw;padding:10px 16px;background:rgba(0,0,0,.8);border:1px solid rgba(232,180,80,.3);text-align:center;font:14px Georgia,serif;}</style><style>/* 2026-10-29 nightwork, played live: the dock's choice was a bare white system button under the gold ENTER THE HALIBUT; it takes that button's look */.bevan-chippy-choices{background:none;border:none;padding:0}.bevan-chippy-choices button{font:13px 'Courier New',monospace;color:rgba(232,180,80,.85);letter-spacing:4px;text-transform:uppercase;padding:12px 28px;border:1px solid rgba(232,180,80,.3);background:rgba(0,0,0,.55);cursor:pointer;margin:0 6px}.bevan-chippy-choices button:hover,.bevan-chippy-choices button:focus-visible{color:rgba(255,210,120,.95);border-color:rgba(232,180,80,.6);outline:none}</style>
 (display: "Stash Point")
 
 :: Chinese Fish and Chips [venue-chippy] {"position":"100,1300","size":"100,100"}
@@ -59099,7 +59167,7 @@ Better not tomorrow.
 (if: $pendingLilyBreath is true)[(set: $pendingLilyBreath to false)(go-to: "After the call")]\
 <!-- 2026-10-19 (Sam, playtest: "two typewriter passages appeared, one after the other. That shouldn't happen"): none of the street's story pages below fires straight after another typewriter page; it waits for the next visit. Both history slots are checked, whichever one holds the page you came from. -->(set: _twPages to (a: "After the call", "After Aoife", "Night Ahead Part Two", "Aoife memory 2", "LINE 2 Oxford", "The Interval", "After the music", "After Cecil Court", "After the painter", "Things turn up", "The dark pass", "The Night Ahead", "The Blackout"))(set: _twLast to false)(if: (history:)'s length > 0)[(if: _twPages contains (history:)'s last)[(set: _twLast to true)]](if: (history:)'s length > 1)[(if: _twPages contains (history:)'s 2ndlast)[(set: _twLast to true)]]\
 (if: $hadPhoneCall is true and $metCritic is true and $sawAoifeReflection is false and not _twLast)[(set: $sawAoifeReflection to true)(set: $aoifeReflectLap to $returns)(go-to: "After Aoife")]\
-<!-- 2026-10-15 (Sam: the cover story revealed later): Night Ahead Part Two no longer follows RED's kiss. It comes on the first street after the Ham has refused the book and AOIFE has rung: after After Aoife if the call was answered (the trigger above runs first and sends you there; this one fires on the return), at once if the call was refused or left ringing ($hadPhoneCall still false). Insurance: a night that found the second line without the Ham gets it then. ONE LINE, as the comment below explains. --><!-- 2026-10-16 (Sam, from Astra's playtest: "I had scarcely begun believing in the book-selling mission before the game told me how to interpret it"): the confession now waits for a second reader's no as well as the Ham's, so the book has been turned down twice, by two people, before the night calls it a cover story. Any reader with a slip counts: the novelist (THE REFUSAL), INIS (page 93 asked for), DAVY, JEFFREY, the agent shown the book, SHANA, LACKLAND (2026-10-19, Sam: MOE's set no longer counts; he is not a reader). INIS always comes before the second line, so the insurance still catches every night. -->(set: _secondNo to ((($haunts is an array) and ($haunts contains $haunt2)) or ($knowsAboutPage is true) or ($metDavy is true) or ($sawJeffrey is true) or ($pitchedAgent is true) or ($metShana is true) or ($lacklandRead is true)))(if: ($nightAheadPart2Shown is not true) and (not _twLast) and ((($metCritic is true) and _secondNo and (($hadPhoneCall is false) or ($sawAoifeReflection is true))) or ($alba contains $alba2)))[(go-to: "Night Ahead Part Two")]\
+<!-- 2026-10-15 (Sam: the cover story revealed later): Night Ahead Part Two no longer follows RED's kiss. It comes on the first street after the Ham has refused the book and AOIFE has rung: after After Aoife if the call was answered (the trigger above runs first and sends you there; this one fires on the return), at once if the call was refused or left ringing ($hadPhoneCall still false). Insurance: a night that found the second line without the Ham gets it then. ONE LINE, as the comment below explains. --><!-- 2026-10-16 (Sam, from Astra's playtest: "I had scarcely begun believing in the book-selling mission before the game told me how to interpret it"): the confession now waits for a second reader's no as well as the Ham's, so the book has been turned down twice, by two people, before the night calls it a cover story. Any reader with a slip counts: the novelist (THE REFUSAL), INIS (page 93 asked for), DAVY, JEFFREY, the agent shown the book, SHANA, LACKLAND (2026-10-19, Sam: MOE's set no longer counts; he is not a reader). INIS always comes before the second line, so the insurance still catches every night. -->(set: _secondNo to ((($haunts is an array) and ($haunts contains $haunt2)) or ($knowsAboutPage is true) or ($inisRefusedErrand is true) or ($metDavy is true) or ($sawJeffrey is true) or ($pitchedAgent is true) or ($metShana is true) or ($lacklandRead is true)))(if: ($nightAheadPart2Shown is not true) and (not _twLast) and ((($metCritic is true) and _secondNo and (($hadPhoneCall is false) or ($sawAoifeReflection is true))) or ($alba contains $alba2)))[(go-to: "Night Ahead Part Two")]\
 <!-- A2: reliable mid-night Aoife memory. Fires on the first hub return from lap 5 onward (2026-10-19: lap 7, three laps after A1, never straight after a typewriter page; see _twLast), AFTER A1 (After Aoife), but NOT on the lap you've just come off a Lily memory (2026-10-19: in Harlowe 3 (history:) leaves out the current passage, so its last is the page you came from; _twLast checks both slots), and NOT on the way back from a doorway or an alley ($alleyReturn; Sam, 2026-10-09: it fired when he "just stopped in a doorway on the way to Cecil Court"). Whole thing dormant until $aoifeRework is flipped on at go-live. NOTE 2026-09-14: kept on ONE line deliberately. Harlowe turns every newline inside a multi-line HTML comment into a <br>, and this comment alone was putting three blank lines and ~88px of dead space at the top of the hub, above the title. -->\
 <!-- 2026-10-14 (Sam: space them out): memory 2 waits at least one lap after After Aoife ($aoifeReflectLap) --><!-- 2026-10-19 (Sam: "Can we save this passage about how wonderful Aoife is for a later moment?"): lap 7 (was 5), three laps after After Aoife (was one), and never straight after a typewriter page (_twLast, above) -->(if: ($aoifeRework is true) and ($returns >= 7) and ($sawAoifeReflection is true) and (($aoifeReflectLap is not a num) or ($returns >= $aoifeReflectLap + 3)) and ($sawAoifeMemory2 is false) and (not _twLast))[(unless: $alleyReturn is true)[(set: $sawAoifeMemory2 to true)(go-to: "Aoife memory 2")]]\
 (set: $awaitingLacklandPwd to false)\
@@ -60973,9 +61041,9 @@ He slaps the manuscript like an arse and says: <span class="dss-quest-line">‘P
 })();</script>
 
 [[I’ll look for it|Dean Street]]
-<!-- 2026-10-28 (Sam, playtest note 40: "you can just say no", the ask coming back on a later visit): the errand refused leaves nothing marked; INIS asks again next time you speak to him -->(link: "Not tonight.")[(set: $knowsAboutPage to false)(go-to: "Dean Street")]
+<!-- 2026-10-28 (Sam, playtest note 40: "you can just say no", the ask coming back on a later visit): the errand refused leaves nothing marked; INIS asks again next time you speak to him -->(link: "Not tonight.")[(set: $knowsAboutPage to false)(set: $inisRefusedErrand to true)<!-- 2026-10-29 nightwork, played live: clearing $knowsAboutPage also erased INIS's refusal of the book, the "second no" Night Ahead Part Two waits for, so the cover story never came; his no is kept here -->(go-to: "Dean Street")]
 <!-- 2026-10-27 (Sam, playtest note 36: "You should be able to skip Carthage on the second play"): once page 93 has been handed back on an earlier night or game (localStorage dssPage93Done, set in O'Flatterly's Gift), a second link skips the errand and goes straight to returning it. The Interval and its lift are skipped with it. --><span class="dss-skip93" hidden>
-(link: "Hand him page 93 (found on an earlier night)")[(set: $hasMissingPage to true)(go-to: "Return the page")]</span><script>(function(){ try { if (localStorage.getItem('dssPage93Done') === '1') { var e = Array.prototype.filter.call(document.querySelectorAll('.dss-skip93'), function(x){ return !x.closest('.dss-ghost'); }).pop(); if (e) e.hidden = false; } } catch (err) {} })();</script>
+(link: "Hand him page 93 (found on an earlier night)")[(set: $hasMissingPage to true)(set: $visitedCarthage to true)<!-- 2026-10-29 nightwork, played live: the skip left $visitedCarthage false, which keeps the voices' key trails shut all night and drops a line from SHANA's reading; the page was found in Carthage on an earlier night, so the night counts it as visited -->(go-to: "Return the page")]</span><script>(function(){ try { if (localStorage.getItem('dssPage93Done') === '1') { var e = Array.prototype.filter.call(document.querySelectorAll('.dss-skip93'), function(x){ return !x.closest('.dss-ghost'); }).pop(); if (e) e.hidden = false; } } catch (err) {} })();</script>
 
 :: PP Defeat [venue-lackland-back] {"position":"1400,2550","size":"100,100"}
 (set: $confidence to ($statLoss: $confidence, 9))\
@@ -63043,7 +63111,7 @@ comments, so never write example macro syntax in here. -->\
 (set: $nightAheadPart2Shown to false)\
 (set: $sawMemory1 to false)\
 (set: $sawMemory2 to false)\
-(set: $metGreenSeaFriend to false)(set: $harpRouteOn to false)\
+(set: $metGreenSeaFriend to false)(set: $harpRouteOn to false)(set: $inisRefusedErrand to false)\
 (set: $killedMugger to false)\
 (set: $harpMet to false)(set: $harpNamed to "")(set: $harpOutcome to "")\
 (set: $sawMemory3 to false)\
@@ -63207,6 +63275,7 @@ Such was the agent who sat at the table.
 (link: "Get a drink with the man at the bar")[(set: $sobriety to ($statLoss: $sobriety, 9))(go-to: "Davy Merkin")]](else-if: $metDavy is true)[
 [[Get a drink|Colony drink choice]]]
 <!-- 2026-10-24: DAVY remains reachable for his paper errand, including keys left on his table. -->\
+(unless: $stashSites is an array)[(set: $stashSites to (a:))]\
 (if: $metDavy is true and ($davyTicketPhase is not "returned" or $stashSites contains "Davy’s note"))[[[Talk to DAVY|Davy’s note]]]
 (if: $knowsRonnies is false and ($venueRest is not "colony"))[
 [[Talk to the famous agent|Talk to the intimidating agent]]]]<!-- 2026-10-17 (Sam): DAVY and the agent, one a visit; the bar's own drink only once DAVY is met, as before -->
@@ -65408,7 +65477,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 (else:)[(set: _nb to _nb + '<div class="nb-item"><span class="qp">☆</span> Find Page 93 for INIS O&#39;FLATTERLY. Leave Soho to look.</div>')]\
 (set: _nb to _nb + '</div>')]\
 <!-- 2026-10-28 (note 24): the rumour's who's-who, names only, once heard (dssRumourSketch fills it) -->(if: $hamRumour is true)[(set: _nb to _nb + '<div class="nb-section nb-rumour-section"><strong class="nb-heading">THE RUMOUR</strong><div class="nb-rumour-sketch"></div></div>')]\
-<!-- 2026-10-28 (notes 34/35): every lore note read, in full, in the order read (dssLore fills it from the words it kept) -->(if: ($loreRead is an array) and ($loreRead's length > 0))[(set: _lr to "")(for: each _l, ...$loreRead)[(set: _lr to _lr + _l + "|")](set: _nb to _nb + '<div class="nb-section nb-lore-section"><strong class="nb-heading">LORE</strong><div class="nb-lore-notes" data-read="' + _lr + '"></div></div>')]\
+<!-- 2026-10-28 (notes 34/35): every lore note read, in full, in the order read (dssLore fills it from the words it kept) -->(set: _lr to "")(if: $loreRead is an array)[(for: each _l, ...$loreRead)[(set: _lr to _lr + _l + "|")]](set: _nb to _nb + '<div class="nb-section nb-lore-section" hidden><strong class="nb-heading">LORE</strong><div class="nb-lore-notes" data-read="' + _lr + '"></div></div>')<!-- 2026-10-29 nightwork: printed every time, the script shows it once the run has a note read -->\
 (set: _nb to _nb + '</div>')\
 (set: _nb to _nb + '<div class="nb-panel nb-panel-lily">')\
 (set: _nb to _nb + '<div class="nb-section nb-lily-section">')\
@@ -65578,6 +65647,9 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 .book-pitch .book-pitch-opt tw-link:hover { color: #f3dc9a; }
 .book-pitch .book-pitch-on { color: #f3dc9a; letter-spacing: 0.06em; text-shadow: 0 0 8px rgba(236,196,110,0.45); }
 .book-pitch .book-pitch-on::before { content: '\25B8 '; }
+/* 2026-10-29 nightwork: "No one yet." (note 40) read as one more reader's name; it is the way of saying no, so it is quieter */
+.book-pitch .book-pitch-no tw-link { color: rgba(217, 189, 120, 0.62); font-style: italic; letter-spacing: 0.02em; }
+.book-pitch .book-pitch-no tw-link:hover { color: #e8d08c; }
 /* 2026-10-16: the notebook's still-to-see list, the question's earlier-night verdicts, the dawn's slips */
 .nb-tosee { margin-top: 0.9em; }
 .nb-tosee-h { font-variant: small-caps; letter-spacing: 0.1em; color: #c8a86a; font-size: 0.85em; margin-bottom: 0.3em; }
@@ -67977,7 +68049,7 @@ border-left: 2px solid rgba(140, 120, 180, 0.3);
 .dss-room-prose .lore-box { max-height: none; }
 .dss-room-card { bottom: 40px !important; }
 .dss-room-card .fi-wayon-btn { opacity: 0.72; background: transparent !important; }
-.dss-room-hovername { position: absolute; z-index: 9005; pointer-events: none; font: 10px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: rgba(238,230,200,0.92); /* 2026-10-14: brighter, now the only name */ text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1); white-space: nowrap; opacity: 0; transition: opacity 0.35s ease; }
+.dss-room-hovername { position: absolute; z-index: 9005; pointer-events: none; font: 10px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: rgba(238,230,200,0.92); /* 2026-10-14: brighter, now the only name */ text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1); white-space: normal; overflow-wrap: anywhere; line-height:1.4; text-align:center; opacity: 0; transition: opacity 0.35s ease; }
 /* 2026-10-05: the room's veil covers the whole viewport (it sits in tw-story, under the fixed header),
    so the words have the screen rather than the room's box and a short window reads the whole passage;
    long words scroll the veil as a page. The darker wash also covers the room while it warms up. */
@@ -69256,6 +69328,9 @@ tw-story:has(.typewriter-page) .dss-trail-chip { display: none; } /* it would ha
 .nb-lore-text { font-family: 'Courier New', Courier, monospace; font-size: 0.92em; line-height: 1.5; color: rgba(42, 32, 20, 0.74); }
 .nb-lore-text .lore-box { margin: 0; background: none; box-shadow: none; padding: 0; color: inherit; font-family: inherit; font-size: inherit; }
 .nb-lore-text .lore-box::before { display: none; }
+/* 2026-10-29 nightwork, played live: THE GREAT HAM's note carries its own colours, made for the dark card, and read faint on the paper; every LORE note in the notebook takes the notebook's ink */
+.nb-lore-text, .nb-lore-text * { color: rgba(42, 32, 20, 0.8) !important; text-shadow: none !important; }
+.nb-lore-text strong, .nb-lore-text b, .nb-lore-text h1, .nb-lore-text h2, .nb-lore-text h3 { color: rgba(60, 42, 22, 0.9) !important; }
 .nb-lore-text p { margin: 0 0 0.7em; }
 /* 2026-10-28: a sticky hint slip (the STATS primer) sat over the rumour card and its sketch; slips wait out of sight while a lore or rumour card is open */
 body:has(#dss-lore-overlay) .dss-hint-slip { visibility: hidden; }
@@ -76081,8 +76156,19 @@ tw-passage tw-link[data-dss-way="street"]:hover::after { border-bottom-color: rg
   tw-passage tw-link[data-dss-way], tw-passage .dss-choice-rule { animation: none !important; opacity: 1; transform: none; }
 }
 
+/* Keep room captions whole, including the person you came to see. */
+.dss-room-caption {
+  width:max-content; max-width:calc(100% - 32px)!important;
+  white-space:normal!important; text-align:center; line-height:1.5!important;
+  overflow-wrap:break-word; box-sizing:border-box;
+}
+
 /* Clear, shared return control for every interior close-up. */
-.dss-room-back-row { margin-top:12px; }
+/* Instruction paper waits while an object card is read, then returns intact. */
+body:has(.dss-room-card[aria-hidden="false"]) .dss-hint-stack { visibility:hidden; }
+.dss-room-card-body { min-height:0; flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; padding:2px 4px 3px; }
+.dss-room-card-body:focus-visible { outline:1px solid rgba(232,214,166,.45); outline-offset:-1px; }
+.dss-room-back-row { flex:0 0 auto; margin-top:12px; }
 .dss-room-card .dss-room-back {
   display:inline-flex; align-items:center; justify-content:center; gap:12px;
   min-height:40px; padding:7px 14px; border:1px solid rgba(210,187,144,.38);

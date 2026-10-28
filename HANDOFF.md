@@ -28,8 +28,8 @@ Brief: HANDOFF-nightwork-prompt.md. Harness and scripts: this session's scratchp
 
 **Questions for Sam:**
 1. **Room panels scroll.** COPPER's cellar panel at 1440×900 is 1217 px tall in a 900 px window: the text runs under the pinned INTO THE CELLAR button and the password box sits below the fold. Room panels have scrolled by design since 5 Oct; the 23 Oct rule says nothing should scroll on a laptop. The survey of every panel was cut off when the machine slept. Options: (a) a layout-only fit for panels like the page fit (zoom to 80% at least, no words touched), (b) leave panels scrolling, (c) you trim the long panels.
-2. **The skip-93 trails (fix 6 above):** keep it, or should a skip night stay without trails?
-3. **The rumour on later nights:** the Ham tells it again every night while the ship is undecided (night 2 had the full staged card again). Keep, or once per run?
+2. **The skip-93 trails (fix 6 above):** keep it, or should a skip night stay without trails? **Ruled (Sam, 28 Oct evening): keep.** A skip night counts as having been to Carthage (trails open, The Moon in SHANA's card 2).
+3. **The rumour on later nights:** the Ham tells it again every night while the ship is undecided (night 2 had the full staged card again). Keep, or once per run? **Ruled (Sam, 28 Oct evening): keep.**
 
 **Not reached:** the cellar's password box (below the fold, see Q1); THE THIRST's first slip; a full Dawn and the real Another night button (night 2 began from the button's own code); the panel survey (cut off by the machine's sleep).
 

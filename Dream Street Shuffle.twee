@@ -764,13 +764,13 @@ window.dssAudio = (function() {
     }
     if (_pissBuf) begin(_pissBuf); else { _pissWaiters.push(begin); primePissStream(); }
     return {
-      stop: function() {
+      stop: function(fade) {
         if (stopped) return; stopped = true;
         var t = ac.currentTime;
         try {
           g.gain.cancelScheduledValues(t);
           g.gain.setValueAtTime(g.gain.value, t);
-          g.gain.linearRampToValueAtTime(0.0001, t + 0.25);
+          g.gain.linearRampToValueAtTime(0.0001, t + (fade || 0.25));
         } catch(e) {}
         if (src && _pissBuf && _pissBuf.duration > _pissOff + PISS_LEAD + PISS_BODY + 0.5) {
           try {
@@ -779,7 +779,7 @@ window.dssAudio = (function() {
             tail.start(t + 0.02, _pissOff + PISS_LEAD + PISS_BODY);
           } catch(e) {}
         }
-        setTimeout(function() { try { if (src) src.stop(); } catch(e) {} try { g.disconnect(); } catch(e) {} }, 400);
+        setTimeout(function() { try { if (src) src.stop(); } catch(e) {} try { g.disconnect(); } catch(e) {} }, 150 + (fade || 0.25) * 1000);
       }
     };
   }
@@ -6156,6 +6156,10 @@ function init(container) {
   function nearWindow(){if(!passage.querySelector('[data-window-action]'))return null;return BREAKABLE_WINDOWS.find(function(w){return !broken(w)&&Math.abs(S.c-w.fc)+Math.abs(S.r-w.fr)<=1;})||null;}
   function smashWindow(){var w=nearWindow();if(!w||busy()||S.moving||S.entering)return;var link=passage.querySelector('[data-window-action="'+w.id+'"] tw-link');if(!link)return;link.click();if(!broken(w))return;if(window.dssAudio&&window.dssAudio.windowSmash)window.dssAudio.windowSmash();/* 2026-10-23 (Sam): the glass goes */S.held={};refreshBar();}
   smashButton.addEventListener('click',smashWindow);
+  function inDoorway(){var h=doorAt(S.c,S.r);return (h&&h.spot&&/^dw/.test(h.id)&&doors[h.id]&&doors[h.id].status==='open'&&!S.moving&&!S.entering)?h:null;}
+  var doorwayButton=document.createElement('button');doorwayButton.type='button';doorwayButton.className='dss-smash-btn dss-doorway-btn';doorwayButton.textContent='Step into the doorway.';doorwayButton.style.cssText=smashButton.style.cssText;wrap.insertBefore(doorwayButton,dpad);
+  function stepIn(){var h=inDoorway();if(!h||busy())return;doorwayButton.style.display='none';enter(h);}
+  doorwayButton.addEventListener('click',function(e){e.preventDefault();stepIn();try{cv.focus({preventScroll:true});}catch(e2){}});
   BREAKABLE_WINDOWS.forEach(function(w){wasBroken[w.id]=broken(w);});
   var hintSeen = false; try { hintSeen = sessionStorage.getItem('dssMapHintDone') === '1'; } catch(e) {}
   function setBar(name, html, note) { place.textContent = name || ''; right.innerHTML = html || ''; if (note) { var ns = document.createElement('span'); ns.className = 'smb-note'; ns.textContent = note; if (html) right.appendChild(document.createTextNode(' ')); right.appendChild(ns); } }
@@ -6182,10 +6186,12 @@ function init(container) {
   function refreshBar() {
     S.beatOn = false;
     smashButton.style.display=nearWindow()&&!busy()?'block':'none';
+    doorwayButton.style.display=inDoorway()&&!busy()?'block':'none';
     if (S.noteFlash && S.noteFlash.t > 0) { setBar(S.noteFlash.name, '', S.noteFlash.text); return; }
     if (!hintSeen && !S.hintShown && hubFlag('fire-only') !== 'on' && hubFlag('hut') !== 'burnt') { S.hintShown = true; var touchHint = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches; setBar(streetName(S.c, S.r), '', touchHint ? 'Use the arrows below to walk. Stop on a lit step, or tap a door’s name, to go in.' : 'Use the arrow keys to walk. Stop on a lit step, or click a door’s name, to go in.'); return; } /* 2026-10-17 (Sam: fix the tip for the doors drawn from above) */
-    var d = facingDoor();
-    if (d) { var st = doors[d.id]; if (st.status === 'open') { setBar(d.name, st.glyphs, st.lead); } /* 2026-10-17 (Sam): the bar names the venue, not who is inside (as the plates) */ else if (st.status === 'grey') setBar(d.name, '', st.label); else setBar(d.name, '', 'Not tonight.'); }
+    var d = facingDoor(), dwy = inDoorway();
+    if (!d && dwy) setBar(dwy.name, '', 'A doorway. Press E to step in.');
+    else if (d) { var st = doors[d.id]; if (st.status === 'open') { setBar(d.name, st.glyphs, st.lead); } /* 2026-10-17 (Sam): the bar names the venue, not who is inside (as the plates) */ else if (st.status === 'grey') setBar(d.name, '', st.label); else setBar(d.name, '', 'Not tonight.'); }
     // 2026-10-11 (Sam): the fire path names itself in the caption bar: after the second blackout the choice, once the hut has burnt the one way left
     // 2026-10-12 (Sam): a turning point of the night, said once in the bar (the beat flag, set in Dean Street)
     else if (S.beat && S.beat.t > 0) { S.beatOn = true; setBar(streetName(S.c, S.r), '', S.beat.text); }
@@ -6245,6 +6251,7 @@ function init(container) {
   var KEYS = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right', W:'up', S:'down', A:'left', D:'right' };
   function onKeyDown(e) {
     if ((e.key==='e'||e.key==='E')&&nearWindow()&&!busy()) { e.preventDefault(); if(!e.repeat)smashWindow(); return; }
+    if ((e.key==='e'||e.key==='E'||e.key==='Enter')&&inDoorway()&&!busy()) { e.preventDefault(); if(!e.repeat)stepIn(); return; }
     var dir = KEYS[e.key]; if (!dir) return;
     var ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
     if (/^Arrow/.test(e.key)) e.preventDefault();
@@ -6332,7 +6339,7 @@ function init(container) {
     if (!S.alive) return;
     S.t++;
     if (S.t <= 90 && applyRows()) settleLabels(); // the header lifts and the title block settles under us in the first frames: at init the map's top reads ~150px low
-    if(S.t%10===0)smashButton.style.display=nearWindow()&&!busy()?'block':'none';
+    if(S.t%10===0){smashButton.style.display=nearWindow()&&!busy()?'block':'none';doorwayButton.style.display=inDoorway()&&!busy()?'block':'none';}
     if (S.lockY != null && S.t < S.lockT && Math.abs(window.scrollY - S.lockY) > 2) { try { window.scrollTo(0, S.lockY); } catch(e) {} }
     if (S.noteFlash && S.noteFlash.t > 0) { S.noteFlash.t--; if (S.noteFlash.t === 0) { S.noteFlash = null; refreshBar(); } }
     // it only runs down while it is in the bar and nothing covers the map (a door faced, the first-visit hint or a card such as the matches holds it back)
@@ -6366,7 +6373,7 @@ function init(container) {
         if (window.dssAudio && window.dssAudio.mapFootstep) { try { window.dssAudio.mapFootstep(); } catch(e) {} }
         if (spawnDoor && window.dssAudio && window.dssAudio.transitionDistance) { try { window.dssAudio.transitionDistance(Math.abs(S.c - spawnDoor.c) + Math.abs(S.r - spawnDoor.r)); } catch(e) {} } /* 2026-10-21 (Sam): the pub heard from outside fades with the walk from its door */
         var here = doorAt(S.c, S.r);
-        if (here && here.spot && doors[here.id].status === 'open') { enter(here); }
+        if (here && here.spot && doors[here.id].status === 'open' && !/^dw/.test(here.id)) { enter(here); } /* 2026-10-29 (Sam: walking past a doorway should not stop you in it; "you should have to actively press to enter it in order to piss or vomit"): a doorway waits for its button, E or Enter */
         /* 2026-10-17 (Sam: "you have to pause ever so slightly in the lit pavement. If you keep holding down the walk button you are just walking through"): coming to a stop on a wall door's step starts a short wait (STEP_PAUSE_MS); still standing there when it ends, you go in. Holding a direction walks on. */
         S.stepWait = null; if (!S.entering) { for (var di2 = 0; di2 < DOORS.length; di2++) { var dd2 = DOORS[di2]; if (dd2.spot || dd2.fc !== S.c || dd2.fr !== S.r || !doors[dd2.id] || doors[dd2.id].status !== 'open') continue; S.stepWait = { door: dd2, c: S.c, r: S.r, t0: Date.now() }; break; } }
         var hd = heldDir(); if (hd && !S.entering && !busy()) tryStep(hd); else S.frame = 0;
@@ -7646,7 +7653,8 @@ window.dssLilyPopup = function(hook) {
   function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   var html = '<div class="dss-key-label dss-lily-label">\u27e1 A FLOWER \u27e1</div>' +
     '<div class="coin-overlay-stage dss-key-stage dss-lily-stage">' + (svg ? svg.outerHTML : '') + '</div>' +
-    (glimpse ? '<p class="coin-overlay-text dss-lily-story' + (pink ? ' claude-draft' : '') + '">' + esc(glimpse) + '</p>' : '') +
+    /* 2026-10-29 (Sam: the prose that comes with the lily "doesn't need its own card, just its own box and border to make it obvious") */
+    (glimpse ? '<div class="dss-lily-story-box"><p class="coin-overlay-text dss-lily-story' + (pink ? ' claude-draft' : '') + '">' + esc(glimpse) + '</p></div>' : '') +
     /* 2026-10-23 (Sam: quieter flowers): no "Gather flowers. There are five to find." and no "FLOWER n OF 5"; the NOTEBOOK and the Fetch keep the count */
     (pentBody ? '<div class="dss-lily-pent">' + (pentTitle ? '<div class="pent-reveal-title">' + esc(pentTitle) + '</div>' : '') + '<p class="coin-overlay-text">' + esc(pentBody) + '</p>' + (pentNote ? '<span class="inventory-note">' + esc(pentNote) + '</span>' : '') + '</div>' : '') +
     // 2026-10-12 (the wanderer playthrough): under 30 sobriety the flower is only a glimpse and is not gathered; it says so,
@@ -7665,7 +7673,26 @@ window.dssLilyPopup = function(hook) {
     overlay.classList.add('coin-overlay-fade');
     setTimeout(function() { if (overlay.parentNode) overlay.remove(); }, 800);
   }
-  box.querySelector('.dss-lily-close').addEventListener('click', close);
+  /* 2026-10-29 (Sam: "when you press the lily in your notebook there should be a little animation showing that happening"): the flower lifts off
+     the stage, flies to the header's NOTEBOOK and is pressed flat into it; the NOTEBOOK takes it with the same glow the rejection slips get */
+  function pressIn() {
+    var sv = box.querySelector('.dss-lily-stage svg'), nb = Array.prototype.find.call(document.querySelectorAll('#stat-bars-lifted tw-link, .stat-bars tw-link'), function(l) { return /NOTEBOOK/i.test(l.textContent) && l.getClientRects().length; });
+    if (!sv || !nb || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    var r = sv.getBoundingClientRect(), t = nb.getBoundingClientRect(), dx = t.left + t.width / 2 - (r.left + r.width / 2), dy = t.top + t.height / 2 - (r.top + r.height / 2);
+    var f = document.createElement('div'); f.className = 'dss-lily-press'; f.setAttribute('aria-hidden', 'true'); f.appendChild(sv.cloneNode(true));
+    f.style.left = r.left + 'px'; f.style.top = r.top + 'px'; f.style.width = r.width + 'px'; f.style.height = r.height + 'px';
+    document.body.appendChild(f); sv.style.visibility = 'hidden';
+    var a = f.animate([
+      { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1 },
+      { transform: 'translate(0,-18px) scale(1.08) rotate(-6deg)', opacity: 1, offset: 0.18 },
+      { transform: 'translate(' + (dx * 0.55) + 'px,' + (dy * 0.55 - 50) + 'px) scale(0.7) rotate(-14deg)', opacity: 1, offset: 0.55 },
+      { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(0.32) rotate(0deg)', opacity: 1, offset: 0.84 },
+      { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(0.42,0.05) rotate(0deg)', opacity: 0.9, offset: 0.93 },
+      { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(0.42,0.05) rotate(0deg)', opacity: 0 }
+    ], { duration: 1500, easing: 'ease-in-out', fill: 'forwards' });
+    a.onfinish = function() { if (f.parentNode) f.parentNode.removeChild(f); nb.classList.add('dss-nb-took'); setTimeout(function() { nb.classList.remove('dss-nb-took'); }, 1600); };
+  }
+  box.querySelector('.dss-lily-close').addEventListener('click', function() { if (count) pressIn(); close(); });
   overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
   if (window.dssAudio && window.dssAudio.paperRustle) { try { window.dssAudio.paperRustle(); } catch (e) {} }
   // if the player leaves the room while it is up, it goes with the passage
@@ -13091,7 +13118,8 @@ window.dssLore = (function() {
     var b = document.createElement('div'); b.className = 'dss-lore-body'; b.appendChild(held);
     if (held.querySelector('.lore-box > strong')) h.style.display = 'none'; // the note carries its own heading (his): no second one
     c.appendChild(x); c.appendChild(h); c.appendChild(b);
-    function done() { if (held.parentNode === b) b.removeChild(held); close(); document.removeEventListener('keydown', onKey, true); }
+    var after = thenDo; thenDo = null;
+    function done() { if (held.parentNode === b) b.removeChild(held); close(); document.removeEventListener('keydown', onKey, true); if (after) after(); }
     if (auto) { var on = document.createElement('button'); on.type = 'button'; on.className = 'dss-lore-on'; on.textContent = 'On.'; on.addEventListener('click', function(ev) { ev.stopPropagation(); done(); }); c.appendChild(on); setTimeout(function() { try { on.scrollIntoView({ block: 'nearest' }); } catch (e) {} }, 60); }
     o.appendChild(c); document.body.appendChild(o);
     function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); done(); } }
@@ -13142,9 +13170,13 @@ window.dssLore = (function() {
   if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
   // 2026-10-19 (Sam, playtest): a room card's lore button opens the note and leaves the card up, so closing the note goes back to the card
   function open(l) { var t = titleOf(l.textContent); if (notes[t]) show(t); else if (l.isConnected) l.click(); }
+  /* 2026-10-29 (Sam: Chariots of the Gods at the French "should appear, the first time, not as an optional lore link but as a second card before you go back to the bar"):
+     a room card's note opened as the card after it, once per browser like the other first openings; its On. (or ×, or Escape) runs the step after */
+  var thenDo = null;
+  function openNext(l, then) { var t = titleOf(l.textContent); autoMark(t); autoFirst = t; thenDo = then || null; open(l); }
   /* 2026-10-19: a note held in the page rather than behind a link (THE GREAT WORK, printed hidden by the header) */
   function showFrom(title, src) { if (!notes[title] && src) { var frag = document.createElement('div'); frag.className = 'dss-lore-held'; frag.innerHTML = src.innerHTML; Array.prototype.forEach.call(frag.querySelectorAll('[style]'), function(e) { e.style.removeProperty('opacity'); e.style.removeProperty('transition'); }); remember(title, frag.innerHTML); notes[title] = frag; } show(title); } /* (overnight: no inline opacity carried into the card) */
-  return { scan: scan, show: show, isLore: isLore, open: open, showFrom: showFrom };
+  return { scan: scan, show: show, isLore: isLore, open: open, showFrom: showFrom, openNext: openNext, firstDone: function(t) { return autoDone(titleOf(t)); } };
 })();
 /* 2026-10-19 (Sam: explain the alchemy, "4 plus 3"). THE WHEEL IN THE NOTEBOOK and THE GREAT WORK NOTE.
    The notebook's HAUNTS opens on the wheel the Dawn draws (dssOpusReveal), small and in ink: Ripley's twelve gates clockwise
@@ -14178,6 +14210,28 @@ window.dssRingHold = (function() {
   }
   setInterval(fit, 500);
   window.addEventListener('resize', function() { undo(); until = Date.now() + 20000; });
+})();
+/* 2026-10-29 (Sam: "I think all of the quotes should be styled different, maybe make them type out on a typewriter"): each quoted verse (.verse) is
+   struck out letter by letter once it is on screen, with a caret riding the last letter; every letter keeps its place from the start, so nothing reflows.
+   Its words and line breaks are untouched (each letter is only wrapped). Under reduced motion it is shown whole. */
+(function() {
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function onScreen(v) { if (!v.getClientRects().length || v.closest('.dss-ghost, [hidden]')) return false; var r = v.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; }
+  function type(v) {
+    v._dssTyped = true; if (still) return;
+    var w = document.createTreeWalker(v, NodeFilter.SHOW_TEXT), ts = [], cs = []; while (w.nextNode()) ts.push(w.currentNode);
+    ts.forEach(function(t) { var x = t.nodeValue; if (!x || !x.trim() && !/\S/.test(x) && t.parentNode === v) return; var fr = document.createDocumentFragment(); for (var i = 0; i < x.length; i++) { var c = document.createElement('span'); c.className = 'vt-c'; c.textContent = x[i]; fr.appendChild(c); cs.push(c); } t.parentNode.replaceChild(fr, t); });
+    if (!cs.length) return;
+    v.classList.add('vt-on'); var caret = document.createElement('span'); caret.className = 'vt-caret'; caret.setAttribute('aria-hidden', 'true'); var i = 0;
+    function step() {
+      if (!v.isConnected) return;
+      if (i >= cs.length) { setTimeout(function() { if (caret.parentNode) caret.parentNode.removeChild(caret); v.classList.add('vt-done'); }, 1400); return; }
+      var c = cs[i++]; c.classList.add('vt-in'); c.parentNode.insertBefore(caret, c.nextSibling);
+      var ch = c.textContent; setTimeout(step, ch === ' ' ? 60 : /[,.;:!?]/.test(ch) ? 190 : 34 + Math.random() * 46);
+    }
+    setTimeout(step, 450);
+  }
+  setInterval(function() { Array.prototype.forEach.call(document.querySelectorAll('.verse'), function(v) { if (!v._dssTyped && onScreen(v)) type(v); }); }, 250);
 })();
 /* 2026-10-28 (Sam, nightwork Q1, room panels scroll: "Make it fit the screen"): a room's words panel (the veil over a 3D room) that
    runs past the window shrinks evenly, like the pages above: the panel's sheet is zoomed, so the words, the boxes and the pink line
@@ -15382,7 +15436,7 @@ _build() {
     self.wobbleDecay = 0.4;
     var finishing = self.hasRetched && self.streamLevel >= 0.6 && !self.closing;
     /* 2026-10-24 (Sam, playtest: "When you piss in the doorway the sound should last longer"): the hold fills in about a second, so a finished doorway hold lets the stream run on three seconds before its fade and tail */
-    if (self._stream) { var st = self._stream; self._stream = null; if (finishing && self.mode === 'doorway') setTimeout(function() { try { st.stop(); } catch(err) {} }, 3000); else { try { st.stop(); } catch(err) {} } }
+    if (self._stream) { var st = self._stream; self._stream = null; if (finishing && self.mode === 'doorway') setTimeout(function() { try { st.stop(0.9); } catch(err) {} }, 7000); /* 2026-10-29 (Sam: "The pissing sound effect should last longer"): seven seconds, was three, and a slower fade */ else { try { st.stop(); } catch(err) {} } }
     if (finishing) {
       self.closing = true;
       setTimeout(function() { self._fadeOut(); }, 800);
@@ -26641,7 +26695,10 @@ if (!key || !VOICE.keyReady(key) || !window.dssRoomScope) return [];
 var pass = window.dssRoomScope(host), off = pass && pass.querySelector('.dss-key-offer[data-key="' + key + '"][data-kind="seed"]');
 return off ? Array.prototype.slice.call(off.querySelectorAll('tw-link')) : [];
 }
-function spotActions(spot) { var a; try { a = spot.actions ? spot.actions() : []; } catch (e) { a = []; } return a.concat(keyLinks(spot)); }
+/* 2026-10-29 (Sam: "the lore link is only open once, it should still be there every time you click back"): Harlowe takes a note's link away once it is
+   pressed, so each object remembers the notes it offered and, when the link is gone, offers a stand-in that reopens the note */
+var loreKept = {};
+function spotActions(spot) { var a; try { a = spot.actions ? spot.actions() : []; } catch (e) { a = []; } a = a.concat(keyLinks(spot)); var L = window.dssLore; if (!L || !L.isLore) return a; var have = a.filter(function(l) { return l.tagName !== 'TW-HOOK' && L.isLore(l.textContent); }).map(function(l) { return l.textContent.trim(); }), k = loreKept[spot.name] || (loreKept[spot.name] = []); have.forEach(function(t) { if (k.indexOf(t) < 0) k.push(t); }); k.forEach(function(t) { if (have.indexOf(t) < 0) { var st = document.createElement('span'); st.textContent = t; a.push(st); } }); return a; }
 HOTSPOTS.forEach(function(h) { if (KEYSPOT[h.name]) VOICE.claim(KEYSPOT[h.name], WRAP); });
 // an object renamed in its room but not in the voices table goes quiet: the console names it
 if (VOICE) { var unvoiced = HOTSPOTS.filter(function(h) { return !(window.DSS_VOICES.objects[ROOM] || {})[h.name]; }).map(function(h) { return h.name; }); if (unvoiced.length) try { console.warn('DSS voices: ' + ROOM + ' objects with no entry in DSS_VOICES.objects', unvoiced); } catch (e) {} }
@@ -26974,11 +27031,11 @@ var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
 var b = document.createElement('span');
 b.className = 'fi-action'; b.textContent = window.dssLoreLabel ? window.dssLoreLabel(link.textContent.trim()) : link.textContent.trim(); b.style.cssText = BTN; keyable(b);
-if (link.tagName !== 'TW-HOOK' && (/^\s*⟡/.test(link.textContent) || (link.querySelector && link.querySelector('.dss-orn')) || (window.dssLore && window.dssLore.isLore && window.dssLore.isLore(link.textContent)))) { /* every ⟡ … ⟡ link is a lore note; the ornament pass swaps its ⟡ for .dss-orn spans */ /* 2026-10-21 (Sam, of Ronnie's photographs: "the lore is a great idea! Let's just make that more obvious when you click"): a note to read wears the lore's gold and says LORE */ var loreT = link.textContent.trim().replace(/^(?:⟡\s*)?(?:LORE:\s*)?/, '').replace(/\s*⟡\s*$/, '').trim(); if (link.closest('.lore-card-only')) { /* 2026-10-24 (Sam, playtest at the Pillars: "The Lore doesn't need to be highlighted here. They should be equal"): the Great Ham's lore button wears the plain button, beside his other */ b.innerHTML = '⟡ LORE · ' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); } else { b.className += ' fi-lore-btn'; b.innerHTML = '<span class="fi-lore-mark">⟡ LORE</span>' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); b.style.cssText = BTN + 'color:#ffe2a0;border-color:rgba(216,184,112,0.8);background:rgba(40,28,8,0.6);text-shadow:0 0 8px rgba(255,220,150,0.55);'; } }
+if (link.tagName !== 'TW-HOOK' && (/^\s*⟡/.test(link.textContent) || (link.querySelector && link.querySelector('.dss-orn')) || (window.dssLore && window.dssLore.isLore && window.dssLore.isLore(link.textContent)))) { /* every ⟡ … ⟡ link is a lore note; the ornament pass swaps its ⟡ for .dss-orn spans */ /* 2026-10-21 (Sam, of Ronnie's photographs: "the lore is a great idea! Let's just make that more obvious when you click"): a note to read wears the lore's gold and says LORE */ var loreT = link.textContent.trim().replace(/^(?:⟡\s*)?(?:LORE:\s*)?/, '').replace(/\s*⟡\s*$/, '').trim(); if (link.closest('.lore-card-only')) { /* 2026-10-24 (Sam, playtest at the Pillars: "The Lore doesn't need to be highlighted here. They should be equal"): the Great Ham's lore button wears the plain button, beside his other */ b.innerHTML = '⟡ LORE · ' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); } else { b.className += ' fi-lore-btn'; b.innerHTML = '<span class="fi-lore-mark">⟡ LORE</span>' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); b.style.cssText = BTN + 'color:#ffe2a0;border-color:rgba(216,184,112,0.8);background:rgba(40,28,8,0.6);text-shadow:0 0 8px rgba(255,220,150,0.55);'; }  if (spot.loreNext && link.isConnected && window.dssLore.openNext && !window.dssLore.firstDone(link.textContent)) { b.className = 'fi-action'; b.textContent = 'Continue'; b.style.cssText = BTN; b._dssLoreNext = true; var brow = card.querySelector('.dss-room-back-row'); if (brow) brow.style.display = 'none'; } }
 if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
 if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
 b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
-b.addEventListener('click', function(ev) { ev.stopPropagation(); if (window.dssLore && window.dssLore.isLore && window.dssLore.isLore(link.textContent)) { window.dssLore.open(link); return; } if (link.getAttribute && link.getAttribute('data-dss-stay')) { link.click(); if (b.parentNode) b.parentNode.removeChild(b); try { card.focus({ preventScroll: true }); } catch (e) {} return; } if (!link.isConnected) { stepBack(); return; } var kOff = keyActs.indexOf(link) >= 0 ? keyOffer : null, lilyH = link.tagName === 'TW-HOOK' ? link : null; link.click(); stepBack(); if (o.onPress) o.onPress(spot, link); if (kOff) keyTaken(kOff); if (lilyH) lilyTaken(lilyH); });
+b.addEventListener('click', function(ev) { ev.stopPropagation(); if (b._dssLoreNext) { window.dssLore.openNext(link, function() { stepBack(); }); return; } if (window.dssLore && window.dssLore.isLore && window.dssLore.isLore(link.textContent)) { window.dssLore.open(link); return; } if (link.getAttribute && link.getAttribute('data-dss-stay')) { link.click(); if (b.parentNode) b.parentNode.removeChild(b); try { card.focus({ preventScroll: true }); } catch (e) {} return; } if (!link.isConnected) { stepBack(); return; } var kOff = keyActs.indexOf(link) >= 0 ? keyOffer : null, lilyH = link.tagName === 'TW-HOOK' ? link : null; link.click(); stepBack(); if (o.onPress) o.onPress(spot, link); if (kOff) keyTaken(kOff); if (lilyH) lilyTaken(lilyH); });
 row.appendChild(b);
 });
 var wrow = card.querySelector('.fi-wayon');
@@ -27161,18 +27218,37 @@ var lilyN = 0; try { lilyN = parseInt((document.getElementById('dss-lily-n') || 
 if (flower && lilyN >= 2) flower = false;
 return flower ? 'There is a lily in this room. Gather it.' : take ? 'SOMETHING HERE TO TAKE \u00b7\u00a0LOOK\u00a0CLOSER' : ''; /* the dot ends a line, never starts one */
 }
+/* 2026-10-29 (Sam: "when you click on it, a line of petals should flash between it and wherever the clickable lily is in the room"): the hint's
+   sprig to the object holding the flower, a trail of petals lit one after another, then gone */
+function petalLine() {
+if (!hint.classList.contains('dss-room-lily-hint') || !hint.dataset.keep) return;
+var spot = HOTSPOTS.filter(function(h) { try { return available(h) && spotLily(h); } catch (e) { return false; } })[0]; if (!spot) return;
+var g = restGlows.filter(function(x) { return x.spot === spot; })[0], v = (g && g.on) ? g.sp.position.clone() : new THREE.Vector3().fromArray(spot.haloAt || spot.tgt || spot.pos);
+v.project(camera); if (v.z < -1 || v.z >= 1) return;
+var cr = canvas.getBoundingClientRect(), wr = wrap.getBoundingClientRect(), ic = hint.querySelector('.dss-room-lily-hint-ic') || hint, ir = ic.getBoundingClientRect();
+var x1 = cr.left - wr.left + (v.x + 1) / 2 * cr.width, y1 = cr.top - wr.top + (1 - v.y) / 2 * cr.height, x0 = ir.left - wr.left + ir.width / 2, y0 = ir.top - wr.top + ir.height / 2;
+var dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy), n = Math.max(8, Math.min(28, Math.round(len / 24))), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+for (var i = 0; i < n; i++) (function(i) {
+var t = (i + 1) / (n + 1), p = document.createElement('div'); p.className = 'dss-lily-petal';
+p.style.left = (x0 + dx * t - dy / len * Math.sin(t * Math.PI * 2.5) * 7) + 'px'; p.style.top = (y0 + dy * t + dx / len * Math.sin(t * Math.PI * 2.5) * 7) + 'px';
+p.style.setProperty('--r', (ang + (i % 2 ? 40 : -40)) + 'deg'); p.style.animationDelay = (i * 45) + 'ms';
+wrap.appendChild(p); setTimeout(function() { if (p.parentNode) p.parentNode.removeChild(p); }, 1500 + i * 45);
+})(i);
+var end = document.createElement('div'); end.className = 'dss-lily-petal-end'; end.style.left = x1 + 'px'; end.style.top = y1 + 'px'; end.style.animationDelay = (n * 45) + 'ms';
+wrap.appendChild(end); setTimeout(function() { if (end.parentNode) end.parentNode.removeChild(end); }, 1700 + n * 45);
+}
 /* 2026-10-17 (Sam: "There is a lily in this room. Gather it.", in a little box of its own at the top right, green and white): the lily line has its own box; the key's line keeps the centred style */
 function holdsHint() { var h = roomHolds(); if (h) { hint.textContent = h; hint.dataset.keep = '1'; hint.dataset.line = h; var lily = (h === 'There is a lily in this room. Gather it.'); var S = hint.style;
 if (lily) { S.top = '14px'; S.left = 'auto'; S.right = '14px'; S.transform = 'none'; S.textAlign = 'left'; S.maxWidth = '300px'; S.font = 'italic 15px Georgia, \'Crimson Text\', serif'; S.letterSpacing = '0.02em'; S.color = '#eef7e6'; S.textShadow = '0 0 8px rgba(150,220,130,0.35)'; S.background = 'radial-gradient(ellipse at center,rgba(91,148,72,0.30) 0%,rgba(70,122,60,0.16) 42%,rgba(45,89,44,0.06) 61%,transparent 76%)'; S.border = 'none'; S.boxShadow = 'none'; S.padding = '13px 20px 13px 15px'; S.borderRadius = '50%';
 /* 2026-10-19 (Sam: "drab and unfinished ... should be more obvious"): a dark ground, a breathing green glow, and the game's own lily sprig before the line */
 hint.classList.add('dss-room-lily-hint'); var lsv = null; try { var lh = window.dssRoomScope(o.host); lsv = null; if (lh) Array.prototype.some.call(lh.querySelectorAll('tw-hook[name^="lily"]'), function(hk) { if (!/^lily\d$/.test(hk.getAttribute('name') || '')) return false; lsv = hk.querySelector('svg'); return !!lsv; }); } catch (e) {}
-if (lsv) { var ic = lsv.cloneNode(true); ic.removeAttribute('id'); ic.setAttribute('aria-hidden', 'true'); ic.setAttribute('class', 'dss-room-lily-hint-ic'); hint.insertBefore(ic, hint.firstChild); } }
-else { hint.classList.remove('dss-room-lily-hint'); S.top = '22px'; S.left = '50%'; S.right = 'auto'; S.transform = 'translateX(-50%)'; S.textAlign = 'center'; S.maxWidth = '90%'; S.font = '12.5px \'Courier New\', monospace'; S.letterSpacing = '3px'; S.color = cFg; S.textShadow = '0 0 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9)'; S.background = 'rgba(8,6,4,0.55)'; S.border = 'none'; S.boxShadow = 'none'; S.padding = '5px 12px'; S.borderRadius = '2px'; } } }
+if (lsv) { var ic = lsv.cloneNode(true); ic.removeAttribute('id'); ic.setAttribute('aria-hidden', 'true'); ic.setAttribute('class', 'dss-room-lily-hint-ic'); hint.insertBefore(ic, hint.firstChild); } S.pointerEvents = 'auto'; S.cursor = 'pointer'; if (!hint._dssPetals) { hint._dssPetals = true; hint.addEventListener('click', petalLine); } }
+else { hint.classList.remove('dss-room-lily-hint'); S.pointerEvents = 'none'; S.cursor = ''; S.top = '22px'; S.left = '50%'; S.right = 'auto'; S.transform = 'translateX(-50%)'; S.textAlign = 'center'; S.maxWidth = '90%'; S.font = '12.5px \'Courier New\', monospace'; S.letterSpacing = '3px'; S.color = cFg; S.textShadow = '0 0 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9)'; S.background = 'rgba(8,6,4,0.55)'; S.border = 'none'; S.boxShadow = 'none'; S.padding = '5px 12px'; S.borderRadius = '2px'; } } }
 // taken: the hint lets go and fades like any other room's
 var holdsTimer = setInterval(function() {
 if (!wrap.isConnected) { clearInterval(holdsTimer); return; }
 var nowHolds = roomHolds();
-if (hint.dataset.keep && !nowHolds) { delete hint.dataset.keep; hint.style.opacity = '0'; }
+if (hint.dataset.keep && !nowHolds) { delete hint.dataset.keep; hint.style.opacity = '0'; hint.style.pointerEvents = 'none'; }
 else if (hint.dataset.keep && nowHolds !== (hint.dataset.line || hint.textContent)) holdsHint(); // the flower taken, a key still waits (restyled: the lily's box gives way to the centred line)
 else if (!hint.dataset.keep && roomHolds()) { holdsHint(); hint.style.opacity = '0.95'; }
 }, 1500);
@@ -28614,7 +28690,7 @@ prose: function() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''
 { root: glassG, name: 'A glass on the bar', pos: [-0.9, 1.5, 0.35], tgt: [gp.x, 1.16, gp.z],
 actions: function() { return byText(['Get a drink at the bar']); } },
 { root: bookG, name: 'An orange paperback', pos: [bp.x + 0.20, 1.46, bp.z + 0.18], tgt: [bp.x, 1.166, bp.z], haloAt: [bp.x - 0.05, 1.18, bp.z + 0.4], haloSc: 0.45, /* 2026-10-14: its glow a little along the bar, clear of the glass */ keepLine: true, notAWay: true,
-line: '<i>Chariots of the Gods?</i>',
+line: '<i>Chariots of the Gods?</i>', loreNext: true,
 actions: function() { return byText(['⟡ LORE: Chariots of the Gods? ⟡', 'LORE: Chariots of the Gods?']); } },
 { root: doorG, name: 'A blue door', pos: [1.65, 1.5, -2.8], tgt: [3.6, 1.3, -3.7], haloAt: [3.45, 1.3, -3.7], haloSc: 1.1,
 actions: function() { var a = byText(['Leave the French']); if (a.length) return a; return window.dssStreetExit(); }, /* 2026-10-16 (room sweep): until the French is done the door offers the page's own exit, as the Coach's does, rather than a card with nothing on it */ // 2026-10-12 (the venues audit): the way out is the door, not the window
@@ -34422,7 +34498,7 @@ phPaveFlood.material.metalness = 0.35;
 phPaveFlood.material.roughness = 0.14;
 phPaveFlood.renderOrder = 3;
 phPaveFlood.rotation.x = -Math.PI / 2;
-phPaveFlood.position.set(0.7, 0.157, 3.55);
+phPaveFlood.position.set(0.7, 0.157, 4.2);
 phPaveFlood.scale.set(0.01, 0.01, 1);
 scene.add(phPaveFlood);
 // Visit 2+: slow blob-ripples spreading off the drain. Blobs, NOT rings —
@@ -34482,6 +34558,11 @@ phWaterMats.forEach(function(mat) {
   };
   mat.customProgramCacheKey = function() { return 'ph-water-wavelets-2'; };
 });
+// Deep overtopping water hides the flags below it. Keeping this sheet in
+// the opaque pass also prevents the wet-pavement layers showing through it.
+phPaveFlood.material.transparent = false;
+phPaveFlood.material.opacity = 1;
+phPaveFlood.material.depthWrite = true;
 for (var phwi = 0; phwi < phWaterMats.length; phwi++) { if (phWaterMats[phwi].emissive) { phWaterMats[phwi].emissive.setHex(0x9fb4dc); phWaterMats[phwi].emissiveIntensity = 0; } }
 var phFogBase = scene.fog ? scene.fog.color.clone() : null;
 var phBgBase = (scene.background && scene.background.isColor) ? scene.background.clone() : null;
@@ -36169,10 +36250,9 @@ function phAnimate() {
   if (pvT > 0) {
     var pvP = Math.min(1, pvT / 65);
     pvP = pvP * pvP * (3 - 2 * pvP);
-    var pvLen = 4.3 * pvP;
+    var pvLen = 5.0 * pvP;
     phPaveFlood.position.y = phLevel + 0.002;
     phPaveFlood.scale.set(1.2 + pvLen * 1.35 + Math.sin(t * 1.7) * 0.03, pvLen, 1);
-    phPaveFlood.material.opacity = 0.65 + Math.min(0.28, pvT * 0.008) + Math.sin(t * 2.4) * 0.015;
   }
 
   // Visit 2+: ripples working off the drain
@@ -59431,7 +59511,7 @@ There is an atmosphere of the silver screen. Brando might emerge in a tight and 
 ]\
 <!-- 2026-10-24 sweep: the book-lost roll (Book Footer) runs here, before the bag line and the pitch question, and the bag line shows only while the book is in the bag (left behind, fenced, lent or sold it said "In your bag, you have your novel" regardless; played live with the book left at the French) -->(display: "Book Footer")(set: $bookRollLap to $returns)(unless: $bookLent is a string)[(set: $bookLent to "")](set: _bagHas to (($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($bookLent is "")))\
 (display: "Key Doors Open Line")(if: $returns is 1)[In your bag, you have your novel, in manuscript. It might open doors.](else-if: _bagHas)[In your bag, you have //(print: $bookTitle)//, your novel, in manuscript. It might open doors.]\
-<!-- 2026-10-15 (Sam: "some sort of prompt where it asks you who you want to try to pitch the book to and then gives a choice and even guides you there"): the question under the bag line, from the second lap, while the book is in the bag and no forced road is on. The names come from Who Will Read (the people still owed a reading or a refusal, behind open doors). A pick sets NEXT to that person and the map lights a gold thread to their door; it clears when they have had their say, and the question comes back. -->(unless: $bookLent is a string)[(set: $bookLent to "")](set: _bookInBag to (($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($bookLent is "")))(if: ($metRed is true) and _bookInBag and ($coachUrgent is not true) and ($hutBurnt is not true) and ($blackouts < 2) and ($pitchAvail is an array) and ($pitchAvail's length > 1))[<!-- 2026-10-17 (Sam): a question only when there is a choice; one reader left, and NEXT and the map simply name them --><div class="book-pitch">|pitchq>[(display: "Pitch Question")]</div>]\
+<!-- 2026-10-15 (Sam: "some sort of prompt where it asks you who you want to try to pitch the book to and then gives a choice and even guides you there"): the question under the bag line, from the second lap, while the book is in the bag and no forced road is on. The names come from Who Will Read (the people still owed a reading or a refusal, behind open doors). A pick sets NEXT to that person and the map lights a gold thread to their door; it clears when they have had their say, and the question comes back. -->(unless: $bookLent is a string)[(set: $bookLent to "")](set: _bookInBag to (($bookAt is a string) and ($bookAt is "") and ($bookSold is not true) and ($bookLent is "")))(if: ($metRed is true) and _bookInBag and ($coachUrgent is not true) and ($hutBurnt is not true) and ($blackouts < 2) and ($pitchAvail is an array) and ($pitchAvail's length > 0))[<!-- 2026-10-17 (Sam): a question only when there is a choice; one reader left, and NEXT and the map simply name them --><!-- 2026-10-29 (Sam: "the link choices you can click to guide you to the next venue seem to have entirely disappeared. They should still be there"): since the novelist joins only when he is next (10-27), the early nights had one reader and lost the question; it shows from one reader on --><div class="book-pitch">|pitchq>[(display: "Pitch Question")]</div>]\
 <!-- The blank line that used to separate this beat from the bag line sat
      OUTSIDE the hook, so it printed whether or not the beat did, and once the
      map moved below the prose it was one of two stray breaks pushing the street
@@ -59609,8 +59689,8 @@ The fire must burn with you or without you.
 
 Whatever more you choose comes out in the wash:
 
-<div class="verse">Hobson has supt, and ’s newly gon to bed.</div>
-]
+<div class="verse">Hobson has supt, and ’s newly gon to bed.</div>\
+]\
 (unless: $worldsVisited is an array)[(set: $worldsVisited to (a:))](unless: $inisToldOfPillars is a boolean)[(set: $inisToldOfPillars to false)]\
 (if: $inisToldOfPillars is true and $dreamKey is not "")[<div class="prose-tilde">~</div>]\
 (display: "Key Guards")\
@@ -59628,8 +59708,8 @@ Whatever more you choose comes out in the wash:
      and a crossing costs nothing. Key consumption still limits it alone.)
      The < 5 guard only
      stops the column opening onto an empty pool once every world is done;
-     the portal's own fallback would otherwise dead-end there. -->
-<!-- Different unfinished worlds may be entered during the same night. -->
+     the portal's own fallback would otherwise dead-end there. -->\
+<!-- Different unfinished worlds may be entered during the same night. -->\
 <!-- STRAIGHT THROUGH (2026-09-14, Sam: "when you return to the pillars and have
      everything you need for a dream quest, it should immediately go to the third
      pillar screen when you walk in off the map"). $pillarsNoAuto is set by the
@@ -59647,23 +59727,23 @@ The (print: $keyNames's ($dreamKey)) in your pocket seems to heat with some occu
 </div>
 
 (if: ($sobriety + $pillarsToll) < 30)[<div class="choice-box">[[Step into the third blue post|The Wall]]</div>](else:)[<div class="choice-box">[[Step into the third blue post|Third Pillar Portal]]</div>]
-]
+]\
 <!-- 2026-10-06 (Dr Quill): "if you have no key or no word from Inis then you just shouldn't see the pillar at all".
      The shut-pillar paragraph is gone; the 2D and 3D pillar show only with Inis's word and a key, or when the synthesis is ready.
-     His shut-pillar words, kept here: There is the third pillar, the one that Inis O’Flatterly told you about. For the moment it is shut. It wants paying and your pockets are empty. Find something small in the night to fund your passage. -->
+     His shut-pillar words, kept here: There is the third pillar, the one that Inis O’Flatterly told you about. For the moment it is shut. It wants paying and your pockets are empty. Find something small in the night to fund your passage. -->\
 <!-- v2-expansion: the synthesis ritual link, revealed only when the
      player has earned all 5 world gifts across their lifetime
      (localStorage). The third pillar isn't a portal now — it's the
      site of a ritual. The visible/hidden toggle happens in JS at the
      bottom of the passage. Gated on lifetime gifts only; a player
      can carry that knowledge into a fresh playthrough without having
-     met Inis this run. -->
+     met Inis this run. -->\
 <span id="dss-synth-visited" style="display:none">(print: $worldsVisited)</span><div id="dss-synthesis-link" style="display:none;">
 <div class="prose-tilde">~</div>
 <div>There is nothing more in the night for you to find.</div>
 
 <div class="choice-box">[[Perform the synthesis|The Synthesis]]</div>
-</div>
+</div>\
 <script>
 (function(){
   try {
@@ -59675,22 +59755,20 @@ The (print: $keyNames's ($dreamKey)) in your pocket seems to heat with some occu
     }
   } catch(e) {}
 })();
-</script>
-
+</script>\
 (if: _lilyRing)[(set: $lilyCallReturn to "Entering The Pillars of Hercules")<div class="phone-ringing">A phone rings, the barman answers it, then looks you in the eye and mouths, ‘LILY’.
 
 |lilyring>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 6))(go-to: "Lily phone call 1")]
 (link: "I’m not here")[(set: $confidence to ($statLoss: $confidence, 3))(display: "Bars Now")(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $ringSnoozed to true)(set: $resumingFromCall to true)(set: $refusedLily1 to true)(replace: ?lilyring)[What would LILY want with you? You couldn’t speak to her now, you are not ready.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]
-[[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]
+[[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]\
 (else-if: _dualRing)[(set: $lilyCallReturn to "Entering The Pillars of Hercules")<div class="phone-ringing">The phone behind the bar rings.
 
 |dualring>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 7))(go-to: "The dual ring")]
 (link: "Turn and leave")[(set: $refusedDualRing to true)(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $resumingFromCall to true)(replace: ?dualring)[<!-- 2026-10-11 (Sam, option C part B): turning LILY away is a glimpse of the Fetch, not a meeting. PARKED (Sam): a musical intervention here, so the sound tells you something important has happened. --><div class="glass-pane">(display: "Fetch Window SVG")</div>
-[[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]
+[[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]\
 (else:)[(if: $hadPhoneCall is true and $metCritic is true and $tookLily2 is false)[<span class="dss-flower-only-marker"></span>](if: $tookLily2 is false)[|lily2>[(display: "Lily SVG")]\
 (click-replace: ?lily2)[(if: $sobriety < 30)[(display: "Lily SVG")(unless: $lostToDrink contains "lily2")[(set: $lostToDrink to $lostToDrink + (a: "lily2"))]<span class="lily-glimpse lily-fade">She was leaving town the day after PIERS GAV. She found you and your mates in a pub garden; you hadn’t slept and the acid was still funny. This is the flower you tried to give her. The one you picked in the ha-ha of some big house and kept in your buttonhole all night, and which she wouldn’t take.</span>](else:)[(set: $lostToDrink to $lostToDrink - (a: "lily2"))(set: $lilyCount to $lilyCount + 1)(set: $tookLily2 to true)(display: "Next Redraw")<span class="dss-lily-count" style="display:none">(print: $lilyCount)</span>(display: "Lily SVG")<span class="lily-glimpse lily-fade">There occurs, as you crossed the threshold of the Pillars, a sonic peculiarity seen elsewhere, for instance, in the acoustic mirrors on Dungeness. If you stand in that precise spot and the atmospherics are favourable, you might hear a noise made at that same instant anywhere in Soho. You hear her laugh.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">Gather flowers. There are five to find.</div>](if: $lilyCount is 5)[(set: $confidence to ($statGain: $confidence, 25))(set: $sobriety to ($statGain: $sobriety, 15))<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">MORALE +25 | SOBRIETY +15</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
-
 <!-- 2026-10-12 (the Pillars audit): AOIFE's ring no longer hides the Ham. Before the critic the pub holds the call AND the
      Ham (his 14 September rule), so both show, in any order; "no more business" waits until neither is left. --><!-- 2026-10-14 (Sam: want the book): AOIFE's call comes straight after the Ham refuses the book (in The critic's judgement); here it rings only on later visits, until answered -->(set: _aoifeRing to (($hadPhoneCall is false) and ($ringSnoozed is not true) and ($metCritic is true)))\
 (if: _aoifeRing)[<div class="phone-ringing">Behind the bar a phone rings and your name is called.
@@ -59698,7 +59776,7 @@ The (print: $keyNames's ($dreamKey)) in your pocket seems to heat with some occu
 |aoifering>[(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 9))(go-to: "The phone call")]
 (link: "I’m not here")[(set: $confidence to ($statLoss: $confidence, 4))(display: "Bars Now")(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $ringSnoozed to true)(set: $resumingFromCall to true)(set: $refusedAoife to true)(replace: ?aoifering)[The barman looks you over utterly neutrally. He wishes he wasn’t paid to be part of this game. ‘Not seen him,’ he says, and puts back the receiver.
 (if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]
-[[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]
+[[Back to the bar|Entering The Pillars of Hercules]]]]]</div>]\
 (if: $metCritic is false)[Through the fumes, vapours and drink, you recognise a man.
 
 <span class="lore-card-only">(link: "⟡ LORE: The Great Ham ⟡")[(set: _lore to "The Great Ham")(display: "Lore Read")<div class="lore-box">
@@ -69435,6 +69513,15 @@ border-left: 2px solid rgba(226, 182, 101, 0.7);
 text-shadow: 0 0 12px rgba(230, 180, 90, 0.28);
 }
 
+/* 2026-10-29 (Sam: the quotes "styled different ... type out on a typewriter"): typed in the game's typewriter face, cream ink on a faint sheet,
+   the gold rule kept; the letters are struck one by one by the verse typer in the UserScript */
+.verse:not(.typewriter-page .verse) { font-family: 'Special Elite', 'Courier New', monospace; font-style: normal; font-weight: 400; font-size: 1.04em; letter-spacing: 0.01em; line-height: 1.7; color: #f0e4c8; background: rgba(240,226,196,0.045); text-shadow: 0 0 10px rgba(230,180,90,0.2); }
+.verse.vt-on .vt-c { visibility: hidden; }
+.verse.vt-on .vt-c.vt-in { visibility: visible; animation: vtStrike 0.22s ease-out; }
+@keyframes vtStrike { 0% { opacity: 0.25; text-shadow: 0 0 2px rgba(255,240,200,0.9); } 100% { opacity: 1; } }
+.vt-caret { position: relative; display: inline-block; width: 0; height: 1em; }
+.vt-caret::after { content: ''; position: absolute; left: 2px; top: 0.12em; width: 0.5em; height: 1.05em; background: rgba(240,228,200,0.7); animation: vtBlink 0.9s steps(2, start) infinite; }
+@keyframes vtBlink { to { visibility: hidden; } }
 /* 2026-10-23 overnight (Maritime interlude with a key in the pocket): the lead and the quiet road swap places */
 .maritime-scene .mar-lead tw-link { font-size: 1.35em !important; color: #f0c870 !important; letter-spacing: 0.04em; text-shadow: 0 0 12px rgba(240,200,110,0.45) !important; border-bottom: 0 !important; }
 .maritime-scene .mar-key-chip { display: inline-block; margin-left: 0.9em; font: 600 0.72em/1 'Courier New', monospace; letter-spacing: 0.22em; text-transform: uppercase; color: #8fd0e8; text-shadow: 0 0 8px rgba(140,200,230,0.5); vertical-align: middle; }
@@ -69579,6 +69666,16 @@ body:has(#dss-lore-overlay) .dss-hint-slip { visibility: hidden; }
 @keyframes fiLoreBreath { 0%, 100% { box-shadow: 0 0 8px rgba(216,184,112,0.22), inset 0 0 8px rgba(216,184,112,0.08); } 50% { box-shadow: 0 0 20px rgba(216,184,112,0.5), inset 0 0 12px rgba(216,184,112,0.18); } }
 @media (prefers-reduced-motion: reduce) { .fi-action.fi-lore-btn { animation: none; box-shadow: 0 0 12px rgba(216,184,112,0.35); } }
 .lore-fn:hover, .lore-fn:focus-visible { color: #ffe2a0; text-shadow: 0 0 12px rgba(255,220,150,0.8); outline: none; }
+/* 2026-10-29 (Sam: "make the links much more obvious, to the point that people are more likely than not to click them"): the mark in the words is a lit gold tab
+   at the text's own size, not a superscript, and breathes; a room card's lore button is a full-width gold plate */
+.lore-fn { vertical-align: 0.08em; font-size: 0.78em; margin-left: 0.4em; padding: 0.2em 0.6em 0.16em; border: 1px solid rgba(232,200,120,0.85); border-radius: 2px; background: rgba(216,184,112,0.16); color: #ffe2a0; text-shadow: 0 0 8px rgba(255,220,150,0.6); white-space: nowrap; animation: loreFnBreath 2.6s ease-in-out infinite; }
+.lore-fn-word { font-size: 0.9em; font-weight: bold; }
+.lore-fn:hover, .lore-fn:focus-visible { background: rgba(216,184,112,0.32); border-color: #ffe2a0; }
+@keyframes loreFnBreath { 0%, 100% { box-shadow: 0 0 6px rgba(216,184,112,0.3); } 50% { box-shadow: 0 0 16px rgba(255,220,150,0.65); } }
+.fi-action.fi-lore-btn { display: block !important; margin: 12px auto 2px !important; padding: 13px 22px !important; font-size: 13px !important; color: #fff0c8 !important; border: 1px solid rgba(240,210,140,0.95) !important; background: linear-gradient(180deg, rgba(216,184,112,0.34), rgba(120,88,30,0.42)) !important; }
+.fi-action.fi-lore-btn .fi-lore-mark { font-size: 12px; color: #ffe2a0; }
+.fi-action.fi-lore-btn:hover, .fi-action.fi-lore-btn:focus-visible { background: linear-gradient(180deg, rgba(236,204,132,0.5), rgba(140,104,40,0.55)) !important; }
+@media (prefers-reduced-motion: reduce) { .lore-fn { animation: none; box-shadow: 0 0 10px rgba(216,184,112,0.45); } }
 #dss-lore-overlay { position: fixed; inset: 0; z-index: 9999990; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; opacity: 0; transition: opacity 0.3s ease; }
 #dss-lore-overlay.in { opacity: 1; } #dss-lore-overlay.out { opacity: 0; }
 /* 2026-10-21: a note card sits outside tw-story, where Harlowe's paragraph spacer (tw-consecutive-br) is not styled, so blank lines collapsed and Ronnie's four stories ran together; it keeps the page's spacing now */
@@ -73130,6 +73227,16 @@ border-right: 1px solid rgba(107,32,32,0.25);
 .dss-lily-stage svg { width: 96px; filter: drop-shadow(0 0 14px rgba(240,220,170,0.35)) drop-shadow(0 5px 14px rgba(0,0,0,0.5)); }
 .dss-lily-stage .lily-prompt, .dss-lily-stage .lily-icon-svg { animation: none; cursor: default; }
 .dss-lily-box .coin-overlay-text.claude-draft { color: #ff3aa8; }
+.dss-lily-story-box { margin: 14px auto 10px; max-width: 30em; padding: 14px 20px; border: 1px solid rgba(232,200,120,0.7); outline: 1px solid rgba(232,200,120,0.22); outline-offset: 4px; background: rgba(36,26,10,0.55); box-shadow: 0 0 18px rgba(240,200,110,0.18), inset 0 0 14px rgba(240,200,110,0.08); }
+.dss-lily-story-box .dss-lily-story { margin: 0; }
+.dss-lily-press { position: fixed; z-index: 10000001; pointer-events: none; filter: drop-shadow(0 0 14px rgba(240,220,170,0.55)); }
+.dss-lily-press svg { width: 100% !important; height: 100% !important; }
+/* 2026-10-29: the petal trail from the room's lily hint to the flower (petalLine in the room kit) */
+.dss-lily-petal { position: absolute; width: 10px; height: 5px; margin: -2.5px 0 0 -5px; border-radius: 50% 0 50% 0; background: #f6faee; box-shadow: 0 0 7px rgba(190,240,170,0.85); z-index: 9004; pointer-events: none; opacity: 0; transform: rotate(var(--r)) scale(0.4); animation: dssLilyPetal 1.3s ease-out forwards; }
+@keyframes dssLilyPetal { 0% { opacity: 0; transform: rotate(var(--r)) scale(0.4); } 22% { opacity: 1; transform: rotate(var(--r)) scale(1.15); } 100% { opacity: 0; transform: rotate(calc(var(--r) + 50deg)) scale(0.7) translateY(6px); } }
+.dss-lily-petal-end { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; border: 1px solid rgba(220,250,200,0.9); box-shadow: 0 0 16px rgba(190,240,170,0.7), inset 0 0 12px rgba(190,240,170,0.4); z-index: 9004; pointer-events: none; opacity: 0; animation: dssLilyPetalEnd 1.2s ease-out forwards; }
+@keyframes dssLilyPetalEnd { 0% { opacity: 0; transform: scale(0.3); } 30% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.6); } }
+@media (prefers-reduced-motion: reduce) { .dss-lily-petal, .dss-lily-petal-end { animation-duration: 0.01s; } }
 /* 2026-10-23 (Sam, playtest: the story line on the flower, "Was that her passing the window…", "needs to be emphasised. Maybe make a
    sort of golden glow scroll through it"): a band of gold light moves slowly through the words, again every few seconds; the words
    keep their own colour between passes. Not on a pink draft line; still under reduced motion. */

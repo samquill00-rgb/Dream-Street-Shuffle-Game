@@ -1,3 +1,15 @@
+# 2026-10-29 evening: Sam's 10 playtest notes (synced, NOT committed)
+1/5 Lore no longer opens on a timer: a note seen is owed; the next trusted press on a tw-link or .fi-action on that page opens it (card with On.) and On. replays the press (dssLore `owe`/`owed`, capture click listener). Verified at Cecil Court: no auto-open in 16 s, Look in -> Watkins note -> On. -> Watkins.
+2 Rumour card's "· · ·" is now "GO ON ▼" bobbing; .dss-quest-line errands (Ham's INIS line, Inis's Page 93) sit in a gold-ruled box (border + outer glow only: the text is background-clip painted, any fill would hide it).
+3/4 $statLoss floors at 40 until $returnedPage (a stat already under 40 is not lifted). "Changes seem arbitrary" NOT addressed.
+4 matchboxRattle sfx on keeping the Pillars matches.
+6 Watkins: brass Blavatsky / the Beast words open hover/focus/tap windows; text from window.DSS_WATKINS_BIOS, pink placeholders in the script until Sam writes.
+7 Waltz: window._dssWaltzReport (kept/clean/total/outcome) -> card on Approach O'Flatterly ("A fine/fair/poor waltz." + steps).
+8 Glass case in the shop: voices 'oi' 'A glass case' now = pink placeholder, so it is always clickable (dev mode shows pink; players see it once Sam writes it).
+9 Maritime: Seek the shore (no-key branch) in a breathing gold .mar-shore box.
+10 Carthage coast: haze/fog planes masked soft (caSoftTex), sky cloud bands drawn with blur(10px), surf and shallows feathered at the far edge. Before/after screenshots: scratchpad coast_before.png / coast.png.
+All touched pages load with no JS/Harlowe errors.
+
 # 2026-10-29 afternoon (synced, NOT committed)
 - French first-visit line: "clocks you" -> "looks you in the eyes".
 - Lore: room cards keep a lore button after the link is used (loreKept stand-ins in the room kit's spotActions); lore marks are lit gold tabs, card lore buttons full-width gold plates; the French paperback's first look shows Continue -> Chariots note as the next card -> back to the room (spot.loreNext, dssLore.openNext/firstDone; once per browser via dssLoreAuto).

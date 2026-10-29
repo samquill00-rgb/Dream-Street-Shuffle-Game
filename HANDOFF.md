@@ -1,3 +1,12 @@
+# 2026-10-29 night: Sam's downloaded assets placed (synced, NOT committed)
+- Sun (NASA/SDO) in Ronnie's approach sky (rsSun on planetGroup, additive). Moon (moon_overlay) via window.dssSkyMoon, hooked in _dssBindScene for fh/ch/ph/lo/cr/ts/of/fc wraps.
+- Coach interior: wood2 painted into panelTex (panelling + counter, repeat 3x1), wood1 on oakTrim. window.dssPaintTex(tex,url,wash) helper.
+- Flags + cobbles: --dss-flags / --dss-cobble CSS vars; gents tile strips and the worm wall.
+- Yughues CC0 parquet -> Lackland's floor; slate tile -> cellar floor (DSS_TEX_PARQUET / DSS_TEX_SLATE).
+- Four dead trees in Carthage approach (initCa, before FOG PLANES).
+- Green Sea square (green-sea-3d-static.html, not synced, ships as its own file): paneMoon() reflects the parent's DSS_MOON_URL in every window pane, random size/place/tilt/strength per pane per visit, fainter on lamplit panes.
+- Held: ulukai + Ryzom (CC-BY-SA), brick pavers (period). Window reflection not done (ask what he meant). Credits table in SOUND-SOURCES.md; four licences to confirm with Sam.
+
 # 2026-10-29: plot-speech style built (synced, NOT committed)
 - .dss-speech panel (data-speaker label, --sp rule colour, warm italic on dark): INIS on O'Flatterly's Third Pillar (#8fbf78), INIS's Page 93 errand, the Ham's INIS errand (#d9806a). The quest-line gold light still runs inside. Add `<div class="dss-speech" data-speaker="NAME" style="--sp:#hex">` round any other plot speech.
 - Coach grit pass (coach-grit session) synced alongside.
@@ -7987,3 +7996,6 @@ Sam corrected handle placement: must not sit on glass. Moved lever spindle/backp
 ## 2026-10-29 — Magical book colours inside/outside INIS's shop
 Sam requested books changing/swapping colours at varying paces, magically. Added shared dssBookMagic scene-local material colour cycles (8–27s, independent phases, muted bookcloth palette; guarantees alternate differs from base). Interior registered shelf books, floor stacks, case books and window-ledge books. Exterior display's painted books use a static identity-mask canvas texture plus shader recolouring, preserving original shading and leaving paper notices clear; three physical window stacks use shared helper. Existing scene frame callbacks only, no extra loops/timers/meshes/lights; mask explicitly disposed on exterior scene removal. Reduced motion holds colours. Geometry/prose/actions unchanged.
 QA isolated actual-source interior/exterior fixtures both render without page/console/shader errors; animated screenshots inspected. 390x844 reduced-motion captures pixel-identical after entrance button fade; helper colour-change + still checks passed. Fixtures omit full Harlowe/postprocessing, interior ghost stubbed. Files scratchpad/book-magic-2026-10-29; /private/tmp/books-{inside,outside}-{a,b}.png and books-reduced-* images. Synced283 passages; no git. Other concurrent session changes retained; before snapshot not for wholesale restoration.
+
+## 2026-10-29 — Stronger/faster magical book colours
+Sam requested more obvious colour changes and some faster books. Shared book palette now ruby/emerald/blue/purple/gold/rose;25% of registered materials cycle3–6s, others8–22s. Exterior identity-mask shader uses same contrasting hue families with30% more target luminance, stronger recolour weighting and quarter fast seeds. Updated preview header and regenerated both fixtures; refreshed user-visible preview and left interior window close-up selected. Synced283 passages, no git. Actual-source helper check passed visible change,3s fast cycle and reduced-motion hold. Both updated views visually checked through IAB (outside then inside/window); one browser-injected MutationObserver error appeared in dev logs, no observer exists in fixture sources and both scenes render. Full game/postprocessing not tested. Local preview server remains on8781 for user's preview; index.html switches Inside/Outside. No further timers/lights/meshes added.

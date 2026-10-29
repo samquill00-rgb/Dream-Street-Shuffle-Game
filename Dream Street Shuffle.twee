@@ -34417,8 +34417,12 @@ scene.add(phAlleyPool);
 // water starts claiming the raised pavement itself (top y 0.15): a fan
 // spreading from the kerb line toward the pub door, never quite stopping.
 var phPaveFlood = new THREE.Mesh(phFanGeo(1.3), phWaterMat.clone());
+phPaveFlood.material.color.setHex(0x344358);
+phPaveFlood.material.metalness = 0.35;
+phPaveFlood.material.roughness = 0.14;
+phPaveFlood.renderOrder = 3;
 phPaveFlood.rotation.x = -Math.PI / 2;
-phPaveFlood.position.set(1.8, 0.157, 3.45);
+phPaveFlood.position.set(0.7, 0.157, 3.55);
 phPaveFlood.scale.set(0.01, 0.01, 1);
 scene.add(phPaveFlood);
 // Visit 2+: slow blob-ripples spreading off the drain. Blobs, NOT rings —
@@ -34462,10 +34466,10 @@ phWaterMats.forEach(function(mat) {
     shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', [
       '#include <normal_fragment_maps>',
       'vec2 wp = phWaterXZ;',
-      'float wa = wp.x * 9.0 + wp.y * 5.0 - phWaterTime * 1.4;',
-      'float wb = wp.x * -5.0 + wp.y * 12.0 - phWaterTime * 1.05;',
+      'float wa = wp.x * 4.0 - wp.y * 10.0 - phWaterTime * 1.4;',
+      'float wb = wp.x * -7.0 - wp.y * 7.0 - phWaterTime * 1.05;',
       'float wc = wp.x * 19.0 + wp.y * 16.0 + sin(wa) * 0.65 - phWaterTime * 2.1;',
-      'vec2 slope = vec2(0.075, 0.042) * cos(wa) + vec2(-0.035, 0.084) * cos(wb) + vec2(0.026, 0.022) * cos(wc);',
+      'vec2 slope = vec2(0.034, -0.085) * cos(wa) + vec2(-0.049, -0.049) * cos(wb) + vec2(0.026, 0.022) * cos(wc);',
       'normal = normalize(normal + mat3(viewMatrix) * vec3(-slope.x, 0.0, -slope.y));'
     ].join('\n'));
     shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', [
@@ -34476,7 +34480,7 @@ phWaterMats.forEach(function(mat) {
       'totalEmissiveRadiance += brokenLight * (vec3(0.045, 0.065, 0.095) + vec3(0.24, 0.12, 0.035) * lampTrail);'
     ].join('\n'));
   };
-  mat.customProgramCacheKey = function() { return 'ph-water-wavelets-1'; };
+  mat.customProgramCacheKey = function() { return 'ph-water-wavelets-2'; };
 });
 for (var phwi = 0; phwi < phWaterMats.length; phwi++) { if (phWaterMats[phwi].emissive) { phWaterMats[phwi].emissive.setHex(0x9fb4dc); phWaterMats[phwi].emissiveIntensity = 0; } }
 var phFogBase = scene.fog ? scene.fog.color.clone() : null;
@@ -36101,8 +36105,20 @@ function phAnimate() {
   // the flood never finishes, it just stops hurrying
   // Growth is LINEAR and endless — the boundaries in phSpreadVerts are
   // what slow it down, so it presses harder forever rather than stopping
-  var flG = 0.15 + flP * 3.55 + 0.035 * Math.max(0, t - 18);
-  phSpreadVerts(phFlood, flG, t, 0, 3.15);
+  var flG = 0.15 + flP * 3.55 + 0.085 * Math.max(0, t - 18);
+  // 2026-10-29 (Sam): fill the street, then overtop the kerb and door.
+  // One rising level across both sources; carried time preserves it on return.
+  var phRise = Math.max(0, Math.min(1, (t - 20) / 100));
+  phRise = phRise * phRise * (3 - 2 * phRise);
+  var phLevel = 0.02 + 0.52 * phRise;
+  phFlood.position.y = phLevel;
+  phDeepPool.position.y = phLevel + 0.004;
+  phCrown.position.y = phLevel + 0.008;
+  phAlleyPool.position.y = phLevel + 0.002;
+  phAlleyInner.position.y = Math.max(0.035, phLevel);
+  phAlleyStream.position.y = Math.max(0.158, phLevel + 0.001);
+  phRip.forEach(function(ripple) { ripple.position.y = phLevel + 0.006; });
+  phSpreadVerts(phFlood, flG, t, 0, 3.15 + phRise * 1.8);
   phSpreadVerts(phFloodDamp, flG * 1.18, t, 2.1, 3.35);
   phFlood.material.opacity = 0.55 + flP * 0.22 + Math.sin(t * 2.6) * 0.04;
   // The deep core: SMALL, ROUND, and capped. It is the source puddle, not
@@ -36146,14 +36162,17 @@ function phAnimate() {
     phAlleyPool.scale.set(agR * 1.1, agR, 1);
     phAlleyPool.material.opacity = 0.5 + agP * 0.2 + Math.sin(t * 2.3 + 1) * 0.04;
   }
-  // Over the kerb: the pavement sheet, fed from the road pool. Waits for
-  // the road to actually look full (the pool needs ~2.5 min to press the
-  // kerb along its length) — the pavement must never flood first.
-  var pvT = Math.max(0, t - 150);
+  // Local +y points towards the pub (-world z). Start after the shared
+  // level clears the 0.18m kerb; reach past the door at z=0.7 by ~2 minutes.
+  var pvT = Math.max(0, t - 58);
+  phPaveFlood.visible = pvT > 0;
   if (pvT > 0) {
-    var pvLen = 2.95 * Math.tanh(pvT / 160);
-    phPaveFlood.scale.set(1.2 + pvLen * 0.9 + Math.sin(t * 1.7) * 0.03, pvLen, 1);
-    phPaveFlood.material.opacity = 0.45 + Math.min(0.25, pvT * 0.006) + Math.sin(t * 2.4) * 0.04;
+    var pvP = Math.min(1, pvT / 65);
+    pvP = pvP * pvP * (3 - 2 * pvP);
+    var pvLen = 4.3 * pvP;
+    phPaveFlood.position.y = phLevel + 0.002;
+    phPaveFlood.scale.set(1.2 + pvLen * 1.35 + Math.sin(t * 1.7) * 0.03, pvLen, 1);
+    phPaveFlood.material.opacity = 0.65 + Math.min(0.28, pvT * 0.008) + Math.sin(t * 2.4) * 0.015;
   }
 
   // Visit 2+: ripples working off the drain
@@ -36178,7 +36197,7 @@ function phAnimate() {
       var pcA = pc.userData.ph + t * 0.15 * (pci2 % 2 ? 1 : -1);
       var pcX = 2.2 + Math.cos(pcA) * pcR * flG * 0.5 + pc.userData.ox;
       var pcZ = 6.4 - Math.sin(pcA) * pcR * Math.min(flG * 0.25, 2.0) - pc.userData.oz;
-      pc.position.set(pcX, 0.023, pcZ);
+      pc.position.set(pcX, phLevel + 0.003, pcZ);
       var pcS = (0.3 + 0.25 * Math.abs(Math.sin(pcT))) * (0.7 + 0.3 * chopAmp);
       pc.scale.set(pcS * 1.4, pcS, 1);
       pc.material.opacity = (0.1 + 0.14 * Math.abs(Math.sin(pcT * 1.3))) * chopAmp;
@@ -63511,7 +63530,7 @@ At one end of the bar are the artists; you know them, they are famous.
 
 Stuffed into a barstool which his arsecheeks overhang, like clouds waiting to rain, is a stout man with his back to you. His leather jacket, somehow both parched and sweating, falls short at the neck, flashing a collar of labial pink.
 
-Opposite him is the only man who clocks you, who is thin like verdaccio and hardly there at all.]
+Opposite him is the only man who looks you in the eyes, who is thin like verdaccio and hardly there at all.]
 <!-- 2026-10-13 (Sam: "the text introducing the paths should be attached to each path"): the artists' paragraphs and the novelist's line, which stood in the first visit's opening, now come on that figure's card in the room (the painter's, the novelist's), after you click the figure and before you choose to go into its story. Sam's words, unchanged; the room reads them from these hidden spans. -->(if: ($haunts contains $haunt4) and not ($haunts contains $haunt1))[<div class="fr-path-intro" data-for="artists" hidden><span class="fr-p">At one end of the bar are the artists; you know them, they are famous.</span><!-- 2026-10-16 (Sam, option 2): the Bacon paragraph and "Opposite him" are read once, at the door (the French's opening); the painter's card keeps only this line --></div>](if: ($haunts contains $haunt1) and not ($haunts contains $haunt2) and _bagBook)[<div class="fr-path-intro" data-for="novelist" hidden><span class="fr-p">There, sitting quietly at a table in the corner, you spot what you’re after.</span></div>]
 <!-- 2026-10-07 (Sam: "it still shows the 'reentry prose' when you come in ... fold those bits of prose into the story loop after the click on the figure"): the second- and third-visit lines that stood here now come up from "French Reentry", once a visit, at the top of whichever loop the first clicked figure opens. -->
 

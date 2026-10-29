@@ -123,7 +123,7 @@ Dream Street Shuffle
 (set: $sawAstralReveal to false)\
 (set: $lilyHintShown to false)\
 (set: $shownStashTip to false)\
-(set: $nightAheadPart2Shown to false)\
+(set: $nightAheadPart2Shown to false)(set: $lilyNamed to false)\
 (set: $sawMemory1 to false)\
 (set: $sawMemory2 to false)\
 (set: $metGreenSeaFriend to false)(set: $harpRouteOn to false)(set: $inisRefusedErrand to false)(set: $loreRead to (a:))<!-- 2026-10-28 (notes 34/35): the lore notes read, for the NOTEBOOK -->\
@@ -4777,6 +4777,36 @@ window.dssModalA11y = function(overlay, card, labelEl, closeFn, opts) {
     if (b && /^(Pick up a spade|Begin ascent|Take the rifle|Enter the dark)$/i.test((b.textContent || '').trim())) setTimeout(window.dssScrollPlayIntoView, 250);
   }, true);
   window.dssShowMinigameRules = showRules;
+  /* 2026-10-28 (Sam, after a playtest: the minigames are too hard for someone not used to games; "Easier each retry"):
+     every failable game counts its own losses in this browser (localStorage 'dssEase', never reset, so a player who found a
+     game hard finds it gentler on a later night too) and reads its ease level, 0 to 3, when a round starts. Each game loosens
+     its own goals, timing windows, speeds or lives by the level; steering and jump physics are left as tuned. A lost round
+     shows this card inside the game's frame: TRY AGAIN starts a gentler round, MOVE ON takes the loss as the story has it.
+     Nothing on screen says it got easier. */
+  window.dssEase = (function() {
+    var KEY = 'dssEase', MAX = 3, mem = {};
+    function all() { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return mem; } }
+    function level(k) { var n = +all()[k] || 0; return Math.max(0, Math.min(MAX, n)); }
+    function lost(k) { var m = all(); m[k] = Math.min(MAX, (+m[k] || 0) + 1); mem = m; try { localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} return m[k]; }
+    /* by(k, a, b): a at level 0, b at level 3, in even steps */
+    function by(k, a, b) { return a + (b - a) * level(k) / MAX; }
+    function offer(host, o) {
+      if (!host) return null;
+      var old = host.querySelector(':scope > .dss-ease-card'); if (old) old.remove();
+      if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+      var c = document.createElement('div'); c.className = 'dss-ease-card';
+      c.innerHTML = '<div class="dss-ease-row"><button type="button" class="dss-ease-btn dss-ease-again">' + (o.again || 'Try again') + '</button><button type="button" class="dss-ease-btn dss-ease-move">' + (o.move || 'Move on') + '</button></div>';
+      host.appendChild(c);
+      var done = false;
+      function pick(fn) { if (done) return; done = true; c.remove(); if (fn) fn(); }
+      c.querySelector('.dss-ease-again').addEventListener('click', function(e) { e.stopPropagation(); pick(o.onAgain); });
+      c.querySelector('.dss-ease-move').addEventListener('click', function(e) { e.stopPropagation(); pick(o.onMove); });
+      ['pointerdown', 'mousedown', 'touchstart', 'keydown'].forEach(function(t) { c.addEventListener(t, function(e) { e.stopPropagation(); }); });
+      setTimeout(function() { var b = c.querySelector('.dss-ease-again'); if (b && c.isConnected) try { b.focus({ preventScroll: true }); } catch (e) {} }, 60);
+      return c;
+    }
+    return { level: level, lost: lost, by: by, offer: offer };
+  })();
   // 2026-10-18 (Sam: "all the dream world games in the next style too"): the dream-world games (the Climb, the Reclamation,
   // the Pyramid Run) open on a cover inside their frame: a kicker line, the name, instruction paragraphs and a start button.
   // Whenever such a cover is showing, the same rules card is raised from it, word for word: the kicker as the slip's bold
@@ -8846,8 +8876,9 @@ _scorePour() {
 var d = this.drinks[this.mRound];
 var effectiveTarget = Math.max(0.1, Math.min(0.9, d.target + this.targetOff));
 var diff = Math.abs(this.pourLevel - effectiveTarget);
-if (diff < 0.07) { this.pourAccuracy = 2; }
-else if (diff < 0.16) { this.pourAccuracy = 1; }
+/* 2026-10-28 (dssEase): the bands widen with each lost round */
+if (diff < (window.dssEase ? window.dssEase.by('bar', 0.07, 0.12) : 0.07)) { this.pourAccuracy = 2; }
+else if (diff < (window.dssEase ? window.dssEase.by('bar', 0.16, 0.26) : 0.16)) { this.pourAccuracy = 1; }
 else { this.pourAccuracy = 0; }
 var gx = this.W/2, gy = 270;
 this.mScore += this.pourAccuracy;
@@ -8893,6 +8924,8 @@ document.getElementById('bar-round-display').textContent = '\u2727 Drinks ready!
 // hands, and the first knock on the way to the stage spills nothing
 this.carryPhase.steady = this.mScore >= 5 ? 1 : 0;
 narr.innerHTML = '<em style="color:#d4a574;">Now carry the tray back to the stage.' + (this.carryPhase.steady ? ' Your pours were good: steady hands, one knock forgiven.' : '') + '</em>';
+/* 2026-10-28 (dssEase): from the second lost round, one more knock is forgiven (unannounced) */
+if (window.dssEase && window.dssEase.level('bar') >= 2) this.carryPhase.steady++;
 this.phase = 'carryWait';
 var self = this;
 setTimeout(function() {
@@ -9351,7 +9384,7 @@ this.handShake = Math.sin(this.wobT * 4.2) * drunk * 3 + Math.sin(this.wobT * 2.
 if (this.pouring && !this.pourDone) {
   this.pourTime += dt;
   var ramp = Math.min(1, this.pourTime / 400);
-  var steadySpeed = 0.00048;
+  var steadySpeed = 0.00048 * (window.dssEase ? window.dssEase.by('bar', 1, 0.75) : 1); /* 2026-10-28 (dssEase): a slower pour after lost rounds */
   var wobbleMult = 1.0 + drunk * 0.4 * Math.sin(this.wobT * 3.1 + Math.sin(this.wobT * 1.7) * 0.5);
   var speed = steadySpeed * ramp * wobbleMult;
   this.pourLevel = Math.min(1.0, this.pourLevel + Math.max(0.00005, speed) * dt);
@@ -9480,7 +9513,7 @@ if (cp.pitFalling) {
 
 // Speed ramp: starts at 170, gently climbs to 260, plateaus
 var progressRatio = cp.scrollPos / cp.maxScroll;
-cp.scrollSpeed = 170 + Math.min(progressRatio * 1.5, 1.0) * 90;
+cp.scrollSpeed = (170 + Math.min(progressRatio * 1.5, 1.0) * 90) * (window.dssEase ? window.dssEase.by('bar', 1, 0.75) : 1); /* 2026-10-28 (dssEase) */
 cp.difficultyPhase = Math.floor(progressRatio * 4);
 
 // Dynamic terrain: player is at screen x=100, so world x = scrollPos + 100
@@ -12033,6 +12066,15 @@ if (perfect) {
 this.phase = 'result';
 
 var self = this;
+/* 2026-10-28 (Sam: "Easier each retry"): a lost round no longer leaves at once; TRY AGAIN pours a gentler round, MOVE ON takes the loss */
+if (!win && window.dssEase) {
+  window.dssEase.lost('bar');
+  setTimeout(function() {
+    var cv = document.getElementById('bar-canvas'); if (!cv || !cv.isConnected) return;
+    window.dssEase.offer(cv.parentElement, { onAgain: function() { window._barStartAt = 0; window.startBarGame(); }, onMove: function() { var lk = document.querySelector('#bar-lose-link tw-link'); if (lk) lk.click(); } });
+  }, 1800);
+  return;
+}
 setTimeout(function() {
   var lk = win ? document.querySelector('#bar-win-link tw-link') : document.querySelector('#bar-lose-link tw-link');
   if (lk) lk.click();
@@ -16730,7 +16772,8 @@ this._loopUntil = 0;
 // Tightened from 2000ms — the player has less time to read the
 // telegraph and pick a side. Tuned with the per-round difficulty
 // scaling below so round 3 lands inside ~1100ms.
-this.baseTelegraphDuration = 1150; // 2026-10-16 (Sam: "make the whole thing happen more speedily"): was 1550
+this.EZ = window.dssEase ? window.dssEase.level('fight') : 0; /* 2026-10-28 (dssEase): lost fights make the next slower to read and softer to take */
+this.baseTelegraphDuration = 1150 + this.EZ * 150; // 2026-10-16 (Sam: "make the whole thing happen more speedily"): was 1550
 this.telegraphDuration = this.baseTelegraphDuration;
 
 this.roundPunches = ['right_cross', 'left_hook', 'uppercut', 'right_cross', 'left_hook', 'uppercut', 'left_hook', 'right_cross', 'uppercut'];
@@ -16864,7 +16907,7 @@ this.telegraphDuration = 1800; // practice swings, were 3200
 // six of them), and sobriety still shaves milliseconds off your reaction.
 var roundSpeed = 1 - (this.realRoundIndex() * 0.07);
 var sobPenalty = (100 - this.sobriety) * 4;
-this.telegraphDuration = Math.max(650, Math.round(this.baseTelegraphDuration * roundSpeed - sobPenalty));
+this.telegraphDuration = Math.max(650 + this.EZ * 90, Math.round(this.baseTelegraphDuration * roundSpeed - sobPenalty * (1 - this.EZ * 0.25)));
 }
 
 this.updateRoundDisplay();
@@ -17068,7 +17111,7 @@ endEl.innerHTML = '<span style="color:#d8a090;text-shadow:0 0 10px rgba(200,110,
 if (!won) {
 this._downDim = Date.now();
 this._loopUntil = Date.now() + 1300;
-setTimeout(function() {
+var goDown = function() {
 var targetPassage = 'Fight Defeat';
 var wrap = document.getElementById('go-fight-defeat');
 var link = wrap && wrap.querySelector('tw-link');
@@ -17088,7 +17131,18 @@ injected.style.display = 'none';
 storyEl.appendChild(injected);
 injected.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 setTimeout(function(){ if (injected.parentNode) injected.parentNode.removeChild(injected); }, 50);
+};
+/* 2026-10-28 (Sam: "Easier each retry"): a lost fight offers TRY AGAIN (a gentler fight) or MOVE ON (going down, as before) */
+if (window.dssEase) {
+window.dssEase.lost('fight');
+var cvF = this.canvas || document.getElementById('fight-canvas');
+setTimeout(function() {
+if (!cvF || !cvF.isConnected) { goDown(); return; }
+window.dssEase.offer(cvF.parentElement, { onAgain: function() { endEl.innerHTML = ''; if (inst) inst.style.display = ''; window.startFightGame(); }, onMove: goDown });
 }, 1000);
+return;
+}
+setTimeout(goDown, 1000);
 return;
 }
 
@@ -18063,7 +18117,7 @@ ctx.closePath();
 applyDamage(toYou, toHim) {
 if (toYou > 0) this.playerBarFlash = 1;
 if (toHim > 0) this.copperBarFlash = 1;
-this.playerHP = Math.max(0, this.playerHP - toYou);
+this.playerHP = Math.max(0, this.playerHP - Math.round(toYou * (1 - (this.EZ || 0) * 0.15)));
 this.copperHP = Math.max(0, this.copperHP - toHim);
 }
 
@@ -34389,6 +34443,36 @@ for (var pci = 0; pci < 12; pci++) {
 var phLightning = new THREE.AmbientLight(0xcfe0ff, 0);
 scene.add(phLightning);
 var phWaterMats = [phFlood.material, phDeepPool.material, phWaterMat, phAlleyPool.material, phAlleyInner.material, phPaveFlood.material];
+// 2026-10-28: small, world-anchored wavelets break the lamplight from
+// the first visit. Shading only: no extra planes or screen-wide ripple rings.
+var phWaterTime = { value: 0 };
+phWaterMats.forEach(function(mat) {
+  mat.depthWrite = false;
+  mat.onBeforeCompile = function(shader) {
+    shader.uniforms.phWaterTime = phWaterTime;
+    shader.vertexShader = 'varying vec2 phWaterXZ;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\nphWaterXZ = (modelMatrix * vec4(position, 1.0)).xz;');
+    shader.fragmentShader = 'uniform float phWaterTime;\nvarying vec2 phWaterXZ;\n' + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', [
+      '#include <normal_fragment_maps>',
+      'vec2 wp = phWaterXZ;',
+      'float wa = wp.x * 9.0 + wp.y * 5.0 - phWaterTime * 1.4;',
+      'float wb = wp.x * -5.0 + wp.y * 12.0 - phWaterTime * 1.05;',
+      'float wc = wp.x * 19.0 + wp.y * 16.0 + sin(wa) * 0.65 - phWaterTime * 2.1;',
+      'vec2 slope = vec2(0.075, 0.042) * cos(wa) + vec2(-0.035, 0.084) * cos(wb) + vec2(0.026, 0.022) * cos(wc);',
+      'normal = normalize(normal + mat3(viewMatrix) * vec3(-slope.x, 0.0, -slope.y));'
+    ].join('\n'));
+    shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', [
+      '#include <emissivemap_fragment>',
+      // Fragmented vertical trails, fading away from their light source.
+      'float brokenLight = pow(max(0.0, sin(wa + sin(wb) * 1.3)), 9.0) * (0.3 + 0.7 * pow(max(0.0, sin(wb)), 2.0));',
+      'float lampTrail = exp(-pow((wp.x - 0.6 + sin(wp.y * 2.1 + phWaterTime * 0.4) * 0.18) / 0.85, 2.0)) * exp(-abs(wp.y - 3.5) * 0.19);',
+      'totalEmissiveRadiance += brokenLight * (vec3(0.045, 0.065, 0.095) + vec3(0.24, 0.12, 0.035) * lampTrail);'
+    ].join('\n'));
+  };
+  mat.customProgramCacheKey = function() { return 'ph-water-wavelets-1'; };
+});
 for (var phwi = 0; phwi < phWaterMats.length; phwi++) { if (phWaterMats[phwi].emissive) { phWaterMats[phwi].emissive.setHex(0x9fb4dc); phWaterMats[phwi].emissiveIntensity = 0; } }
 var phFogBase = scene.fog ? scene.fog.color.clone() : null;
 var phBgBase = (scene.background && scene.background.isColor) ? scene.background.clone() : null;
@@ -35970,6 +36054,7 @@ function phAnimate() {
   phAnimId = requestAnimationFrame(phAnimate);
   var t = phStill ? 14 : clock.getElapsedTime();
   phThisT = t; t = t + phCarryT;
+  phWaterTime.value = t;
 
   // Fog drift (held still under reduced motion)
   for (var i = 0; i < (phStill ? 0 : fogSprites.length); i++) {
@@ -57313,7 +57398,9 @@ var playerScore = 0, oppScore = 0, rallyCount = 0; // rallyCount escalates ball 
 var playerStreak = 0, rallyBurst = 0, hitSparks = [];
 var gameOver = false, paused = false, serving = true, serveTime = Date.now();
 document.body.classList.remove('pp-bail-ok');
-var ball = {x:W/2,y:H/2,dx:0,dy:0,r:5,base:5.0};
+/* 2026-10-28 (dssEase): each lost match makes the next gentler: a slower ball, a slower and later opponent */
+var EZ = window.dssEase ? window.dssEase.level('pong') : 0, EZ_SPEED = 1 - EZ * 0.12, EZ_RT = 1 + EZ * 0.45;
+var ball = {x:W/2,y:H/2,dx:0,dy:0,r:5,base:5.0 * (1 - EZ * 0.08)};
 var pPad = {x:12,y:H/2-35,w:8,h:70};
 var oPad = {x:W-20,y:H/2-35,w:8,h:70};
 var mouseY = H/2, actualY = pPad.y;
@@ -57345,7 +57432,7 @@ function serve(){
 ball.x=W/2;ball.y=H/2;
 /* Serve speed climbs with each point played so the match opens brisk and quickens
    toward the finish; capped at the 9th point so a long decider stays returnable. */
-var sp=ball.base+Math.min(rallyCount,9)*0.30;var a=(Math.random()-0.5)*0.8;var d=(rallyCount%2===0)?-1:1;
+var sp=ball.base+Math.min(rallyCount,9)*0.30*(1 - EZ * 0.2);var a=(Math.random()-0.5)*0.8;var d=(rallyCount%2===0)?-1:1;
 ball.dx=d*sp*Math.cos(a);ball.dy=sp*Math.sin(a);
 serving=true;serveTime=Date.now();rallyCount++;
 }
@@ -57428,23 +57515,23 @@ var accMul   = Math.max(0.4, 1 - bias * 0.5);     // reaction time; never below 
 var noiseMul = Math.max(0.45, 1 - bias * 0.55);   // aim error; never below baseline, so the AI always mis-hits some
 if(opponent==='Jack Curtis'){
 /* Jack — patient veteran. Reacts ~75ms, predicts cleanly with light noise. */
-var rt = 75 * accMul;
+var rt = 75 * accMul * EZ_RT;
 if(now-aiLast<rt)return;aiLast=now;
 var py=ball.y;
 if(ball.dx>0){var f=(oPad.x-ball.x)/ball.dx;py=ball.y+ball.dy*f;while(py<0||py>H){if(py<0)py=-py;if(py>H)py=2*H-py;}}
 py+=(Math.random()-0.5)*12*noiseMul;aiTarget=py;
-var sp=4.4*speedMul,c=oPad.y+oPad.h/2,d=aiTarget-c;
+var sp=4.4*speedMul*EZ_SPEED,c=oPad.y+oPad.h/2,d=aiTarget-c;
 if(Math.abs(d)>4)oPad.y+=Math.sign(d)*Math.min(sp,Math.abs(d));
 }else{
 /* Percy — wild but quicker now; the accurate-prediction roll fires more often. */
-var rt = 35 * accMul;
+var rt = 35 * accMul * EZ_RT;
 if(now-aiLast<rt)return;aiLast=now;
 var py=ball.y+ball.dy*8;py+=(Math.random()-0.5)*32*noiseMul;
 /* Accurate-prediction roll: 30% baseline, rises when AI is behind. */
 var predChance = Math.max(0.05, Math.min(0.85, 0.30 + bias * 0.35));
 if(Math.random()<predChance){var f=ball.dx>0?(oPad.x-ball.x)/ball.dx:30;py=ball.y+ball.dy*f;while(py<0||py>H){if(py<0)py=-py;if(py>H)py=2*H-py;}}
 aiTarget=py;
-var sp=6.2*speedMul,c=oPad.y+oPad.h/2,d=aiTarget-c;
+var sp=6.2*speedMul*EZ_SPEED,c=oPad.y+oPad.h/2,d=aiTarget-c;
 if(Math.abs(d)>3)oPad.y+=Math.sign(d)*Math.min(sp,Math.abs(d));
 }
 oPad.y=Math.max(0,Math.min(H-oPad.h,oPad.y));
@@ -57515,6 +57602,8 @@ if(pw)el.innerHTML='<span style="color:#d4a574;text-shadow:0 0 15px rgba(212,165
 else el.innerHTML='<span style="color:#d8a090;text-shadow:0 0 10px rgba(200,110,90,0.4);">DEFEAT</span>';
 }
 if(window.dssAudio){if(pw&&window.dssAudio.brightChord)window.dssAudio.brightChord();else if(!pw&&window.dssAudio.muffledThud)window.dssAudio.muffledThud();}
+/* 2026-10-28 (Sam: "Easier each retry"): a lost match offers TRY AGAIN (a gentler match) or MOVE ON (the defeat) */
+if(!pw&&window.dssEase){window.dssEase.lost('pong');setTimeout(function(){if(!canvas.isConnected)return;window.dssEase.offer(canvas.parentElement,{onAgain:function(){var e=document.getElementById('pp-game-end');if(e)e.innerHTML='';__boot();},onMove:function(){var link=document.querySelector('#pp-go-lose tw-link');if(link)link.click();}});},1700);return;}
 setTimeout(function(){
 var sel=pw?'#pp-go-win tw-link':'#pp-go-lose tw-link';
 var link=document.querySelector(sel);if(link)link.click();
@@ -58097,7 +58186,7 @@ Crowley came here and Yeats, Waite and Mathers. Mozart sold tickets to his shows
 <div class="waltz-keys"><span class="dss-desk-only">&larr; &nbsp; &darr; &nbsp; &rarr; <span class="waltz-keys-aux">&nbsp;&nbsp;or A &nbsp; S &nbsp; D &nbsp;&middot;&nbsp; or tap the lanes</span></span><span class="dss-touch-only">tap the lanes</span></div>
 <div id="waltz-onward" style="display:none;text-align:center;margin-top:1em;">[[Onward, then.|Approach O'Flatterly]]</div>
 <span id="waltz-up" style="display:none;">[[Onward, then.|Waltz Result Up]]</span>
-<span id="waltz-down" style="display:none;">[[Onward, then.|Waltz Result Down]]</span>
+<span id="waltz-down" style="display:none;">[[Onward, then.|Waltz Result Down]]</span><span id="waltz-again" style="display:none;">[[Again|Cecil Court Waltz]]</span>
 <!-- Stall safety net: manual escape revealed long after the ~32s waltz has ended, only if auto-nav stalls. -->
 (after: 150s)[<div class="canvas-bail">The waltz unravels and the floor empties. [[Slip out into Cecil Court.|Approach O'Flatterly]]</div>]
 </div>
@@ -58120,6 +58209,8 @@ Crowley came here and Yeats, Waite and Mathers. Mozart sold tickets to his shows
 
   /* ── Music timing ── */
   var BPM = 90;
+  var EZ = window.dssEase ? window.dssEase.level('waltz') : 0; /* 2026-10-28 (dssEase): lost waltzes widen the next one's timing; the music's tempo stays */
+  var WIN_MS = 220 + EZ * 45, ZONE = 1 + EZ * 0.25;
   var BEAT_MS = 60000 / BPM;        /* 666.67 */
   var BAR_MS  = BEAT_MS * 3;        /* 2000 */
   var TOTAL_MS = BAR_MS * 17;       /* 34000: extra opening bar for the dissolve */
@@ -58329,7 +58420,7 @@ Crowley came here and Yeats, Waite and Mathers. Mozart sold tickets to his shows
       if (delta < bestDelta) { bestDelta = delta; bestIdx = i; }
     }
     /* ±220ms hit window */
-    if (bestIdx >= 0 && bestDelta <= 220) {
+    if (bestIdx >= 0 && bestDelta <= WIN_MS) {
       enchant=Math.min(1,enchant+.075);
       notes[bestIdx].hit = true;
       notes[bestIdx].hitDelta = bestDelta;
@@ -58536,7 +58627,7 @@ Crowley came here and Yeats, Waite and Mathers. Mozart sold tickets to his shows
       var noteT = n.beatIdx * BEAT_MS;
       var delta = noteT - t;
       /* Auto-mark missed if it sails past the player by 250ms */
-      if (delta < -250 && !n.missed) { n.missed = true; danceStreak = 0; enchant=Math.max(.12,enchant-.11);lastMiss=t; }
+      if (delta < -(WIN_MS + 30) && !n.missed) { n.missed = true; danceStreak = 0; enchant=Math.max(.12,enchant-.11);lastMiss=t; }
       /* Visible window: from spawn (delta = APPROACH_MS, near vanishing
          line) until shortly after the player line (delta = -400ms). */
       if (delta > APPROACH_MS || delta < -400) continue;
@@ -58703,7 +58794,7 @@ Crowley came here and Yeats, Waite and Mathers. Mozart sold tickets to his shows
             total++;
             if (nn.hit) {
               var hd = (typeof nn.hitDelta === 'number') ? nn.hitDelta : 0;
-              weighted += (hd <= 60) ? 1.0 : (hd <= 150) ? 0.75 : 0.5;
+              weighted += (hd <= 60 * ZONE) ? 1.0 : (hd <= 150 * ZONE) ? 0.75 : 0.5;
             }
           }
           var score = total > 0 ? weighted / total : 0;
@@ -58723,6 +58814,15 @@ Crowley came here and Yeats, Waite and Mathers. Mozart sold tickets to his shows
            result passages apply the (set:) and forward; neutral goes straight on.
            window.Engine isn't exposed, so navigate by clicking the matching hidden
            link (display:none, so the player never sees it). */
+        /* 2026-10-28 (Sam: "Easier each retry"): a waltz that went badly offers TRY AGAIN (a gentler one, the page entered afresh) or MOVE ON (the result as before) */
+        if (window._waltzOutcome === 'down' && window.dssEase) {
+          window.dssEase.lost('waltz');
+          setTimeout(function(){
+            if (!canvas.isConnected) return;
+            function go(id){ var h = document.getElementById(id), l = h && h.querySelector('tw-link'); if (l) ['mousedown','mouseup','click'].forEach(function(t){ l.dispatchEvent(new MouseEvent(t, { bubbles: true })); }); }
+            window.dssEase.offer(canvas.parentElement, { onAgain: function(){ go('waltz-again'); }, onMove: function(){ go('waltz-down'); } });
+          }, 700);
+        } else
         setTimeout(function(){
           var outcome = window._waltzOutcome || 'neutral';
           var id = (outcome === 'up') ? 'waltz-up' : (outcome === 'down') ? 'waltz-down' : 'waltz-onward';
@@ -58762,7 +58862,7 @@ INIS O’FLATTERLY sits at the thick wooden counter, reading. He does not look u
 <div class="approach-back">[[← Back to Dean Street|Dean Street]]</div>
 <div id="fc-container"></div>[[·|Chinese Fish and Chips]]
 <!-- 2026-10-25 (Sam): the pigeon favour stays available after declining; Lily's name waits for her introduction. -->
-(if: $nightAheadPart2Shown is true)[<div class="bevan-chippy-choices">
+(if: $lilyNamed is true)[<div class="bevan-chippy-choices">
 (if: $helpedBevan is not true)[[[BEVAN GLYNDŴR|BEVAN’s pigeon]]](else:)[[[Wait for LILY|Waiting outside the chippy]]]
 </div>]
 <style>.bevan-chippy-choices{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);z-index:9010;max-width:90vw;padding:10px 16px;background:rgba(0,0,0,.8);border:1px solid rgba(232,180,80,.3);text-align:center;font:14px Georgia,serif;}</style><style>/* 2026-10-29 nightwork, played live: the dock's choice was a bare white system button under the gold ENTER THE HALIBUT; it takes that button's look */.bevan-chippy-choices{background:none;border:none;padding:0}.bevan-chippy-choices button{font:13px 'Courier New',monospace;color:rgba(232,180,80,.85);letter-spacing:4px;text-transform:uppercase;padding:12px 28px;border:1px solid rgba(232,180,80,.3);background:rgba(0,0,0,.55);cursor:pointer;margin:0 6px}.bevan-chippy-choices button:hover,.bevan-chippy-choices button:focus-visible{color:rgba(255,210,120,.95);border-color:rgba(232,180,80,.6);outline:none}</style>
@@ -58774,7 +58874,7 @@ INIS O’FLATTERLY sits at the thick wooden counter, reading. He does not look u
 (if: $hadChippy is true and $tookLily1 is false)[<span class="dss-flower-only-marker"></span>]
 You find it after some looking, where you always knew it was: the Chinese Fish and Chips.
 
-<!-- 2026-10-21 (ordering audit): LILY's name waits for Night Ahead Part Two, as her phone rings do in every venue; before it the lily is here unnamed, as in the other rooms -->(if: ($tookLily1 is not true) and ($nightAheadPart2Shown is true))[You’re eating at the counter when somebody passes the window: that’s LILY.]
+<!-- 2026-10-21 (ordering audit): LILY's name waits for Night Ahead Part Two, as her phone rings do in every venue; before it the lily is here unnamed, as in the other rooms -->(if: ($tookLily1 is not true) and ($lilyNamed is true))[You’re eating at the counter when somebody passes the window: that’s LILY.]
 
 (if: $tookLily1 is false)[|lily1>[(display: "Lily SVG")]\
 (click-replace: ?lily1)[(if: $sobriety < 30)[(display: "Lily SVG")(unless: $lostToDrink contains "lily1")[(set: $lostToDrink to $lostToDrink + (a: "lily1"))]<span class="lily-glimpse lily-fade">She was leaving town the day after PIERS GAV. She found you and your mates in a pub garden; you hadn’t slept and the acid was still funny. This is the flower you tried to give her. The one you picked in the ha-ha of some big house and kept in your buttonhole all night, and which she wouldn’t take.</span>](else:)[(set: $lostToDrink to $lostToDrink - (a: "lily1"))(set: $lilyCount to $lilyCount + 1)(set: $tookLily1 to true)(display: "Next Redraw")<span class="dss-lily-count" style="display:none">(print: $lilyCount)</span>(display: "Lily SVG")<span class="lily-glimpse lily-fade">That must be her, as tall as the Amazon; her joints articulate how you remember.</span>(if: $lilyHintShown is false)[(set: $lilyHintShown to true)<div class="lily-glimpse-hint">Gather flowers. There are five to find.</div>](if: $lilyCount is 5)[(set: $confidence to ($statGain: $confidence, 25))(set: $sobriety to ($statGain: $sobriety, 15))<div class="pent-reveal-note"><div class="pent-reveal-title">⛤ THE PENTACLE ⛤</div><div class="pent-reveal-body">Five flowers, five points; the city draws its star around you.</div><span class="inventory-note">MORALE +25 | SOBRIETY +15</span></div><script>setTimeout(function(){if(window.dssRevealPentangleOnMap)window.dssRevealPentangleOnMap();},900);</script>]]]](else:)[<div class="lily-taken">(display: "Lily SVG")</div>]
@@ -58823,7 +58923,7 @@ You find it after some looking, where you always knew it was: the Chinese Fish a
 
 :: Coach and Horses bar [venue-coach] {"position":"150,1450","size":"100,100"}
 <!-- 2026-10-12 (the venues audit): LILY waits until the first visit, JEFFREY's, is done, as the French, Colony and Ronnie's wait for a first visit -->\
-(set: _lilyRing to (($ringSnoozed is not true) and ($nightAheadPart2Shown is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3)))(unless: $sawJeffrey is true)[(set: _lilyRing to false)]<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
+(set: _lilyRing to (($ringSnoozed is not true) and ($lilyNamed is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3)))(unless: $sawJeffrey is true)[(set: _lilyRing to false)]<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
 (set: _dualRing to (($refusedDualRing is not true) and ($lilyCount >= 2) and ($hadLilyCall1 is true) and ($hadDualRing is false) and ($crossedThreshold is true) and (($returns - $lilyCall1ReturnsAt) >= 2)))<!-- 2026-10-24 sweep: the dual ring took the Coach's first visit too (played live: the phone rang in place of JEFFREY, his cow and THE BEAST on the first walk in for the cow); it waits for his scene as LILY's ring does -->(unless: $sawJeffrey is true)[(set: _dualRing to false)]\
 <div id="cb-container"></div>\
 (set: $resumingFromCall to false)\
@@ -59048,7 +59148,7 @@ You found the poem, the path to dawn’s bleak Albion.
 ]\
 <!-- 2026-10-11 (Sam, A): the second meeting, his Beckett line above the way on. 2026-10-12 (Sam): the first meeting has his Baudelaire, by way of Eliot, in the same place. -->(if: _ready and $fetchMet >= 2)[<div style="margin:0 0 0.9em;font-style:italic;">‘I can’t go on, I’ll go on.’</div>](else:)[<div style="margin:0 0 0.9em;font-style:italic;">‘You! hypocrite lecteur! – mon semblable, – mon frère!’</div>](if: _ready)[[[Follow him|Approach Centre Point]]]
 (if: not _ready)[There are still flowers to gather in the night, and work yet to be done.
-<div class="fetch-owed"><!-- 2026-10-21 (ordering audit): the tally names LILY only once Night Ahead Part Two has -->(if: $nightAheadPart2Shown is true)[LILY’S FLOWERS](else:)[FLOWERS] (print: $lilyCount) of (print: $needLilies) · HAUNTS (print: $haunts's length) of (print: $needHaunts)</div>](else-if: not ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[(if: $lilyCount < 5 or $haunts's length < 12)[
+<div class="fetch-owed"><!-- 2026-10-21 (ordering audit): the tally names LILY only once Night Ahead Part Two has -->(if: $lilyNamed is true)[LILY’S FLOWERS](else:)[FLOWERS] (print: $lilyCount) of (print: $needLilies) · HAUNTS (print: $haunts's length) of (print: $needHaunts)</div>](else-if: not ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[(if: $lilyCount < 5 or $haunts's length < 12)[
 You can leave now, perhaps it’s wise to get out. But there are still flowers to gather in the night, and work yet to be done.]]
 (unless: _ready and ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[
 
@@ -59459,7 +59559,7 @@ The fire must burn with you or without you.
      and the Ham and nothing else — the Lily rings wait for the French or the
      Coach, so bouncing in and out cannot farm them. -->
 (set: _pillarsOpen to ($metCritic is true))\
-(set: _lilyRing to (_pillarsOpen and ($ringSnoozed is not true) and ($nightAheadPart2Shown is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3) and ($visited contains "Pillars") and ($visited's Pillars is true)))<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
+(set: _lilyRing to (_pillarsOpen and ($ringSnoozed is not true) and ($lilyNamed is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3) and ($visited contains "Pillars") and ($visited's Pillars is true)))<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
 (set: _dualRing to (_pillarsOpen and ($refusedDualRing is not true) and ($lilyCount >= 2) and ($hadLilyCall1 is true) and ($hadDualRing is false) and ($crossedThreshold is true) and (($returns - $lilyCall1ReturnsAt) >= 2) and ($visited contains "Pillars") and ($visited's Pillars is true)))\
 <div id="pi-container"></div>\
 <div class="pillars-scene">
@@ -60248,7 +60348,7 @@ Among them, with his back to you, is your old friend. The eldest of the children
 <span data-outcome="excellent">(link: "cards-excellent")[(unless: $houseCardsPlayed is true)[(set: $houseCardsPlayed to true)(set: $confidence to ($statGain: $confidence, 12))<div class="inventory-note">MORALE +12</div>]<div>[[Back to the table|LINE 2]]</div>]</span>
 <span data-outcome="loss">(link: "cards-loss")[(unless: $houseCardsPlayed is true)[(set: $houseCardsPlayed to true)]<div>[[Back to the table|LINE 2]]</div>]</span>
 </div>
-<div class="cards-skip" hidden>[[(skip — testing)|LINE 2]]</div>
+<div class="cards-skip" hidden>[[(skip — testing)|LINE 2]]</div><span class="cards-again" hidden>[[Again|Green Sea House of Cards]]</span>
 </div>
 <!-- Timer starts at passage render, including time spent at the rules popup. -->
 (after: 150s)[<div class="canvas-bail">[[Back to the table|LINE 2]]</div>]
@@ -60284,6 +60384,10 @@ Among them, with his back to you, is your old friend. The eldest of the children
   var IDEAL = 70, LEAN_TOL = [15, 12, 9], MATCH_TOL = [12, 9, 6];
   var BRIDGE_TOL = [7, 5], INTERVAL = [8, 6.8, 5.6], DECK = 18;
   var DAMAGE = [.018, .023, .028], FINAL_DAMAGE = .12;
+  /* 2026-10-28 (dssEase): an unfinished house makes the next one more forgiving: wider tolerances, slower and softer roars */
+  var EZ = window.dssEase ? window.dssEase.level('cards') : 0;
+  LEAN_TOL = LEAN_TOL.map(function(v){return v*(1+EZ*.2);}); MATCH_TOL = MATCH_TOL.map(function(v){return v*(1+EZ*.2);}); BRIDGE_TOL = BRIDGE_TOL.map(function(v){return v*(1+EZ*.2);});
+  INTERVAL = INTERVAL.map(function(v){return v*(1+EZ*.12);}); DAMAGE = DAMAGE.map(function(v){return v*(1-EZ*.2);}); FINAL_DAMAGE *= (1-EZ*.2);
   var NUDGE_MIN = .2, NUDGE_RANGE = .6, PLACEMENT_QUIET = 1.5;
   var slots = [], placed = [], fallen = [], used = 0, falls = 0;
   var active = -1, angle = 60, elapsed = 0, nextRoar = 8, finalAt = 0;
@@ -60456,6 +60560,17 @@ Among them, with his back to you, is your old friend. The eldest of the children
     if (outcome !== 'loss') sfx('brightChord',380);
     say(outcome === 'excellent' ? 'Not one card fell.' : outcome === 'win' ? 'The house stands.' : 'The house is unfinished.');
     root.querySelectorAll('button').forEach(function(b){b.disabled=true;});
+    /* 2026-10-28 (Sam: "Easier each retry"): an unfinished house offers TRY AGAIN (a gentler house, the page entered afresh) or MOVE ON (as before) */
+    if (outcome === 'loss' && window.dssEase && !window.dssEase._cardsMove) {
+      window.dssEase.lost('cards');
+      var cvC = root.querySelector('canvas');
+      setTimeout(function(){
+        if (!root.isConnected) return;
+        window.dssEase.offer(cvC.parentElement, { onAgain: function(){ var a = root.parentElement.querySelector('.cards-again tw-link') || document.querySelector('.cards-again tw-link'); if (a) a.click(); }, onMove: function(){ ended = false; window.dssEase._cardsMove = true; finish('loss'); window.dssEase._cardsMove = false; } });
+      }, 900);
+      draw();
+      return;
+    }
     var target = payment.querySelector('[data-outcome="'+outcome+'"] tw-link');
     if (target) target.click();
     payment.classList.add('revealed'); payment.removeAttribute('aria-hidden');
@@ -61557,7 +61672,7 @@ var tElapsed = elapsed - tier * 5000;
 var cur = speeds[tier];
 var nxt = tier < 7 ? speeds[tier + 1] : cur + 2.0;
 var sp = cur + (nxt - cur) * (tElapsed / 5000) * 0.4;
-return sp;
+return sp * (window.dssEase ? window.dssEase.by('cow', 1, 0.7) : 1); /* 2026-10-28 (dssEase): each throw makes the next ride slower */
 }
 
 function getTier(){
@@ -61645,7 +61760,7 @@ var px=playerX, py=PLAYER_Y, pw=40, ph=42;
 if(!invulnerable){
 for(var j=0;j<obstacles.length;j++){
 var o=obstacles[j];
-var ow=o.type.w*0.60, oh=o.type.h*0.60;
+var HB=window.dssEase ? window.dssEase.by('cow', 0.60, 0.48) : 0.60; var ow=o.type.w*HB, oh=o.type.h*HB; /* 2026-10-28 (dssEase): and its knocks a little narrower */
 if(Math.abs(px-o.x)<(pw+ow)/2 && Math.abs(py-o.y)<(ph+oh)/2){
 lives--;
 hitFlashAt=now;
@@ -61654,6 +61769,7 @@ if(window.dssAudio)window.dssAudio.muffledThud();
 obstacles.splice(j,1);
 if(lives<=0){
 gameOver=true; wonGame=false;
+if(window.dssEase) window.dssEase.lost('cow'); /* 2026-10-28 (Sam: "Easier each retry"): RIDE AGAIN is gentler each time */
 /* The throw: heavy landing, then the gallop dies with you. */
 if(window.dssAudio){window.dssAudio.punchImpact();setTimeout(function(){if(window.dssAudio)window.dssAudio.thunderClap();},250);}
 stopCowMusic();
@@ -62891,7 +63007,7 @@ The beast throws you onto the pissant cobblestones, trots off and never looks ba
 </div>
 
 :: Ronnie Scott's [venue-ronnies] {"position":"1900,1500","size":"100,100"}
-(set: _lilyRing to (($ringSnoozed is not true) and ($nightAheadPart2Shown is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3) and ($visited contains "Ronnies") and ($visited's Ronnies is true)))<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
+(set: _lilyRing to (($ringSnoozed is not true) and ($lilyNamed is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3) and ($visited contains "Ronnies") and ($visited's Ronnies is true)))<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
 (set: _dualRing to (($refusedDualRing is not true) and ($lilyCount >= 2) and ($hadLilyCall1 is true) and ($hadDualRing is false) and ($crossedThreshold is true) and (($returns - $lilyCall1ReturnsAt) >= 2) and ($visited contains "Ronnies") and ($visited's Ronnies is true)))\
 <div id="ri-container"></div>\
 <div class="ronnies-scene">
@@ -63140,7 +63256,7 @@ comments, so never write example macro syntax in here. -->\
 (set: $sawAstralReveal to false)\
 (set: $lilyHintShown to false)\
 (set: $shownStashTip to false)\
-(set: $nightAheadPart2Shown to false)\
+(set: $nightAheadPart2Shown to false)(set: $lilyNamed to false)\
 (set: $sawMemory1 to false)\
 (set: $sawMemory2 to false)\
 (set: $metGreenSeaFriend to false)(set: $harpRouteOn to false)(set: $inisRefusedErrand to false)\
@@ -63264,7 +63380,7 @@ As you go, you remember, wholly and as a lone, remarkable thought: Ronnie Scott�
 </div>
 
 :: The Colony Room [venue-colony] {"position":"1200,700","size":"100,100"}
-(set: _lilyRing to (($ringSnoozed is not true) and ($nightAheadPart2Shown is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3) and ($visited contains "Colony") and ($visited's Colony is true)))<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
+(set: _lilyRing to (($ringSnoozed is not true) and ($lilyNamed is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3) and ($visited contains "Colony") and ($visited's Colony is true)))<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
 (set: _dualRing to (($refusedDualRing is not true) and ($lilyCount >= 2) and ($hadLilyCall1 is true) and ($hadDualRing is false) and ($crossedThreshold is true) and (($returns - $lilyCall1ReturnsAt) >= 2) and ($visited contains "Colony") and ($visited's Colony is true)))\
 <div id="ci-container"></div><span class="dss-hub-flag" data-k="rest" style="display:none">(print: $venueRest)</span><!-- 2026-10-24 (Sam, Q3): the room reads this to put the street's line on a resting figure's card -->\
 <div class="colony-scene">
@@ -63355,7 +63471,7 @@ Outside, leaning upon Dean Street, with a glass in his hand gone stray from anot
 :: The French [venue-french] {"position":"300,550","size":"100,100"}
 <!-- 2026-10-17 (design note 5.5): a reader cannot read a book that is not in the bag (left, fenced, sold or lent) -->(set: _bagBook to ((($bookAt is not a string) or ($bookAt is "")) and ($bookSold is not true) and (($bookLent is not a string) or ($bookLent is ""))))\
 (if: $haunts is not an array)[(set: $haunts to (a:))]\
-(set: _lilyRing to (($ringSnoozed is not true) and ($nightAheadPart2Shown is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3) and ($visited contains "French") and ($visited's French is true)))<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
+(set: _lilyRing to (($ringSnoozed is not true) and ($lilyNamed is true) and ($lilyCount >= 2) and ($hadLilyCall1 is false) and ($hadPhoneCall is true) and (($returns - $phoneCallReturnsAt) >= 3) and ($visited contains "French") and ($visited's French is true)))<!-- 2026-10-24 sweep: every comparison bracketed; Harlowe read the long unbracketed chain as true with $ringSnoozed true (tested in a scratch build), so a refused ring came straight back on "Back to the bar" -->\
 (set: _dualRing to (($refusedDualRing is not true) and ($lilyCount >= 2) and ($hadLilyCall1 is true) and ($hadDualRing is false) and ($crossedThreshold is true) and (($returns - $lilyCall1ReturnsAt) >= 2) and ($visited contains "French") and ($visited's French is true)))\
 <div id="fi-container"></div><span class="dss-hub-flag" data-k="rest" style="display:none">(print: $venueRest)</span><!-- 2026-10-24 (Sam, Q3): the room reads this to put the street's line on a resting figure's card -->\
 (if: $visited is not a datamap)[(set: $visited to (dm:))]\
@@ -63480,16 +63596,25 @@ You’ll try, you suppose, the haunts you used to haunt and the people you knew.
 [[Step into the night|Dean Street]]
 </div>
 
+:: Night Ahead: LILY [night-ahead] {"position":"700,280","size":"100,100"}
+<!-- 2026-10-28 (Sam: "split it"): the first half of Night Ahead Part Two (his words unchanged), now straight after RED, so LILY is named before the night's first lily-of-the-valley. Shown once a night; $lilyNamed opens LILY's name, her calls and her place on the dedication page. -->\
+(if: $lilyNamed is true)[(go-to: "LINE 1")]\
+(set: $lilyNamed to true)\
+<div class="typewriter-page" style="font-family: 'Courier New', Courier, monospace; background: #e5d9b8; color: #1a1612; width: 560px; min-height: 380px; max-width: 90vw; padding: 3.5em 4em 3em; margin: 1.5em auto; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.18), 0 12px 40px rgba(0,0,0,0.3), inset 0 0 95px rgba(26,10,0,0.30), inset 0 0 38px rgba(26,10,0,0.18); border-radius: 1px 3px 3px 1px; text-shadow: none; line-height: 1.85; letter-spacing: 0.02em; font-size: 0.95em; position: relative;"><svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="nalilyB1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#120802" stop-opacity="0.97"/><stop offset="20%" stop-color="#120802" stop-opacity="0.97"/><stop offset="45%" stop-color="#3f1c08" stop-opacity="0.78"/><stop offset="70%" stop-color="#7a3c0c" stop-opacity="0.45"/><stop offset="88%" stop-color="#a86014" stop-opacity="0.18"/><stop offset="100%" stop-color="#a86014" stop-opacity="0"/></radialGradient><radialGradient id="nalilyB2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#150902" stop-opacity="0.95"/><stop offset="20%" stop-color="#150902" stop-opacity="0.95"/><stop offset="45%" stop-color="#44200a" stop-opacity="0.74"/><stop offset="70%" stop-color="#80400e" stop-opacity="0.40"/><stop offset="88%" stop-color="#ae6416" stop-opacity="0.16"/><stop offset="100%" stop-color="#ae6416" stop-opacity="0"/></radialGradient><radialGradient id="nalilyWI" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#701020" stop-opacity="0.05"/><stop offset="70%" stop-color="#701020" stop-opacity="0.03"/><stop offset="100%" stop-color="#701020" stop-opacity="0"/></radialGradient></defs><circle cx="78" cy="640" r="68" fill="url(#nalilyWI)"/><circle cx="78" cy="640" r="68" fill="none" stroke="rgba(112,20,30,0.42)" stroke-width="9"/><circle cx="78" cy="640" r="68" fill="none" stroke="rgba(80,10,18,0.20)" stroke-width="4"/><ellipse cx="74" cy="715" rx="2" ry="8" fill="rgba(100,18,28,0.28)"/><circle cx="540" cy="220" r="13" fill="url(#nalilyB1)"/><circle cx="535" cy="252" r="10" fill="url(#nalilyB2)"/><circle cx="22" cy="380" r="11" fill="url(#nalilyB2)"/><circle cx="538" cy="510" r="9" fill="url(#nalilyB1)"/><circle cx="30" cy="240" r="9" fill="url(#nalilyB2)"/><circle cx="20" cy="560" r="12" fill="url(#nalilyB1)"/><ellipse cx="18" cy="450" rx="3" ry="13" transform="rotate(8,18,450)" fill="rgba(68,32,7,0.36)"/><circle cx="530" cy="155" r="3" fill="rgba(135,80,28,0.22)"/><circle cx="42" cy="195" r="2.5" fill="rgba(140,85,30,0.20)"/><circle cx="510" cy="320" r="3.5" fill="rgba(125,72,24,0.22)"/><circle cx="55" cy="345" r="2" fill="rgba(145,90,35,0.18)"/><circle cx="525" cy="450" r="2.5" fill="rgba(130,78,26,0.20)"/><circle cx="62" cy="510" r="3" fill="rgba(132,80,28,0.20)"/><circle cx="14" cy="690" r="2.5" fill="rgba(138,82,30,0.19)"/><circle cx="540" cy="700" r="3" fill="rgba(128,76,24,0.21)"/><line x1="0" y1="380" x2="100%" y2="380" stroke="rgba(155,125,70,0.12)" stroke-width="2"/><line x1="0" y1="378" x2="100%" y2="378" stroke="rgba(75,50,20,0.07)" stroke-width="1"/><line x1="280" y1="0" x2="285" y2="900" stroke="rgba(110,80,35,0.06)" stroke-width="0.6"/></svg>
+You’ve been thinking about the form of the aubade, the morning poem, the song of wake-me-not-so-I-might-have-my-dream. You’ve been thinking about the first love of your life; LILY, from the rarest valley in Wales.
+
+She’s why you’re here again, all told; you’d say that to yourself if you could stomach it.
+
+[[On.|LINE 1]]
+</div>
+
 :: Night Ahead Part Two [night-ahead] {"position":"700,350","size":"100,100"}
 <!-- 2026-10-21: Sam's rewrite for the later cover-story reveal (his 2026-10-19 note: "change this prose, since now you are not giving up selling the book straight away"). -->\
 (if: $nightAheadPart2Shown is true)[(go-to: "Dean Street")]\
 (set: $nightAheadPart2Shown to true)\
 <!-- 2026-10-15 (Sam: the cover story revealed later): reached from Dean Street after the Ham's refusal and AOIFE's ring (see the trigger there), no longer from RED's kiss. The subtitle the naming page used to add joins the title here, and the typewriter types the whole title out below his words, so the stamp lands as he admits it. -->(unless: $bookTitle is a string)[(set: $bookTitle to "Untitled Manuscript")](if: $bookTitle is "")[(set: $bookTitle to "Untitled Manuscript")](unless: $bookTitle contains ": A Cover Story")[(set: $bookTitle to $bookTitle + ": A Cover Story")]\
 <div class="typewriter-page" style="font-family: 'Courier New', Courier, monospace; background: #e5d9b8; color: #1a1612; width: 560px; min-height: 380px; max-width: 90vw; padding: 3.5em 4em 3em; margin: 1.5em auto; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.18), 0 12px 40px rgba(0,0,0,0.3), inset 0 0 95px rgba(26,10,0,0.30), inset 0 0 38px rgba(26,10,0,0.18); border-radius: 1px 3px 3px 1px; text-shadow: none; line-height: 1.85; letter-spacing: 0.02em; font-size: 0.95em; position: relative;"><svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="napt2B1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#120802" stop-opacity="0.97"/><stop offset="20%" stop-color="#120802" stop-opacity="0.97"/><stop offset="45%" stop-color="#3f1c08" stop-opacity="0.78"/><stop offset="70%" stop-color="#7a3c0c" stop-opacity="0.45"/><stop offset="88%" stop-color="#a86014" stop-opacity="0.18"/><stop offset="100%" stop-color="#a86014" stop-opacity="0"/></radialGradient><radialGradient id="napt2B2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#150902" stop-opacity="0.95"/><stop offset="20%" stop-color="#150902" stop-opacity="0.95"/><stop offset="45%" stop-color="#44200a" stop-opacity="0.74"/><stop offset="70%" stop-color="#80400e" stop-opacity="0.40"/><stop offset="88%" stop-color="#ae6416" stop-opacity="0.16"/><stop offset="100%" stop-color="#ae6416" stop-opacity="0"/></radialGradient><radialGradient id="napt2WI" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#701020" stop-opacity="0.05"/><stop offset="70%" stop-color="#701020" stop-opacity="0.03"/><stop offset="100%" stop-color="#701020" stop-opacity="0"/></radialGradient></defs><circle cx="78" cy="640" r="68" fill="url(#napt2WI)"/><circle cx="78" cy="640" r="68" fill="none" stroke="rgba(112,20,30,0.42)" stroke-width="9"/><circle cx="78" cy="640" r="68" fill="none" stroke="rgba(80,10,18,0.20)" stroke-width="4"/><ellipse cx="74" cy="715" rx="2" ry="8" fill="rgba(100,18,28,0.28)"/><circle cx="540" cy="220" r="13" fill="url(#napt2B1)"/><circle cx="535" cy="252" r="10" fill="url(#napt2B2)"/><circle cx="22" cy="380" r="11" fill="url(#napt2B2)"/><circle cx="538" cy="510" r="9" fill="url(#napt2B1)"/><circle cx="30" cy="240" r="9" fill="url(#napt2B2)"/><circle cx="20" cy="560" r="12" fill="url(#napt2B1)"/><ellipse cx="18" cy="450" rx="3" ry="13" transform="rotate(8,18,450)" fill="rgba(68,32,7,0.36)"/><circle cx="530" cy="155" r="3" fill="rgba(135,80,28,0.22)"/><circle cx="42" cy="195" r="2.5" fill="rgba(140,85,30,0.20)"/><circle cx="510" cy="320" r="3.5" fill="rgba(125,72,24,0.22)"/><circle cx="55" cy="345" r="2" fill="rgba(145,90,35,0.18)"/><circle cx="525" cy="450" r="2.5" fill="rgba(130,78,26,0.20)"/><circle cx="62" cy="510" r="3" fill="rgba(132,80,28,0.20)"/><circle cx="14" cy="690" r="2.5" fill="rgba(138,82,30,0.19)"/><circle cx="540" cy="700" r="3" fill="rgba(128,76,24,0.21)"/><line x1="0" y1="380" x2="100%" y2="380" stroke="rgba(155,125,70,0.12)" stroke-width="2"/><line x1="0" y1="378" x2="100%" y2="378" stroke="rgba(75,50,20,0.07)" stroke-width="1"/><line x1="280" y1="0" x2="285" y2="900" stroke="rgba(110,80,35,0.06)" stroke-width="0.6"/></svg>
-You’ve been thinking about the form of the aubade, the morning poem, the song of wake-me-not-so-I-might-have-my-dream. You’ve been thinking about the first love of your life; LILY, from the rarest valley in Wales.
-
-She’s why you’re here again, all told; you’d say that to yourself if you could stomach it.
-
+<!-- 2026-10-28 (Sam: LILY named too late, long after the first lily-of-the-valley; "split it"): his first two paragraphs moved, unchanged, to Night Ahead: LILY, which follows RED. The cover story stays here, with its timing. -->\
 So try to sell the book. It’s both your get out and your cover story. Someone here will take it, eventually. But that’s not all you’re here for. No, you’ve come to lay some ghosts to rest.
 
 Soho’s rain churns up your silted bloodstream; even in the years that you aren’t here.
@@ -64174,29 +64299,7 @@ He pulls //(print: $bookTitle)// close.
 
 You say you’ve not, thank him, and make to leave when he calls you back.
 
-<!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="himalayas" hidden>‘Looks like you found thunder on the mountain. It still won’t sell but, if it’s any consolation, it’ll keep.’<br><br></span>(if: $mantraComplete is true)[<span class="dss-gift-now" data-gift="himalayas" hidden></span>]<span class="dss-quest-line">‘When you’re next in Cecil Court, look for INIS O’FLATTERLY. Quare fellow, knows a lot about books. I think he’d like to meet you. He’s been trying to get to Carthage, on his way to The Pillars of Hercules.’</span>
-<!-- 2026-10-11, Sam: the venue-opens line wherever a new venue opens. The header back-fills $knowsCecilCourt as soon as $metCritic is true, so this keys on its own once-flag; the novelist carries his own line inside the haunt box. -->
-(if: $cecilOpensSaid is not true)[(if: not ($haunts contains $haunt2))[(set: $cecilOpensSaid to true)<div class="haunt-opens">Cecil Court opens.</div>]]
-(set: $knowsCecilCourt to true)
-<!-- 2026-10-09, Sam: the ship rumour comes in the call-back, before midnight only; two versions by whether you have been down to the cellar yet. -->
-(if: $shipNews is "" and $afterMidnight is false)[(set: $shipNews to "rumour")(set: $hamRumour to true)(if: $metSalvu is false)[<!-- 2026-10-14 (Sam, A and B): his speech, words unchanged, broken into paragraphs and set on a card, THE RUMOUR, that opens over the page a moment after; the small link reopens it (dssRumourCard) -->He leans low on his elbows and whispers, stagily, <span class="rumour-open" role="button" tabindex="0">THE RUMOUR</span><div class="rumour-text" hidden><p>‘Let me tell you something I’ve heard tonight.</p><p>‘I believe you are familiar with ASHTON GRANGER. God love her: SALVU COPPER, the Maltese gangster, heard she has a few quid to spare. She’s been courting one of his muscle men, QUIET FRANKIE.</p><p>‘Long story short, they charmed her into buying a shipment of “pipe cleaners” – Lord knows what it really is – that’s been on its way to Liverpool from America. Thing is, it’s meant to dock tonight and SALVU’S got the shivers, he hasn’t heard word of progress and thinks they’re all frightened to tell him it’s sunk.</p><p>‘So SALVU’S got QUIET FRANKIE holding ASHTON GRANGER hostage, though she doesn’t know she’s a hostage, in his cellar under Dean Street. If the ship comes in she’ll never know a thing.</p><p>‘Now, you didn’t hear a word of that; I assume that we’d both like to see the morning.’</p></div><script>setTimeout(function(){ if (window.dssRumourCard) window.dssRumourCard(); }, 0);</script>](else:)[‘Do you know anyone who can clean a dirty pipe?’]]<!-- 2026-10-21 (Sam, playtest: "the order is wrong here ... he knows it on the first meeting"): his aside about COPPER, and the password it carries, now come after the rumour that first names COPPER; the sentence is his, unchanged, with its own quote marks; same gate as before (not once SALVU has been met) -->(if: $metSalvu is false)[
-
-‘And if you see COPPER, tell him I said hello.’
-
-(if: $knowsCopperWord is false)[<div class="item-box critic-deferred-motes" data-motes="1">
-<div class="item-header">PASSWORD LEARNED</div>
-<div class="item-name">“I said hello”</div>
-<div class="item-note">It&#39;s saved in your notebook <span class="item-note-arrow">&#8593;</span></div>
-</div>
-(set: $knowsCopperWord to true)]]<!-- 2026-10-23 (Sam, playtest: "the slip ... repeats the 'america' type words, they shouldn't be happening twice in one scene"): the slip asks "Have you tried America?" and the reply above answers it ("America, you think of new-found-land."), so this after-line, a third America, is kept here but not shown --><span class="dss-ham-america-echo" hidden>Perhaps you’ll try America after all.</span>
-
-<!-- 2026-10-14 (Sam: "you have to really want to sell the book"): straight after the Ham's refusal, home rings: AOIFE's call, the same card as the Pillars', brought in once the verdict, its slip and any rumour card have passed (the hidden link is pressed by the script below) -->(if: ($hadPhoneCall is false) and ($ringSnoozed is not true))[<span class="ham-ring-go" hidden>(link: "ham-ring-go")[(replace: ?hamring)[<div class="phone-ringing ring-now">Behind the bar a phone rings and your name is called.
-
-<!-- 2026-10-24 (Sam, playtest: "You have the option to 'leave the pub' from the Ham. Then you see the rumour then the phonecall. It shouldn't take you back to the bar after that, it should eject you"): when the ring came because you made to leave, #critAftermath carries .ham-leaving, which shows the -leave-only links: the call hangs up onto the street, a refusal has no way back to the bar -->|hamaoifering>[<span class="ham-stay-only">(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 9))(go-to: "The phone call")]</span><span class="ham-leave-only">(link: "Accept the call")[(set: $callThenOut to true)(set: $confidence to ($statLoss: $confidence, 9))(go-to: "The phone call")]</span>
-(link: "I’m not here")[(set: $confidence to ($statLoss: $confidence, 4))(display: "Bars Now")(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $ringSnoozed to true)(set: $resumingFromCall to true)(set: $refusedAoife to true)(replace: ?hamaoifering)[The barman looks you over utterly neutrally. He wishes he wasn’t paid to be part of this game. ‘Not seen him,’ he says, and puts back the receiver.
-(if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]
-<span class="ham-stay-only">[[Back to the bar|Entering The Pillars of Hercules]]</span>]]]</div>]]</span>]|hamring>[]
-[[Leave the pub.|Dean Street]]
+<!-- 2026-10-28 (Sam: the page ran past a laptop screen; "fold and split"): the call-back and all after it moved, unchanged, to The Ham calls you back. The street exit is hidden here (the header's _backHide) so the call-back, the rumour and AOIFE's ring cannot be skipped. -->[[Continue|The Ham calls you back]]
 </div></div>
 (if: $sobriety < 30)[<span id="critDrunk" hidden></span>]
 <script>
@@ -64435,6 +64538,44 @@ You say you’ve not, thank him, and make to leave when he calls you back.
   setTimeout(doTurn, 850);
 })();
 </script>
+</div>
+
+:: The Ham calls you back [venue-pillars char-ham] {"position":"420,1400","size":"100,100"}
+<!-- 2026-10-28 (Sam: "fold and split"): the second half of The critic's judgement, his words and the scene's machinery unchanged: the call-back, CECIL COURT OPENS., THE RUMOUR, the password, AOIFE's ring (and the make-to-leave catch) and the way out. The aftermath is shown at once; the password's motes come from the shared item-box spawner. -->
+<div class="pillars-scene">
+<div class="pillars-light"></div>
+<div class="pillars-smoke"></div>
+<div class="pillars-dust"><span style="left:12%;bottom:18%;animation-duration:7s;animation-delay:0s;"></span><span style="left:32%;bottom:8%;animation-duration:9.5s;animation-delay:1.2s;"></span><span style="left:52%;bottom:28%;animation-duration:6.5s;animation-delay:2.8s;"></span><span style="left:72%;bottom:5%;animation-duration:11s;animation-delay:0.4s;"></span><span style="left:22%;bottom:38%;animation-duration:8.5s;animation-delay:1.8s;"></span><span style="left:82%;bottom:22%;animation-duration:10s;animation-delay:3.5s;"></span><span style="left:42%;bottom:12%;animation-duration:7.8s;animation-delay:0.8s;"></span><span style="left:62%;bottom:32%;animation-duration:9s;animation-delay:2.2s;"></span></div>
+<!-- Left broken pillar — Piranesi/Decline & Fall style -->
+<svg class="pillar left" viewBox="0 0 34 280" preserveAspectRatio="xMidYMax meet"><defs><linearGradient id="pfb" x1="0" x2="0" y1="0" y2="1"><stop offset="0%"   stop-color="#8ac8dc" stop-opacity="0.72"/><stop offset="60%"  stop-color="#8ac8dc" stop-opacity="0.42"/><stop offset="100%" stop-color="#8ac8dc" stop-opacity="0"/></linearGradient></defs><g filter="url(#dss-ink-fine)"><!-- Two-step plinth base --><rect x="1"  y="252" width="32" height="8"  fill="none" stroke="url(#pfb)" stroke-width="1.1"/><rect x="4"  y="246" width="26" height="7"  fill="none" stroke="url(#pfb)" stroke-width="1"/><!-- Shaft edges (slight taper: 24px wide at top, 26px at base) --><line x1="5"  y1="246" x2="6"  y2="88" stroke="url(#pfb)" stroke-width="1.1"/><line x1="29" y1="246" x2="28" y2="88" stroke="url(#pfb)" stroke-width="1.1"/><!-- Drum course bands every 22px --><line x1="5.3" y1="110" x2="28.7" y2="110" stroke="url(#pfb)" stroke-width="0.65"/><line x1="5.5" y1="132" x2="28.5" y2="132" stroke="url(#pfb)" stroke-width="0.65"/><line x1="5.5" y1="154" x2="28.5" y2="154" stroke="url(#pfb)" stroke-width="0.65"/><line x1="5.5" y1="176" x2="28.5" y2="176" stroke="url(#pfb)" stroke-width="0.65"/><line x1="5.5" y1="198" x2="28.5" y2="198" stroke="url(#pfb)" stroke-width="0.65"/><line x1="5.5" y1="220" x2="28.5" y2="220" stroke="url(#pfb)" stroke-width="0.65"/><line x1="5.5" y1="242" x2="28.5" y2="242" stroke="url(#pfb)" stroke-width="0.65"/><!-- Faint fluting --><line x1="10" y1="88" x2="10" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="14" y1="88" x2="14" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="17" y1="88" x2="17" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="20" y1="88" x2="20" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="24" y1="88" x2="24" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><!-- Echinus (curved capital swell) --><path d="M6,88 Q5,78 3,72 L31,72 Q29,78 28,88" fill="none" stroke="url(#pfb)" stroke-width="1.1"/><!-- Abacus slab — CRACKED, left portion collapsed inward --><!-- Right surviving portion: tilting down-left --><path d="M12,72 L32,68 L33,63 L13,66 Z" fill="none" stroke="#8ac8dc" stroke-width="1" opacity="0.6"/><!-- Left fallen piece: a slab lying at an angle, partly off the shaft --><path d="M2,74 L-2,70 L8,67 L11,72 Z" fill="none" stroke="#8ac8dc" stroke-width="0.9" opacity="0.45"/><!-- Fracture line across shaft top --><path d="M6,88 L9,83 L13,87 L17,80 L21,86 L25,79 L28,88" fill="none" stroke="#8ac8dc" stroke-width="0.9" opacity="0.55"/><!-- A fallen drum section leaning against the shaft at ~1/3 height --><path d="M1,168 L3,160 L9,162 L9,170 L3,172 Z" fill="none" stroke="#8ac8dc" stroke-width="0.85" opacity="0.32"/><!-- Crack on shaft face --><path d="M13,130 L15,142 L12,150" fill="none" stroke="#8ac8dc" stroke-width="0.5" opacity="0.28"/><!-- Rubble at base --><path d="M3,255  L9,255  L10,260 L2,260 Z"  fill="none" stroke="#8ac8dc" stroke-width="0.8" opacity="0.28"/><path d="M21,257 L28,257 L29,262 L20,261 Z" fill="none" stroke="#8ac8dc" stroke-width="0.7" opacity="0.22"/><path d="M13,260 L18,259 L19,264 L12,263 Z" fill="none" stroke="#8ac8dc" stroke-width="0.7" opacity="0.2"/></g></svg>
+<!-- Right pillar — same shape, scaleX(-1) mirrors it so break faces inward -->
+<svg class="pillar right" viewBox="0 0 34 280" preserveAspectRatio="xMidYMax meet"><defs><linearGradient id="pf2b" x1="0" x2="0" y1="0" y2="1"><stop offset="0%"   stop-color="#8ac8dc" stop-opacity="0.72"/><stop offset="60%"  stop-color="#8ac8dc" stop-opacity="0.42"/><stop offset="100%" stop-color="#8ac8dc" stop-opacity="0"/></linearGradient></defs><g filter="url(#dss-ink-fine)"><rect x="1"  y="252" width="32" height="8"  fill="none" stroke="url(#pf2b)" stroke-width="1.1"/><rect x="4"  y="246" width="26" height="7"  fill="none" stroke="url(#pf2b)" stroke-width="1"/><!-- Shorter shaft: top at y=130 instead of y=88 — this pillar more ruined --><line x1="5"  y1="246" x2="6"  y2="130" stroke="url(#pf2b)" stroke-width="1.1"/><line x1="29" y1="246" x2="28" y2="130" stroke="url(#pf2b)" stroke-width="1.1"/><line x1="5.5" y1="152" x2="28.5" y2="152" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="5.5" y1="174" x2="28.5" y2="174" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="5.5" y1="196" x2="28.5" y2="196" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="5.5" y1="218" x2="28.5" y2="218" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="5.5" y1="240" x2="28.5" y2="240" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="10" y1="130" x2="10" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="14" y1="130" x2="14" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="17" y1="130" x2="17" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="20" y1="130" x2="20" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="24" y1="130" x2="24" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><!-- Echinus at top of shorter shaft --><path d="M6,130 Q5,120 3,114 L31,114 Q29,120 28,130" fill="none" stroke="url(#pf2b)" stroke-width="1.1"/><!-- This column: abacus has COLLAPSED entirely — jagged stump and tilted block --><path d="M3,114 L6,107 L10,112 L14,104 L18,110 L22,102 L27,108 L31,114" fill="none" stroke="#8ac8dc" stroke-width="1" opacity="0.6"/><!-- Large fallen capital block --><path d="M2,106 L-3,98 L14,94 L17,104 Z" fill="none" stroke="#8ac8dc" stroke-width="1" opacity="0.5"/><!-- Fracture running down shaft --><path d="M6,130 L9,125 L13,129 L17,122 L21,128 L25,121 L28,130" fill="none" stroke="#8ac8dc" stroke-width="0.9" opacity="0.55"/><path d="M9,142 L11,158 L8,164" fill="none" stroke="#8ac8dc" stroke-width="0.5" opacity="0.28"/><!-- Fallen drum leaning against shaft --><path d="M1,215 L3,207 L9,209 L9,217 L3,219 Z" fill="none" stroke="#8ac8dc" stroke-width="0.85" opacity="0.3"/><!-- Rubble at base --><path d="M3,255 L9,255 L10,260 L2,260 Z"    fill="none" stroke="#8ac8dc" stroke-width="0.8" opacity="0.28"/><path d="M22,257 L29,257 L30,262 L21,261 Z"  fill="none" stroke="#8ac8dc" stroke-width="0.7" opacity="0.22"/><path d="M11,260 L17,259 L18,264 L10,263 Z"  fill="none" stroke="#8ac8dc" stroke-width="0.7" opacity="0.2"/></g></svg>
+<!-- Lattice pub window at top -->
+<svg class="pillars-lattice" viewBox="0 0 300 36" width="100%" height="36" preserveAspectRatio="none"><defs><linearGradient id="latEdgeb" x1="0" x2="1"><stop offset="0%"   stop-color="#7ab8cc" stop-opacity="0"/><stop offset="15%"  stop-color="#7ab8cc" stop-opacity="0.55"/><stop offset="85%"  stop-color="#7ab8cc" stop-opacity="0.55"/><stop offset="100%" stop-color="#7ab8cc" stop-opacity="0"/></linearGradient><pattern id="dLat" x="0" y="0" width="42" height="24" patternUnits="userSpaceOnUse"><path d="M7,0 L14,12 L7,24 L0,12 Z" fill="rgba(160,35,25,0.26)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/><path d="M21,0 L28,12 L21,24 L14,12 Z" fill="rgba(185,215,235,0.07)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/><path d="M35,0 L42,12 L35,24 L28,12 Z" fill="rgba(28,108,52,0.22)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/></pattern><mask id="latMask"><rect x="0" y="0" width="300" height="36" fill="url(#latEdgeb)"/></mask></defs><g filter="url(#dss-ink-fine)"><rect x="0" y="0" width="300" height="36" fill="url(#dLat)" mask="url(#latMask)"/><line x1="0" y1="34" x2="300" y2="34" stroke="url(#latEdgeb)" stroke-width="1.2"/></g></svg>
+<div class="ham-callback-stage" hidden aria-hidden="true"></div><!-- a "-stage" marker keeps this page out of the plain-page panel, as its first half is (the book stage), so the scene looks the same across the split and THE RUMOUR card opens as before --><div class="critic-aftermath revealed" id="critAftermath"><div class="critic-after-verdict"><!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="himalayas" hidden>‘Looks like you found thunder on the mountain. It still won’t sell but, if it’s any consolation, it’ll keep.’<br><br></span>(if: $mantraComplete is true)[<span class="dss-gift-now" data-gift="himalayas" hidden></span>]<span class="dss-quest-line">‘When you’re next in Cecil Court, look for INIS O’FLATTERLY. Quare fellow, knows a lot about books. I think he’d like to meet you. He’s been trying to get to Carthage, on his way to The Pillars of Hercules.’</span>
+<!-- 2026-10-11, Sam: the venue-opens line wherever a new venue opens. The header back-fills $knowsCecilCourt as soon as $metCritic is true, so this keys on its own once-flag; the novelist carries his own line inside the haunt box. -->\
+(if: $cecilOpensSaid is not true)[(if: not ($haunts contains $haunt2))[(set: $cecilOpensSaid to true)<div class="haunt-opens">Cecil Court opens.</div>]]
+(set: $knowsCecilCourt to true)\
+<!-- 2026-10-09, Sam: the ship rumour comes in the call-back, before midnight only; two versions by whether you have been down to the cellar yet. -->\
+(if: $shipNews is "" and $afterMidnight is false)[(set: $shipNews to "rumour")(set: $hamRumour to true)(if: $metSalvu is false)[<!-- 2026-10-14 (Sam, A and B): his speech, words unchanged, broken into paragraphs and set on a card, THE RUMOUR, that opens over the page a moment after; the small link reopens it (dssRumourCard) -->He leans low on his elbows and whispers, stagily, <span class="rumour-open" role="button" tabindex="0">THE RUMOUR</span><div class="rumour-text" hidden><p>‘Let me tell you something I’ve heard tonight.</p><p>‘I believe you are familiar with ASHTON GRANGER. God love her: SALVU COPPER, the Maltese gangster, heard she has a few quid to spare. She’s been courting one of his muscle men, QUIET FRANKIE.</p><p>‘Long story short, they charmed her into buying a shipment of “pipe cleaners” – Lord knows what it really is – that’s been on its way to Liverpool from America. Thing is, it’s meant to dock tonight and SALVU’S got the shivers, he hasn’t heard word of progress and thinks they’re all frightened to tell him it’s sunk.</p><p>‘So SALVU’S got QUIET FRANKIE holding ASHTON GRANGER hostage, though she doesn’t know she’s a hostage, in his cellar under Dean Street. If the ship comes in she’ll never know a thing.</p><p>‘Now, you didn’t hear a word of that; I assume that we’d both like to see the morning.’</p></div><script>setTimeout(function(){ if (window.dssRumourCard) window.dssRumourCard(); }, 0);</script>](else:)[‘Do you know anyone who can clean a dirty pipe?’]]<!-- 2026-10-21 (Sam, playtest: "the order is wrong here ... he knows it on the first meeting"): his aside about COPPER, and the password it carries, now come after the rumour that first names COPPER; the sentence is his, unchanged, with its own quote marks; same gate as before (not once SALVU has been met) -->(if: $metSalvu is false)[
+
+‘And if you see COPPER, tell him I said hello.’
+
+(if: $knowsCopperWord is false)[<div class="item-box critic-deferred-motes">
+<div class="item-header">PASSWORD LEARNED</div>
+<div class="item-name">“I said hello”</div>
+<div class="item-note">It&#39;s saved in your notebook <span class="item-note-arrow">&#8593;</span></div>
+</div>
+(set: $knowsCopperWord to true)]]<!-- 2026-10-23 (Sam, playtest: "the slip ... repeats the 'america' type words, they shouldn't be happening twice in one scene"): the slip asks "Have you tried America?" and the reply above answers it ("America, you think of new-found-land."), so this after-line, a third America, is kept here but not shown --><span class="dss-ham-america-echo" hidden>Perhaps you’ll try America after all.</span>\
+
+<!-- 2026-10-14 (Sam: "you have to really want to sell the book"): straight after the Ham's refusal, home rings: AOIFE's call, the same card as the Pillars', brought in once the verdict, its slip and any rumour card have passed (the hidden link is pressed by the script below) -->(if: ($hadPhoneCall is false) and ($ringSnoozed is not true))[<span class="ham-ring-go" hidden>(link: "ham-ring-go")[(replace: ?hamring)[<div class="phone-ringing ring-now">Behind the bar a phone rings and your name is called.
+
+<!-- 2026-10-24 (Sam, playtest: "You have the option to 'leave the pub' from the Ham. Then you see the rumour then the phonecall. It shouldn't take you back to the bar after that, it should eject you"): when the ring came because you made to leave, #critAftermath carries .ham-leaving, which shows the -leave-only links: the call hangs up onto the street, a refusal has no way back to the bar -->|hamaoifering>[<span class="ham-stay-only">(link: "Accept the call")[(set: $confidence to ($statLoss: $confidence, 9))(go-to: "The phone call")]</span><span class="ham-leave-only">(link: "Accept the call")[(set: $callThenOut to true)(set: $confidence to ($statLoss: $confidence, 9))(go-to: "The phone call")]</span>
+(link: "I’m not here")[(set: $confidence to ($statLoss: $confidence, 4))(display: "Bars Now")(unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](set: $refusedCalls to $refusedCalls + 1)(set: $ringSnoozed to true)(set: $resumingFromCall to true)(set: $refusedAoife to true)(replace: ?hamaoifering)[The barman looks you over utterly neutrally. He wishes he wasn’t paid to be part of this game. ‘Not seen him,’ he says, and puts back the receiver.
+(if: $refusedCalls is 2)[<div class="glass-pane">(display: "Fetch Window SVG")</div>]
+<span class="ham-stay-only">[[Back to the bar|Entering The Pillars of Hercules]]</span>]]]</div>]]</span>]|hamring>[]
+[[Leave the pub.|Dean Street]]
+</div></div>
 </div>
 
 <script>
@@ -64861,7 +65002,8 @@ You know who she is, she is SHANA, destroyer of worlds.]
     $('.mats-lea').textContent = pair[0]; $('.mats-jack').textContent = pair[1];
     $('.mats-left').classList.toggle('mats-quiet', event === 'won'); $('.mats-right').classList.toggle('mats-quiet', event !== 'won');
   }
-  function windowMs() { return Math.max(WINDOW_FLOOR, WINDOW_BASE - count * WINDOW_PER_MAT); }
+  /* 2026-10-28 (Sam: "Easier each retry"): every drop widens the catch a little (dssEase, 'mats'); Go again was already there */
+  function windowMs() { var ez = window.dssEase ? window.dssEase.level('mats') : 0; return Math.max(WINDOW_FLOOR + ez * 12, WINDOW_BASE + ez * 18 - count * WINDOW_PER_MAT); }
   function down() {
     if (ended) return;
     if (phase === 'ready') {
@@ -64886,7 +65028,7 @@ You know who she is, she is SHANA, destroyer of worlds.]
     } else fail(progress * duration < catchAt ? 'Too early.' : 'Too late.');
   }
   function fail(label) {
-    phase = 'lost'; speak('lost'); if (window.dssAudio && window.dssAudio.matDrop) window.dssAudio.matDrop(); play.textContent = 'Go again'; status(label, 'Try the same number again.');
+    phase = 'lost'; speak('lost'); if (window.dssEase) window.dssEase.lost('mats'); if (window.dssAudio && window.dssAudio.matDrop) window.dssAudio.matDrop(); play.textContent = 'Go again'; status(label, 'Try the same number again.');
     var p = pose(progress);
     for (var i = 0; i < count; i++) particles.push({ x: W * .5, y: p.y, vx: (Math.random() - .5) * 110, vy: 50 + Math.random() * 60, a: p.angle });
   }
@@ -65319,7 +65461,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 
 <!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="easter" hidden>RED looks at you, phlegmatic as a leech. ‘There’s a word in your mouth,’ he says, ‘my professional advice is: don’t cough up.’<br><br></span>(if: $easterGlyph is true)[<span class="dss-gift-now" data-gift="easter" hidden></span>]You don’t understand and smiling and then retreating, you strike, in the nifty, brisket air, a vein of his perfume, which you recognise, because you once loved a woman who wore the very same, as lily-of-the-valley.
 
-[[Walk on|LINE 1]]
+[[Walk on|Night Ahead: LILY]]<!-- 2026-10-28: LILY's page before LINE 1 -->
 </div>
 
 :: header header [header] {"position":"700,50","size":"100,100"}
@@ -65328,7 +65470,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 <span class="dss-gw-read" hidden>(link: "gw-read")[(set: _lore to "The Great Work")(display: "Lore Read")]</span>\
 <span id="dss-lily-n" hidden>(if: $lilyCount is a number)[(print: $lilyCount)]</span>\
 <!-- 2026-10-21: the haunts caught before this page, for the gold wheel after a haunt (THE GATE FLASH). Pipe-delimited, as at the Dawn. -->(set: _dssHeld to "")(if: $haunts is an array)[(if: $haunts's length > 0)[(for: each _dssH, ...$haunts)[(set: _dssHeld to _dssHeld + _dssH + "|")]]]<span id="dss-haunts-held" hidden>(print: _dssHeld)</span>\
-<!-- 2026-10-22 (the dedication page): the names tonight has earned for the book's first page, read by dssDedication and banked across nights. Always AOIFE, your daughter, LILY, no one; ASHTON GRANGER once the cellar has named her; JOHN after his round or his rescue; the Fetch after the Sanctum. -->(set: _dssDedicPool to "aoife,daughter,noone")<!-- 2026-10-24 (Sam: "keep LILY off the dedication page until Night Ahead Part Two has shown") -->(if: $nightAheadPart2Shown is true)[(set: _dssDedicPool to _dssDedicPool + ",lily")](if: (history:) contains "Turn to Copper")[(set: _dssDedicPool to _dssDedicPool + ",ashton")](if: ((history:) contains "His round") or ($savedBy is "john"))[(set: _dssDedicPool to _dssDedicPool + ",john")](if: $sanctumDone is true)[(set: _dssDedicPool to _dssDedicPool + ",fetch")]<span id="dss-dedic-pool" hidden>(print: _dssDedicPool)</span>\
+<!-- 2026-10-22 (the dedication page): the names tonight has earned for the book's first page, read by dssDedication and banked across nights. Always AOIFE, your daughter, LILY, no one; ASHTON GRANGER once the cellar has named her; JOHN after his round or his rescue; the Fetch after the Sanctum. -->(set: _dssDedicPool to "aoife,daughter,noone")<!-- 2026-10-24 (Sam: "keep LILY off the dedication page until Night Ahead Part Two has shown") -->(if: $lilyNamed is true)[(set: _dssDedicPool to _dssDedicPool + ",lily")](if: (history:) contains "Turn to Copper")[(set: _dssDedicPool to _dssDedicPool + ",ashton")](if: ((history:) contains "His round") or ($savedBy is "john"))[(set: _dssDedicPool to _dssDedicPool + ",john")](if: $sanctumDone is true)[(set: _dssDedicPool to _dssDedicPool + ",fetch")]<span id="dss-dedic-pool" hidden>(print: _dssDedicPool)</span>\
 (display: "Dream Progress")(display: "Davy Ticket Progress")\
 <!-- 2026-09-16: has the player been INSIDE a venue yet? Gates the dawn door on Dean Street. Old mid-night saves: treat a second hub visit as yes. -->\
 (unless: $enteredVenue is a boolean)[(set: $enteredVenue to ($returns is a number and $returns >= 2))]\
@@ -65400,7 +65542,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 <!-- 2026-10-16 (Sam: carry the pick indoors): inside the venue of the person you chose on Dean Street, a hidden span the room reads on build; that figure is lit red and the room's caption says who you came for --><!-- 2026-10-23 (the first-night map): not while that venue rests (the one-person rule has hidden the people), so the caption no longer says "YOU CAME FOR … / Talk to others first." over a room where no one else will talk -->(display: "Who Will Read")(if: ($pitchOn is true) and ($pitchTarget is a string) and ($pitchTarget is not "") and ($venueRest is not $pitchTarget))[(set: _cfTags to (dm: "pillars", "venue-pillars", "french", "venue-french", "colony", "venue-colony", "cecil", "venue-cecilcourt", "coach", "venue-coach", "ronnies", "venue-ronnies", "trishas", "venue-trishas", "lackland", "venue-lackland"))(if: (_cfTags contains $pitchTarget) and ((passage:)'s tags contains (_cfTags's ($pitchTarget))))[<span class="dss-came-for" hidden><span class="dss-came-for-name">(print: $pitchName)</span><span class="dss-came-for-link">(print: $pitchLink)</span>(if: ($pitchName is "THE NOVELIST") and ($pitchLink is not "Speak to him"))[<span class="dss-came-for-first"></span>]</span>]]<!-- 2026-10-17 (Sam): the novelist picked while JOHN or BENITO stands before him; the room adds "Talk to others first." under its caption -->\
 <!-- 2026-10-12 (Sam: the next task must be much clearer): the one place to go next, from Next Target; hidden on the hub's map screen's own bar, the endings and the night's opening pages --><!-- 2026-10-23 (Sam: "get rid of the next for now, unless you choose an option and get the highlighted path. Otherwise it is over determined"): the NEXT line is gone; Next Target still runs, for the rest rule and the primer's timing -->(display: "Next Shown")(if: $nextShown)[(display: "Next Target")]
 (if: $hasLiver is true and ($confidence is a number and $sobriety is a number) and ($confidence < 10 or $sobriety < 10))[<div class="liver-hint">‘You’re running on fumes. Remember: Shelley’s liver in your notebook.’</div>]
-(set: _backHide to (a: "Talk to the critic", "None of us likes it!", "Turn to Copper", "Copper confronts", "Beaten", "St. John's Word", "Standing", "His round", "Talk to the Artists", "The Spanish Artist", "Sketch the Painter", "Shana Looks Again", "O'Flatterly introduction", "Lackland's Back Room", "Watch the decider", "You notice her", "You give him Red", "You give him John", "Title", "Start", "The Night Ahead", "Name Your Book", "Dedicate Your Book", "Dawn", "White page", "Black page", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "PP Pong", "Ride Jeffrey Bernard's cow", "Fight starts", "Fight Victory", "Fight Defeat", "The phone call", "Lily phone call 1", "The dual ring", "After the dual ring", "After the call", "After Aoife", "The Painter's Gaze", "The Set", "Shana Reads", "Davy Merkin", "Return the page", "Give him the painting", "Bar Canvas Win", "Bar Canvas Lose", "Shana's Verdict", "Copper Word Accepted", "Stand your ground", "Approach the novelist", "Benito's Hour"))
+(set: _backHide to (a: "Talk to the critic", "The critic's judgement", "None of us likes it!", "Turn to Copper", "Copper confronts", "Beaten", "St. John's Word", "Standing", "His round", "Talk to the Artists", "The Spanish Artist", "Sketch the Painter", "Shana Looks Again", "O'Flatterly introduction", "Lackland's Back Room", "Watch the decider", "You notice her", "You give him Red", "You give him John", "Title", "Start", "The Night Ahead", "Name Your Book", "Dedicate Your Book", "Dawn", "White page", "Black page", "Dawn Approach White", "Dawn Approach Black", "Alba Complete", "Alba Incomplete", "PP Pong", "Ride Jeffrey Bernard's cow", "Fight starts", "Fight Victory", "Fight Defeat", "The phone call", "Lily phone call 1", "The dual ring", "After the dual ring", "After the call", "After Aoife", "The Painter's Gaze", "The Set", "Shana Reads", "Davy Merkin", "Return the page", "Give him the painting", "Bar Canvas Win", "Bar Canvas Lose", "Shana's Verdict", "Copper Word Accepted", "Stand your ground", "Approach the novelist", "Benito's Hour"))
 <div class="header-links">(unless: _backHide contains (passage:)'s name)[(set: _exitTo to "")(if: (passage:)'s tags contains "venue-french")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-colony")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-ronnies")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-coach")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-gents")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-trishas")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-lackland")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-lackland-back")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-cecilcourt")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-pillars")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-cellar")[(set: _exitTo to "Dean Street")](else-if: (passage:)'s tags contains "venue-chippy")[(set: _exitTo to "Dean Street")](unless: _exitTo is "")[<div class="back-one-link dss-exit-reserve">(link-goto: "← Out onto the street", _exitTo)</div><script>(function(){ /* 2026-10-20 (Sam: "I'd rather people used the in-world exits"): this way out stays in the page, hidden, for the rooms' doors to press. It shows only where nothing else leads on: a room whose 3D did not come up, or a page with no link of its own. Lost WebGL shows it by CSS. */ if (window._dssExitGuard) { window._dssExitGuard(); return; } var ROOMS = '#fi-container, #ci-container, #pi-container, #ri-container, #cb-container, #ti-container, #lk-container, #oi-container, #cf-container'; var SKIP = '.header-links, .stat-bars, #stat-bars-lifted, tw-dialog, .notebook-link, .lore-box, #dss-notebook'; var timer = null; function check() { timer = null; var d = document.querySelector('.header-links .back-one-link.dss-exit-reserve'); if (!d) return; var p = document.querySelector('tw-passage'); var room = p && p.querySelector(ROOMS); var need = true; if (room) need = !room.querySelector('canvas'); else { var ls = document.querySelectorAll('tw-passage tw-link, tw-passage .enchantment-link, tw-story > .dss-threshold tw-link, tw-story > .dss-threshold .enchantment-link'); /* a plain page's words move into its panel (.dss-threshold) */ for (var i = 0; i < ls.length; i++) { if (ls[i].closest(SKIP) || !ls[i].getClientRects().length) continue; need = false; break; } } d.classList.toggle('dss-exit-needed', need); } function soon() { if (!timer) timer = setTimeout(check, 700); } window._dssExitGuard = soon; new MutationObserver(soon).observe(document.querySelector('tw-story') || document.body, { childList: true, subtree: true }); soon(); })();</script>]]
 (unless: $notebook is a string)[(set: $notebook to "held")](if: $notebook is "stolen")[<div class="notebook-link notebook-gone" title="Your notebook was taken in Bourchier Street.">NOTEBOOK</div>](else:)[<div class="notebook-link">(link-repeat: "NOTEBOOK")[(display: "Build Notebook")]</div>]
 </div>
@@ -72822,6 +72964,8 @@ border-right: 1px solid rgba(107,32,32,0.25);
 .critic-book-stage.book-closed .critic-folder-tab { left: 24%; }
 .critic-aftermath { opacity: 0; transition: opacity 1.2s ease 0.3s; }
 .critic-aftermath.revealed { opacity: 1; }
+/* 2026-10-28 (Sam: "fold and split"): runs of three or more line breaks in the Ham's scene fold to one blank line (layout only) */
+#critAftermath br + br + br, #critAftermath br + br + tw-consecutive-br, #critAftermath tw-consecutive-br + br + br { display: none; }
 
 /* ── COIN OVERLAY (Dean Street pickup) — also reused by #match-overlay ── */
 /* ===== POCKET-KEY OFFER + POPUP (2026-09-12) =====
@@ -75552,7 +75696,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 /* ===== ONE BUTTON LANGUAGE — the bar plate's treatment everywhere =====
    Applied late in the sheet so it wins the cascade over each button's
    original styling. Canvas-drawn buttons (the cow's) are out of reach. */
-.fight-continue-btn, .dawn-restart-btn, .coin-overlay-btn, .dss-rules-play {
+.fight-continue-btn, .dawn-restart-btn, .coin-overlay-btn, .dss-rules-play, .dss-ease-btn {
   background: linear-gradient(180deg, #241a0a, #130d05);
   color: #d4b878;
   border: 1px solid rgba(184, 154, 96, 0.55);
@@ -75567,7 +75711,11 @@ html { scrollbar-width: thin; scrollbar-color: rgba(150, 120, 70, 0.55) rgba(12,
 }
 .fight-continue-btn, .dawn-restart-btn, .dss-rules-play { padding: 12px 42px; font-size: 0.95em; }
 .coin-overlay-btn { padding: 9px 22px; font-size: 0.82em; letter-spacing: 0.18em; }
-.fight-continue-btn:hover, .dawn-restart-btn:hover, .coin-overlay-btn:hover, .dss-rules-play:hover {
+/* 2026-10-28: the shared TRY AGAIN / MOVE ON card a lost minigame round raises inside its own frame (window.dssEase) */
+.dss-ease-card { position: absolute; left: 0; right: 0; bottom: 8%; z-index: 60; display: flex; justify-content: center; pointer-events: none; }
+.dss-ease-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; pointer-events: auto; padding: 10px 14px; background: rgba(8,5,3,0.72); }
+.dss-ease-btn { padding: 10px 26px; font-size: 0.82em; }
+.fight-continue-btn:hover, .dawn-restart-btn:hover, .coin-overlay-btn:hover, .dss-rules-play:hover, .dss-ease-btn:hover, .dss-ease-btn:focus-visible {
   color: #e8cc88; border-color: rgba(212, 178, 110, 0.75);
   box-shadow: 0 0 30px rgba(184, 154, 96, 0.2), 0 0 8px rgba(184, 154, 96, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
@@ -76696,7 +76844,7 @@ A thin sound needles into the edge of your hearing. It drones in till it swells 
 <div class="rc-stage"><div class="rc-toolbar"><span>RAPA NUI · THE RECLAMATION</span><span><button id="rc-pause" type="button">Pause</button> <button id="rc-expand" type="button">Expand</button></span></div><div class="rc-scoreboard" role="group" aria-label="Rifle scoreboard"><div class="rc-score-key"><span>ENEMIES · SHOOT</span><span>DO NOT SHOOT</span></div><div class="rc-score-types"><div><span>DRONES</span><strong data-rc-score="drone">0</strong></div><div><span>RIGS</span><strong data-rc-score="rig">0</strong></div><div><span>CRAWLERS</span><strong data-rc-score="crawler">0</strong></div><div class="rc-score-spirits"><span>SPIRITS HIT</span><strong data-rc-score="spirit">0</strong></div></div><div class="rc-score-strip"><span>SILENCED <b data-rc-score="total">0 / 10</b></span><span>AT WALL <b data-rc-score="wall">0 / 3</b></span><span data-rc-score="ammo">ROUNDS 5 / 5</span></div></div><div id="rc-hud">He hands it over stock first. Wait for the eyes.</div><div class="rc-frame"><canvas id="rc-canvas" width="720" height="540" tabindex="0" aria-label="3D night shoot from the moai platform. Move the pointer or arrow keys to aim, click, tap or Space to fire, R to reload, P to pause." aria-describedby="rc-hud"></canvas><div id="rc-reticle" aria-hidden="true"></div><div id="rc-glare" aria-hidden="true"></div><div id="rc-banner" role="status"></div><div class="rc-cover" id="rc-cover"><p class="rc-kicker">HOLD THE LINE</p><h2>The Reclamation</h2><p id="rc-instructions">Move the mouse or drag to aim · click, tap or Space fires<br>Dragging aims without firing. Use Fire while holding your aim.<br>Five rounds to a clip · R reloads<br>Silence the machines on the quarry road.<br>Never the turquoise ones. They are the old ones.<br>Drones: one hit · rigs: lamp, then head · crawler: three hits.<br>Amber lights are targets. Turquoise spirits are not.</p><p>Ten machines and the road is dark.<br>Three spirits, or three at the wall, and Subcomandante Fortuna lowers the rifle.<br>(if: $easterHomeFight is true)[The boat waits either way.](else:)[The sixth moai waits either way.]</p><button type="button" id="rc-begin">Take the rifle</button></div></div><div class="rc-pad" aria-label="Rifle controls"><button type="button" data-rc-key="ArrowLeft" aria-label="Aim left">←</button><button type="button" data-rc-key="ArrowUp" aria-label="Aim up">↑</button><button type="button" data-rc-key="ArrowDown" aria-label="Aim down">↓</button><button type="button" data-rc-key="ArrowRight" aria-label="Aim right">→</button><button type="button" data-rc-key=" " aria-label="Fire">Fire</button><button type="button" data-rc-key="r" aria-label="Reload">Reload</button></div></div>
 
 <span id="rc-win" style="display:none;">(if: $easterHomeFight is true)[(link: "Down to the boat")[(set: $easterReclaimWon to true)(go-to: "Easter Island Return")]](else:)[(link: "Stand before the sixth")[(set: $easterReclaimWon to true)(go-to: "The Listening Moai")]]</span>
-<span id="rc-lose" style="display:none;">(if: $easterHomeFight is true)[[[Down to the boat|Easter Island Return]]](else:)[[[Stand before the sixth|The Listening Moai]]]</span>
+<span id="rc-lose" style="display:none;">(if: $easterHomeFight is true)[[[Down to the boat|Easter Island Return]]](else:)[[[Stand before the sixth|The Listening Moai]]]</span><span class="rc-again" style="display:none;">[[Again|The Reclamation]]</span>
 
 <span id="rc-skip" style="display:none;"><div class="claude-draft" style="text-align:center;margin-top:1.4em;font-size:0.78em;opacity:0.45;letter-spacing:0.08em;">(if: $easterHomeFight is true)[[[(skip reclamation — testing)|Easter Island Return]]](else:)[[[(skip reclamation — testing)|The Listening Moai]]]</div></span>
 <script>if (window.DSS_DEV) { var _rk = document.getElementById('rc-skip'); if (_rk) _rk.style.display = 'block'; }</script>
@@ -76721,7 +76869,7 @@ A thin sound needles into the edge of your hearing. It drones in till it swells 
   var aim={x:0,y:.05}, aimVec=null, raycaster=null, sway={x:0,y:0}, recoil=0, breathe=0;
   var rounds=5, CLIP=5, reloadT=0, RELOAD=1.5, shotT=0, BOLT=.42, fireQueued=false;
   var shotBuffer=0, touchAim=null, seaTick=0, aimTarget='';
-  var silenced=0, disturbed=0, atWall=0, WIN=10, LOSE=3, spawned=0;
+  var silenced=0, disturbed=0, atWall=0, WIN=10, LOSE=3 + (window.dssEase ? window.dssEase.level('reclaim') : 0), spawned=0; /* 2026-10-28 (dssEase): each lost night lets one more reach the wall */
   var shotCounts={drone:0,rig:0,crawler:0}, scoreEls={}, lastScore='';
   stage.querySelectorAll('[data-rc-score]').forEach(function(el){scoreEls[el.getAttribute('data-rc-score')]=el;});
   function updateScoreboard(){var ammo=reloadT>0?'RELOADING':'ROUNDS '+rounds+' / '+CLIP;var key=[shotCounts.drone,shotCounts.rig,shotCounts.crawler,disturbed,silenced,atWall,ammo].join('|');if(key===lastScore)return;lastScore=key;['drone','rig','crawler'].forEach(function(k){scoreEls[k].textContent=shotCounts[k];});scoreEls.spirit.textContent=disturbed;scoreEls.total.textContent=silenced+' / '+WIN;scoreEls.wall.textContent=atWall+' / '+LOSE;scoreEls.ammo.textContent=ammo;}
@@ -77168,6 +77316,7 @@ A thin sound needles into the edge of your hearing. It drones in till it swells 
       }
       if(ending>(endKind==='win'?6.5:3.6) && !finished){finished=true;clearInput();hud.textContent=endKind==='win'?(document.getElementById('rc-homeward')?'Subcomandante Fortuna lowers the rifle.':'Subcomandante Fortuna lowers the rifle. Behind him, the sixth moai opens its eye.'):endKind==='spirits'?'The spirits turn their faces away. Subcomandante Fortuna lowers the rifle.':'The lights reach the platform. Subcomandante Fortuna lowers the rifle.';
         var exit=document.getElementById(endKind==='win'?'rc-win':'rc-lose');exit.style.display='block';exit.classList.add('dss-mini-exit');
+        if(endKind!=='win' && window.dssEase){window.dssEase.lost('reclaim');window.dssEase.offer(stage, { onAgain: function(){ var a = document.querySelector('.rc-again tw-link'); if (a) a.click(); }, onMove: function(){ var l = exit.querySelector('tw-link'); if (l) l.click(); } });} /* 2026-10-28 (Sam: "Easier each retry") */
         var link=exit.querySelector('tw-link');if(link){link.setAttribute('tabindex','0');link.focus({preventScroll:true});}
         var skip=document.getElementById('rc-skip');if(skip)skip.style.display='none';stage.scrollIntoView({block:'nearest'});}}
     else{
@@ -77447,7 +77596,7 @@ You need to sing the harmony.
   var banner=root.querySelector('.hm-banner'), title=root.querySelector('.hm-title'), marks=root.querySelectorAll('.hm-marks i');
   var reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // 2026-10-16 (Sam, from a tester: too hard, the tritone unclear): the hum now climbs a Hijaz scale from AL HUBZ's root, a step at a time, and the choice is the octave; one step past it the note cracks
-  var F0=130.81, TRIES=3, R0=66, SCALE=[0,1,4,5,7,8,11,12], STEP_MS=520, TARGET_IDX=SCALE.length-1, TARGET=12, stepIdx=0;
+  var F0=130.81, TRIES=3, R0=66, SCALE=[0,1,4,5,7,8,11,12], STEP_MS=520 + (window.dssEase ? window.dssEase.level('chamber') * 90 : 0), TARGET_IDX=SCALE.length-1, TARGET=12, stepIdx=0; /* 2026-10-28 (dssEase): a missed hum makes the scale climb more slowly next time */
   var CX=W*0.5, CY=H*0.56;
   var holding=false, holdStart=0, semis=0, attempt=0, done=false, ghosts=[], result='', resultAt=0, bannerUntil=0, thrum=[], raf=0, lastT=0;
   var ac=null, his=null, mine=null, hisGain=null, mineGain=null, master=null, lfo=null;
@@ -77497,7 +77646,7 @@ You need to sing the harmony.
     if(kind==='hit'){ if(ac){var t=ac.currentTime; mineGain.gain.setTargetAtTime(0.16,t,0.1); mineGain.gain.setTargetAtTime(0.0001,t+2.6,0.9); hisGain.gain.setTargetAtTime(0.0001,t+2.6,0.9);} shimmer(); for(var k=0;k<4;k++)thrum.push({at:resultAt+k*260}); say(WORDS.hit,4); finish(true); return; }
     if(kind==='crack'){ crackSound(); say(WORDS.crack); }
     else { if(ac){var t2=ac.currentTime; mineGain.gain.setTargetAtTime(0.0001,t2+0.5,0.35);} say(WORDS[kind]); }
-    if(attempt>=TRIES){ setTimeout(function(){ if(root.isConnected){ say(WORDS.out,4); if(ac){var t3=ac.currentTime; hisGain.gain.setTargetAtTime(0.0001,t3+0.6,1.2);} } },1500); finish(false); }
+    if(attempt>=TRIES){ if(window.dssEase) window.dssEase.lost('chamber'); setTimeout(function(){ if(root.isConnected){ say(WORDS.out,4); if(ac){var t3=ac.currentTime; hisGain.gain.setTargetAtTime(0.0001,t3+0.6,1.2);} } },1500); finish(false); }
   }
   function release(){
     if(!holding)return;
@@ -79707,7 +79856,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
     // Mario rubber band: the black car hustles when behind, coasts when ahead
     var gap2 = playerLapsT - oppLapsT;
     var band = Math.max(0.82, Math.min(1.03, 1 + gap2*0.35));
-    var od = oppSpeedT * oppEase * band * Math.min(1,raceElapsed/2000) * dt;
+    var od = oppSpeedT * oppEase * band * Math.min(1,raceElapsed/2000) * dt * (window.dssEase ? window.dssEase.by('nazca', 1, 0.88) : 1); /* 2026-10-28 (dssEase): each lost race slows the black car a little; steering untouched */
     if (oppStun > 0){ oppStun -= dt*16.67; od = 0; }
     oppT += od; oppLapsT += od;
 
@@ -79728,6 +79877,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
 
   function endRace(won){
     finished = true; racing = false; messageUntil = Infinity;
+    if (!won && window.dssEase) window.dssEase.lost('nazca'); /* 2026-10-28 (Sam: "Easier each retry"): Race again is gentler each time */
     pauseButton.disabled = true; retryButton.hidden = false; itemButton.disabled = true;
     dashboard.speedLabel.textContent = 'BEST LAP';
     dashboard.state.textContent = 'RACE COMPLETE';
@@ -80134,7 +80284,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
 <div class="pr-stage"><div class="pr-toolbar"><span>THE PYRAMID · DESCENT</span><span><button id="pr-pause" type="button">Pause</button> <button id="pr-expand" type="button">Expand</button></span></div><div class="pr-frame"><canvas id="pyr-run-canvas" width="720" height="540" tabindex="0" aria-label="Pyramid run. Up or space jumps, down ducks, right hurries, left walks back. P pauses." aria-describedby="pyr-run-hud"></canvas><div id="pyr-run-banner" role="status"></div><div class="pr-cover" id="pr-cover"><p class="pr-kicker">SEVEN MARKS IN THE DARK</p><h2>The Pyramid Run</h2><p>You run automatically.<br>↑ / Space jump · ↓ duck · → hurry · ← go back<br>Hold a jump across pits; release early to land sooner.<br>Jump scarabs and sand; duck under marked lintels.<br>The snake well slows you to measured hops. Torches save your place.</p><p>Gather 4 marks with at most 3 stumbles for the bonus.<br>You reach the Gallery either way.</p><button id="pr-begin" type="button">Enter the dark</button></div></div><div id="pyr-run-hud">Follow the torchlight.</div><div class="pr-pad" aria-label="Running controls"><button type="button" data-pr-key="ArrowLeft" aria-label="Walk back">← Back</button><button type="button" data-pr-key="ArrowRight" aria-label="Hurry">→ Hurry</button><button type="button" data-pr-key="ArrowUp" aria-label="Jump; hold for height">↑ Jump</button><button type="button" data-pr-key="ArrowDown" aria-label="Hold to duck">↓ Duck</button></div></div>
 
 <span id="pyr-run-win" style="display:none;">(link: "Step into the Gallery")[(set: $pyramidRunWon to true)(go-to: "Grand Gallery")]</span>
-<span id="pyr-run-lose" style="display:none;">[[Limp into the Gallery|Grand Gallery]]</span>
+<span id="pyr-run-lose" style="display:none;">[[Limp into the Gallery|Grand Gallery]]</span><span class="pr-again" style="display:none;">[[Again|Pyramid Run]]</span>
 
 <span id="pyr-run-skip" style="display:none;"><div class="claude-draft" style="text-align:center;margin-top:1.4em;font-size:0.78em;opacity:0.45;letter-spacing:0.08em;">[[(skip run — testing)|Grand Gallery]]</div></span>
 <script>if (window.DSS_DEV) { var _pk = document.getElementById('pyr-run-skip'); if (_pk) _pk.style.display = 'block'; }</script>
@@ -80710,7 +80860,8 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
         finished = true;
         if(audio)audio.silence();
         if(document.fullscreenElement===stage && document.exitFullscreen)document.exitFullscreen().catch(function(){});
-        var won = (stumbles <= 3 && glyphCount >= 4);
+        var EZ = window.dssEase ? window.dssEase.level('pyramid') : 0; /* 2026-10-28 (dssEase): after a stumbling run the next asks less */
+        var won = (stumbles <= 3 + EZ && glyphCount >= 4 - (EZ >= 2 ? 1 : 0));
         if (banner){
           banner.textContent = won ? 'THE GALLERY OPENS.' : 'THE GALLERY OPENS, GRUDGINGLY.';
           banner.style.opacity = '1';
@@ -80725,6 +80876,8 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
           setTimeout(function(){
             if (span2.scrollIntoView) span2.scrollIntoView({ behavior: reducedMotion?'auto':'smooth', block: 'center' });
           }, 900);
+          /* 2026-10-28 (Sam: "Easier each retry"): TRY AGAIN runs it afresh, gentler; MOVE ON limps on as before */
+          if (!won && window.dssEase) { window.dssEase.lost('pyramid'); window.dssEase.offer(stage, { onAgain: function(){ var a = document.querySelector('.pr-again tw-link'); if (a) a.click(); }, onMove: function(){ var l = span2.querySelector('tw-link'); if (l) l.click(); } }); }
         }
         if (won && window.dssAudio && window.dssAudio.loreUnravel) window.dssAudio.loreUnravel();
   }
@@ -81234,7 +81387,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
 <div class="hc-stage"><div class="hc-toolbar"><span>HIMALAYAS · THE ASCENT</span><span><button id="hc-pause" type="button">Pause</button> <button id="hc-expand" type="button">Expand</button></span></div><div class="hc-frame"><canvas id="hc-canvas" width="720" height="540" tabindex="0" aria-label="3D mountain climb. Up or W to walk uphill, left/right or A/D to steer, space to jump, down or S to chant, P to pause." aria-describedby="hc-hud"></canvas><div id="hc-banner" role="status"></div><div class="hc-cover" id="hc-cover"><p class="hc-kicker">FOLLOW THE BLUE FOOTPRINTS</p><h2>The Climb</h2><p id="hc-instructions">↑ / W walk uphill · ← → / A D steer<br>Space jumps · ↓ / S hold to chant<br>Hold a jump for height. Pale blue rims mark gaps; walking stops at the edge.<br>Chant to recover breath and brace against the wind.<br>Hold ↑ / W on ladders. Jump at the cornice rim. Hold Space when the avalanche says JUMP.<br>Prayer flags save your place.</p><p>Keep 10 footprints with at most 3 slips for the bonus.<br>The cave awaits either way.</p><button type="button" id="hc-begin">Begin ascent</button></div></div><div id="hc-hud">Follow his steps. Take your time.</div><div class="hc-pad" aria-label="Climbing controls"><button type="button" data-hc-key="ArrowLeft" aria-label="Move left">←</button><button type="button" data-hc-key="ArrowRight" aria-label="Move right">→</button><button type="button" data-hc-key="ArrowUp" aria-label="Walk uphill">↑ Walk</button><button type="button" data-hc-key=" " aria-label="Jump; hold for a higher jump">Jump</button><button type="button" data-hc-key="ArrowDown" aria-label="Hold to chant">↓ Chant</button></div></div>
 
 <span id="hc-win" style="display:none;">(link: "Into the cave")[(set: $himalayaClimbWon to true)(go-to: "The Cave")]</span>
-<span id="hc-lose" style="display:none;">[[Into the cave|The Cave]]</span>
+<span id="hc-lose" style="display:none;">[[Into the cave|The Cave]]</span><span class="hc-again" style="display:none;">[[Again|The Climb]]</span>
 
 <span id="hc-skip" style="display:none;"><div class="claude-draft" style="text-align:center;margin-top:1.4em;font-size:0.78em;opacity:0.45;letter-spacing:0.08em;">[[(skip climb — testing)|The Cave]]</div></span>
 <script>if (window.DSS_DEV) { var _hk = document.getElementById('hc-skip'); if (_hk) _hk.style.display = 'block'; }</script>
@@ -81833,7 +81986,9 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
       if(ending>1.2 && !turned){turned=true;if(window.dssAudio && window.dssAudio.loreUnravel && !(window.dssAudio.isMuted && window.dssAudio.isMuted()))window.dssAudio.loreUnravel();}
       if(ending>3.8)yetiS=Math.min(LENGTH+8,yetiS+dt*1.5);
       if(ending>8){finished=true;clearInput();hud.textContent='';banner.textContent='';
-        var won=slips<=3 && prints>=10;var exit=document.getElementById(won?'hc-win':'hc-lose');exit.style.display='block';exit.classList.add('dss-mini-exit');
+        var EZ=window.dssEase?window.dssEase.level('climb'):0;/* 2026-10-28 (dssEase): after a lost climb the next asks fewer prints and forgives more slips */
+        var won=slips<=3+EZ && prints>=10-2*EZ;var exit=document.getElementById(won?'hc-win':'hc-lose');exit.style.display='block';exit.classList.add('dss-mini-exit');
+        if(!won && window.dssEase){window.dssEase.lost('climb');window.dssEase.offer(stage, { onAgain: function(){ var a = document.querySelector('.hc-again tw-link'); if (a) a.click(); }, onMove: function(){ var l = exit.querySelector('tw-link'); if (l) l.click(); } });}
         if(document.fullscreenElement===stage)document.exitFullscreen().catch(function(){});
         exit.scrollIntoView({behavior:reducedMotion?'auto':'smooth',block:'nearest'});
       }
@@ -82328,7 +82483,7 @@ Massive earthworms are breaking through the floor!
 <div class="worm-payment">
 <span data-outcome="win">(link: "worm-win")[(unless: $wormPlayed is true)[(set: $wormPlayed to true)(set: $confidence to ($statGain: $confidence, 8))(display: "Bars Now")<div class="inventory-note">MORALE +8</div>]]</span>
 <span data-outcome="excellent">(link: "worm-excellent")[(unless: $wormPlayed is true)[(set: $wormPlayed to true)(set: $confidence to ($statGain: $confidence, 12))(display: "Bars Now")<div class="inventory-note">MORALE +12</div>]]</span>
-<span data-outcome="loss">(link: "worm-loss")[(unless: $wormPlayed is true)[(set: $wormPlayed to true)]]</span>
+<span class="worm-again" hidden>[[Again|Soho Square: the gardener’s hut]]</span><span data-outcome="loss">(link: "worm-loss")[(unless: $wormPlayed is true)[(set: $wormPlayed to true)]]</span>
 </div>
 </div>
 [[Back to the Square|Alley: Soho Square]]
@@ -82461,13 +82616,17 @@ Massive earthworms are breaking through the floor!
   }
   function finish() {
     running = false; ended = true; cancelAnimationFrame(frame); active.forEach(function (_, i) { hide(i); });
-    var won = score >= 18;
+    var EZW = window.dssEase ? window.dssEase.level('worms') : 0; /* 2026-10-28 (dssEase): after a lost round fewer worms win it */
+    var won = score >= 18 - EZW * 2;
     status.textContent = won ? 'GLORY!' : 'LA PETITE MORT!';
     status.classList.add(won ? 'worm-win' : 'worm-loss');
     root.querySelector('.worm-tally').textContent = score + (score === 1 ? ' worm.' : ' worms.');
-    var target = root.querySelector('[data-outcome="' + (won ? (score >= 28 ? 'excellent' : 'win') : 'loss') + '"] tw-link');
+    /* 2026-10-28 (Sam: "Easier each retry"): a lost round offers TRY AGAIN (a gentler round, the hut entered afresh) or MOVE ON (as before) */
+    var settle = function () { var target = root.querySelector('[data-outcome="' + (won ? (score >= 28 ? 'excellent' : 'win') : 'loss') + '"] tw-link');
     if (target) target.click();
-    root.querySelector('.worm-payment').classList.add('revealed');
+    root.querySelector('.worm-payment').classList.add('revealed'); };
+    if (!won && window.dssEase) { window.dssEase.lost('worms'); var wall = root.querySelector('.worm-hole'); window.dssEase.offer(wall ? wall.parentElement : root, { onAgain: function () { var a = document.querySelector('.worm-again tw-link'); if (a) a.click(); }, onMove: settle }); }
+    else settle();
     cleanup();
   }
   function tick(now) {
@@ -82481,7 +82640,7 @@ Massive earthworms are breaking through the floor!
         var empty = active.map(function (v, i) { return v ? -1 : i; }).filter(function (i) { return i >= 0; });
         if (empty.length) {
           var i = empty[Math.floor(Math.random() * empty.length)];
-          active[i] = elapsed + 1450 - 600 * elapsed / 30000;
+          active[i] = elapsed + 1450 + (window.dssEase ? window.dssEase.level('worms') * 150 : 0) - 600 * elapsed / 30000;
           holes[i].classList.remove('struck'); holes[i].classList.add('up');
           holes[i].setAttribute('aria-label', 'Hole ' + (i + 1) + ': hit the worm');
         }

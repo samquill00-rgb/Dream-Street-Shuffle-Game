@@ -1,3 +1,25 @@
+# 2026-10-29: plot-speech style built (synced, NOT committed)
+- .dss-speech panel (data-speaker label, --sp rule colour, warm italic on dark): INIS on O'Flatterly's Third Pillar (#8fbf78), INIS's Page 93 errand, the Ham's INIS errand (#d9806a). The quest-line gold light still runs inside. Add `<div class="dss-speech" data-speaker="NAME" style="--sp:#hex">` round any other plot speech.
+- Coach grit pass (coach-grit session) synced alongside.
+- Speech panels now type in like the verses (same typer, pace 0.42, ~24 s for INIS's speech); a click on the panel finishes it. Hide rules generalised to `.vt-on .vt-c`.
+
+# 2026-10-29 late: notes 11-25 + Sam's answers (synced, NOT committed)
+Answers: errand stays a gold box; stat changes show their reason; floor 40 kept; waltz verdicts kept; plot-speech style = mock-up shown, awaiting his OK; bridle moved to the ride; Pillars with key simplified; swirls red + buy back a stumble; key trails decided later by Sam; Coach grit pass running in its own session (coach-grit, shared checkout).
+11 The Interval split: "The Interval: the stairs" (LILY, the Yeats) is page 2; $intervalStairsSeen guard, reset nightly.
+12 O'Flatterly's shop intro only on first visit ($shopIntroSeen, reset nightly).
+13 "But that is not a scarab." / "on his second best bed."
+16 "You take its bridle." moved to the start of Ride Jeffrey Bernard's cow.
+17 Key lines on room cards (.dss-key-loud) and take buttons (.fi-key-btn) loud red, pulsing.
+19 Hub: with $inisToldOfPillars and a $dreamKey, the Pillars door goes to Approach The Pillars (no storm); Entering auto-sends to the portal.
+20 THREE BLUE POSTS sign in blue over the portal scene (DOM overlay in initThirdPillar, fades in at 2.6 s).
+21 Portal STEP THROUGH no longer auto-clicks the page's Step through; the words stay to be read.
+22 Pyramid Run marks red; each takes back a stumble ("A MARK TAKES BACK A STUMBLE."); HUD says so.
+23 Lost run: page link hidden, retry card's move button reads "Limp into the Gallery".
+24 Harmony attempts labelled TRIES (gold = hit, brown = miss).
+25 King's Chamber: everything after Keep listening is "The King's Chamber: the proportion".
+3 Stat change marks append " · <last choice pressed>" (window._dssLastChoice, capture listener; reason shown if pressed in the last 90 s).
+All touched pages load with no errors. Not played: the stat reasons, the Pyramid swirl rule, the Pillars key route.
+
 # 2026-10-29 evening: Sam's 10 playtest notes (synced, NOT committed)
 1/5 Lore no longer opens on a timer: a note seen is owed; the next trusted press on a tw-link or .fi-action on that page opens it (card with On.) and On. replays the press (dssLore `owe`/`owed`, capture click listener). Verified at Cecil Court: no auto-open in 16 s, Look in -> Watkins note -> On. -> Watkins.
 2 Rumour card's "· · ·" is now "GO ON ▼" bobbing; .dss-quest-line errands (Ham's INIS line, Inis's Page 93) sit in a gold-ruled box (border + outer glow only: the text is background-clip painted, any fill would hide it).
@@ -7961,3 +7983,7 @@ Sam identified the gold shape beside INIS's head as the apparent giant moth. It 
 
 ## 2026-10-29 — Door handle on timber
 Sam corrected handle placement: must not sit on glass. Moved lever spindle/backplate/screws from x-1.28 onto right wooden door stile at x-1.16 (stile width.14m); lever extends left from spindle. Height/style retained. Synced, no git. Source geometry check: backplate width.055 fits within stile x[-1.23,-1.09].
+
+## 2026-10-29 — Magical book colours inside/outside INIS's shop
+Sam requested books changing/swapping colours at varying paces, magically. Added shared dssBookMagic scene-local material colour cycles (8–27s, independent phases, muted bookcloth palette; guarantees alternate differs from base). Interior registered shelf books, floor stacks, case books and window-ledge books. Exterior display's painted books use a static identity-mask canvas texture plus shader recolouring, preserving original shading and leaving paper notices clear; three physical window stacks use shared helper. Existing scene frame callbacks only, no extra loops/timers/meshes/lights; mask explicitly disposed on exterior scene removal. Reduced motion holds colours. Geometry/prose/actions unchanged.
+QA isolated actual-source interior/exterior fixtures both render without page/console/shader errors; animated screenshots inspected. 390x844 reduced-motion captures pixel-identical after entrance button fade; helper colour-change + still checks passed. Fixtures omit full Harlowe/postprocessing, interior ghost stubbed. Files scratchpad/book-magic-2026-10-29; /private/tmp/books-{inside,outside}-{a,b}.png and books-reduced-* images. Synced283 passages; no git. Other concurrent session changes retained; before snapshot not for wholesale restoration.

@@ -14253,6 +14253,16 @@ window.dssRingHold = (function() {
   setInterval(fit, 500);
   window.addEventListener('resize', function() { undo(); until = Date.now() + 20000; });
 })();
+/* 2026-10-29 (Sam, playtest note 3, show the reason for a stat change): the last choice the player pressed (a link in the words, a room card's
+   button, a popup's button), read by the stat bars' change marks to say what brought the change */
+document.addEventListener('click', function(ev) {
+  if (!ev.isTrusted) return;
+  var el = ev.target && ev.target.closest && ev.target.closest('tw-link, .fi-action, .coin-overlay-btn, .dss-ease-btn, button');
+  if (!el || el.closest('.stat-bars, #stat-bars-lifted, tw-header, #dss-lore-overlay, .dss-lore-x, .dss-room-back')) return;
+  var t = (el.textContent || '').replace(/\s+/g, ' ').replace(/[⟡◆◇❀❁▲△★☆✦✧]/g, '').trim();
+  if (!t || t.length > 40 || /^(·|NOTEBOOK|Continue|On\.|Back to the room)$/i.test(t)) return;
+  window._dssLastChoice = { text: t, at: Date.now() };
+}, true);
 /* 2026-10-29 (Sam: "I think all of the quotes should be styled different, maybe make them type out on a typewriter"): each quoted verse (.verse) is
    struck out letter by letter once it is on screen, with a caret riding the last letter; every letter keeps its place from the start, so nothing reflows.
    Its words and line breaks are untouched (each letter is only wrapped). Under reduced motion it is shown whole. */
@@ -14264,16 +14274,21 @@ window.dssRingHold = (function() {
     var w = document.createTreeWalker(v, NodeFilter.SHOW_TEXT), ts = [], cs = []; while (w.nextNode()) ts.push(w.currentNode);
     ts.forEach(function(t) { var x = t.nodeValue; if (!x || !x.trim() && !/\S/.test(x) && t.parentNode === v) return; var fr = document.createDocumentFragment(); for (var i = 0; i < x.length; i++) { var c = document.createElement('span'); c.className = 'vt-c'; c.textContent = x[i]; fr.appendChild(c); cs.push(c); } t.parentNode.replaceChild(fr, t); });
     if (!cs.length) return;
-    v.classList.add('vt-on'); var caret = document.createElement('span'); caret.className = 'vt-caret'; caret.setAttribute('aria-hidden', 'true'); var i = 0;
+    v.classList.add('vt-on'); var caret = document.createElement('span'); caret.className = 'vt-caret'; caret.setAttribute('aria-hidden', 'true'); var i = 0, ended = false;
+    /* 2026-10-29 (Sam: the plot-speech boxes should "build up like a typewriter does also"): a speech panel types too, at a little under half
+       the verse's pace as it is longer, and a click on it sets the rest down at once */
+    var pace = v.classList.contains('dss-speech') ? 0.42 : 1;
+    function end() { if (ended) return; ended = true; for (; i < cs.length; i++) cs[i].classList.add('vt-in'); setTimeout(function() { if (caret.parentNode) caret.parentNode.removeChild(caret); v.classList.add('vt-done'); }, 1400); }
+    if (pace < 1) v.addEventListener('click', end);
     function step() {
-      if (!v.isConnected) return;
-      if (i >= cs.length) { setTimeout(function() { if (caret.parentNode) caret.parentNode.removeChild(caret); v.classList.add('vt-done'); }, 1400); return; }
+      if (!v.isConnected || ended) return;
+      if (i >= cs.length) { end(); return; }
       var c = cs[i++]; c.classList.add('vt-in'); c.parentNode.insertBefore(caret, c.nextSibling);
-      var ch = c.textContent; setTimeout(step, ch === ' ' ? 60 : /[,.;:!?]/.test(ch) ? 190 : 34 + Math.random() * 46);
+      var ch = c.textContent; setTimeout(step, pace * (ch === ' ' ? 60 : /[,.;:!?]/.test(ch) ? 190 : 34 + Math.random() * 46));
     }
     setTimeout(step, 450);
   }
-  setInterval(function() { Array.prototype.forEach.call(document.querySelectorAll('.verse'), function(v) { if (!v._dssTyped && onScreen(v)) type(v); }); }, 250);
+  setInterval(function() { Array.prototype.forEach.call(document.querySelectorAll('.verse, .dss-speech'), function(v) { if (!v._dssTyped && onScreen(v)) type(v); }); }, 250);
 })();
 /* 2026-10-28 (Sam, nightwork Q1, room panels scroll: "Make it fit the screen"): a room's words panel (the veil over a 3D room) that
    runs past the window shrinks evenly, like the pages above: the panel's sheet is zoomed, so the words, the boxes and the pink line
@@ -32283,6 +32298,14 @@ winGlow.material.opacity = 0.2 + 0.03 * Math.sin(t * 0.7);
 // <<<< DSS ROOM CF END
 
 // >>>> DSS ROOM OI BEGIN
+// 2026-10-29 (Sam): books quietly exchange colours at independent paces.
+// Scene-owned state, using the existing frame callbacks; no extra timers.
+window.dssBookMagic = function() {
+ var books=[], palette=[0x6a2a1a,0x245840,0x343b70,0x704369,0x9b7735,0x567576].map(function(c){return new THREE.Color(c);});
+ return { add:function(mat){var n=books.length,base=mat.color.clone(),target=palette[(n+2)%palette.length];if(target.equals(base))target=palette[(n+3)%palette.length];books.push({mat:mat,base:base,pace:8+(n*7.31%19),offset:n*2.399,target:target});},
+ frame:function(t,still){if(still)return;books.forEach(function(b){var v=(Math.sin(t*6.283185/b.pace+b.offset)+1)*0.5;v=v*v*(3-2*v);b.mat.color.copy(b.base).lerp(b.target,v);});} };
+};
+
 // ====== INSIDE O'FLATTERLY'S — THE ROOM, WITH CLOSE-UPS ======
 // 2026-09-30. Built from what is written of I. O'Flatterly, dealer in books,
 // in Cecil Court: a narrow shop shelved floor to ceiling, a ladder on its
@@ -32317,6 +32340,7 @@ var wallMat = new THREE.MeshStandardMaterial({ map: wallPaint, roughness: 0.95 }
 var back = mesh(new THREE.PlaneGeometry(W, H), wallMat, 0, H / 2, -D / 2); var front = mesh(new THREE.PlaneGeometry(W, H), wallMat, 0, H / 2, D / 2); front.rotation.y = Math.PI;
 var left = mesh(new THREE.PlaneGeometry(D, H), wallMat, -W / 2, H / 2, 0); left.rotation.y = Math.PI / 2; var right = mesh(new THREE.PlaneGeometry(D, H), wallMat, W / 2, H / 2, 0); right.rotation.y = -Math.PI / 2;
 // ---------- THE SHELVES, floor to ceiling, both walls and the back, and the books in them ----------
+var oiBookMagic = window.dssBookMagic();
 var bookCols = [0x6a2a1a, 0x2a3a5a, 0x1a4a2a, 0xa08030, 0xe8e0d0, 0x3a2a4a, 0x8a1a1a, 0x2a2a2a, 0xc8b070, 0x5a3a18, 0x7a6a50, 0x1a2a3a];
 var spineTex = tex(64, 256, function(cx, w, h) { cx.fillStyle = 'rgba(255,255,255,0)'; cx.clearRect(0, 0, w, h); cx.fillStyle = 'rgba(230,200,120,0.75)'; cx.fillRect(10, 30, w - 20, 3); cx.fillRect(10, h - 40, w - 20, 3); for (var l = 0; l < 3; l++) cx.fillRect(14 + rnd(l) * 10, 60 + l * 14, w - 28 - rnd(l * 3) * 20, 4); cx.fillStyle = 'rgba(0,0,0,0.18)'; cx.fillRect(0, 0, 6, h); cx.fillRect(w - 6, 0, 6, h); });
 function shelfWall(len, x, z, ry, seed, gaps) {
@@ -32333,6 +32357,7 @@ var bw = 0.025 + rnd(seed + sh * 100 + bx * 37) * 0.05, bh = 0.2 + rnd(seed + sh
 if (rnd(seed + sh * 3 + bx * 5) < 0.05) { bx += 0.1; continue; }
 var col = bookCols[Math.floor(rnd(seed + sh * 11 + bx * 17) * bookCols.length)];
 var bm = new THREE.MeshStandardMaterial({ color: col, roughness: 0.85 });
+oiBookMagic.add(bm);
 var bk = mesh(new THREE.BoxGeometry(bw, bh, 0.2 + rnd(bx + seed) * 0.1), bm, bx + bw / 2, y + 0.015 + bh / 2, 0.04, g);
 if (rnd(bx * 7 + seed) < 0.3) mesh(new THREE.PlaneGeometry(bw * 0.9, bh * 0.9), new THREE.MeshStandardMaterial({ map: spineTex, transparent: true, roughness: 0.8 }), bx + bw / 2, y + 0.015 + bh / 2, 0.04 + 0.11 + rnd(bx + seed) * 0.05 + 0.001, g);
 if (rnd(bx * 3 + seed) < 0.07) bk.rotation.z = 0.18;
@@ -32356,7 +32381,7 @@ var ladderBook=detail.group(0,1.22,0.02,ladderG);ladderBook.rotation.x=-0.4;
 [-1,1].forEach(function(side){var leaf=detail.paperBlock(0.078,0.012,0.22,side*0.04,0,0,ladderBook,'#624637');leaf.rotation.z=-side*0.08;
 var print=tex(64,128,function(c,w,h){c.fillStyle='#ded2b4';c.fillRect(0,0,w,h);c.fillStyle='#7c705b';for(var l=0;l<22;l++)c.fillRect(6,9+l*5,43+(l*7%10),0.7);});var face=mesh(new THREE.PlaneGeometry(0.072,0.21),new THREE.MeshStandardMaterial({map:print,roughness:1}),0,0.014,0,leaf);face.rotation.x=-Math.PI/2;});
 // the stacks on the floor, the way a shop like this has them
-function stack(x, z, n, seed) { var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); var y = 0; for (var i = 0; i < n; i++) { var h = 0.03 + rnd(seed + i) * 0.04, w = 0.18 + rnd(seed + i * 3) * 0.1, d = 0.24 + rnd(seed + i * 5) * 0.08; var b = mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: bookCols[Math.floor(rnd(seed + i * 7) * bookCols.length)], roughness: 0.85 }), (rnd(seed + i * 9) - 0.5) * 0.04, y + h / 2, (rnd(seed + i * 11) - 0.5) * 0.04, g); b.rotation.y = (rnd(seed + i * 13) - 0.5) * 0.4; b.castShadow = true;
+function stack(x, z, n, seed) { var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); var y = 0; for (var i = 0; i < n; i++) { var h = 0.03 + rnd(seed + i) * 0.04, w = 0.18 + rnd(seed + i * 3) * 0.1, d = 0.24 + rnd(seed + i * 5) * 0.08; var b = mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: bookCols[Math.floor(rnd(seed + i * 7) * bookCols.length)], roughness: 0.85 }), (rnd(seed + i * 9) - 0.5) * 0.04, y + h / 2, (rnd(seed + i * 11) - 0.5) * 0.04, g); b.rotation.y = (rnd(seed + i * 13) - 0.5) * 0.4; b.castShadow = true; oiBookMagic.add(b.material);
 var page=mesh(new THREE.BoxGeometry(w*0.95,h*0.72,d*0.96),detail.material('#c3b697','paper'),b.position.x,b.position.y,b.position.z+0.004,g);page.rotation.y=b.rotation.y;
 [-1,1].forEach(function(side){var cover=mesh(new THREE.BoxGeometry(w+0.005,0.003,d+0.005),b.material,b.position.x,b.position.y+side*h*0.46,b.position.z,g);cover.rotation.y=b.rotation.y;});b.visible=false;
 y += h; } k.contact(x, 0, z, 0.6); return g; }
@@ -32412,7 +32437,7 @@ mesh(new THREE.BoxGeometry(1.3, 0.8, 0.5), new THREE.MeshStandardMaterial({ map:
 var caseGlass = new THREE.MeshPhysicalMaterial({ color: 0xf0f4f0, roughness: 0.04, transparent: true, opacity: 0.18, envMap: k.roomEnv, envMapIntensity: 1.2, clearcoat: 1 });
 mesh(new THREE.BoxGeometry(1.26, 0.4, 0.46), caseGlass, 0, 1.0, 0, caseG); [[-0.63, 0], [0.63, 0]].forEach(function(e) { mesh(new THREE.BoxGeometry(0.02, 0.42, 0.48), M.brass, e[0], 1.0, 0, caseG); }); mesh(new THREE.BoxGeometry(1.28, 0.02, 0.48), M.brass, 0, 1.2, 0, caseG);
 mesh(new THREE.BoxGeometry(1.2, 0.01, 0.4), new THREE.MeshStandardMaterial({ color: 0x3a1a2a, roughness: 0.95 }), 0, 0.805, 0, caseG);
-[[-0.4, 0x8a1a1a, 0.18, 0.26], [-0.05, 0x1a3a2a, 0.14, 0.2], [0.3, 0xd8c8a0, 0.2, 0.28], [0.5, 0x2a2a4a, 0.1, 0.15]].forEach(function(b, i) { var bk = mesh(new THREE.BoxGeometry(b[2], 0.035, b[3]), new THREE.MeshStandardMaterial({ color: b[1], roughness: 0.6, envMap: k.roomEnv, envMapIntensity: 0.3 }), b[0], 0.83, (rnd(i) - 0.5) * 0.1, caseG); bk.rotation.y = (rnd(i * 3) - 0.5) * 0.5; if (i === 2) { mesh(new THREE.PlaneGeometry(0.17, 0.25), new THREE.MeshStandardMaterial({ map: pageTex, roughness: 0.95 }), b[0], 0.849, (rnd(i) - 0.5) * 0.1, caseG).rotation.set(-Math.PI / 2, 0, bk.rotation.y); } mesh(new THREE.PlaneGeometry(0.06, 0.03), new THREE.MeshStandardMaterial({ color: 0xf0e8d0, roughness: 0.95 }), b[0], 0.812, 0.15, caseG).rotation.x = -Math.PI / 2; });
+[[-0.4, 0x8a1a1a, 0.18, 0.26], [-0.05, 0x1a3a2a, 0.14, 0.2], [0.3, 0xd8c8a0, 0.2, 0.28], [0.5, 0x2a2a4a, 0.1, 0.15]].forEach(function(b, i) { var bk = mesh(new THREE.BoxGeometry(b[2], 0.035, b[3]), new THREE.MeshStandardMaterial({ color: b[1], roughness: 0.6, envMap: k.roomEnv, envMapIntensity: 0.3 }), b[0], 0.83, (rnd(i) - 0.5) * 0.1, caseG); bk.rotation.y = (rnd(i * 3) - 0.5) * 0.5; oiBookMagic.add(bk.material); if (i === 2) { mesh(new THREE.PlaneGeometry(0.17, 0.25), new THREE.MeshStandardMaterial({ map: pageTex, roughness: 0.95 }), b[0], 0.849, (rnd(i) - 0.5) * 0.1, caseG).rotation.set(-Math.PI / 2, 0, bk.rotation.y); } mesh(new THREE.PlaneGeometry(0.06, 0.03), new THREE.MeshStandardMaterial({ color: 0xf0e8d0, roughness: 0.95 }), b[0], 0.812, 0.15, caseG).rotation.x = -Math.PI / 2; });
 // Sam, 2026-10-11: a glass eye with an electric-blue iris lies in the case, the other of the pair to the green one in LACKLAND's dish; it looks back at whoever looks in
 var caseEye = new THREE.Group(); caseEye.position.set(0.12, 0.834, 0.06); caseG.add(caseEye);
 mesh(new THREE.SphereGeometry(0.028, 48, 36), new THREE.MeshPhysicalMaterial({ color: 0xf2f0e8, roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.05, envMap: k.roomEnv, envMapIntensity: 1 }), 0, 0, 0, caseEye);
@@ -32450,7 +32475,7 @@ mesh(new THREE.BoxGeometry(1.8, 2.0, 0.1), green, 0, 0, 0, winG);
 mesh(new THREE.PlaneGeometry(1.6, 1.8), new THREE.MeshBasicMaterial({ map: courtTex, toneMapped: false }), 0, 0, 0.055, winG);
 mesh(new THREE.PlaneGeometry(1.6, 1.8), caseGlass, 0, 0, 0.06, winG);
 // the window's own books, backs to you, on a shelf the court sees
-mesh(new THREE.BoxGeometry(1.6, 0.03, 0.3), M.shelfWood, 0, -0.75, 0.2, winG); for (var wb = 0; wb < 7; wb++) { var wbk = mesh(new THREE.BoxGeometry(0.16 + rnd(wb) * 0.06, 0.24 + rnd(wb * 3) * 0.06, 0.03), new THREE.MeshStandardMaterial({ color: bookCols[(wb * 5) % bookCols.length], roughness: 0.8 }), -0.68 + wb * 0.22, -0.6, 0.25, winG); wbk.rotation.x = -0.2; }
+mesh(new THREE.BoxGeometry(1.6, 0.03, 0.3), M.shelfWood, 0, -0.75, 0.2, winG); for (var wb = 0; wb < 7; wb++) { var wbk = mesh(new THREE.BoxGeometry(0.16 + rnd(wb) * 0.06, 0.24 + rnd(wb * 3) * 0.06, 0.03), new THREE.MeshStandardMaterial({ color: bookCols[(wb * 5) % bookCols.length], roughness: 0.8 }), -0.68 + wb * 0.22, -0.6, 0.25, winG); wbk.rotation.x = -0.2; oiBookMagic.add(wbk.material); }
 mesh(new THREE.BoxGeometry(0.05, 1.8, 0.04), green, 0, 0, 0.09, winG); mesh(new THREE.BoxGeometry(1.6, 0.05, 0.04), green, 0, 0.2, 0.09, winG);
 var fasciaTex = tex(512, 64, function(cx, w, h) { cx.clearRect(0, 0, w, h); cx.save(); cx.translate(w, 0); cx.scale(-1, 1); cx.fillStyle = 'rgba(220,180,90,0.9)'; cx.font = 'bold 30px Georgia,serif'; cx.textAlign = 'center'; cx.fillText("I. O'FLATTERLY", w / 2, 42); cx.restore(); });
 mesh(new THREE.PlaneGeometry(1.5, 0.19), new THREE.MeshBasicMaterial({ map: fasciaTex, transparent: true, toneMapped: false }), 0, 0.68, 0.065, winG);
@@ -32487,6 +32512,7 @@ figure: true, actions: function() { return k.byText(['The Great Ham sent me', 'A
 actions: function() { return window.dssStreetExit(); } } /* 2026-10-20: the shop's door is its way out (it was only looked at) */
 ];
 return { hotspots: hotspots, frame: function(t, dt, still) {
+oiBookMagic.frame(t, still);
 if (still) return;
 lampLight.intensity = 1.6 + 0.03 * Math.sin(t * 1.1); lampGlow.material.opacity = 0.45 + 0.02 * Math.sin(t * 1.1);
 pendLight.intensity = 1.0 + 0.03 * Math.sin(t * 0.9 + 1);
@@ -32635,11 +32661,14 @@ chDisposeExtra=function(){if(dssComposerLocal&&dssComposerLocal.dssDispose)dssCo
 // ============================================================
 var chKit = window.dssScene || null;
 var creamWall = (chKit && chKit.makeWeatheredStucco)
-  ? chKit.makeWeatheredStucco({ baseColor: 0xd8cfc0, repeat: [2, 2.5] })
-  : new THREE.MeshStandardMaterial({ color: 0xd8cfc0, roughness: 0.85 });
+  ? chKit.makeWeatheredStucco({ baseColor: 0xb4aa96, repeat: [2, 2.5] })
+  : new THREE.MeshStandardMaterial({ color: 0xb4aa96, roughness: 0.85 });
 var darkCream = (chKit && chKit.makeWeatheredStucco)
-  ? chKit.makeWeatheredStucco({ baseColor: 0xc0b8a8, repeat: [2, 2.5] })
-  : new THREE.MeshStandardMaterial({ color: 0xc0b8a8, roughness: 0.8 });
+  ? chKit.makeWeatheredStucco({ baseColor: 0x9a917f, repeat: [2, 2.5] })
+  : new THREE.MeshStandardMaterial({ color: 0x9a917f, roughness: 0.8 });
+/* a century of coal smoke over the render: greyed, streaked from every sill and the cornice, pitted */
+chWeather(creamWall.map, { fade: 'rgb(168,160,146)', bloom: 6, streaks: 16, specks: 700, chips: 10, edges: false });
+chWeather(darkCream.map, { fade: 'rgb(150,142,128)', bloom: 4, streaks: 12, specks: 600, chips: 8, edges: false });
 // Painted red timber — glossy pub paint over boards, grimed toward the ground
 function chRedPaintMat(base, boardTone, rough) {
   if (!chKit || !chKit.makeCanvasTexture) {
@@ -32692,13 +32721,22 @@ var pavementMat = (chKit && chKit.makePavingSlabs)
 var roadMat = (chKit && chKit.makeGrimyRoad)
   ? chKit.makeGrimyRoad({ baseColor: 0x161616 })
   : new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.85 });
+/* Romilly St runs across the view: its own road texture turned a quarter so the tarmac and the old centre line run with the street, not across it */
+var romRoadMat = (chKit && chKit.makeGrimyRoad)
+  ? chKit.makeGrimyRoad({ baseColor: 0x161616, repeat: [1, 6] })
+  : roadMat;
+if (romRoadMat !== roadMat && romRoadMat.map) { romRoadMat.map.center.set(0.5, 0.5); romRoadMat.map.rotation = Math.PI / 2; }
+/* rain-dark tarmac and slabs: damp patches that hold the lamplight, gum and grit on the flags */
+chWetGround(roadMat, { tint: 'rgb(170,166,160)', patches: 12, dry: 200, metal: 0.2 });
+if (romRoadMat !== roadMat) chWetGround(romRoadMat, { tint: 'rgb(170,166,160)', patches: 12, dry: 200, metal: 0.2 });
+chWetGround(pavementMat, { tint: 'rgb(132,128,120)', patches: 7, gum: 70, dry: 225, metal: 0.08 });
 var blueBrick = (chKit && chKit.makeGrimyBrick)
   ? chKit.makeGrimyBrick({ baseColor: 0x3a4a6a, repeat: [2, 4], sootStreaks: 6 })
   : new THREE.MeshStandardMaterial({ color: 0x3a4a6a, roughness: 0.85 });
 var redBrick = (chKit && chKit.makeGrimyBrick)
   ? chKit.makeGrimyBrick({ baseColor: 0x8b4a3a, repeat: [2, 4], sootStreaks: 7, dampPatches: 4 })
   : new THREE.MeshStandardMaterial({ color: 0x8b4a3a, roughness: 0.85 });
-var windowFrame = new THREE.MeshStandardMaterial({ color: 0xb0a890, roughness: 0.7 });
+var windowFrame = new THREE.MeshStandardMaterial({ color: 0x8c8473, roughness: 0.8 });
 var darkGlass = new THREE.MeshStandardMaterial({ color: 0x0a0a15, roughness: 0.2, metalness: 0.3 });
 
 // ============================================================
@@ -32729,7 +32767,120 @@ cx.fillStyle = fg; cx.font = fs + 'px ' + ff;
 cx.textAlign = 'center'; cx.textBaseline = 'middle';
 cx.fillText(text, cw/2, ch/2);
 });
-return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 });
+chWeather(tex, { specks: 1400, chips: 26, streaks: 10, grime: 5, rust: [[0.02, 0.1], [0.98, 0.1]] });
+return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.62 });
+}
+
+/* 2026-10-29 graphics pass (Sam, playtest: "This should be given a pass for graphics, it's too clean, it doesn't match."):
+   the helpers below age the signs, soot the render, wet and dirty the ground. Materials only; layout, camera, lamps,
+   the sign's words and the ENTER button are as they were. */
+function chRand(a, b) { return a + Math.random() * (b - a); }
+/* Weather a canvas texture in place: faded paint, chalky bloom, soot runs, rust from fixings, pitting, flaked chips, edge grime. */
+function chWeather(tex, o) {
+  o = o || {};
+  var c = tex && tex.image; if (!c || !c.getContext) return tex;
+  var q = c.getContext('2d'), w = c.width, h = c.height, k = Math.sqrt(w * h) / 512, i;
+  q.save();
+  q.globalCompositeOperation = 'multiply'; q.fillStyle = o.fade || 'rgb(188,168,140)'; q.fillRect(0, 0, w, h);
+  q.globalCompositeOperation = 'screen';
+  for (i = 0; i < (o.bloom != null ? o.bloom : 12); i++) {
+    var bx = chRand(0, w), by = chRand(0, h), br = chRand(30, 90) * k, bg = q.createRadialGradient(bx, by, 0, bx, by, br);
+    bg.addColorStop(0, 'rgba(62,48,40,0.26)'); bg.addColorStop(1, 'rgba(62,48,40,0)');
+    q.fillStyle = bg; q.fillRect(bx - br, by - br, br * 2, br * 2);
+  }
+  q.globalCompositeOperation = 'source-over';
+  for (i = 0; i < (o.streaks != null ? o.streaks : 8); i++) {
+    var sx = chRand(0, w), sw = chRand(3, 16) * k, sl = chRand(0.25, 0.95) * h, sg = q.createLinearGradient(0, 0, 0, sl);
+    sg.addColorStop(0, 'rgba(14,10,7,' + chRand(0.3, 0.6).toFixed(2) + ')'); sg.addColorStop(1, 'rgba(14,10,7,0)');
+    q.fillStyle = sg; q.fillRect(sx - sw / 2, 0, sw, sl);
+  }
+  (o.rust || []).forEach(function(p) {
+    for (var r = 0; r < 3; r++) {
+      var rx = p[0] * w + chRand(-4, 4) * k, ry = p[1] * h, rl = chRand(0.06, 0.22) * h, rg = q.createLinearGradient(0, ry, 0, ry + rl);
+      rg.addColorStop(0, 'rgba(118,56,20,0.6)'); rg.addColorStop(1, 'rgba(118,56,20,0)');
+      q.fillStyle = rg; q.fillRect(rx, ry, chRand(1.5, 4) * k, rl);
+    }
+  });
+  for (i = 0; i < (o.grime || 0); i++) {
+    var gx = chRand(0, w), gy = chRand(0, h), gr = chRand(50, 160) * k, gg = q.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    gg.addColorStop(0, 'rgba(32,20,12,' + chRand(0.25, 0.45).toFixed(2) + ')'); gg.addColorStop(1, 'rgba(32,20,12,0)');
+    q.fillStyle = gg; q.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+  }
+  var n = Math.round((o.specks != null ? o.specks : 900) * k * k);
+  for (i = 0; i < n; i++) {
+    q.fillStyle = 'rgba(22,14,9,' + chRand(0.15, 0.6).toFixed(2) + ')';
+    q.fillRect(chRand(0, w), chRand(0, h), chRand(0.6, 2.4) * k, chRand(0.6, 1.6) * k);
+  }
+  for (i = 0; i < (o.chips != null ? o.chips : 40); i++) {
+    var m = 12 * k, cx0, cy0, side = Math.floor(Math.random() * 4);
+    if (Math.random() < 0.6) { cx0 = side === 0 ? chRand(0, m) : side === 1 ? w - chRand(0, m) : chRand(0, w); cy0 = side === 2 ? chRand(0, m) : side === 3 ? h - chRand(0, m) : chRand(0, h); }
+    else { cx0 = chRand(0, w); cy0 = chRand(0, h); }
+    var cr = chRand(1.5, 7) * k;
+    q.beginPath();
+    for (var v = 0; v < 7; v++) { var a = v / 7 * Math.PI * 2, rr = cr * chRand(0.45, 1.3); q[v ? 'lineTo' : 'moveTo'](cx0 + Math.cos(a) * rr, cy0 + Math.sin(a) * rr * 0.75); }
+    q.closePath(); q.fillStyle = 'rgba(36,23,14,0.92)'; q.fill();
+    q.strokeStyle = 'rgba(160,140,104,0.42)'; q.lineWidth = 0.8 * k; q.stroke();
+  }
+  if (o.edges !== false) {
+    var e = Math.min(w, h) * 0.12;
+    [[0, 0, e, 0, 0, 0, e, h], [w, 0, w - e, 0, w - e, 0, e, h], [0, 0, 0, e, 0, 0, w, e], [0, h, 0, h - e, 0, h - e, w, e]].forEach(function(g) {
+      var eg = q.createLinearGradient(g[0], g[1], g[2], g[3]);
+      eg.addColorStop(0, 'rgba(16,11,7,0.5)'); eg.addColorStop(1, 'rgba(16,11,7,0)');
+      q.fillStyle = eg; q.fillRect(g[4], g[5], g[6], g[7]);
+    });
+  }
+  q.restore();
+  tex.needsUpdate = true;
+  return tex;
+}
+/* World-scaled UVs for a positioned, unrotated box: u runs along its long axis, v up the side (or across the top). */
+function chBoxUV(mesh, along, su, sv) {
+  var geo = mesh.geometry, p = geo.attributes.position, nrm = geo.attributes.normal, uv = geo.attributes.uv;
+  var ax = along === 'x' ? 0 : 2, cr = along === 'x' ? 2 : 0, o = [mesh.position.x, mesh.position.y, mesh.position.z];
+  for (var i = 0; i < p.count; i++) {
+    var P = [p.getX(i) + o[0], p.getY(i) + o[1], p.getZ(i) + o[2]], N = [Math.abs(nrm.getX(i)), Math.abs(nrm.getY(i)), Math.abs(nrm.getZ(i))];
+    uv.setXY(i, (N[ax] > 0.5 ? P[cr] : P[ax]) * su, (N[1] > 0.5 ? P[cr] : P[1]) * sv);
+  }
+  uv.needsUpdate = true;
+}
+/* Wet, dirty ground: darken the map, lay damp patches and gum, and give the same patches a low-roughness map so the lamps catch them. */
+function chWetGround(mat, o) {
+  o = o || {};
+  var tex = mat.map; if (!tex || !tex.image || !tex.image.getContext) return mat;
+  var c = tex.image, q = c.getContext('2d'), w = c.width, h = c.height;
+  var rc = document.createElement('canvas'); rc.width = w; rc.height = h;
+  var rq = rc.getContext('2d'), i;
+  q.save();
+  q.globalCompositeOperation = 'multiply'; q.fillStyle = o.tint || 'rgb(150,144,134)'; q.fillRect(0, 0, w, h);
+  q.globalCompositeOperation = 'source-over';
+  rq.fillStyle = 'rgb(' + (o.dry || 215) + ',' + (o.dry || 215) + ',' + (o.dry || 215) + ')'; rq.fillRect(0, 0, w, h);
+  for (i = 0; i < (o.patches || 9); i++) {
+    /* each damp patch is a ragged cluster of soft blots, so the sheen lies in smears rather than discs */
+    var cx0 = chRand(0, w), cy0 = chRand(0, h), spread = chRand(30, 90);
+    for (var b = 0; b < 7; b++) {
+      var px = cx0 + chRand(-spread, spread), py = cy0 + chRand(-spread, spread) * 0.6, pr = chRand(12, 46);
+      var pg = q.createRadialGradient(px, py, 0, px, py, pr);
+      pg.addColorStop(0, 'rgba(6,6,8,0.2)'); pg.addColorStop(1, 'rgba(6,6,8,0)');
+      q.fillStyle = pg; q.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+      var rg = rq.createRadialGradient(px, py, 0, px, py, pr);
+      rg.addColorStop(0, 'rgba(96,96,96,0.42)'); rg.addColorStop(1, 'rgba(96,96,96,0)');
+      rq.fillStyle = rg; rq.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+    }
+  }
+  for (i = 0; i < (o.gum || 0); i++) {
+    q.fillStyle = 'rgba(' + (o.gumTone || '112,108,100') + ',' + chRand(0.35, 0.7).toFixed(2) + ')';
+    q.beginPath(); q.ellipse(chRand(0, w), chRand(0, h), chRand(1.5, 4), chRand(1.2, 3.2), chRand(0, 3), 0, Math.PI * 2); q.fill();
+  }
+  for (i = 0; i < (o.grit || 1500); i++) {
+    q.fillStyle = 'rgba(10,9,8,' + chRand(0.2, 0.5).toFixed(2) + ')';
+    q.fillRect(chRand(0, w), chRand(0, h), chRand(0.8, 2), chRand(0.8, 2));
+  }
+  q.restore();
+  tex.needsUpdate = true;
+  var rt = new THREE.CanvasTexture(rc); rt.wrapS = rt.wrapT = THREE.RepeatWrapping; rt.repeat.copy(tex.repeat);
+  mat.roughnessMap = rt; mat.roughness = o.rough || 1; mat.metalness = o.metal != null ? o.metal : 0.12;
+  mat.needsUpdate = true;
+  return mat;
 }
 
 // ============================================================
@@ -32748,7 +32899,7 @@ greekRoad.receiveShadow = true;
 scene.add(greekRoad);
 
 // Romilly St road (runs along X, south of the pub)
-var romRoad = new THREE.Mesh(new THREE.PlaneGeometry(30, 8), roadMat);
+var romRoad = new THREE.Mesh(new THREE.PlaneGeometry(30, 8), romRoadMat);
 romRoad.rotation.x = -Math.PI / 2;
 romRoad.position.set(-10, 0.004, 5);
 romRoad.receiveShadow = true;
@@ -33310,6 +33461,8 @@ cx.font = 'bold 30px Georgia';
 cx.fillText('BEERS & LAGERS', w/2, 955);
 });
 exterior.age(bannerTex,true);
+/* the board has hung over the corner since long before 1973: sun-faded red, gilt worn and pitted, soot runs, rust from the four fixings */
+chWeather(bannerTex, { fade: 'rgb(178,156,128)', specks: 1300, chips: 90, streaks: 22, bloom: 22, grime: 10, rust: [[0.05, 0.015], [0.95, 0.015], [0.05, 0.5], [0.95, 0.5]] });
 var bannerMat = new THREE.MeshStandardMaterial({
 map: bannerTex, roughness: 0.4, emissive: 0x6b0e0e, emissiveIntensity: 0.35,
 emissiveMap: bannerTex
@@ -33340,20 +33493,22 @@ bannerSpot2.position.set(1.5, 2, 1.5);
 pub.add(bannerSpot2);
 
 // ----- HANGING PUB SIGN (Greek St face) -----
-var signTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+/* drawn at twice the old size (same words, same layout) so the weathering has pixels to sit in */
+var signTex = makeCanvasTexture(256, 256, function(cx, w, h) {
 cx.fillStyle = '#6b0e0e';
 cx.fillRect(0, 0, w, h);
-cx.strokeStyle = '#c0a040'; cx.lineWidth = 3;
-cx.strokeRect(5, 5, w-10, h-10);
+cx.strokeStyle = '#c0a040'; cx.lineWidth = 6;
+cx.strokeRect(10, 10, w-20, h-20);
 cx.fillStyle = '#c8a840';
-cx.font = 'bold 16px Georgia'; cx.textAlign = 'center';
-cx.fillText('COACH', w/2, 45);
-cx.fillText('&', w/2, 65);
-cx.fillText('HORSES', w/2, 85);
-cx.font = '10px Georgia'; cx.fillText("NORMAN'S", w/2, 108);
+cx.font = 'bold 32px Georgia'; cx.textAlign = 'center';
+cx.fillText('COACH', w/2, 90);
+cx.fillText('&', w/2, 130);
+cx.fillText('HORSES', w/2, 170);
+cx.font = '20px Georgia'; cx.fillText("NORMAN'S", w/2, 216);
 });
 exterior.age(signTex,false);
-var signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.5, side: THREE.DoubleSide });
+chWeather(signTex, { fade: 'rgb(178,156,128)', specks: 1600, chips: 30, streaks: 12, grime: 4, rust: [[0.2, 0.0], [0.8, 0.0]] });
+var signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.7, side: THREE.DoubleSide });
 var hangSign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), signMat);
 hangSign.position.set(1.2, 3.8, -4.2);
 pub.add(hangSign);
@@ -33364,7 +33519,9 @@ placeMesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), bracketMat, 0.6, 4.3, -4.2);
 exterior.chain(pub,0.94,4.3,-4.2,0.08);exterior.chain(pub,1.46,4.3,-4.2,0.08);
 
 // ----- CHIMNEYS -----
-var chimMat = new THREE.MeshStandardMaterial({ color: 0xa09080, roughness: 0.85 });
+var chimMat = (chKit && chKit.makeGrimyBrick)
+  ? chKit.makeGrimyBrick({ baseColor: 0x5a4436, repeat: [1, 2], sootStreaks: 9, dampPatches: 2 })
+  : new THREE.MeshStandardMaterial({ color: 0x6a5a4c, roughness: 0.85 });
 placeMesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), chimMat, -2, 12.75, -1);
 placeMesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), chimMat, -6, 12.75, -2);
 placeMesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), chimMat, -2, 13.55, -1);
@@ -33514,10 +33671,23 @@ scene.add(oppRom);
 // ============================================================
 // PAVEMENTS — raised kerbs along both streets
 // ============================================================
-var kerbMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 });
+/* granite kerb stones, four to a tile: joints, chipped arrises worn pale on top, gutter muck up the foot */
+var kerbTex = makeCanvasTexture(512, 128, function(cx, w, h) {
+  cx.fillStyle = '#46443f'; cx.fillRect(0, 0, w, h);
+  for (var s = 0; s < 4; s++) { var t = chRand(-10, 10); cx.fillStyle = 'rgba(' + (70 + t) + ',' + (68 + t) + ',' + (62 + t) + ',0.5)'; cx.fillRect(s * 128, 0, 128, h); }
+  for (var g = 0; g < 2600; g++) { var v = Math.floor(chRand(40, 140)); cx.fillStyle = 'rgba(' + v + ',' + v + ',' + (v - 6) + ',0.35)'; cx.fillRect(chRand(0, w), chRand(0, h), 1.4, 1.4); }
+  cx.fillStyle = 'rgba(150,146,134,0.28)'; cx.fillRect(0, h * 0.47, w, h * 0.05);
+  cx.fillStyle = 'rgba(14,12,10,0.85)'; for (var j = 0; j < 4; j++) cx.fillRect(j * 128 + chRand(-2, 2), 0, 3, h);
+  for (var c = 0; c < 26; c++) { cx.fillStyle = 'rgba(20,18,15,' + chRand(0.4, 0.8).toFixed(2) + ')'; cx.beginPath(); cx.ellipse(chRand(0, w), h * 0.5 + chRand(-3, 3), chRand(2, 9), chRand(1, 4), 0, 0, Math.PI * 2); cx.fill(); }
+  var gg = cx.createLinearGradient(0, h, 0, h * 0.6); gg.addColorStop(0, 'rgba(12,10,7,0.8)'); gg.addColorStop(1, 'rgba(12,10,7,0)');
+  cx.fillStyle = gg; cx.fillRect(0, h * 0.6, w, h * 0.4);
+});
+kerbTex.wrapS = kerbTex.wrapT = THREE.RepeatWrapping;
+var kerbMat = new THREE.MeshStandardMaterial({ map: kerbTex, roughness: 0.82 });
 var paveMat = (chKit && chKit.makePavingSlabs)
-  ? chKit.makePavingSlabs({ repeat: [10, 3] })
+  ? chKit.makePavingSlabs({ repeat: [1, 1] })
   : new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.85 });
+chWetGround(paveMat, { tint: 'rgb(140,136,128)', patches: 6, gum: 90, dry: 225, metal: 0.08 });
 
 // Greek St pavement — pub side (west, at x≈0-1)
 // Runs along -Z from z=5 down to z=-20
@@ -33562,6 +33732,54 @@ var cornerPave = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), paveMat);
 cornerPave.position.set(1.5, 0.075, 1.5);
 cornerPave.receiveShadow = true;
 scene.add(cornerPave);
+
+/* slabs and kerbs at true size on every run (the old repeats stretched them into long strips), then the muck the street collects */
+[[greekPaveW, 'z'], [greekPaveE, 'z'], [romPaveN, 'x'], [romPaveS, 'x'], [cornerPave, 'x']].forEach(function(p) { chBoxUV(p[0], p[1], 1 / 2.4, 1 / 2.4); });
+[[greekKerbW, 'z'], [greekKerbE, 'z'], [romKerbN, 'x'], [romKerbS, 'x']].forEach(function(p) { chBoxUV(p[0], p[1], 1 / 3.6, 1 / 0.36); });
+(function() {
+  /* one strip texture, dark and wet at its top edge, for the gutters and for the foot of the walls: leaves, dog-ends, scraps of paper */
+  var gc = document.createElement('canvas'); gc.width = 1024; gc.height = 96;
+  var g = gc.getContext('2d'), i;
+  for (i = 0; i < 420; i++) {
+    var gx = chRand(0, 1024), gl = chRand(0.25, 0.85) * 96, gs = g.createLinearGradient(0, 0, 0, gl);
+    gs.addColorStop(0, 'rgba(10,8,6,' + chRand(0.35, 0.7).toFixed(2) + ')'); gs.addColorStop(1, 'rgba(10,8,6,0)');
+    g.fillStyle = gs; g.fillRect(gx, 0, chRand(3, 14), gl);
+  }
+  for (i = 0; i < 40; i++) { g.fillStyle = 'rgba(' + Math.floor(chRand(70, 110)) + ',' + Math.floor(chRand(45, 66)) + ',22,' + chRand(0.5, 0.85).toFixed(2) + ')'; g.beginPath(); g.ellipse(chRand(0, 1024), chRand(4, 40), chRand(4, 9), chRand(2, 4), chRand(0, 3), 0, Math.PI * 2); g.fill(); }
+  for (i = 0; i < 26; i++) { var fx = chRand(0, 1024), fy = chRand(6, 60), fa = chRand(0, 3); g.save(); g.translate(fx, fy); g.rotate(fa); g.fillStyle = 'rgba(205,190,160,0.8)'; g.fillRect(-5, -1.3, 8, 2.6); g.fillStyle = 'rgba(176,120,60,0.9)'; g.fillRect(3, -1.3, 3, 2.6); g.restore(); }
+  for (i = 0; i < 9; i++) {
+    var px = chRand(0, 1024), py = chRand(10, 60), pr = chRand(7, 15);
+    g.beginPath(); for (var v = 0; v < 8; v++) { var a = v / 8 * Math.PI * 2, rr = pr * chRand(0.55, 1.2); g[v ? 'lineTo' : 'moveTo'](px + Math.cos(a) * rr, py + Math.sin(a) * rr * 0.6); } g.closePath();
+    g.fillStyle = 'rgba(178,170,150,0.72)'; g.fill(); g.strokeStyle = 'rgba(70,62,50,0.6)'; g.lineWidth = 1; g.stroke();
+  }
+  var gt = new THREE.CanvasTexture(gc); gt.wrapS = THREE.RepeatWrapping;
+  function strip(len, x, y, z, rz) {
+    var t = gt.clone(); t.needsUpdate = true; t.repeat.set(len / 3, 1);
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.5), new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 0.35, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -2 }));
+    m.rotation.set(-Math.PI / 2, 0, rz); m.position.set(x, y, z); m.userData.noShadow = true; scene.add(m); return m;
+  }
+  strip(30, 2.83, 0.014, -5, Math.PI / 2);
+  strip(30, 6.17, 0.014, -5, -Math.PI / 2);
+  strip(25, -10, 0.014, 2.83, 0);
+  strip(25, -10, 0.014, 6.17, Math.PI);
+  strip(20, 0.42, 0.153, -10, Math.PI / 2);
+  strip(23, -11.5, 0.153, 0.42, 0);
+  /* a few things dropped and trodden flat: chip paper, a cigarette packet, a sodden page of newspaper */
+  var lc = document.createElement('canvas'); lc.width = 192; lc.height = 64; var l = lc.getContext('2d');
+  l.fillStyle = 'rgba(196,188,166,0.92)'; l.beginPath(); l.moveTo(6, 14); l.lineTo(50, 6); l.lineTo(58, 40); l.lineTo(34, 58); l.lineTo(8, 48); l.closePath(); l.fill();
+  l.fillStyle = 'rgba(150,120,60,0.35)'; l.beginPath(); l.ellipse(30, 32, 14, 10, 0.4, 0, Math.PI * 2); l.fill();
+  l.fillStyle = 'rgba(150,40,34,0.9)'; l.fillRect(80, 18, 34, 26); l.fillStyle = 'rgba(214,206,186,0.85)'; l.fillRect(80, 18, 34, 8);
+  l.fillStyle = 'rgba(158,154,140,0.85)'; l.fillRect(136, 6, 50, 52);
+  l.fillStyle = 'rgba(60,58,52,0.45)'; for (var r = 10; r < 54; r += 4) { l.fillRect(140, r, 20, 1.5); l.fillRect(164, r, 18, 1.5); }
+  l.fillStyle = 'rgba(30,28,24,0.3)'; l.fillRect(136, 30, 50, 28);
+  var litter = [[0, 1.7, 0.153, -0.7, 0.4], [1, 3.05, 0.016, 2.2, 1.1], [2, 7.3, 0.153, 3.6, -0.5], [0, 6.0, 0.016, 7.4, 2.0], [1, 1.9, 0.153, -6.2, 0.3], [2, -2.6, 0.153, 1.9, 1.7]];
+  litter.forEach(function(it) {
+    var t = new THREE.CanvasTexture(lc); t.repeat.set(1 / 3, 1); t.offset.set(it[0] / 3, 0);
+    var sz = it[0] === 2 ? 0.42 : it[0] === 1 ? 0.12 : 0.26;
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz * (it[0] === 1 ? 0.75 : 1)), new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -3 }));
+    m.rotation.set(-Math.PI / 2, 0, it[4]); m.position.set(it[1], it[2] + 0.002, it[3]); m.userData.noShadow = true; scene.add(m);
+  });
+})();
 
 // ============================================================
 // STREETLAMPS
@@ -33800,6 +34018,7 @@ var chWaterTex=makeCanvasTexture(64,128,function(cx,w,h){
     cx.fillStyle='rgba(239,189,118,'+(.12+(ri%4)*.05)*fade+')';cx.fillRect((w-width)/2+Math.sin(ri*.8)*3,v*h,width,1+(ri%2));}
 });
 var chWaterMats=[],chEmberWater;
+var chPuddleAlpha=makeCanvasTexture(128,128,function(cx,w,h){cx.fillStyle='#000';cx.fillRect(0,0,w,h);for(var b=0;b<9;b++){var x=w/2+chRand(-28,28),y=h/2+chRand(-28,28),r=chRand(16,36),g=cx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,'rgba(255,255,255,0.9)');g.addColorStop(.7,'rgba(255,255,255,0.5)');g.addColorStop(1,'rgba(255,255,255,0)');cx.fillStyle=g;cx.fillRect(x-r,y-r,2*r,2*r);}});
 
 for (var i = 0; i < 8; i++) {
 var puddleMat = new THREE.MeshStandardMaterial({
@@ -33819,7 +34038,7 @@ if(i===0){
   puddle.material.dispose();puddle.material=new THREE.MeshBasicMaterial({map:chWaterTex,color:0xe3ba83,transparent:true,opacity:.23,depthWrite:false,blending:THREE.AdditiveBlending});
   puddle.position.set(i===1?2.1:-3.7,.024,i===1?-1.8:2.0);puddle.scale.set(.85,1.9,1);if(i===2)puddle.rotation.z=Math.PI/2;
   chWaterMats.push(puddle.material);
-}else puddle.material.depthWrite=false;
+}else{puddle.material.depthWrite=false;puddle.material.alphaMap=chPuddleAlpha;puddle.material.opacity=.42;puddle.material.roughness=.06;puddle.scale.set(chRand(.8,1.6),chRand(.6,1.1),1);puddle.rotation.z=chRand(0,Math.PI);} /* ragged edges, not discs */
 scene.add(puddle);
 }
 
@@ -49092,6 +49311,10 @@ cx.fillStyle = bg2; cx.fillRect(0, h - 70, w, 70);
 placeMesh(new THREE.PlaneGeometry(4.72, 3.1), new THREE.MeshBasicMaterial({ map: frontGrimeTex, transparent: true, opacity: 0.55, depthWrite: false }), 0, 1.55, 0.21);
 
 // ---- THE WINDOW (right of door): packed with warm stock ----
+var ofBookMaskCanvas = document.createElement('canvas');
+ofBookMaskCanvas.width=1024;ofBookMaskCanvas.height=768;
+var ofBookMask = ofBookMaskCanvas.getContext('2d'), ofBookCount=0;
+var ofMagicTime={value:0};
 var displayTex = makeCanvasTexture(1024, 768, function(cx, w, h) {
 var bg = cx.createRadialGradient(w * 0.5, h * 0.45, 60, w * 0.5, h * 0.5, w * 0.62);
 bg.addColorStop(0, '#c25f14'); bg.addColorStop(0.45, '#8a3d0c'); bg.addColorStop(1, '#3d1d06');
@@ -49109,6 +49332,9 @@ var lean = (Math.random() < 0.22) ? (Math.random() - 0.5) * 0.12 : 0;
 cx.save();
 cx.translate(bx + bw / 2, sy);
 cx.rotate(lean);
+ofBookMask.save();ofBookMask.translate(bx+bw/2,sy);ofBookMask.rotate(lean);
+ofBookMask.fillStyle='rgb('+ (25+(ofBookCount++*73)%210) +',0,0)';
+ofBookMask.fillRect(-bw/2,-bh,bw,bh);ofBookMask.restore();
 cx.fillStyle = col2; cx.fillRect(-bw/2, -bh, bw, bh);
 var bg3 = cx.createLinearGradient(-bw/2, 0, bw/2, 0);
 bg3.addColorStop(0, 'rgba(0,0,0,0.45)');
@@ -49131,6 +49357,8 @@ for (var ly = 0; ly < 3; ly++) {
 var lw = 58 + Math.random() * 26, lh = 11 + Math.random() * 5;
 cx.fillStyle = palette[Math.floor(Math.random() * palette.length)];
 cx.fillRect(bx, sy - (ly + 1) * lh - 2, lw, lh);
+ofBookMask.fillStyle='rgb('+(25+(ofBookCount++*73)%210)+',0,0)';
+ofBookMask.fillRect(bx,sy-(ly+1)*lh-2,lw,lh);
 cx.fillStyle = 'rgba(240,220,170,0.4)';
 cx.fillRect(bx + lw - 7, sy - (ly + 1) * lh - 1, 5, lh - 2);
 }
@@ -49142,6 +49370,7 @@ var prSpots = [[130, 170], [640, 200], [360, 430]];
 for (var pr = 0; pr < 3; pr++) {
 var px2 = prSpots[pr][0], py2 = prSpots[pr][1];
 var pw2 = 100 + pr * 18, ph2 = 120 + (pr % 2) * 26;
+ofBookMask.clearRect(px2-3,py2-3,pw2+6,ph2+6);
 cx.fillStyle = 'rgba(204,182,134,0.9)'; cx.fillRect(px2, py2, pw2, ph2);
 cx.strokeStyle = 'rgba(60,30,10,0.8)'; cx.lineWidth = 5; cx.strokeRect(px2, py2, pw2, ph2);
 cx.fillStyle = 'rgba(120,70,30,0.55)';
@@ -49154,10 +49383,35 @@ glow.addColorStop(0, 'rgba(255,190,90,0.30)'); glow.addColorStop(1, 'rgba(255,19
 cx.fillStyle = glow; cx.fillRect(0, 0, w, h);
 });
 var ofDisplay = placeMesh(new THREE.PlaneGeometry(2.66, 2.0), new THREE.MeshBasicMaterial({ map: displayTex }), 0.675, 1.62, -0.16);
+// The existing painted spines get a second, static identity mask. The GPU
+// changes each independently; lettering, shadows and paper notices stay put.
+var ofBookMaskTex=new THREE.CanvasTexture(ofBookMaskCanvas);
+ofDisplay.material.onBeforeCompile=function(shader){
+ shader.uniforms.ofBookMask={value:ofBookMaskTex};shader.uniforms.ofMagicTime=ofMagicTime;
+ shader.fragmentShader='uniform sampler2D ofBookMask;\nuniform float ofMagicTime;\n'+shader.fragmentShader;
+ shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',[
+ '#include <map_fragment>',
+ 'vec4 bookID=texture2D(ofBookMask,vUv);',
+ 'float seed=bookID.r*255.0;',
+ 'float phase=ofMagicTime*6.283185/(8.0+mod(seed*0.731,19.0))+seed*2.399;',
+ 'float blend=0.5+0.5*sin(phase);blend=blend*blend*(3.0-2.0*blend);',
+ 'vec3 hue=mix(vec3(0.055,0.16,0.10),vec3(0.19,0.07,0.18),0.5+0.5*sin(seed*1.71));',
+ 'hue=mix(hue,vec3(0.26,0.18,0.045),0.5+0.5*cos(seed*0.91));',
+ 'float lum=dot(diffuseColor.rgb,vec3(0.2126,0.7152,0.0722));',
+ 'float chroma=max(max(diffuseColor.r,diffuseColor.g),diffuseColor.b)-min(min(diffuseColor.r,diffuseColor.g),diffuseColor.b);',
+ 'vec3 magic=hue*lum/max(0.01,dot(hue,vec3(0.2126,0.7152,0.0722)));',
+ 'diffuseColor.rgb=mix(diffuseColor.rgb,magic,bookID.a*blend*smoothstep(0.015,0.08,chroma));'
+ ].join('\n'));
+};
+ofDisplay.material.customProgramCacheKey=function(){return 'of-magic-books-1';};
+// Register the mask with the room's normal texture disposal.
+ofDisplay.material.userData.dssBookMask=ofBookMaskTex;
+var ofBookMagic=window.dssBookMagic();
 // 3D dressing just behind the glass
 for (var bs = 0; bs < 3; bs++) {
 var stackX = 0.0 + bs * 0.62, stackH = 0.1 + Math.random() * 0.14;
-placeMesh(new THREE.BoxGeometry(0.34, stackH, 0.24), new THREE.MeshStandardMaterial({ color: [0x8a4418, 0x5d4a1e, 0x6b1f1f][bs], roughness: 0.7 }), stackX - 0.2, 0.62 + stackH / 2, -0.04);
+var ofStack= placeMesh(new THREE.BoxGeometry(0.34, stackH, 0.24), new THREE.MeshStandardMaterial({ color: [0x8a4418, 0x5d4a1e, 0x6b1f1f][bs], roughness: 0.7 }), stackX - 0.2, 0.62 + stackH / 2, -0.04);
+ofBookMagic.add(ofStack.material);
 }
 var folio = placeMesh(new THREE.PlaneGeometry(0.34, 0.26), new THREE.MeshStandardMaterial({ color: 0xe0d0a0, roughness: 0.8, side: THREE.DoubleSide }), 1.5, 0.72, -0.03);
 folio.rotation.set(-1.1, 0.25, 0);
@@ -49402,6 +49656,8 @@ var clock = new THREE.Clock();
 function ofAnimate() {
 ofAnimId = requestAnimationFrame(ofAnimate);
 var t = ofStill ? 4 : clock.getElapsedTime();
+ofMagicTime.value = ofStill ? 0 : t;
+ofBookMagic.frame(t, ofStill);
 // Lamplight breath — the shop's pulse, strong enough to read from the court
 var doorPulse = 0.72 + 0.28 * (0.5 + 0.5 * Math.sin(t * 1.05)) + 0.1 * Math.sin(t * 3.1);
 var winPulse = 0.86 + 0.14 * (0.5 + 0.5 * Math.sin(t * 0.8 + 2));
@@ -49487,6 +49743,7 @@ initOflatterly();
 } else if (!container) {
 ofActive = false;
 if (ofAnimId) { cancelAnimationFrame(ofAnimId); ofAnimId = null; }
+if (window._dssThreeRegistry && window._dssThreeRegistry['of-wrap']) { var ofEntry=window._dssThreeRegistry['of-wrap']; if(ofEntry.scene)ofEntry.scene.traverse(function(o){if(o.material&&o.material.userData.dssBookMask)o.material.userData.dssBookMask.dispose();}); }
 window._dssDisposeWrap('of-wrap');
 }
 }, 300);
@@ -61314,7 +61571,7 @@ INIS O’FLATTERLY clocks you, first with his eyes still downcast, then eventual
 
 O’Flatterly coughs, disturbing the dust on the cover before him, agitating its thousand motes into flight, which hang over his desk like the clouds over Willesden Junction.
 
-He slaps the manuscript like an arse and says: <span class="dss-quest-line">‘Page 93 is missing. Find it for me!’</span><!-- 2026-10-23 overnight: the errand itself, in the quest-line gold, now that its card waits for "I’ll look for it" --><span class="dss-refusal-after" data-k="inis" hidden>You can swallow that; he’s neither publisher nor agent, and besides he’ll give you more than he could if he were. You’ll take the book and chance your arm elsewhere.</span>
+He slaps the manuscript like an arse and says: <span class="dss-speech" data-speaker="INIS O’FLATTERLY" style="--sp:#8fbf78"><span class="dss-quest-line">‘Page 93 is missing. Find it for me!’</span></span><!-- 2026-10-23 overnight: the errand itself, in the quest-line gold, now that its card waits for "I’ll look for it" --><span class="dss-refusal-after" data-k="inis" hidden>You can swallow that; he’s neither publisher nor agent, and besides he’ll give you more than he could if he were. You’ll take the book and chance your arm elsewhere.</span>
 
 (set: $knowsAboutPage to true)
 
@@ -61559,8 +61816,7 @@ From beneath the counter he produces a small glass vial.
 <!-- 2026-10-28: the second half of O'Flatterly's Gift (Sam's words unchanged), split so each page fits a laptop screen -->(set: $inisToldOfPillars to true)\
 <div>
 INIS looks at the door and then at you.
-
-‘There’s something they don’t say about the Pillars of Hercules,’ he begins, his thumbnails sitting on the counter’s lip. ‘The legends speak of two pillars only: one at Gibraltar, the other on the shores of the Maghreb. These are on either side of the pub’s front door.
+<!-- 2026-10-29 (Sam, playtest note 14, the mock-up approved): plot speech from someone in the game world sits in a speaker's panel; his words unchanged --><div class="dss-speech" data-speaker="INIS O’FLATTERLY" style="--sp:#8fbf78">‘There’s something they don’t say about the Pillars of Hercules,’ he begins, his thumbnails sitting on the counter’s lip. ‘The legends speak of two pillars only: one at Gibraltar, the other on the shores of the Maghreb. These are on either side of the pub’s front door.
 
 ‘But there were always three. Most people go a lifetime without ever seeing the third. I’ve been here so long, longer than a lifetime perhaps, that I have seen the third that stands between them.
 
@@ -61568,7 +61824,7 @@ INIS looks at the door and then at you.
 
 ‘And know this too: the third blue post is hungry; be sure to have some offering to charm your way to the far side of the veil. You’ll find what you need as you wander; pay attention.
 
-‘In fact there could be something in my shop that pays your way, though I wouldn’t look here first; you must explore. And if you find it standing, dear boy, go through.’
+‘In fact there could be something in my shop that pays your way, though I wouldn’t look here first; you must explore. And if you find it standing, dear boy, go through.’</div>
 </div>
 
 (display: "Key Doors Open Line")
@@ -64727,7 +64983,7 @@ You say you’ve not, thank him, and make to leave when he calls you back.
 <svg class="pillar right" viewBox="0 0 34 280" preserveAspectRatio="xMidYMax meet"><defs><linearGradient id="pf2b" x1="0" x2="0" y1="0" y2="1"><stop offset="0%"   stop-color="#8ac8dc" stop-opacity="0.72"/><stop offset="60%"  stop-color="#8ac8dc" stop-opacity="0.42"/><stop offset="100%" stop-color="#8ac8dc" stop-opacity="0"/></linearGradient></defs><g filter="url(#dss-ink-fine)"><rect x="1"  y="252" width="32" height="8"  fill="none" stroke="url(#pf2b)" stroke-width="1.1"/><rect x="4"  y="246" width="26" height="7"  fill="none" stroke="url(#pf2b)" stroke-width="1"/><!-- Shorter shaft: top at y=130 instead of y=88 — this pillar more ruined --><line x1="5"  y1="246" x2="6"  y2="130" stroke="url(#pf2b)" stroke-width="1.1"/><line x1="29" y1="246" x2="28" y2="130" stroke="url(#pf2b)" stroke-width="1.1"/><line x1="5.5" y1="152" x2="28.5" y2="152" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="5.5" y1="174" x2="28.5" y2="174" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="5.5" y1="196" x2="28.5" y2="196" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="5.5" y1="218" x2="28.5" y2="218" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="5.5" y1="240" x2="28.5" y2="240" stroke="url(#pf2b)" stroke-width="0.65"/><line x1="10" y1="130" x2="10" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="14" y1="130" x2="14" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="17" y1="130" x2="17" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="20" y1="130" x2="20" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><line x1="24" y1="130" x2="24" y2="245" stroke="#8ac8dc" stroke-width="0.3" opacity="0.22"/><!-- Echinus at top of shorter shaft --><path d="M6,130 Q5,120 3,114 L31,114 Q29,120 28,130" fill="none" stroke="url(#pf2b)" stroke-width="1.1"/><!-- This column: abacus has COLLAPSED entirely — jagged stump and tilted block --><path d="M3,114 L6,107 L10,112 L14,104 L18,110 L22,102 L27,108 L31,114" fill="none" stroke="#8ac8dc" stroke-width="1" opacity="0.6"/><!-- Large fallen capital block --><path d="M2,106 L-3,98 L14,94 L17,104 Z" fill="none" stroke="#8ac8dc" stroke-width="1" opacity="0.5"/><!-- Fracture running down shaft --><path d="M6,130 L9,125 L13,129 L17,122 L21,128 L25,121 L28,130" fill="none" stroke="#8ac8dc" stroke-width="0.9" opacity="0.55"/><path d="M9,142 L11,158 L8,164" fill="none" stroke="#8ac8dc" stroke-width="0.5" opacity="0.28"/><!-- Fallen drum leaning against shaft --><path d="M1,215 L3,207 L9,209 L9,217 L3,219 Z" fill="none" stroke="#8ac8dc" stroke-width="0.85" opacity="0.3"/><!-- Rubble at base --><path d="M3,255 L9,255 L10,260 L2,260 Z"    fill="none" stroke="#8ac8dc" stroke-width="0.8" opacity="0.28"/><path d="M22,257 L29,257 L30,262 L21,261 Z"  fill="none" stroke="#8ac8dc" stroke-width="0.7" opacity="0.22"/><path d="M11,260 L17,259 L18,264 L10,263 Z"  fill="none" stroke="#8ac8dc" stroke-width="0.7" opacity="0.2"/></g></svg>
 <!-- Lattice pub window at top -->
 <svg class="pillars-lattice" viewBox="0 0 300 36" width="100%" height="36" preserveAspectRatio="none"><defs><linearGradient id="latEdgeb" x1="0" x2="1"><stop offset="0%"   stop-color="#7ab8cc" stop-opacity="0"/><stop offset="15%"  stop-color="#7ab8cc" stop-opacity="0.55"/><stop offset="85%"  stop-color="#7ab8cc" stop-opacity="0.55"/><stop offset="100%" stop-color="#7ab8cc" stop-opacity="0"/></linearGradient><pattern id="dLat" x="0" y="0" width="42" height="24" patternUnits="userSpaceOnUse"><path d="M7,0 L14,12 L7,24 L0,12 Z" fill="rgba(160,35,25,0.26)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/><path d="M21,0 L28,12 L21,24 L14,12 Z" fill="rgba(185,215,235,0.07)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/><path d="M35,0 L42,12 L35,24 L28,12 Z" fill="rgba(28,108,52,0.22)" stroke="#5a96aa" stroke-width="1" stroke-linejoin="round"/></pattern><mask id="latMask"><rect x="0" y="0" width="300" height="36" fill="url(#latEdgeb)"/></mask></defs><g filter="url(#dss-ink-fine)"><rect x="0" y="0" width="300" height="36" fill="url(#dLat)" mask="url(#latMask)"/><line x1="0" y1="34" x2="300" y2="34" stroke="url(#latEdgeb)" stroke-width="1.2"/></g></svg>
-<div class="ham-callback-stage" hidden aria-hidden="true"></div><!-- a "-stage" marker keeps this page out of the plain-page panel, as its first half is (the book stage), so the scene looks the same across the split and THE RUMOUR card opens as before --><div class="critic-aftermath revealed" id="critAftermath"><div class="critic-after-verdict"><!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="himalayas" hidden>‘Looks like you found thunder on the mountain. It still won’t sell but, if it’s any consolation, it’ll keep.’<br><br></span>(if: $mantraComplete is true)[<span class="dss-gift-now" data-gift="himalayas" hidden></span>]<span class="dss-quest-line">‘When you’re next in Cecil Court, look for INIS O’FLATTERLY. Quare fellow, knows a lot about books. I think he’d like to meet you. He’s been trying to get to Carthage, on his way to The Pillars of Hercules.’</span>
+<div class="ham-callback-stage" hidden aria-hidden="true"></div><!-- a "-stage" marker keeps this page out of the plain-page panel, as its first half is (the book stage), so the scene looks the same across the split and THE RUMOUR card opens as before --><div class="critic-aftermath revealed" id="critAftermath"><div class="critic-after-verdict"><!-- 2026-10-17 (Sam's line, the worlds wired to the readers): --><span class="dss-gift-line" data-gift="himalayas" hidden>‘Looks like you found thunder on the mountain. It still won’t sell but, if it’s any consolation, it’ll keep.’<br><br></span>(if: $mantraComplete is true)[<span class="dss-gift-now" data-gift="himalayas" hidden></span>]<span class="dss-speech" data-speaker="THE GREAT HAM" style="--sp:#d9806a"><span class="dss-quest-line">‘When you’re next in Cecil Court, look for INIS O’FLATTERLY. Quare fellow, knows a lot about books. I think he’d like to meet you. He’s been trying to get to Carthage, on his way to The Pillars of Hercules.’</span></span>
 <!-- 2026-10-11, Sam: the venue-opens line wherever a new venue opens. The header back-fills $knowsCecilCourt as soon as $metCritic is true, so this keys on its own once-flag; the novelist carries his own line inside the haunt box. -->\
 (if: $cecilOpensSaid is not true)[(if: not ($haunts contains $haunt2))[(set: $cecilOpensSaid to true)<div class="haunt-opens">Cecil Court opens.</div>]]
 (set: $knowsCecilCourt to true)\
@@ -65725,7 +65981,7 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 (unless: $prevCigsTonight is a number)[(set: $prevCigsTonight to ($cigsTonight + 0))]\
 (if: $cigsTonight is a number and $cigsTonight > $prevCigsTonight)[<script>if(window.startBurningCigarette)window.startBurningCigarette();</script>]\
 (set: $prevCigsTonight to $cigsTonight)\
-(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)<script>(function(){try{var b=document.getElementById('stat-bars-lifted')||document.querySelector('.stat-bars');if(!b)return;var d=b.querySelectorAll('.stat-delta');if(!d.length)return;for(var i=0;i<d.length;i++){d[i].style.animationPlayState='paused';}var gen=window._passageGen,done=false,t0=Date.now(),lastSeen=0;function play(){if(done)return;done=true;for(var j=0;j<d.length;j++){d[j].style.animationPlayState='running';}}function up(){if(window._drinkPopupOpen===true)return true;return !!document.querySelector('.dss-rules-overlay,#coin-overlay,#match-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,#liver-eat-overlay,#napkin-popup-overlay,#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro,#dss-lore-overlay,#dss-gate-flash');}setTimeout(play,25000);(function loop(){if(done)return;if(window._passageGen!==gen){play();return;}var n=Date.now();if(up()){lastSeen=n;setTimeout(loop,100);return;}if(lastSeen===0?(n-t0>750):(n-lastSeen>1200)){play();return;}setTimeout(loop,100);})();}catch(e){}})();</script>
+(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)<script>(function(){try{var b=document.getElementById('stat-bars-lifted')||document.querySelector('.stat-bars');if(!b)return;var d=b.querySelectorAll('.stat-delta');if(!d.length)return;/* 2026-10-29 (Sam, playtest note 3: the changes "seemed entirely arbitrary"; his pick: show the reason): each change names the choice that brought it */var lc=window._dssLastChoice;if(lc&&Date.now()-lc.at<90000&&lc.text){for(var w=0;w<d.length;w++){if(d[w].querySelector('.stat-why'))continue;var sw=document.createElement('span');sw.className='stat-why';sw.textContent=' · '+lc.text;d[w].appendChild(sw);}}for(var i=0;i<d.length;i++){d[i].style.animationPlayState='paused';}var gen=window._passageGen,done=false,t0=Date.now(),lastSeen=0;function play(){if(done)return;done=true;for(var j=0;j<d.length;j++){d[j].style.animationPlayState='running';}}function up(){if(window._drinkPopupOpen===true)return true;return !!document.querySelector('.dss-rules-overlay,#coin-overlay,#match-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,#liver-eat-overlay,#napkin-popup-overlay,#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro,#dss-lore-overlay,#dss-gate-flash');}setTimeout(play,25000);(function loop(){if(done)return;if(window._passageGen!==gen){play();return;}var n=Date.now();if(up()){lastSeen=n;setTimeout(loop,100);return;}if(lastSeen===0?(n-t0>750):(n-lastSeen>1200)){play();return;}setTimeout(loop,100);})();}catch(e){}})();</script>
 (if: $afterMidnight is true)[<span id="dst-after-midnight" style="display:none"></span>]
 ]
 
@@ -68126,6 +68382,7 @@ text-shadow:
   0 0 14px rgba(255, 106, 72, 1),
   0 0 28px rgba(255, 80, 50, 0.85);
 }
+.stat-delta .stat-why { font: italic 400 0.62em Georgia, 'Crimson Text', serif; letter-spacing: 0.02em; white-space: nowrap; opacity: 0.9; } /* 2026-10-29: the choice behind a change */
 @keyframes stat-delta-drift {
 0%   { opacity: 0;   transform: translateY(6px) scale(0.7);  filter: brightness(1); }
 6%   { opacity: 1;   transform: translateY(-2px) scale(1.9); filter: brightness(2); }
@@ -69589,8 +69846,8 @@ text-shadow: 0 0 12px rgba(230, 180, 90, 0.28);
 /* 2026-10-29 (Sam: the quotes "styled different ... type out on a typewriter"): typed in the game's typewriter face, cream ink on a faint sheet,
    the gold rule kept; the letters are struck one by one by the verse typer in the UserScript */
 .verse:not(.typewriter-page .verse) { font-family: 'Special Elite', 'Courier New', monospace; font-style: normal; font-weight: 400; font-size: 1.04em; letter-spacing: 0.01em; line-height: 1.7; color: #f0e4c8; background: rgba(240,226,196,0.045); text-shadow: 0 0 10px rgba(230,180,90,0.2); }
-.verse.vt-on .vt-c { visibility: hidden; }
-.verse.vt-on .vt-c.vt-in { visibility: visible; animation: vtStrike 0.22s ease-out; }
+.vt-on .vt-c { visibility: hidden; }
+.vt-on .vt-c.vt-in { visibility: visible; animation: vtStrike 0.22s ease-out; }
 @keyframes vtStrike { 0% { opacity: 0.25; text-shadow: 0 0 2px rgba(255,240,200,0.9); } 100% { opacity: 1; } }
 .vt-caret { position: relative; display: inline-block; width: 0; height: 1em; }
 .vt-caret::after { content: ''; position: absolute; left: 2px; top: 0.12em; width: 0.5em; height: 1.05em; background: rgba(240,228,200,0.7); animation: vtBlink 0.9s steps(2, start) infinite; }
@@ -69681,6 +69938,11 @@ tw-story:has(.typewriter-page) .dss-trail-chip { display: none; } /* it would ha
 .fi-action.fi-key-btn { display: block !important; margin: 12px auto 2px !important; padding: 13px 22px !important; font-size: 13px !important; font-weight: bold; color: #fff2f2 !important; border: 1px solid rgba(255,110,130,0.95) !important; background: linear-gradient(180deg, rgba(200,30,60,0.55), rgba(120,10,30,0.65)) !important; box-shadow: 0 0 18px rgba(255,50,80,0.45); animation: dssKeyBtn 1.8s ease-in-out infinite; }
 @keyframes dssKeyBtn { 0%, 100% { box-shadow: 0 0 12px rgba(255,50,80,0.35); } 50% { box-shadow: 0 0 26px rgba(255,60,90,0.75); } }
 @media (prefers-reduced-motion: reduce) { .dss-key-loud, .fi-action.fi-key-btn { animation: none; } }
+/* 2026-10-29 (Sam, playtest note 14, mock-up approved): plot speech from someone in the game world, set apart from the narration and from the
+   typewriter's commentary: the speaker named in small caps, the words in a warm italic serif on a dark panel, a rule in the speaker's colour (--sp) */
+tw-passage .dss-speech, .dss-room-prose .dss-speech { display: block; margin: 0.9em 0; padding: 0.75em 1.2em 0.85em; border-left: 3px solid var(--sp, #c9a35e); border-radius: 0; background: rgba(26,20,13,0.82); font-family: Georgia, 'Crimson Text', serif; font-style: italic; font-size: 1.05em; line-height: 1.7; color: #f1e3c2; }
+tw-passage .dss-speech::before, .dss-room-prose .dss-speech::before { content: attr(data-speaker); display: block; font: bold 12px 'Courier New', monospace; letter-spacing: 4px; color: var(--sp, #c9a35e); margin-bottom: 6px; }
+.dss-speech .dss-quest-line { display: inline; margin: 0; padding: 0; border: 0; outline: 0; box-shadow: none; }
 .wk-bio-link { cursor: help; border-bottom: 1px dotted rgba(230,190,110,0.75); outline: none; }
 .wk-bio-link:hover, .wk-bio-link:focus-visible { text-shadow: 0 0 10px rgba(255,220,150,0.8); }
 .wk-bio { position: fixed; z-index: 9999995; max-width: 300px; padding: 10px 14px; background: rgba(14,10,6,0.96); border: 1px solid rgba(216,184,112,0.75); box-shadow: 0 6px 22px rgba(0,0,0,0.6); color: #eadcbc; font: 14px/1.5 Georgia, 'Crimson Text', serif; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity 0.2s ease, transform 0.2s ease; }
@@ -77796,7 +78058,7 @@ You need to sing the harmony.
 <div id="dss-harmony">
 (if: $jeffreyTune is true)[<button type="button" class="hm-reference">Remember JEFFREY’s tune</button>]
 <div class="hm-stage"><canvas width="600" height="400" tabindex="0" aria-label="The granite chamber. An empty sarcophagus, and at its heart a scarab caught in amber. Hold to hum; let go to hold the note."></canvas><div class="hm-banner" aria-hidden="true"></div></div>
-<div class="hm-status" role="status" aria-live="polite"><b class="hm-title">Hold to hum. Let go when the scarab opens its wings.</b><span class="hm-marks" aria-label="attempts"><i></i><i></i><i></i></span></div>
+<div class="hm-status" role="status" aria-live="polite"><b class="hm-title">Hold to hum. Let go when the scarab opens its wings.</b><span class="hm-tries" style="display:inline-flex;align-items:center;gap:8px;flex:none"><small style="font:10px 'Courier New',monospace;letter-spacing:.2em;opacity:.75">TRIES</small><span class="hm-marks" aria-label="attempts"><i></i><i></i><i></i></span></span></div>
 <div class="hm-help">Mouse, finger or the space bar, held down.</div>
 </div>
 <span id="hm-mark" aria-hidden="true">(link: "hm-harmony")[(set: $pyramidHarmony to true)]</span>
@@ -77958,7 +78220,10 @@ You need to sing the harmony.
 </script>
 
 <span id="hm-after">
-(link: "Keep listening")[
+<!-- 2026-10-29 (Sam, playtest note 25: the chamber "needs to be split so it fits on one page without scrolling"): what came after Keep listening is its own page, words unchanged -->[[Keep listening|The King's Chamber: the proportion]]
+</span>
+
+:: The King's Chamber: the proportion [dream pyramid centre] {"position":"2300,3100","size":"100,100"}
 (set: $pyramidNumber to true)\
 (if: $pyramidRunWon is true)[(set: $confidence to ($statGain: $confidence, 8))(display: "Bars Now")<div class="inventory-note">MORALE +8</div>]\
 (unless: $worldsVisited contains "pyramid")[(set: $worldsVisited to $worldsVisited + (a: "pyramid"))]
@@ -77987,8 +78252,6 @@ As you are to the chamber, so is the stamen to the flower.
 (link: "Keep listening to the silence")[(set: $alba to $alba + (a: $alba2))<div class="revelation-box" data-alba="2"><em>‘$alba2’</em></div><strong class="alba-counter">THE SECOND LINE OF THREE</strong>]
 ]
 [[Back the way you came|Pyramid Return]]
-]
-</span>
 
 :: Pyramid Return [outdoor street-night] {"position":"2300,3200","size":"100,100"}
 <script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.passageWhoosh)window.dssAudio.passageWhoosh();},200);</script>
@@ -81025,7 +81288,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
         if (g3.got || g3.hidden) continue;
         var gyy = (floorAt(g3.x) || floorAt(g3.x - 80) || 360) + g3.dy;
         if (Math.abs(g3.x - px) < 26 && Math.abs(gyy - (py - 24)) < 40){
-          g3.got = true; glyphCount++; if(audio)audio.mark(glyphCount);
+          g3.got = true; glyphCount++; if(audio)audio.mark(glyphCount); if (stumbles > 0) { stumbles--; say('A MARK TAKES BACK A STUMBLE.', 1.6); } /* 2026-10-29 (Sam, playtest note 22: "there should be some reason for collecting these"; his pick: each buys back a stumble) */
           sparkles.push({ x: g3.x, y: gyy, t: 0 });
           if (window.dssAudio && window.dssAudio.loreUnravel && glyphCount === GLYPHS.length) window.dssAudio.loreUnravel();
         }
@@ -81083,7 +81346,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
       hazardHint=nextHazards.length?nextHazards[0].text:'';
       if(px>SNAKE0-35&&px<SNAKE1)hazardHint='SNAKE HEADS · HOLD ↑, RELEASE, JUMP AGAIN';
       if(!croc.passed&&px>=CROC_GATE-110&&px<4820)hazardHint=croc.open>.82?'JAWS OPEN · HOLD → TO ENTER':'WAIT · THE JAWS WILL OPEN';
-      hud.textContent = (hazardHint?hazardHint+'   ·   ':'')+'MARKS ' + glyphCount + '/7 · BONUS AT 4   ·   STUMBLES ' + stumbles + '/3';
+      hud.textContent = (hazardHint?hazardHint+'   ·   ':'')+'MARKS ' + glyphCount + '/7 · EACH TAKES BACK A STUMBLE   ·   STUMBLES ' + stumbles + '/3';
     }
   }
 
@@ -81108,7 +81371,8 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
             if (span2.scrollIntoView) span2.scrollIntoView({ behavior: reducedMotion?'auto':'smooth', block: 'center' });
           }, 900);
           /* 2026-10-28 (Sam: "Easier each retry"): TRY AGAIN runs it afresh, gentler; MOVE ON limps on as before */
-          if (!won && window.dssEase) { window.dssEase.lost('pyramid'); window.dssEase.offer(stage, { onAgain: function(){ var a = document.querySelector('.pr-again tw-link'); if (a) a.click(); }, onMove: function(){ var l = span2.querySelector('tw-link'); if (l) l.click(); } }); }
+          /* 2026-10-29 (Sam, playtest note 23: "two buttons doing the same thing. Move on and Limp in. It should just be one"): the card's own move button is the limp; the page link stays hidden */
+          if (!won && window.dssEase) { span2.style.display = 'none'; window.dssEase.lost('pyramid'); window.dssEase.offer(stage, { move: 'Limp into the Gallery', onAgain: function(){ var a = document.querySelector('.pr-again tw-link'); if (a) a.click(); }, onMove: function(){ var l = span2.querySelector('tw-link'); if (l) l.click(); } }); }
         }
         if (won && window.dssAudio && window.dssAudio.loreUnravel) window.dssAudio.loreUnravel();
   }
@@ -81314,19 +81578,19 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
       ctx.strokeStyle='#91b6a1';ctx.lineWidth=1.2;ctx.beginPath();ctx.ellipse(s2.x,sfl3-5,9,5,0,Math.PI,Math.PI*2);ctx.stroke();
     }
 
-    // glyphs — electric blue, they glow through the dark
+    // glyphs — red now (2026-10-29, Sam: "can we make them red not blue"), they glow through the dark
     for (var gd2 = 0; gd2 < GLYPHS.length; gd2++){
       var g4 = GLYPHS[gd2];
       if (g4.got || g4.hidden || g4.x < camX - 60 || g4.x > camX + W + 60) continue;
       var gfl = (floorAt(g4.x) || floorAt(g4.x - 80) || 360) + g4.dy;
       var pulse = 0.7 + 0.3*Math.sin(now2/400 + gd2*1.7);
       var gg2 = ctx.createRadialGradient(g4.x, gfl, 2, g4.x, gfl, 30);
-      gg2.addColorStop(0, 'rgba(200,242,255,' + (0.6*pulse) + ')');
-      gg2.addColorStop(0.4, 'rgba(70,180,255,' + (0.3*pulse) + ')');
+      gg2.addColorStop(0, 'rgba(255,214,206,' + (0.6*pulse) + ')');
+      gg2.addColorStop(0.4, 'rgba(235,50,40,' + (0.32*pulse) + ')');
       gg2.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = gg2;
       ctx.fillRect(g4.x - 30, gfl - 30, 60, 60);
-      ctx.strokeStyle = 'rgba(120,220,255,' + (0.95*pulse) + ')';
+      ctx.strokeStyle = 'rgba(255,90,70,' + (0.95*pulse) + ')';
       ctx.lineWidth = 1.8;
       ctx.beginPath();
       for (var ph2 = 0; ph2 < 26; ph2++){

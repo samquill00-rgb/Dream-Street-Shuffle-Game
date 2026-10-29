@@ -5,7 +5,10 @@
 - Yughues CC0 parquet -> Lackland's floor; slate tile -> cellar floor (DSS_TEX_PARQUET / DSS_TEX_SLATE).
 - Four dead trees in Carthage approach (initCa, before FOG PLANES).
 - Green Sea square (green-sea-3d-static.html, not synced, ships as its own file): paneMoon() reflects the parent's DSS_MOON_URL in every window pane, random size/place/tilt/strength per pane per visit, fainter on lamplit panes.
-- Held: ulukai + Ryzom (CC-BY-SA), brick pavers (period). Window reflection not done (ask what he meant). Credits table in SOUND-SOURCES.md; four licences to confirm with Sam.
+- Parallax: window.dssParallaxLayers (Ronnie's ceiling, Colony smoke). Abstracts: window.DSS_ABS + dssAbsTex (Cosmogramma sleeves, Ronnie's light show on the curtain, bar arena at venue-ronnies, chippy formica, Trisha's 7 wall panels + bar front). Netting: window.dssNetting (Colony right wall by the back, cellar right wall far end). Lightning: DSS_LIGHTNING + poller before PENTANGLE REVEAL ON MAP, bolts per stroke timed to nb-map-pent (verified with an injected star).
+- Normal maps (DSS_NRM, dssNrmTex): portal goldMat normal+emissive oil-slick (portal not seen headless: needs a key); Carthage columnMat lichen+normal; Green Sea shutters lattice (static html). Nazca: Dirt multiplied into the race ground canvas g2 (note: `gx` is NOT the 2D context there). Old papers: --dss-paper-a on .dss-speech (dark ink), --dss-paper-b on .page-found. Trisha's floor: arcade carpet via dssPaintTex.
+- Gas giant: window.dssGasGiantDisc paints DSS_GAS (face 4) into planet sprite discs, rings redrawn after: Carthage planetDreamTex (rose wash), Ronnie's pTex1.
+- Held: ulukai, Ryzom (incl. sky_fyros), penguins skyboxes (all CC-BY-SA), brick pavers (period). Window reflection not done (ask what he meant). Credits table in SOUND-SOURCES.md; four licences to confirm with Sam.
 
 # 2026-10-29: plot-speech style built (synced, NOT committed)
 - .dss-speech panel (data-speaker label, --sp rule colour, warm italic on dark): INIS on O'Flatterly's Third Pillar (#8fbf78), INIS's Page 93 errand, the Ham's INIS errand (#d9806a). The quest-line gold light still runs inside. Add `<div class="dss-speech" data-speaker="NAME" style="--sp:#hex">` round any other plot speech.

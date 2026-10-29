@@ -34,5 +34,16 @@ The originals stay in the Claude work folder.
 | Patterns 271 (parquet) and 273 (slate tile), 3D_pattern_54 | Lackland's office floor; the cellar floor | Yughues (Nobiax), CC0 1.0 (original pack readme). Courtesy credit: Yughues, yughues.artstation.com |
 | Dead trees (tree_collection_dead_1K), four cut out | The coast of Carthage | Downloaded by Sam; licence to confirm |
 
-Not used (ShareAlike, held for Sam's decision): ulukai skyboxes (CC-BY-SA 3.0), Ryzom textures (CC-BY-SA 3.0). Not used for period: ground_brick_parker (modern herringbone concrete pavers).
+| Parallax60 (specks layer) | Ronnie's ceiling star-drift; Colony smoke glitter | Downloaded by Sam; licence to confirm |
+| Seamless abstract pack 128x128 (nos 2, 6, 13, 16, 22, 26, 29, 33, 36, 38, 41, 44, 45, 49, 50) | Cosmogramma LP sleeves; Ronnie's light show; Ronnie's bar-game arena; chippy formica; Trisha's panels and bar front | Screaming Brain Studios, CC0 (pack License.txt) |
+| Construction mesh cover | One sheet each in the Colony and Copper's cellar | Downloaded by Sam; licence to confirm |
+| Lightning (frames 0, 1, 3, 5, 7, 9) | Pentagram cast on the notebook map | Downloaded by Sam; licence to confirm |
+
+| 50 free textures 4 + normal maps: 163 (lichen stone), 173b / 173_norm (oil-slick metal), 176 (carved lattice) | Carthage colonnade; portal pillar shaft; Green Sea shutters | Downloaded by Sam; licence to confirm |
+| Dirt.png | Nazca race pampa crackle | Downloaded by Sam; licence to confirm |
+| Stains compressed (old papers), two pieces | Plot-speech panels; Page 93 | Downloaded by Sam; licence to confirm |
+| arcadefloor.png | Trisha's floor | Downloaded by Sam; licence to confirm |
+| tan-gas-giant-textures (face 4) | Carthage dream planet; Ronnie's tan ringed planet | Downloaded by Sam; no licence in the archive, to confirm |
+
+Not used (ShareAlike, held for Sam's decision): ulukai skyboxes (CC-BY-SA 3.0), Ryzom textures incl. sky_fyros_day_clouds (CC-BY-SA 3.0), penguins skybox pack by Zachery Slocum (CC-BY-SA 3.0). Not used for period: ground_brick_parker (modern herringbone concrete pavers).
 

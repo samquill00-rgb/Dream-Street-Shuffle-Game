@@ -45,6 +45,9 @@ The originals stay in the Claude work folder.
 | arcadefloor.png | Trisha's floor | Downloaded by Sam; licence to confirm |
 | Fantasy Ruins Pack: RuinArch_01, TempleRuin_02 (no ivy), RomanTypeCol_01, RuinWallSegment_01 + their stone textures | Carthage approach: drowned harbour, headland temple, wall among the palms | 3TD (Three D Textures), CC0 (3TD_CC0_License_EULA.pdf) |
 | Medieval Church (75990), Collada export, carved door figure omitted | Dawn view from Centre Point (oxford-street-from-centre-point-3d-static.html), north of Oxford Street | Daniel74, CC0 (licence page in the pack) |
+| Medieval Modular Buildings 1 (74696): Plaster, Wood, RoofTiles, GreyBricks textures | Soho Square gardener's hut | Daniel74, CC0 (licence page in the pack) |
+| Butterfly (monarch) wing texture, butterfly-skin.png | Colony approach, resting on the wall between the doors | Čestmír Dammer (for Kelgar), CC0 (license.txt) |
+| Potion_1 (FBX), rendered once to an image, re-coloured crimson | Shelley's liver: OBJECT ACQUIRED box and notebook | Downloaded by Sam; no licence in the archive, to confirm |
 | tan-gas-giant-textures (face 4) | Carthage dream planet; Ronnie's tan ringed planet | Downloaded by Sam; no licence in the archive, to confirm |
 
 Not used (ShareAlike, held for Sam's decision): ulukai skyboxes (CC-BY-SA 3.0), Ryzom textures incl. sky_fyros_day_clouds (CC-BY-SA 3.0), penguins skybox pack by Zachery Slocum (CC-BY-SA 3.0). Not used for period: ground_brick_parker (modern herringbone concrete pavers).

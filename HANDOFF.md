@@ -1,3 +1,6 @@
+# 2026-10-29: title page gap fixed (synced, NOT committed)
+- Page-fit (the 80% text-page shrink) zoomed the passage, and fixed layers inside it (the title's full-window backdrop) shrank too, leaving a strip at the right and foot. `unshrink()` in that IIFE zooms fixed descendants back by 1/z; undo() restores. Checked at 1440x900, 1280x800 and 1000x453: backdrop fills.
+
 # EVENING 2026-10-28 (after the nightwork) — synced, NOT committed
 
 - **Panels fit the screen (Q1):** new IIFE after the page fit in the UserScript (`2026-10-28 (Sam, nightwork Q1` comment). A room's words panel (`.dss-room-fixed`, zooms its `.dss-room-sheet`) or a plain-page panel (`.dss-threshold`, zooms its `.dss-room-prose`) taller than the window shrinks evenly, floor 60%, re-measured every 400 ms. Off below 700 px wide, in fullscreen, on the bar game's full panel, and while a fixed popup sits inside the panel. dssCharDeco's corners now follow the zoomed box (`box._dssDecoFit`).

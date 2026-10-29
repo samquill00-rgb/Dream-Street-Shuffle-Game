@@ -1,3 +1,52 @@
+# NIGHTWORK 2026-10-29/30 (05:41–07:51 GMT, 29 Oct by `date`) — synced, NOT committed
+
+Harness and evidence: scratchpad `/private/tmp/claude-501/-Users-samquill--claude-spares-spare-2jgkd9/865ce499-9d0f-4a24-9578-ca4dc3952a63/scratchpad/` (nsweep.py, nsmooth.py, fpsall.py, playnight.py, skipcheck.py, shots/).
+
+## Sweep
+- 240 passages × 1440×900 and 1280×800, by debug jump, run before and again after tonight's fixes. After the fixes: 0 page errors, 0 console errors (web-font timeouts aside), 0 tw-errors at both sizes.
+- No scene fallbacks (`scene failed`), and no approach whose `*-wrap` never appeared.
+- Overflow fixed: "The Ham calls you back" ran 86 px over at 1280×800 after the errand moved into the speech panel. The `.dss-speech` panel is tightened and two blank lines are folded, so it now fits (the ring still appears; replayed).
+- Overflow left as known: Dawn (by design), Tarot Card Back (a component, not a page), The French (81–89 px, your prose), PP Victory (5 px at 1280 only).
+
+## 29 Oct checks
+- Lore opens on the next onward press (Cecil Court → Watkins): OK.
+- Stat reasons on the rising numbers ("+3 · Beaujolais"): OK.
+- The Interval split, the King's Chamber split and the TRIES label: OK.
+- Lily petal trail from the hint to the flower: OK (seen live in the Pillars).
+- Doorways: walking past no longer stops you, and E, Enter, the button or a door's name steps in. Hold to piss works: the card closes after about 2.6 s and you are back on Dean Street. OK.
+- Plot-speech paper panels type in, and a click finishes them: OK. A click now finishes every verse, not only the speech panels.
+- First French visit: the slips queue one at a time, with no pile-up. OK.
+- Not reachable headless: the THREE BLUE POSTS portal sign and the portal text wait (a debug jump without a key goes to the Pillars). The code is unchanged since your own check.
+
+## Smoothness (worst first)
+1. **The Night Ahead** took about 43 s untouched, because it is a typewriter page and nothing says it can be skipped. Fixed: after 6 s a small line, "Click anywhere to set the whole page.", appears at the bottom. It shows on every typewriter page until the player has skipped once, and then never again. Verified: absent at 4 s, shown at 8 s, gone after the click.
+2. **Ronnie Scott's approach** ran at 36 fps. The render loop made a new 1440×900 canvas every frame and redrew the grain with 262,144 `fillRect` calls every eighth frame. Fixed: the same grain look is now done in one `putImageData`. It runs at 60 fps; before and after shots are `shots/ronnie_before_after.png`, with mean brightness unchanged.
+3. **The Fetch** held you for 15 s with no way through. Fixed: a click, Space or Enter now shows the whole street at once.
+4. **Shana's tarot spread**: it was unclear which card to turn. Fixed: the next card to turn breathes gold.
+5. Typewriter pages over 8 s (After the call 20.6 s, After Aoife 18, Cow ride success 16.1, Night Ahead Part Two 14.9, Night Ahead: LILY 14.2, After Cecil Court 13.7, After the music 13.3, Aoife memory 2 12.8, Watkins 12.7, After the painter 11.3): each one now gives its first choice 0.6–0.8 s after one click. Covered by the hint in item 1.
+6. Frame rates for all 31 scenes, measured one at a time: every scene is at or above 48 fps. Airport Pub (48–49) and the chippy approach (53) were already tuned on 14 Oct and are left alone. Time to first frame is 0.7–1.9 s everywhere.
+7. Approach ENTER buttons wait 1.5–3.5 s. That is fine and left alone.
+8. Deliberate timed beats, left for you (see Questions): the dual ring's "Hang up." at 15 s, the other calls' 8 s and 15 s hang-ups, the Dawn pages' 16 s auto-advance, and the portal button's 7.2 s.
+
+## Visual
+- All 33 in-game scenes plus the two static htmls were shot at 1440×900 (`shots/`), and every scene again at 1280×800 (`shots1280/`, `sheet1280.png`); nothing clips on the smaller laptop size. There are no black materials, floating props, z-fighting or white-hot glows to fix.
+- Checked and intended: the dark right halves of the Ginger Light and Trisha's are foreground buildings; the end of Cecil Court is a fogged facade; Harp Alley is off and pink.
+- Fault left (parked pass): the broken Waterhouse pillars in Carthage read dark and boxy.
+
+## Questions for Sam
+1. Typewriter skip hint: keep it (it only shows until the first skip), shorten its 6 s delay, or remove it?
+2. The Night Ahead types for about 43 s on a first play. Keep it, or speed up the type on that page only?
+3. Phone calls: the dual ring's "Hang up." appears at 15 s while the Lily lines run to about 21 s. Keep it, move it to the end of the call, or make the call skippable by a click like the typewriter pages?
+4. The doorway card cannot be backed out of once you are in it (you have to hold). Keep that, or let Escape or a click outside leave without pissing?
+5. The French is 81–89 px too tall at both laptop sizes. Trim the prose (your call), or let me fit it with the zoom floor?
+6. The eagle feeding at Shelley's liver has no prompt, by design. Keep it, or add a one-line "Move the mouse" for first-timers?
+7. Credits still to name: the creator of the Waterhouse set (CC0, but they asked for a courtesy credit), plus the four licences still to confirm (credits table in SOUND-SOURCES.md).
+8. The ShareAlike packs held back (Ulukai, Ryzom/fyros, penguins): keep them out of the commercial build, or use them on non-commercial test builds only?
+9. The "window reflection" from the moon request was never built. Which window did you mean: Ronnie's, the Green Sea, or a room interior?
+
+## Smoothness bot
+- `playnight.py` plays from Start on a fresh origin with real (occluded) mouse clicks, holds on the doorway card, and logs waits and overlays. A first night ran Title → Night Ahead (2.9 s with one click) → Ginger Light → poet → LILY → LINE 1 → book name and dedication → Dean Street coin → two doorways → Soho Square hut → Pillars. There were no dead ends, no errors, and no overlay pile-ups. It cannot click 3D hotspots, so it stops inside the rooms.
+
 # 2026-10-29 night: Sam's downloaded assets placed (synced, NOT committed)
 - Sun (NASA/SDO) in Ronnie's approach sky (rsSun on planetGroup, additive). Moon (moon_overlay) via window.dssSkyMoon, hooked in _dssBindScene for fh/ch/ph/lo/cr/ts/of/fc wraps.
 - Coach interior: wood2 painted into panelTex (panelling + counter, repeat 3x1), wood1 on oakTrim. window.dssPaintTex(tex,url,wash) helper.
@@ -16,6 +65,8 @@
 - Soho Square: gate removed (scene.remove(gate)); deer idle animation (dssStag userData.tick: breathe, look, graze, tail flick; sqHerd interval); King aged (own canvas material: streaks, lichen, droppings; traverse) with an animated pigeon on his wig.
 - Hut weathered: hutTex paints each pack texture into a canvas and weather(c,w,h,kind) adds streaks/damp/algae/cracks (plaster), rot/silvering (wood), moss/lichen/soot (roof), green damp (brick). Dove (white) replaced the pigeon.
 - Shelley's liver: his Potion_1.fbx rendered headless (scratchpad potrender/, FBXLoader r128 from CDN, plain crimson/glass/cork materials as its UVs mis-mapped) to a webp in the Gift's item box and the notebook (replaced the SVG vial). Waterhouse Set looked at: no licence file; not used yet.
+- Waterhouse (public domain): window.dssWaterhouse(name,tint); Carthage greyPillar() replaces buildColumn for -4,-2,4,-16,-13,18,20,22 (broken = clipped with a canted plane, renderer.localClippingEnabled); Sam: replace, don't add: the box-built centre arch (oldCentreArch group, not added) is now the Waterhouse round arch at (1,0,CENTRE_Z), file lies on its side (rot z -PI/2), span 6.7 m fitted to 5.5 m, y x1.35; fallen voussoirs kept. Blue posts, lintel pair 6/8, skull 10 untouched. Credit name pending from Sam.
+- PARKED (Sam, 2026-10-29: "put this on park for now, it's getting there"): Carthage Waterhouse pass. Live state: round arch replaces the centre arch, grey marble pillars (clipped when broken) replace drums/background columns. Open: broken pillars read dark/boxy in the low sun; creator's name for the courtesy credit still to come.
 - Held: ulukai, Ryzom (incl. sky_fyros), penguins skyboxes (all CC-BY-SA), brick pavers (period). Window reflection not done (ask what he meant). Credits table in SOUND-SOURCES.md; four licences to confirm with Sam.
 
 # 2026-10-29: plot-speech style built (synced, NOT committed)

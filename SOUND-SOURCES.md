@@ -43,6 +43,7 @@ The originals stay in the Claude work folder.
 | Dirt.png | Nazca race pampa crackle | Downloaded by Sam; licence to confirm |
 | Stains compressed (old papers), two pieces | Plot-speech panels; Page 93 | Downloaded by Sam; licence to confirm |
 | arcadefloor.png | Trisha's floor | Downloaded by Sam; licence to confirm |
+| Fantasy Ruins Pack: RuinArch_01, TempleRuin_02 (no ivy), RomanTypeCol_01, RuinWallSegment_01 + their stone textures | Carthage approach: drowned harbour, headland temple, wall among the palms | 3TD (Three D Textures), CC0 (3TD_CC0_License_EULA.pdf) |
 | tan-gas-giant-textures (face 4) | Carthage dream planet; Ronnie's tan ringed planet | Downloaded by Sam; no licence in the archive, to confirm |
 
 Not used (ShareAlike, held for Sam's decision): ulukai skyboxes (CC-BY-SA 3.0), Ryzom textures incl. sky_fyros_day_clouds (CC-BY-SA 3.0), penguins skybox pack by Zachery Slocum (CC-BY-SA 3.0). Not used for period: ground_brick_parker (modern herringbone concrete pavers).

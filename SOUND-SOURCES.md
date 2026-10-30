@@ -50,6 +50,12 @@ The originals stay in the Claude work folder.
 | Potion_1 (FBX), rendered once to an image, re-coloured crimson | Shelley's liver: OBJECT ACQUIRED box and notebook | Downloaded by Sam; no licence in the archive, to confirm |
 | Waterhouse Set: Grey_Pillar, Arch_Round (FBX) + HalfAtlas texture | Carthage approach: broken and background columns, a drowned arch | Public domain (OpenGameArt notice); creator asks for a courtesy credit, name to add |
 | tan-gas-giant-textures (face 4) | Carthage dream planet; Ronnie's tan ringed planet | Downloaded by Sam; no licence in the archive, to confirm |
+| Kenney Planets (planet05–08) | Ronnie's approach sky (rust, ice); Rapa Nui sky (mauve, tan) | CC0 |
+| Kenney Space Skyboxes (skybox-space-day, cloud band) | Rapa Nui clouds (clouds/rapa-nui-clouds.png) | CC0 |
+| Kenney Voiceover Pack: Fighter (8 calls) | Cellar fight ring MC (fight-announcer.m4a) | CC0 |
+| Kenney Impact Sounds (punch, soft, glass, plate, wood; footsteps concrete/wood/carpet/grass/snow) | Fight punches and falls, glass clinks/smash, crockery, knocks, landings, footsteps (sfx/sfx-impact.m4a, sfx/sfx-steps.m4a) | CC0 |
+| Kenney RPG Audio (creak, doorClose, bookFlip, bookPlace, handleCoins, metalLatch) | Door creaks and closes, page rustles, tarot card turns, coin into pocket, Zippo lid (sfx/sfx-rpg.m4a) | CC0 |
+| Kenney UI Audio (switch 2–6, click 1–5) | Notebook tab tick (sfx/sfx-ui.m4a) | CC0 |
 
 Not used (ShareAlike, held for Sam's decision): ulukai skyboxes (CC-BY-SA 3.0), Ryzom textures incl. sky_fyros_day_clouds (CC-BY-SA 3.0), penguins skybox pack by Zachery Slocum (CC-BY-SA 3.0). Not used for period: ground_brick_parker (modern herringbone concrete pavers).
 

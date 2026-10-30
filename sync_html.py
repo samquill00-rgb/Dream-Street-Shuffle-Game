@@ -76,6 +76,12 @@ AUDIO_EMBEDS = [
     ("__DSS_DOORWAY_DROPS_DATA_URI__", "doorway-drops.m4a",                            "audio/mp4"),   # "Water Drops" by CeoxBlackj: the doorway hold (lead, 8 s loop, tail)
     ("__DSS_VOMIT_DATA_URI__",       "vomit-sickness.m4a",                             "audio/mp4"),   # "Sick Noises" by frosty ham: the retch hold
     ("__DSS_GLASS_SMASH_DATA_URI__", "glass-window-smash.m4a",                         "audio/mp4"),   # "Glass Break" by Till Behrend: smashed map windows
+    # 2026-10-30: Kenney Impact Sounds, RPG Audio and UI Audio (CC0), cut into 1.5 s-slot sheets; see sfxTake in the UserScript
+    ("__DSS_SFX_IMPACT_DATA_URI__",  "sfx/sfx-impact.m4a",                             "audio/mp4"),
+    ("__DSS_SFX_STEPS_DATA_URI__",   "sfx/sfx-steps.m4a",                              "audio/mp4"),
+    ("__DSS_SFX_RPG_DATA_URI__",     "sfx/sfx-rpg.m4a",                                "audio/mp4"),
+    ("__DSS_SFX_UI_DATA_URI__",      "sfx/sfx-ui.m4a",                                 "audio/mp4"),
+    ("__DSS_FIGHT_ANNOUNCER_DATA_URI__", "fight-announcer.m4a",                       "audio/mp4"),   # 2026-10-30: Kenney Voiceover Pack: Fighter (CC0), eight ring-MC calls in 2 s slots for the cellar fight
     ("__DSS_SNOW_STEPS_DATA_URI__",  "climb-snow-steps.m4a",                           "audio/mp4"),   # "42 Snow and Gravel Footsteps" by Corsica_S: eight steps, one per second, for The Climb   # 2026-10-18 night: the street outside any venue (outdoor + street-night passages), Sam's outside-the-French recording under the generated late-night street
 ]
 

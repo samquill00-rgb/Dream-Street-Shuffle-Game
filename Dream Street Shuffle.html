@@ -10968,6 +10968,11 @@ window.dssAudio = (function() {
   }
   // Sam: "Glass breaking. I want this to be the sound of the glass breaking when you smash windows" (the Dean Street map)
   function windowSmash() { _playSample(GLASS_URL, 0.5, null, null, false); }
+  /* 2026-10-30 (Sam: "add relevant fighter voice sounds to the boxing game"): Kenney's Voiceover Pack: Fighter (CC0) is an announcer, so the
+     cellar gets a ring MC: eight calls cut into one sheet (fight-announcer.m4a, two seconds a slot), band-limited and given a little room so
+     they sound like a man shouting through a tin horn down the stairs */
+  var FIGHT_URL = 'fight-announcer.m4a', FIGHT_CALLS = ['round_1', 'round_2', 'round_3', 'final_round', 'fight', 'time', 'you_win', 'you_lose'];
+  function fightCall(name) { var i = FIGHT_CALLS.indexOf(name); if (i < 0) return; _sample(FIGHT_URL, function(buf) { _playSample(FIGHT_URL, 0.62, _onset(buf, i * 2, i * 2 + 1.9), 1.9 - (_onset(buf, i * 2, i * 2 + 1.9) - i * 2), false); }); }
   // Sam: "Walking: I want this to be the sound used in the yeti climb" (The Climb): one of eight snow steps, a second apart in the file
   var _lastSnow = -1;
   function snowStep() {
@@ -14537,9 +14542,45 @@ window.dssAudio = (function() {
       sSrc.start(spT);
     });
   }
+  /* 2026-10-30 (Sam: "use all of the others too"): Kenney's Impact Sounds, RPG Audio and UI Audio (all CC0) cut into four sound sheets in sfx/
+     (1.5 s a slot, sfx-*.m4a). The procedural cues below now play a random recorded take, never the same take twice running; the first call of
+     each, before its sheet has loaded, still plays the old procedural sound, so nothing goes silent while the sheets come in */
+  var SFX = { impact: 'sfx/sfx-impact.m4a', steps: 'sfx/sfx-steps.m4a', rpg: 'sfx/sfx-rpg.m4a', ui: 'sfx/sfx-ui.m4a' };
+  var SFX_FAM = { punch: ['impact', 0, 5], softHeavy: ['impact', 5, 5], softMed: ['impact', 10, 5], glassLight: ['impact', 15, 5], glassMed: ['impact', 20, 5], glassHeavy: ['impact', 25, 5],
+    plate: ['impact', 30, 5], woodMed: ['impact', 35, 5], woodLight: ['impact', 40, 5],
+    concrete: ['steps', 0, 5], wood: ['steps', 5, 5], carpet: ['steps', 10, 5], grass: ['steps', 15, 5], snow: ['steps', 20, 5],
+    creak: ['rpg', 0, 3], doorClose: ['rpg', 3, 4], doorOpen: ['rpg', 7, 2], bookFlip: ['rpg', 9, 3], bookPlace: ['rpg', 12, 3], coins: ['rpg', 15, 2], metalClick: ['rpg', 17, 1], metalLatch: ['rpg', 18, 1],
+    uiSwitch: ['ui', 0, 5], uiClick: ['ui', 5, 5] };
+  var _sfxLast = {};
+  function sfxReady(fam) { var f = SFX_FAM[fam], e = f && _smp[SFX[f[0]]]; if (f && !(e && e.buf)) _sample(SFX[f[0]]); return !!(e && e.buf); }
+  function sfxTake(fam, level, tick) {
+    if (!sfxReady(fam)) return false;
+    var f = SFX_FAM[fam], url = SFX[f[0]], buf = _smp[url].buf, k = f[1] + ((Math.random() * f[2]) | 0);
+    if (f[2] > 1 && k === _sfxLast[fam]) k = f[1] + ((k - f[1] + 1) % f[2]); _sfxLast[fam] = k;
+    var at = _onset(buf, k * 1.5, k * 1.5 + 1.4); _playSample(url, level * (0.85 + Math.random() * 0.3), at, k * 1.5 + 1.5 - at, !!tick); return true;
+  }
+  function _sfxSwap(orig, fam, level, tick) { return function() { if (!sfxTake(fam, level, tick)) return orig.apply(this, arguments); }; }
+  punchImpact = _sfxSwap(punchImpact, 'punch', 0.55);
+  muffledThud = _sfxSwap(muffledThud, 'softHeavy', 0.6);
+  glassClink = _sfxSwap(glassClink, 'glassLight', 0.42);
+  glassSetDown = _sfxSwap(glassSetDown, 'glassMed', 0.22, true);
+  glassSmash = _sfxSwap(glassSmash, 'glassHeavy', 0.5);
+  crockery = _sfxSwap(crockery, 'plate', 0.22, true);
+  woodKnock = _sfxSwap(woodKnock, 'woodLight', 0.32, true);
+  doorCreak = _sfxSwap(doorCreak, 'creak', 0.4);
+  doorThud = _sfxSwap(doorThud, 'doorClose', 0.5);
+  pageRustle = _sfxSwap(pageRustle, 'bookFlip', 0.38);
+  cardTurn = _sfxSwap(cardTurn, 'bookPlace', 0.32, true);
+  coinPocket = _sfxSwap(coinPocket, 'coins', 0.34, true);
+  zippoClick = _sfxSwap(zippoClick, 'metalLatch', 0.4, true);
+  tabTick = _sfxSwap(tabTick, 'uiSwitch', 0.28, true);
+  (function(o) { landThud = function(hard) { var k = Math.max(0.4, Math.min(1.4, hard || 1)); if (!sfxTake(k > 1 ? 'softHeavy' : 'softMed', 0.32 * k, true)) return o(hard); }; })(landThud);
+  (function(o) { doorKnock = function(times) { times = times || 3; if (!sfxReady('woodMed')) return o(times); for (var i = 0; i < times; i++) setTimeout(function() { sfxTake('woodMed', 0.5); }, i * 190); }; })(doorKnock);
+  (function(o) { footstep = function(surface) { var fam = { cobble: 'concrete', stone: 'concrete', wet: 'concrete', wood: 'wood', carpet: 'carpet', grass: 'grass', snow: 'snow' }[surface];
+    if (!fam || !sfxTake(fam, 0.42 * ((typeof _stepTrim === 'number') ? _stepTrim : 1))) return o.apply(this, arguments); }; })(footstep);
   return {
     jeffreyTune: jeffreyTune, pour: pour, sip: sip, phoneRing: phoneRing, pageRustle: pageRustle, pageShuffle: pageShuffle,
-    startPissStream: startPissStream, primePissStream: primePissStream, startRetchStream: startRetchStream, primeRetchStream: primeRetchStream, windowSmash: windowSmash, snowStep: snowStep, primeSnowSteps: primeSnowSteps,
+    startPissStream: startPissStream, primePissStream: primePissStream, startRetchStream: startRetchStream, primeRetchStream: primeRetchStream, windowSmash: windowSmash, fightCall: fightCall, sfxTake: sfxTake, snowStep: snowStep, primeSnowSteps: primeSnowSteps,
     typewriterTick: typewriterTick, typewriterClack: typewriterClack,
     itemFound: itemFound,
     penScratch: penScratch, heartbeat: heartbeat,
@@ -26701,6 +26742,8 @@ this.telegraphDuration = Math.max(650 + this.EZ * 90, Math.round(this.baseTelegr
 }
 this.updateRoundDisplay();
 var introDelay = this.isPractice() ? 1400 : (this.realRoundIndex() === 0 ? 1000 : 600);
+/* 2026-10-30: the ring MC calls each real exchange (the practice rounds stay quiet), and "Fight!" lands as the first swing comes */
+if (!this.isPractice() && window.dssAudio && window.dssAudio.fightCall) { var ri = this.realRoundIndex(); window.dssAudio.fightCall(ri === this.REAL_EXCHANGES - 1 ? 'final_round' : ['round_1', 'round_2', 'round_3'][ri]); if (ri === 0) setTimeout(() => { if (!this.gameOver && window.dssAudio) window.dssAudio.fightCall('fight'); }, 1250); }
 setTimeout(() => {
 if (this.gameOver) return;
 this.phase = 'telegraph';
@@ -26857,6 +26900,9 @@ var perfect = ko;
 window._lastFightScore = perfect ? 2 : (won ? 1 : 0);
 this.ko = ko;
 if (this._keyHandler) document.removeEventListener('keydown', this._keyHandler);
+/* 2026-10-30: the ring MC's verdict: "Time!" first when it went to the bell, then "You win" or "You lose" (a knockout waits for the body to land) */
+if (window.dssAudio && window.dssAudio.fightCall) { var fc = window.dssAudio.fightCall, toBell = !ko && !youDown;
+  if (toBell) fc('time'); setTimeout(function() { fc(won ? 'you_win' : 'you_lose'); }, ko ? 1500 : (toBell ? 1300 : 350)); }
 if (ko) {
 // The knockout plays out on canvas: Copper goes over (drawCopper's fall
 // transform), loop() runs on past gameOver to animate it, the body lands
@@ -64261,6 +64307,7 @@ window._dssDisposeWrap('ei-wrap');
   skyPlanet('planets/planet05.png', 5, -48, 37, -88, 0x8d909c, 0.8);
   /* 2026-10-30 (Sam: "add clouds to this sky"): the cloud band from Kenney's Space Skyboxes (CC0, skybox-space-day), keyed off its purple ground into
      grey-blue cloud and wrapped round the view inside the moon and planets, so they drift faintly across both */
+  var rnCloudBand = null, rnFlashK = 0;
   (function() { var im = new Image(); im.onload = function() {
     var w = im.width, h = im.height, cv = document.createElement('canvas'); cv.width = w; cv.height = h; var cx = cv.getContext('2d'); cx.drawImage(im, 0, 0);
     var d = cx.getImageData(0, 0, w, h), px = d.data;
@@ -64268,9 +64315,37 @@ window._dssDisposeWrap('ei-wrap');
       px[i] = v * 0.62; px[i + 1] = v * 0.68; px[i + 2] = v * 0.78; px[i + 3] = a * 255; }
     cx.putImageData(d, 0, 0); var tex = new THREE.CanvasTexture(cv); tex.wrapS = THREE.RepeatWrapping;
     var band = new THREE.Mesh(new THREE.CylinderGeometry(84, 84, 34, 96, 1, true), new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, transparent: true, opacity: 0.55, depthWrite: false, fog: false }));
-    band.position.set(2.6, 22, 11); band.renderOrder = 2; scene.add(band);
+    band.position.set(2.6, 22, 11); band.renderOrder = 2; scene.add(band); rnCloudBand = band;
     (function drift() { if (!band.parent) return; band.rotation.y += 0.00004; requestAnimationFrame(drift); })(); };
     im.src = 'clouds/rapa-nui-clouds.png'; })();
+  /* 2026-10-30 (Sam: "can this sky have some lightning?"): his lightning frames (window.DSS_LIGHTNING, horizontal bolts on black) stood upright as additive
+     sprites far out in the cloud ring; every 7 to 18 s a strike flickers through the frames, the clouds light up from inside and a cold ambient spike
+     catches the moai and the beach, sometimes twice in quick succession */
+  if (window.DSS_LIGHTNING) (function() {
+    var frames = window.DSS_LIGHTNING.map(function(f) { return new THREE.TextureLoader().load(f.src); });
+    var boltMat = new THREE.SpriteMaterial({ map: frames[0], color: 0xdfe8ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    var bolt = new THREE.Sprite(boltMat); bolt.renderOrder = 3; scene.add(bolt);
+    var gcv = document.createElement('canvas'); gcv.width = gcv.height = 128; var gx = gcv.getContext('2d'), gg = gx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gg.addColorStop(0, 'rgba(200,215,255,0.9)'); gg.addColorStop(0.4, 'rgba(150,170,230,0.35)'); gg.addColorStop(1, 'rgba(0,0,0,0)'); gx.fillStyle = gg; gx.fillRect(0, 0, 128, 128);
+    var glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gcv), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    glow.renderOrder = 1; scene.add(glow);
+    var flashLight = new THREE.AmbientLight(0xcfe0ff, 0); scene.add(flashLight);
+    function alive() { return !!document.getElementById('ei-wrap'); }
+    function setFlash(k) { rnFlashK = k; flashLight.intensity = 0.7 * k; glow.material.opacity = 0.75 * k; if (rnCloudBand) { rnCloudBand.material.opacity = 0.55 + 0.4 * k; rnCloudBand.material.color.setScalar(1 + 1.6 * k); } }
+    function strike(again) {
+      if (!alive()) return;
+      var th = (-62 + Math.random() * 100) * Math.PI / 180, x = 2.6 + 80 * Math.sin(th), z = 11 - 80 * Math.cos(th), len = 24 + Math.random() * 10;
+      bolt.position.set(x, 4 + len / 2, z); bolt.scale.set(len, len * 0.16, 1); boltMat.rotation = Math.PI / 2 + (Math.random() - 0.5) * 0.25;
+      glow.position.set(x, 4 + len * 0.85, z - 2); glow.scale.set(46, 30, 1);
+      var steps = [1, 0.15, 0.9, 0.5, 1, 0.3, 0.7], n = 0;
+      (function tick() { if (n < steps.length) { boltMat.map = frames[(Math.random() * frames.length) | 0]; boltMat.opacity = steps[n]; setFlash(steps[n]); n++; setTimeout(tick, 45 + Math.random() * 40); return; }
+        var t0 = performance.now(); (function fade() { var k = 1 - (performance.now() - t0) / 420; if (k <= 0) { boltMat.opacity = 0; setFlash(0); return; } boltMat.opacity = 0.6 * k; setFlash(0.6 * k); setTimeout(fade, 30); })(); })();
+      if (!again && Math.random() < 0.35) setTimeout(function() { strike(true); }, 650 + Math.random() * 500);
+    }
+    (function loop() { setTimeout(function() { if (!alive()) return; strike(false); loop(); }, 7000 + Math.random() * 11000); })();
+    setTimeout(function() { strike(false); }, 3500);
+    window._dssRapaStrike = { strike: strike, bolt: boltMat, flash: setFlash }; /* debug hook for checking a strike from the console */
+  })();
   // ============================================================
   // LIGHTING
   // ============================================================
@@ -64411,17 +64486,54 @@ window._dssDisposeWrap('ei-wrap');
     glints.push({ s: gs, ph: rand(0, 6.3), sp: rand(0.5, 1.6), base: rand(0.25, 0.7) });
   }
   // Foam at the waterline and up the wet stones
-  var foamTex = canvasTex(256, 64, function(ctx, w, h) {
+  /* 2026-10-30 (Sam: "improve the surf on the beach... more realistic... foam and catch the light"): was four dotted strips sliding half a unit.
+     Now three waves on their own clocks: each breaks as a thin white line out on the water, runs up the stones as a rolling foam front with lace
+     trailing behind it, then slides back thinning to nothing. The front reaches the shore at a slant (its phase shifts along the beach), the foam
+     is additive so it glows against the dark water, glints flash along each crest as it runs, and a lightning flash whitens all of it */
+  var foamTex = canvasTex(256, 512, function(ctx, w, h) {
     ctx.clearRect(0, 0, w, h);
-    for (var i = 0; i < 260; i++) { ctx.fillStyle = 'rgba(225,235,245,' + (0.2 + Math.random() * 0.5) + ')'; ctx.beginPath(); ctx.arc(Math.random() * w, h * 0.2 + Math.random() * h * 0.6, 1 + Math.random() * 5, 0, 6.3); ctx.fill(); }
-    var fade = ctx.createLinearGradient(0, 0, 0, h); fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(0.3, 'rgba(0,0,0,0)'); fade.addColorStop(0.7, 'rgba(0,0,0,0)'); fade.addColorStop(1, 'rgba(0,0,0,1)');
-    ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = fade; ctx.fillRect(0, 0, w, h);
+    var wash = ctx.createLinearGradient(0, 0, w, 0); wash.addColorStop(0, 'rgba(170,190,215,0)'); wash.addColorStop(0.7, 'rgba(170,190,215,0.04)'); wash.addColorStop(1, 'rgba(170,190,215,0.08)');
+    ctx.fillStyle = wash; ctx.fillRect(0, 0, w, h);
+    for (var i = 0; i < 2600; i++) { var u = Math.pow(Math.random(), 0.55), x = u * w, y = Math.random() * h, r = 1 + Math.random() * (2 + u * 5);
+      ctx.fillStyle = 'rgba(232,240,250,' + (0.05 + u * 0.4) * Math.random() + ')'; ctx.beginPath(); ctx.ellipse(x, y, r, r * (0.6 + Math.random() * 0.8), Math.random() * 3, 0, 6.3); ctx.fill(); }
+    ctx.globalCompositeOperation = 'destination-out';
+    for (var k = 0; k < 900; k++) { var u2 = Math.random() * 0.85, r2 = 1.5 + Math.random() * (7 - u2 * 5); ctx.fillStyle = 'rgba(0,0,0,' + (0.6 + Math.random() * 0.4) + ')'; ctx.beginPath(); ctx.arc(u2 * w, Math.random() * h, r2, 0, 6.3); ctx.fill(); }
+    ctx.globalCompositeOperation = 'source-over';
+    for (var y2 = 0; y2 < h; y2 += 2) { var lip = w * (0.86 + Math.sin(y2 * 0.05) * 0.03 + Math.sin(y2 * 0.19) * 0.02 + Math.random() * 0.02);
+      var lg = ctx.createLinearGradient(lip, 0, w, 0); lg.addColorStop(0, 'rgba(240,246,255,0)'); lg.addColorStop(0.45, 'rgba(242,247,255,0.85)'); lg.addColorStop(0.8, 'rgba(250,252,255,1)'); lg.addColorStop(1, 'rgba(250,252,255,0.2)');
+      ctx.fillStyle = lg; ctx.fillRect(lip, y2, w - lip, 2); }
   });
-  var foamLines = [];
-  for (var fi = 0; fi < 4; fi++) {
-    var fm = new THREE.Mesh(new THREE.PlaneGeometry(80, 1.6 - fi * 0.25), new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, opacity: 0.5 - fi * 0.08 }));
-    fm.rotation.x = -Math.PI / 2; fm.rotation.z = Math.PI / 2; fm.position.set(0.4 + fi * 0.7, 0.03 + fi * 0.1, -8); scene.add(fm);
-    foamLines.push({ m: fm, baseX: fm.position.x, ph: fi * 1.4, baseOp: fm.material.opacity });
+  foamTex.wrapT = THREE.RepeatWrapping;
+  var foamLines = [], SURF_W = 1.7, SURF_L = 80;
+  function surfFront(p) { if (p < 0.42) { var e = p / 0.42; e = 1 - (1 - e) * (1 - e) * (1 - e); return -6 + 7.3 * e; } var r = (p - 0.42) / 0.58; return 1.3 - 2.6 * r * r; }
+  function surfGlow(p) { return p < 0.42 ? 0.25 + 0.75 * (p / 0.42) : Math.pow(1 - (p - 0.42) / 0.58, 1.6); }
+  for (var fi = 0; fi < 3; fi++) {
+    var fg = new THREE.PlaneGeometry(1, 1, 10, 200), uvA = fg.attributes.uv, nV = uvA.count, cols = new Float32Array(nV * 3);
+    for (var ui = 0; ui < nV; ui++) uvA.setY(ui, uvA.getY(ui) * 6);
+    fg.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    var fmesh = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ map: foamTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    fmesh.frustumCulled = false; fmesh.renderOrder = 2; scene.add(fmesh);
+    var crestGl = [];
+    for (var cg = 0; cg < 26; cg++) { var cs = new THREE.Sprite(new THREE.SpriteMaterial({ map: glintTex, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 }));
+      cs.scale.set(0.5 + Math.random() * 0.7, 0.12 + Math.random() * 0.1, 1); scene.add(cs); crestGl.push({ s: cs, z: -46 + Math.random() * 76, ph: Math.random() * 6.3, sp: 3 + Math.random() * 5 }); }
+    foamLines.push({ m: fmesh, g: fg, period: 8.6 + fi * 0.9, off: fi / 3, crest: crestGl });
+  }
+  function surfAt(fl, t, zW) { var p = t / fl.period + fl.off + Math.sin(zW * 0.13 + fl.off * 5) * 0.035 + zW * 0.0035; return p - Math.floor(p); }
+  function stepSurf(t) {
+    var flash = 1 + 2.2 * rnFlashK;
+    for (var f = 0; f < foamLines.length; f++) {
+      var fl = foamLines[f], pos = fl.g.attributes.position, uv = fl.g.attributes.uv, col = fl.g.attributes.color;
+      for (var i = 0; i < pos.count; i++) {
+        var u = uv.getX(i), zW = -8 - (uv.getY(i) / 6 - 0.5) * SURF_L, p = surfAt(fl, t, zW), front = surfFront(p);
+        var x = front - SURF_W * (1 - u), y = 0.15 + Math.max(0, x) * 0.16;
+        var k = 0.65 * surfGlow(p) * (0.7 + 0.3 * Math.sin(zW * 0.31 + f * 2)) * flash * (x < -4.5 ? Math.max(0, (x + 6.5) / 2) : 1) * (zW > -4 ? Math.max(0.45, 1 - (zW + 4) / 16) : 1);
+        pos.setXYZ(i, x, y, zW); col.setXYZ(i, k * 0.86, k * 0.92, k);
+      }
+      pos.needsUpdate = true; col.needsUpdate = true;
+      for (var c = 0; c < fl.crest.length; c++) { var cr = fl.crest[c], pc = surfAt(fl, t, cr.z), fx = surfFront(pc);
+        cr.s.position.set(fx - 0.15, 0.2 + Math.max(0, fx) * 0.16, cr.z);
+        cr.s.material.opacity = (pc < 0.46 ? 0.8 : 0) * (cr.z > -4 ? 0.4 : 1) * surfGlow(pc) * Math.max(0, Math.sin(t * cr.sp + cr.ph)) * flash; }
+    }
   }
   // The boat's wake: a V of foam receding out to sea, and the boat itself, far and dark
   (function() {
@@ -64579,7 +64691,7 @@ window._dssDisposeWrap('ei-wrap');
     for (var i = 0; i < p.count; i++) { var b = seaBase[i]; p.setZ(i, Math.sin(b.x * 0.18 + t * 0.6) * 0.14 + Math.sin(b.y * 0.11 - t * 0.45 + b.x * 0.05) * 0.1 + Math.sin((b.x + b.y) * 0.5 + t * 1.1) * 0.03); }
     p.needsUpdate = true; seaGeo.computeVertexNormals();
     // foam breathes up the stones and back
-    for (var f = 0; f < foamLines.length; f++) { var fl = foamLines[f]; var w = Math.sin(t * 0.45 + fl.ph); fl.m.position.x = fl.baseX + w * 0.5; fl.m.material.opacity = fl.baseOp * (0.6 + 0.4 * Math.max(0, w)); }
+    stepSurf(t);
     for (var g = 0; g < glints.length; g++) { var gl = glints[g]; gl.s.material.opacity = gl.base * Math.max(0, Math.sin(t * gl.sp + gl.ph)) * Math.max(0, Math.sin(t * 0.37 + gl.ph * 2)); }
     moonRoad.material.opacity = 0.3 + Math.sin(t * 0.5) * 0.04;
     // the boat and its spark creep out
@@ -80664,6 +80776,13 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
+
+
+
+
 
 
 

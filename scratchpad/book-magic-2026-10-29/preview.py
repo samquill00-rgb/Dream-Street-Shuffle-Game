@@ -1,6 +1,6 @@
 from pathlib import Path
 s=Path('Dream Street Shuffle.twee').read_text();out=Path('scratchpad/book-magic-2026-10-29')
-a=s.index('window.dssBookMagic =');b=s.index('// ====== INSIDE O\'FLATTERLY',a);magic=s[a:b]
+a=s.index('window.dssBookSwaps =');b=s.index('// ====== INSIDE O\'FLATTERLY',a);magic=s[a:b]
 # Reuse isolated exterior fixture shell and its shared scene helpers.
 p=Path('scratchpad/inis-approach-2026-10-29/after.html').read_text();a=s.index("// ====== O'FLATTERLY'S BOOKSHOP SCENE");b=s.index('// ====== THIRD PILLAR PORTAL',a)
 (out/'outside.html').write_text(p[:p.index("// ====== O'FLATTERLY'S BOOKSHOP SCENE")]+magic+s[a:b]+'</script>')

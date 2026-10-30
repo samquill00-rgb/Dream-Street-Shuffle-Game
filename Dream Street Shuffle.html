@@ -41690,6 +41690,22 @@ winGlow.material.opacity = 0.2 + 0.03 * Math.sin(t * 0.7);
 // >>>> DSS ROOM OI BEGIN
 // 2026-10-29 (Sam): books quietly exchange colours at independent paces.
 // Scene-owned state, using the existing frame callbacks; no extra timers.
+// 2026-10-30 (Sam): occasional pairs vanish and reappear in each other's slots.
+window.dssBookSwaps = function() {
+ var pairs=[];
+ return { pair:function(a,b){
+  var i=pairs.length, ax=a.position.x,bx=b.position.x;
+  var aw=a.geometry.parameters.width,bw=b.geometry.parameters.width;
+  var mats=[];[a,b].forEach(function(book){book.traverse(function(o){if(o.material){var m=o.material;m.transparent=true;m.depthWrite=false;mats.push({m:m,alpha:m.opacity});}});});
+  pairs.push({a:a,b:b,ax:ax,bx:bx,at:bx+bw/2-aw/2,bt:ax-aw/2+bw/2,mats:mats,start:5+(i*1.9%8),period:11+(i*3.7%13)});
+ },frame:function(t,still){if(still)return;pairs.forEach(function(p){
+  var elapsed=t-p.start, turn=elapsed<0?-1:Math.floor(elapsed/p.period), age=elapsed<0?2:elapsed%p.period;
+  var swapped=elapsed>=0 && (turn+(age>=0.8?1:0))%2===1;
+  p.a.position.x=swapped?p.at:p.ax;p.b.position.x=swapped?p.bt:p.bx;
+  var alpha=age<1.6?Math.abs(age-0.8)/0.8:1;alpha=alpha*alpha*(3-2*alpha);
+  p.mats.forEach(function(v){v.m.opacity=v.alpha*alpha;});
+ });} };
+};
 window.dssBookMagic = function() {
  var books=[], palette=[0xc23c57,0x1ab48c,0x426fe0,0xa74cc7,0xd7a936,0xd65d9b].map(function(c){return new THREE.Color(c);});
  // A quarter turn quickly; the rest keep their own medium or slow rhythm.
@@ -41730,7 +41746,7 @@ var wallMat = new THREE.MeshStandardMaterial({ map: wallPaint, roughness: 0.95 }
 var back = mesh(new THREE.PlaneGeometry(W, H), wallMat, 0, H / 2, -D / 2); var front = mesh(new THREE.PlaneGeometry(W, H), wallMat, 0, H / 2, D / 2); front.rotation.y = Math.PI;
 var left = mesh(new THREE.PlaneGeometry(D, H), wallMat, -W / 2, H / 2, 0); left.rotation.y = Math.PI / 2; var right = mesh(new THREE.PlaneGeometry(D, H), wallMat, W / 2, H / 2, 0); right.rotation.y = -Math.PI / 2;
 // ---------- THE SHELVES, floor to ceiling, both walls and the back, and the books in them ----------
-var oiBookMagic = window.dssBookMagic();
+var oiBookMagic = window.dssBookMagic(), oiBookSwaps=window.dssBookSwaps();
 var bookCols = [0x6a2a1a, 0x2a3a5a, 0x1a4a2a, 0xa08030, 0xe8e0d0, 0x3a2a4a, 0x8a1a1a, 0x2a2a2a, 0xc8b070, 0x5a3a18, 0x7a6a50, 0x1a2a3a];
 var spineTex = tex(64, 256, function(cx, w, h) { cx.fillStyle = 'rgba(255,255,255,0)'; cx.clearRect(0, 0, w, h); cx.fillStyle = 'rgba(230,200,120,0.75)'; cx.fillRect(10, 30, w - 20, 3); cx.fillRect(10, h - 40, w - 20, 3); for (var l = 0; l < 3; l++) cx.fillRect(14 + rnd(l) * 10, 60 + l * 14, w - 28 - rnd(l * 3) * 20, 4); cx.fillStyle = 'rgba(0,0,0,0.18)'; cx.fillRect(0, 0, 6, h); cx.fillRect(w - 6, 0, 6, h); });
 function shelfWall(len, x, z, ry, seed, gaps) {
@@ -41741,7 +41757,7 @@ for (var sh = 0; sh < n; sh++) {
 var y = 0.12 + sh * 0.38;
 mesh(new THREE.BoxGeometry(len, 0.03, 0.34), M.shelfWood, 0, y, 0.0, g);
 if (gaps && gaps(sh)) continue;
-var bx = -len / 2 + 0.03;
+var bx = -len / 2 + 0.03, rowBooks=[];
 while (bx < len / 2 - 0.05) {
 var bw = 0.025 + rnd(seed + sh * 100 + bx * 37) * 0.05, bh = 0.2 + rnd(seed + sh * 7 + bx * 13) * 0.13;
 if (rnd(seed + sh * 3 + bx * 5) < 0.05) { bx += 0.1; continue; }
@@ -41749,10 +41765,12 @@ var col = bookCols[Math.floor(rnd(seed + sh * 11 + bx * 17) * bookCols.length)];
 var bm = new THREE.MeshStandardMaterial({ color: col, roughness: 0.85 });
 oiBookMagic.add(bm);
 var bk = mesh(new THREE.BoxGeometry(bw, bh, 0.2 + rnd(bx + seed) * 0.1), bm, bx + bw / 2, y + 0.015 + bh / 2, 0.04, g);
-if (rnd(bx * 7 + seed) < 0.3) mesh(new THREE.PlaneGeometry(bw * 0.9, bh * 0.9), new THREE.MeshStandardMaterial({ map: spineTex, transparent: true, roughness: 0.8 }), bx + bw / 2, y + 0.015 + bh / 2, 0.04 + 0.11 + rnd(bx + seed) * 0.05 + 0.001, g);
+if (rnd(bx * 7 + seed) < 0.3) { var lettering=mesh(new THREE.PlaneGeometry(bw * 0.9, bh * 0.9), new THREE.MeshStandardMaterial({ map: spineTex, transparent: true, roughness: 0.8 }), bx + bw / 2, y + 0.015 + bh / 2, 0.04 + 0.11 + rnd(bx + seed) * 0.05 + 0.001, g); bk.attach(lettering); }
+rowBooks.push(bk);
 if (rnd(bx * 3 + seed) < 0.07) bk.rotation.z = 0.18;
 bx += bw + 0.003;
 }
+if(sh%3===1 && rowBooks.length>5)oiBookSwaps.pair(rowBooks[2],rowBooks[3]);
 }
 return g;
 }
@@ -41874,7 +41892,9 @@ mesh(new THREE.BoxGeometry(1.8, 2.0, 0.1), green, 0, 0, 0, winG);
 mesh(new THREE.PlaneGeometry(1.6, 1.8), new THREE.MeshBasicMaterial({ map: courtTex, toneMapped: false }), 0, 0, 0.055, winG);
 mesh(new THREE.PlaneGeometry(1.6, 1.8), caseGlass, 0, 0, 0.06, winG);
 // the window's own books, backs to you, on a shelf the court sees
-mesh(new THREE.BoxGeometry(1.6, 0.03, 0.3), M.shelfWood, 0, -0.75, 0.2, winG); for (var wb = 0; wb < 7; wb++) { var wbk = mesh(new THREE.BoxGeometry(0.16 + rnd(wb) * 0.06, 0.24 + rnd(wb * 3) * 0.06, 0.03), new THREE.MeshStandardMaterial({ color: bookCols[(wb * 5) % bookCols.length], roughness: 0.8 }), -0.68 + wb * 0.22, -0.6, 0.25, winG); wbk.rotation.x = -0.2; oiBookMagic.add(wbk.material); }
+var oiWindowBooks=[];
+mesh(new THREE.BoxGeometry(1.6, 0.03, 0.3), M.shelfWood, 0, -0.75, 0.2, winG); for (var wb = 0; wb < 7; wb++) { var wbk = mesh(new THREE.BoxGeometry(0.16 + rnd(wb) * 0.06, 0.24 + rnd(wb * 3) * 0.06, 0.03), new THREE.MeshStandardMaterial({ color: bookCols[(wb * 5) % bookCols.length], roughness: 0.8 }), -0.68 + wb * 0.22, -0.6, 0.25, winG); wbk.rotation.x = -0.2; oiBookMagic.add(wbk.material); oiWindowBooks.push(wbk); }
+oiBookSwaps.pair(oiWindowBooks[2],oiWindowBooks[3]);
 mesh(new THREE.BoxGeometry(0.05, 1.8, 0.04), green, 0, 0, 0.09, winG); mesh(new THREE.BoxGeometry(1.6, 0.05, 0.04), green, 0, 0.2, 0.09, winG);
 var fasciaTex = tex(512, 64, function(cx, w, h) { cx.clearRect(0, 0, w, h); cx.save(); cx.translate(w, 0); cx.scale(-1, 1); cx.fillStyle = 'rgba(220,180,90,0.9)'; cx.font = 'bold 30px Georgia,serif'; cx.textAlign = 'center'; cx.fillText("I. O'FLATTERLY", w / 2, 42); cx.restore(); });
 mesh(new THREE.PlaneGeometry(1.5, 0.19), new THREE.MeshBasicMaterial({ map: fasciaTex, transparent: true, toneMapped: false }), 0, 0.68, 0.065, winG);
@@ -41912,6 +41932,7 @@ actions: function() { return window.dssStreetExit(); } } /* 2026-10-20: the shop
 ];
 return { hotspots: hotspots, frame: function(t, dt, still) {
 oiBookMagic.frame(t, still);
+oiBookSwaps.frame(t, still);
 if (still) return;
 lampLight.intensity = 1.6 + 0.03 * Math.sin(t * 1.1); lampGlow.material.opacity = 0.45 + 0.02 * Math.sin(t * 1.1);
 pendLight.intensity = 1.0 + 0.03 * Math.sin(t * 0.9 + 1);
@@ -57727,7 +57748,7 @@ placeMesh(new THREE.PlaneGeometry(4.72, 3.1), new THREE.MeshBasicMaterial({ map:
 var ofBookMaskCanvas = document.createElement('canvas');
 ofBookMaskCanvas.width=1024;ofBookMaskCanvas.height=768;
 var ofBookMask = ofBookMaskCanvas.getContext('2d'), ofBookCount=0;
-var ofMagicTime={value:0};
+var ofMagicTime={value:0}, ofSpineSlots=[];
 var displayTex = makeCanvasTexture(1024, 768, function(cx, w, h) {
 var bg = cx.createRadialGradient(w * 0.5, h * 0.45, 60, w * 0.5, h * 0.5, w * 0.62);
 bg.addColorStop(0, '#c25f14'); bg.addColorStop(0.45, '#8a3d0c'); bg.addColorStop(1, '#3d1d06');
@@ -57745,6 +57766,7 @@ var lean = (Math.random() < 0.22) ? (Math.random() - 0.5) * 0.12 : 0;
 cx.save();
 cx.translate(bx + bw / 2, sy);
 cx.rotate(lean);
+if(lean===0)ofSpineSlots.push({x:bx,y:sy-bh,w:bw,h:bh,row:sh});
 ofBookMask.save();ofBookMask.translate(bx+bw/2,sy);ofBookMask.rotate(lean);
 ofBookMask.fillStyle='rgb('+ (25+(ofBookCount++*73)%210) +',0,0)';
 ofBookMask.fillRect(-bw/2,-bh,bw,bh);ofBookMask.restore();
@@ -57798,12 +57820,40 @@ cx.fillStyle = glow; cx.fillRect(0, 0, w, h);
 var ofDisplay = placeMesh(new THREE.PlaneGeometry(2.66, 2.0), new THREE.MeshBasicMaterial({ map: displayTex }), 0.675, 1.62, -0.16);
 // The existing painted spines get a second, static identity mask. The GPU
 // changes each independently; lettering, shadows and paper notices stay put.
+var ofSwapCanvas=document.createElement('canvas'),ofSwapMaskCanvas=document.createElement('canvas');
+ofSwapCanvas.width=ofSwapMaskCanvas.width=1024;ofSwapCanvas.height=ofSwapMaskCanvas.height=768;
+var ofSwapCtx=ofSwapCanvas.getContext('2d'),ofSwapMaskCtx=ofSwapMaskCanvas.getContext('2d');
+ofSwapCtx.drawImage(displayTex.image,0,0);
+var ofSwapPairs=0;
+function ofSpineClear(r){return ![[130,170,100,120],[640,200,118,146],[360,430,136,120]].some(function(p){return r.x<p[0]+p[2]+4&&r.x+r.w>p[0]-4&&r.y<p[1]+p[3]+4&&r.y+r.h>p[1]-4;});}
+for(var ofRow=0;ofRow<4;ofRow++){
+ var slots=ofSpineSlots.filter(function(r){return r.row===ofRow&&ofSpineClear(r);});
+ if(slots.length<2)continue;
+ var aa=slots[1],bb=slots[slots.length-2];if(aa===bb)continue;
+ [[aa,bb],[bb,aa]].forEach(function(pair){var dst=pair[0],src=pair[1];
+  ofSwapCtx.drawImage(displayTex.image,src.x,src.y,src.w,src.h,dst.x,dst.y,dst.w,dst.h);
+  ofSwapMaskCtx.fillStyle='rgb('+(32+ofSwapPairs*48)+',0,0)';ofSwapMaskCtx.fillRect(dst.x,dst.y,dst.w,dst.h);
+ });ofSwapPairs++;
+}
+var ofSwapTex=new THREE.CanvasTexture(ofSwapCanvas),ofSwapMaskTex=new THREE.CanvasTexture(ofSwapMaskCanvas);
 var ofBookMaskTex=new THREE.CanvasTexture(ofBookMaskCanvas);
 ofDisplay.material.onBeforeCompile=function(shader){
+ shader.uniforms.ofSwapMap={value:ofSwapTex};shader.uniforms.ofSwapMask={value:ofSwapMaskTex};
  shader.uniforms.ofBookMask={value:ofBookMaskTex};shader.uniforms.ofMagicTime=ofMagicTime;
- shader.fragmentShader='uniform sampler2D ofBookMask;\nuniform float ofMagicTime;\n'+shader.fragmentShader;
+ shader.fragmentShader='uniform sampler2D ofSwapMap;\nuniform sampler2D ofSwapMask;\nuniform sampler2D ofBookMask;\nuniform float ofMagicTime;\n'+shader.fragmentShader;
  shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',[
  '#include <map_fragment>',
+ 'vec4 swapID=texture2D(ofSwapMask,vUv);',
+ 'float pairID=(swapID.r*255.0-32.0)/48.0;',
+ 'float swapElapsed=ofMagicTime-(5.0+pairID*2.7);',
+ 'if(swapID.a>0.9 && swapElapsed>=0.0){',
+ 'float swapPeriod=12.0+pairID*3.7;',
+ 'float age=mod(swapElapsed,swapPeriod);',
+ 'float swapped=mod(floor(swapElapsed/swapPeriod)+step(0.8,age),2.0);',
+ 'diffuseColor.rgb=mix(diffuseColor.rgb,texture2D(ofSwapMap,vUv).rgb*diffuse,swapped);',
+ 'float vanish=age<1.6?abs(age-0.8)/0.8:1.0;',
+ 'diffuseColor.rgb*=smoothstep(0.0,1.0,vanish);',
+ '}',
  'vec4 bookID=texture2D(ofBookMask,vUv);',
  'float seed=bookID.r*255.0;',
  'float pace=mod(floor(seed),4.0)<1.0?3.0+mod(seed*0.173,3.0):8.0+mod(seed*0.731,14.0);',
@@ -57822,9 +57872,10 @@ ofDisplay.material.onBeforeCompile=function(shader){
  'diffuseColor.rgb=mix(diffuseColor.rgb,magic,bookID.a*blend*smoothstep(0.01,0.05,chroma));'
  ].join('\n'));
 };
-ofDisplay.material.customProgramCacheKey=function(){return 'of-magic-books-2';};
+ofDisplay.material.customProgramCacheKey=function(){return 'of-magic-books-3';};
 // Register the mask with the room's normal texture disposal.
 ofDisplay.material.userData.dssBookMask=ofBookMaskTex;
+ofDisplay.material.userData.dssBookSwapMaps=[ofSwapTex,ofSwapMaskTex];
 var ofBookMagic=window.dssBookMagic();
 // 3D dressing just behind the glass
 for (var bs = 0; bs < 3; bs++) {
@@ -58153,7 +58204,7 @@ initOflatterly();
 } else if (!container) {
 ofActive = false;
 if (ofAnimId) { cancelAnimationFrame(ofAnimId); ofAnimId = null; }
-if (window._dssThreeRegistry && window._dssThreeRegistry['of-wrap']) { var ofEntry=window._dssThreeRegistry['of-wrap']; if(ofEntry.scene)ofEntry.scene.traverse(function(o){if(o.material&&o.material.userData.dssBookMask)o.material.userData.dssBookMask.dispose();}); }
+if (window._dssThreeRegistry && window._dssThreeRegistry['of-wrap']) { var ofEntry=window._dssThreeRegistry['of-wrap']; if(ofEntry.scene)ofEntry.scene.traverse(function(o){if(o.material&&o.material.userData.dssBookMask){o.material.userData.dssBookMask.dispose();(o.material.userData.dssBookSwapMaps||[]).forEach(function(tex){tex.dispose();});}}); }
 window._dssDisposeWrap('of-wrap');
 }
 }, 300);
@@ -80511,6 +80562,8 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
 
 
 

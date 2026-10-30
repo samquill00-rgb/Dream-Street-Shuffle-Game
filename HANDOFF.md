@@ -1,3 +1,37 @@
+# NIGHTWORK 2026-10-30 (03:57–04:55 by `date`) — synced, NOT committed
+
+Prompt: `HANDOFF-nightwork-2026-10-30.md`. Focus: prove tonight's sound-engine swaps and the Rapa Nui sky/surf are safe, matched and smooth. Your 03:55 commit already holds `planets/`, `clouds/`, `sfx/`, `fight-announcer.m4a`; only the .twee and .html changed since. Harness and evidence: 29 Oct scratchpad (`levels.py`, `fpsei.py`, `warm.py`, `recheck.py`, `n30/`, `levels_before.json`, `levels_after.json`, `n30_1440.json`, `n30_1280.json`).
+
+## Sweep
+- 1440×900: 242 passages, 0 scene fallbacks, 0 tw-errors. 4 hits were server timeouts under load; all clean when re-run one at a time (plus Easter Island Shore and Turn to Copper).
+- 1280×800: 240 passages, 0 page or console errors, 0 tw-errors. O'Flatterly's quest showed 53 px over: a false alarm. The panel grows from 558 to 693 px when its last words finish typing (about 9 s in), and the fitter zooms it to 0.918 on its next 400 ms tick. The sweep caught it in that gap (`ofl5.py`, `ofl6.py`). Nothing to fix.
+- Overflows unchanged from 29 Oct: Dawn (by design), Tarot Card Back (component), The French (89 px, your prose).
+
+## Sound levels (muted headless, peak and active RMS at the destination; recorded minus procedural, RMS dB)
+- Before: most recorded takes 6–14 dB hot (zippo +13.9, tabTick +12.9, cardTurn +11.5, crockery +10.3, landThud +9.4, woodKnock +9.2, glassSetDown +8.7, mapFootstep +8.4, glassClink +7.7, doorCreak +6.4); glassSmash 11 dB under.
+- After two passes: all within about ±2.5 dB (punch −2.4, glassSmash −1.5, doorThud −1.3, pageRustle −1.3, coinPocket −2.1; the six small ticks taken down a second step). Recorded clicks still have sharper peaks than the generated ones (peak +2 to +10 dB at equal RMS); listen to the notebook tab and the Zippo first.
+- Ring MC (round_1, you_win) sits at −21 dB RMS, level with the punches (−20.6).
+- Fixed: Ronnie's entry played `doorThud` as a "muffled velvet curtain"; that cue is now a recorded wooden door, so Ronnie's keeps the old thud (`doorThudSoft`).
+- Fixed: a cue's first use played the old generated sound while its sheet loaded. The four sheets and the MC now preload 1.5 s after the first click (about 860 KB). Verified: none loaded before the click, all loaded 4 s after.
+
+- Fixed: entering the French or the Colony layered a door creak over your own recorded crossing (playTransition). By your real-vs-floor rule those stay pure, so the creak no longer fires there; Trisha's keeps its swing and bell, Ronnie's its soft thud.
+
+## Rapa Nui and Ronnie's
+- Both 60 fps at 1440×900 (Rapa Nui first canvas 1.5 s, Ronnie's 1.0 s); 60 fps during a held lightning strike. No console errors.
+- Fixed: the cloud drift loop never ended after leaving Rapa Nui (it checked the mesh, which outlives the scene).
+- Fixed: lightning now stays off under reduced motion (no flashing for players who ask for less motion).
+- Fixed: bolts stopped short of the sea; they now come down to the horizon (`n30/ei_strike.png`).
+
+## Smoothness bot
+- Night one from Start on a fresh origin: Title → Night Ahead → Ginger Light → poet → LILY → LINE 1 → book name and dedication → coin → two doorways → hut (Whack-a-Worm) → Pillars. No errors, no overlay pile-ups; same route and waits as 29 Oct. It cannot click 3D hotspots, so it stops in the Pillars room.
+
+## Questions for Sam
+1. Listen to the recorded sounds in play: any too loud or too soft? Levels are matched by measurement, not by ear.
+2. The ring MC's cellar-PA treatment: keep it, make it cleaner, or rougher?
+3. The 29 Oct questions 1–9 are still open (typewriter hint, Night Ahead length, phone hang-up timing, doorway card back-out, the French overflow, the eagle prompt, credits, ShareAlike packs, the window reflection).
+
+Morning: nothing broke tonight; five fixes (Ronnie's curtain thud, French/Colony crossings kept pure, sound preload, cloud loop, reduced-motion lightning) and every recorded cue brought down to match. Listen first to a door and a page turn on Dean Street, then a fight. Nothing committed.
+
 # NIGHTWORK 2026-10-29/30 (05:41–07:51 GMT, 29 Oct by `date`) — synced, NOT committed
 
 Harness and evidence: scratchpad `/private/tmp/claude-501/-Users-samquill--claude-spares-spare-2jgkd9/865ce499-9d0f-4a24-9578-ca4dc3952a63/scratchpad/` (nsweep.py, nsmooth.py, fpsall.py, playnight.py, skipcheck.py, shots/).

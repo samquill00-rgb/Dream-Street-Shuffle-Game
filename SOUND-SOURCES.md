@@ -15,6 +15,7 @@
 
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.
+- The Persian rug in Copper's cellar (2026-10-31): Wikimedia Commons photograph Abrash.JPG, public domain as Sam downloaded it. No credit needed if that holds; worth a glance at its Commons page before release to be sure.
 - The Ark of the Covenant in Copper's cellar (2026-10-31) is modelled from scratch. The Wikimedia Commons render you downloaded (Arca_da_Aliança_de_Deus_(3815219934).jpg) was only looked at for reference and is not in the game, so it needs no credit.
 
 Every outside sound that might go into the game: its page, author and licence. Checked against each item's own page on 2026-10-23; the files were matched by name and byte size.
@@ -68,6 +69,7 @@ The originals stay in the Claude work folder.
 | Waterhouse Set: Grey_Pillar, Arch_Round (FBX) + HalfAtlas texture | Carthage approach: broken and background columns, a drowned arch | Public domain (OpenGameArt notice); creator asks for a courtesy credit, name to add |
 | tan-gas-giant-textures (face 4) | Carthage dream planet; Ronnie's tan ringed planet | Downloaded by Sam; no licence in the archive, to confirm |
 | Kenney Planets (planet05–08) | Ronnie's approach sky (rust, ice); Rapa Nui sky (mauve, tan) | CC0 |
+| Abrash.JPG (Wikimedia Commons), warmed and desaturated into assets/cellar-rug.jpg | The rug under the chesterfield in Copper's cellar (room and approach) | Public domain (per Sam's download) |
 | Smithsonian Open Access, Pergolesi Side Chair (low-res glb, unpacked to models/pergolesi-chair.*) | The Colony Room, back wall between the bar and the piano | CC0 |
 | Kenney Space Skyboxes (skybox-space-day, cloud band) | Rapa Nui clouds (clouds/rapa-nui-clouds.png) | CC0 |
 | Kenney Voiceover Pack: Fighter (8 calls) | Cellar fight ring MC (fight-announcer.m4a) | CC0 |

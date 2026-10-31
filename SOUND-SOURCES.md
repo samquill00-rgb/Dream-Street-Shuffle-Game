@@ -8,6 +8,7 @@
 **Credits that are asked for or customary** (not legally required; good manners in the end credits):
 - NASA / Solar Dynamics Observatory: "Sun image courtesy of NASA/SDO" (Ronnie Scott's approach sky).
 - Yughues (Nobiax), yughues.artstation.com: parquet pattern (Lackland's office). The slate pattern came off the cellar floor on 2026-10-31.
+- PagDev (OpenGameArt): the pyre's fire. CC0, but the page says credit "is always appreciated".
 - Waterhouse Set creator: carved columns and arch at Carthage. The creator asks for a credit; their name still needs finding on the OpenGameArt page.
 
 **Licence still to confirm before release** (each could turn out to need a credit, or not be usable):
@@ -16,6 +17,7 @@
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.
 - Dripping water loop (atmosbasement.mp3_.flac) by Independent.nu, submitted by qubodup, https://opengameart.org/content/dripping-water-loop: CC0, checked on its page 2026-10-31 (file name and 1.3 MB size match). Now Copper's cellar drips. No credit needed; "Independent.nu" is a courtesy credit if wanted.
+- Fireplace Sound loop (fire.wav) by PagDev, https://opengameart.org/content/fireplace-sound-loop: CC0, checked on its page 2026-10-31 ("Credit is not required, but it is always appreciated"). Now the fire under Dido's Lament on the pyre. Courtesy credit: PagDev.
 - The Persian rug in Copper's cellar (2026-10-31): Wikimedia Commons photograph Abrash.JPG, public domain as Sam downloaded it. No credit needed if that holds; worth a glance at its Commons page before release to be sure.
 - The Ark of the Covenant in Copper's cellar (2026-10-31) is modelled from scratch. The Wikimedia Commons render you downloaded (Arca_da_Aliança_de_Deus_(3815219934).jpg) was only looked at for reference and is not in the game, so it needs no credit.
 
@@ -28,6 +30,7 @@ Every outside sound that might go into the game: its page, author and licence. C
 | water drops.mp3 | https://opengameart.org/content/water-drops | CeoxBlackj | CC0 | No |
 | corsica_s-walking_in_snow.7z | https://opengameart.org/content/42-snow-and-gravel-footsteps | Corsica_S | CC0 | No |
 | atmosbasement.mp3_.flac | https://opengameart.org/content/dripping-water-loop | Independent.nu (submitted by qubodup) | CC0 | No |
+| fire.wav | https://opengameart.org/content/fireplace-sound-loop | PagDev | CC0 | No (courtesy welcome) |
 | water.ogg | **not found**: the OpenGameArt "water.ogg" by jcpmcdonald (CC0) is a different file (12,805 bytes; yours is 538,794) | ? | **unknown** | Don't use until its page is found |
 
 CC0 means public domain: free for commercial use, no credit required. Crediting CC0 authors anyway is a courtesy, not an obligation.
@@ -41,6 +44,7 @@ CC0 means public domain: free for commercial use, no credit required. Crediting 
 | glass-window-smash.m4a | glass_breaking.wav (trimmed) | Smashing windows on the Dean Street map (`windowSmash`) |
 | climb-snow-steps.m4a | eight steps from the snow-covered-gravel set, one per second | Footsteps in The Climb (`snowStep`) |
 | sfx/sfx-drips.m4a | atmosbasement.mp3_.flac: eight clean drips, each levelled and set in a 1.5 s slot (2026-10-31) | Copper's cellar: its ambient drips and the ceiling drip you can see (`dripDrop`). The street's after-rain drips stay synthesised; the gents stays Sam's recording |
+| pyre-fire.m4a | fire.wav: a 25.98 s crossfaded loop, frame-aligned (1218 x 1024 samples at 48 kHz), gained to -31 LUFS (2026-10-31) | The pyre (Dido, Rescue the page, Stay in Carthage), about 3 dB under Dido's Lament |
 
 The originals stay in the Claude work folder.
 

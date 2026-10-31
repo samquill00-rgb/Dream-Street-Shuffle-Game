@@ -49,6 +49,7 @@ AUDIO_EMBEDS = [
     ("__DSS_CARTHAGE_DATA_URI__",    "the-carthage-cicadas-ambience.m4a",              "audio/mp4"),
     ("__DSS_CARTHAGE_MELODY_DATA_URI__", "carthage-melody.m4a",                            "audio/mp4"),
     ("__DSS_DIDOS_LAMENT_DATA_URI__", "didos-lament.m4a",                               "audio/mp4"),
+    ("__DSS_PYRE_FIRE_DATA_URI__",   "pyre-fire.m4a",                                  "audio/mp4"),   # 2026-10-31: "Fireplace Sound loop" by PagDev (OpenGameArt, CC0), a 25.98 s crossfaded loop (1218 x 1024 samples at 48 kHz), -31 LUFS; original fire.wav in Claude work
     ("__DSS_CELLAR_DATA_URI__",      "the-cellar-pump-ambience.m4a",                   "audio/mp4"),
     ("__DSS_COLONY_DATA_URI__",      "indoor-colony-room-floor.m4a",                         "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a small packed room; generated the-colony-ambience.m4a stays on disk
     ("__DSS_TRISHAS_DATA_URI__",     "indoor-quiet-lounge-floor.m4a",                        "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a quiet lounge; generated the-trishas-ambience.m4a stays on disk

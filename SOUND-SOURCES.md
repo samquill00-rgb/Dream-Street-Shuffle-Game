@@ -18,6 +18,7 @@
 - Everything else in the tables below that says CC0.
 - Dripping water loop (atmosbasement.mp3_.flac) by Independent.nu, submitted by qubodup, https://opengameart.org/content/dripping-water-loop: CC0, checked on its page 2026-10-31 (file name and 1.3 MB size match). Now Copper's cellar drips. No credit needed; "Independent.nu" is a courtesy credit if wanted.
 - Fireplace Sound loop (fire.wav) by PagDev, https://opengameart.org/content/fireplace-sound-loop: CC0, checked on its page 2026-10-31 ("Credit is not required, but it is always appreciated"). Now the fire under Dido's Lament on the pyre. Courtesy credit: PagDev.
+- Medieval Blacksmith pack by Daniel74 (Blend Swap 75729): CC0 per the licence page in the pack. Its strapped plank door is now the gardener's hut's double doors (2026-10-31). No credit needed.
 - The Persian rug in Copper's cellar (2026-10-31): Wikimedia Commons photograph Abrash.JPG, public domain as Sam downloaded it. No credit needed if that holds; worth a glance at its Commons page before release to be sure.
 - The Ark of the Covenant in Copper's cellar (2026-10-31) is modelled from scratch. The Wikimedia Commons render you downloaded (Arca_da_Aliança_de_Deus_(3815219934).jpg) was only looked at for reference and is not in the game, so it needs no credit.
 
@@ -71,6 +72,7 @@ The originals stay in the Claude work folder.
 | Fantasy Ruins Pack: RuinArch_01, TempleRuin_02 (no ivy), RomanTypeCol_01, RuinWallSegment_01 + their stone textures | Carthage approach: drowned harbour, headland temple, wall among the palms | 3TD (Three D Textures), CC0 (3TD_CC0_License_EULA.pdf) |
 | Medieval Church (75990), Collada export, carved door figure omitted | Dawn view from Centre Point (oxford-street-from-centre-point-3d-static.html), north of Oxford Street | Daniel74, CC0 (licence page in the pack) |
 | Medieval Modular Buildings 1 (74696): Plaster, Wood, RoofTiles, GreyBricks textures | Soho Square gardener's hut | Daniel74, CC0 (licence page in the pack) |
+| Medieval Blacksmith (75729), DoorType1 strapped plank door, two leaves (one mirrored) | Soho Square gardener's hut double doors (2026-10-31) | Daniel74, CC0 (licence page in the pack) |
 | Butterfly (monarch) wing texture, butterfly-skin.png | Colony approach, resting on the wall between the doors | Čestmír Dammer (for Kelgar), CC0 (license.txt) |
 | Potion_1 (FBX), rendered once to an image, re-coloured crimson | Shelley's liver: OBJECT ACQUIRED box and notebook | Downloaded by Sam; no licence in the archive, to confirm |
 | Waterhouse Set: Grey_Pillar, Arch_Round (FBX) + HalfAtlas texture | Carthage approach: broken and background columns, a drowned arch | Public domain (OpenGameArt notice); creator asks for a courtesy credit, name to add |

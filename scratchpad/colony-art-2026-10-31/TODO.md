@@ -1,0 +1,3 @@
+- [x] Choose 30 suitable public-domain artworks and record source metadata.
+- [x] Download, inspect and optimise the images; build the artwork pack and source list.
+- [x] Fit artwork to Colony frames and verify rendering; sync the game.

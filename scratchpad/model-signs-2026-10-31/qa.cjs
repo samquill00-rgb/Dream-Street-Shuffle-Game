@@ -1,0 +1,5 @@
+const {chromium}=require('/Users/samquill/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const fs=require('fs');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:'/Users/samquill/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell',args:['--use-gl=angle','--use-angle=metal','--enable-unsafe-swiftshader']});
+let results=[];
+for(const scene of ['cards','lackland']){const p=await browser.newPage({viewport:{width:1100,height:760}});let errors=[];p.on('pageerror',e=>errors.push(String(e)));await p.goto('http://127.0.0.1:8784/scratchpad/model-signs-2026-10-31/'+scene+'.html');await p.waitForTimeout(1800);console.log({scene,errors,registry:await p.evaluate(()=>Object.keys(window._dssThreeRegistry||{}))});await p.screenshot({path:'/private/tmp/dss-model-sign-'+scene+'.png'});await p.close();}await browser.close();})();

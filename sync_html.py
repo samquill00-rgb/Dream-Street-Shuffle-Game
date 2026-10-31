@@ -81,7 +81,7 @@ AUDIO_EMBEDS = [
     ("__DSS_SFX_STEPS_DATA_URI__",   "sfx/sfx-steps.m4a",                              "audio/mp4"),
     ("__DSS_SFX_RPG_DATA_URI__",     "sfx/sfx-rpg.m4a",                                "audio/mp4"),
     ("__DSS_SFX_UI_DATA_URI__",      "sfx/sfx-ui.m4a",                                 "audio/mp4"),
-    ("__DSS_SFX_DRIPS_DATA_URI__",   "sfx/sfx-drips.m4a",                              "audio/mp4"),   # 2026-10-31: eight drips cut from Sam's atmosbasement clip (source and licence to confirm), Copper's cellar
+    ("__DSS_SFX_DRIPS_DATA_URI__",   "sfx/sfx-drips.m4a",                              "audio/mp4"),   # 2026-10-31: eight drips cut from "Dripping water loop" by Independent.nu (OpenGameArt, CC0), Copper's cellar
     ("__DSS_FIGHT_ANNOUNCER_DATA_URI__", "fight-announcer.m4a",                       "audio/mp4"),   # 2026-10-30: Kenney Voiceover Pack: Fighter (CC0), eight ring-MC calls in 2 s slots for the cellar fight
     ("__DSS_SNOW_STEPS_DATA_URI__",  "climb-snow-steps.m4a",                           "audio/mp4"),   # "42 Snow and Gravel Footsteps" by Corsica_S: eight steps, one per second, for The Climb   # 2026-10-18 night: the street outside any venue (outdoor + street-night passages), Sam's outside-the-French recording under the generated late-night street
 ]

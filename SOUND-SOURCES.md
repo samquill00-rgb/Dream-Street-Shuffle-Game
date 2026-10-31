@@ -11,11 +11,11 @@
 - Waterhouse Set creator: carved columns and arch at Carthage. The creator asks for a credit; their name still needs finding on the OpenGameArt page.
 
 **Licence still to confirm before release** (each could turn out to need a credit, or not be usable):
-- atmosbasement.mp3_.flac (dripping water, added 2026-10-31): Sam's download, no source or licence in the file; find its page before release.
 - Moon overlay; Wood 1 and Wood 2; square paving flags and cobbles; dead trees; Parallax60 specks; construction mesh; lightning frames (map pentagram and Rapa Nui sky); 50 free textures 4; Dirt.png; Stains compressed; arcadefloor.png; Potion_1; tan gas giant textures.
 
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.
+- Dripping water loop (atmosbasement.mp3_.flac) by Independent.nu, submitted by qubodup, https://opengameart.org/content/dripping-water-loop: CC0, checked on its page 2026-10-31 (file name and 1.3 MB size match). Now Copper's cellar drips. No credit needed; "Independent.nu" is a courtesy credit if wanted.
 - The Persian rug in Copper's cellar (2026-10-31): Wikimedia Commons photograph Abrash.JPG, public domain as Sam downloaded it. No credit needed if that holds; worth a glance at its Commons page before release to be sure.
 - The Ark of the Covenant in Copper's cellar (2026-10-31) is modelled from scratch. The Wikimedia Commons render you downloaded (Arca_da_Aliança_de_Deus_(3815219934).jpg) was only looked at for reference and is not in the game, so it needs no credit.
 
@@ -27,6 +27,7 @@ Every outside sound that might go into the game: its page, author and licence. C
 | glass_breaking.wav | https://opengameart.org/content/glass-break | Till Behrend | CC0 | No |
 | water drops.mp3 | https://opengameart.org/content/water-drops | CeoxBlackj | CC0 | No |
 | corsica_s-walking_in_snow.7z | https://opengameart.org/content/42-snow-and-gravel-footsteps | Corsica_S | CC0 | No |
+| atmosbasement.mp3_.flac | https://opengameart.org/content/dripping-water-loop | Independent.nu (submitted by qubodup) | CC0 | No |
 | water.ogg | **not found**: the OpenGameArt "water.ogg" by jcpmcdonald (CC0) is a different file (12,805 bytes; yours is 538,794) | ? | **unknown** | Don't use until its page is found |
 
 CC0 means public domain: free for commercial use, no credit required. Crediting CC0 authors anyway is a courtesy, not an obligation.

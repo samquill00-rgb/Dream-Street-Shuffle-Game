@@ -3,7 +3,7 @@
 ## ATTRIBUTION LOG (kept up to date as assets come in; started 2026-10-31)
 
 **Credits you must give** (licence requires it):
-- None yet. Everything in the game so far is CC0 or public domain, or its licence is still unconfirmed (below).
+- reivaxcorp, "Cow run Cycle" (vaca.png), https://opengameart.org/node/83314, CC-BY 3.0: the cow that jumps over the moon in the Cecil Court approach (2026-10-31; file name and 42.7 KB size match the page). Credit line: "Cow run Cycle by reivaxcorp (OpenGameArt), CC-BY 3.0".
 
 **Credits that are asked for or customary** (not legally required; good manners in the end credits):
 - NASA / Solar Dynamics Observatory: "Sun image courtesy of NASA/SDO" (Ronnie Scott's approach sky).
@@ -72,6 +72,7 @@ The originals stay in the Claude work folder.
 | Fantasy Ruins Pack: RuinArch_01, TempleRuin_02 (no ivy), RomanTypeCol_01, RuinWallSegment_01 + their stone textures | Carthage approach: drowned harbour, headland temple, wall among the palms | 3TD (Three D Textures), CC0 (3TD_CC0_License_EULA.pdf) |
 | Medieval Church (75990), Collada export, carved door figure omitted | Dawn view from Centre Point (oxford-street-from-centre-point-3d-static.html), north of Oxford Street | Daniel74, CC0 (licence page in the pack) |
 | Medieval Modular Buildings 1 (74696): Plaster, Wood, RoofTiles, GreyBricks textures | Soho Square gardener's hut | Daniel74, CC0 (licence page in the pack) |
+| Cow run Cycle (vaca.png), 18-frame sheet, copied as assets/moon-cow.png | The cow jumping over the moon, Cecil Court approach (cecil-court-3d-static.html, 2026-10-31) | reivaxcorp, CC-BY 3.0: **credit required** |
 | Medieval Blacksmith (75729), DoorType1 strapped plank door, two leaves (one mirrored) | Soho Square gardener's hut double doors (2026-10-31) | Daniel74, CC0 (licence page in the pack) |
 | Butterfly (monarch) wing texture, butterfly-skin.png | Colony approach, resting on the wall between the doors | Čestmír Dammer (for Kelgar), CC0 (license.txt) |
 | Potion_1 (FBX), rendered once to an image, re-coloured crimson | Shelley's liver: OBJECT ACQUIRED box and notebook | Downloaded by Sam; no licence in the archive, to confirm |

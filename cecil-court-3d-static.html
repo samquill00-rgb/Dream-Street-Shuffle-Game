@@ -1289,42 +1289,32 @@ var moonOuterGlow = new THREE.Mesh(outerGlowGeo, outerGlowMat);
 moonOuterGlow.position.set(3.5, 33, -72);
 scene.add(moonOuterGlow);
 
-// A small, improbable shooting star: the cow falls across the moon once
-// the street has settled, then disappears behind the roofs. No extra loop.
-var moonCow = new THREE.Group();
-var cowIvory = new THREE.MeshBasicMaterial({ color: 0xc9c1ad, fog: false, transparent: true });
-var cowInk = new THREE.MeshBasicMaterial({ color: 0x17151b, fog: false, transparent: true });
-var cowMuzzle = new THREE.MeshBasicMaterial({ color: 0x92736a, fog: false, transparent: true });
-var cowMaterials = [cowIvory, cowInk, cowMuzzle];
-var cowShape = new THREE.SphereGeometry(1, 12, 8);
-function cowPart(material, x, y, z, sx, sy, sz) {
-  var part = new THREE.Mesh(cowShape, material);
-  part.position.set(x, y, z); part.scale.set(sx, sy, sz);
-  moonCow.add(part); return part;
-}
-cowPart(cowIvory, 0, 0, 0, 0.95, 0.46, 0.36);
-cowPart(cowInk, -0.35, 0.12, 0.31, 0.3, 0.29, 0.08);
-cowPart(cowInk, 0.32, -0.05, 0.34, 0.21, 0.25, 0.07);
-cowPart(cowIvory, 0.9, 0.3, 0, 0.32, 0.4, 0.3);
-cowPart(cowMuzzle, 1.13, 0.13, 0.14, 0.3, 0.19, 0.26);
-cowPart(cowInk, 1.03, 0.43, 0.28, 0.055, 0.055, 0.04);
-cowPart(cowIvory, 0.66, 0.62, 0, 0.25, 0.1, 0.13).rotation.z = -0.35;
-cowPart(cowIvory, 1.06, 0.68, -0.08, 0.07, 0.23, 0.07).rotation.z = -0.3;
-cowPart(cowIvory, 0.76, 0.71, 0.06, 0.07, 0.22, 0.07).rotation.z = 0.25;
-var cowLegs = [];
-for (var leg = 0; leg < 4; leg++) {
-  var lx = leg < 2 ? -0.58 : 0.58, lz = leg % 2 ? -0.24 : 0.24;
-  var limb = new THREE.Group(); limb.position.set(lx, -0.27, lz);
-  var shin = new THREE.Mesh(cowShape, cowIvory);
-  shin.scale.set(0.095, 0.34, 0.09); shin.position.y = -0.2;
-  var hoof = new THREE.Mesh(cowShape, cowInk);
-  hoof.scale.set(0.13, 0.11, 0.12); hoof.position.set(0.04, -0.5, 0);
-  limb.add(shin, hoof); moonCow.add(limb); cowLegs.push(limb);
-}
-cowPart(cowIvory, -1.02, 0.12, 0, 0.08, 0.4, 0.07).rotation.z = -0.8;
-cowPart(cowInk, -1.25, -0.12, 0, 0.12, 0.16, 0.1);
+// The cow jumps over the moon: a running cow, rising from the rooftops on the
+// left, arching over the top of the moon and dropping away behind the roofs
+// on the right. 2026-10-31 (Sam: "a cow moving its body while travelling in an
+// arch over the moon"): its body is reivaxcorp's "Cow run Cycle" sprite sheet
+// (OpenGameArt, CC-BY 3.0, assets/moon-cow.png), 18 frames of 111x81 in a
+// 7-column grid, played on a small canvas so the frames never bleed.
+var COW_FRAMES = 18, COW_COLS = 7, COW_FW = 111, COW_FH = 81, COW_FLIGHT = 6.5;
+var cowSheet = new Image();
+var cowCanvas = document.createElement('canvas');
+cowCanvas.width = COW_FW; cowCanvas.height = COW_FH;
+var cowCtx = cowCanvas.getContext('2d');
+var cowTex = new THREE.CanvasTexture(cowCanvas);
+var cowFrame = -1;
+cowSheet.src = 'assets/moon-cow.png';
+var cowMat = new THREE.SpriteMaterial({ map: cowTex, color: 0xe6dccb, fog: false, transparent: true, depthWrite: false });
+var moonCow = new THREE.Sprite(cowMat);
+moonCow.scale.set(6.3, 6.3 * COW_FH / COW_FW, 1);
 moonCow.visible = false;
 scene.add(moonCow);
+function drawCowFrame(f) {
+  if (f === cowFrame || !cowSheet.complete || !cowSheet.naturalWidth) return;
+  cowFrame = f;
+  cowCtx.clearRect(0, 0, COW_FW, COW_FH);
+  cowCtx.drawImage(cowSheet, (f % COW_COLS) * COW_FW, Math.floor(f / COW_COLS) * COW_FH, COW_FW, COW_FH, 0, 0, COW_FW, COW_FH);
+  cowTex.needsUpdate = true;
+}
 var cowTrailPositions = new Float32Array(32 * 3);
 var cowTrailColours = new Float32Array(32 * 3);
 for (var ct = 0; ct < 32; ct++) {
@@ -1341,27 +1331,31 @@ var cowTrailMat = new THREE.PointsMaterial({ size: 0.18, vertexColors: true,
 var cowTrail = new THREE.Points(cowTrailGeo, cowTrailMat);
 cowTrail.visible = false; scene.add(cowTrail);
 function cowFlight(u, target) {
-  // At halfway: in front of the moon, on the same camera sightline.
-  target.set(3.2 + (u - 0.5) * 26, 30.2 - (u - 0.5) * 23 - 5 * Math.pow(u - 0.5, 2), -62);
+  // A parabola just in front of the moon (3.5, 33, -70; radius 2.5, halo
+  // beyond): it takes off and lands level with the moon's lower edge and
+  // tops out well clear of the halo, square over the middle.
+  var s = u - 0.5;
+  target.set(3.5 + s * 22, 29.5 + 10 * (1 - 4 * s * s), -64);
 }
 var cowTrailPoint = new THREE.Vector3();
 function updateMoonCow(t) {
   var phase = (t - 6) % 34;
-  var visible = !motionPreference.matches && t >= 6 && phase < 4.8;
+  var visible = !motionPreference.matches && t >= 6 && phase < COW_FLIGHT;
   moonCow.visible = cowTrail.visible = visible;
   if (!visible) return;
-  var u = phase / 4.8;
+  var u = phase / COW_FLIGHT;
   cowFlight(u, moonCow.position);
-  moonCow.rotation.z = -0.32 + Math.sin(u * Math.PI * 2) * 0.22;
-  cowLegs.forEach(function(limb, i) { limb.rotation.z = Math.sin(u * 13 + i * 1.8) * 0.45; });
+  drawCowFrame(Math.floor(phase * 15) % COW_FRAMES);
+  // Nose up on the way up, level at the top, nose down on the way down.
+  cowMat.rotation = Math.atan2(-80 * (u - 0.5), 22) * 0.8;
   var alpha = Math.min(1, u * 9, (1 - u) * 7);
-  cowMaterials.forEach(function(m) { m.opacity = alpha; });
+  cowMat.opacity = alpha;
   cowTrailMat.opacity = alpha * 0.6;
   for (var i = 0; i < 32; i++) {
-    cowFlight(u - i * 0.006, cowTrailPoint);
-    cowTrailPositions[i * 3] = cowTrailPoint.x - 0.8;
-    cowTrailPositions[i * 3 + 1] = cowTrailPoint.y + Math.sin(i * 2.4) * i * 0.007;
-    cowTrailPositions[i * 3 + 2] = -62.5;
+    cowFlight(u - 0.025 - i * 0.006, cowTrailPoint);
+    cowTrailPositions[i * 3] = cowTrailPoint.x;
+    cowTrailPositions[i * 3 + 1] = cowTrailPoint.y - 0.9 + Math.sin(i * 2.4) * i * 0.007;
+    cowTrailPositions[i * 3 + 2] = -64.5;
   }
   cowTrailGeo.attributes.position.needsUpdate = true;
   cowTrailGeo.computeBoundingSphere();

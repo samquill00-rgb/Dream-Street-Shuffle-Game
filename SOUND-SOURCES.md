@@ -12,12 +12,15 @@
 - Waterhouse Set creator: carved columns and arch at Carthage. The creator asks for a credit; their name still needs finding on the OpenGameArt page.
 
 **Licence still to confirm before release** (each could turn out to need a credit, or not be usable):
-- Moon overlay; Wood 1 and Wood 2; square paving flags and cobbles; dead trees; Parallax60 specks; construction mesh; lightning frames (map pentagram and Rapa Nui sky); 50 free textures 4; Dirt.png; Stains compressed; arcadefloor.png; Potion_1; tan gas giant textures.
+- Moon overlay; Wood 1 and Wood 2; square paving flags and cobbles; dead trees; Parallax60 specks; construction mesh; lightning frames (map pentagram and Rapa Nui sky); 50 free textures 4; Dirt.png; Stains compressed; arcadefloor.png; Potion_1; tan gas giant textures; USNM 220068 cranium (the Carthage skull: Smithsonian NMNH scan, whose 3D records for neighbouring primate crania are CC0, but its own record not found yet); Cher Ami, the stuffed pigeon in O'Flatterly's shop (Smithsonian NMAH AF*30714 scan, file nmah-af_30714-cher_ami-100k-ar.glb; Smithsonian 3D scans are mostly CC0 but its own record has not been checked).
 
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.
 - Dripping water loop (atmosbasement.mp3_.flac) by Independent.nu, submitted by qubodup, https://opengameart.org/content/dripping-water-loop: CC0, checked on its page 2026-10-31 (file name and 1.3 MB size match). Now Copper's cellar drips. No credit needed; "Independent.nu" is a courtesy credit if wanted.
 - Fireplace Sound loop (fire.wav) by PagDev, https://opengameart.org/content/fireplace-sound-loop: CC0, checked on its page 2026-10-31 ("Credit is not required, but it is always appreciated"). Now the fire under Dido's Lament on the pyre. Courtesy credit: PagDev.
+- Charlie Parker's alto saxophone, Smithsonian 3D scan (NMAAHC 2019.10.1a-g), https://3d.si.edu/object/3d/alto-saxophone-owned-and-played-charlie-parker:c7c58ff8-fd1f-4cf6-9813-6bca3cd0b8b3: CC0 per its Smithsonian record (page itself sits behind a bot check; file 2019-10-1a-g_001-100k-2048_std.glb). Now Moe's horn at Ronnie Scott's. No credit needed; NMAAHC is a courtesy credit.
+- Baluster vase, Freer Gallery five-piece Kangxi garniture (F1980.190-.194; scan of F1980.192), Smithsonian 3D, file F1980.190–194_baluster_vase-150k-4096.glb: CC0 per the Smithsonian's Sketchfab listing and the Freer record for its sibling F1980.191 (no 3d.si.edu page checked). Now the green vase in Trisha's. No credit needed; National Museum of Asian Art is a courtesy credit.
+- Low Poly Animated Guns (FPS Pack.zip) by Quaternius, https://opengameart.org/content/low-poly-animated-guns: CC0, checked on its page 2026-10-31 (FPS Pack.zip, 1,098,036 bytes, matches). Its sniper rifle is Fortuna's rifle in The Reclamation. No credit needed; "Quaternius" is a courtesy credit if wanted.
 - Medieval Blacksmith pack by Daniel74 (Blend Swap 75729): CC0 per the licence page in the pack. Its strapped plank door is now the gardener's hut's double doors (2026-10-31). No credit needed.
 - The Persian rug in Copper's cellar (2026-10-31): Wikimedia Commons photograph Abrash.JPG, public domain as Sam downloaded it. No credit needed if that holds; worth a glance at its Commons page before release to be sure.
 - The Ark of the Covenant in Copper's cellar (2026-10-31) is modelled from scratch. The Wikimedia Commons render you downloaded (Arca_da_Aliança_de_Deus_(3815219934).jpg) was only looked at for reference and is not in the game, so it needs no credit.
@@ -61,7 +64,7 @@ The originals stay in the Claude work folder.
 | Dead trees (tree_collection_dead_1K), four cut out | The coast of Carthage | Downloaded by Sam; licence to confirm |
 
 | Parallax60 (specks layer) | Ronnie's ceiling star-drift; Colony smoke glitter | Downloaded by Sam; licence to confirm |
-| Seamless abstract pack 128x128 (nos 2, 6, 13, 16, 22, 26, 29, 33, 36, 38, 41, 44, 45, 49, 50) | Cosmogramma LP sleeves; Ronnie's light show; Ronnie's bar-game arena; chippy formica; Trisha's panels and bar front | Screaming Brain Studios, CC0 (pack License.txt) |
+| Seamless abstract pack 128x128 (nos 2, 6, 13, 16, 22, 26, 29, 33, 36, 38, 41, 44, 45, 49, 50) | Cosmogramma LP sleeves; Ronnie's light show; Ronnie's bar-game arena; chippy formica; Trisha's three panels (the bar front went to laminate on 2026-10-31) | Screaming Brain Studios, CC0 (pack License.txt) |
 | Construction mesh cover | One sheet each in the Colony and Copper's cellar | Downloaded by Sam; licence to confirm |
 | Lightning (frames 0, 1, 3, 5, 7, 9) | Pentagram cast on the notebook map; Rapa Nui sky strikes (2026-10-30) | Downloaded by Sam; licence to confirm |
 
@@ -73,6 +76,7 @@ The originals stay in the Claude work folder.
 | Medieval Church (75990), Collada export, carved door figure omitted | Dawn view from Centre Point (oxford-street-from-centre-point-3d-static.html), north of Oxford Street | Daniel74, CC0 (licence page in the pack) |
 | Medieval Modular Buildings 1 (74696): Plaster, Wood, RoofTiles, GreyBricks textures | Soho Square gardener's hut | Daniel74, CC0 (licence page in the pack) |
 | Cow run Cycle (vaca.png), 18-frame sheet, copied as assets/moon-cow.png | The cow jumping over the moon, Cecil Court approach (cecil-court-3d-static.html, 2026-10-31) | reivaxcorp, CC-BY 3.0: **credit required** |
+| FPS Pack.zip: SniperRifle.obj, packed into the passage, recoloured (the pack's materials are all grey) | Subcomandante Fortuna's rifle in view, The Reclamation (Rapa Nui shoot), 2026-10-31 | Quaternius, "Low Poly Animated Guns", CC0 (OpenGameArt page) |
 | Medieval Blacksmith (75729), DoorType1 strapped plank door, two leaves (one mirrored) | Soho Square gardener's hut double doors (2026-10-31) | Daniel74, CC0 (licence page in the pack) |
 | Butterfly (monarch) wing texture, butterfly-skin.png | Colony approach, resting on the wall between the doors | Čestmír Dammer (for Kelgar), CC0 (license.txt) |
 | Potion_1 (FBX), rendered once to an image, re-coloured crimson | Shelley's liver: OBJECT ACQUIRED box and notebook | Downloaded by Sam; no licence in the archive, to confirm |
@@ -81,6 +85,10 @@ The originals stay in the Claude work folder.
 | Kenney Planets (planet05–08) | Ronnie's approach sky (rust, ice); Rapa Nui sky (mauve, tan) | CC0 |
 | Abrash.JPG (Wikimedia Commons), warmed and desaturated into assets/cellar-rug.jpg | The rug under the chesterfield in Copper's cellar (room and approach) | Public domain (per Sam's download) |
 | Smithsonian Open Access, Pergolesi Side Chair (low-res glb, unpacked to models/pergolesi-chair.*) | The Colony Room, back wall between the bar and the piano | CC0 |
+| Smithsonian 3D, "Alto saxophone owned and played by Charlie Parker" (NMAAHC 2019.10.1a-g), 100k glb unpacked to models/parker-sax.* (maps at 1024, occlusion baked into colour) | Moe's saxophone on the stage at Ronnie Scott's (2026-10-31) | CC0 (Smithsonian Open Access). Courtesy credit: National Museum of African American History and Culture |
+| Smithsonian 3D, baluster vase from a five-piece garniture (Freer F1980.190-.194; the scan is F1980.192), 150k glb cut to about 56k triangles, unpacked to models/baluster-vase.* | Trisha's, on the floor against the left wall beside the back door, tinted green (2026-10-31) | CC0 (Smithsonian Open Access; its Sketchfab listing and the sibling record F1980.191 say CC0). Courtesy credit: National Museum of Asian Art (Freer Gallery) |
+| Smithsonian NMNH scan, USNM220068_Cranium (an ape cranium; 450k-face ASCII PLY), cut to its outer case, about 36k triangles, as models/carthage-skull.bin | The watching skull on the broken column, Carthage approach (2026-10-31), in place of the built cattle skull | Smithsonian 3D; licence to confirm (record not found; neighbouring specimens are CC0) |
+| Smithsonian 3D, Cher Ami, the Signal Corps pigeon (NMAH AF*30714), 100k AR glb cut to about 53k triangles, unpacked to models/cher-ami.* (occlusion baked into colour; the glass eye's transmission swapped for a plain amber gloss) | O'Flatterly's shop, stuffed on its turned base on top of the glass case (2026-10-31) | Smithsonian 3D; licence to confirm (probably CC0). Courtesy credit if so: National Museum of American History |
 | Kenney Space Skyboxes (skybox-space-day, cloud band) | Rapa Nui clouds (clouds/rapa-nui-clouds.png) | CC0 |
 | Kenney Voiceover Pack: Fighter (8 calls) | Cellar fight ring MC (fight-announcer.m4a) | CC0 |
 | Kenney Impact Sounds (punch, soft, glass, plate, wood; footsteps concrete/wood/carpet/grass/snow) | Fight punches and falls, glass clinks/smash, crockery, knocks, landings, footsteps (sfx/sfx-impact.m4a, sfx/sfx-steps.m4a) | CC0 |

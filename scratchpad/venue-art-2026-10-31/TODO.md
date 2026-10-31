@@ -1,4 +1,4 @@
 - [x] Audit French picture placeholders and preserve Sam's special photograph.
 - [x] Audit Trisha's and other venue picture placeholders.
 - [x] Select/download suitable public-domain images with source records.
-- [ ] Install images, verify affected rooms, and sync.
+- [x] Install images, verify affected rooms, and sync.

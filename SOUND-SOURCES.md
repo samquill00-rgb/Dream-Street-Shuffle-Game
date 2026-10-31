@@ -11,6 +11,7 @@
 - Waterhouse Set creator: carved columns and arch at Carthage. The creator asks for a credit; their name still needs finding on the OpenGameArt page.
 
 **Licence still to confirm before release** (each could turn out to need a credit, or not be usable):
+- atmosbasement.mp3_.flac (dripping water, added 2026-10-31): Sam's download, no source or licence in the file; find its page before release.
 - Moon overlay; Wood 1 and Wood 2; square paving flags and cobbles; dead trees; Parallax60 specks; construction mesh; lightning frames (map pentagram and Rapa Nui sky); 50 free textures 4; Dirt.png; Stains compressed; arcadefloor.png; Potion_1; tan gas giant textures.
 
 **No credit needed** (CC0, or built by Claude from scratch):
@@ -38,6 +39,7 @@ CC0 means public domain: free for commercial use, no credit required. Crediting 
 | vomit-sickness.m4a | sickness.wav (trimmed) | Vomiting (`startRetchStream`) |
 | glass-window-smash.m4a | glass_breaking.wav (trimmed) | Smashing windows on the Dean Street map (`windowSmash`) |
 | climb-snow-steps.m4a | eight steps from the snow-covered-gravel set, one per second | Footsteps in The Climb (`snowStep`) |
+| sfx/sfx-drips.m4a | atmosbasement.mp3_.flac: eight clean drips, each levelled and set in a 1.5 s slot (2026-10-31) | Copper's cellar: its ambient drips and the ceiling drip you can see (`dripDrop`). The street's after-rain drips stay synthesised; the gents stays Sam's recording |
 
 The originals stay in the Claude work folder.
 

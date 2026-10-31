@@ -1,0 +1,9 @@
+const {chromium}=require('/Users/samquill/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const fs=require('fs');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:'/Users/samquill/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell',args:['--use-gl=angle','--use-angle=metal','--enable-unsafe-swiftshader']});
+let results=[];
+const context=await browser.newContext({viewport:{width:1280,height:800}});const p=await context.newPage();let errors=[];p.on('pageerror',e=>errors.push(String(e)));p.on('console',e=>{if(e.type()==='error')errors.push(e.text())});await p.goto('http://127.0.0.1:8784/scratchpad/square-layout-2026-10-31/square.html');await p.waitForTimeout(1900);
+async function count(){return p.evaluate(()=>{var s=window._dssThreeRegistry['sq-wrap'].scene,g=s.getObjectByName('charles-cumulative-droppings');return {count:g.userData.count,saved:localStorage.getItem('dssCharlesDroppings1'),meshes:g.children.length};});}
+console.log('initial',await count());await p.waitForTimeout(2900);console.log('first',await count());await p.waitForFunction(()=>window._dssThreeRegistry['sq-wrap'].scene.getObjectByName('charles-cumulative-droppings').userData.count>=2,{},{timeout:25000});const before=await count();console.log('repeat',before);
+await p.reload();await p.waitForTimeout(1400);const after=await count();console.log('revisit',after);if(after.count!==before.count||before.count<2)throw Error('Persistence or repeat failed');
+await p.emulateMedia({reducedMotion:'reduce'});await p.reload();await p.waitForTimeout(3700);console.log('reduced',await count());console.log({errors});if(errors.length)throw Error('Scene errors');await browser.close();})();

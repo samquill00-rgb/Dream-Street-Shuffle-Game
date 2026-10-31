@@ -22875,49 +22875,26 @@ window.dssLore = (function() {
   function logRead(t) { try { var a = readLog(), f = runFirst(); if (a.some(function(r) { return r.t === t && r.n >= f; })) return; a.push({ t: t, n: nightNow() }); localStorage.setItem(KEYL, JSON.stringify(a)); } catch (e) {} }
   function autoDone(t) { try { return (JSON.parse(localStorage.getItem(KEYA) || '[]') || []).indexOf(t) >= 0; } catch (e) { return true; } }
   function autoMark(t) { try { var a = JSON.parse(localStorage.getItem(KEYA) || '[]') || []; if (a.indexOf(t) < 0) a.push(t); localStorage.setItem(KEYA, JSON.stringify(a)); } catch (e) {} }
-  function seen(el) { if (!el || !el.isConnected || !el.getClientRects().length) return false; var r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return false; for (var e = el; e && e.nodeType === 1; e = e.parentElement) { var cs = getComputedStyle(e); if (cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.6) return false; } return true; }
-  function held_busy() { return !!((window.dssOverlayBusy && window.dssOverlayBusy()) || document.querySelector('#dss-lore-overlay, tw-dialog, .phone-ringing:not(.ring-wait), .phone-scene, .dss-slip-fly, .dss-refusal:not(.dss-filed), .dss-rules-overlay')); }
-  /* a note a room card carries (the paperback at the French, the entry at Ronnie's, the Ham's card): the card is its sentence; it opens
-     after the beat once that card is looked at, by pressing the card's own lore button */
-  function norm(x) { return String(x || '').replace(/⟡/g, ' ').replace(/^\s*LORE\s*[:·]?\s*/i, ' ').replace(/\s+/g, ' ').trim().toLowerCase(); }
-  function cardBtn(t) { return Array.prototype.filter.call(document.querySelectorAll('.dss-room-card .fi-action, .dss-room-card button'), function(b) { return norm(b.textContent) === norm(t) && !b.closest('.dss-ghost') && seen(b); })[0] || null; }
-  function autoOpenCard(l, t) {
-    if (autoDone(t)) return;
-    var gen = null, at = 0; setTimeout(function() { gen = window._passageGen; }, 150);
-    var poll = setInterval(function() {
-      if (!l.isConnected || (gen !== null && window._passageGen !== gen) || autoDone(t)) { clearInterval(poll); return; }
-      var b = cardBtn(t);
-      if (!b || held_busy()) { at = 0; return; }
-      if (!at) { at = Date.now(); return; }
-      clearInterval(poll); owe(l, t); /* 2026-10-29: owed, not opened (see owe) */
-    }, 300);
-  }
-  function autoOpen(l, t, fn) {
-    if (autoDone(t)) return;
-    var gen = null, at = 0; setTimeout(function() { gen = window._passageGen; }, 150);
-    var poll = setInterval(function() {
-      if (!fn.isConnected || (gen !== null && window._passageGen !== gen) || autoDone(t)) { clearInterval(poll); return; }
-      if (!seen(fn) || held_busy()) { at = 0; return; }
-      if (!at) { at = Date.now(); return; }
-      clearInterval(poll); owe(l, t);
-    }, 300);
-  }
   /* 2026-10-29 (Sam, playtest notes 1 and 5: "This lore popup is what I want but it shouldn't just happen automatically, it should be part of the
      regular chain of pressing steps. This should occur in all similar instances"): a note seen for the first time is owed, not opened on a timer.
      The player's next onward press on that page (a link in the words, or a room card's button) opens it first, as the card with On.; On. (or ×,
      or Escape) then carries the press on. Once a browser, as before; its ⟡ LORE mark still opens it any time. */
   var owed = [], passing = false;
-  function owe(l, t) { if (autoDone(t) || owed.some(function(o) { return o.t === t; })) return; owed.push({ l: l, t: t, gen: window._passageGen }); }
+  /* 2026-10-31 (Sam: "so many options for LORE ... the LORE of a passage should appear automatically when you click off a page that has 'lore';
+     there should be no button or way to click it before then"): every note on a page is owed the moment the page is drawn, with no ⟡ LORE mark
+     in the words and no LORE button on a room card; the press that leaves the page opens it first, as the card with On., and On. carries the
+     press on. Once a browser as before; after that the note lives in the NOTEBOOK. fn: a note not behind a link (THE GREAT WORK). */
+  function owe(l, t, fn) { if (autoDone(t) || owed.some(function(o) { return o.t === t; })) return; owed.push({ l: l, t: t, fn: fn || null, gen: window._passageGen }); }
   document.addEventListener('click', function(ev) {
     if (passing || !ev.isTrusted || !owed.length) return;
-    var el = ev.target && ev.target.closest && ev.target.closest('tw-link, .fi-action'); if (!el) return;
+    var el = ev.target && ev.target.closest && ev.target.closest('tw-link, .fi-action, .dss-room-strip-btn'); if (!el) return; /* 2026-10-31: a room's strip (Back) leaves too */
     if (el._dssLoreNext || el.classList.contains('fi-lore-btn') || isLore(el.textContent) || el.closest('#dss-lore-overlay, .stat-bars, #stat-bars-lifted, tw-header, .dss-ghost, .lore-hidden-link')) return;
-    owed = owed.filter(function(o) { return o.gen === window._passageGen && !autoDone(o.t) && (notes[o.t] || o.l.isConnected); });
+    owed = owed.filter(function(o) { return o.gen === window._passageGen && !autoDone(o.t) && (o.fn || notes[o.t] || (o.l && o.l.isConnected)); });
     var o = owed.shift(); if (!o) return;
     ev.preventDefault(); ev.stopImmediatePropagation();
     autoMark(o.t); autoFirst = o.t;
     thenDo = function() { setTimeout(function() { if (!el.isConnected) return; passing = true; try { el.click(); } finally { passing = false; } }, 260); };
-    open(o.l);
+    if (o.fn) o.fn(); else open(o.l);
   }, true);
   setInterval(function() {
     Array.prototype.forEach.call(document.querySelectorAll('.nb-lore-notes:not([data-filled])'), function(b) {
@@ -22977,24 +22954,8 @@ window.dssLore = (function() {
   function placeDagger(l) {
     if (l._dssLore) return; l._dssLore = true;
     var t = titleOf(l.textContent), wrap = l.closest('tw-expression') || l.parentElement || l;
-    if (l.closest('.lore-card-only')) { wrap.classList.add('lore-hidden-link'); if (!l.closest('.dss-ghost')) autoOpenCard(l, t); return; } /* 2026-10-21 (Sam): the Great Ham's lore comes only from his card; no footnote in the room's words */
-    if (l.classList.contains('dss-claimed') || l.closest('.dss-claimed, .dss-claimed-wrap')) { if (!l.closest('.dss-ghost')) autoOpenCard(l, t); return; } // a room object's card carries it
-    var fn = document.createElement('span'); fn.className = 'lore-fn'; fn.innerHTML = '⟡<span class="lore-fn-word">LORE</span>'; /* Sam: the dagger alone didn't say what it was. 2026-10-19 (Sam): the dagger read as an up arrow; the lore's own ⟡. (A // comment here had switched off the title, role and tab stop after it.) */ fn.title = t; fn.setAttribute('role', 'button'); fn.tabIndex = 0; fn.setAttribute('aria-label', 'Note: ' + t);
-    fn.addEventListener('click', function(ev) { ev.stopPropagation(); if (notes[t]) show(t); else if (l.isConnected) l.click(); });
-    fn.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); fn.click(); } });
-    // the end of the sentence before the link: skip line breaks and blank text back to the last words
-    // (skip line breaks, scripts and anything without words, then sit after the last words inside what is found)
-    function lastWords(el) { var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), last = null; while (w.nextNode()) { var tn = w.currentNode; if (tn.nodeValue.trim() && !tn.parentNode.closest('script, style, tw-link, svg, [hidden]')) last = tn; } return last; }
-    var prev = wrap.previousSibling, spot = null;
-    while (prev && !spot) {
-      if (prev.nodeType === 3 && prev.nodeValue.trim()) spot = prev;
-      else if (prev.nodeType === 1 && !/^(SCRIPT|STYLE|SVG|TW-LINK|BUTTON)$/i.test(prev.tagName) && !prev.classList.contains('lore-hidden-link')) spot = lastWords(prev);
-      if (!spot) prev = prev.previousSibling;
-    }
-    if (spot) spot.parentNode.insertBefore(fn, spot.nextSibling);
-    else wrap.parentNode.insertBefore(fn, wrap);
     wrap.classList.add('lore-hidden-link');
-    if (!fn.closest('.dss-ghost')) autoOpen(l, t, fn);
+    if (!l.closest('.dss-ghost')) setTimeout(function() { owe(l, t); }, 200);
   }
   function scan() { Array.prototype.forEach.call(document.querySelectorAll('tw-link'), function(l) { if (isLore(l.textContent)) placeDagger(l); }); }
   var q = false;
@@ -23008,7 +22969,7 @@ window.dssLore = (function() {
   function openNext(l, then) { var t = titleOf(l.textContent); autoMark(t); autoFirst = t; thenDo = then || null; open(l); }
   /* 2026-10-19: a note held in the page rather than behind a link (THE GREAT WORK, printed hidden by the header) */
   function showFrom(title, src) { if (!notes[title] && src) { var frag = document.createElement('div'); frag.className = 'dss-lore-held'; frag.innerHTML = src.innerHTML; Array.prototype.forEach.call(frag.querySelectorAll('[style]'), function(e) { e.style.removeProperty('opacity'); e.style.removeProperty('transition'); }); remember(title, frag.innerHTML); notes[title] = frag; } show(title); } /* (overnight: no inline opacity carried into the card) */
-  return { scan: scan, show: show, isLore: isLore, open: open, showFrom: showFrom, openNext: openNext, firstDone: function(t) { return autoDone(titleOf(t)); } };
+  return { scan: scan, show: show, isLore: isLore, open: open, showFrom: showFrom, openNext: openNext, oweFrom: function(t, fn) { setTimeout(function() { owe(null, t, fn); }, 200); }, firstDone: function(t) { return autoDone(titleOf(t)); } };
 })();
 /* 2026-10-19 (Sam: explain the alchemy, "4 plus 3"). THE WHEEL IN THE NOTEBOOK and THE GREAT WORK NOTE.
    The notebook's HAUNTS opens on the wheel the Dawn draws (dssOpusReveal), small and in ink: Ripley's twelve gates clockwise
@@ -23062,7 +23023,7 @@ window.dssLore = (function() {
     Array.prototype.forEach.call(document.querySelectorAll('.haunt-box .haunt-work:not([data-gw])'), function(wk) {
       wk.setAttribute('data-gw', '1');
       var pr = wk.closest('.haunt-box').querySelector('.haunt-progress');
-      if (pr && /^\s*1 of 12\b/.test(pr.textContent)) wk.appendChild(mark());
+      if (pr && /^\s*1 of 12\b/.test(pr.textContent) && !wk.closest('.dss-ghost') && window.dssLore && window.dssLore.oweFrom) window.dssLore.oweFrom(NOTE, openNote); /* 2026-10-31: owed to the press that leaves, no mark */
     });
   }
   setInterval(function() { Array.prototype.forEach.call(document.querySelectorAll('.nb-haunts:not([data-wheel])'), build); firstBoxMark(); }, 300);
@@ -32708,6 +32669,51 @@ window._dssDisposeWrap('gl-wrap');
 }
 }, 300);
 })();
+// One persistent painted surface and one reusable falling drop; no growing mesh list.
+window.dssStatueDroppings = function(king) {
+  var key='dssCharlesDroppings1',count=window._dssCharlesDroppings||0;
+  try{var saved=Number(localStorage.getItem(key));if(Number.isFinite(saved)&&saved>=0)count=Math.max(count,Math.min(1e9,Math.floor(saved)));}catch(e){}
+  var canvas=document.createElement('canvas');canvas.width=384;canvas.height=640;var ctx=canvas.getContext('2d');
+  var texture=new THREE.CanvasTexture(canvas);texture.minFilter=THREE.LinearFilter;texture.generateMipmaps=false;
+  var material=new THREE.MeshStandardMaterial({map:texture,transparent:true,alphaTest:.015,depthWrite:false,roughness:.87,emissive:0x191813,emissiveMap:texture,emissiveIntensity:.22,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+  var layer=new THREE.Group();layer.name='charles-cumulative-droppings';king.add(layer);
+  var pos=[],uv=[],indices=[],surfaceHits=[],cols=32,rows=52,ray=new THREE.Raycaster(),dir=new THREE.Vector3(0,0,-1),inv=new THREE.Matrix4();
+  king.updateWorldMatrix(true,true);inv.copy(king.matrixWorld).invert();dir.transformDirection(king.matrixWorld);
+  var stone=king.children.filter(function(o){return o.isMesh;});
+  for(var row=0;row<=rows;row++)for(var col=0;col<=cols;col++){
+    var u=col/cols,v=row/rows,x=(u-.5)*.21,y=4.025-v*.34;
+    var origin=new THREE.Vector3(x,y,1).applyMatrix4(king.matrixWorld);ray.set(origin,dir);var hits=ray.intersectObjects(stone,false),z=.105;
+    if(hits.length)z=hits[0].point.clone().applyMatrix4(inv).z+.002;
+    surfaceHits.push(hits.length>0);pos.push(x,y,z);uv.push(u,1-v);if(row<rows&&col<cols){var i=row*(cols+1)+col;indices.push(i,i+cols+1,i+1,i+1,i+cols+1,i+cols+2);}
+  }
+  var geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
+  var stain=new THREE.Mesh(geo,material);stain.userData.sqDynamic=true;stain.renderOrder=3;layer.add(stain);
+  var drop=new THREE.Mesh(new THREE.SphereGeometry(1,12,8),new THREE.MeshStandardMaterial({color:0xf6f3dc,roughness:.55,emissive:0x15140e}));drop.scale.set(.009,.022,.009);drop.userData.sqDynamic=true;drop.visible=false;king.add(drop);
+  function R(n,s){var x=Math.sin(n*37.13+s*71.79)*43758.5453;return x-Math.floor(x);}
+  function deposit(n,p){var x=canvas.width*(.30+R(n,1)*.38),y=canvas.height*(.08+R(n,2)*.065),r=14+R(n,3)*13;
+    ctx.fillStyle='rgba(247,245,222,.94)';ctx.beginPath();ctx.ellipse(x,y,r,r*.55,R(n,4),0,Math.PI*2);ctx.fill();
+    for(var j=0;j<5;j++){var angle=R(n,j+8)*6.28;ctx.beginPath();ctx.ellipse(x+Math.cos(angle)*r*1.15,y+Math.sin(angle)*r*.6,2+R(n,j+20)*3,2,angle,0,6.3);ctx.fill();}
+    var length=45+R(n,5)*155,bend=(R(n,6)-.5)*35;
+    ctx.strokeStyle='rgba(241,239,215,.91)';ctx.lineWidth=7+R(n,7)*6;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x+bend*p*.45,y+length*p*.5,x+bend*p,y+length*p);ctx.stroke();
+    ctx.fillStyle='#eae7cc';ctx.beginPath();ctx.ellipse(x+bend*p,y+length*p,ctx.lineWidth*.65,ctx.lineWidth*.9,0,0,6.3);ctx.fill();
+    ctx.globalCompositeOperation='destination-in';ctx.drawImage(mask,0,0);ctx.globalCompositeOperation='source-over';
+  }
+  var mask=document.createElement('canvas');mask.width=canvas.width;mask.height=canvas.height;var mx=mask.getContext('2d');mx.fillStyle='#fff';
+  for(var mr=0;mr<rows;mr++)for(var mc=0;mc<cols;mc++){var mi=mr*(cols+1)+mc;if(surfaceHits[mi]&&surfaceHits[mi+1]&&surfaceHits[mi+cols+1]&&surfaceHits[mi+cols+2])mx.fillRect(mc*canvas.width/cols,mr*canvas.height/rows,canvas.width/cols+1,canvas.height/rows+1);}
+  var settled=document.createElement('canvas');settled.width=canvas.width;settled.height=canvas.height;var old=settled.getContext('2d');
+  for(var n=0;n<count;n++)deposit(n,1);
+  old.drawImage(canvas,0,0);texture.needsUpdate=true;
+  var next=2.4,fallStart=-1,dripStart=-1,active=-1,started=null;
+  function save(){window._dssCharlesDroppings=count;try{localStorage.setItem(key,String(count));}catch(e){}}
+  layer.userData.count=count;
+  function impact(t,still){active=count;count++;layer.userData.count=count;save();dripStart=t;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(settled,0,0);deposit(active,still?1:0);texture.needsUpdate=true;if(still){old.clearRect(0,0,canvas.width,canvas.height);old.drawImage(canvas,0,0);dripStart=-1;}drop.visible=false;fallStart=-1;}
+  return {frame:function(t,still){
+    var now=performance.now();if(started===null)started=now;t=(now-started)/1000;
+    if(fallStart>=0){var f=Math.min(1,(t-fallStart)/.38);drop.visible=true;drop.position.set(-.038,4.12-.135*f*f,.085);if(f>=1)impact(t,false);}
+    if(dripStart>=0){var p=Math.min(1,(t-dripStart)/1.7);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(settled,0,0);deposit(active,still?1:p);texture.needsUpdate=true;if(p>=1||still){old.clearRect(0,0,canvas.width,canvas.height);old.drawImage(canvas,0,0);dripStart=-1;}}
+    if(t>=next&&fallStart<0&&dripStart<0){next=t+5.2;fallStart=t;if(still)impact(t,true);}
+  }};
+};
 // ====== SOHO SQUARE — THE HUT, ITS FIRE AND AFTERIMAGE ======
 // A disposable 2D last frame bridges the two text exits; no WebGL context survives.
 window.dssFireTrace = function(renderer, render, seconds) {
@@ -32808,44 +32814,82 @@ function buildSquare(host) {
     fragmentShader:'uniform sampler2D waterImage; uniform float time; varying vec4 proj; varying vec2 wuv; void main(){ vec2 uv=proj.xy/proj.w;uv.x+=sin(wuv.y*37.+time*.35)*.0014+sin(wuv.x*55.-time*.23)*.0006;vec3 col=texture2D(waterImage,uv).rgb;float d=distance(wuv,vec2(.5))+sin(wuv.x*23.)*sin(wuv.y*31.)*.045;float edge=1.-smoothstep(.28,.51,d);gl_FragColor=vec4(col*.70,edge*.52);}' });
   var water=new THREE.MeshStandardMaterial({color:0x394951,roughness:.09,metalness:.72,transparent:true,opacity:.62});
   for(var p=0;p<15;p++){ var pu=mesh(new THREE.PlaneGeometry(2.1+rnd()*.7,1.8+rnd()*2),reflectionMaterial,(rnd()-.5)*1.0,.035,2+p*.85);pu.rotation.x=-Math.PI/2;pu.castShadow=false;pu.receiveShadow=false;puddles.push(pu); }
-  var hut=new THREE.Group();scene.add(hut);
+  var hut=new THREE.Group();hut.name='soho-square-gardeners-hut';scene.add(hut);
   box(6.5,.32,4.6,0,.08,0,hutBase,hut);
-  if(!burnt)box(5.8,2.8,4,0,1.58,0,plaster,hut);
-  else {box(5.4,.12,3.7,0,.3,0,black,hut);}
-  // Steep roof, a front-facing gable, weathered tile courses and exposed timber.
-  function roof(x,z,w,depth,height,parent) {
-    var g=new THREE.BufferGeometry(), v=[-w/2,0,-depth/2,w/2,0,-depth/2,0,height,-depth/2,-w/2,0,depth/2,0,height,depth/2,w/2,0,depth/2,-w/2,0,-depth/2,0,height,-depth/2,0,height,depth/2,-w/2,0,-depth/2,0,height,depth/2,-w/2,0,depth/2,w/2,0,-depth/2,w/2,0,depth/2,0,height,depth/2,w/2,0,-depth/2,0,height,depth/2,0,height,-depth/2];
-    g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));var ruv=[];for(var ri=0;ri<v.length;ri+=3)ruv.push(v[ri+2]/1.1,Math.sqrt(v[ri]*v[ri]+(height-v[ri+1])*(height-v[ri+1]))/1.1);g.setAttribute('uv',new THREE.Float32BufferAttribute(ruv,2));g.computeVertexNormals(); var r=mesh(g,roofMat,x,3,z,parent); /* uv: along the ridge, and down the slope, so the tile courses run level */ r.material.side=THREE.DoubleSide; return r;
-  }
-  if(!burnt)roof(0,0,6.5,4.8,2.1,hut);
-  else { beam([-2.8,3,-1.9],[-1.7,3.7,-1.9],.07,wood,hut); }
   if(!burnt){
-    var gable=new THREE.Shape();gable.moveTo(-1.4,0);gable.lineTo(0,1.9);gable.lineTo(1.4,0);gable.closePath();
-    mesh(new THREE.ShapeGeometry(gable),plaster,0,2.9,2.65,hut);
-    beam([-1.55,2.9,2.70],[0,5,2.70],.10,wood,hut);beam([0,5,2.70],[1.55,2.9,2.70],.10,wood,hut);beam([0,3,2.71],[0,4.85,2.71],.08,wood,hut);
-    for(var yy=0;yy<10;yy++){
-      var ry=3+yy*.205, rx=3.25*(1-yy/10);
-      beam([-rx-.035,ry+.04,-2.43],[-rx-.035,ry+.04,2.43],.016,wood,hut);beam([rx+.035,ry+.04,-2.43],[rx+.035,ry+.04,2.43],.016,wood,hut);
-      for(var tz=-2.3;tz<2.4;tz+=.38){var off=(yy%2)*.18;beam([rx+.035,ry+.04,tz+off],[rx-.28,ry+.245,tz+off],.009,wood,hut);}
-    }
-  } else {
-    // The missing front gable is remembered by its cracked ribs, never by a wall of flame.
+    // Reference photograph: two-storey black-and-white pavilion beneath a steep, swept hip roof.
+    var hutWhite=plaster.clone();hutWhite.color.setHex(0xe2e1d5);hutWhite.bumpScale=.009;
+    var hutBlack=wood.clone();hutBlack.color.setHex(0x292d29);hutBlack.roughness=.88;hutBlack.bumpScale=.009;
+    function hutBeam(a,b,r,material,parent){var A=new THREE.Vector3().fromArray(a),B=new THREE.Vector3().fromArray(b),d=B.clone().sub(A);var m=mesh(new THREE.BoxGeometry(r*1.65,d.length(),r*1.65),material,0,0,0,parent);m.position.copy(A).add(B).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return m;}
+    box(5.8,3.3,4,0,1.89,0,hutWhite,hut);
+    // Muted green-grey small tiles, staggered joints, moss and worn lower edges.
+    var tiles=document.createElement('canvas');tiles.width=tiles.height=512;var tx=tiles.getContext('2d');tx.fillStyle='#626956';tx.fillRect(0,0,512,512);
+    for(var row=0;row<28;row++){var y=row*512/28;for(var col=-1;col<14;col++){var x=col*40+(row%2)*20;var n=(row*71+col*37+557)%41;tx.fillStyle='rgb('+(72+n)+','+(80+n)+','+(62+n)+')';tx.fillRect(x,y,39,18);tx.fillStyle='rgba(15,24,17,.55)';tx.fillRect(x,y+15,40,2);tx.fillStyle='rgba(184,184,144,.25)';tx.fillRect(x+1,y+17,37,1);tx.fillStyle='rgba(27,33,23,.3)';tx.fillRect(x,y,1,17);}}
+    for(var moss=0;moss<90;moss++){var x=(moss*83.1)%512,y=(moss*47.7)%512;tx.fillStyle=moss%3?'rgba(82,103,37,.25)':'rgba(175,179,136,.22)';tx.beginPath();tx.ellipse(x,y,5+moss%13,2+moss%5,.3,0,6.3);tx.fill();}
+    var tileMap=new THREE.CanvasTexture(tiles);tileMap.wrapS=tileMap.wrapT=THREE.RepeatWrapping;tileMap.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+    var hipMat=new THREE.MeshStandardMaterial({color:0x737d68,map:tileMap,bumpMap:tileMap,bumpScale:.012,roughness:.93,side:THREE.DoubleSide});
+    // Mock Tudor: straight steep roof planes and restrained overhanging eaves.
+    var pos=[],uv=[],idx=[],roofN=32,roofRows=24;
+    var corners=[[-3.24,-2.43],[3.24,-2.43],[3.24,2.43],[-3.24,2.43]];
+    corners.forEach(function(c,face){var next=corners[(face+1)%4],base=pos.length/3;
+      for(var r=0;r<=roofRows;r++){var v=r/roofRows,spread=v,y=6.85-3.21*v;
+        for(var j=0;j<=roofN;j++){var u=j/roofN;pos.push((c[0]*(1-u)+next[0]*u)*spread,y,(c[1]*(1-u)+next[1]*u)*spread);uv.push(u*1.5,v*1.5);if(r<roofRows&&j<roofN){var i=base+r*(roofN+1)+j;idx.push(i,i+roofN+1,i+1,i+1,i+roofN+1,i+roofN+2);}}
+      }
+    });
+    var hipGeo=new THREE.BufferGeometry();hipGeo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));hipGeo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));hipGeo.setIndex(idx);hipGeo.computeVertexNormals();mesh(hipGeo,hipMat,0,0,0,hut);
+    // Slim hip ridges, fascia boards and a restrained finial at the peak.
+    corners.forEach(function(c,i){var pts=[];for(var n=0;n<=20;n++){var v=n/20,spread=v;pts.push(new THREE.Vector3(c[0]*spread,6.87-3.21*v,c[1]*spread));}mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,.035,6,false),hipMat,0,0,0,hut);
+      var q=corners[(i+1)%4];hutBeam([c[0],3.63,c[1]],[q[0],3.63,q[1]],.045,hutBlack,hut);
+    });
+    // Projecting front gable: its own tiled roof, white infill and branching timberwork.
+    var gable=new THREE.Shape();gable.moveTo(-1.35,0);gable.lineTo(0,1.28);gable.lineTo(1.35,0);gable.closePath();mesh(new THREE.ShapeGeometry(gable),hutWhite,0,3.48,2.79,hut);
+    var gpos=[-1.48,3.49,2.87,0,4.91,2.87,0,4.91,1.03,-1.48,3.49,2.87,0,4.91,1.03,-1.48,3.49,1.03,1.48,3.49,2.87,1.48,3.49,1.03,0,4.91,1.03,1.48,3.49,2.87,0,4.91,1.03,0,4.91,2.87];
+    var gg=new THREE.BufferGeometry();gg.setAttribute('position',new THREE.Float32BufferAttribute(gpos,3));var guv=[];for(var k=0;k<gpos.length;k+=3)guv.push(gpos[k+2]*.65,(4.91-gpos[k+1])*.8);gg.setAttribute('uv',new THREE.Float32BufferAttribute(guv,2));gg.computeVertexNormals();mesh(gg,hipMat,0,0,0,hut);
+    hutBeam([-1.48,3.48,2.90],[0,4.91,2.90],.085,hutBlack,hut);hutBeam([0,4.91,2.90],[1.48,3.48,2.90],.085,hutBlack,hut);
+    box(.12,1.25,.12,0,4.10,2.87,hutBlack,hut);hutBeam([0,3.68,2.88],[-.67,4.24,2.88],.055,hutBlack,hut);hutBeam([0,3.68,2.88],[.67,4.24,2.88],.055,hutBlack,hut);
+    box(2.74,.13,.18,0,3.5,2.87,hutBlack,hut);
+    // Strong corner posts, closely spaced upper studs and deep horizontal floor bands.
+    [-2.84,-1.42,0,1.42,2.84].forEach(function(x){[-2.06,2.06].forEach(function(z){box(.145,3.34,.15,x,1.91,z,hutBlack,hut);});});
+    [.39,2.26,2.51,3.48].forEach(function(y){box(5.94,.13,4.15,0,y,0,hutBlack,hut);});
+    for(var x=-2.65;x<2.8;x+=.46){box(.065,.91,.10,x,2.98,2.095,hutBlack,hut);box(.065,.91,.10,x,2.98,-2.095,hutBlack,hut);}
+    [-1,1].forEach(function(sd){for(var z=-1.8;z<=1.8;z+=.45)box(.10,.91,.065,sd*2.955,2.98,z,hutBlack,hut);});
+    // White panels between short black posts form the projecting balustrade-like storey band.
+    for(var x=-2.82;x<2.85;x+=.38){box(.27,.31,.10,x,2.47,2.23,hutWhite,hut);box(.055,.36,.13,x+.16,2.48,2.24,hutBlack,hut);}
+    [-1,1].forEach(function(sd){for(var z=-1.9;z<2.1;z+=.38){box(.10,.31,.27,sd*3.08,2.47,z,hutWhite,hut);box(.13,.36,.055,sd*3.09,2.48,z+.16,hutBlack,hut);}});
+    box(6.05,.075,.11,0,2.665,2.25,hutBlack,hut);
+    [-1,1].forEach(function(sd){box(.11,.075,4.15,sd*3.09,2.665,0,hutBlack,hut);});
+    // Lower white recessed panels with characteristic Tudor arch braces.
+    function arch(cx,z,side){var pts=[];for(var i=0;i<=16;i++){var a=Math.PI-i*Math.PI/16;pts.push(new THREE.Vector3(cx+Math.cos(a)*.54,1.57+Math.sin(a)*.56,z));}var m=mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),32,.033,6,false),hutBlack,0,0,0,hut);if(side){m.rotation.y=side*Math.PI/2;}}
+    [-2.12,2.12].forEach(function(x){box(1.04,1.59,.07,x,1.30,2.10,hutWhite,hut);arch(x,2.16,0);box(.045,1.45,.075,x,1.28,2.15,hutBlack,hut);box(1.04,.045,.075,x,1.56,2.15,hutBlack,hut);});
+    [-1,1].forEach(function(sd){[-1.35,0,1.35].forEach(function(z){box(.08,1.7,.09,sd*2.98,1.31,z,hutBlack,hut);});
+      for(var z=-1.32;z<1.4;z+=1.32){var pts=[];for(var i=0;i<=16;i++){var a=Math.PI-i*Math.PI/16;pts.push(new THREE.Vector3(sd*2.99,1.58+Math.sin(a)*.53,z+Math.cos(a)*.57));}mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),32,.029,6,false),hutBlack,0,0,0,hut);}
+    });
+    box(2.65,.91,.78,0,3.04,2.39,hutWhite,hut);
+    // Small dark leaded panes under the gable, above the solid timber double doors.
+    var hutGlass=new THREE.MeshStandardMaterial({color:0x59625a,roughness:.38,metalness:.22});
+    for(var win=0;win<5;win++){var x=-.94+win*.47;box(.38,.61,.035,x,3.13,2.83,hutGlass,hut);box(.045,.67,.065,x+.215,3.14,2.88,hutBlack,hut);hutBeam([x-.15,3.12,2.865],[x+.15,3.42,2.865],.007,hutBlack,hut);hutBeam([x-.15,3.42,2.865],[x+.15,3.12,2.865],.007,hutBlack,hut);}
+    box(2.23,1.84,.12,0,1.29,2.13,hutBlack,hut);box(2.40,.17,.24,0,2.23,2.18,hutBlack,hut);
+    for(var plank=-7;plank<=7;plank++)box(.012,1.75,.018,plank*.145,1.29,2.201,black,hut);
+    box(.07,1.8,.04,0,1.29,2.23,hutBlack,hut);[.69,1.78].forEach(function(y){box(2.15,.085,.04,0,y,2.22,hutBlack,hut);});orb(.035,.18,1.25,2.25,brass,hut);
+    // Corner downpipes follow the building rather than floating beyond the eaves.
+    [-1,1].forEach(function(sd){hutBeam([sd*2.99,3.50,-2.09],[sd*2.99,.28,-2.09],.035,iron,hut);});
+  }else{
+    // Preserve the existing fire aftermath and its lower remains.
+    box(5.4,.12,3.7,0,.3,0,black,hut);beam([-2.8,3,-1.9],[-1.7,3.7,-1.9],.07,wood,hut);
     beam([-1.5,2.8,2.4],[-.25,4.5,2.4],.09,wood,hut);beam([.1,4.7,2.4],[1.5,2.8,2.4],.08,wood,hut);
     for(var ash=0;ash<24;ash++){var br=box(.05+rnd()*.15,.06,.3+rnd()*.7,rnd()*7-3.5,.27,rnd()*4+1,wood);br.rotation.y=rnd()*6;}
+    for(var bx=-2.8;bx<=2.81;bx+=1.4){box(.14,2.8,.12,bx,1.62,2.06,wood,hut);box(.14,2.8,.12,bx,1.62,-2.06,wood,hut);}
+    [.35,1.2,2.9].forEach(function(y){beam([-2.9,y,2.06],[2.9,y,2.06],.055,wood,hut);beam([-2.9,y,-2.06],[2.9,y,-2.06],.055,wood,hut);});
+    [-1,1].forEach(function(sd){beam([sd*1.55,.42,2.13],[sd*2.72,1.15,2.13],.06,wood,hut);});
+    box(1.16,.14,.26,0,2.30,2.16,wood,hut);orb(.05,.34,1.2,2.23,brass,hut);
+    [-1.92,1.92].forEach(function(wx){for(var k=-2;k<3;k++){beam([wx-.45,1.5+k*.13,2.22],[wx+.45,2.1+k*.13,2.22],.009,wood,hut);beam([wx-.45,2.1+k*.13,2.22],[wx+.45,1.5+k*.13,2.22],.009,wood,hut);}box(1.03,.1,.21,wx,1.44,2.15,wood,hut);});
   }
-  for(var bx=-2.8;bx<=2.81;bx+=1.4){box(.14,2.8,.12,bx,1.62,2.06,wood,hut);box(.14,2.8,.12,bx,1.62,-2.06,wood,hut);}
-  [0.35,1.2,2.9].forEach(function(y){if(!burnt)box(5.9,.12,4.14,0,y,0,wood,hut);else {beam([-2.9,y,2.06],[2.9,y,2.06],.055,wood,hut);beam([-2.9,y,-2.06],[2.9,y,-2.06],.055,wood,hut);}});
-  [-1,1].forEach(function(side){beam([side*1.55,.42,2.13],[side*2.72,1.15,2.13],.06,wood,hut);});
-  if(!burnt)box(1,1.95,.16,0,1.28,2.12,black,hut);box(1.16,.14,.26,0,2.30,2.16,wood,hut);orb(.05,.34,1.2,2.23,brass,hut);
-  var glass=new THREE.MeshStandardMaterial({color:burnt?0x121819:0x526b70,roughness:.21,metalness:.55});
-  [-1.92,1.92].forEach(function(wx){if(!burnt)box(.9,1.05,.1,wx,2,2.14,glass,hut);for(var k=-2;k<3;k++){beam([wx-.45,1.5+k*.13,2.22],[wx+.45,2.1+k*.13,2.22],.009,wood,hut);beam([wx-.45,2.1+k*.13,2.22],[wx+.45,1.5+k*.13,2.22],.009,wood,hut);}box(1.03,.1,.21,wx,1.44,2.15,wood,hut);});
-  if(!burnt){
-    for(var dp=-3;dp<=3;dp++)box(.012,1.78,.022,dp*.13,1.24,2.225,wood,hut);
-    box(.73,.05,.055,0,1.55,2.27,wood,hut);box(.73,.05,.055,0,.65,2.27,wood,hut);
-    beam([-2.82,1.2,2.18],[-1.42,2.85,2.18],.045,wood,hut);beam([1.42,2.85,2.18],[2.82,1.2,2.18],.045,wood,hut);
-    for(var sz=-1.6;sz<2;sz+=1.1){box(.14,2.7,.11,2.98,1.57,sz,wood,hut);beam([3.0,.35,sz],[3.0,1.2,sz+.9],.045,wood,hut);}
-    beam([-3.32,2.94,-2.45],[-3.32,2.94,2.42],.06,iron,hut);beam([3.32,2.94,-2.45],[3.32,2.94,2.42],.06,iron,hut);beam([3.2,2.94,-1.95],[3.2,.3,-1.95],.06,iron,hut);
-  }
+    hut.updateMatrixWorld(true);var localFromWorld=new THREE.Matrix4().copy(hut.matrixWorld).invert(),batches=new Map();
+    hut.traverse(function(m){if(!m.isMesh)return;var geo=m.geometry.clone();geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(localFromWorld,m.matrixWorld));var list=batches.get(m.material)||[];list.push(geo);batches.set(m.material,list);m.geometry.dispose();});
+    hut.clear();batches.forEach(function(list,material){var pos=[],nor=[],uv=[],indices=[],offset=0;
+      list.forEach(function(geo){var p=geo.getAttribute('position'),n=geo.getAttribute('normal'),u=geo.getAttribute('uv');for(var i=0;i<p.count;i++){pos.push(p.getX(i),p.getY(i),p.getZ(i));nor.push(n.getX(i),n.getY(i),n.getZ(i));uv.push(u?u.getX(i):0,u?u.getY(i):0);}if(geo.index){for(var j=0;j<geo.index.count;j++)indices.push(offset+geo.index.getX(j));}else{for(var j=0;j<p.count;j++)indices.push(offset+j);}offset+=p.count;geo.dispose();});
+      var geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeBoundingSphere();mesh(geo,material,0,0,0,hut);
+    });
   // Railings encircle the grass. The near gate is turned into view along the return path.
   function fence(ax,az,bx,bz,n){for(var f=0;f<=n;f++){var u=f/n,x=ax+(bx-ax)*u,z=az+(bz-az)*u;beam([x,0,z],[x,1.65,z],.025,iron);var tip=mesh(new THREE.ConeGeometry(.07,.17,4),iron,x,1.75,z); }[.45,1.3].forEach(function(y){beam([ax,y,az],[bx,y,bz],.027,iron);});}
   fence(-12,-10,12,-10,70);fence(-12,-10,-12,12,65);fence(12,-10,12,12,65);
@@ -32867,7 +32911,7 @@ function buildSquare(host) {
     beam([-6.82,1.08,4.7],[-6.55,.86,4.82],.05,shade);
     var coalEnd=orb(.018,-6.43,.98,4.98,new THREE.MeshBasicMaterial({color:0xff6a2a}));coalEnd.castShadow=false;}
   // Charles II: modelled from Sam's two Soho Square photographs, 2026-10-31.
-  var king=new THREE.Group();king.name='charles-ii-soho';king.position.set(-5,0,2);king.rotation.y=.67;scene.add(king);
+  var king=new THREE.Group();king.name='charles-ii-soho';king.position.set(0,0,9);king.rotation.y=0;scene.add(king);
   function kEll(x,y,z,rx,ry,rz,par){var m=mesh(new THREE.SphereGeometry(1,24,18),stone,x,y,z,par||king);m.scale.set(rx,ry,rz);return m;}
   function kCurve(points,r,par){return mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(function(p){return new THREE.Vector3().fromArray(p);})),Math.max(16,points.length*6),r,8,false),stone,0,0,0,par||king);}
   function kLimb(a,b,r0,r1,par){var A=new THREE.Vector3().fromArray(a),B=new THREE.Vector3().fromArray(b),d=B.clone().sub(A);var profile=[[0,0],[r0*.8,.025],[r0,.12],[r0*.98,.35],[r1,.76],[r1*.9,.96],[0,1]];
@@ -32964,6 +33008,7 @@ function buildSquare(host) {
     [-1,1].forEach(function(sd){var lg=new THREE.Mesh(new THREE.CylinderGeometry(.004,.004,.04,5),pink);lg.position.set(.01,.02,sd*.025);pig.add(lg);});
     var host=document.querySelector('#sq-container'),t0=performance.now(),iv=setInterval(function(){if(host&&!host.isConnected){clearInterval(iv);return;}var s2=(performance.now()-t0)/1000;hd.rotation.y=Math.sin(s2*.7)*.6+(Math.sin(s2*3.1)>.97?.5:0);hd.position.x=.1+Math.max(0,Math.sin(s2*5))*.012;},50);
   })();
+  var sqGuano=window.dssStatueDroppings(king);
   // Bare plane trees hold the lamps between branches; mottled bark catches cold light.
   seed=1379; // The same trees and distant windows survive both versions of the square.
   var bark=mat(0x6a6e61,.94,texture('#8f9480',.20,true));
@@ -33042,10 +33087,10 @@ function buildSquare(host) {
   function spot(id,pos,target,key){var hit=mesh(new THREE.BoxGeometry(id==='king'?1.8:1.7,id==='king'?3.8:2.6,.65),new THREE.MeshBasicMaterial({visible:false}),pos[0],pos[1],pos[2]);hit.userData.sq=id;
     var rest=glow(pos[0],pos[1],pos[2]+.18,1.6,.06,0xc3bcab);
     hotspots.push({id:id,hit:hit,rest:rest,pos:new THREE.Vector3().fromArray(pos),target:new THREE.Vector3().fromArray(target),key:key});}
-  spot('door',[0,1.5,2.6],[1.8,2.5,7.4],'light');spot('king',[-5,1.9,2.4],[-3.1,3.4,7.5],null);spot('gate',[6,1.3,5],[8.5,2.8,10],'leave');
+  spot('door',[0,1.5,2.6],[1.8,2.5,7.4],'light');spot('king',[0,1.9,9.4],[3.0,3.4,14.4],null);spot('gate',[6,1.3,5],[8.5,2.8,10],'leave');
   scene.updateMatrixWorld(true);
   var batches={};
-  scene.traverse(function(o){if(!o.isMesh||!o.material||o.material.visible===false||o.material===reflectionMaterial||Array.isArray(o.material))return;
+  scene.traverse(function(o){if(!o.isMesh||o.userData.sqDynamic||!o.material||o.material.visible===false||o.material===reflectionMaterial||Array.isArray(o.material))return;
     var key=o.material.uuid, b=batches[key]||(batches[key]={material:o.material,parts:[],objects:[]});
     var g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();g.applyMatrix4(o.matrixWorld);b.parts.push(g);b.objects.push(o);
   });
@@ -33070,7 +33115,7 @@ function buildSquare(host) {
   function click(e){if(burnt)return;var h=pick(e);if(h)inspect(h);else if(selected)back();}
   function key(e){if(e.key==='Escape'&&selected)back();}
   renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('click',click);window.addEventListener('keydown',key);
-  function frame(now){if(disposed)return;if(!host.isConnected){dispose();return;}raf=requestAnimationFrame(frame);var dt=Math.min((now-last)/1000,.05);last=now;if(document.hidden)return;elapsed+=dt;
+  function frame(now){if(disposed)return;if(!host.isConnected){dispose();return;}raf=requestAnimationFrame(frame);var dt=Math.min((now-last)/1000,.05);last=now;if(document.hidden)return;elapsed+=dt;if(sqGuano)sqGuano.frame(elapsed,still);
     if(wrap.dataset.cam==='tween'||wrap.dataset.cam==='return'){tween=Math.min(1,tween+dt/1.25);var u=tween*tween*(3-2*tween);camera.position.lerpVectors(fromPos,destPos,u);aim.lerpVectors(fromAim,destAim,u);if(tween===1)wrap.dataset.cam=selected?'inspect':'idle';}
     if(wrap.dataset.cam==='idle'&&!still){var opening=establishing?Math.pow(Math.max(0,1-elapsed/7),3):0;camera.position.copy(idlePos);camera.position.z+=opening*2.2+Math.sin(elapsed*.075)*.08;camera.position.x+=opening*.6;aim.copy(idleAim);}
     camera.lookAt(aim);
@@ -36781,6 +36826,7 @@ card.classList.toggle('dss-card-narrow', wrap.clientWidth < 520);
 Array.prototype.forEach.call(card.querySelectorAll('.dss-card-keyart svg'), function(s) { s.style.cssText = 'display:block;height:54px;width:auto;margin:0 auto 4px;filter:drop-shadow(0 0 6px rgba(240,220,170,0.25));'; });
 var row = card.querySelector('.fi-actions');
 if (row) acts.forEach(function(link) {
+if (link.tagName !== 'TW-HOOK' && window.dssLore && window.dssLore.isLore(link.textContent) && !(spot.loreNext && link.isConnected && window.dssLore.openNext && !window.dssLore.firstDone(link.textContent))) return; /* 2026-10-31 (Sam): no LORE buttons; the note opens when you leave */
 var b = document.createElement('span');
 b.className = 'fi-action'; b.textContent = window.dssLoreLabel ? window.dssLoreLabel(link.textContent.trim()) : link.textContent.trim(); b.style.cssText = BTN; keyable(b);
 if (link.tagName !== 'TW-HOOK' && (/^\s*⟡/.test(link.textContent) || (link.querySelector && link.querySelector('.dss-orn')) || (window.dssLore && window.dssLore.isLore && window.dssLore.isLore(link.textContent)))) { /* every ⟡ … ⟡ link is a lore note; the ornament pass swaps its ⟡ for .dss-orn spans */ /* 2026-10-21 (Sam, of Ronnie's photographs: "the lore is a great idea! Let's just make that more obvious when you click"): a note to read wears the lore's gold and says LORE */ var loreT = link.textContent.trim().replace(/^(?:⟡\s*)?(?:LORE:\s*)?/, '').replace(/\s*⟡\s*$/, '').trim(); if (link.closest('.lore-card-only')) { /* 2026-10-24 (Sam, playtest at the Pillars: "The Lore doesn't need to be highlighted here. They should be equal"): the Great Ham's lore button wears the plain button, beside his other */ b.innerHTML = '⟡ LORE · ' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); } else { b.className += ' fi-lore-btn'; b.innerHTML = '<span class="fi-lore-mark">⟡ LORE</span>' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); b.style.cssText = BTN + 'color:#ffe2a0;border-color:rgba(216,184,112,0.8);background:rgba(40,28,8,0.6);text-shadow:0 0 8px rgba(255,220,150,0.55);'; }  if (spot.loreNext && link.isConnected && window.dssLore.openNext && !window.dssLore.firstDone(link.textContent)) { b.className = 'fi-action'; b.textContent = 'Continue'; b.style.cssText = BTN; b._dssLoreNext = true; var brow = card.querySelector('.dss-room-back-row'); if (brow) brow.style.display = 'none'; } }
@@ -69612,7 +69658,7 @@ He’s gone and you know that you owe something now, to him and to here.
 (set: $albaRevealed to true)
 ‘Forget the book,’ says RED, ‘it’s no way to live. Try this.’
 
-As he turns from his ginger light he kisses you and, as he does, you close your eyes. Inside their shuttered lids you read:
+As he turns from his ginger light he leans to kiss you and, as he does, you close your eyes. Inside their shuttered lids you read:
 
 &lt;div class=&quot;revelation-box alba-fade-first&quot; data-alba=&quot;1&quot;&gt;
 &lt;em&gt;‘$alba1’&lt;/em&gt;
@@ -69620,11 +69666,11 @@ As he turns from his ginger light he kisses you and, as he does, you close your 
 
 &lt;strong class=&quot;alba-counter alba-fade-first&quot;&gt;THE FIRST LINE OF THREE&lt;/strong&gt;
 
-&lt;!-- 2026-10-28 (Sam, playtest notes 26/31: &quot;What is Alba?&quot;, &quot;explained FAR TOO LATE&quot;): his three morning-song sentences moved here from Night Ahead Part Two, words unchanged --&gt;&lt;div class=&quot;alba-why&quot;&gt;The only way out is through a morning song.
+&lt;!-- 2026-10-28 (Sam, playtest notes 26/31: &quot;What is Alba?&quot;, &quot;explained FAR TOO LATE&quot;): his three morning-song sentences moved here from Night Ahead Part Two, words unchanged --&gt;&lt;!-- 2026-10-31 (Sam, playtest notes 3 and 4) --&gt;&lt;div class=&quot;alba-why&quot;&gt;You know this line, it begins Ezra Pound’s ‘Alba’. That used to be one of your favourite pieces of verse. ‘Alba’ means white, like the dawn; the only way out of this is through a morning song.
 
-You need to find one hidden in the night. To make the dawn, for AOIFE and your daughter.&lt;/div&gt;
+There are two more lines to find, if you want to escape. You’ll need to go far beyond Soho for the second. The third is buried somewhere in its night. To make the dawn, for AOIFE and your daughter.&lt;/div&gt;
 
-&lt;!-- 2026-10-15 (Sam: the cover story revealed later): the kiss goes straight to the naming; Night Ahead Part Two now comes from Dean Street after the Ham&#x27;s refusal and AOIFE&#x27;s ring --&gt;&lt;span class=&quot;alba-link-fade&quot;&gt;[[Dream On|Name Your Book]]&lt;/span&gt;</tw-passagedata>
+&lt;!-- 2026-10-15 (Sam: the cover story revealed later): the kiss goes straight to the naming; Night Ahead Part Two now comes from Dean Street after the Ham&#x27;s refusal and AOIFE&#x27;s ring --&gt;&lt;span class=&quot;alba-link-fade&quot;&gt;[[Kiss him|Name Your Book]]&lt;/span&gt;</tw-passagedata>
 <tw-passagedata pid="79" name="Green Sea Approach" tags="carthage-shore" position="850,200" size="100,100">&lt;div class=&quot;approach-back&quot;&gt;[[← Back|Carthage shore]]&lt;/div&gt;
 &lt;div id=&quot;gs-approach&quot;&gt;&lt;/div&gt;[[·|LINE 2]]</tw-passagedata>
 <tw-passagedata pid="80" name="LINE 2" tags="green-sea" position="900,200" size="100,100">(set: $metGreenSeaFriend to true)\
@@ -72850,7 +72896,7 @@ Soho’s rain churns up your silted bloodstream; even in the years that you aren
 (set: $bookTitle to &quot;&quot;)\
 &lt;div class=&quot;nb-input&quot;&gt;(input-box: bind $bookTitle, 1)&lt;/div&gt;
 &lt;!-- 2026-10-15 (Sam: the cover story revealed later): the &quot;: A Cover Story&quot; subtitle no longer shows here or joins the title now; Night Ahead Part Two stamps it when the confession comes --&gt;
-&lt;div class=&quot;nb-link-row&quot;&gt;(link: &quot;On.&quot;)[(if: $bookTitle is &quot;&quot;)[(set: $bookTitle to &quot;Untitled Manuscript&quot;)](go-to: &quot;Dedicate Your Book&quot;)]&lt;!-- 2026-10-22: On. to Dedicate Your Book (the book&#x27;s first page), which goes back to Dean Street --&gt;&lt;/div&gt;
+&lt;div class=&quot;nb-link-row&quot;&gt;(link: &quot;And who did you write it for?&quot;)[(if: $bookTitle is &quot;&quot;)[(set: $bookTitle to &quot;Untitled Manuscript&quot;)](go-to: &quot;Dedicate Your Book&quot;)]&lt;!-- 2026-10-31 (Sam, playtest note 5): was &quot;On.&quot; --&gt;&lt;!-- 2026-10-22: On. to Dedicate Your Book (the book&#x27;s first page), which goes back to Dean Street --&gt;&lt;/div&gt;
 &lt;/div&gt;
 
 &lt;script&gt;
@@ -81387,6 +81433,14 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
+
+
+
+
+
 
 
 

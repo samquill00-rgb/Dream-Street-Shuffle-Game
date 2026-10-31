@@ -1,0 +1,3 @@
+- [x] Darken the hut roof tiles (interpreting “room ltimes” as roof tiles).
+- [x] Move statue halfway down the path, centred and aligned with it.
+- [x] Verify silver deer and other shared scene details; show them in context.

@@ -1,0 +1,31 @@
+window.dssPotion = function(kind, colour, env) {
+  if (!window.THREE) return null;
+  var P = { bomb: [[0,0],[0.05,0.004],[0.07,0.04],[0.068,0.085],[0.045,0.115],[0.016,0.13],[0.014,0.2],[0.018,0.205]],
+            elixir: [[0,0],[0.032,0],[0.034,0.13],[0.03,0.16],[0.012,0.185],[0.011,0.23],[0.015,0.235]],
+            flask: [[0,0],[0.065,0],[0.06,0.02],[0.022,0.12],[0.018,0.17],[0.022,0.175]],
+            jar: [[0,0],[0.055,0],[0.06,0.015],[0.06,0.09],[0.05,0.1],[0.05,0.11]],
+            potion: [[0,0],[0.045,0],[0.055,0.03],[0.052,0.075],[0.03,0.1],[0.014,0.115],[0.013,0.15],[0.017,0.155]],
+            tube: [[0,0],[0.012,0.002],[0.016,0.012],[0.016,0.16],[0.019,0.165]],
+            vial: [[0,0],[0.018,0],[0.02,0.06],[0.012,0.07],[0.011,0.09],[0.014,0.094]] }[kind] || null;
+  if (!P) return null;
+  var g = new THREE.Group(), col = new THREE.Color(colour), top = P[P.length - 1][1];
+  g.name='aged-apothecary-'+kind;
+  function painted(fn){var c=document.createElement('canvas');c.width=c.height=128;fn(c.getContext('2d'));return new THREE.CanvasTexture(c);}
+  var wear=painted(function(cx){cx.fillStyle='#b4b4b4';cx.fillRect(0,0,128,128);for(var i=0;i<220;i++){cx.fillStyle=i%3?'rgba(40,40,40,.22)':'rgba(245,245,245,.3)';cx.fillRect((i*47.31)%128,(i*29.7)%128,.8+i%2,2+i%9);}cx.strokeStyle='#e4e4e4';cx.lineWidth=1;for(var j=0;j<12;j++){cx.beginPath();cx.moveTo(j*11,0);cx.lineTo(j*11-4,128);cx.stroke();}});
+  var glass = new THREE.Mesh(new THREE.LatheGeometry(P.map(function(p) { return new THREE.Vector2(p[0], p[1]); }), 24), new THREE.MeshPhysicalMaterial({ color: 0xc5d5c4, roughness: 0.19, roughnessMap:wear, bumpMap:wear, bumpScale:0.00022, metalness: 0, transparent: true, opacity: 0.34, clearcoat: 0.7, envMap: env || null, envMapIntensity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+  var fill = kind === 'tube' || kind === 'vial' ? 0.7 : 0.62, lv = top * fill, inner = [];
+  P.forEach(function(p) { if (p[1] <= lv) inner.push(new THREE.Vector2(p[0] * 0.86, p[1] + 0.003)); }); inner.push(new THREE.Vector2(inner[inner.length - 1].x, lv)); inner.push(new THREE.Vector2(0, lv));
+  var liquid = new THREE.Mesh(new THREE.LatheGeometry(inner, 20), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.18, roughness: 0.25, transparent: true, opacity: 0.88 }));
+  var neck = P[P.length - 2][0], cork = new THREE.Mesh(new THREE.CylinderGeometry(neck * 1.05, neck * 0.9, 0.028, 12), new THREE.MeshStandardMaterial({ color: 0x8a6440, map:wear, bumpMap:wear, bumpScale:0.0007, roughness: 0.98 }));
+  cork.position.y = top + 0.006; liquid.renderOrder = 1; glass.renderOrder = 2; g.add(liquid); g.add(glass); if (kind !== 'jar') g.add(cork); else { var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.014, 20), new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.6, metalness: 0.3 })); lid.position.y = top + 0.007; g.add(lid); }
+  var radius=0;P.forEach(function(p){if(p[1]<=lv)radius=Math.max(radius,p[0]);});
+  // Curved worn labels, with decorative ink marks rather than new story text.
+  var label=painted(function(cx){cx.clearRect(0,0,128,128);cx.fillStyle='#bfac7f';cx.beginPath();cx.moveTo(8,13);cx.lineTo(116,8);cx.lineTo(121,106);cx.lineTo(105,118);cx.lineTo(9,113);cx.lineTo(5,79);cx.closePath();cx.fill();cx.strokeStyle='#78643f';cx.lineWidth=2;cx.strokeRect(16,20,94,82);cx.beginPath();cx.arc(64,49,15,0,Math.PI*2);cx.moveTo(50,61);cx.lineTo(64,30);cx.lineTo(78,61);cx.closePath();cx.stroke();for(var i=0;i<4;i++){cx.fillStyle='rgba(70,51,30,'+(.45+i*.08)+')';cx.fillRect(27,76+i*5,67-i*8,1);}for(var n=0;n<85;n++){cx.fillStyle=n%2?'rgba(79,49,20,.18)':'rgba(229,209,161,.4)';cx.fillRect((n*39.7)%128,(n*17.3)%128,1+n%5,1+n%3);}});
+  function wallRadius(y){for(var i=1;i<P.length;i++){if(P[i][1]>=y){var t=(y-P[i-1][1])/Math.max(.00001,P[i][1]-P[i-1][1]);return P[i-1][0]+(P[i][0]-P[i-1][0])*t;}}return neck;}
+  var labelProfile=[];for(var li=0;li<=8;li++){var ly=top*(.195+li*.29/8);labelProfile.push(new THREE.Vector2(wallRadius(ly)+.0007,ly-top*.34));}
+  var paper=new THREE.Mesh(new THREE.LatheGeometry(labelProfile,18,-.8,1.6),new THREE.MeshStandardMaterial({map:label,transparent:true,alphaTest:.15,roughness:1,side:THREE.DoubleSide,depthWrite:false}));paper.position.y=top*.34;paper.renderOrder=3;g.add(paper);
+  var ring=new THREE.Mesh(new THREE.TorusGeometry(neck*1.04,.0018,6,20),new THREE.MeshStandardMaterial({color:0x827047,metalness:.45,roughness:.73}));ring.rotation.x=Math.PI/2;ring.position.y=top-.005;g.add(ring);
+  var sediment=new THREE.Mesh(new THREE.CylinderGeometry(radius*.73,radius*.77,.005,18),new THREE.MeshStandardMaterial({color:col.clone().multiplyScalar(.32),roughness:.92}));sediment.position.y=.008;g.add(sediment);
+  var meniscus=new THREE.Mesh(new THREE.TorusGeometry(inner[inner.length-2].x*.97,.0014,5,20),new THREE.MeshStandardMaterial({color:col,roughness:.34,transparent:true,opacity:.65}));meniscus.rotation.x=Math.PI/2;meniscus.position.y=lv;meniscus.renderOrder=1;g.add(meniscus);
+  return g;
+};

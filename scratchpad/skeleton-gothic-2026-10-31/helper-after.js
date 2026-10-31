@@ -27,7 +27,7 @@ window.dssSkeleton = function() {
   var g=new THREE.Group();g.name='gothic-anatomical-skeleton';
   var bone=new THREE.MeshStandardMaterial({color:0xe0d2b4,map:boneMap,bumpMap:boneMap,bumpScale:.0018,roughness:.88});
   var skullBone=bone.clone();skullBone.map=skullBone.bumpMap=skullMap;
-  var dark=new THREE.MeshStandardMaterial({color:0x201b16,roughness:1});
+  var dark=new THREE.MeshBasicMaterial({color:0x100d0b});
   var iron=new THREE.MeshStandardMaterial({color:0x292b29,metalness:.65,roughness:.62});
   var wood=new THREE.MeshStandardMaterial({color:0x64503e,map:woodMap,bumpMap:woodMap,bumpScale:.003,roughness:.8});
   function add(geo,mat,x,y,z){var m=new THREE.Mesh(geo,mat||bone);m.position.set(x||0,y||0,z||0);m.castShadow=m.receiveShadow=true;g.add(m);return m;}
@@ -48,15 +48,29 @@ window.dssSkeleton = function() {
   // Rounded cranium, hollow orbital openings, cheek arches and an open articulated jaw.
   var cranium=ell(0,1.716,-.027,.081,.092,.081,skullBone);cranium.rotation.z=-.045;
   var face=new THREE.Shape();face.moveTo(-.066,.067);face.bezierCurveTo(-.093,.038,-.079,-.018,-.055,-.034);face.lineTo(-.034,-.058);face.quadraticCurveTo(0,-.066,.034,-.058);face.lineTo(.055,-.034);face.bezierCurveTo(.079,-.018,.093,.038,.066,.067);face.quadraticCurveTo(0,.09,-.066,.067);
-  [-1,1].forEach(function(sd){var hole=new THREE.Path();hole.absellipse(sd*.033,.018,.023,.026,0,Math.PI*2,true,sd*.12);face.holes.push(hole);});
+  [-1,1].forEach(function(sd){var hole=new THREE.Path();hole.absellipse(sd*.032,.018,.021,.019,0,Math.PI*2,true,sd*-.16);face.holes.push(hole);});
   var nose=new THREE.Path();nose.moveTo(0,.004);nose.lineTo(-.013,-.029);nose.quadraticCurveTo(0,-.023,.013,-.029);nose.lineTo(0,.004);face.holes.push(nose);
-  add(new THREE.ExtrudeGeometry(face,{depth:.009,steps:1,bevelEnabled:true,bevelThickness:.003,bevelSize:.003,bevelSegments:3,curveSegments:16}),skullBone,0,1.665,.052);
-  [-1,1].forEach(function(sd){ell(sd*.033,1.683,.052,.022,.025,.008,dark);
+  var faceGeo=new THREE.ExtrudeGeometry(face,{depth:.009,steps:1,bevelEnabled:true,bevelThickness:.003,bevelSize:.003,bevelSegments:3,curveSegments:20});
+  // Subdivide broad facial triangles before curving them, avoiding diagonal facets across the sockets.
+  for(var subdiv=0;subdiv<3;subdiv++){
+    var refined=new THREE.BufferGeometry();
+    ['position','normal','uv'].forEach(function(name){var attr=faceGeo.getAttribute(name),size=attr.itemSize,values=[];
+      function vertex(a,b){for(var c=0;c<size;c++)values.push(b==null?attr.array[a*size+c]:(attr.array[a*size+c]+attr.array[b*size+c])*.5);}
+      for(var tri=0;tri<attr.count;tri+=3){var a=tri,b=tri+1,c=tri+2;
+        vertex(a);vertex(a,b);vertex(c,a);vertex(a,b);vertex(b);vertex(b,c);vertex(c,a);vertex(b,c);vertex(c);vertex(a,b);vertex(b,c);vertex(c,a);
+      }refined.setAttribute(name,new THREE.Float32BufferAttribute(values,size));
+    });faceGeo.dispose();faceGeo=refined;
+  }
+  var fp=faceGeo.getAttribute('position');
+  for(var fi=0;fi<fp.count;fi++){var fx=fp.getX(fi),fy=fp.getY(fi);fp.setZ(fi,fp.getZ(fi)-.025*Math.pow(fx/.085,2)-.028*Math.pow(Math.max(0,fy-.018)/.065,2));}
+  faceGeo.computeVertexNormals();add(faceGeo,skullBone,0,1.665,.052);
+  [-1,1].forEach(function(sd){ell(sd*.032,1.683,.044,.022,.021,.009,dark);
     curve([[sd*.069,1.691,.047],[sd*.077,1.664,.05],[sd*.052,1.646,.065],[sd*.025,1.632,.07]],.007,bone);
     curve([[sd*.06,1.659,.018],[sd*.06,1.605,.038],[sd*.034,1.593,.071],[0,1.589,.078]],.008,bone);
     ell(sd*.058,1.655,.019,.009,.012,.01);
   });
-  ell(0,1.649,.055,.012,.017,.006,dark);
+  ell(0,1.589,.078,.008,.008,.008);
+  ell(0,1.649,.05,.012,.017,.006,dark);
   // Individual small teeth follow the curved upper and lower dental arches.
   for(var tooth=0;tooth<12;tooth++){var angle=-1.2+tooth*2.4/11,x=Math.sin(angle)*.039,z=.043+Math.cos(angle)*.032;
     ell(x,1.612,z,.0036,.0085,.0047);ell(x,1.601,z-.001,.0033,.006,.0044);

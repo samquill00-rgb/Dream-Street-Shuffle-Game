@@ -1,0 +1,3 @@
+- [x] Make the open counter book more used-looking.
+- [x] Make globe more legible and aged, retaining pink/blue/green palette.
+- [x] Weather and detail the potions/bottles.

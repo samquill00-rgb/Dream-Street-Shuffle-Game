@@ -1,3 +1,54 @@
+# NIGHTWORK 2026-10-31 (05:17 GMT on) — the 27 playtest notes; synced, NOT committed
+
+Self-prompt for runs like this: `HANDOFF-playtest-fix-prompt.md`. Harness: scratchpad `pj.py "<passage>" <sub> <wait> [js | @sleep:s | @shot:f | @click:t | @mclick:t]`.
+
+## Done (verified headless unless said)
+- 1 Ginger flash: deanRoad/greekRoad z-fight separated; hot pixels 209 → 23.
+- 2–3 LINE 1: petals fly straight to the NOTEBOOK; last sentence his.
+- 4, 20 Maritime: YES small/plain when Seek the shore is the way; Pillars lore + "Why Carthage" map (pink).
+- 5 Pillars primer slips modal, 1/2 and 2/2; clicks swallowed until read.
+- 6 Petal launch waits for the camera tween.
+- 8–10 Ham: stagger + ticks; THE RUMOUR on clicking off; paragraph rustle; Great Ham note opens on looking at him.
+- 11 Dean Street: the Cecil (and Page 93) slip stands down while the way to Cecil Court is lit.
+- 19 Doorway piss: stream runs on 6 s on the card, sound 9.5 s with a 2.2 s fade.
+- 27 Map footsteps: yes, quieter since the 10-30 sample swap (recorded step at 0.042); procedural cobble restored for the map. Walk speed unchanged in code since 15 Oct.
+- 12 Cecil Court: mist over the two front awnings (P.J. Hilton, Watkins), thinning with the dolly; iframe ?v=20261031b.
+- 13 Watkins bios drafted (pink, draft: true).
+- 14 Waltz: arriving from Watkins skipped the rules card; the rule now sits over the canvas through the intro.
+- 15 O'Flatterly: glass case line drafted ('[draft] ' prefix in DSS_VOICES shows pink); Page 93 note drafted (pink).
+- 16–17 THE GREAT WORK opens on its own a couple of seconds after the night's first haunt box shows, larger plain type, the notebook wheel with this haunt's gate gilded; fits 1280×800.
+- 21 Carthage: centre arch lifted (y scale 1.35 → 1.9); drowned ruins lay shadow decals on the water. Inscription: see below.
+- 22 Shore: "There are two paths, but one is blocked for now:" while the Green Sea is closed.
+- 23 Pyre fire down to 0.18 (about 8.5 dB under the lament); lament untouched.
+- 24 Dido: Marlowe credit under her words; Christopher Marlowe note (pink); Shelley's Liver note moved here from the Gift and drafted (pink).
+- 25 Yeats credited, each line whole; also credited Milton (Pillars), Marvell (LINE 2 Oxford), Yeats (Talk to the Artists), Homer via Scipio (Carthage shore).
+- 26 Stairs polaroid on its own screen (#dss-photo-pop, registered in both busy checks).
+
+## Iterating (after the notes)
+- Flash scan of 12 approaches: every remaining hot spot is designed motion (Colony sign and butterfly, Coppers bulb and moth, Chippy neon, Pillars flood, Carthage sea). No change.
+- Lily glimpses were invisible: the 10-23 gold-glow rule replaced lilyFadeIn, so every `.lily-glimpse.lily-fade` sat at opacity 0 (the phone call's closing Sonnet 66 lines, the flower lines). Both animations now run; late, very-late and bells-spent variants kept. Verified on Lily phone call 1 and on gathering the Pillars lily (its line had been invisible since 10-23 in every venue), and on After the dual ring, whose only line ("And the tears and the tears and the tears.") had shown a blank card since it moved there on 10-28.
+- Harlowe and-chain quirk shape bracketed (no logic change): The French's lily 5 flower-only guard, four Next Target else-ifs. Both pages render clean.
+- 7 The brief slip at the Pillars: the three-slip cap sent off the oldest slip the moment a fourth landed, so a slip could show for a blink and go. Now only a plain slip up 4 s or more makes room; modal primers never do. Tested: four at once all stay; a later fifth trims back to three. (Also possible: a primer your click dismissed before note 5's modal fix.)
+- Sweep of all 280 passages at 1280×800 (debug jump, 9 s): no tw-errors outside display-only passages; overflow only Dawn (ending, below), The French 81 px (passage behind the fixed room veil), Ham 12 px (a trailing break), PP Victory 5, Shana 3. Invisible-text sweep: only designed waits (lily hint after the words go, a3 flash card, hub dock).
+- 18 Night Ahead Part Two order: no earlier order note for this page exists in any transcript, so your general rule is applied (the words, then each piece, then the way on). Slips queued elsewhere used to land mid-typing; now a slip waits while any typewriter page types and for 2 s after its way on shows (cap 60 s). The cover-story title now lands on its own and On. follows 1.6 s later. Timed: stamp 12.5 s, On. 14.4 s, a slip queued at 2 s lands after both. Skip still sets the whole page. Say if the order you meant differs.
+- Left at standard: PP Victory (5 px, way back on the bottom edge, fully visible), Shana (3 px), Ham (12 px trailing break), The French (81 px of passage behind the fixed room veil).
+- Asset sweep, all passages: no failed requests, no 404s, no console errors.
+- Random-walk bot (6 walks, about 1,600 real clicks from the Title): no tw-errors, page errors or stuck pages; reach is limited to the first lap because room hotspots need 3D clicks.
+- First haunt, reader closing each slip: MORALE 1/2, SOBRIETY 2/2, HAUNTS, then THE GREAT WORK, one at a time (Shana's Verdict).
+- Room cards: every venue's hotspots opened by their keyboard buttons at 1280×800 (44 cards that a debug jump makes available): none overflows or leaves the screen.
+- Regression error sweep after all of tonight's edits: clean.
+- After the call: On. sat below the paper at 1280×800 (the roll follows the typing cursor, and the polaroid and On. come after the last typed line), black ink on the dark, so a laptop player saw no way on. When the links show, the roll now feeds on until the last one sits on the sheet. Verified natural and skipped, 1280×800 and 1440×900; all 16 typewriter pages rechecked, every way on on the paper and clickable.
+- Reachability sweep (every visible link on screen and on top at its centre, all passages, 1280×800): only designed cases (approach and dream-world bridge links under their scenes' own buttons, lore cards and rules cards that are open, the quest page before its fit settles).
+- Credits: Ezekiel 1:4 (Storm from the North), William Shakespeare, Sonnet 66 (Lily phone call 1).
+
+## For Sam
+- 21 "Bring back the inscription on the old arch": the only inscription this scene has had is XCIII on the right-hand lintel (columns 6 and 8), still there and readable from the opening view (checked by a camera raycast and a zoomed shot tonight). The box-built centre arch retired on 10-29 never carried lettering, nor did the April lintel. Which arch did you mean?
+- 24 Rework the Dido translation (your reminder). Marlowe recurring: banked.
+- Heart monitor: still needs the Haywood monitor glb downloaded.
+- Uncredited on purpose? The Fetch's spoken Beckett ('I can't go on, I'll go on.') and Baudelaire via Eliot ('hypocrite lecteur'). Also on the dual ring, your 'as the grass grows on the weirs' (Yeats, 'Down by the Salley Gardens'). Left uncredited as speech; say if you want small credits.
+- Dawn (the ending) is a 3046 px pane at 1280×800 and scrolls by hand; long prose is your call, left as is.
+- Pink drafted tonight: Watkins bios ×2, glass case, Page 93, Shelley's Liver, Christopher Marlowe, Pillars lore, Why Carthage.
+
 # NIGHTWORK 2026-10-30 (03:57–04:55 by `date`) — synced, NOT committed
 
 Prompt: `HANDOFF-nightwork-2026-10-30.md`. Focus: prove tonight's sound-engine swaps and the Rapa Nui sky/surf are safe, matched and smooth. Your 03:55 commit already holds `planets/`, `clouds/`, `sfx/`, `fight-announcer.m4a`; only the .twee and .html changed since. Harness and evidence: 29 Oct scratchpad (`levels.py`, `fpsei.py`, `warm.py`, `recheck.py`, `n30/`, `levels_before.json`, `levels_after.json`, `n30_1440.json`, `n30_1280.json`).

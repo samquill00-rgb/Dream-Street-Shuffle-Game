@@ -5,7 +5,9 @@
 - Q5 Hang up now appears after the lines: Lily call 1 8 s → 13 s (Sonnet 66 fades from 10 s), dual ring 15 s → 22 s; auto hang-ups 28 s / 40 s unchanged. Not seen live.
 - Q7 The French: the 81 px was empty story/passage bottom padding under the in-flow #fi-wrap; padding removed when #fi-wrap is present. 1280×800 overflow 0. No zoom, words untouched.
 - Q10 ShareAlike packs: kept out of every build (SOUND-SOURCES.md updated).
-- Q9 credits: a research agent is looking up the Waterhouse creator and the ~14 "licence to confirm" downloads; results to be written into SOUND-SOURCES.md.
+- Q9 credits DONE: all 13 OGA downloads checked on their pages (agent; Dirt verified by curl): CC0 except Dirt.png (CC-BY 3.0, KIIRA / Chloe Wolfe, credit REQUIRED, now in must-credit). Waterhouse = Colorado Stark (courtesy credit + a comment on his page). SOUND-SOURCES.md log and image table updated. Still unchecked: the four Smithsonian scans' own records, Abrash.JPG's Commons page.
+- Older questions cleared: endings stay as they are (no reward beyond the Dawn counts); LINE 3's "It is written. You shall get out alive." now shows only when the Fetch would be ready ($needLilies/$needHaunts, bracketed); spent-door "Not tonight." kept; the red doorway door on the map left (no preference); ring cards over room intros already fixed (.ring-wait). The Interval radio original moved OUT of the repo to `../Dream Street Shuffle - audio backups/`.
+- No open questions remain. Sam's to-dos: commit; play the paged Dawn, phone calls, LINE 3; look at the Carthage arch; pink lines + Dido; listen to recorded sounds; write the questions for comprehension responses (27 Oct notes 37/38); try COPPER's password in a real night; Harp's Alley lines (parked).
 
 # SESSION 2026-11-01 (afternoon) — synced, NOT committed
 

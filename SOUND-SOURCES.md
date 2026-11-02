@@ -3,16 +3,17 @@
 ## ATTRIBUTION LOG (kept up to date as assets come in; started 2026-10-31)
 
 **Credits you must give** (licence requires it):
+- KIIRA (Chloe Wolfe), "Hand Painted Texture - Dirt" (Dirt.png), https://opengameart.org/content/hand-painted-texture-dirt, CC-BY 3.0: the Nazca race pampa crackle (checked 2026-11-02; 109.7 KB, 256×256, matches). Credit line: "Hand Painted Texture - Dirt by KIIRA (OpenGameArt), CC-BY 3.0".
 - reivaxcorp, "Cow run Cycle" (vaca.png), https://opengameart.org/node/83314, CC-BY 3.0: the cow that jumps over the moon in the Cecil Court approach (2026-10-31; file name and 42.7 KB size match the page). Credit line: "Cow run Cycle by reivaxcorp (OpenGameArt), CC-BY 3.0".
 
 **Credits that are asked for or customary** (not legally required; good manners in the end credits):
 - NASA / Solar Dynamics Observatory: "Sun image courtesy of NASA/SDO" (Ronnie Scott's approach sky).
 - Yughues (Nobiax), yughues.artstation.com: parquet pattern (Lackland's office). The slate pattern came off the cellar floor on 2026-10-31.
 - PagDev (OpenGameArt): the pyre's fire. CC0, but the page says credit "is always appreciated".
-- Waterhouse Set creator: carved columns and arch at Carthage. The creator asks for a credit; their name still needs finding on the OpenGameArt page.
+- Colorado Stark, "John Williams Waterhouse Handpainted Set", https://opengameart.org/content/john-williams-waterhouse-handpainted-set, CC0: carved columns and arch at Carthage. He asks for his name in the credits and a comment on the page showing the use (checked 2026-11-02). Credit line: "Waterhouse Set by Colorado Stark (OpenGameArt)".
 
 **Licence still to confirm before release** (each could turn out to need a credit, or not be usable):
-- Moon overlay; Wood 1 and Wood 2; square paving flags and cobbles; dead trees; Parallax60 specks; construction mesh; lightning frames (map pentagram and Rapa Nui sky); 50 free textures 4; Dirt.png; Stains compressed; arcadefloor.png; Potion_1; tan gas giant textures; USNM 220068 cranium (the Carthage skull: Smithsonian NMNH scan, whose 3D records for neighbouring primate crania are CC0, but its own record not found yet); Cher Ami, the stuffed pigeon in O'Flatterly's shop (Smithsonian NMAH AF*30714 scan, file nmah-af_30714-cher_ami-100k-ar.glb; Smithsonian 3D scans are mostly CC0 but its own record has not been checked); the wiz boots by Ashton in Copper's cellar (Smithsonian 3D, NMAAHC 2007.3.8.4ab, file wiz_boots-150k-4096.glb; record not checked yet); the kneeling winged monster in Trisha's (Smithsonian 3D, file kneeling-winged-monster-150k-2048-medium-100k-2048_std_draco.glb; record not checked yet).
+- (The thirteen OpenGameArt downloads that stood here were checked 2026-11-02: all CC0 except Dirt.png, now under must-credit; see the image table.) USNM 220068 cranium (the Carthage skull: Smithsonian NMNH scan, whose 3D records for neighbouring primate crania are CC0, but its own record not found yet); Cher Ami, the stuffed pigeon in O'Flatterly's shop (Smithsonian NMAH AF*30714 scan, file nmah-af_30714-cher_ami-100k-ar.glb; Smithsonian 3D scans are mostly CC0 but its own record has not been checked); the wiz boots by Ashton in Copper's cellar (Smithsonian 3D, NMAAHC 2007.3.8.4ab, file wiz_boots-150k-4096.glb; record not checked yet); the kneeling winged monster in Trisha's (Smithsonian 3D, file kneeling-winged-monster-150k-2048-medium-100k-2048_std_draco.glb; record not checked yet).
 
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.
@@ -57,21 +58,21 @@ The originals stay in the Claude work folder.
 | Asset | Where in the game | Source / licence |
 |---|---|---|
 | Sun (SDO/AIA 304, 2010-06-22), labels cropped | Ronnie Scott's approach sky | NASA / Solar Dynamics Observatory, public domain. Credit: NASA/SDO |
-| Moon overlay (moon_overlay.png) | Night sky over the eight Soho approaches | Downloaded by Sam; licence to confirm |
-| Wood 1 (dark oak) and Wood 2 (mahogany), wood_0.zip | Coach and Horses interior: trim, panelling, counter | Downloaded by Sam; licence to confirm |
-| Square paving flags (ground_pavement_square2) and cobbles (ground_cobblestone5) | Gents tile strips; the gardener's hut worm wall | Downloaded by Sam; licence to confirm |
+| Moon overlay (moon_overlay.png) | Night sky over the eight Soho approaches | CC0, bart, opengameart.org/content/moon-overlay-texture (checked 2026-11-02) |
+| Wood 1 (dark oak) and Wood 2 (mahogany), wood_0.zip | Coach and Horses interior: trim, panelling, counter | CC0, Luke.RUSTLTD, opengameart.org/content/5-wood-textures (checked 2026-11-02) |
+| Square paving flags (ground_pavement_square2) and cobbles (ground_cobblestone5) | Gents tile strips; the gardener's hut worm wall | CC0, Scouser, opengameart.org/content/free-urban-textures-ground-grass-road-cobbles-snow (checked 2026-11-02) |
 | Patterns 271 (parquet) and 273 (slate tile), 3D_pattern_54 | Lackland's office floor (the cellar floor until 2026-10-31, now plain concrete again) | Yughues (Nobiax), CC0 1.0 (original pack readme). Courtesy credit: Yughues, yughues.artstation.com |
-| Dead trees (tree_collection_dead_1K), four cut out | The coast of Carthage | Downloaded by Sam; licence to confirm |
+| Dead trees (tree_collection_dead_1K), four cut out | The coast of Carthage | CC0, rubberduck, opengameart.org/content/high-res-tree-textures (checked 2026-11-02; filename match, no local copy to size) |
 
-| Parallax60 (specks layer) | Ronnie's ceiling star-drift; Colony smoke glitter | Downloaded by Sam; licence to confirm |
+| Parallax60 (specks layer) | Ronnie's ceiling star-drift; Colony smoke glitter | CC0, scorcher24, opengameart.org/content/space-parallax-background (checked 2026-11-02) |
 | Seamless abstract pack 128x128 (nos 2, 6, 13, 16, 22, 26, 29, 33, 36, 38, 41, 44, 45, 49, 50) | Cosmogramma LP sleeves; Ronnie's light show; Ronnie's bar-game arena; chippy formica; Trisha's three panels (the bar front went to laminate on 2026-10-31) | Screaming Brain Studios, CC0 (pack License.txt) |
-| Construction mesh cover | One sheet each in the Colony and Copper's cellar | Downloaded by Sam; licence to confirm |
-| Lightning (frames 0, 1, 3, 5, 7, 9) | Pentagram cast on the notebook map; Rapa Nui sky strikes (2026-10-30) | Downloaded by Sam; licence to confirm |
+| Construction mesh cover | One sheet each in the Colony and Copper's cellar | CC0, Scouser, opengameart.org/content/free-urban-textures-metal-construction-barriers (checked 2026-11-02) |
+| Lightning (frames 0, 1, 3, 5, 7, 9) | Pentagram cast on the notebook map; Rapa Nui sky strikes (2026-10-30) | CC0, Calinou, opengameart.org/content/lightning-animation (checked 2026-11-02) |
 
-| 50 free textures 4 + normal maps: 163 (lichen stone), 173b / 173_norm (oil-slick metal), 176 (carved lattice) | Carthage colonnade; portal pillar shaft; Green Sea shutters | Downloaded by Sam; licence to confirm |
-| Dirt.png | Nazca race pampa crackle | Downloaded by Sam; licence to confirm |
-| Stains compressed (old papers), two pieces | Plot-speech panels; Page 93 | Downloaded by Sam; licence to confirm |
-| arcadefloor.png | Trisha's floor | Downloaded by Sam; licence to confirm |
+| 50 free textures 4 + normal maps: 163 (lichen stone), 173b / 173_norm (oil-slick metal), 176 (carved lattice) | Carthage colonnade; portal pillar shaft; Green Sea shutters | CC0, rubberduck, opengameart.org/content/50-free-textures-4-normalmaps (checked 2026-11-02) |
+| Dirt.png | Nazca race pampa crackle | **CC-BY 3.0, KIIRA (Chloe Wolfe), opengameart.org/content/hand-painted-texture-dirt: credit required** (checked 2026-11-02) |
+| Stains compressed (old papers), two pieces | Plot-speech panels; Page 93 | CC0, Q_x, opengameart.org/content/various-old-paper-stains-drops-and-other (checked 2026-11-02) |
+| arcadefloor.png | Trisha's floor | CC0, Fupi, opengameart.org/content/arcade-floor-neon (checked 2026-11-02) |
 | Fantasy Ruins Pack: RuinArch_01, TempleRuin_02 (no ivy), RomanTypeCol_01, RuinWallSegment_01 + their stone textures | Carthage approach: drowned harbour, headland temple, wall among the palms | 3TD (Three D Textures), CC0 (3TD_CC0_License_EULA.pdf) |
 | Medieval Church (75990), Collada export, carved door figure omitted | Dawn view from Centre Point (oxford-street-from-centre-point-3d-static.html), north of Oxford Street | Daniel74, CC0 (licence page in the pack) |
 | Medieval Modular Buildings 1 (74696): Plaster, Wood, RoofTiles, GreyBricks textures | Soho Square gardener's hut | Daniel74, CC0 (licence page in the pack) |
@@ -79,9 +80,9 @@ The originals stay in the Claude work folder.
 | FPS Pack.zip: SniperRifle.obj, packed into the passage, recoloured (the pack's materials are all grey) | Subcomandante Fortuna's rifle in view, The Reclamation (Rapa Nui shoot), 2026-10-31 | Quaternius, "Low Poly Animated Guns", CC0 (OpenGameArt page) |
 | Medieval Blacksmith (75729), DoorType1 strapped plank door, two leaves (one mirrored) | Soho Square gardener's hut double doors (2026-10-31) | Daniel74, CC0 (licence page in the pack) |
 | Butterfly (monarch) wing texture, butterfly-skin.png | Colony approach, resting on the wall between the doors | Čestmír Dammer (for Kelgar), CC0 (license.txt) |
-| Potion_1 (FBX), rendered once to an image, re-coloured crimson | Shelley's liver: OBJECT ACQUIRED box and notebook | Downloaded by Sam; no licence in the archive, to confirm |
-| Waterhouse Set: Grey_Pillar, Arch_Round (FBX) + HalfAtlas texture | Carthage approach: broken and background columns, a drowned arch | Public domain (OpenGameArt notice); creator asks for a courtesy credit, name to add |
-| tan-gas-giant-textures (face 4) | Carthage dream planet; Ronnie's tan ringed planet | Downloaded by Sam; no licence in the archive, to confirm |
+| Potion_1 (FBX), rendered once to an image, re-coloured crimson | Shelley's liver: OBJECT ACQUIRED box and notebook | CC0, OwlishMedia, opengameart.org/content/potion-bottle-0 (checked 2026-11-02) |
+| Waterhouse Set: Grey_Pillar, Arch_Round (FBX) + HalfAtlas texture | Carthage approach: broken and background columns, a drowned arch | CC0, Colorado Stark, opengameart.org/content/john-williams-waterhouse-handpainted-set; courtesy credit asked (checked 2026-11-02) |
+| tan-gas-giant-textures (face 4) | Carthage dream planet; Ronnie's tan ringed planet | CC0, smcameron (Stephen M. Cameron), opengameart.org/content/tan-gas-giant-planet-cubemap-textures (checked 2026-11-02) |
 | Kenney Planets (planet05–08) | Ronnie's approach sky (rust, ice); Rapa Nui sky (mauve, tan) | CC0 |
 | Abrash.JPG (Wikimedia Commons), warmed and desaturated into assets/cellar-rug.jpg | The rug under the chesterfield in Copper's cellar (room and approach) | Public domain (per Sam's download) |
 | Smithsonian Open Access, Pergolesi Side Chair (low-res glb, unpacked to models/pergolesi-chair.*) | The Colony Room, back wall between the bar and the piano | CC0 |

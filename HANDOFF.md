@@ -1,3 +1,32 @@
+# NIGHTWORK 2026-11-02 (04:42 GMT on) — today's troubles hunted across the game; synced, NOT committed, muted
+
+Brief (Sam, before sleep): take today's fixes (dim ritual text, Crowley bio off screen, the star drifted from its venues, PRIME/OLDBOY and haunt steps unexplained, the Harp route left off) and find the same troubles elsewhere. His prose untouched; style values only.
+
+**Fixed**
+- Dawn approach star (Dawn Approach White + Black, `centre-pent-overlay`) still drew the OLD layout: old points, old Wardour/Dean lines, and its five halos sat off its own points (three by 40–100 units). Now the approved star (306,70 · Coach · Chippy · Trisha's · French), streets at 80/190, halos and lilies on the points. Seen in the pane.
+- Dim/small text raised (scout list, then a contrast scan of every notebook tab): lore boxes on a return visit (0.62 → 0.92), old notebook slips (0.6/0.42/0.3 → 0.88/0.78/0.7), Alba panel body and note, the "Alas, I kiss you Jane" ghost line (0.22 → 0.7, still faint on purpose), haunt "The work:" captions and stage names (stage names now dark ink on the cream page), Dido credit, verse/scripture credits, the lily hint "Gather flowers…" and the pentangle reveal note (their fade ended at 0.6, now 1), the lily prompt, tarot hint and position labels, notebook CHANT/paths captions, item notes, the title page save line, the 10 old 3D rooms' place-name labels (0.25/0.4 → 0.62).
+- Notebook text that was pale gold for a dark page sitting on the cream page: "Still to see" list, DREAMS ledger rows (0.38 → 0.66; done rows still gold), chant syllables, lily label, the "not yet" grey `.nb-grey` (1.9:1 → readable) and its gate numerals. Checked by screenshot.
+- Long hint slips: cap 50vh → 68vh so a long slip shows whole on a laptop.
+- Dawn tally read "FLOWERS 5 OF 3" once you had more than needed; both tallies (notebook FINDS and the Fetch) now cap at the need with (min:). Seen: "FLOWERS 3 OF 3 · HAUNTS 3 OF 6", 0 errors.
+
+**Checked, fine**
+- All 11 long lore notes fit 1280×800 with no scroll. The voices box (its `about` lines moved to slips on 28 Oct) fits the longest object (glass case). The primer slip (647 chars) fits.
+- Route trace (notebook) follows the Dean move; the Dawn page's trace uses the street map's own grid, unaffected.
+- No links to missing passages; no variable read but never set; no leftover test passages (scout).
+
+**Run cut short (~05:00, session context ran out); not done**
+- Full crawl at 1280×800 (all 278 passages, 3 s wait each): 0 JS errors. Pages that scrolled, NOT yet re-measured with a longer wait (some will be load timing): Watkins 144, Cecil Court Waltz 48, Alba Complete 41, Alba Incomplete 75, Dawn 121, Fight Victory Perfect 100, Tarot Card Back 310, Shana's Verdict 9, Green Sea House of Cards 87, Maritime interlude 36, PP Defeat 233, PP Victory 262, Cow ride success 29, Sketch the Painter 17, The Ham calls you back 339, Airport Pub 61, The Sanctum 162, Lore The Great Work 184, Nazca Race 363, Preview Himalayas 61.
+- Harlowe errors only on Key Drop Here and Lore Read, which need their caller's temp variables; opened cold they always error, so not real bugs.
+- Not run: the 1366×768 crawl with contrast scan.
+- Zz Night Test passage removed, synced (0 in the html).
+
+**Your calls (not touched)**
+- Primer says "Neither one can end the night", but SOBRIETY ≤10 sends you to The Blackout and a second blackout forces the ending (your words, so flagged only).
+- Unexplained to a player (scout): OPUS/STATE header at 12 haunts; CHANT (6 syllables for 12 haunts, purpose held back till the Cave); DREAMS ledger columns unlabelled; five gifts → Synthesis never signposted; pocket keys (one at a time, used on crossing, bins/alleys as stashes; the ⚲ cell only explains on hover); "five to find" vs "FLOWERS x OF 3"; the PENTACLE's meaning; PASSWORDS "Deploy" button; resting venues' rule; THE FETCH never introduced.
+- `$midnightEnabled` is never true (parked by you), so midnight-only Coach routes are unreachable.
+- Hover-only story text: pocket cell "The third pillar wants paying."; notebook-gone "taken in Bourchier Street".
+- "Bourchier Street: The Knife" shows only your "POW!" (left alone).
+
 # SESSION 2026-11-02 — Sam's answers to the open questions; synced, NOT committed
 - Q1 Night Ahead Part Two order: keep. Q4 Night Ahead speed: keep. Q6 doorway card: no way out, keep. Q8 eagle: stays wordless. Q11 window reflection: dropped. Heart monitor: dropped.
 - Q2 ring MC: Sam unsure; parked for his sound pass, unchanged.

@@ -74,7 +74,7 @@ AUDIO_EMBEDS = [
     ("__DSS_TR_UP_DATA_URI__",       "french-stairs-up.m4a",                           "audio/mp4"),
     ("__DSS_STREET_DATA_URI__",      "the-street-layered-floor.m4a",                   "audio/mp4"),
     # 2026-10-23: CC0 sounds from OpenGameArt (SOUND-SOURCES.md), cut in the session scratchpad
-    ("__DSS_DOORWAY_DROPS_DATA_URI__", "doorway-drops.m4a",                            "audio/mp4"),   # "Water Drops" by CeoxBlackj: the doorway hold (lead, 8 s loop, tail)
+    ("__DSS_DOORWAY_DROPS_DATA_URI__", "doorway-piss.m4a",                             "audio/mp4"),   # Sam's recording (2026-11-02): one 30 s stream, each doorway starts at its own point; was doorway-drops.m4a ("Water Drops", CeoxBlackj)
     ("__DSS_VOMIT_DATA_URI__",       "vomit-sickness.m4a",                             "audio/mp4"),   # "Sick Noises" by frosty ham: the retch hold
     ("__DSS_GLASS_SMASH_DATA_URI__", "glass-window-smash.m4a",                         "audio/mp4"),   # "Glass Break" by Till Behrend: smashed map windows
     # 2026-10-30: Kenney Impact Sounds, RPG Audio and UI Audio (CC0), cut into 1.5 s-slot sheets; see sfxTake in the UserScript

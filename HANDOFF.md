@@ -109,7 +109,7 @@ Self-prompt for runs like this: `HANDOFF-playtest-fix-prompt.md`. Harness: scrat
 
 ## For Sam
 - 21 "Bring back the inscription on the old arch": the only inscription this scene has had is XCIII on the right-hand lintel (columns 6 and 8), still there and readable from the opening view (checked by a camera raycast and a zoomed shot tonight). The box-built centre arch retired on 10-29 never carried lettering, nor did the April lintel. Which arch did you mean?
-- 24 Rework the Dido translation (your reminder). Marlowe recurring: banked.
+- 24 Dido translation: DONE (Sam's lines 1-2, 2026-11-02). Marlowe recurring: banked.
 - Heart monitor: DROPPED by Sam (see the 2026-11-02 session notes).
 - Credits: the Fetch's Beckett and Baudelaire/Eliot and the dual ring's Yeats already carry credit lines (checked 2026-11-02).
 - Dawn (the ending) is a 3046 px pane at 1280×800 and scrolls by hand; long prose is your call, left as is.
@@ -8391,3 +8391,6 @@ Sam requested slightly more left again. Portrait halo wall-z+.355->+.39; height 
 
 ## 2026-11-02 — Waltz street graphics depth pass
 Sam accepted suggested graphics pass. Shared dssWaltzGlass now has continuous damp perspective paving with staggered joints/low-contrast surface variations, broken warm/cool window reflections and low kerb glints instead of broad moving floor lines. Shop bays depth-sorted far-to-near; slight facade shear, masonry surrounds/returns, cornices, upper sashes/sills, recessed existing arched displays. Projecting bracket signs carry book/celestial symbols only (no invented prose) and sway subtly. Thin local mist veils interleave bays; existing outer mist remains. Existing rhythms/input/lights/audio/story text untouched. No new loops/assets. Shared scene remains behind Watkins closed room until opening. Extracted helper syntax and isolated open/partway/still renders clean; open screenshot /private/tmp/dss-waltz-windows-open.png visually checked. Full-game rules/start +12.5s play: no errors; screenshot /private/tmp/dss-waltz-depth-game.png shows readable lights over revised scene. Synced284passages; no git. Scripts/TODO-depth in waltz scratchpad.
+
+## 2026-11-02 — Waltz control wording: click the arrows
+Sam corrected latest control wording: click the arrows, not lights. Updated waltz rules (desktop/touch) and persistent control hint to exact phrase click the arrows (sentence initial Click). Gameplay unchanged. Synced284passages; no git.

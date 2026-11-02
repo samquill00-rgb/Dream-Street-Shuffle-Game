@@ -1,0 +1,3 @@
+- [x] Remove the stuttering zoom into the walkable map.
+- [x] Use a still map image for the final view, then fade into gameplay.
+- [x] Verify and sync.

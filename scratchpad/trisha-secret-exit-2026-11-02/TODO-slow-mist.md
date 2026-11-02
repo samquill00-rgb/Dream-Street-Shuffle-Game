@@ -1,0 +1,3 @@
+- [x] Slow the full sequence and soften its motion and fades.
+- [x] Add more drifting mist.
+- [x] Verify and sync.

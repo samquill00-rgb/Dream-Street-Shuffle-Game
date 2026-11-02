@@ -1,0 +1,3 @@
+- [x] Remove street illustration and restore live map view.
+- [x] Replace repeated rectangles with a flowing transition into the landing.
+- [x] Verify and sync.

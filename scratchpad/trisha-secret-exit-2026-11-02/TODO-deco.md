@@ -1,0 +1,3 @@
+- [x] Smooth the falling-card motion and colour blooms.
+- [x] Add Art Deco styling and magickal detailing.
+- [x] Verify the final animation and sync.

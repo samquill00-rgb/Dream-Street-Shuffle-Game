@@ -1,0 +1,3 @@
+- [x] Give the portrait a gold frame.
+- [x] Set a slightly angled close-up.
+- [x] Verify and sync.

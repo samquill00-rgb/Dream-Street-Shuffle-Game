@@ -1,0 +1,4 @@
+- [ ] Integrate the portrait with the Coach lighting.
+- [ ] Check the original attachment for a date in metadata.
+- [ ] Verify and sync.
+- [ ] Centre the photograph on its wooden panel.

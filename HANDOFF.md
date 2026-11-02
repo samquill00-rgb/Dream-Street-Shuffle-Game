@@ -20,6 +20,15 @@ Brief (Sam, before sleep): take today's fixes (dim ritual text, Crowley bio off 
 - Not run: the 1366×768 crawl with contrast scan.
 - Zz Night Test passage removed, synced (0 in the html).
 
+**Explainers added (evening, Sam: "add the ones that you can")**
+- Notebook captions (styled as the CHANT caption): CHANT "One syllable for each of your first six haunts. You will need them in the mountains."; DREAMS "Each world, the gift you bring back from it, and its echo in Soho." + "Gifts brought back: n of 5."; LILIES "Three flowers are enough for the dawn. All five draw the star."; PASSWORDS (only while a Deploy shows) "Press Deploy to say the word at the door that is waiting for it."
+- One-time slips from the header (queued, wait for overlays; `window.dssExplainSlip`): first pocket key ("In your pocket. The third pillar wants paying."), fifth gift ("All five gifts are brought back. The third pillar is waiting."), notebook stolen ("Your notebook was taken in Bourchier Street."). Flags $pocketSlipShown / $giftsSlipShown / $goneSlipShown. Seen headless, 0 errors.
+- Dawn: stray line breaks after the fade-in hidden (1280×800 and 1280×720 fit). Ham: trailing blank line joined (14 → 9 px).
+- 1366×768 (Sam: "Agree", hub only, not a game-wide rule): map row floor VR_MIN 6 → 4, so Dean Street and the doorways fit at 768 (4 rows), unchanged at 1280×800 (6) and 1440×900 (10). Other pages that scroll at 768 left as they are.
+- THE FETCH: lore note "⟡ LORE: The Fetch ⟡" on his page under the quotation; PINK draft, redone from Sam's source (Irish version, Sam's pick: your own double, morning = long life, evening = death near; Shelley at Casa Magni, 1822, 'How long do you mean to be content?' per Mary Shelley's letter of 15 Aug 1822) for Sam to rewrite. Seen opening on its card, 0 errors.
+- Resting venues: no explainer (Sam: "leave it"); his "Look elsewhere; try again later." slip is enough.
+- OPUS protects (Sam: "Yes, protect them"): all 13 Blackout triggers now read `($sobriety <= 10) and ($haunts's length < 12)`; slip at 12 haunts "The Great Work is held. The night can no longer black you out." ($opusSlipShown). Tested: 12 haunts + SOBRIETY 5 skips it, 2 haunts still blacks out.
+
 **Your calls (not touched)**
 - Primer says "Neither one can end the night", but SOBRIETY ≤10 sends you to The Blackout and a second blackout forces the ending (your words, so flagged only).
 - Unexplained to a player (scout): OPUS/STATE header at 12 haunts; CHANT (6 syllables for 12 haunts, purpose held back till the Cave); DREAMS ledger columns unlabelled; five gifts → Synthesis never signposted; pocket keys (one at a time, used on crossing, bins/alleys as stashes; the ⚲ cell only explains on hover); "five to find" vs "FLOWERS x OF 3"; the PENTACLE's meaning; PASSWORDS "Deploy" button; resting venues' rule; THE FETCH never introduced.

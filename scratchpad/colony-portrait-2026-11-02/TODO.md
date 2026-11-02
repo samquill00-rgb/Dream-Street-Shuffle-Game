@@ -1,4 +1,4 @@
 - [x] Convert supplied portrait to black and white.
 - [x] Soften it slightly.
 - [x] Place in Coach and Horses with its own click target.
-- [ ] Verify and sync.
+- [x] Verify and sync.

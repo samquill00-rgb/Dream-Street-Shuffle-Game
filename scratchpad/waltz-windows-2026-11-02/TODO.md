@@ -1,0 +1,3 @@
+- [ ] Change the start button to “Take this waltz”.
+- [ ] Add mist and strangeness at the sides.
+- [ ] Verify and sync.

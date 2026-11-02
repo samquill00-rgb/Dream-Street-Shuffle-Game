@@ -236,6 +236,95 @@ Dream Street Shuffle
 
 :: UserScript [script]
 
+// Trisha's secret exit: opening colour, chromatic passage, live destination reveal.
+(function () {
+  var running = false, releasing = null;
+  document.addEventListener('click', function (ev) {
+    var link = ev.target.closest && ev.target.closest('tw-link');
+    if (!link || link === releasing || link.textContent.trim() !== 'Through the door') return;
+    if (document.querySelector('.dss-hint-modal:not(.out)') || Date.now() < (window.__dssModalHold || 0)) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    if (running) return;
+    running = true;
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var veil = document.createElement('div'), canvas = document.createElement('canvas');
+    veil.id = 'dss-trisha-secret-exit';
+    veil.setAttribute('role', 'img'); veil.setAttribute('aria-label', 'A coloured doorway opens. Violet, turquoise and amber light pass through the dark; Dean Street appears through the exit.');
+    veil.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:#030407;pointer-events:auto;';
+    canvas.style.cssText = 'display:block;width:100%;height:100%';
+    veil.appendChild(canvas); document.body.appendChild(veil);
+    var cx = canvas.getContext('2d'), started = performance.now(), raf = 0, done = false, navigated = false, arrivalAt = 0;
+    function navigate() {
+      if (navigated) return; navigated = true; releasing = link;
+      try { if (link.isConnected) link.click(); } finally { releasing = null; }
+    }
+    function finish() {
+      if (done) return; done = true; cancelAnimationFrame(raf); clearTimeout(safety);
+      document.removeEventListener('keydown', skip, true); window.removeEventListener('resize', size);
+      try { navigate(); } finally {
+        veil.style.transition = 'opacity .65s ease'; veil.style.opacity = '0';
+        setTimeout(function () { veil.remove(); running = false; }, 700);
+      }
+    }
+    function skip(e) { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopImmediatePropagation(); finish(); } }
+    function size() { canvas.width = Math.round(innerWidth * Math.min(devicePixelRatio || 1, 1.5)); canvas.height = Math.round(innerHeight * Math.min(devicePixelRatio || 1, 1.5)); }
+    function ease(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
+    function rect(x,y,w,h,col) { cx.fillStyle=col; cx.fillRect(x,y,w,h); }
+    function paint(now) {
+      var t = (now-started)/1000, w=canvas.width,h=canvas.height;
+      if (reduced) { if(t>.2)navigate(); if(t>.8)finish(); else raf=requestAnimationFrame(paint); return; }
+      if(t>3.45)navigate();
+      var destination=navigated && document.querySelector('#soho-map-container canvas');
+      if(destination && destination.width && !arrivalAt)arrivalAt=t;
+      var reveal=arrivalAt ? ease((t-arrivalAt)/1.15) : 0;
+      cx.globalCompositeOperation='source-over';cx.globalAlpha=1;rect(0,0,w,h,'#030407');
+      var opening=ease(t/.9), travel=ease((t-.8)/3.7), arrival=ease((t-4.6)/1.6);
+      var dw=Math.min(w*.36,h*.53)*(1+arrival*3),dh=h*.8*(1+arrival*2.5), x=(w-dw)/2,y=(h-dh)/2;
+      // Receding frames: a black passage that catches each passing colour.
+      cx.save();cx.beginPath();cx.rect(x,y,dw,dh);cx.clip();
+      var well=cx.createLinearGradient(0,y,0,y+dh);well.addColorStop(0,'#070914');well.addColorStop(.58,'#151e2a');well.addColorStop(1,'#030509');cx.fillStyle=well;cx.fillRect(x,y,dw,dh);
+      for(var i=15;i>=0;i--){
+        var z=((i/16+travel*.85)%1),scale=.12+Math.pow(z,2)*2.3;
+        var fw=dw*scale,fh=dh*scale,fx=w/2-fw/2,fy=h*.48-fh/2;
+        cx.strokeStyle='rgba(119,150,167,'+(.04+z*.18)+')';cx.lineWidth=1+z*3;cx.strokeRect(fx,fy,fw,fh);
+        // Thin chromatic fringes trail the stone jambs.
+        cx.strokeStyle='rgba(111,60,163,'+(z*.19)+')';cx.strokeRect(fx-3,fy,fw,fh);
+        cx.strokeStyle='rgba(64,188,186,'+(z*.17)+')';cx.strokeRect(fx+3,fy,fw,fh);
+      }
+      for(var r=0;r<110;r++){
+        var rz=(r/110+travel*.3)%1, ry=h*.52+Math.pow(rz,2)*dh*.55;
+        var shimmer=.5+.5*Math.sin(r*4.7+t*2.4),rw=dw*(.015+rz*.38)*shimmer;
+        rect(w/2+Math.sin(r*8.1)*dw*rz*.28-rw/2,ry,rw,1+rz*2,'rgba(156,191,207,'+(.04+shimmer*.18)+')');
+      }
+      // The view is the actual, already-running destination map, never a substitute street.
+      if(reveal){cx.globalAlpha=reveal;cx.drawImage(destination,x,y,dw,dh);cx.globalAlpha=1;}
+      cx.restore();
+      // Heavy door leaf swings away into darkness, with a coloured edge.
+      var leaf=dw*(1-opening);rect(x,y,leaf,dh,'#100c15');
+      cx.strokeStyle='rgba(225,180,233,'+(.6*(1-opening))+')';cx.lineWidth=3;cx.strokeRect(x+leaf,y,1,dh);
+      cx.strokeStyle='#222732';cx.lineWidth=9;cx.strokeRect(x-5,y-5,dw+10,dh+10);
+      // Three deliberate colour events, over a second apart: bloom then lingering afterimage.
+      var pulses=[{at:.18,c:'207,63,225'},{at:1.5,c:'33,220,219'},{at:2.85,c:'255,157,57'}];
+      pulses.forEach(function(p){var age=t-p.at;if(age<0||age>1.4)return;
+        var strength=age<.15?ease(age/.15):Math.exp(-(age-.15)*4.1);
+        cx.save();cx.globalCompositeOperation='screen';
+        var bloom=cx.createRadialGradient(w/2,h*.48,0,w/2,h*.48,Math.max(w,h)*.8);
+        bloom.addColorStop(0,'rgba('+p.c+','+strength*.8+')');bloom.addColorStop(.3,'rgba('+p.c+','+strength*.48+')');bloom.addColorStop(1,'rgba('+p.c+',0)');cx.fillStyle=bloom;cx.fillRect(0,0,w,h);
+        cx.shadowColor='rgb('+p.c+')';cx.shadowBlur=32*strength;cx.strokeStyle='rgba('+p.c+','+strength*.9+')';cx.lineWidth=3+strength*7;cx.strokeRect(x,y,dw,dh);
+        for(var k=0;k<7;k++){cx.globalAlpha=strength*(1-k/8)*.18;cx.strokeRect(x-k*11,y-k*17,dw+k*22,dh+k*34);}cx.restore();
+      });
+      // Dust and tiny refracted streaks give the light something to move through.
+      cx.save();cx.globalCompositeOperation='screen';
+      for(var d=0;d<80;d++){var phase=(d*.618+t*.11)%1,dx=w/2+Math.sin(d*71.3)*dw*(.15+phase*.65),dy=h/2+Math.cos(d*19.7)*dh*phase*.7;cx.strokeStyle='rgba(174,194,220,'+(.06+phase*.18)*(1-reveal)+')';cx.lineWidth=1;cx.beginPath();cx.moveTo(dx,dy);cx.lineTo(dx+(dx-w/2)*.018,dy+(dy-h/2)*.018);cx.stroke();}cx.restore();
+      if(arrivalAt && t>Math.max(6.2,arrivalAt+2.1)){finish();return;}
+      raf=requestAnimationFrame(paint);
+    }
+    var safety=setTimeout(finish,11000);
+    veil.addEventListener('click',finish);document.addEventListener('keydown',skip,true);window.addEventListener('resize',size);
+    size();if(cx)raf=requestAnimationFrame(paint);else finish();
+  },true);
+})();
+
 // ====== V2-EXPANSION: WORLDS LIFETIME TRACKING ======
 // Worlds the player has completed across all playthroughs persist in
 // localStorage. The Third Pillar Portal passage reads this list in its
@@ -60242,7 +60331,7 @@ The origin of that name is far from certain, but it is, probably, traceable at l
 
 Crowley came here and Yeats, Waite and Mathers. Mozart sold tickets to his shows from the shop at number nine. It is a dangerous bookshop.
 </div>]
-<!-- 2026-10-24 (Sam): the later visit, after Carthage and the Green Sea, goes on to the alley behind the Harp (Brydges Place) instead of the shop. The pink link text is a placeholder for Sam. --><!-- 2026-10-27 (Sam, for the tester link): the Harp's Alley route is switched off while its lines are pink; $harpRouteOn (StoryInit and Start) turns it back on -->(if: ($harpRouteOn is true) and ($returnedPage is true))[<span class="claude-draft">[[Go on to the back of the Harp|Harp Alley Approach]]</span>
+<!-- 2026-10-24 (Sam): the later visit, after Carthage and the Green Sea, goes on to the alley behind the Harp (Brydges Place) instead of the shop. The pink link text is a placeholder for Sam. --><!-- 2026-10-27 (Sam, for the tester link): the Harp's Alley route is switched off while its lines are pink; $harpRouteOn (StoryInit and Start) turns it back on -->(if: ($harpRouteOn is true) and ($returnedPage is true))[<span>[[Go on to the back of the Harp|Harp Alley Approach]]</span>
 [[Back to the street|Dean Street]]](else:)[[[Look in|Watkins]]]
 
 :: Harp Alley Approach [outdoor] {"position":"300,1565","size":"100,100"}
@@ -60252,19 +60341,18 @@ Crowley came here and Yeats, Waite and Mathers. Mozart sold tickets to his shows
 :: The Harp's Alley [outdoor] {"position":"300,1570","size":"100,100"}
 <!-- 2026-10-25 (Sam): the meeting in Brydges Place with the old friend from the Green Sea, an undercover man for the security services who is Heat and the Professor at once (Conrad, The Secret Agent). Three beats: he reads your night back (here), the two faces and the ask (Harp Alley Ask, Harp Alley Answer), the hand in his pocket (Harp Alley Standoff, Harp Alley End). Every pink line is a slot for Sam's own text, with a line from The Secret Agent under it to riff on (Project Gutenberg text, chapter given); the branching is built on the ship thread ($shipFate, $shipNews, $shipCall, $ashtonSold) and the cellar's $crossed. Once a game: $harpMet shuts the hub's Cecil Court door again. Stakes (stats, the Debt, a haunt) are not yet decided, so no beat moves a meter. -->
 (set: $harpMet to true)\
-<span class="claude-draft">Slot · Brydges Place, the back door of the Harp, and your old friend from the Green Sea, waiting. This time he sees you first.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘It was like a meeting in a side corridor of a mansion full of life.’</span>
+<span>Brydges Place, the back door of the Harp, and your old friend from the Green Sea, waiting. This time he sees you first.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘It was like a meeting in a side corridor of a mansion full of life.’</span>
 
 <!-- Beat 1, he reads your night back: what you did with the ship. -->\
-(if: $shipCall is "given")[<span class="claude-draft">Slot · He knows you gave QUIET FRANKIE ASHTON’S name on the phone, and that you chose to.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘…the mind and the instincts of a burglar are of the same kind as the mind and the instincts of a police officer. Both recognise the same conventions…’</span>](else-if: $shipCall is "slipped")[<span class="claude-draft">Slot · He knows ASHTON’S name came out of you on the phone, drunk, unchosen.<br><i>Conrad, The Secret Agent, ch. III:</i> ‘There is no occupation that fails a man more completely than that of a secret agent of police.’</span>](else-if: $shipCall is "kept")[<span class="claude-draft">Slot · He knows you hung up on QUIET FRANKIE and the Debt still stands.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘The mind of Chief Inspector Heat was inaccessible to ideas of revolt. But his thieves were not rebels.’</span>](else-if: $shipNews is "sunk")[<span class="claude-draft">Slot · You heard she went down off the Old Head of Kinsale. He knows more than the news did.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘Not accustomed, as the doctors are, to examine closely the mangled remains of human beings, he had been shocked by the sight disclosed to his view…’</span>](else-if: $shipNews is not "")[<span class="claude-draft">Slot · You have only heard the rumour of the ship. He knows it from the inside.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘A department does not know so much as some of its servants.’</span>](else:)[<span class="claude-draft">Slot · You have heard nothing of the ship. He tells you about it.<br><i>Conrad, The Secret Agent, ch. VI:</i> ‘There are things not fit for everybody to know.’</span>]
+(if: $shipCall is "given")[<span>He knows you gave QUIET FRANKIE ASHTON’S name on the phone, and that you chose to do it.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘…the mind and the instincts of a burglar are of the same kind as the mind and the instincts of a police officer. Both recognise the same conventions…’</span>](else-if: $shipCall is "slipped")[<span>He knows that you slipped ASHTON’S name, you useless drunk.<br><i>Conrad, The Secret Agent, ch. III:</i> ‘There is no occupation that fails a man more completely than that of a secret agent of police.’</span>](else-if: $shipCall is "kept")[<span>He knows you hung up on QUIET FRANKIE and the Debt still stands.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘The mind of Chief Inspector Heat was inaccessible to ideas of revolt. But his thieves were not rebels.’</span>](else-if: $shipNews is "sunk")[<span>You heard she went down off the Old Head of Kinsale. He, being a geographer, knows more than you.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘Not accustomed, as the doctors are, to examine closely the mangled remains of human beings, he had been shocked by the sight disclosed to his view…’</span>](else-if: $shipNews is not "")[<span>You have only heard the rumour about the ship. He, being a man of the world and a scholar, already knows more than you do.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘A department does not know so much as some of its servants.’</span>](else:)[<span>You have heard nothing of a ship and a plot, so he’ll tell you about it.<br><i>Conrad, The Secret Agent, ch. VI:</i> ‘There are things not fit for everybody to know.’</span>]
 
 <!-- What you did in the cellar, if you gave COPPER a name. -->\
-(if: $crossed is "red")[<span class="claude-draft">Slot · He knows you gave COPPER RED’S name in the cellar.<br><i>Conrad, The Secret Agent, ch. VI:</i> ‘Private friendship, private information, private use of it—that’s how I look upon it.’</span>
+(if: $crossed is "red")[<span>He knows you gave COPPER RED’S name in the cellar.<br><i>Conrad, The Secret Agent, ch. VI:</i> ‘Private friendship, private information, private use of it—that’s how I look upon it.’</span>
 
-](else-if: $crossed is "john")[<span class="claude-draft">Slot · He knows you gave COPPER JOHN’S name in the cellar.<br><i>Conrad, The Secret Agent, ch. VI:</i> ‘Private friendship, private information, private use of it—that’s how I look upon it.’</span>
+](else-if: $crossed is "john")[<span>He knows you gave COPPER JOHN ST. JOHN’S name in the cellar.<br><i>Conrad, The Secret Agent, ch. VI:</i> ‘Private friendship, private information, private use of it—that’s how I look upon it.’</span>
 
 ]\
-<!-- The truth of the ship tonight, which he knows whether or not you do. -->\
-(if: $shipFate is "afloat")[<span class="claude-draft">Slot · Tonight the ship is still afloat. What he knows of that, or means to do about it.<br><i>Conrad, The Secret Agent, ch. II:</i> ‘A bomb outrage to have any influence on public opinion now must go beyond the intention of vengeance or terrorism. It must be purely destructive.’</span>](else:)[<span class="claude-draft">Slot · Tonight the ship has gone down. What he knows of that.<br><i>Conrad, The Secret Agent, ch. V:</i> ‘The complexion of that case had somehow forced upon him the general idea of the absurdity of things human…’</span>]
+<!-- 2026-11-02 (Sam): the ship-tonight slot (afloat / sunk) cut; slot 2 already brings in the ship. -->\
 
 <span class="claude-draft">[[Hear him out|Harp Alley Ask]]</span>
 
@@ -84791,8 +84879,8 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
 <!-- 2026-10-25 (Sam): the murder. Far gone (sobriety under 30, no blackout needed: one step easier than the Soho Square hut), the knife is a choice: freeze and be robbed as before, or turn it on him. Once a game ($killedMugger). No meter moves, nobody comes; the only trace is a black teardrop on the notebook's first page. The robbery text is Sam's, moved word for word to "Bourchier Street: Mugged" so both ways can show it; the pink lines are slots for Sam. -->
 (display: "Key Guards")(if: $killedMugger is true)[(display: "Bourchier Street: The Knife")](else-if: $notebook is "held")[He takes you round to Brewer Street and into the car park with the pale tiled front and the copper dome, then down the ramp to the underground level, which at this hour is deserted.
 
-He lights up, hands it over, then pulls a knife. ‘Empty your jacket pocket,’ he says. (if: ($sobriety < 30) and ($killedMugger is not true))[|mugchoice>[<span class="claude-draft">(link: "Freeze.")[(replace: ?mugchoice)[(display: "Bourchier Street: Mugged")]]</span>
-<span class="claude-draft">(link: "Turn his knife on him.")[(set: $killedMugger to true)(replace: ?mugchoice)[(display: "Bourchier Street: The Knife")]]</span>]](else:)[(display: "Bourchier Street: Mugged")]](else:)[[[Back to the street|Dean Street]]]
+He lights up, hands it over, then pulls a knife. ‘I want what you’ve got,’ he says. (if: ($sobriety < 30) and ($killedMugger is not true))[|mugchoice>[<span>(link: "Stay calm.")[(replace: ?mugchoice)[(display: "Bourchier Street: Mugged")]]</span>
+<span>(link: "Turn his knife on him.")[(set: $killedMugger to true)(replace: ?mugchoice)[(display: "Bourchier Street: The Knife")]]</span>]](else:)[(display: "Bourchier Street: Mugged")]](else:)[[[Back to the street|Dean Street]]]
 
 :: Bourchier Street: The Knife [street-night] {"position":"2600,780","size":"100,100"}
 <!-- 2026-10-25: the murder and the slipping away, displayed by the car park; also what the car park shows on any later render, so a re-render can never fall through to the robbery. -->\

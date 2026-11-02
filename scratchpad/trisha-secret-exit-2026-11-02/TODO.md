@@ -1,0 +1,4 @@
+- [x] Coloured flash as the secret door opens.
+- [x] Several different coloured flashes while passing through.
+- [x] Finish with a view through the exit into the actual destination.
+- [ ] Check the revised animation and sync the game.

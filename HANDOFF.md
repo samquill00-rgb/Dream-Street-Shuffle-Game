@@ -8327,3 +8327,16 @@ Original142x129 clipboard PNG metadata inspected directly (PNG/eXIf): orientatio
 
 ## 2026-11-02 — Brass July 2020 plaque
 Sam requested physical brass plaque beneath pint photograph reading July 2020. Added centred.205x.047m dull brass plate, two small fixing heads and transparent scene-texture serif lettering; final font64px on768x160texture for close-up legibility. Attached to portrait group below frame, same room light/oblique camera. Existing caption His first pint after lockdown retained. Actual-source Coach fixture no errors/image200; plaque placement visually checked in /private/tmp/dss-coach-first-pint.png before final lettering size increase44->64. Synced284passages; no git.
+
+
+## 2026-11-02 — Full panel centre and plaque/caption clearance fixed in full UI
+Sam screenshot showed plaque covered by caption and picture still right of wooden panel. Sam clarified lift image/plaque, not move caption down. Rear divider segment is now ONE decorative panel (partitionPanel optional bays1 here, other divisions unchanged). Picture/plate centred on whole segment z=(dividerEnd+openingFar)/2=-1.445 (prior quarter centre was wrong visual section), raised physically y1.73. Camera final pp.x+.98,pp.y-.15,pp.z+.25, targetpp.x+.025,pp.y-.34,pp.z: makes full image+plate sit higher in close-up, caption unchanged. Full real-game QA after dismissing normal primers/lore/room intro and built-in reg.look inspection:860x540, caption top326.5px, plaque bottom308.37px (18pxclear), picture z exactlypanelcentre, no errors. Screenshot /private/tmp/dss-coach-plaque-clear.png visually checked. Previous fixture omitted card and had hidden overlap; FULL UI now tested. Script qa-full-layout.cjs in portrait scratchpad. Synced284passages; no git. Preview opened through open_in_codex at user’s request.
+
+## 2026-11-02 — Portrait halo beside frame
+Sam requested pre-click halo just to side of photograph. Moved Coach photograph haloAt along its wall from pp.z to pp.z+.31, keeping same height and wall offset. Frame outer half-width.24 gives7cm clear beside edge; picture/camera/caption/plaque unchanged. Synced284passages; no git.
+
+## 2026-11-02 — Slightly closer portrait
+Sam requested a touch more zoom. Camera position moved~7.3% towards existing target, maintaining oblique angle/high framing. Full-game860x540 check clean: plaque bottom307.77 vs caption top326.5 (18.7pxclear), panel centre intact, no errors. Synced284passages; no git.
+
+## 2026-11-02 — Halo nudge left/down
+Sam requested halo a little left and down. Portrait halo wall-z+.31->+.355 (screen left from room approach), heightpp.y->pp.y-.045. Other portrait settings unchanged. Synced284passages; no git.

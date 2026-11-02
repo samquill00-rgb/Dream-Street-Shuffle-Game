@@ -1,3 +1,3 @@
 - [x] Raise picture/plaque in the close-up; leave caption position unchanged.
 - [x] Centre photograph and plaque on the visible wooden panel.
-- [ ] Verify in full game and sync.
+- [x] Verify in full game and sync.

@@ -1,3 +1,3 @@
 - [x] Change the start button to “Take this waltz”.
 - [x] Add mist and strangeness at the sides.
-- [ ] Verify and sync.
+- [x] Verify and sync.

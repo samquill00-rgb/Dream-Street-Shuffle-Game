@@ -47,9 +47,14 @@ window.dssWaltzGlass = function(canvas, ms, opening, enchant, still, reveal, str
           c.beginPath();c.moveTo(0,py-.075);c.lineTo(.28,py);c.lineTo(0,py+.075);c.lineTo(-.28,py);c.closePath();c.stroke();
         }
         c.beginPath();c.moveTo(0,-.64);c.lineTo(0,-.03);c.stroke();
+        // A reflected eye resolves slowly in the glass, then is only leadwork again.
+        c.save();c.globalAlpha*=still?.18:Math.pow(.5+.5*Math.sin(t*.42+i*1.9+side),3)*.62;
+        c.strokeStyle='#c7b7da';c.lineWidth=.018;
+        c.beginPath();c.moveTo(-.27,-.35);c.quadraticCurveTo(0,-.53,.27,-.35);c.quadraticCurveTo(0,-.17,-.27,-.35);c.stroke();
+        c.beginPath();c.ellipse(still?0:Math.sin(t*.21+i)*.05,-.35,.055,.07,0,0,Math.PI*2);c.stroke();c.restore();
       }else{
         // A little brass armillary sphere in an antiquarian display.
-        c.save();c.translate(0,-.35);c.strokeStyle='#d0b575';c.lineWidth=.018;
+        c.save();c.translate(0,-.35);c.rotate(still?0:Math.sin(t*.27+i)*.22);c.strokeStyle='#d0b575';c.lineWidth=.018;
         c.beginPath();c.ellipse(0,0,.28,.18,0,0,Math.PI*2);c.stroke();
         c.beginPath();c.ellipse(0,0,.13,.18,-.4,0,Math.PI*2);c.stroke();
         c.beginPath();c.ellipse(0,0,.28,.055,.22,0,Math.PI*2);c.stroke();
@@ -269,6 +274,22 @@ window.dssWaltzGlass = function(canvas, ms, opening, enchant, still, reveal, str
     });
     faces.sort(function(a,b){return a.z-b.z;});c.save();c.globalAlpha=(1-o)*reveal;c.lineWidth=.35;
     faces.forEach(function(f){c.fillStyle=c.strokeStyle='rgb('+f.col.map(function(v){return Math.round(19+(v-19)*reveal);}).join(',')+')';c.beginPath();f.ps.forEach(function(p,i){if(i)c.lineTo(p[0],p[1]);else c.moveTo(p[0],p[1]);});c.closePath();c.fill();c.stroke();});c.restore();
+  }
+  // Side mist coils around the shopfronts, leaving the rhythm lanes clear.
+  if(o>0){
+    c.save();c.globalAlpha=o;c.globalCompositeOperation='screen';
+    [-1,1].forEach(function(side){
+      for(var bank=0;bank<5;bank++){
+        var drift=still?0:Math.sin(t*(.16+bank*.017)+bank*1.8+side)*12;
+        var fx=side<0?19+bank*5+drift:341-bank*5+drift;
+        var fy=154+bank*77+(still?0:Math.sin(t*.19+bank)*16);
+        c.save();c.translate(fx,fy);c.scale(.85+bank*.08,1.6);
+        var sideFog=c.createRadialGradient(0,0,0,0,0,43);
+        sideFog.addColorStop(0,side<0?'rgba(131,166,174,.19)':'rgba(167,141,185,.18)');
+        sideFog.addColorStop(.4,'rgba(155,177,181,.09)');sideFog.addColorStop(1,'rgba(130,150,170,0)');
+        c.fillStyle=sideFog;c.fillRect(-44,-44,88,88);c.restore();
+      }
+    });c.restore();
   }
   // Mist belongs to the crossing, not just the room: it spills out and thins along the street.
   {

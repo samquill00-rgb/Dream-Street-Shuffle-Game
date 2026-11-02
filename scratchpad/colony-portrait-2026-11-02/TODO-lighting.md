@@ -1,4 +1,5 @@
-- [ ] Integrate the portrait with the Coach lighting.
-- [ ] Check the original attachment for a date in metadata.
-- [ ] Verify and sync.
-- [ ] Centre the photograph on its wooden panel.
+- [x] Integrate the portrait with the Coach lighting.
+- [x] Check the original attachment for a date in metadata.
+- [x] Verify and sync.
+- [x] Centre the photograph on its wooden panel.
+- [x] Add exact caption “His first pint after lockdown”.

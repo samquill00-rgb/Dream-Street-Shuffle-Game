@@ -1,0 +1,4 @@
+- [x] Preserve refusal/admission and returning-visitor rules.
+- [x] Add a hinged entrance door and red-lit descending stairwell.
+- [x] Animate opening, crossing and descent; reduced-motion/skip/cleanup.
+- [x] Verify admitted/refused/return visits and sync.

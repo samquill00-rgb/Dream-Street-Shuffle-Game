@@ -8340,3 +8340,7 @@ Sam requested a touch more zoom. Camera position moved~7.3% towards existing tar
 
 ## 2026-11-02 — Halo nudge left/down
 Sam requested halo a little left and down. Portrait halo wall-z+.31->+.355 (screen left from room approach), heightpp.y->pp.y-.045. Other portrait settings unchanged. Synced284passages; no git.
+
+## 2026-11-02 notebook pentagram redrawn (Sam approved from preview)
+- Star points: Centre Point (apex nudged right to 306), Coach and Horses, Chippy, Trisha's, French. Dean Street drawn 40 left (Wardour 20) on the notebook map only; trace script XS adjusted to match.
+- LBRP text now 13.5px, full opacity (keyframe ends at 1), box x102 w356 so it clears the Coach & Horses label.

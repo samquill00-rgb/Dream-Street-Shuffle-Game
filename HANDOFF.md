@@ -22,7 +22,7 @@ Brief (Sam, before sleep): take today's fixes (dim ritual text, Crowley bio off 
 
 **Explainers added (evening, Sam: "add the ones that you can")**
 - Notebook captions (styled as the CHANT caption): CHANT "One syllable for each of your first six haunts. You will need them in the mountains."; DREAMS "Each world, the gift you bring back from it, and its echo in Soho." + "Gifts brought back: n of 5."; LILIES "Three flowers are enough for the dawn. All five draw the star."; PASSWORDS (only while a Deploy shows) "Press Deploy to say the word at the door that is waiting for it."
-- One-time slips from the header (queued, wait for overlays; `window.dssExplainSlip`): first pocket key ("In your pocket. The third pillar wants paying."), fifth gift ("All five gifts are brought back. The third pillar is waiting."), notebook stolen ("Your notebook was taken in Bourchier Street."). Flags $pocketSlipShown / $giftsSlipShown / $goneSlipShown. Seen headless, 0 errors.
+- One-time slips from the header (queued, wait for overlays; `window.dssExplainSlip`): first pocket key ("In your pocket. The third pillar wants paying."), fifth gift ("All five gifts are brought back. The third pillar is waiting.") (the stolen-notebook slip was added then removed at Sam's word: the Mugged scene already says it). Flags $pocketSlipShown / $giftsSlipShown. Seen headless, 0 errors.
 - Dawn: stray line breaks after the fade-in hidden (1280×800 and 1280×720 fit). Ham: trailing blank line joined (14 → 9 px).
 - 1366×768 (Sam: "Agree", hub only, not a game-wide rule): map row floor VR_MIN 6 → 4, so Dean Street and the doorways fit at 768 (4 rows), unchanged at 1280×800 (6) and 1440×900 (10). Other pages that scroll at 768 left as they are.
 - PP Victory and the Ham: the page fit may go from 80% to 77% when a page is still ≤24 px over at the floor; both now fit 1280×800.
@@ -34,9 +34,9 @@ Brief (Sam, before sleep): take today's fixes (dim ritual text, Crowley bio off 
 **Your calls (not touched)**
 - Primer: DONE (Sam's line): "Only getting too drunk can end the night; you can still carry on if you’re miserable." replaces "Neither one can end the night."
 - Unexplained to a player (scout): OPUS/STATE header at 12 haunts; CHANT (6 syllables for 12 haunts, purpose held back till the Cave); DREAMS ledger columns unlabelled; five gifts → Synthesis never signposted; pocket keys (one at a time, used on crossing, bins/alleys as stashes; the ⚲ cell only explains on hover); "five to find" vs "FLOWERS x OF 3"; the PENTACLE's meaning; PASSWORDS "Deploy" button; resting venues' rule; THE FETCH never introduced.
-- `$midnightEnabled` is never true (parked by you), so midnight-only Coach routes are unreachable.
+- `$midnightEnabled`: CORRECTED, no Coach routes depend on it; on, it would only flip the date to 24.11.73, fire the Big Ben flare, cut off the Ham's rumour and advance the night phase. Recommended: stay parked.
 - Hover-only story text: pocket cell "The third pillar wants paying."; notebook-gone "taken in Bourchier Street".
-- "Bourchier Street: The Knife" shows only your "POW!" (left alone).
+- The Knife: DONE (Sam's line) "Pow! He’ll trouble no more."
 
 # SESSION 2026-11-02 — Sam's answers to the open questions; synced, NOT committed
 - Q1 Night Ahead Part Two order: keep. Q4 Night Ahead speed: keep. Q6 doorway card: no way out, keep. Q8 eagle: stays wordless. Q11 window reflection: dropped. Heart monitor: dropped.
@@ -110,8 +110,8 @@ Self-prompt for runs like this: `HANDOFF-playtest-fix-prompt.md`. Harness: scrat
 ## For Sam
 - 21 "Bring back the inscription on the old arch": the only inscription this scene has had is XCIII on the right-hand lintel (columns 6 and 8), still there and readable from the opening view (checked by a camera raycast and a zoomed shot tonight). The box-built centre arch retired on 10-29 never carried lettering, nor did the April lintel. Which arch did you mean?
 - 24 Rework the Dido translation (your reminder). Marlowe recurring: banked.
-- Heart monitor: still needs the Haywood monitor glb downloaded.
-- Uncredited on purpose? The Fetch's spoken Beckett ('I can't go on, I'll go on.') and Baudelaire via Eliot ('hypocrite lecteur'). Also on the dual ring, your 'as the grass grows on the weirs' (Yeats, 'Down by the Salley Gardens'). Left uncredited as speech; say if you want small credits.
+- Heart monitor: DROPPED by Sam (see the 2026-11-02 session notes).
+- Credits: the Fetch's Beckett and Baudelaire/Eliot and the dual ring's Yeats already carry credit lines (checked 2026-11-02).
 - Dawn (the ending) is a 3046 px pane at 1280×800 and scrolls by hand; long prose is your call, left as is.
 - Pink drafted tonight: Watkins bios ×2, glass case, Page 93, Shelley's Liver, Christopher Marlowe, Pillars lore, Why Carthage.
 
@@ -8387,3 +8387,7 @@ Sam requested halo a little left and down. Portrait halo wall-z+.31->+.355 (scre
 
 ## 2026-11-02 — Halo a little further left
 Sam requested slightly more left again. Portrait halo wall-z+.355->+.39; height retained. Synced284passages; no git.
+
+
+## 2026-11-02 — Waltz street graphics depth pass
+Sam accepted suggested graphics pass. Shared dssWaltzGlass now has continuous damp perspective paving with staggered joints/low-contrast surface variations, broken warm/cool window reflections and low kerb glints instead of broad moving floor lines. Shop bays depth-sorted far-to-near; slight facade shear, masonry surrounds/returns, cornices, upper sashes/sills, recessed existing arched displays. Projecting bracket signs carry book/celestial symbols only (no invented prose) and sway subtly. Thin local mist veils interleave bays; existing outer mist remains. Existing rhythms/input/lights/audio/story text untouched. No new loops/assets. Shared scene remains behind Watkins closed room until opening. Extracted helper syntax and isolated open/partway/still renders clean; open screenshot /private/tmp/dss-waltz-windows-open.png visually checked. Full-game rules/start +12.5s play: no errors; screenshot /private/tmp/dss-waltz-depth-game.png shows readable lights over revised scene. Synced284passages; no git. Scripts/TODO-depth in waltz scratchpad.

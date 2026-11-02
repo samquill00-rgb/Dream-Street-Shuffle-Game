@@ -1,0 +1,4 @@
+- [x] Add architectural depth and projecting signs to the shopfronts.
+- [x] Replace flat floor bands with wet perspective paving and reflections.
+- [x] Layer mist through the architecture while preserving playable-light clarity.
+- [x] Verify normal, partial-opening and reduced-motion views; sync.

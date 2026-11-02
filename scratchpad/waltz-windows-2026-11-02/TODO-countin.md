@@ -1,0 +1,3 @@
+- [x] Align the count-in with the recorded waltz beat.
+- [x] Change “the lanes” to “the lights”.
+- [ ] Verify and sync.

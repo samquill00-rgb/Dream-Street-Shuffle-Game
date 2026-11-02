@@ -58,13 +58,10 @@
   }
 
   /* ── Beat schedule ──
-     Beats 0-5:   bars 1-2, intro music, no notes (4s).
-     Beats 6-8:   bar 3, count-in (visual 1-2-3, no playable notes) (2s).
-     Beats 9-44:  bars 4-15, twelve bars of dance (24s).
-     Beat  45:    bar 16 beat 1, a single RIGHT step — the finality
-                  cadence; the last step of bar 15 echoes once on the
-                  downbeat of the outro bar, then silence holds.
-     Beats 46-47: rest of bar 16, silence (~1.3s). */
+     The base patterns below are shifted by six beats after generation.
+     0–6s: opening; 6–8s: count-in with no playable marks.
+     8–10s: first mark approaches; 10s: first playable step.
+     The closing RIGHT lands at 34s; the game ends at 36s. */
   var notes = [];  /* { beatIdx, lane, hit:false, missed:false } */
   function pushPattern(barStart, lanesByBeat) {
     for (var b = 0; b < 3; b++) {
@@ -90,6 +87,7 @@
   var carry=window._dssWaltzCarry;window._dssWaltzCarry=null;
   if(carry && performance.now()-carry.at>4000){if(carry.music)carry.music.stop();carry=null;}
   if(carry && carry.music)carry.music.claimed=true;
+  var audioClock=null;
   var audioBase=0, audioPrevious=0, audioTravel=0, inheritedMusic=carry&&carry.music||null;
   var audioEl = null;
   var audioStarted = false;
@@ -100,7 +98,7 @@
   function startAudio() {
     if (audioStarted) return;
     audioStarted = true;
-    if(carry && carry.music && carry.music.el){inheritedMusic=carry.music;inheritedMusic.claimed=true;audioEl=inheritedMusic.el;audioBase=Math.floor(audioEl.currentTime/2)*2;audioPrevious=audioEl.currentTime;audioTravel=audioPrevious-audioBase;inheritedMusic.open();return;}
+    if(carry && carry.music && carry.music.el){inheritedMusic=carry.music;inheritedMusic.claimed=true;audioEl=inheritedMusic.el;audioClock=inheritedMusic.context||null;audioBase=Math.floor(audioEl.currentTime/2)*2;audioPrevious=audioEl.currentTime;audioTravel=audioPrevious-audioBase;inheritedMusic.open();return;}
     var src = window._waltzMiniDataUri || '';
     /* If the placeholder hasn't been replaced (track still parked), the URI
        starts with __DSS_; in that case skip audio and play silently. */
@@ -109,6 +107,13 @@
       audioEl = new Audio(src);
       audioEl.volume = 0.42;
       audioEl.loop = true;
+      // Use the same output clock for music and count-in, including speaker latency.
+      try {
+        var ClockAC=window.AudioContext||window.webkitAudioContext;
+        if(ClockAC){hitAudio=new ClockAC({latencyHint:'interactive'});audioClock=hitAudio;
+          audioClock.createMediaElementSource(audioEl).connect(audioClock.destination);
+          if(audioClock.state==='suspended')audioClock.resume().catch(function(){});}
+      } catch(clockError){audioClock=null;}
       audioEl.muted = isGameMuted();
       audioEl.play().catch(function(){});
       /* Track the global mute toggle so unmute/mute mid-waltz works. */
@@ -199,10 +204,21 @@
   // 2026-10-14 (Sam: the first steps came before you could press them): the clock started on the tap, but the track
   // needs a moment to load and start, so the steps ran ahead of the music. Now the music is the clock: hold at 0 until
   // it is playing (up to 2.5 s), then follow its own time; with no track, the old wall clock.
+  function audibleTime(mediaMs) {
+    if(!audioClock||audioClock.state!=='running')return mediaMs;
+    var delay=(audioClock.baseLatency||0)+(audioClock.outputLatency||0);
+    if(audioClock.getOutputTimestamp){
+      var stamp=audioClock.getOutputTimestamp();
+      if(stamp.contextTime>0&&stamp.performanceTime>0){
+        delay=audioClock.currentTime-stamp.contextTime-(performance.now()-stamp.performanceTime)/1000;
+      }
+    }
+    return Math.max(0,mediaMs-Math.max(0,Math.min(.25,delay))*1000);
+  }
   function elapsedMs() {
     if (!running) return 0;
     if (audioEl) {
-      if (!audioEl.paused && audioEl.currentTime > 0) {var step=audioEl.currentTime-audioPrevious;if(step<0)step+=audioEl.duration||0;audioTravel+=step;audioPrevious=audioEl.currentTime;return audioTravel*1000;}
+      if (!audioEl.paused && audioEl.currentTime > 0) {var step=audioEl.currentTime-audioPrevious;if(step<0)step+=audioEl.duration||0;audioTravel+=step;audioPrevious=audioEl.currentTime;return audibleTime(audioTravel*1000);}
       if (audioEl.currentTime === 0 && performance.now() - startedAt < 2500) return 0;
       if (audioEl.ended) return Math.max(audioEl.duration * 1000 || 0, performance.now() - startedAt);
     }
@@ -545,7 +561,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Press a key, or click here, to begin.', W / 2, H / 2 - 14);
-    /* control hint removed — the rules popup teaches the lanes/keys */
+    /* control hint removed — the rules popup teaches the lights/keys */
   }
   function drawEnd() {
     /* Intentionally empty — the canvas keeps its final pavement/lanes
@@ -646,4 +662,4 @@
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-};((window._dssWaltzCarry && performance.now()-window._dssWaltzCarry.at<4000)?function(o){o.onPlay(); /* 2026-10-31 (Sam, playtest note 14: "do you ever get instructions on how the game works?"): not on the way in from Watkins, where the rules card is skipped so the music carries on; the rule now sits over the canvas through the six-second intro instead */ var cv=document.getElementById('waltz-canvas'); if(cv){var hw=document.createElement('div'); hw.className='waltz-howto'; hw.innerHTML=o.lines[0]; cv.parentNode.insertBefore(hw,cv); setTimeout(function(){hw.classList.add('waltz-howto-out');},6200); setTimeout(function(){if(hw.parentNode)hw.parentNode.removeChild(hw);},7600);}}:(window.dssShowMinigameRules||function(o){o.onPlay()}))({key:'waltz',play:'Take this waltz',title:'CECIL COURT WALTZ',lines:[((window.matchMedia&&window.matchMedia('(hover: none) and (pointer: coarse)').matches)?"Tap the lanes":"Press &larr; &darr; &rarr; or A&nbsp;S&nbsp;D, or tap the lanes,")+" as each note reaches the line."],onPlay:__boot});})();
+};((window._dssWaltzCarry && performance.now()-window._dssWaltzCarry.at<4000)?function(o){o.onPlay(); /* 2026-10-31 (Sam, playtest note 14: "do you ever get instructions on how the game works?"): not on the way in from Watkins, where the rules card is skipped so the music carries on; the rule now sits over the canvas through the six-second intro instead */ var cv=document.getElementById('waltz-canvas'); if(cv){var hw=document.createElement('div'); hw.className='waltz-howto'; hw.innerHTML=o.lines[0]; cv.parentNode.insertBefore(hw,cv); setTimeout(function(){hw.classList.add('waltz-howto-out');},6200); setTimeout(function(){if(hw.parentNode)hw.parentNode.removeChild(hw);},7600);}}:(window.dssShowMinigameRules||function(o){o.onPlay()}))({key:'waltz',play:'Take this waltz',title:'CECIL COURT WALTZ',lines:[((window.matchMedia&&window.matchMedia('(hover: none) and (pointer: coarse)').matches)?"Tap the lights":"Press &larr; &darr; &rarr; or A&nbsp;S&nbsp;D, or tap the lights,")+" as each note reaches the line."],onPlay:__boot});})();

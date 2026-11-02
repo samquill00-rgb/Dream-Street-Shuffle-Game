@@ -97,5 +97,5 @@ The originals stay in the Claude work folder.
 | Kenney RPG Audio (creak, doorClose, bookFlip, bookPlace, handleCoins, metalLatch) | Door creaks and closes, page rustles, tarot card turns, coin into pocket, Zippo lid (sfx/sfx-rpg.m4a) | CC0 |
 | Kenney UI Audio (switch 2–6, click 1–5) | Notebook tab tick (sfx/sfx-ui.m4a) | CC0 |
 
-Not used (ShareAlike, held for Sam's decision): ulukai skyboxes (CC-BY-SA 3.0), Ryzom textures incl. sky_fyros_day_clouds (CC-BY-SA 3.0), penguins skybox pack by Zachery Slocum (CC-BY-SA 3.0). Not used for period: ground_brick_parker (modern herringbone concrete pavers).
+Not used (ShareAlike; Sam 2026-11-02: kept out of every build): ulukai skyboxes (CC-BY-SA 3.0), Ryzom textures incl. sky_fyros_day_clouds (CC-BY-SA 3.0), penguins skybox pack by Zachery Slocum (CC-BY-SA 3.0). Not used for period: ground_brick_parker (modern herringbone concrete pavers).
 

@@ -1,3 +1,21 @@
+# SESSION 2026-11-02 — Sam's answers to the open questions; synced, NOT committed
+- Q1 Night Ahead Part Two order: keep. Q4 Night Ahead speed: keep. Q6 doorway card: no way out, keep. Q8 eagle: stays wordless. Q11 window reflection: dropped. Heart monitor: dropped.
+- Q2 ring MC: Sam unsure; parked for his sound pass, unchanged.
+- Q3 typewriter skip hint REMOVED (timer returns at once; dssTwSkipKnown code left inert).
+- Q5 Hang up now appears after the lines: Lily call 1 8 s → 13 s (Sonnet 66 fades from 10 s), dual ring 15 s → 22 s; auto hang-ups 28 s / 40 s unchanged. Not seen live.
+- Q7 The French: the 81 px was empty story/passage bottom padding under the in-flow #fi-wrap; padding removed when #fi-wrap is present. 1280×800 overflow 0. No zoom, words untouched.
+- Q10 ShareAlike packs: kept out of every build (SOUND-SOURCES.md updated).
+- Q9 credits: a research agent is looking up the Waterhouse creator and the ~14 "licence to confirm" downloads; results to be written into SOUND-SOURCES.md.
+
+# SESSION 2026-11-01 (afternoon) — synced, NOT committed
+
+- Carthage centre arch: y scale 1.9 → 2.3 (Sam: "slightly higher"). Not yet seen in a shot.
+- Small credits (inline-styled spans): Fetch Beckett ('The Unnamable'), Fetch Baudelaire ('Au lecteur', by way of Eliot), dual-ring 'weirs' line (Yeats, 'Down by the Salley Gardens').
+- Dawn is PAGED (Sam: no scrolling on a laptop): four `.dawn-page` screens (1 title→"awake for so long", 2 Lackland→alba, 3 the record, 4 petal sentence + lily + colophon/credits/Play again). The record now sits BEFORE the petal sentence (order change, words unchanged). On. button / Enter / Space / → / click on empty pane turns; JS zoom fit (floor 0.55) per page, re-fit at 3.2 s. Frieze and top rule hidden; stray top-level BRs hidden. Petal watcher's 36 s fallback is now a 3 s poll that only fires when the trigger is on screen. Verified at 1280×800: all four fit (p1 zoom 0.978), flood fires on p4, not on p1 after 50 s, no console errors. NOT checked: 1440×900, page 3 with the night-drawn route fully drawn.
+- Heart monitor: Sam dropped it.
+- Harness note: playwright is no longer importable by any python3 here; the browser pane on a `python3 -m http.server 8732` worked instead (debug jump via `#dss-debug-jump=Dawn` + reload).
+- Open questions list for Sam was compiled this session (11 questions, 6 to-dos) from the 10-29/10-30/10-31 runs.
+
 # NIGHTWORK 2026-10-31 (05:17 GMT on) — the 27 playtest notes; synced, NOT committed
 
 Self-prompt for runs like this: `HANDOFF-playtest-fix-prompt.md`. Harness: scratchpad `pj.py "<passage>" <sub> <wait> [js | @sleep:s | @shot:f | @click:t | @mclick:t]`.

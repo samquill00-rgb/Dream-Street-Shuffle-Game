@@ -8298,3 +8298,7 @@ Sam parked secret-exit performance, asked to improve side rectangles in waltz; t
 
 ## 2026-11-02 — Take this waltz; side mist and uncanny glass
 Sam requested start button Take this waltz (formerly Take the floor), plus mist/strangeness at sides. Exact button updated. Ten soft silver-blue/violet mist banks drift at outer sides as room opens; central lanes clear. Leaded windows slowly reveal/fade reflected eyes; brass armillaries gently precess. Reduced motion keeps effects still/faint. No rhythm mechanics/other prose changed. Shared helper syntax/isolated open/partway/still QA clean, no errors; open screenshot visually checked. Synced284passages; no git. TODO/helper/QA in scratchpad/waltz-windows-2026-11-02.
+
+
+## 2026-11-02 — Waltz notes no longer overlap count-in
+Sam reported playable marks start before countdown ends. Existing count-in6–8s overlapped note approach6–8s and earliest first hit7.78s. Shifted base note schedule+6beats instead of+3: first visible8s, first target10s, earliest ordinary hit9.78s. Final RIGHT34s; duration36s instead34s to preserve outro. Music beat/bar alignment retained; labels/control/scoring untouched. Updated timing comments. Full passage script syntax clean; actual-source generated-schedule assertions pass: visible>=countdown end, earliest hit after count-in, last hit window inside duration. QA-timing.cjs in waltz scratchpad. Synced284passages; no git. No full live play test this pass.

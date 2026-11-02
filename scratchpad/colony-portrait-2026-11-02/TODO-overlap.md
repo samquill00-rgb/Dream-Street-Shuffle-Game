@@ -1,0 +1,3 @@
+- [ ] Keep popup caption clear of the brass plaque.
+- [ ] Centre photograph and plaque on the visible wooden panel.
+- [ ] Verify in full game and sync.

@@ -8344,3 +8344,6 @@ Sam requested halo a little left and down. Portrait halo wall-z+.31->+.355 (scre
 ## 2026-11-02 notebook pentagram redrawn (Sam approved from preview)
 - Star points: Centre Point (apex nudged right to 306), Coach and Horses, Chippy, Trisha's, French. Dean Street drawn 40 left (Wardour 20) on the notebook map only; trace script XS adjusted to match.
 - LBRP text now 13.5px, full opacity (keyframe ends at 1), box x102 w356 so it clears the Coach & Horses label.
+
+## 2026-11-02 — Halo a little further left
+Sam requested slightly more left again. Portrait halo wall-z+.355->+.39; height retained. Synced284passages; no git.

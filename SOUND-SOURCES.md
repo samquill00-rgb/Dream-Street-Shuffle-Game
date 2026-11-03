@@ -43,6 +43,8 @@ Every outside sound that might go into the game: its page, author and licence. C
 
 CC0 means public domain: free for commercial use, no credit required. Crediting CC0 authors anyway is a courtesy, not an obligation.
 
+- 2026-11-03: `the-chippy-ambience.m4a`, `the-bookshop-ambience.m4a` — generated in-house by `tools_make_beds_extra.py` (noise and sine partials, nothing sampled): no credit needed.
+
 ## In the game (2026-10-23)
 
 | Game file | Made from | Used for |

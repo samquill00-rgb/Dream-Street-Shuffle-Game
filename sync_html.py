@@ -59,6 +59,7 @@ AUDIO_EMBEDS = [
     ("__DSS_NAZCA_DATA_URI__",       "the-nazca-ambience.m4a",                         "audio/mp4"),
     ("__DSS_EASTER_DATA_URI__",      "the-easter-island-ambience.m4a",                 "audio/mp4"),
     ("__DSS_PYRAMID_DATA_URI__",     "the-pyramid-ambience.m4a",                       "audio/mp4"),
+    ("__DSS_JEFFREY_TUNE_DATA_URI__", "jeffreys-tune.m4a",                           "audio/mp4"),   # 2026-11-03: Sam's Jeffrey hum, cleaned and levelled (the Coach and Horses; the Pyramid chamber hint stays synthesised)
     ("__DSS_PYRAMID_MUSIC_DATA_URI__", "pyramid-music.mp3",                          "audio/mpeg"),  # 2026-11-03: Sam's arranged Pyramid sketch ("Egypt atmosphere game"), played by section from the passages (scored bed)
     ("__DSS_EZEKIEL_DATA_URI__",     "the-ezekiel-ambience.m4a",                       "audio/mp4"),
     ("__DSS_RONNIES_MUSIC_DATA_URI__", "ronnies-firebird-jazz.m4a",                    "audio/mp4"),

@@ -11124,8 +11124,38 @@ window.dssAudio = (function() {
   }
   // 2026-10-24 (Sam): Jeffrey's phrase ends on the Pyramid's octave reference.
   // Shared SFX path honours mute and ducks the room bed. Returns a stop handle.
+  /* 2026-11-03 (Sam: "change the placeholder for this recording"): the full tune is now Sam's hum, cut, cleaned, lightly roomed and levelled
+     to -19 LUFS (jeffreys-tune.m4a, from "Egypt atmosphere game#03Jeffrey's tune.wav"); the one-note octave reference (referenceOnly) stays synthesised */
+  var _jtBuf = null, _jtWait = null;
+  function _jtGet(ac, cb) {
+    if (_jtBuf) { cb(_jtBuf); return; }
+    if (_jtWait) { _jtWait.push(cb); return; }
+    _jtWait = [cb];
+    fetch('jeffreys-tune.m4a').then(function(r) { return r.arrayBuffer(); })
+      .then(function(ab) { return new Promise(function(res, rej) { ac.decodeAudioData(ab, res, rej); }); })
+      .then(function(buf) { _jtBuf = buf; var q = _jtWait; _jtWait = null; q.forEach(function(f) { try { f(buf); } catch(e) {} }); })
+      .catch(function(err) { _jtWait = null; if (window.console) console.error('[dssAudio] Jeffrey tune decode failed:', err); });
+  }
   function jeffreyTune(referenceOnly) {
     var nodes=[];
+    if (!referenceOnly) {
+      var stopped=false, gains=[];
+      _play(function(ac) {
+        _jtGet(ac, function(buf) {
+          if (stopped) return;
+          var src=ac.createBufferSource(), g=ac.createGain();
+          src.buffer=buf; g.gain.value=0.55; src.connect(g); g.connect(ac.destination);
+          src.onended=function(){ try{ src.disconnect(); g.disconnect(); }catch(e){} };
+          src.start(); nodes.push(src); gains.push(g);
+        });
+      });
+      return {stop:function(){
+        stopped=true;
+        var ac=getCtx(); if(!ac) return;
+        gains.forEach(function(g){ try{ var t=ac.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value,t); g.gain.linearRampToValueAtTime(0.0001,t+0.25); }catch(e){} });
+        nodes.forEach(function(o){ try{ o.stop(ac.currentTime+0.3); }catch(e){} });
+      }};
+    }
     _play(function(ac) {
       var notes=referenceOnly?[12]:[0,4,7,12], start=ac.currentTime;
       notes.forEach(function(st,i) {
@@ -82815,6 +82845,7 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
 
 
 

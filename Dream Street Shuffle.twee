@@ -912,7 +912,7 @@ window.dssAudio = (function() {
       notes.forEach(function(st,i) {
         var t=start+i*0.42, dur=i===notes.length-1?1.25:0.48;
         var o=ac.createOscillator(), g=ac.createGain(), f=ac.createBiquadFilter();
-        o.type='triangle'; o.frequency.value=130.81*Math.pow(2,st/12);
+        o.type='triangle'; o.frequency.value=146.83*Math.pow(2,st/12); /* 2026-11-03: D3 (was C3 130.81), to sit in Sam's D-rooted Pyramid music */
         f.type='lowpass'; f.frequency.value=650;
         g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.13,t+0.09);
         g.gain.setTargetAtTime(0.0001,t+dur-0.2,0.07);
@@ -2715,6 +2715,7 @@ window.dssAudio = (function() {
     });
   }
   function _stopBed(bed) {
+    if (bed.score) { _scGo(bed, 'off', 0.4); return; }
     bed._forced = false; // clear manual-start flag on any stop
     bed._finishing = false;
     // Clear pending gap-restart so a stop while waiting in the silent
@@ -3335,10 +3336,107 @@ window.dssAudio = (function() {
     else if (street) { if (_trVenue && _trVenue !== 'out') playTransition(_trVenue + '>out'); _trVenue = 'out'; }
     if (!_trPrewarmed && _trVenue) { _trPrewarmed = true; for (var k in TRANSITIONS) _trDecode(TRANSITIONS[k].url); }
   }
+  /* ====== SCORED BEDS, 2026-11-03 (Sam's Pyramid music, "Egypt atmosphere game", 70 s at 120 bpm, 2 s bars) ======
+     A bed with a `score` plays sections of one file by passage tag instead of a start-to-finish loop: bed.score.cues maps a
+     passage tag to a section ('keep' = leave things as they are, a passage with none of its tags = fade out; Harlowe puts no name on the DOM). A section's first pass runs
+     from its entry point and then loops bars loop[0]..loop[1] with an equal-power crossfade of score.xf seconds (the lead-in
+     before loop[0] fades in as the end fades out), so it can wait as long as the player lingers. Changing section waits for the
+     next bar line, then the old section fades under the new one's first beat. The file itself is never edited. */
+  var _scSt = { voice: null, cue: null };
+  var _SC_IN = [], _SC_OUT = [];
+  for (var _sci = 0; _sci <= 32; _sci++) { _SC_IN.push(Math.sin(Math.PI / 2 * _sci / 32)); _SC_OUT.push(Math.cos(Math.PI / 2 * _sci / 32)); }
+  _SC_IN = new Float32Array(_SC_IN); _SC_OUT = new Float32Array(_SC_OUT);
+  function _scIter(bed, v, off, when, fadeIn, xfIn, endAt) {
+    var ac = getCtx(), src = ac.createBufferSource(), g = ac.createGain(), h = ac.createGain();
+    src.buffer = bed.buffer; src.connect(g); g.connect(h); h.connect(bed.gain);
+    g.gain.value = xfIn ? 0 : 1;
+    if (xfIn) g.gain.setValueCurveAtTime(_SC_IN, when, xfIn);
+    h.gain.value = fadeIn > 0 ? 0 : 1;
+    if (fadeIn > 0) { h.gain.setValueAtTime(0, when); h.gain.linearRampToValueAtTime(1, when + fadeIn); }
+    src.start(when, off);
+    if (endAt) src.stop(endAt + 0.05);
+    var it = { src: src, g: g, h: h, t0: when, off0: off, fadeIn: fadeIn };
+    v.its.push(it);
+    return it;
+  }
+  function _scArm(bed, v) {
+    var L = v.def.loop; if (!L || v.dead) return;
+    var ac = getCtx(), XF = bed.score.xf, it = v.its[v.its.length - 1];
+    var wt = it.t0 + (L[1] - it.off0), fireAt = wt - XF;
+    if (!it.endSet) { it.endSet = true; try { it.src.stop(wt + 0.05); } catch(e) {} }
+    v.timer = setTimeout(function() {
+      if (v.dead) return;
+      var ac2 = getCtx(), when = Math.max(fireAt, ac2.currentTime + 0.02), late = when - fireAt, dur = Math.max(0.2, XF - late);
+      var nit = _scIter(bed, v, L[0] - XF + late, when, 0, dur, 0);
+      try { it.g.gain.setValueCurveAtTime(_SC_OUT, when, dur); } catch(e) {}
+      setTimeout(function() { var k = v.its.indexOf(it); if (k >= 0) v.its.splice(k, 1); try { it.g.disconnect(); it.h.disconnect(); } catch(e) {} }, Math.max(0, (wt + 0.3 - ac2.currentTime) * 1000));
+      _scArm(bed, v);
+    }, Math.max(0, (fireAt - ac.currentTime - 1.5) * 1000));
+  }
+  function _scRelease(v, t, dur) {
+    if (!v || v.dead) return;
+    v.dead = true; clearTimeout(v.timer);
+    var ac = getCtx();
+    v.its.forEach(function(it) {
+      try {
+        var lvl = it.fadeIn > 0 ? Math.max(0, Math.min(1, (t - it.t0) / it.fadeIn)) : 1;
+        it.h.gain.cancelScheduledValues(t); it.h.gain.setValueAtTime(lvl, t); it.h.gain.linearRampToValueAtTime(0.0001, t + dur);
+        it.src.stop(t + dur + 0.1);
+      } catch(e) {}
+    });
+    setTimeout(function() { v.its.forEach(function(it) { try { it.g.disconnect(); it.h.disconnect(); } catch(e) {} }); }, (t + dur + 0.5 - ac.currentTime) * 1000);
+  }
+  function _scGo(bed, cue, offDur) {
+    var sc = bed.score, ac = getCtx(); if (!sc || !ac) return;
+    if (cue === _scSt.cue) return;
+    _scSt.cue = cue;
+    var v = _scSt.voice, now = ac.currentTime;
+    if (cue === 'off') {
+      if (v) { _scRelease(v, now, offDur || 2.2); _scSt.voice = null; setTimeout(function() { if (!_scSt.voice) bed.started = false; }, ((offDur || 2.2) + 0.3) * 1000); }
+      return;
+    }
+    _decodeBed(bed, function() {
+      if (_scSt.cue !== cue) return;                       /* the player moved on while the file decoded */
+      var ac2 = getCtx(), t = ac2.currentTime, def = sc.sections[cue], old = _scSt.voice;
+      if (!bed.gain) { bed.gain = ac2.createGain(); bed.gain.connect(ac2.destination); }
+      if (!old) bed.gain.gain.value = _muted ? 0 : bed.volume;
+      var tb, entry, fadeIn, pre = 0;
+      if (!old) { tb = t + 0.05; entry = (def.resume != null) ? def.resume : def.from; fadeIn = 1.8; }
+      else {
+        var cur = old.its[0]; for (var k = 0; k < old.its.length; k++) if (old.its[k].t0 <= t) cur = old.its[k];
+        var pos = cur.off0 + Math.max(0, t - cur.t0), nb = Math.ceil((pos + 0.05) / sc.bar) * sc.bar;
+        tb = t + (nb - pos); entry = def.from; pre = 0.04; fadeIn = 0.04;
+        _scRelease(old, tb - 0.1, 1.8);
+      }
+      var nv = { cue: cue, def: def, its: [], dead: false, timer: null };
+      _scSt.voice = nv; bed.started = true;
+      var endAt = def.loop ? 0 : (tb - pre + (bed.buffer.duration - entry));
+      var it = _scIter(bed, nv, entry - pre, tb - pre, fadeIn, 0, endAt);
+      if (!def.loop) {                                     /* a one-shot section (the resolution) closes with a short fade of its own */
+        it.h.gain.setValueAtTime(1, tb - pre + fadeIn); it.h.gain.setValueAtTime(1, endAt - 1.6); it.h.gain.linearRampToValueAtTime(0.0001, endAt);
+        it.src.onended = function() { if (_scSt.voice === nv) { _scSt.voice = null; bed.started = false; } };
+      }
+      _scArm(bed, nv);
+    });
+  }
+  function _scoreForPassage(passageNode) {
+    if (!passageNode) return;
+    var tags = (passageNode.getAttribute('tags') || '').split(/\s+/).filter(Boolean);
+    for (var i = 0; i < _ambientBeds.length; i++) {
+      var bed = _ambientBeds[i]; if (!bed.score) continue;
+      var cue = null;
+      for (var j = 0; j < tags.length; j++) if (bed.score.cues[tags[j]]) { cue = bed.score.cues[tags[j]]; break; }
+      if (cue === 'keep') continue;
+      _scGo(bed, cue || 'off');
+    }
+  }
+  function scoreCue(label, cue, secs) { var bed = findBedByLabel(label); if (bed && bed.score) _scGo(bed, cue, secs); }
   function updateAmbientBedsForPassage(passageNode) {
     try { _transitionForPassage(passageNode); } catch(e) {}
+    try { _scoreForPassage(passageNode); } catch(e) { if (window.console) console.error('[dssAudio] score', e); }
     for (var i = 0; i < _ambientBeds.length; i++) {
       var bed = _ambientBeds[i];
+      if (bed.score) continue;
       if (_bedShouldPlay(bed, passageNode)) _startBed(bed);
       else _stopBed(bed);
     }
@@ -3541,6 +3639,23 @@ window.dssAudio = (function() {
   });
   registerAmbientBed({ label: 'world-nazca',    dataUri: '__DSS_NAZCA_DATA_URI__',    tags: { 'nazca': 1 },     volume: 0.18, duckVolume: 0.06 });
   registerAmbientBed({ label: 'world-easter',   dataUri: '__DSS_EASTER_DATA_URI__',   tags: { 'easter': 1 },    volume: 0.18, duckVolume: 0.06 });
+  /* 2026-11-03 (Sam: "my arranged version of the Pyramid MIDI sketch ... the music for the Pyramid's exploration and reading passages"):
+     'Egypt atmosphere game', 70 s: hum 0-24, chamber 24-48, the run 48-60 (never played: the Pyramid Run has its own music), resolution 60-70.
+     Passages carry the tags pyramid-hum (Mouth), pyramid-chamber (Corridor, Gallery), pyramid-resolve (King's Chamber), pyramid-keep (the Run, the proportion page).
+     Mouth: the hum (first pass, then bars 4-12 loop). Corridor and Grand Gallery: the chamber (24 s first pass from the hum, 32 s when resumed;
+     loops 32-48). The Pyramid Run fades it out at Begin. King's Chamber: the resolution, once. See the SCORED BEDS block. */
+  registerAmbientBed({
+    label: 'pyramid-music',
+    dataUri: '__DSS_PYRAMID_MUSIC_DATA_URI__',
+    tags: { 'pyramid-music-manual': 1 },
+    volume: 0.30,
+    duckVolume: 0.10,
+    score: {
+      bar: 2, xf: 1.5,
+      sections: { hum: { from: 0, loop: [6, 24] }, chamber: { from: 24, resume: 32, loop: [32, 48] }, resolve: { from: 60 } },
+      cues: { 'pyramid-hum': 'hum', 'pyramid-chamber': 'chamber', 'pyramid-resolve': 'resolve', 'pyramid-keep': 'keep' }
+    }
+  });
   registerAmbientBed({ label: 'world-pyramid',  dataUri: '__DSS_PYRAMID_DATA_URI__',  tags: { 'pyramid': 1 },   volume: 0.20, duckVolume: 0.07 });
   registerAmbientBed({ label: 'world-ezekiel',  dataUri: '__DSS_EZEKIEL_DATA_URI__',  tags: { 'ezekiel': 1 },   volume: 0.18, duckVolume: 0.06 });
   // Cellar pump-station hum — Copper's cellar (the fight) AND Lackland's
@@ -4884,6 +4999,7 @@ window.dssAudio = (function() {
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
     mapFootstep: mapFootstep, transitionDistance: transitionDistance, mapCab: mapCab, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
+    scoreCue: scoreCue, _scoreState: function(){ var v=_scSt.voice; return { cue:_scSt.cue, voice: v ? { cue:v.cue, dead:v.dead, its:v.its.map(function(i){ return [i.off0, i.t0, +i.g.gain.value.toFixed(2), +i.h.gain.value.toFixed(2)]; }) } : null, bed: (function(b){ return b && b.gain ? +b.gain.gain.value.toFixed(2) : null; })(findBedByLabel('pyramid-music')), now: getCtx().currentTime }; },
     startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel,
     prewarmBed: prewarmBedByLabel,
     playTransition: playTransition,
@@ -80583,7 +80699,7 @@ The war on the island burns on; the moai have more to tell you.
 
 [[Dean Street|Dean Street]]
 
-:: Pyramid Mouth [dream pyramid] {"position":"1700,3000","size":"100,100"}
+:: Pyramid Mouth [dream pyramid pyramid-hum] {"position":"1700,3000","size":"100,100"}
 <div id="py-container"></div>
 <div>
 It is true – what they say – that you know the pyramids before you see them.
@@ -80597,7 +80713,7 @@ You climb the face until you reach a door.
 
 <div>[[Descend into the corridor|Descending Corridor]]</div>
 
-:: Descending Corridor [dream pyramid] {"position":"1900,3000","size":"100,100"}
+:: Descending Corridor [dream pyramid pyramid-chamber] {"position":"1900,3000","size":"100,100"}
 <div>
 The passage cuts into the stone so precisely and at an angle so regularly declining that, if you didn’t know better, you would find it hard to believe it was cut with copper tools.
 
@@ -80610,7 +80726,7 @@ A portal opens up in the far wall.
 
 <div>[[Into the dark, at a run|Pyramid Run]]</div>
 
-:: Grand Gallery [dream pyramid] {"position":"2100,3000","size":"100,100"}
+:: Grand Gallery [dream pyramid pyramid-chamber] {"position":"2100,3000","size":"100,100"}
 <!-- 2026-10-11: the sobriety loss moved here from the Descending Corridor so it lands with its note; $statLoss keeps both at or above 0. -->(set: $sobriety to ($statLoss: $sobriety, 4))(set: $confidence to ($statLoss: $confidence, 5))(display: "Bars Now")\
 <div>
 The Grand Gallery corbels a limestone ceiling over your head precariously.
@@ -80621,7 +80737,7 @@ You hear the hum again. Somehow this time before you, in the next chamber.
 
 <div>[[Into the chamber|King's Chamber]]</div>
 
-:: King's Chamber [dream pyramid centre] {"position":"2300,3000","size":"100,100"}
+:: King's Chamber [dream pyramid centre pyramid-resolve] {"position":"2300,3000","size":"100,100"}
 <!-- Completion passage for the Pyramid. Number/proportion gift —
      the chamber's resonant frequency, abstracted as a small
      geometric figure. -->
@@ -80673,7 +80789,7 @@ You need to sing the harmony.
   var banner=root.querySelector('.hm-banner'), title=root.querySelector('.hm-title'), marks=root.querySelectorAll('.hm-marks i');
   var reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // 2026-10-16 (Sam, from a tester: too hard, the tritone unclear): the hum now climbs a Hijaz scale from AL HUBZ's root, a step at a time, and the choice is the octave; one step past it the note cracks
-  var F0=130.81, TRIES=3, R0=66, SCALE=[0,1,4,5,7,8,11,12], STEP_MS=520 + (window.dssEase ? window.dssEase.level('chamber') * 90 : 0), TARGET_IDX=SCALE.length-1, TARGET=12, stepIdx=0; /* 2026-10-28 (dssEase): a missed hum makes the scale climb more slowly next time */
+  var F0=146.83 /* 2026-11-03: D3 (was C3 130.81), to sit in the Pyramid music */, TRIES=3, R0=66, SCALE=[0,1,4,5,7,8,11,12], STEP_MS=520 + (window.dssEase ? window.dssEase.level('chamber') * 90 : 0), TARGET_IDX=SCALE.length-1, TARGET=12, stepIdx=0; /* 2026-10-28 (dssEase): a missed hum makes the scale climb more slowly next time */
   var CX=W*0.5, CY=H*0.56;
   var holding=false, holdStart=0, semis=0, attempt=0, done=false, ghosts=[], result='', resultAt=0, bannerUntil=0, thrum=[], raf=0, lastT=0;
   var ac=null, his=null, mine=null, hisGain=null, mineGain=null, master=null, lfo=null;
@@ -80807,7 +80923,7 @@ You need to sing the harmony.
 <!-- 2026-10-29 (Sam, playtest note 25: the chamber "needs to be split so it fits on one page without scrolling"): what came after Keep listening is its own page, words unchanged -->[[Keep listening|The King's Chamber: the proportion]]
 </span>
 
-:: The King's Chamber: the proportion [dream pyramid centre] {"position":"2300,3100","size":"100,100"}
+:: The King's Chamber: the proportion [dream pyramid centre pyramid-keep] {"position":"2300,3100","size":"100,100"}
 (set: $pyramidNumber to true)\
 (if: $pyramidRunWon is true)[(set: $confidence to ($statGain: $confidence, 8))(display: "Bars Now")<div class="inventory-note">MORALE +8</div>]\
 (unless: $worldsVisited contains "pyramid")[(set: $worldsVisited to $worldsVisited + (a: "pyramid"))]
@@ -83350,7 +83466,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
 })();
 </script>
 
-:: Pyramid Run [dream pyramid] {"position":"2400,3250","size":"100,100"}
+:: Pyramid Run [dream pyramid pyramid-keep] {"position":"2400,3250","size":"100,100"}
 <!-- v2-expansion: THE PYRAMID RUN (2026-08-21, Sam: "a mario style
      platformer where you travel through tunnels into the pyramid").
      Side-scrolling cutaway with the bar-game's Sam-approved Mario feel
@@ -83637,6 +83753,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
     stage.querySelectorAll('[data-held]').forEach(function(b){ b.removeAttribute('data-held'); }); }
   function startGame(){
     if(finished) return;
+    if(window.dssAudio&&window.dssAudio.scoreCue)window.dssAudio.scoreCue('pyramid-music','off',2.5); /* 2026-11-03: Sam's Pyramid music fades out as the run begins */
     makeAudio(); started=true; paused=false; lastNow=null; clearInput(); cover.hidden=true;
     pauseButton.textContent='Pause'; canvas.focus({preventScroll:true});
     if(audio) audio.resume();

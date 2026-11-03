@@ -8439,3 +8439,9 @@ Sam felt refinement too defined; requested almostoriginal with tinyextra definit
 
 ## 2026-11-03 — Correct flag mountains to single triangles
 Sam clarified square outlines were a misunderstanding: flags should be triangles, just bolder than before. Changed each flag-ridge top profile to a SINGLE apex with straight triangular sides (no multiple peaks, no flat top). Kept existing22placements/colours/clothmotifs/folds/billow; cats untouched. Full-game QA at2/17/56/166 clean; screenshot17 visually checked, unmistakably single triangular silhouettes. Synced285passages; no git.
+
+
+## 2026-11-03 — Trisha secret exit depth pass
+- User found the simple squares weak compared with the drain. Rebuilt the space behind the existing falling cards as a true curved Three.js passage: swept plum plaster vault, brass arches/fanlights, oval tarnished mirrors, projecting coloured sconces, patterned glossy floor, fog and dust. Camera follows a curved path; original coloured blooms, mist, falling cards and still-map ending retained. Cards now catch a satin/foil light band and have extra corner engraving. No creative prose changed.
+- Implementation is the secret-exit IIFE at start of UserScript in .twee. One existing RAF renders offscreen WebGL into overlay canvas; lazy Three loader, no extra animation loop. Dispose geometry/materials/textures/context on finish/skip. Original 2D background remains as WebGL fallback.
+- Synced via sync_html.py. Node syntax check passed. Real Chromium natural transition returned to Dean Street map with no page/console errors and no remaining overlay. Escape and reduced-motion tests also reached map with no errors and no overlay. Scratchpad: scratchpad/trisha-exit-depth-2026-11-03 (before.js is pre-pass backup). Preview: ?preview=deco-secret-depth#dss-debug-jump=Trisha%20Secret%20Exit.

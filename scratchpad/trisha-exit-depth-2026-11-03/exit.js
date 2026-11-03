@@ -14,6 +14,9 @@
     var cx = canvas.getContext('2d'), started = performance.now(), raf = 0, done = false, navigated = false, mapStill = null, stillAt = 0;
     function navigate() {
       if (navigated) return; navigated = true; releasing = link;
+      // A single-use arrival on Bateman Street, just round the corner from the club.
+      window.dssSohoArrival = {c:38,r:14,facing:'left',door:'trishas'};
+      try { sessionStorage.setItem('dssMapLast','trishas'); } catch(e) {}
       try { if (link.isConnected) link.click(); } finally { releasing = null; }
     }
     function finish() {
@@ -186,7 +189,7 @@
       if (reduced) { if(t>.2)navigate(); if(t>.8)finish(); else raf=requestAnimationFrame(paint); return; }
       if(t>3.45)navigate();
       var destination=navigated && document.querySelector('#soho-map-container canvas');
-      // The doorway stays fixed; the last image is a still of the map at its gameplay size.
+      // The last image is a large, motionless map of the actual arrival corner.
       var reveal=ease((t-3.65)/1), crossing=0;
       cx.globalCompositeOperation='source-over';cx.globalAlpha=1;rect(0,0,w,h,'#030407');
       var opening=ease(t/.9), travel=ease((t-.8)/3.7), arrival=crossing;
@@ -257,10 +260,12 @@
       // Take one frame after the map has settled, with no animated crop or zoom.
       if(!mapStill && destination && t>4.4){
         var bounds=destination.getBoundingClientRect();
-        if(bounds.width>0&&bounds.height>0){
+        var mapPainted=false;
+        try { var probe=destination.getContext('2d').getImageData(Math.floor(destination.width/2),Math.floor(destination.height/2),1,1).data; mapPainted=probe[3]>0; } catch(e) {}
+        if(bounds.width>0&&bounds.height>0&&mapPainted){
           mapStill=document.createElement('canvas');mapStill.width=w;mapStill.height=h;
           var sc=mapStill.getContext('2d'),sx=w/innerWidth,sy=h/innerHeight;
-          if(sc){var ratio=destination.width/destination.height,mw=Math.min(bounds.width*sx,w*.82,h*.72*ratio),mh=mw/ratio;sc.fillStyle='#030407';sc.fillRect(0,0,w,h);sc.drawImage(destination,(w-mw)/2,(h-mh)/2,mw,mh);stillAt=t;}
+          if(sc){var ratio=destination.width/destination.height,mw=Math.min(w*.94,h*.86*ratio),mh=mw/ratio;sc.fillStyle='#030407';sc.fillRect(0,0,w,h);sc.drawImage(destination,(w-mw)/2,(h-mh)/2,mw,mh);stillAt=t;}
           else mapStill=null;
         }
       }

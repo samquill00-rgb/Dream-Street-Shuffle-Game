@@ -1,0 +1,2 @@
+- [x] Make the final still map larger.
+- [x] Land just around the corner from Trisha’s and verify position.

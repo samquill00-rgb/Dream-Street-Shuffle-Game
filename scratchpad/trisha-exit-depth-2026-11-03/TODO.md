@@ -1,0 +1,4 @@
+- [ ] Compare the drain and secret exit rendering.
+- [ ] Build a detailed curved 3D Deco passage behind the cards.
+- [ ] Preserve cards, coloured light, mist, skip and still-map ending.
+- [ ] Verify the full transition and cleanup; sync.

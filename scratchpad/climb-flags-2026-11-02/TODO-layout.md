@@ -1,0 +1,4 @@
+- [x] Keep over-track banners only at existing checkpoints.
+- [x] Make decorative flags irregular, loose and strewn around the ridge sides.
+- [x] Add distant mountain forms resembling inverted prayer flags.
+- [x] Visually verify and sync.

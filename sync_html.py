@@ -54,6 +54,8 @@ AUDIO_EMBEDS = [
     ("__DSS_COLONY_DATA_URI__",      "indoor-colony-room-floor.m4a",                         "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a small packed room; generated the-colony-ambience.m4a stays on disk
     ("__DSS_TRISHAS_DATA_URI__",     "indoor-quiet-lounge-floor.m4a",                        "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a quiet lounge; generated the-trishas-ambience.m4a stays on disk
     ("__DSS_HIMALAYA_DATA_URI__",    "the-himalaya-ambience.m4a",                      "audio/mp4"),
+    ("__DSS_HIMALAYA_MUSIC_DATA_URI__", "himalaya-music.m4a",                      "audio/mp4"),  # 2026-11-02: Sam's own "Meditation in Tibet", frame-aligned loop
+    ("__DSS_CLIMB_MUSIC_DATA_URI__",    "climb-music.m4a",                         "audio/mp4"),  # 2026-11-03: Sam's own Climb music; plays once, loops 84-100 s
     ("__DSS_NAZCA_DATA_URI__",       "the-nazca-ambience.m4a",                         "audio/mp4"),
     ("__DSS_EASTER_DATA_URI__",      "the-easter-island-ambience.m4a",                 "audio/mp4"),
     ("__DSS_PYRAMID_DATA_URI__",     "the-pyramid-ambience.m4a",                       "audio/mp4"),

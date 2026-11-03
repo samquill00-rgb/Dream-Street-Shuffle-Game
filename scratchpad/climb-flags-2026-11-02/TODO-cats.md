@@ -1,0 +1,5 @@
+- [x] Make each flag-mountain a single flag shape, without multiple peaks.
+- [x] Add two small cats following the yeti in the final stretch: black left, black-and-white right.
+- [x] Verify placement, motion and sync.
+- [x] Add little paw-print trails behind both cats.
+- [x] Capture and show a clear screenshot with the cats.

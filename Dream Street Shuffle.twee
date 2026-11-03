@@ -2584,6 +2584,8 @@ window.dssAudio = (function() {
         bed.source = ac3.createBufferSource();
         bed.source.buffer = buf;
         bed.source.loop = !bed.gapMs;
+        /* 2026-11-03: bed.loopStart plays the file once from the top, then repeats only from loopStart to loopEnd (the Climb's summit) */
+        if (bed.loopStart && bed.source.loop) { bed.source.loopStart = bed.loopStart; bed.source.loopEnd = bed.loopEnd || buf.duration; }
         bed.source.connect(bed.gain);
         // Skip the first 200ms only on the very first iteration — past
         // the MP3 priming garbage and the loud opening transient. Later
@@ -3404,6 +3406,27 @@ window.dssAudio = (function() {
   // skips the generic procedural wind (windFarnell) when one of these is on.
   // Sam may write music for the worlds later; these are the room tone under it.
   registerAmbientBed({ label: 'world-himalaya', dataUri: '__DSS_HIMALAYA_DATA_URI__', tags: { 'himalayan': 1 }, volume: 0.18, duckVolume: 0.06 });
+  /* 2026-11-02 (Sam: "the music for the Himalaya part ... for everything but the minigame"): his own piece, 'Meditation in Tibet', over the
+     wind on every Himalaya page except The Climb (tagged climb-game). Mastered at the Ronnie's jazz loudness, so the same 0.30. */
+  registerAmbientBed({
+    label: 'world-himalaya-music',
+    dataUri: '__DSS_HIMALAYA_MUSIC_DATA_URI__',
+    tags: { 'himalayan': 1 },
+    notTags: { 'climb-game': 1 },
+    volume: 0.30,
+    duckVolume: 0.10
+  });
+  /* 2026-11-03: Sam's Climb music. No page carries its tag, so it never starts on load; The Climb's startGame starts it
+     ("Begin ascent"), it plays once from the top and then loops the summit, bars 43-50 (84-100 s at 120). Leaving the page stops it. */
+  registerAmbientBed({
+    label: 'climb-music',
+    dataUri: '__DSS_CLIMB_MUSIC_DATA_URI__',
+    tags: { 'climb-music-manual': 1 },
+    loopStart: 84.0,
+    loopEnd: 100.0,
+    volume: 0.30,
+    duckVolume: 0.10
+  });
   registerAmbientBed({ label: 'world-nazca',    dataUri: '__DSS_NAZCA_DATA_URI__',    tags: { 'nazca': 1 },     volume: 0.18, duckVolume: 0.06 });
   registerAmbientBed({ label: 'world-easter',   dataUri: '__DSS_EASTER_DATA_URI__',   tags: { 'easter': 1 },    volume: 0.18, duckVolume: 0.06 });
   registerAmbientBed({ label: 'world-pyramid',  dataUri: '__DSS_PYRAMID_DATA_URI__',  tags: { 'pyramid': 1 },   volume: 0.20, duckVolume: 0.07 });
@@ -84254,7 +84277,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
 })();
 </script>
 
-:: The Climb [dream himalayan] {"position":"1450,3250","size":"100,100"}
+:: The Climb [dream himalayan climb-game] {"position":"1450,3250","size":"100,100"}
 <!-- v2-expansion: THE YETI CHASE (2026-08-22, Sam's brainstorm, all
      elements approved): vertical climber up the snowline. The yeti is
      glimpsed above, rubber-banded — you never catch him by speed; he
@@ -84317,7 +84340,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
   var hcTouch=!!(window.matchMedia&&window.matchMedia('(hover: none) and (pointer: coarse)').matches);
   var s=2, u=0, y=0, vy=0, grounded=true, breath=1, slips=0, prints=0, checkpoint=2, snowWalk=0; /* snowWalk: distance since the last snow step (2026-10-23) */
   var time=0, yetiS=13, nextPrint=3, printList=[], collected=new Set(), flagObjects=[];
-  var climber, yeti, eyeMaterial, cameraReady=false, lastHUD='', running=0;
+  var climber, yeti, eyeMaterial, summitCats=[], cameraReady=false, lastHUD='', running=0;
   var LENGTH=440, GRAV=18, JUMP=7.6, SPEED=8.4, COYOTE=.20, BUFFER=.22;
   // Extended route: ladders, timber crossing, a cornice and the avalanche couloir.
   // Route coordinates s/u map into a winding 3D world; all collision uses the
@@ -84375,7 +84398,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
   window._hcCleanup=cleanup;
   observer=new MutationObserver(function(){if(!canvas.isConnected)cleanup();});
   observer.observe(document.querySelector('tw-story') || document.body,{childList:true,subtree:true});
-  function startGame(){if(!renderer || disposed || finished)return;started=true;if(window.dssAudio&&window.dssAudio.primeSnowSteps)window.dssAudio.primeSnowSteps();paused=false;lastNow=null;accumulator=0;clearInput();cover.hidden=true;pauseButton.textContent='Pause';canvas.focus({preventScroll:true});if(!eng)makeAudio();if(eng)eng.resume();}
+  function startGame(){if(!renderer || disposed || finished)return;started=true;if(window.dssAudio&&window.dssAudio.primeSnowSteps)window.dssAudio.primeSnowSteps();if(window.dssAudio&&window.dssAudio.startBed)window.dssAudio.startBed('climb-music');paused=false;lastNow=null;accumulator=0;clearInput();cover.hidden=true;pauseButton.textContent='Pause';canvas.focus({preventScroll:true});if(!eng)makeAudio();if(eng)eng.resume();}
   function setPaused(value){if(!started || finished)return;paused=value;clearInput();lastNow=null;accumulator=0;cover.hidden=!value;beginButton.textContent='Resume ascent';pauseButton.textContent=value?'Resume':'Pause';if(eng)eng.silence();if(!value){canvas.focus({preventScroll:true});if(eng)eng.resume();}}
   function releaseJump(){if(!held(' ') && vy>0 && !jumpCut){vy*=.55;jumpCut=true;}}
   function kd(e){
@@ -84509,6 +84532,24 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
     var lipGeo=new THREE.BufferGeometry();lipGeo.setAttribute('position',new THREE.Float32BufferAttribute(lipVerts,3));
     scene.add(new THREE.LineSegments(lipGeo,new THREE.LineBasicMaterial({color:0x8ce1ef,transparent:true,opacity:.85})));
     STEPS.concat(GAPS.reduce(function(all,g){return all.concat(g);},[])).forEach(function(at){mesh(cube,rock,center(at),height(at)-1,-at,width(at),2,.1);});
+    // Blue ice exposed down each crevasse wall; never a surface across the gap.
+    var iceFaces=[],iceColours=[],iceIndices=[];
+    GAPS.concat([CORNICE]).forEach(function(g){g.forEach(function(at,edge){
+      var start=iceFaces.length/3;
+      for(var row=0;row<3;row++)for(var shard=0;shard<=16;shard++){
+        var across=-width(at)/2+width(at)*shard/16;
+        iceFaces.push(center(at)+across,height(at)-.02-row*4.5,-at+(edge?.065:-.065)+Math.sin(shard*2.7)*row*.035);
+        var tint=row===0?[.4,.86,1]:row===1?[.06,.39,.62]:[.015,.08,.17];iceColours.push(tint[0],tint[1],tint[2]);
+        if(row<2&&shard<16){var v=start+row*17+shard;iceIndices.push(v,v+1,v+18,v,v+18,v+17);}
+      }
+    });});
+    var iceFaceGeo=new THREE.BufferGeometry();iceFaceGeo.setAttribute('position',new THREE.Float32BufferAttribute(iceFaces,3));iceFaceGeo.setAttribute('color',new THREE.Float32BufferAttribute(iceColours,3));iceFaceGeo.setIndex(iceIndices);iceFaceGeo.computeVertexNormals();
+    var iceWalls=new THREE.Mesh(iceFaceGeo,new THREE.MeshPhongMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide,emissive:0x06314a,emissiveIntensity:.28,specular:0x5ac8e8,shininess:62}));iceWalls.name='ice-blue-crevasse-walls';scene.add(iceWalls);
+    var iceCanvas=document.createElement('canvas');iceCanvas.width=iceCanvas.height=256;var ic=iceCanvas.getContext('2d');
+    ic.fillStyle='#66b9db';ic.fillRect(0,0,256,256);
+    for(var crack=0;crack<13;crack++){ic.strokeStyle=crack%3?'rgba(13,73,116,.5)':'rgba(200,245,255,.7)';ic.lineWidth=crack%3?1:2;ic.beginPath();var ix=(crack*71)%256;ic.moveTo(ix,0);for(var iy=0;iy<=256;iy+=24)ic.lineTo(ix+Math.sin(crack*3+iy*.07)*14,iy);ic.stroke();}
+    var iceMap=new THREE.CanvasTexture(iceCanvas);
+    var brittleIce=new THREE.MeshPhongMaterial({color:0x88d9f2,map:iceMap,specular:0x9eeaff,shininess:74,emissive:0x06314a,emissiveIntensity:.22});
     var timber=new THREE.MeshLambertMaterial({color:0x766353}),rope=new THREE.MeshLambertMaterial({color:0xc2b18c});
     var beamGeometry=new THREE.CylinderGeometry(1,1,1,8);
     function beam(start,end,radius,material){var v=end.clone().sub(start),m=mesh(beamGeometry,material,0,0,0,radius,v.length(),radius);m.position.copy(start).add(end).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize());return m;}
@@ -84518,7 +84559,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
     });
     for(var plank=BRIDGE[0];plank<BRIDGE[1];plank+=.45){var board=mesh(cube,timber,center(plank),height(plank)+.08,-plank,2,.12,.42);board.rotation.y=-Math.atan(tangent(plank));}
     [-1,1].forEach(function(side){for(var at=BRIDGE[0];at<BRIDGE[1];at+=2){beam(position(at,side,height(at)),position(at,side,height(at)+1.1),.045,timber);beam(position(at,side,height(at)+1.1),position(Math.min(at+2,BRIDGE[1]),side,height(Math.min(at+2,BRIDGE[1]))+1.1),.025,rope);}});
-    corniceMesh=mesh(cube,snow,center(227.5),height(227.5)-.08,-227.5,width(227.5),.25,3);
+    corniceMesh=mesh(cube,brittleIce,center(227.5),height(227.5)-.08,-227.5,width(227.5),.25,3);
     corniceMesh.rotation.x=Math.atan(.19);
     avalancheMesh=new THREE.InstancedMesh(sphere,snow,28);avalancheMesh.visible=false;scene.add(avalancheMesh);
     whirlMesh=new THREE.InstancedMesh(sphere,snow,44);whirlMesh.visible=false;scene.add(whirlMesh);
@@ -84527,7 +84568,39 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
     for(var ri=0;ri<rp.count;ri++){var rx=rp.getX(ri),ry=rp.getY(ri),rz=rp.getZ(ri);var erosion=1+.13*Math.sin(rx*9+ry*5)*Math.cos(rz*8-ry*3);rp.setXYZ(ri,rx*erosion+ry*ry*.13,ry,rz*erosion);}
     ridge.computeVertexNormals();
     var peaks=new THREE.InstancedMesh(ridge,rock,34),dummy=new THREE.Object3D();
-    for(var i=0;i<34;i++){var at2=i*(LENGTH/32)-20;dummy.position.set(center(at2)+(i%2?1:-1)*(20+(i%5)*4),height(at2)-12,-at2);dummy.scale.set(9+i%4,14+(i%7)*2,12);dummy.rotation.y=i;dummy.updateMatrix();peaks.setMatrixAt(i,dummy.matrix);}scene.add(peaks);
+    for(var i=0;i<34;i++){var at2=i*(LENGTH/32)-20;dummy.position.set(center(at2)+(i%2?1:-1)*(20+(i%5)*4),height(at2)-12,-at2);dummy.scale.set(9+i%4,14+(i%7)*2,12);if(i%3!==0)dummy.scale.setScalar(0);dummy.rotation.y=i;dummy.updateMatrix();peaks.setMatrixAt(i,dummy.matrix);}scene.add(peaks);
+    // Distant ridges echo flags turned upside down: planted in the cloud deck,
+    // folded stone faces rise to a torn cloth-like skyline rather than floating bunting.
+    var flagPeakPositions=[],flagPeakColours=[],flagPeakIndices=[],flagPeakUVs=[];
+    var tornTop=[-1,-1/3,1/3,1,1/3,-1/3,-1];
+    for(var strip=0;strip<7;strip++){
+      var fx=-1+strip/3,fold=Math.sin(strip*2.3)*.24;
+      flagPeakPositions.push(fx,-1,fold*.55,fx,tornTop[strip],fold);
+      flagPeakColours.push(.6,.62,.67,.95,.97,1);flagPeakUVs.push(strip/6,0,strip/6,1);
+      if(strip<6){var n=strip*2;flagPeakIndices.push(n,n+1,n+3,n,n+3,n+2);}
+    }
+    var flagPeakGeo=new THREE.BufferGeometry();flagPeakGeo.setAttribute('position',new THREE.Float32BufferAttribute(flagPeakPositions,3));flagPeakGeo.setAttribute('color',new THREE.Float32BufferAttribute(flagPeakColours,3));flagPeakGeo.setAttribute('uv',new THREE.Float32BufferAttribute(flagPeakUVs,2));flagPeakGeo.setIndex(flagPeakIndices);flagPeakGeo.computeVertexNormals();
+    // Woven borders and weathered emblems make the huge ridges unmistakably cloth-like.
+    var peakCanvas=document.createElement('canvas');peakCanvas.width=256;peakCanvas.height=384;var pc=peakCanvas.getContext('2d');
+    pc.fillStyle='#eee8d8';pc.fillRect(0,0,256,384);pc.strokeStyle='rgba(52,48,54,.38)';pc.lineWidth=5;pc.strokeRect(16,19,224,346);pc.lineWidth=1.5;pc.strokeRect(23,26,210,332);
+    pc.save();pc.translate(128,192);pc.rotate(Math.PI);pc.lineWidth=3;
+    pc.beginPath();pc.ellipse(0,0,57,72,0,0,Math.PI*2);pc.stroke();
+    for(var ray=0;ray<12;ray++){var ra=ray*Math.PI/6;pc.beginPath();pc.moveTo(Math.cos(ra)*65,Math.sin(ra)*81);pc.lineTo(Math.cos(ra)*80,Math.sin(ra)*98);pc.stroke();}
+    pc.beginPath();pc.moveTo(0,-50);pc.lineTo(38,0);pc.lineTo(0,50);pc.lineTo(-38,0);pc.closePath();pc.stroke();pc.restore();
+    for(var weave=0;weave<384;weave+=3){pc.fillStyle=weave%2?'rgba(255,255,255,.045)':'rgba(70,60,65,.045)';pc.fillRect(0,weave,256,1);}
+    var peakMap=new THREE.CanvasTexture(peakCanvas);
+    var flagPeakMaterial=new THREE.MeshLambertMaterial({color:0xffffff,map:peakMap,vertexColors:true,side:THREE.DoubleSide});
+    flagPeakMaterial.onBeforeCompile=function(shader){shader.uniforms.hcFlagTime=snowLight;shader.vertexShader='uniform float hcFlagTime;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.z+=sin(position.x*4.5+position.y*2.0+hcFlagTime*.22)*.12*max(0.0,position.y+.8);');};
+    var flagPeakSlots=[];for(var slot=0;slot<34;slot++)if(slot%3!==0)flagPeakSlots.push(slot);
+    var flagPeaks=new THREE.InstancedMesh(flagPeakGeo,flagPeakMaterial,flagPeakSlots.length);
+    flagPeaks.name='inverted-prayer-flag-peaks';flagPeaks.frustumCulled=false;
+    var stoneTints=[0x7391c9,0xe0dbc7,0xba7671,0x7a9f83,0xc2ac61];
+    for(var peak=0;peak<flagPeakSlots.length;peak++){
+      var pi=flagPeakSlots[peak],ps=pi*(LENGTH/32)-20;
+      dummy.position.set(center(ps)+(pi%2?1:-1)*(25+(peak%3)*4),height(ps)-11,-ps);
+      dummy.scale.set(8+peak%3,15+(peak%4)*2,7);dummy.rotation.set(0,-.2+Math.sin(peak)*.3,Math.sin(peak*2.3)*.08);dummy.updateMatrix();flagPeaks.setMatrixAt(peak,dummy.matrix);flagPeaks.setColorAt(peak,new THREE.Color(stoneTints[peak%5]));
+    }
+    flagPeaks.instanceMatrix.needsUpdate=true;flagPeaks.instanceColor.needsUpdate=true;scene.add(flagPeaks);
     // Soft snow shoulders break up the ruler-straight shelf silhouette.
     var drifts=new THREE.InstancedMesh(sphere,snow,88);
     for(var di=0;di<88;di++){var ds=di*(LENGTH/88),side=di%2?1:-1;dummy.position.set(center(ds)+side*(width(ds)/2+.3),height(ds)-.23,-ds);dummy.scale.set(.58,.32,1.9);if(GAPS.some(function(g){return ds>g[0]-1.9 && ds<g[1]+1.9;}))dummy.scale.setScalar(0);dummy.rotation.set(0,0,0);dummy.updateMatrix();drifts.setMatrixAt(di,dummy.matrix);}scene.add(drifts);
@@ -84540,9 +84613,40 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
       for(var n=0;n<9;n++)mesh(cube,flagMats[n%5],-1.95+n*.49,1.96-Math.sin(n/8*Math.PI)*.18,0,.36,.42,.035,group);
       var marker=mesh(cube,new THREE.MeshBasicMaterial({color:0x7b8592}),0,.025,0,4.6,.025,.18,group);flagObjects.push({s:at,marker:marker});
     });
+    // Loose roadside offerings: only the original checkpoint banners cross the track.
+    function flagScatter(n){var value=Math.sin(n*91.731+17.3)*43758.54;return value-Math.floor(value);}
+    var extraFlagGroups=[];
+    for(var festoon=0;festoon<39;festoon++){
+      var at=5+festoon*10.7+(flagScatter(festoon+7)-.5)*6;if(at>LENGTH-8)break;
+      var side=flagScatter(festoon+44)>.5?1:-1;
+      var toAt=Math.min(LENGTH-2,at+2.1+flagScatter(festoon+91)*6.2);
+      var fromHeight=.65+flagScatter(festoon+13)*1.9,toHeight=.4+flagScatter(festoon+28)*1.8;
+      var from=position(at,side*(width(at)/2+.65+flagScatter(festoon+62)*1.2),height(at)+fromHeight);
+      var to=position(toAt,side*(width(toAt)/2+.65+flagScatter(festoon+73)*2.1),height(toAt)+toHeight);
+      var fg=new THREE.Group();fg.name='decorative-prayer-flags-'+festoon;scene.add(fg);extraFlagGroups.push(fg);
+      [from,to].forEach(function(p,index){
+        // Short, leaning stakes and rock-tied cords, at unequal heights.
+        var anchorHeight=index?toHeight:fromHeight;
+        if(flagScatter(festoon*3+index+104)>.3){var stake=mesh(cube,poleMat,p.x,p.y-anchorHeight/2,p.z,.045,anchorHeight+.15,.045,fg);stake.rotation.z=(flagScatter(festoon+index+119)-.5)*.28;}
+      });
+      var last=from.clone(),pieces=5+Math.floor(flagScatter(festoon+166)*9);
+      for(var fn=0;fn<pieces;fn++){
+        var fraction=(fn+1)/pieces,point=from.clone().lerp(to,fraction);
+        point.y-=Math.sin(fraction*Math.PI)*(.25+flagScatter(festoon+181)*.65);
+        var line=point.clone().sub(last),cord=mesh(cube,poleMat,0,0,0,.012,line.length(),.012,fg);
+        cord.position.copy(last).add(point).multiplyScalar(.5);cord.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),line.normalize());
+        if(flagScatter(fn+festoon*17+201)>.12){
+          var fw=.22+flagScatter(fn+festoon*13+220)*.21,fh=.23+flagScatter(fn+festoon*19+241)*.28;
+          var cloth=mesh(cube,flagMats[(fn+festoon)%5],point.x,point.y-fh/2,point.z,fw,fh,.015,fg);
+          cloth.rotation.y=Math.atan2(to.x-from.x,to.z-from.z)+Math.PI/2+(flagScatter(fn+festoon*7+263)-.5)*1.25;
+          cloth.rotation.x=(flagScatter(fn+festoon*11+284)-.5)*.85;cloth.rotation.z=(flagScatter(fn+festoon*3+305)-.5)*.7;
+        }
+        last.copy(point);
+      }
+    }
     var flagBatches=new Map();
-    flagObjects.forEach(function(flag){var group=flag.marker.parent;group.updateMatrixWorld(true);group.children.slice().forEach(function(m){if(m===flag.marker)return;var batch=flagBatches.get(m.material)||[];batch.push(m.matrixWorld.clone());flagBatches.set(m.material,batch);group.remove(m);});});
-    flagBatches.forEach(function(matrices,material){var batch=new THREE.InstancedMesh(cube,material,matrices.length);matrices.forEach(function(matrix,i){batch.setMatrixAt(i,matrix);});scene.add(batch);});
+    flagObjects.map(function(flag){return flag.marker.parent;}).concat(extraFlagGroups).forEach(function(group){group.updateMatrixWorld(true);group.children.slice().forEach(function(m){if(flagObjects.some(function(flag){return m===flag.marker;}))return;var batch=flagBatches.get(m.material)||[];batch.push(m.matrixWorld.clone());flagBatches.set(m.material,batch);group.remove(m);});});
+    flagBatches.forEach(function(matrices,material){var batch=new THREE.InstancedMesh(cube,material,matrices.length);batch.name="climb-prayer-flags";batch.frustumCulled=false;matrices.forEach(function(matrix,i){batch.setMatrixAt(i,matrix);});batch.instanceMatrix.needsUpdate=true;scene.add(batch);});
     function person(isYeti){
       var g=new THREE.Group(),coat=new THREE.MeshLambertMaterial({color:isYeti?0xc9d5d8:0xad614b});
       var boots=isYeti?coat:dark,limbs=[];
@@ -84794,6 +84898,33 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
       g.userData.limbs=limbs;scene.add(g);return g;
     }
     climber=mountaineer();yeti=muscularYeti(); // 2026-10-18: the hooded mountaineer (was person(false))
+    // Two quiet companions in the final stretch; decorative, never obstacles.
+    var catSphere=new THREE.SphereGeometry(1,12,9),catEar=new THREE.ConeGeometry(1,1,4);
+    var catCoat=new THREE.MeshLambertMaterial({color:0x161921}),catWhite=new THREE.MeshLambertMaterial({color:0xd9dedb}),catEyes=new THREE.MeshBasicMaterial({color:0xb8a36b});
+    function summitCat(tuxedo,side){
+      var group=new THREE.Group();group.name=side<0?'summit-black-cat-left':'summit-tuxedo-cat-right';group.visible=false;scene.add(group);
+      var darkParts=[[0,.26,0,.135,.17,.28],[0,.27,-.12,.115,.15,.14],[0,.42,-.23,.108,.10,.108],[0,.38,-.32,.065,.04,.045]];
+      var paleParts=tuxedo?[[0,.33,-.19,.105,.11,.065],[.102,.28,.08,.055,.14,.17],[.04,.4,.1,.075,.055,.14],[0,.43,-.328,.022,.065,.015]]:[];
+      function batch(geometry,material,parts,parent){var im=new THREE.InstancedMesh(geometry,material,parts.length),pose=new THREE.Object3D();parts.forEach(function(p,i){pose.position.set(p[0],p[1],p[2]);pose.scale.set(p[3],p[4],p[5]);pose.rotation.set(0,0,0);pose.updateMatrix();im.setMatrixAt(i,pose.matrix);});im.instanceMatrix.needsUpdate=true;im.frustumCulled=false;(parent||group).add(im);return im;}
+      batch(catSphere,catCoat,darkParts);if(paleParts.length)batch(catSphere,catWhite,paleParts);
+      batch(catEar,catCoat,[[-.075,.535,-.23,.043,.1,.04],[.075,.535,-.23,.043,.1,.04]]);
+      batch(catSphere,catEyes,[[-.047,.437,-.328,.01,.011,.007],[.047,.437,-.328,.01,.011,.007]]);
+      var legs=batch(catSphere,catCoat,[[0,0,0,1,1,1],[0,0,0,1,1,1],[0,0,0,1,1,1],[0,0,0,1,1,1]]);
+      var paws=batch(catSphere,tuxedo?catWhite:catCoat,[[0,0,0,1,1,1],[0,0,0,1,1,1],[0,0,0,1,1,1],[0,0,0,1,1,1]]);
+      var tailRoot=new THREE.Group();tailRoot.position.set(0,.31,.22);group.add(tailRoot);
+      batch(catSphere,catCoat,[[0,.025,.075,.035,.05,.10],[0,.11,.16,.031,.075,.04],[0,.21,.17,.028,.065,.035],[.015,.27,.12,.024,.035,.055],[.04,.265,.075,.02,.03,.035]],tailRoot);
+      group.scale.setScalar(1.15);group.userData={side:side,tuxedo:tuxedo,legs:legs,paws:paws,tail:tailRoot,pose:new THREE.Object3D()};return group;
+    }
+    summitCats=[summitCat(false,-1),summitCat(true,1)];
+    var pawCanvas=document.createElement('canvas');pawCanvas.width=pawCanvas.height=64;var pawInk=pawCanvas.getContext('2d');
+    pawInk.fillStyle='#36434c';pawInk.beginPath();pawInk.ellipse(32,42,12,10,0,0,Math.PI*2);pawInk.fill();
+    [[14,27,-.35],[25,18,-.13],[39,18,.13],[50,27,.35]].forEach(function(toe){pawInk.beginPath();pawInk.ellipse(toe[0],toe[1],5,7,toe[2],0,Math.PI*2);pawInk.fill();});
+    var pawMap=new THREE.CanvasTexture(pawCanvas),pawMat=new THREE.MeshBasicMaterial({map:pawMap,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1});
+    summitCats.forEach(function(cat){
+      var trail=new THREE.InstancedMesh(new THREE.PlaneGeometry(.11,.145),pawMat,32);trail.name=cat.name+'-paw-trail';trail.visible=false;trail.frustumCulled=false;scene.add(trail);
+      cat.userData.trail=trail;cat.userData.trailPose=new THREE.Object3D();cat.userData.trailYaw=new THREE.Quaternion();
+    });
+
     // Irregular overlapping boulders form an open cave arch.
     var caveAt=LENGTH+5,caveY=height(caveAt),caveX=center(caveAt);
     for(var ci=0;ci<9;ci++){var ca=ci/8*Math.PI;var stone=mesh(ridge,rock,caveX+Math.cos(ca)*3.9,caveY+.6+Math.sin(ca)*4.5,-caveAt,1.75,1.75,2.5);stone.rotation.z=ca*.7;}
@@ -84853,7 +84984,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
     if(window.dssFilmGrade){var frame=canvas.parentElement,before=frame.children.length;window.dssFilmGrade(frame);for(var gi=before;gi<frame.children.length;gi++)gradeEls.push(frame.children[gi]);cover.style.zIndex='6';banner.style.zIndex='5';}
     y=height(s);beginButton.disabled=false;resize();resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvas.parentElement);
     listen(window,'resize',resize);
-    if(window.DSS_DEV)window._hcDev={canvas:canvas,snapshot:function(){return {s:s,u:u,y:y,ground:height(s),vy:vy,grounded:grounded,breath:breath,prints:prints,slips:slips,checkpoint:checkpoint,yetiS:yetiS,ending:ending,paused:paused,finished:finished,coyote:coyoteT,buffer:bufferT,activePrints:printList.filter(function(p){return p.mesh.visible;}).length,drawCalls:renderer.info.render.calls,climbing:climbing,corniceBroken:corniceBroken,avalanche:avalanche.phase,avalancheFront:avalanche.front,gust:gust.phase,gustDir:gust.dir,dawn:dawn,bloom:!!composer,wind:wind.strength,whirl:whirl.active,width:width(s),plateau:!!plateau(s)};},
+    if(window.DSS_DEV)window._hcDev={canvas:canvas,scene:scene,renderer:renderer,camera:camera,snapshot:function(){return {s:s,u:u,y:y,ground:height(s),vy:vy,grounded:grounded,breath:breath,prints:prints,slips:slips,checkpoint:checkpoint,yetiS:yetiS,ending:ending,paused:paused,finished:finished,coyote:coyoteT,buffer:bufferT,activePrints:printList.filter(function(p){return p.mesh.visible;}).length,drawCalls:renderer.info.render.calls,climbing:climbing,corniceBroken:corniceBroken,avalanche:avalanche.phase,avalancheFront:avalanche.front,gust:gust.phase,gustDir:gust.dir,dawn:dawn,bloom:!!composer,wind:wind.strength,whirl:whirl.active,width:width(s),plateau:!!plateau(s)};},
       // Testing only: put the climber at any point on the route, or force a gust.
       warp:function(at){if(!started||ending>=0)return;s=Math.max(0,Math.min(LENGTH-1,at));u=0;y=height(s);vy=0;grounded=true;yetiS=Math.min(LENGTH,s+13);nextPrint=Math.max(nextPrint,s+3);cameraReady=false;},
       gust:function(dir){gust.phase='warning';gust.t=0;gust.dir=dir||1;},
@@ -85024,6 +85155,30 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers like you’d
     yeti.rotation.y=ending>1.2 && ending<3.8?Math.PI:-Math.atan(tangent(yetiS));
     if(yeti.userData.shades)yeti.userData.shades.visible=turned; // 2026-10-18 (Sam): aviators once he turns at the cave
     yeti.userData.limbs.forEach(function(l,i){l.rotation.x=reducedMotion || ending>=0 && ending<3.8?0:Math.sin(time*7+(Math.floor(i/2)+i%2)*Math.PI)*.25;});
+    summitCats.forEach(function(cat,index){
+      cat.visible=s>=380&&yeti.visible;cat.userData.trail.visible=cat.visible;if(!cat.visible)return;
+      var at=yetiS-1.7-index*.22,side=cat.userData.side;
+      var hop=0;GAPS.forEach(function(g){if(at>g[0]-.3&&at<g[1]+.3)hop=Math.sin((at-g[0]+.3)/(g[1]-g[0]+.6)*Math.PI)*.38;});
+      cat.position.copy(position(at,side*.76,height(at)+hop+(reducedMotion?0:Math.sin(time*16+index)*.006)));cat.rotation.y=-Math.atan(tangent(at));
+      var walking=!(ending>=0&&ending<3.8),stride=reducedMotion||!walking?0:time*8+index*.9;
+      for(var leg=0;leg<4;leg++){
+        var front=leg<2,lr=leg%2?1:-1,swing=reducedMotion||!walking?0:Math.sin(stride+(front?(leg%2)*Math.PI:(1-leg%2)*Math.PI))*.1;
+        var pose=cat.userData.pose;pose.position.set(lr*.09,.12,(front?-.16:.17)+swing);pose.scale.set(.036,.12,.04);pose.rotation.set(swing*2,0,0);pose.updateMatrix();cat.userData.legs.setMatrixAt(leg,pose.matrix);
+        var lift=reducedMotion||!walking?0:Math.max(0,Math.sin(stride+(front?(leg%2)*Math.PI:(1-leg%2)*Math.PI)))*.045;
+        pose.position.set(lr*.09,.025+lift,(front?-.18:.15)+swing);pose.scale.set(.046,.027,.066);pose.rotation.set(0,0,0);pose.updateMatrix();cat.userData.paws.setMatrixAt(leg,pose.matrix);
+      }
+      cat.userData.legs.instanceMatrix.needsUpdate=true;cat.userData.paws.instanceMatrix.needsUpdate=true;
+      cat.userData.tail.rotation.z=reducedMotion?0:Math.sin(time*1.7+index)*.14;cat.userData.tail.rotation.x=reducedMotion?0:Math.sin(time*1.1+index)*.06;
+      // Alternating tiny paw marks follow the actual snow path, never bridge a gap.
+      for(var print=0;print<32;print++){
+        var pawAt=Math.floor((at-.18)/.2)*.2-print*.2,pawAcross=side*.76+(print%2?.075:-.075);
+        var tp=cat.userData.trailPose;tp.position.copy(position(pawAt,pawAcross,height(pawAt)+.018));
+        tp.rotation.set(-Math.PI/2,0,0);cat.userData.trailYaw.setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.atan(tangent(pawAt)));tp.quaternion.premultiply(cat.userData.trailYaw);
+        tp.scale.setScalar(gap(pawAt)?0:1);tp.updateMatrix();cat.userData.trail.setMatrixAt(print,tp.matrix);
+      }
+      cat.userData.trail.instanceMatrix.needsUpdate=true;
+
+    });
     var baseY=Math.max(y,height(s)-1.5),cam=position(s-7.5,u*.7,baseY+4.1),look=position(s+7,u*.25,height(s+7)+1.45);
     look.y=Math.min(look.y,baseY+3); // Keep the climber in frame below steep ladders.
     // No bob, shake, FOV pulse or automatic orbit; reduced motion locks follow.

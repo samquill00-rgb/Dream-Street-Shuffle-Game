@@ -1,0 +1,3 @@
+- [x] Make collapsing floor sections ice blue, like crevasses.
+- [x] Strengthen the mountain-as-prayer-flags treatment.
+- [x] Verify and sync.

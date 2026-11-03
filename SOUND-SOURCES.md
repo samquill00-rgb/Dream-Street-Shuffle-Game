@@ -18,6 +18,8 @@
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.
 - The doorway piss (doorway-piss.m4a, 2026-11-02) is Sam's own recording (New Recording 148). No credit needed, if it is his.
+- The Himalaya music (himalaya-music.m4a, 2026-11-02) is Sam's own composition, "Meditation in Tibet". No credit needed, unless it uses outside samples.
+- The Climb music (climb-music.m4a, 2026-11-03) is Sam's own, built on his chant sequence ("The cllimb minigame.mp3"). No credit needed, unless it uses outside samples.
 - Dripping water loop (atmosbasement.mp3_.flac) by Independent.nu, submitted by qubodup, https://opengameart.org/content/dripping-water-loop: CC0, checked on its page 2026-10-31 (file name and 1.3 MB size match). Now Copper's cellar drips. No credit needed; "Independent.nu" is a courtesy credit if wanted.
 - Fireplace Sound loop (fire.wav) by PagDev, https://opengameart.org/content/fireplace-sound-loop: CC0, checked on its page 2026-10-31 ("Credit is not required, but it is always appreciated"). Now the fire under Dido's Lament on the pyre. Courtesy credit: PagDev.
 - Charlie Parker's alto saxophone, Smithsonian 3D scan (NMAAHC 2019.10.1a-g), https://3d.si.edu/object/3d/alto-saxophone-owned-and-played-charlie-parker:c7c58ff8-fd1f-4cf6-9813-6bca3cd0b8b3: CC0 per its Smithsonian record (page itself sits behind a bot check; file 2019-10-1a-g_001-100k-2048_std.glb). Now Moe's horn at Ronnie Scott's. No credit needed; NMAAHC is a courtesy credit.
@@ -46,6 +48,8 @@ CC0 means public domain: free for commercial use, no credit required. Crediting 
 | Game file | Made from | Used for |
 |---|---|---|
 | doorway-piss.m4a | Sam's own recording, New Recording 148.m4a (13.45 to 43.6 s: high-passed at 70 Hz, +10.4 dB, limited; the stream fails at 25 s, then 5 s of dribble) (2026-11-02) | Pissing in doorways (`startPissStream`); each doorway starts at its own point. Replaces doorway-drops.m4a |
+| himalaya-music.m4a | Sam's own "Meditation in Tibet.mp3" (75.36 s, decoded and trimmed by 512 samples to a 1024-sample multiple at 48 kHz, AAC 192k; no level change, it sits at -19.3 LUFS) (2026-11-02) | Music bed in the Himalaya world, every `himalayan` page except The Climb (`climb-game`), at 0.30 over the wind bed |
+| climb-music.m4a | Sam's own "The cllimb minigame.mp3" (100.06 s, trimmed to 4,802,560 samples at 48 kHz, AAC 192k; no level change, -19.6 LUFS) (2026-11-03) | The Climb: starts on Begin ascent, plays once, then loops the summit (84 to 100 s, bars 43-50) via the bed's new `loopStart`/`loopEnd` |
 | ~~doorway-drops.m4a~~ (out of the game 2026-11-02) | water drops.mp3 (from 10.25 s: a half-second lead, an 8 s seamless loop, a 1.5 s tail) | Pissing in doorways (`startPissStream`) |
 | vomit-sickness.m4a | sickness.wav (trimmed) | Vomiting (`startRetchStream`) |
 | glass-window-smash.m4a | glass_breaking.wav (trimmed) | Smashing windows on the Dean Street map (`windowSmash`) |

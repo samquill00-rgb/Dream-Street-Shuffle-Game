@@ -1,0 +1,1 @@
+Rebuild the Pyramid Run music: `python3 compose.py "../Pyramid Run.mid"` writes the MIDI and score.json; `python3 render.py out.wav` renders the same synth preview (48 kHz stereo); then `ffmpeg -i out.wav -af volume=-6.4dB -c:a aac -b:a 192k pyramid-run-music.m4a` (-19.9 LUFS, matching climb-music) and copy it beside the html.

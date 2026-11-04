@@ -38,7 +38,7 @@ html_path = os.path.join(_here, "Dream Street Shuffle.html")
 #   "embed" — the old behaviour: base64 data URIs, works from file://.
 AUDIO_MODE = "link"
 AUDIO_EMBEDS = [
-    ("__DSS_MUSIC_DATA_URI__",       "Dream Street Shuffle experiment theme loop.m4a", "audio/mp4"),
+    ("__DSS_MUSIC_DATA_URI__",       "dean-street-burial-loop.m4a",                    "audio/mp4"),   # 2026-11-04 (Sam: "Burial is the vibe"): the hub loop is now his theme as a pitched vocal over a 2-step at 138, 32 bars seamless (Music sketches/Beat scene); the organ "experiment theme loop" stays on disk
     ("__DSS_PUB_DATA_URI__",         "the-french-pub-layered-floor.m4a",                     "audio/mp4"),   # 2026-10-17: Sam's own French bar recordings, layered into a seamless 92 s loop (french-live-originals/; polished single-take in polished/, generated bed the-french-pub-ambience.mp3)
     ("__DSS_PILLARS_DATA_URI__",     "indoor-warm-pub-floor.m4a",                            "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a warm panelled pub over the generated bed (french-live-originals/layered-with-floor/); generated the-pillars-pub-ambience.m4a stays on disk
     ("__DSS_PIANO_DATA_URI__",       "piano-eoin-roe.mp3",                             "audio/mpeg"),
@@ -59,23 +59,23 @@ AUDIO_EMBEDS = [
     ("__DSS_NAZCA_DATA_URI__",       "the-nazca-ambience.m4a",                         "audio/mp4"),
     ("__DSS_NAZCA_MUSIC_DATA_URI__", "nazca-music.m4a",                              "audio/mp4"),   # 2026-11-03: Sam's render of the chill pampa sketch ("Nazca Atmosphere"); plays once, loops bars 5-32 (11.43-91.43 s at 84)
     ("__DSS_EASTER_MUSIC_DATA_URI__", "easter-music.m4a",                            "audio/mp4"),   # 2026-11-04: Sam's own "Easter Island atmosphere" (Logic); the whole 70 s file loops, no loop points
-    ("__DSS_RECLAMATION_MUSIC_DATA_URI__", "reclamation-music.m4a",                  "audio/mp4"),   # 2026-11-04: the Reclamation's own music, from Sam's Easter atmosphere form (150 bpm; intro once, loops bars 5-36 = 6.4-57.6 s)
+    ("__DSS_RECLAMATION_MUSIC_DATA_URI__", "reclamation-kode9.m4a", "audio/mp4"),   # 2026-11-04 (Burial pass): Kode9 dark 2-step at 140 on the Easter form; reclamation-music.m4a (the 150 bpm take 2) stays on disk; intro once, loops bars 5-36
     ("__DSS_EZEKIEL_MUSIC_DATA_URI__", "ezekiel-music.m4a",                          "audio/mp4"),   # 2026-11-04: Sam's Dream Street theme five times, maximalist build; once through, loops statements IV-V (100-164 s); ezekiel + synthesis + sanctum pages
-    ("__DSS_NAZCA_RACE_MUSIC_DATA_URI__", "nazca-race-music.m4a",                    "audio/mp4"),   # 2026-11-03: the Nazca Race's own music (the pampa tune driven, 138 bpm); intro once, loops bars 5-44 (6.96-76.52 s)
+    ("__DSS_NAZCA_RACE_MUSIC_DATA_URI__", "nazca-race-hudmo.m4a", "audio/mp4"),   # 2026-11-04 (Burial pass): Hudson Mohawke trap-rave at 140 on the pampa tune; nazca-race-music.m4a (the Springsteen one) stays on disk; intro once, loops bars 5-36
     ("__DSS_EASTER_DATA_URI__",      "the-easter-island-ambience.m4a",                 "audio/mp4"),
     ("__DSS_PYRAMID_DATA_URI__",     "the-pyramid-ambience.m4a",                       "audio/mp4"),
     ("__DSS_JEFFREY_TUNE_DATA_URI__", "jeffreys-tune.m4a",                           "audio/mp4"),   # 2026-11-03: Sam's Jeffrey hum, cleaned and levelled (the Coach and Horses; the Pyramid chamber hint stays synthesised)
     ("__DSS_PYRAMID_MUSIC_DATA_URI__", "pyramid-music.mp3",                          "audio/mpeg"),  # 2026-11-03: Sam's arranged Pyramid sketch ("Egypt atmosphere game"), played by section from the passages (scored bed)
-    ("__DSS_PYRAMID_RUN_MUSIC_DATA_URI__", "pyramid-run-music.m4a",                  "audio/mp4"),   # 2026-11-03: the Pyramid Run's own music, built from Sam's arpeggio and final chord (160 bpm; intro once, loops 6-42 s)
+    ("__DSS_PYRAMID_RUN_MUSIC_DATA_URI__", "pyramid-run-rustie.m4a", "audio/mp4"),   # 2026-11-04 (Burial pass): Rustie glitter-trap at 160 on Sam's arpeggio groups; pyramid-run-music.m4a (chiptune) stays on disk; intro once, loops bars 5-36
     ("__DSS_CHIPPY_DATA_URI__",      "the-chippy-ambience.m4a",                        "audio/mp4"),   # 2026-11-03: generated (tools_make_beds_extra.py): extractor, fryer, till, door; the Halibut had no bed
     ("__DSS_BOOKSHOP_DATA_URI__",    "the-bookshop-ambience.m4a",                      "audio/mp4"),   # 2026-11-03: generated: shut room, mantel clock, pages, the road through the glass; Cecil Court shops had only ticks
     ("__DSS_EZEKIEL_DATA_URI__",     "the-ezekiel-ambience.m4a",                       "audio/mp4"),
     ("__DSS_RONNIES_MUSIC_DATA_URI__", "ronnies-firebird-jazz.m4a",                    "audio/mp4"),
-    ("__DSS_MINIGAME_DATA_URI__",    "the-minigame-retro.m4a",                         "audio/mp4"),
-    ("__DSS_PONGMINI_DATA_URI__",    "the-pongmini-loop.m4a",                          "audio/mp4"),
-    ("__DSS_JAZZMINI_DATA_URI__",    "the-jazzmini-loop.m4a",                          "audio/mp4"),
-    ("__DSS_COWGAME_DATA_URI__",     "the-cowgame-loop.m4a",                           "audio/mp4"),
-    ("__DSS_WALTZ_DATA_URI__",       "the-cecil-court-waltz.m4a",                      "audio/mp4"),
+    ("__DSS_MINIGAME_DATA_URI__",    "fight-halftime.m4a",                             "audio/mp4"),   # 2026-11-04 (Burial pass): the cellar fight's bed is a dark halftime at 140 (Music sketches/Beat scene); the-minigame-retro.m4a stays on disk
+    ("__DSS_PONGMINI_DATA_URI__",    "pong-hudmo.m4a",                                 "audio/mp4"),   # 2026-11-04 (Burial pass): Hudson Mohawke bounce at 125 (the game plays it at 1.12x); the-pongmini-loop.m4a stays on disk
+    ("__DSS_JAZZMINI_DATA_URI__",    "cards-actress.m4a",                              "audio/mp4"),   # 2026-11-04 (Burial pass): Actress: hazy Rhodes under a 5 kHz lid; the-jazzmini-loop.m4a stays on disk
+    ("__DSS_COWGAME_DATA_URI__",     "cow-wonky.m4a",                                  "audio/mp4"),   # 2026-11-04 (Burial pass): Flying Lotus wonky, 30 s (the game speeds it up each lap); the-cowgame-loop.m4a stays on disk
+    ("__DSS_WALTZ_DATA_URI__",       "cecil-court-waltz-burial.m4a",                   "audio/mp4"),   # 2026-11-04 (Burial pass): the waltz in three at 90, exactly 16 bars = 32.000 s, downbeat at 0 (the game is beat-locked); the-cecil-court-waltz.m4a stays on disk
     ("__DSS_INTERVAL_RADIO_DATA_URI__", "the-interval-radio.m4a",                       "audio/mp4"),
     ("__DSS_LACKLAND_DATA_URI__",    "lacklands-office-music.m4a",                     "audio/mp4"),
     ("__DSS_DOORWAY_STREAM_DATA_URI__", "the-doorway-stream.mp3",                       "audio/mpeg"),

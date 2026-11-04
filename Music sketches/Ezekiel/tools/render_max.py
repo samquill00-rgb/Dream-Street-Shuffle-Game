@@ -42,11 +42,13 @@ for ch,s,d,p,v in notes:
     g=v/127; fr=f(p)
     if ch==9:
         if p==36:
-            n=int(0.3*SR); t=np.arange(n)/SR; ph=np.cumsum((48+160*np.exp(-t*28))/SR); out=np.sin(2*np.pi*ph)*np.exp(-t*9)+0.4*rng.uniform(-1,1,n)*np.exp(-t*150)
-            add(s,np.tanh(1.8*out),0.95*g); kicks.append(s)
+            n=int(0.42*SR); t=np.arange(n)/SR; ph=np.cumsum((44+190*np.exp(-t*24))/SR); out=np.sin(2*np.pi*ph)*np.exp(-t*6.5)+0.5*rng.uniform(-1,1,n)*np.exp(-t*160)
+            add(s,np.tanh(2.6*out),1.15*g); kicks.append(s)   # heavier: longer, more sub, harder clip
         elif p==38:
             n=int(0.26*SR); t=np.arange(n)/SR; nz=rng.uniform(-1,1,n); nz=nz-np.concatenate(([0],nz[:-1]))*0.5
-            out=nz*np.exp(-t*20)+0.6*np.sin(2*np.pi*190*t)*np.exp(-t*35)+0.3*np.sin(2*np.pi*330*t)*np.exp(-t*50); add(s,out,0.62*g)
+            out=nz*np.exp(-t*16)+0.9*np.sin(2*np.pi*165*t)*np.exp(-t*28)+0.4*np.sin(2*np.pi*330*t)*np.exp(-t*50)+0.5*np.sin(2*np.pi*90*t)*np.exp(-t*20); add(s,np.tanh(1.8*out),0.8*g)   # heavier: lower body, more noise, clipped
+        elif p==35:   # boom: an 808-style sub drop
+            n=int(1.4*SR); t=np.arange(n)/SR; ph=np.cumsum((38+120*np.exp(-t*18))/SR); out=np.tanh(2.2*np.sin(2*np.pi*ph))*np.exp(-t*2.2); add(s,out,1.0*g); kicks.append(s)
         elif p==39:   # clap: three noise bursts
             n=int(0.2*SR); t=np.arange(n)/SR; out=np.zeros(n)
             for k in range(3): o=int(k*0.011*SR); out[o:]+=rng.uniform(-1,1,n-o)*np.exp(-np.arange(n-o)/SR*40)
@@ -68,16 +70,22 @@ for ch,s,d,p,v in notes:
     elif ch==3: # brass
         n=int((hold+1.0)*SR); out=np.tanh(1.6*(0.6*saw(fr,n)+0.4*sine(fr,n)))*env(n,0.5,0.4,0.9,1.0,hold); add(s,lp_fast(out,900),0.11*g,-0.1)
     elif ch==4: # sub: sine + a little 2nd, short glide in
-        n=int((hold+0.12)*SR); t=np.arange(n)/SR; fe=fr*(1-0.15*np.exp(-t*40)); ph=np.cumsum(fe/SR); out=(np.sin(2*np.pi*ph)+0.25*np.sin(4*np.pi*ph))*env(n,0.004,0.05,0.9,0.12,hold); add(s,np.tanh(1.3*out),0.5*g)
+        n=int((hold+0.12)*SR); t=np.arange(n)/SR; fe=fr*(1-0.15*np.exp(-t*40)); ph=np.cumsum(fe/SR); out=(np.sin(2*np.pi*ph)+0.25*np.sin(4*np.pi*ph))*env(n,0.004,0.05,0.9,0.12,hold); add(s,np.tanh(1.8*out),0.72*g)   # heavier sub
     elif ch==5: # supersaw: 7 detuned saws, lowpassed, into the sidechain bus
         n=int((hold+0.25)*SR); out=np.zeros(n)
         for det in (-0.012,-0.007,-0.003,0,0.003,0.007,0.012): out+=saw(fr,n,det)
-        out=lp_fast(out/7,2600)*env(n,0.02,0.1,0.9,0.25,hold); add(s,out,0.16*g,0.0,SAWBUS)
+        out=np.tanh(2.4*lp_fast(out/7,2600))*env(n,0.02,0.1,0.9,0.25,hold); add(s,out,0.17*g,0.0,SAWBUS)   # driven
     elif ch==6: # glitter: bright square, fast decay, into its own bus (sidechained lighter)
         n=int(0.35*SR); t=np.arange(n)/SR; out=(sq(fr,n)*0.6+0.4*sine(fr*2,n))*np.exp(-t*9)*np.minimum(1,t/0.002); add(s,out,0.09*g,0.3*math.sin(s*3.1),GLITBUS)
     elif ch==7: # FM glass lead: carrier + modulator at 2x and 3.5x, bright, slight vibrato
         n=int((hold+0.5)*SR); t=np.arange(n)/SR; vib=1+0.004*np.sin(2*np.pi*5.5*t)*np.minimum(1,t/0.3); idx=2.2*np.exp(-t*2)+0.6
         mod=idx*np.sin(2*np.pi*fr*2*vib*t)+0.5*idx*np.sin(2*np.pi*fr*3.5*t); out=np.sin(2*np.pi*fr*vib*t+mod)*env(n,0.01,0.2,0.8,0.5,hold); add(s,out,0.14*g,0.15)
+    elif ch==10: # growl bass: saw+square through a wobbling lowpass (LFO at an eighth, faster on long notes), distorted
+        n=int((hold+0.15)*SR); t=np.arange(n)/SR; rate=4.0 if hold<1.0 else 6.0
+        raw=0.6*saw(fr,n)+0.4*sq(fr,n)+0.5*sine(fr/2,n); cut=250+2200*(0.5+0.5*np.sin(2*np.pi*rate*t-np.pi/2))**2
+        out=np.zeros(n); seg=1024
+        for i in range(0,n,seg): c=float(cut[min(i,n-1)]); out[i:i+seg]=lp_fast(raw[i:i+seg],c)
+        out=np.tanh(3.5*out)*env(n,0.01,0.05,0.9,0.15,hold); add(s,out,0.26*g,0.0,SAWBUS)
     elif ch==8: # risers (p 60) and sweep down (p 48): filtered noise sweep
         n=int(hold*SR); t=np.arange(n)/SR; nz=rng.uniform(-1,1,n)
         up=(p==60); cut=np.where(up,300+6000*(t/hold)**2,6000-5700*(t/hold))
@@ -97,9 +105,11 @@ def verb(buf,sec,fb,mix):
     for i in range(d,len(buf),d):   # block recursion
         m=min(d,len(buf)-i); out[i:i+m]+=out[i-d:i-d+m]*fb*mix
     return out
-L=verb(L,0.071,0.5,0.3); R=verb(R,0.089,0.5,0.3); L=verb(L,0.173,0.4,0.22); R=verb(R,0.151,0.4,0.22)
+# 2026-11-04 (Sam: "Add some more reverb"): a bigger hall: four comb stages each side, longer tails, more mix, plus a late diffuse tail
+L=verb(L,0.071,0.62,0.42); R=verb(R,0.089,0.62,0.42); L=verb(L,0.173,0.55,0.34); R=verb(R,0.151,0.55,0.34)
+L=verb(L,0.233,0.5,0.26); R=verb(R,0.251,0.5,0.26); L=verb(L,0.331,0.45,0.2); R=verb(R,0.307,0.45,0.2)
 peak=max(np.abs(L).max(),np.abs(R).max()); print('peak',peak)
-pcm=np.empty(2*N,dtype=np.int16); pcm[0::2]=(32000*np.tanh(L/peak*1.5)).astype(np.int16); pcm[1::2]=(32000*np.tanh(R/peak*1.5)).astype(np.int16)
+pcm=np.empty(2*N,dtype=np.int16); pcm[0::2]=(32000*np.tanh(L/peak*2.0)).astype(np.int16); pcm[1::2]=(32000*np.tanh(R/peak*2.0)).astype(np.int16)   # heavier master drive
 import struct
 with open(sys.argv[2],'wb') as w:
     w.write(b'RIFF'+struct.pack('<I',36+len(pcm)*2)+b'WAVEfmt '+struct.pack('<IHHIIHH',16,1,2,SR,SR*4,4,16)+b'data'+struct.pack('<I',len(pcm)*2)); w.write(pcm.tobytes())

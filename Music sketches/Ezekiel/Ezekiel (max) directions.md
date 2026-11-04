@@ -14,5 +14,5 @@ V   (132-164 s) the top: octave sub, lead two octaves up as well, both glitters,
 Tracks: organ foundation (19), theme organ (19), bells (14), brass (61), sub (38), supersaw (90), glitter arp (98), FM glass lead (88),
 risers (102), drums ch 10 (kick 36, snare 38, clap 39, hats 42/46, crash 49). The preview is the numpy synth in tools/render_max.py.
 Rebuild: `cd tools; python3 compose_ezekiel_max.py "../Ezekiel (max).mid" "../Ezekiel theme variation.mid"; python3 render_max.py "../Ezekiel (max).mid" "../Ezekiel (max preview).wav"`;
-then `ffmpeg -i "Ezekiel (max preview).wav" -af volume=-6.0dB -c:a aac -b:a 192k ezekiel-music.m4a` (-20.3 LUFS) beside the html.
+then `ffmpeg -i "Ezekiel (max preview).wav" -af volume=-9.6dB -c:a aac -b:a 192k ezekiel-music.m4a` (-20.3 LUFS) beside the html.
 Superseded on the same night: the plain shortened loop (tools/shorten_loop.py, "Ezekiel theme variation (game).mid"), kept for reference.

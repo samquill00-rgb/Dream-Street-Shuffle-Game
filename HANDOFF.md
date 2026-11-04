@@ -1,3 +1,12 @@
+# BACKROOM GUN CLICK + DOOR PANELS 2026-11-04 — synced, NOT committed
+- Pistol now directly clickable via raycast hit volume, with pointer cursor and a keyboard-accessible Look at the gun button. Opens a native dialog with pink (#ff3aa8) placeholder: [Placeholder: gun description and interaction to come.]. Back to the room / Esc closes it; no weapon gameplay added. Direct table click verified in preview, dialog text present in accessibility state.
+- Door painting reduced to upper inset panel. Visible wood stiles/rails, lower panel, brass latch plate/knob added. Door visually checked; screenshot scratchpad/new-arrivals-2026-11-04/pb-door-panels.png.
+
+# BACKROOM DOOR ART AND PISTOL 2026-11-04 — synced, NOT committed
+- Sam’s supplied painting covers whole back-room door on a matte plane 0.94×2.24 (not framed). Asset assets/lackland-backroom-door-art.png; handle remains ahead of surface.
+- Previous request completed: pistol isolated from Sam’s photo via imagegen, no ammunition/fabric, assets/lackland-backroom-pistol.png; laid flat on near half of table at x.4,y.794,z.35, 0.31×.25. Contact shadow beneath. Both new assets must accompany game on commit.
+- Visually checked combined room; screenshot scratchpad/new-arrivals-2026-11-04/pb-door-and-pistol.png. Twee + working scene copy + previews updated.
+
 # BACKROOM TAPESTRY WALL 2026-11-04 — synced, NOT committed
 - Sam’s supplied tapestry image papers the entire LEFT SIDE wall of Lackland’s back room (explicit correction: side, not back; whole wall, not framed). Asset assets/lackland-backroom-tapestry.png, native Three texture with UV crop excluding black photo borders; 8.88×2.76 plane on x−2.931. Dado/skirting remain in front. Visually checked: pb-tapestry-wall.png. Keep new asset when committing.
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 s=Path('Dream Street Shuffle.twee').read_text();out=Path('scratchpad/interior-parity-2026-11-04')
 base=Path('scratchpad/visual-pass-50b/make-previews.py').read_text();ns={};exec(base[:base.index('for name,slug')],ns)
-prefix=ns['prefix'].replace('var target=new THREE.Vector3();','var target=new THREE.Vector3(o.CAM.tx,o.CAM.ty,o.CAM.tz);').replace('window.dssGhostTex=function','window.dssGhostLevel=function(b){return Math.min(b,0.24);};window.dssGhostTex=function')
+prefix=ns['prefix'].replace('var target=new THREE.Vector3();','var target=new THREE.Vector3(o.CAM.tx,o.CAM.ty,o.CAM.tz);o.camera.lookAt(target);').replace('window.dssGhostTex=function','window.dssGhostLevel=function(b){return Math.min(b,0.24);};window.dssGhostTex=function')
 shared=s[s.index('window.dssInteriorSurface ='):s.index('// >>>> DSS ROOM KIT BEGIN')]
 shared+=s[s.index('window.dssHandledPhoneMaterials='):s.index('// ====== INSIDE THE FRENCH')]
 shared+=s[s.index('window.dssOrangePaperbackCover ='):s.index('window.dssScene =')]

@@ -1,3 +1,13 @@
+# BACKROOM TAPESTRY WALL 2026-11-04 — synced, NOT committed
+- Sam’s supplied tapestry image papers the entire LEFT SIDE wall of Lackland’s back room (explicit correction: side, not back; whole wall, not framed). Asset assets/lackland-backroom-tapestry.png, native Three texture with UV crop excluding black photo borders; 8.88×2.76 plane on x−2.931. Dado/skirting remain in front. Visually checked: pb-tapestry-wall.png. Keep new asset when committing.
+
+# GENTS WALL AND URINALS 2026-11-04 — synced, NOT committed
+- Graffiti enlarged to 2.9×2.14, centre z−.10 on right wall. Replaced oval urinals with open concave ceramic shells, cupped basins, rounded rims and drains. Visual check passed; screenshot scratchpad/new-arrivals-2026-11-04/gt-graffiti-urinals-v2.png. Scene working copy and Twee match.
+
+# GENTS GRAFFITI 2026-11-04 — synced, NOT committed
+- Sam's green slime ghost reference rendered as a muted green/teal aerosol stencil (speckled wear, overspray and drips), transparent assets/gents-slime-graffiti.png. Keep this new asset with the game when committing.
+- Decal is on right-hand gents wall, x1.354,y1.25,z−.72, 1.1×.81, roughness1, opacity.78, no depth write. Tile grout shows through so it reads as paint. Visually checked and synced; screenshot scratchpad/new-arrivals-2026-11-04/gt-graffiti.png. Native source copy scenes.js updated too.
+
 # NOIR ARRIVAL PASS + SMALLER GENTS 2026-11-04 — synced, NOT committed
 - All five new arrivals: ambient fill reduced, cool/warm directional contrast, shadow-casting geometry and spotlight with softened falloff. Exteriors: rain (static with reduced motion), wet pavement, restrained puddle highlights; offset street views. Interiors: high borrowed-light windows. Shared post/grain/palette retained.
 - Coach gents reduced from 4.5×7 floor to 2.8×3.8 (about a third), ceiling 2.55, closer camera, basin/door brought forward and two urinals rather than three. Wide and 500×800 views visually checked; five narrow previews no error messages. No passage/choice changes.

@@ -58,6 +58,7 @@ AUDIO_EMBEDS = [
     ("__DSS_CLIMB_MUSIC_DATA_URI__",    "climb-music.m4a",                         "audio/mp4"),  # 2026-11-03: Sam's own Climb music; plays once, loops 84-100 s
     ("__DSS_NAZCA_DATA_URI__",       "the-nazca-ambience.m4a",                         "audio/mp4"),
     ("__DSS_NAZCA_MUSIC_DATA_URI__", "nazca-music.m4a",                              "audio/mp4"),   # 2026-11-03: Sam's render of the chill pampa sketch ("Nazca Atmosphere"); plays once, loops bars 5-32 (11.43-91.43 s at 84)
+    ("__DSS_EASTER_MUSIC_DATA_URI__", "easter-music.m4a",                            "audio/mp4"),   # 2026-11-04: Sam's own "Easter Island atmosphere" (Logic); the whole 70 s file loops, no loop points
     ("__DSS_NAZCA_RACE_MUSIC_DATA_URI__", "nazca-race-music.m4a",                    "audio/mp4"),   # 2026-11-03: the Nazca Race's own music (the pampa tune driven, 138 bpm); intro once, loops bars 5-44 (6.96-76.52 s)
     ("__DSS_EASTER_DATA_URI__",      "the-easter-island-ambience.m4a",                 "audio/mp4"),
     ("__DSS_PYRAMID_DATA_URI__",     "the-pyramid-ambience.m4a",                       "audio/mp4"),

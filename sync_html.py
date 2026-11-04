@@ -59,6 +59,8 @@ AUDIO_EMBEDS = [
     ("__DSS_NAZCA_DATA_URI__",       "the-nazca-ambience.m4a",                         "audio/mp4"),
     ("__DSS_NAZCA_MUSIC_DATA_URI__", "nazca-music.m4a",                              "audio/mp4"),   # 2026-11-03: Sam's render of the chill pampa sketch ("Nazca Atmosphere"); plays once, loops bars 5-32 (11.43-91.43 s at 84)
     ("__DSS_EASTER_MUSIC_DATA_URI__", "easter-music.m4a",                            "audio/mp4"),   # 2026-11-04: Sam's own "Easter Island atmosphere" (Logic); the whole 70 s file loops, no loop points
+    ("__DSS_RECLAMATION_MUSIC_DATA_URI__", "reclamation-music.m4a",                  "audio/mp4"),   # 2026-11-04: the Reclamation's own music, from Sam's Easter atmosphere form (150 bpm; intro once, loops bars 5-36 = 6.4-57.6 s)
+    ("__DSS_EZEKIEL_MUSIC_DATA_URI__", "ezekiel-music.m4a",                          "audio/mp4"),   # 2026-11-04: Sam's Dream Street theme five times, maximalist build; once through, loops statements IV-V (100-164 s); ezekiel + synthesis + sanctum pages
     ("__DSS_NAZCA_RACE_MUSIC_DATA_URI__", "nazca-race-music.m4a",                    "audio/mp4"),   # 2026-11-03: the Nazca Race's own music (the pampa tune driven, 138 bpm); intro once, loops bars 5-44 (6.96-76.52 s)
     ("__DSS_EASTER_DATA_URI__",      "the-easter-island-ambience.m4a",                 "audio/mp4"),
     ("__DSS_PYRAMID_DATA_URI__",     "the-pyramid-ambience.m4a",                       "audio/mp4"),

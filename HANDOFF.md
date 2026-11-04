@@ -1,3 +1,8 @@
+# NOIR ARRIVAL PASS + SMALLER GENTS 2026-11-04 — synced, NOT committed
+- All five new arrivals: ambient fill reduced, cool/warm directional contrast, shadow-casting geometry and spotlight with softened falloff. Exteriors: rain (static with reduced motion), wet pavement, restrained puddle highlights; offset street views. Interiors: high borrowed-light windows. Shared post/grain/palette retained.
+- Coach gents reduced from 4.5×7 floor to 2.8×3.8 (about a third), ceiling 2.55, closer camera, basin/door brought forward and two urinals rather than three. Wide and 500×800 views visually checked; five narrow previews no error messages. No passage/choice changes.
+- Current screenshots *-noir.png and *-noir-narrow.png; review.html updated. Baseline scenes-before-noir.js preserved. Main .twee source and scene working copy updated; synced HTML.
+
 # FIVE NEW ARRIVALS 2026-11-04 — synced, NOT committed
 - Added full-screen arrival visuals to Bourchier Street: The Car Park (bc), The Barbershop (bd), Mister Jimmy’s Drug Store (jd), Lackland's Back Room (pb), Coach and Horses lock (gt). They use existing room kit via optional arrival flag; no dssRoomPlay hotspot UI on these. Gold button fades scene away and reveals original passage; stops rendering hidden scene. Gents init waits for .coach-plumbing-intro to disappear.
 - Coherence request: shared k.paintTex, k.woodTex, room environment, dssInteriorSurface, post effects, grain/vignette, gold Courier caption/button. Exterior pavement is stone rather than wood. Shallow shop bays have open fronts; no slab hiding stock. Barber pole turns; faint existing-style figures; pingpong table/net, bench/radiator and lamp; gents basin/mirror/drain/urinals under sickly light.

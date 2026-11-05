@@ -12981,7 +12981,7 @@ window.dssAudio = (function() {
       // canvas hand-off — where the current passage's tags don't match
       // the bed's tags by design).
       if (bed.started) return;
-      if (!bed._forced && !_bedShouldPlay(bed)) return;
+      if (!bed._forced && !bed._fallback && !_bedShouldPlay(bed)) return; /* _fallback: the Soho default, 2026-11-05 evening */
       var ac2 = getCtx(); if (!ac2) return;
       if (bed.source) { try { bed.source.stop(); } catch(e) {} bed.source = null; }
       var targetGain = _muted ? 0 : bed.volume;
@@ -13787,6 +13787,35 @@ window.dssAudio = (function() {
     }
   }
   function scoreCue(label, cue, secs) { var bed = findBedByLabel(label); if (bed && bed.score) _scGo(bed, cue, secs); }
+  /* 2026-11-05 evening (Sam: "The music is cut from too much. I just want it to fall silent when you have the typewriter main passages, not everytime there isn't a visual"; playtest note 1, LINE 1: "There should be music here"):
+     the Soho bed (street render, its shared position) is now the default. On any page that has no music of its own it plays, unless the page is a typewriter page
+     or carries a tag below: the hub (his theme), the games with their own tracks, the dream worlds, the Dawn and its piano, Cecil Court (Sam ruled its bed out 2026-11-05),
+     the gents (real sounds stay pure), system pages. An untagged page still holds what was playing; if nothing musical was, the Soho bed comes in. */
+  var _SOHO_MUSIC_RE = /music|melody|lament|shanti|^soho-|^gap-|piano|radio|firebird|retro/;
+  var _SOHO_NOT = { 'hub':1, 'minigame':1, 'pong':1, 'cow':1, 'waltz-game':1, 'climb-game':1, 'venue-cecilcourt':1, 'venue-gents':1, 'dream':1, 'portal-music':1,
+    'dawn-approach':1, 'dawn-end':1, 'piano-bed':1, 'interval-radio':1, 'venue-ronnies':1, 'system':1, 'white-page':1, 'black-page':1,
+    'himalayan':1, 'nazca':1, 'easter':1, 'pyramid':1, 'ezekiel':1, 'synthesis':1, 'sanctum':1, 'centre':1, 'cave':1, 'reclamation':1,
+    'carthage-shore':1, 'carthage-cicadas':1, 'pyre':1, 'green-sea':1 };
+  function _sohoFallbackOK(passageNode) {
+    if (window.dssSohoDefault === false || !passageNode) return false;
+    if (_isTypewriterPage(passageNode)) return false;
+    var tg = (passageNode.getAttribute('tags') || '').split(/\s+/);
+    for (var k = 0; k < tg.length; k++) { if (_SOHO_NOT[tg[k]]) return false; if (/^(dawn|pyramid-|nazca-|easter-|carthage)/.test(tg[k])) return false; }
+    var pn = ((document.getElementById('dss-pn') || {}).textContent || '').trim();
+    if (pn === 'Title' || pn === 'Start' || /^Dawn/.test(pn)) return false;
+    return true;
+  }
+  function _sohoFallbackHold(passageNode) {
+    try {
+      var soho = null;
+      for (var i = 0; i < _ambientBeds.length; i++) {
+        var b = _ambientBeds[i];
+        if (b.label === 'soho-street') soho = b;
+        if (b.started && _SOHO_MUSIC_RE.test(b.label || '')) return;
+      }
+      if (soho && _sohoFallbackOK(passageNode)) { soho._fallback = true; _startBed(soho); }
+    } catch (e) {}
+  }
   function updateAmbientBedsForPassage(passageNode) {
     try { _transitionForPassage(passageNode); } catch(e) {}
     try { _scoreForPassage(passageNode); } catch(e) { if (window.console) console.error('[dssAudio] score', e); }
@@ -13796,12 +13825,22 @@ window.dssAudio = (function() {
     if (window.dssBedsHoldOnUntagged !== false && passageNode && !_isTypewriterPage(passageNode)) { /* 2026-11-05 afternoon: a typewriter page never holds a bed (Sam: no music there, only the sounds) */
       var _ht = (passageNode.getAttribute('tags') || '').split(/\s+/).filter(Boolean);
       var _pn = (document.getElementById('dss-pn') || {}).textContent || '';
-      if (!_ht.length && _pn.trim() !== 'Title' && _pn.trim() !== 'Start') return;
+      if (!_ht.length && _pn.trim() !== 'Title' && _pn.trim() !== 'Start') { _sohoFallbackHold(passageNode); return; }
     }
+    var _plays = [], _anyMusic = false, _sohoIx = -1;
+    for (var pi = 0; pi < _ambientBeds.length; pi++) {
+      var pb = _ambientBeds[pi];
+      if (pb.label === 'soho-street') _sohoIx = pi;
+      if (pb.score) { if (pb.started) _anyMusic = true; continue; }
+      _plays[pi] = _bedShouldPlay(pb, passageNode);
+      if (_plays[pi] && _SOHO_MUSIC_RE.test(pb.label || '')) _anyMusic = true;
+    }
+    if (_sohoIx >= 0) _ambientBeds[_sohoIx]._fallback = false;
+    if (_sohoIx >= 0 && !_plays[_sohoIx] && !_anyMusic && _sohoFallbackOK(passageNode)) { _plays[_sohoIx] = true; _ambientBeds[_sohoIx]._fallback = true; }
     for (var i = 0; i < _ambientBeds.length; i++) {
       var bed = _ambientBeds[i];
       if (bed.score) continue;
-      if (_bedShouldPlay(bed, passageNode)) {
+      if (_plays[i]) {
         if (bed.volumeByTag) { /* 2026-11-05 afternoon: one wall bed at each venue's own level */
           var _vt = null, _vtags = (passageNode.getAttribute('tags') || '').split(/\s+/);
           for (var vi = 0; vi < _vtags.length; vi++) if (bed.volumeByTag[_vtags[vi]] != null) _vt = bed.volumeByTag[_vtags[vi]];
@@ -83429,6 +83468,8 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
 
 
 

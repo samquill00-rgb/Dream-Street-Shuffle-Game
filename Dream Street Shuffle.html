@@ -51569,7 +51569,24 @@ function buildCaScene() {
   // The three intact columns carry the old blue — the Three Blue Posts
   /* 2026-10-29 (Sam's Waterhouse Set): the plain broken drums and the background columns are the weathered marble pillar now, warmed to the dusk;
      the three blue posts, the lintel pair and the skull column stay as built */
-  function greyPillar(x, z, h, broken, lean) { if (!window.dssWaterhouse) return buildColumn(x, z, h, broken, lean); var p = window.dssWaterhouse('Grey_Pillar', 0xffe6d4); if (!p) return buildColumn(x, z, h, broken, lean); var full = p.userData.size.y || 5, sc = Math.min(1.1, (broken ? 5.2 : h) / full); p.scale.setScalar(sc); p.position.set(x, 0, z); p.rotation.z = lean || 0; p.rotation.y = x * 0.37; if (broken) { renderer.localClippingEnabled = true; p.children[0].material.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0.12 * Math.sin(x), -1, 0.1 * Math.cos(x)).normalize(), h)]; } scene.add(p); return p; } /* a broken one is the whole pillar cut off at its height, the break canted, not a squashed pillar */
+  function greyPillar(x, z, h, broken, lean) { if (!window.dssWaterhouse) return buildColumn(x, z, h, broken, lean); var p = window.dssWaterhouse('Grey_Pillar', 0xffe6d4); if (!p) return buildColumn(x, z, h, broken, lean); var full = p.userData.size.y || 5, sc = Math.min(1.1, (broken ? 5.2 : h) / full); p.scale.setScalar(sc); p.position.set(x, 0, z); p.rotation.z = lean || 0; p.rotation.y = x * 0.37; if (broken) { renderer.localClippingEnabled = true; p.children[0].material.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0.12 * Math.sin(x), -1, 0.1 * Math.cos(x)).normalize(), h)]; brokenTop(p, x, h, sc); } scene.add(p); return p; }
+  /* 2026-11-05 (the parked Waterhouse pass, its one open fault: "the broken pillars read dark and boxy in the low sun"): a clean flat cut read as a box. Each break now gets a jagged stone top (a displaced slab sized to the shaft at the cut, same marble, unclipped), a few fallen chunks at its foot, and a faint warm self-light from the marble's own texture so the shaded faces keep their grain. Whole pillars and the arch untouched. */
+  function brokenTop(p, x, h, sc) {
+    var mesh = p.children[0], mat = mesh.material, pos = mesh.geometry.attributes.position, hl = h / sc, mnx = 1e9, mxx = -1e9, mnz = 1e9, mxz = -1e9, rnd = function(i) { var v = Math.sin(x * 12.9898 + i * 78.233) * 43758.5453; return v - Math.floor(v); };
+    /* the pier is low-poly: no vertices near the cut, so take the nearest rings above and below and interpolate */
+    var yLo = -1e9, yHi = 1e9; for (var i = 0; i < pos.count; i++) { var y = pos.getY(i); if (y <= hl && y > yLo) yLo = y; if (y >= hl && y < yHi) yHi = y; }
+    function ring(yy) { var e = [1e9, -1e9, 1e9, -1e9]; for (var i = 0; i < pos.count; i++) { if (Math.abs(pos.getY(i) - yy) < 0.02) { var px = pos.getX(i), pz = pos.getZ(i); e[0] = Math.min(e[0], px); e[1] = Math.max(e[1], px); e[2] = Math.min(e[2], pz); e[3] = Math.max(e[3], pz); } } return e; }
+    if (yLo < -1e8 || yHi > 1e8) return; var eL = ring(yLo), eH = ring(yHi), f = (yHi - yLo) > 1e-4 ? (hl - yLo) / (yHi - yLo) : 0;
+    mnx = eL[0] + (eH[0] - eL[0]) * f; mxx = eL[1] + (eH[1] - eL[1]) * f; mnz = eL[2] + (eH[2] - eL[2]) * f; mxz = eL[3] + (eH[3] - eL[3]) * f;
+    if (!(mxx > mnx)) return;
+    mat.side = THREE.FrontSide; mat.emissive = new THREE.Color(0x4a2c1c); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.28; mat.needsUpdate = true;
+    var w = (mxx - mnx) * 1.01, d = (mxz - mnz) * 1.01, cg = new THREE.BoxGeometry(w, 0.5 / sc, d, 8, 1, 8), cp = cg.attributes.position, slope = rnd(3) < 0.5 ? 1 : -1, hx = function(px, pz) { var v = Math.sin(Math.round(px * 400) * 12.9898 + Math.round(pz * 400) * 78.233 + x) * 43758.5453; return v - Math.floor(v); };
+    for (var j = 0; j < cp.count; j++) { if (cp.getY(j) > 0) { var qx = cp.getX(j), qz = cp.getZ(j); cp.setY(j, cp.getY(j) + (slope * qx / (w / 2) * 0.22 + hx(qx, qz) * 0.2 - 0.05) / sc); } } /* displaced by position, so the top and the sides share their edge; the break slopes to one side like a snapped pier */
+    cg.computeVertexNormals();
+    var capMat = new THREE.MeshStandardMaterial({ map: mat.map, color: mat.color.clone().multiplyScalar(0.92), roughness: 0.95, emissive: new THREE.Color(0x4a2c1c), emissiveMap: mat.map, emissiveIntensity: 0.26 });
+    var cap = new THREE.Mesh(cg, capMat); cap.position.set((mnx + mxx) / 2, hl - 0.3 / sc, (mnz + mxz) / 2); cap.castShadow = true; cap.receiveShadow = true; p.add(cap);
+    for (var k = 0; k < 4; k++) { var r = (0.16 + rnd(k + 40) * 0.2), ch = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), capMat), a = rnd(k + 60) * Math.PI * 2, dist = Math.max(w, d) * sc * 0.5 + 0.25 + rnd(k + 80) * 0.6; ch.scale.set(1, 0.6 + rnd(k + 90) * 0.3, 0.8 + rnd(k + 95) * 0.4); ch.position.set(x + Math.cos(a) * dist, r * 0.45, p.position.z + Math.sin(a) * dist); ch.rotation.set(rnd(k + 5) * 3, rnd(k + 7) * 3, rnd(k + 9) * 3); ch.castShadow = true; ch.receiveShadow = true; scene.add(ch); }
+  } /* a broken one is the whole pillar cut off at its height, the break canted, not a squashed pillar */
   buildColumn(-10, -3, 5.8, false, 0, blueColumnMat);
   buildColumn(-8, -3, 5.8, false, 0, blueColumnMat);
   buildColumn(-6, -3, 5.8, false, 0.01, blueColumnMat);
@@ -83390,6 +83407,9 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
 
 
 

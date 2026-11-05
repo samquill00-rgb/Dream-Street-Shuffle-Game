@@ -12,13 +12,22 @@
 
 **Open / unverified:**
 - Leftover DECISIONS walked through with Sam 2026-11-05, all settled: (1) mirror face = the Fetch, built; (2) pistol = a drawn Webley, built, SAM WRITES the click words (pink placeholder stays till then); (3) jukebox catalogue: Sam will look at it later on its own; (4) Carthage arch inscription: DROPPED; (5) notes 37/38 reading-as-play: DROPPED, don't rebuild; (6) lighter trail clue: LEAVE; (7) pentacle: explained enough by the banishing ritual's words appearing, hover lines already covered by slips; (8) midnight switch: stays PARKED; but the DATE now turns to 24 at the night's middle on its own flag (see THE DATE TURNS section).
-- Not yet walked: the checks for Sam's eye/ear (pitch shimmer on a later night, coin drop, Ezekiel HEAVIER, French voices-slip timing, paged Dawn + phone calls + LINE 3 live, Carthage centre arch shot, COPPER's password) and the unfinished work (Carthage Waterhouse pillars dark/boxy; routes never walked end to end: gents after the drain, Lackland's Deal, "Your book" follow-ups, Foyles key trade, "Give up on the night"; `$drankAtFrench` set but unread; 1280x800 scroll re-measure and 1366x768 contrast scan; licences: four Smithsonian records, Abrash.JPG Commons page, "hjm" coin source, and the 11-04 door painting/tapestry/gents graffiti ref missing from SOUND-SOURCES.md).
+- Not yet walked: the checks for Sam's eye/ear (pitch shimmer on a later night, coin drop, Ezekiel HEAVIER, French voices-slip timing, paged Dawn + phone calls + LINE 3 live, Carthage centre arch shot, COPPER's password, Webley, Fetch glimmer, date turn). The solo leftovers are DONE: see SOLO LEFTOVERS below.
 - Pitch-list shimmer checked only on an injected copy of the list (the debug jump's first-night hub has no pitch question). Worth a look on a later-night Dean Street.
 - Coin drop not yet heard by ear in Sam's browser.
-- "hjm" coin recording licence: to confirm (SOUND-SOURCES.md, to-confirm list).
+- Coin drop licence settled: Hansjörg Malthaner "Coin Sounds", CC-BY 3.0, MUST CREDIT (SOUND-SOURCES.md).
 - On disk, unlinked, don't re-propose: `bed-soho-rain.m4a`, the fourteen `bed-*-music.m4a`, `bed-cecil-music`, the ruled-out Burial tracks.
 
 **Harness note:** the Playwright venv (`.../3ec7bef6-.../scratchpad/audit/pwvenv`) no longer finds its headless shell; launch with `executable_path` = `~/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`. Scratchpads are per-session, so copy scripts forward if needed.
+
+# SOLO LEFTOVERS 2026-11-05 evening (Sam: "Let's do what you can do alone now and i'll playtest after that") — synced, NOT committed
+- Carthage broken pillars (the parked Waterhouse pass's open fault): `brokenTop()` in `greyPillar` gives each broken shaft a rough sloped cap (sized from the shaft's own vertex rings at the cut), a faint warm emissive so the pier isn't a dark box, and four rubble chunks at its foot. Headless shots checked; still Sam's eye to pass.
+- Routes walked headless, all 0 errors: Foyles (lighter trade, pay with the coin); Give up on the night (needs confidence 4 + $metRed; map door = Centre Point; No more → Lose → the Fetch); "Your book" (Lay it down; on a lived night, 3 lilies + 6 haunts, "Leave it with him" gives the lend line and "Ask him to take it on" opens The Deal: Shake his hand / Keep it); the drain into the gents ($crashedAfterDualRing: pipe intro plays and clears inside 5 s, the gold STEADY YOURSELF card dismisses, Retch works). Lackland's Deal was walked in a real night 2026-10-26.
+- `$drankAtFrench`: set by every French drink, read nowhere. Left as is (design call for Sam: hook it or drop it).
+- 1280x800 re-measure of the 20 pages the crawl flagged, 4/8/12 s: all 0 by 8 s except Tarot Card Back (325 px, known).
+- CONTRAST_PLACEHOLDER
+- Licences: SOUND-SOURCES.md sorted (coin = must-credit CC-BY 3.0; Smithsonian four CC0, courtesy; Abrash.JPG none; Webley drawn for the game). RISKY, to replace: the Bayeux tapestry image (likely the museum's non-commercial scan; swap for a Commons PD-Art copy) and the gents slime graffiti (ChatGPT, close to Slimer; redraw or drop). The Wiz boots record is ca. 1977, after the game's 1973.
+- Throwaway route builds (zz-*.html) deleted; zz-book.html had been committed before, so GitHub Desktop shows its deletion.
 
 # THE DATE TURNS TO 24.11.73 2026-11-05 evening (Sam: "at some point it needs to stop saying 23 and become 24, otherwise the dawn makes no sense"; "do what you think is best") — synced, NOT committed
 - New flag `$dateTurned` (+ `$dateJustTurned`), set in Night Progress when the night reaches phase 1 (four haunts, or the second alba line, which lies only at a dream world's centre, so usually on the way back from the first dream). Set again at the top of The Fetch, so every road to the dawn has turned the date even on a night that ended early.

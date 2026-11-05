@@ -91,6 +91,7 @@ AUDIO_EMBEDS = [
     ("__DSS_DOORWAY_DROPS_DATA_URI__", "doorway-piss.m4a",                             "audio/mp4"),   # Sam's recording (2026-11-02): one 30 s stream, each doorway starts at its own point; was doorway-drops.m4a ("Water Drops", CeoxBlackj)
     ("__DSS_VOMIT_DATA_URI__",       "vomit-sickness.m4a",                             "audio/mp4"),   # "Sick Noises" by frosty ham: the retch hold
     ("__DSS_GLASS_SMASH_DATA_URI__", "glass-window-smash.m4a",                         "audio/mp4"),   # "Glass Break" by Till Behrend: smashed map windows
+    ("__DSS_COIN_DROP_DATA_URI__",   "coin-drop.m4a",                                  "audio/mp4"),   # 2026-11-05: Sam's coin drop (hjm-coindrop_v1.wav), the Donkey toss on Dean Street
     # 2026-10-30: Kenney Impact Sounds, RPG Audio and UI Audio (CC0), cut into 1.5 s-slot sheets; see sfxTake in the UserScript
     ("__DSS_SFX_IMPACT_DATA_URI__",  "sfx/sfx-impact.m4a",                             "audio/mp4"),
     ("__DSS_SFX_STEPS_DATA_URI__",   "sfx/sfx-steps.m4a",                              "audio/mp4"),

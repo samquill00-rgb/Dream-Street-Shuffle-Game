@@ -14,6 +14,7 @@
 
 **Licence still to confirm before release** (each could turn out to need a credit, or not be usable):
 - (The thirteen OpenGameArt downloads that stood here were checked 2026-11-02: all CC0 except Dirt.png, now under must-credit; see the image table.) USNM 220068 cranium (the Carthage skull: Smithsonian NMNH scan, whose 3D records for neighbouring primate crania are CC0, but its own record not found yet); Cher Ami, the stuffed pigeon in O'Flatterly's shop (Smithsonian NMAH AF*30714 scan, file nmah-af_30714-cher_ami-100k-ar.glb; Smithsonian 3D scans are mostly CC0 but its own record has not been checked); the wiz boots by Ashton in Copper's cellar (Smithsonian 3D, NMAAHC 2007.3.8.4ab, file wiz_boots-150k-4096.glb; record not checked yet); the kneeling winged monster in Trisha's (Smithsonian 3D, file kneeling-winged-monster-150k-2048-medium-100k-2048_std_draco.glb; record not checked yet).
+- The Donkey's coin drop (coin-drop.m4a, 2026-11-05), from Sam's file `hjm-coindrop_v1.wav`. Source of the "hjm" recording not known yet: if it is Sam's own, no credit; if downloaded, find its page and licence.
 
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.

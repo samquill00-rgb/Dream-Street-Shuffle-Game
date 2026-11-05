@@ -1,3 +1,6 @@
+# TITLE PAGE 2026-11-05 afternoon (Sam: "The title page now looks undercooked") — synced, NOT committed
+- Compared against the pre-nightwork build (d153205): layout, beams, fog and petals identical; the only change on the Title was the film grain and vignette, which in his Chrome speckle the black and the lettering. Film layer now off on the Title (`html:has(#dss-title)`). Checked in his Chrome: grain and vignette gone, page as before. If he meant something else, still open.
+
 # PILLARS APPROACH RAIN REMOVED 2026-11-05 afternoon (Sam: "The idea is that the rain isn't actually seen unless you are inside") — synced, NOT committed
 - The nightwork's rain overlay on Approach The Pillars (two CSS layers) is deleted; `bed-soho-rain.m4a` is unlinked and the approach plays the street render like every street. The only rain is the Pillars room's own, through its back arch and lattice window. Verified headless: no overlay, street render starts, 0 errors.
 

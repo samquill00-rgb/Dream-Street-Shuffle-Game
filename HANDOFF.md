@@ -20,6 +20,17 @@
 
 **Harness note:** the Playwright venv (`.../3ec7bef6-.../scratchpad/audit/pwvenv`) no longer finds its headless shell; launch with `executable_path` = `~/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`. Scratchpads are per-session, so copy scripts forward if needed.
 
+# PLAYTEST NOTES 2026-11-05 19:09 (3 notes + "the music is cut from too much") — synced, NOT committed
+- Note 2: Name Your Book's link to the dedication now reads "Dedicate Your Book" (was "And who did you write it for?").
+- Note 3: the hub's "Who will you pitch the book to next?" block sits in a framed box of its own (gold hairline, dark ground, compact). The names' shimmer is held by a watcher in the UserScript (beside dssOverlayBusy) until no overlay and no hint slip has shown for 0.6 s (slips alone stop holding it after 25 s), then `.pitch-shine` runs it twice. Tested with a coin overlay up for 6 s: shimmer at 6.7 s; 0 errors.
+- KNOWN, pre-existing: a lap-2+ Dean Street with the pitch list scrolls ~96 px at 1280x800 (99 before the box; the list pushes the map down). 1440x900: ~27. Not fixed (the map's row floor); Sam's call.
+- MUSIC_NOTES_PLACEHOLDER
+
+# SOHO BED LOUDER + ON THE TITLE 2026-11-05 evening (Sam: "The soho bed should be louder (as in not the main theme). It's barely audible. i also want it to happen over the title page") — synced, NOT committed
+- Street render 0.040 → 0.095 (+7.5 dB, duck 0.032); wall render and every venue's volumeByTag doubled (+6 dB). The hub theme untouched.
+- `_bedShouldPlay`: the soho-street bed plays when the passage holds `#dss-title` (the Title is untagged; checked on the passage node, so the after-image ghost can't trigger it). Start still clears it.
+- Verified headless: on the Title, after the first click, the 128 s street loop starts; 0 errors. Levels not heard by ear: Sam's call.
+
 # SOLO LEFTOVERS 2026-11-05 evening (Sam: "Let's do what you can do alone now and i'll playtest after that") — synced, NOT committed
 - Carthage broken pillars (the parked Waterhouse pass's open fault): `brokenTop()` in `greyPillar` gives each broken shaft a rough sloped cap (sized from the shaft's own vertex rings at the cut), a faint warm emissive so the pier isn't a dark box, and four rubble chunks at its foot. Headless shots checked; still Sam's eye to pass.
 - Routes walked headless, all 0 errors: Foyles (lighter trade, pay with the coin); Give up on the night (needs confidence 4 + $metRed; map door = Centre Point; No more → Lose → the Fetch); "Your book" (Lay it down; on a lived night, 3 lilies + 6 haunts, "Leave it with him" gives the lend line and "Ask him to take it on" opens The Deal: Shake his hand / Keep it); the drain into the gents ($crashedAfterDualRing: pipe intro plays and clears inside 5 s, the gold STEADY YOURSELF card dismisses, Retch works). Lackland's Deal was walked in a real night 2026-10-26.

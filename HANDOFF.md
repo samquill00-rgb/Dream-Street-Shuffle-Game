@@ -2,6 +2,7 @@
 **State:** everything below from 2026-11-05 is COMMITTED (Sam's commit 7e9ed5c; working tree clean when this was written). The "synced, NOT committed" tags on today's sections are history.
 
 **What the session did, newest first** (details in the sections below):
+- Link presses no longer dip the music or beds (the tick ducks nothing); music silent on The Night Ahead only. Synced, NOT committed.
 - The way out told: a standing line in Where next? naming what Centre Point and the Fetch still want, and a one-time THE POEM IS WHOLE slip. Synced, NOT committed.
 - Alba carries across the nights of a run; slips linger ten seconds past a page turn; the rumour card's second line reworded. Synced, NOT committed.
 - The French's figure of the moment (JOHN first) is in the pitch list from lap one (note 18). Synced, NOT committed.
@@ -25,6 +26,11 @@
 - On disk, unlinked, don't re-propose: `bed-soho-rain.m4a`, the fourteen `bed-*-music.m4a`, `bed-cecil-music`, the ruled-out Burial tracks.
 
 **Harness note:** the Playwright venv (`.../3ec7bef6-.../scratchpad/audit/pwvenv`) no longer finds its headless shell; launch with `executable_path` = `~/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`. Scratchpads are per-session, so copy scripts forward if needed.
+
+# NO DUCK ON A LINK PRESS; MUSIC OFF ON THE NIGHT AHEAD ONLY 2026-11-05 night (Sam: "when you click between links it slightly fades out the music bed, that shouldn't happen"; "The music should only stop on the very first typewriter (the night ahead) not on others") — synced, NOT committed
+- Cause of the fade: the UserScript plays `typewriterTick(0.10)` on every tw-link press, and typewriterTick went through `_play`, which dips the music to 0.10 and every bed to a third of its volume for 350 ms with a 0.6 s ramp back. With the beds now under the typewriter pages, every typed letter would have pumped them too. `typewriterTick` now sets `_noDuckNext` and `_noBedDuckNext` before `_play`, so a tick dips nothing. Every other SFX ducks as before.
+- `_isTypewriterPage` (the music's silence) now matches The Night Ahead alone; Name Your Book and Dedicate Your Book take the Soho bed like the later typewriter pages.
+- Verified headless: AudioParam.setValueAtTime logged around a NOTEBOOK press on the hub, no duck-level value written; Name Your Book fetches the street bed on arrival.
 
 # THE WAY OUT, TOLD 2026-11-05 night (Sam: "there needs to be some mechanism for telling you exactly what you need to find before you are able to go to centre point"; "once the poem is collected there should be a slip that explains what else you need to do to escape the night and also what a full night is") — synced, NOT committed
 - Two gates stand between the street and the dawn: the gate at the top of the map opens only once the third pillar is crossed (or after two blackouts), and the Fetch beyond it lets you go with the poem whole or three of LILY's flowers and six haunts (3/6 set in StoryInit and Start).

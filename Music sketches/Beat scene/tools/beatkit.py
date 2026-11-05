@@ -192,6 +192,9 @@ class Song:
             n=int(round(loop_seconds*SR)); n=(n//1024)*1024
             if N>n: L[:N-n]+=L[n:]; R[:N-n]+=R[n:]
             L=L[:n]; R=R[:n]; N=n
+            m=1024; w=np.linspace(0,1,m)   # a 21 ms equal-gain crossfade across the seam, so a pad cut at the loop end never clicks
+            for B in (L,R):
+                tail=B[n-m:n].copy(); B[:m]=B[:m]*w+tail*(1-w); B[n-m:n]=B[n-m:n]*(1-w)+B[:m]*w*0.0
         if lowpass: L=lp(L,lowpass); R=lp(R,lowpass)
         if warble: L=wobble(L,warble,0.37); R=wobble(R,warble,0.41)
         peak=max(np.abs(L).max(),np.abs(R).max()) or 1.0

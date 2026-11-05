@@ -61,6 +61,20 @@ AUDIO_EMBEDS = [
     ("__DSS_EASTER_MUSIC_DATA_URI__", "easter-music.m4a",                            "audio/mp4"),   # 2026-11-04: Sam's own "Easter Island atmosphere" (Logic); the whole 70 s file loops, no loop points
     ("__DSS_RECLAMATION_MUSIC_DATA_URI__", "reclamation-music.m4a", "audio/mp4"),   # 2026-11-04 04:30 (Sam: "I don't like any of them, don't add any"): the untreated original, as before the Burial pass
     ("__DSS_EZEKIEL_MUSIC_DATA_URI__", "ezekiel-music.m4a",                          "audio/mp4"),   # 2026-11-04: Sam's Dream Street theme five times, maximalist build; once through, loops statements IV-V (100-164 s); ezekiel + synthesis + sanctum pages
+    ("__DSS_BED_NIGHT_AHEAD_URI__", "bed-night-ahead-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_STREET_URI__", "bed-street-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_PILLARS_RAIN_URI__", "bed-pillars-rain-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_PORTAL_URI__", "bed-portal-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_MALTESE_URI__", "bed-maltese-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_CECIL_URI__", "bed-cecil-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_FRENCH_URI__", "bed-french-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_PILLARS_URI__", "bed-pillars-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_COACH_URI__", "bed-coach-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_TRISHAS_URI__", "bed-trishas-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_COLONY_URI__", "bed-colony-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_CELLAR_URI__", "bed-cellar-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_CHIPPY_URI__", "bed-chippy-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
+    ("__DSS_BED_BOOKSHOP_URI__", "bed-bookshop-music.m4a", "audio/mp4"),   # 2026-11-05 nightwork: gap bed (Music sketches/Beat scene/tools/compose_bed.py)
     ("__DSS_NAZCA_RACE_MUSIC_DATA_URI__", "nazca-race-hudmo.m4a", "audio/mp4"),   # 2026-11-04 (Burial pass): Hudson Mohawke trap-rave at 140 on the pampa tune; nazca-race-music.m4a (the Springsteen one) stays on disk; intro once, loops bars 5-36
     ("__DSS_EASTER_DATA_URI__",      "the-easter-island-ambience.m4a",                 "audio/mp4"),
     ("__DSS_PYRAMID_DATA_URI__",     "the-pyramid-ambience.m4a",                       "audio/mp4"),

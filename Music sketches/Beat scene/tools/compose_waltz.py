@@ -21,6 +21,6 @@ for bar in range(1,17):
     if bar in (4,12): s.note('bell',bar,2,pitch=tri[0]+24,dur=1.5,vel=48,pan=0.4)
     if bar==16: s.note('bell',bar,0,pitch=81,dur=2,vel=50,pan=0.4); s.note('bell',bar,1,pitch=76,dur=2,vel=46,pan=-0.4)
 s.write_midi(sys.argv[1]); loop=16*3*60/BPM
-tot=s.render(sys.argv[2],total=loop+3.0,loop_seconds=loop,crackle=0.6,rain=0.4,lowpass=8500,warble=0.003,
+tot=s.render(sys.argv[2],total=loop+3.0,loop_seconds=loop,crackle=0.6,rain=0.0,lowpass=8500,warble=0.003,
              verb_mix_voices={'snare_dusty','padvox','rhodes','bell','rim'},duck={'paddark'},master_drive=1.4)
 print('loop',loop,'rendered',tot)

@@ -68,6 +68,20 @@ CC0 means public domain: free for commercial use, no credit required. Crediting 
 | reclamation-kode9.m4a | Generated 2026-11-04, Music sketches/Beat scene (beatkit.py synth; no samples) | bed reclamation-music, intro 4 bars once then loops 6.857-61.714 s, -20.0 LUFS | none (generated) |
 | nazca-race-hudmo.m4a | Generated 2026-11-04, Music sketches/Beat scene (beatkit.py synth; no samples) | bed nazca-race-music, intro once then loops 6.857-61.714 s, -20.1 LUFS | none (generated) |
 | pyramid-run-rustie.m4a | Generated 2026-11-04, Music sketches/Beat scene (beatkit.py synth; no samples) | bed pyramid-run-music, intro once then loops 6.0-54.0 s, -20.1 LUFS | none (generated) |
+| bed-night-ahead-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'night-ahead', beatkit synth; no samples) | bed gap-night-ahead | none (generated) |
+| bed-street-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'street', beatkit synth; no samples) | bed gap-street | none (generated) |
+| bed-pillars-rain-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'pillars-rain', beatkit synth; no samples) | bed gap-pillars-rain | none (generated) |
+| bed-portal-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'portal', beatkit synth; no samples) | bed gap-portal | none (generated) |
+| bed-maltese-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'maltese', beatkit synth; no samples) | bed gap-maltese | none (generated) |
+| bed-cecil-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'cecil', beatkit synth; no samples) | bed gap-cecil | none (generated) |
+| bed-french-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'french', beatkit synth; no samples) | bed wall-french | none (generated) |
+| bed-pillars-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'pillars', beatkit synth; no samples) | bed wall-pillars | none (generated) |
+| bed-coach-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'coach', beatkit synth; no samples) | bed wall-coach | none (generated) |
+| bed-trishas-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'trishas', beatkit synth; no samples) | bed wall-trishas | none (generated) |
+| bed-colony-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'colony', beatkit synth; no samples) | bed wall-colony | none (generated) |
+| bed-cellar-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'cellar', beatkit synth; no samples) | bed wall-cellar | none (generated) |
+| bed-chippy-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'chippy', beatkit synth; no samples) | bed wall-chippy | none (generated) |
+| bed-bookshop-music.m4a | Generated 2026-11-05 nightwork (compose_bed.py 'bookshop', beatkit synth; no samples) | bed wall-bookshop | none (generated) |
 | dean-street-theme-treated.m4a (NOT USED: Sam ruled the treated versions out 04:30; file on disk only) | Derived 2026-11-04 (Music sketches/Beat scene/tools/treat.py) from a file already in this log | the organ theme loop (Sam's own) through the Burial treatment (treat.py: hall folded round the loop, crackle, rain, 8.5 kHz lid, wow), 32.000 s, -31.3 LUFS; the hub music | as its source |
 | cards-jazz-treated.m4a (NOT USED: Sam ruled the treated versions out 04:30; file on disk only) | Derived 2026-11-04 (Music sketches/Beat scene/tools/treat.py) from a file already in this log | the-jazzmini-loop through the treatment, -25.0 LUFS; House of Cards | as its source |
 | cow-treated.m4a (NOT USED: Sam ruled the treated versions out 04:30; file on disk only) | Derived 2026-11-04 (Music sketches/Beat scene/tools/treat.py) from a file already in this log | the-cowgame-loop through the treatment, -21.5 LUFS; the cow ride | as its source |

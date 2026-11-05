@@ -2,6 +2,7 @@
 **State:** everything below from 2026-11-05 is COMMITTED (Sam's commit 7e9ed5c; working tree clean when this was written). The "synced, NOT committed" tags on today's sections are history.
 
 **What the session did, newest first** (details in the sections below):
+- Stats audit and fix (evening): the two stat macros are FLAT (N points, not a proportional curve), the pre-errand floor is 30 not 40, the drink escalation is capped, dream worlds and strangers use the macros, Bars Now draws its own mark and settles $prev, doorways always pay. Synced, NOT committed. Morale tuning (item 5) is Sam's.
 - Pitch-list shimmer: the reader names under "Who will you pitch the book to next?" on Dean Street sweep with pale gold twice as the page opens. Get Directions buttons on slips do the same. Map door names were tried and reverted: NOT those.
 - Donkey coin toss plays Sam's coin drop (`coin-drop.m4a`, `dssAudio.coinDrop()`); the notebook coin modal keeps the synthesised `coinFlip`.
 - Title page: Burial look (sodium sky over a blurred roofline, far lamps, smear, vignette), calm linear petals, glass blue lily. Sam: "Keep it". No grain on the Title.
@@ -10,12 +11,37 @@
 - Playtest notes 28 to 34 fixed (voices slip once a run, critic return check, manuscript typescript, Cecil cow timing, Watkins window).
 
 **Open / unverified:**
+- Leftovers walk-through with Sam in progress: decisions 2 to 8 still to go (pistol click: now a Webley, Sam writing its words; jukebox catalogue (Sam: he'll look at it later on its own; leave it), which Carthage arch inscription (Sam: DROPPED, don't worry about it), notes 37/38 questions, lighter trail clue, pentacle + hover-only lines, midnight switch).
 - Pitch-list shimmer checked only on an injected copy of the list (the debug jump's first-night hub has no pitch question). Worth a look on a later-night Dean Street.
 - Coin drop not yet heard by ear in Sam's browser.
 - "hjm" coin recording licence: to confirm (SOUND-SOURCES.md, to-confirm list).
 - On disk, unlinked, don't re-propose: `bed-soho-rain.m4a`, the fourteen `bed-*-music.m4a`, `bed-cecil-music`, the ruled-out Burial tracks.
 
 **Harness note:** the Playwright venv (`.../3ec7bef6-.../scratchpad/audit/pwvenv`) no longer finds its headless shell; launch with `executable_path` = `~/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`. Scratchpads are per-session, so copy scripts forward if needed.
+
+# WEBLEY ON THE BACK-ROOM TABLE 2026-11-05 evening (Sam: "can you render it as a Webley revolver?") — synced, NOT committed
+- The back-room pistol was a SIG Sauer SP2022 (2004: out of period, brand markings, a product-shot look of unknown licence). Replaced by a drawn Webley Mk VI (`assets/lackland-backroom-webley.png`, 1200x570 transparent, drawn for the game as SVG; source in that session's scratchpad only): ribbed 6-inch barrel with underlug, fluted cylinder, top-break stirrup latch, hammer, bird's-head grip with chequered panels, lanyard ring, worn bluing. Plane 0.38 x 0.18 at the old spot. `lackland-backroom-pistol.png` stays on disk, unlinked (old scratch previews still use it). Verified headless: room loads, 0 errors, no failed requests.
+- Clicking it: SAM WILL WRITE THE WORDS (his ruling 2026-11-05). Leave the pink placeholder dialog until his text arrives; don't draft any.
+- NEW ASSET TO COMMIT: assets/lackland-backroom-webley.png
+
+# FETCH IN DEE'S MIRROR 2026-11-05 evening (Sam: "Put the fetch in it, but like, glimmeringly", then "only visible when you click the close up") — synced, NOT committed
+- Lackland's office: John Dee's black mirror now holds the Fetch: head and shoulders in the window glimpse's spectral cyan (#8ac8dc), featureless but for his pale grin, a spark-lit crown, cut to the mirror's own outline (ShapeGeometry of the slab's shape, additive, `fetchGhost`). Only while the mirror's close-up is open (hotspot `onLook`): first about 1.4 s after the camera arrives, then in for about three seconds every five to ten, trembling. Static faint under reduced motion, close-up only. Hidden from the one-off reflection capture.
+- The close-up camera moved in and aimed lower (pos [-0.63,1.17,-1.30], tgt [-0.65,0.83,-1.93]; was [-0.62,1.18,-1.18] / [-0.65,0.99,-1.93]) because the card covered the mirror. The head now sits above the card; the shoulders fade under it.
+- Verified headless at 1280x800: glimmer seen in the close-up, 0 errors. The pale figure on the wall behind the desk is Lackland's own ghost (pre-existing).
+- Leftovers walk-through: decision 1 (the mirror face) is now settled. Next: 2, what the back-room pistol does when clicked.
+
+# STATS AUDIT AND FIX 2026-11-05 evening (Sam: "the stats bars still don't seem to move in a meaningful or regular way, can you take an audit ... and suggest fixes?" then "Yes, build it") — synced, NOT committed
+- Findings (from the source, simulated): the proportional $statGain/$statLoss made the same act show a different number every time (a "loss 9" was -16 at 90 and -5 at 30); the 2026-10-29 floor of 40 until $returnedPage sat exactly on the slip line (`< 40`), so sobriety parked at 40 by the third drink and no flagging slip or Next Target detour ever fired; after page 93 the un-reset $drinksRound made drinks 5 to 8 cost 28 to 43 percent each (44 to blackout in three); dream worlds and the five strangers used raw ± that skipped the floor; in-place changes (Retch., "I'm not here", windows, the chippy wait) redrew silently then replayed on the next page; doorways did nothing one time in four.
+- Built (StoryInit macro block, ~line 161; the 13 drink links; 12 raw sets in the dream worlds and strangers; Bars Now + window.dssBarsNow; the five doorway passages):
+  - `$statGain` = v + N, `$statLoss` = v - N, clamped 0..100 and rounded; the JS mirrors `window.dssStatGain/Loss` match. Every existing N stays as written, so a drink is -8 sobriety, the novelist -9 morale, the chippy +25/+15, Inis +14, etc.
+  - Pre-errand floor 30 (was 40): slips (under 40) can fire, option gates (under 30) stay shut, a stat already under 30 still cannot fall or be lifted by the floor.
+  - Drinks: sobriety `8 + (min: $drinksRound, 3) * 3` (8, 11, 14, 17, 17...), morale `5 + (min: $drinksRound, 3) * 2` (5, 7, 9, 11). The round still carries all night and resets at a blackout, as before.
+  - The Mountain, Nazca pampa/ridge, the Listening Moai, Storm from the North, Four Living Creatures, Gooch/Truze/Woman from the Line/Longshanks/Songstrong: `(set: $x to $x ± N)` → the macros.
+  - Bars Now sets $prevConfidence/$prevSobriety after redrawing; dssBarsNow now draws the +N/-N mark (with the `· choice` label when one is recent), the bar flash and the percentage flash itself.
+  - Doorways: the `(random: 1, 4) > 1` roll is gone; always +4 morale / +6 sobriety.
+- Verified headless (Chrome for Testing, Metal, muted; scratchpad stats/drink2.py and pillars.py; the other session's server on 8732 served the rebuilt html): five drinks at the French from 70/70: sobriety 62, 51, 37, 30 (floored), 30; morale 75, 87 (the French's first-visit +12), 94, 100, 100; the Pillars entry draws +12 / -9 in place and the street after shows no replay; 0 page errors.
+- FOR SAM (item 5 of the audit, his numbers): with flat costs MORALE reaches 100 inside three drinks (every drink +5 to +11, first entry to a venue +12, the chippy +25, Inis +14, against a handful of -9s). It wants smaller per-drink morale (a constant +3?) and maybe the venue +12 cut, so there is somewhere to fall from. Not touched.
+- Harness note: the in-app browser pane refused every localhost navigation this session ("denied or failed", pane hidden); the Playwright venv at `/private/tmp/claude-501/-Users-samquill--claude-spares-spare-aUsvpu/3ec7bef6-7617-429f-9c55-13b91aabe4e0/scratchpad/audit/pwvenv` still runs with `executable_path` to Chrome for Testing 1243. On a debug jump the first bars show "+70 / +70": the jump skips Start, where $prevConfidence is set to 70; not a bug in play.
 
 # GET DIRECTIONS SHIMMER 2026-11-05 afternoon (Sam: the link suggesting the next venue "should have a brief shimmer to draw attention to it, all the links should have") — synced, NOT committed
 - Every slip's Get Directions button (`.dss-hint-go`, the one CSS class all of them share) gets a band of pale gold light sweeping across it with a soft gold glow, twice, starting 0.8 s after the slip appears (about 4 s in all), then it rests. Stops once lit ("Directions lit"), off under reduced motion. Verified headless on a raised slip at 1280x800: sweep visible, 0 errors.

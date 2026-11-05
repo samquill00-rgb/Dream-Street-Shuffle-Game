@@ -18,6 +18,7 @@
 
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.
+- The back-room Webley revolver (assets/lackland-backroom-webley.png, 2026-11-05) is drawn for the game (SVG). No credit needed. It replaced lackland-backroom-pistol.png (a SIG SP2022 product-style image, now unlinked).
 - The doorway piss (doorway-piss.m4a, 2026-11-02) is Sam's own recording (New Recording 148). No credit needed, if it is his.
 - The Himalaya music (himalaya-music.m4a, 2026-11-02) is Sam's own composition, "Meditation in Tibet". No credit needed, unless it uses outside samples.
 - The Climb music (climb-music.m4a, 2026-11-03) is Sam's own, built on his chant sequence ("The cllimb minigame.mp3"). No credit needed, unless it uses outside samples.

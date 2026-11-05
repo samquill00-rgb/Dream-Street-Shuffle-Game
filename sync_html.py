@@ -63,7 +63,6 @@ AUDIO_EMBEDS = [
     ("__DSS_EZEKIEL_MUSIC_DATA_URI__", "ezekiel-music.m4a",                          "audio/mp4"),   # 2026-11-04: Sam's Dream Street theme five times, maximalist build; once through, loops statements IV-V (100-164 s); ezekiel + synthesis + sanctum pages
     ("__DSS_BED_SOHO_STREET_URI__", "bed-soho-street.m4a", "audio/mp4"),   # 2026-11-05 afternoon: the one Soho bed, from Sam's Dean Street theme (Music sketches/Beat scene/tools/compose_soho.py); the fourteen bed-*-music.m4a of the nightwork stay on disk, unlinked
     ("__DSS_BED_SOHO_WALL_URI__",   "bed-soho-wall.m4a",   "audio/mp4"),   # the same song through a pub wall
-    ("__DSS_BED_SOHO_RAIN_URI__",   "bed-soho-rain.m4a",   "audio/mp4"),   # the same song with the one rain, outside the Pillars
     ("__DSS_NAZCA_RACE_MUSIC_DATA_URI__", "nazca-race-hudmo.m4a", "audio/mp4"),   # 2026-11-04 (Burial pass): Hudson Mohawke trap-rave at 140 on the pampa tune; nazca-race-music.m4a (the Springsteen one) stays on disk; intro once, loops bars 5-36
     ("__DSS_EASTER_DATA_URI__",      "the-easter-island-ambience.m4a",                 "audio/mp4"),
     ("__DSS_PYRAMID_DATA_URI__",     "the-pyramid-ambience.m4a",                       "audio/mp4"),

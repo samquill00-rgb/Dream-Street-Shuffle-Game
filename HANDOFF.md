@@ -1,3 +1,22 @@
+# START HERE (end of the 2026-11-05 afternoon session)
+**State:** everything below from 2026-11-05 is COMMITTED (Sam's commit 7e9ed5c; working tree clean when this was written). The "synced, NOT committed" tags on today's sections are history.
+
+**What the session did, newest first** (details in the sections below):
+- Pitch-list shimmer: the reader names under "Who will you pitch the book to next?" on Dean Street sweep with pale gold twice as the page opens. Get Directions buttons on slips do the same. Map door names were tried and reverted: NOT those.
+- Donkey coin toss plays Sam's coin drop (`coin-drop.m4a`, `dssAudio.coinDrop()`); the notebook coin modal keeps the synthesised `coinFlip`.
+- Title page: Burial look (sodium sky over a blurred roofline, far lamps, smear, vignette), calm linear petals, glass blue lily. Sam: "Keep it". No grain on the Title.
+- Rain: none anywhere but inside the Pillars (approach overlay and the rain bed removed).
+- Music: ONE Soho bed (`bed-soho-street.m4a` outdoors, `bed-soho-wall.m4a` through every venue wall, shared position via `resumeGroup`). Waltz and cow back to their originals; no music on typewriter pages.
+- Playtest notes 28 to 34 fixed (voices slip once a run, critic return check, manuscript typescript, Cecil cow timing, Watkins window).
+
+**Open / unverified:**
+- Pitch-list shimmer checked only on an injected copy of the list (the debug jump's first-night hub has no pitch question). Worth a look on a later-night Dean Street.
+- Coin drop not yet heard by ear in Sam's browser.
+- "hjm" coin recording licence: to confirm (SOUND-SOURCES.md, to-confirm list).
+- On disk, unlinked, don't re-propose: `bed-soho-rain.m4a`, the fourteen `bed-*-music.m4a`, `bed-cecil-music`, the ruled-out Burial tracks.
+
+**Harness note:** the Playwright venv (`.../3ec7bef6-.../scratchpad/audit/pwvenv`) no longer finds its headless shell; launch with `executable_path` = `~/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`. Scratchpads are per-session, so copy scripts forward if needed.
+
 # GET DIRECTIONS SHIMMER 2026-11-05 afternoon (Sam: the link suggesting the next venue "should have a brief shimmer to draw attention to it, all the links should have") — synced, NOT committed
 - Every slip's Get Directions button (`.dss-hint-go`, the one CSS class all of them share) gets a band of pale gold light sweeping across it with a soft gold glow, twice, starting 0.8 s after the slip appears (about 4 s in all), then it rests. Stops once lit ("Directions lit"), off under reduced motion. Verified headless on a raised slip at 1280x800: sweep visible, 0 errors.
 - Then (Sam: "the 'Who will you pitch the book to next?' thing above the walkable map, eg 'the belletrist'"): each reader name in that list (`.book-pitch-opt tw-link`) gets the same sweep, twice, as the page opens; not "No one yet."; off under reduced motion. A first try on the map's door names was the wrong target and is fully reverted. Verified headless on injected copies of the list markup (the first-night debug hub doesn't show the question): sweep visible, 0 errors.

@@ -2,6 +2,7 @@
 **State:** everything below from 2026-11-05 is COMMITTED (Sam's commit 7e9ed5c; working tree clean when this was written). The "synced, NOT committed" tags on today's sections are history.
 
 **What the session did, newest first** (details in the sections below):
+- 23:47 notes: Title copy fades in by section, beds release over 1.8 s (the clip), lips by Kiss him, the dedication's rows spaced. Synced, NOT committed.
 - The Who next? / Where next? box is a rose glass panel. Synced, NOT committed.
 - Link presses no longer dip the music or beds (the tick ducks nothing); music silent on The Night Ahead only. Synced, NOT committed.
 - The way out told: a standing line in Where next? naming what Centre Point and the Fetch still want, and a one-time THE POEM IS WHOLE slip. Synced, NOT committed.
@@ -27,6 +28,14 @@
 - On disk, unlinked, don't re-propose: `bed-soho-rain.m4a`, the fourteen `bed-*-music.m4a`, `bed-cecil-music`, the ruled-out Burial tracks.
 
 **Harness note:** the Playwright venv (`.../3ec7bef6-.../scratchpad/audit/pwvenv`) no longer finds its headless shell; launch with `executable_path` = `~/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`. Scratchpads are per-session, so copy scripts forward if needed.
+
+# PLAYTEST NOTES 2026-11-05 23:47 (4 notes) — synced, NOT committed
+- **1 Title fades in by section:** `dstCopyIn` keyframes in the Title's own style block: the title at 0.9 s (3.2 s fade), the byline at 4 s (its inline animation now lists the fade AND dst-breathe, the breath from 7 s), BEGIN at 7 s, CONTINUE at 9 s, the save note at 10.5 s. None under reduced motion. The bed starts on the first click, so the wait is for the music.
+- **2 The clip between passages:** measured at the poet → LILY turn (AudioParam/stop logging): the 'street' bed (Sam's recording outside the French, on outdoor pages) was let go with a 0.45 s fade and stopped at 0.5 s; that short release on a field recording is the clip. `_letGo` takes a length now: beds release over `BED_LEAVE_S` 1.8 s, the hub theme over `LEAVE_S` 1.2 s (was 0.5). The Soho street bed itself runs on through the turn (the fallback keeps it started).
+- **3 Lips beside Kiss him** (LINE 1): a small bright-pink SVG mouth (`.dss-lips`, 26x20, cupid's bow, highlight, a pink glow, a 1.2 s pop-in) inside the `.alba-link-fade` span after the link, so it arrives with the link.
+- **4 Dedicate Your Book:** the names' row gap 0.55em → 1.15em (and 1.8em above the pool), and "no one" (`data-k="noone"`) takes a row of its own under the names, centred.
+- 2 also: a page's ambient loop (`_stopAmbient`, the 10 s loop under the corner) releases over 1.5 s, not 0.5.
+- Also: the Pages deploy for the 23:22 push never fired (GitHub's commit_refs hiccup); a one-line nudge in preview.html and his push at 23:43 deployed it (glass live at 23:47).
 
 # ROSE GLASS BOX 2026-11-05 night (Sam: the "Who next?" box "just looks kinda bad and basic. Could it be perhaps a sort of pink glass panel") — synced, NOT committed
 - `.book-pitch` (the Who next? and Where next? boxes share it) is a pane of rose glass: a tinted translucent gradient ground (rgba 255,118,172 → 122,30,86 at 0.13-0.20), the page blurred behind it (`backdrop-filter: blur(7px) saturate(1.25)`, an inline panel, so the fixed-overlay bleed quirk does not apply), a bright top edge, a diagonal sheen (`::before`), a hairline highlight along the top (`::after`), a pink bloom around it, 5 px corners. The question in pale pink with a neon glow, the names still brassy gold with pink rules, "No one yet." and the way-out line in pale pink. Content sits above the sheen (z-index 1).

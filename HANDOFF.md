@@ -1,3 +1,16 @@
+# BANKED WALKTHROUGH 2026-11-06 (Sam: "let's go through these one by one... set some sort of banked task up so if I don't finish them all today I can go through")
+Sam asked what is left to BUILD (not test, not release). The list below is it. Walk it in order with him; tick an item `[x]` with the ruling the moment he gives it, leave `[ ]` ones for the next session. If a new session starts and any `[ ]` remain, offer to pick up at the first unticked item.
+- [~] 1. THE HARP'S ALLEY. Scene written by Sam. Rulings 2026-11-06: NAME Professor Frank E. Lee (no slot in the text yet: his call where it shows); ONCE A GAME (already so). Sam: "make choices that optimise for the gameplay and give me the calls I need to make about the art side". Gameplay calls made from the source: (a) a name given to Lee stays the night's one crossing (his 3 Nov ruling, "Do c"), and ASHTON stays "granger", so she does not rescue you at dawn (the cellar's "ashton" is the broken agreement of looking at her; selling her to the police is a different act). Kept. (b) New branch in The Harp's Alley for $shipNews "afloat" (the Woman from the Line's "Still on the water"), a PINK SLOT for his line; was read the rumour line. (c) Fix: the Woman from the Line no longer sets $shipNews for a drunk player who loses her in the crowd (Lee used to tell him "You heard she went down"). Synced. OPEN FOR SAM (art): Lee's afloat line; where the name shows.
+- [ ] 2. DREAM-WORLD LORE. Seven pink cards: Third Pillar Portal, The Climb, Nazca Race, The Reclamation, Pyramid Run, Alley: Charing Cross Road fallback, Drunken Street Actions. His to redraft; nothing to build.
+- [ ] 3. AOIFE. He is writing her (memory-photo parallel, a clarity-beat call banked). Wire when the lines come.
+- [ ] 4. MARLOWE RECURRING. Credit + pink lore on the Dido page only. Needs his decision on where he reappears (Elizabethan, not Jacobean).
+- [ ] 5. LACKLAND'S MIRROR FACE. Parked pending his choice of face; the Fetch glimmer is in the close-up meanwhile.
+- [ ] 6. TREE OF LIFE CULMINATION. Notebook toggle has no payoff. Banked directions: Lightning Flash through the ten sefirot; or Da'at made visible if the player takes Red's alba1.
+- [ ] 7. MIDNIGHT. Parked behind $midnightEnabled (StoryInit); restorable with one set. Only if he wants it back.
+- [ ] 8. JEFFREY FIRST PORT OF CALL. The Coach opens only with the third pillar or two lines; opening it from the start changes the night's ladder. His call.
+- [x] 9. ALLEY NAME AS CROSSING. Folded into 1 (it already counts).
+Sound pass is his and stays off this list.
+
 # START HERE (end of the 2026-11-05 afternoon session)
 **State:** everything below from 2026-11-05 is COMMITTED (Sam's commit 7e9ed5c; working tree clean when this was written). The "synced, NOT committed" tags on today's sections are history.
 

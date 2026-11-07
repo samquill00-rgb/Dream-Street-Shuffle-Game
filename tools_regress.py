@@ -388,6 +388,7 @@ for _room, _passage in ROOMS:
 # Each world from its preview start (?start=<world>), walked like a curious player: on every page press the first
 # way on not yet taken, up to 30 pages or back to Dean Street. On every page: no errors (the watchers), any 3D view
 # is not blank, and the page fits a 1440x900 laptop screen without scrolling.
+WORLD_ENDS = {"Night Ahead Part Two": 1, "The Fetch": 1}
 WORLDS = ["himalayas", "nazca", "easter", "pyramid", "ezekiel"]
 
 CLICKABLES = """() => { var out = [], seen = new Set();
@@ -437,7 +438,18 @@ def world_check(world):
                 bad.append("%s: scrolls %d px on a 1440x900 screen" % (pn, over))
             opts = r.js(CLICKABLES)
             fresh = [o for o in opts if (pn, o["t"]) not in taken]
+            if not fresh and r.js("() => /hold to hum|held down/i.test(document.body.innerText)"):
+                # a hold game (the King's Chamber hum): hold Space for different lengths until it lets you on
+                for hold in (1200, 2000, 2800, 3600, 1600, 2400, 3200):
+                    r.page.keyboard.down("Space"); r.page.wait_for_timeout(hold); r.page.keyboard.up("Space"); r.page.wait_for_timeout(2500)
+                    if r.pn() != pn or r.js(CLICKABLES):
+                        break
+                if r.pn() != pn:
+                    continue
+                opts = r.js(CLICKABLES)
+                fresh = [o for o in opts if (pn, o["t"]) not in taken]
             if not fresh:
+                bad.append("%s: no way on found (the walk stopped here)" % pn) if r.pn() not in ("Dean Street",) and step < 29 and not WORLD_ENDS.get(pn) else None
                 break
             o = fresh[0]
             taken.add((pn, o["t"]))

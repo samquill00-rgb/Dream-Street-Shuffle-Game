@@ -1,4 +1,25 @@
 # START HERE (2026-11-07 session: the second-opinion pass)
+
+## Overnight Astra reports (scratchpad/night/a1-a5), verified 2026-11-07
+
+Fixed, synced, tested headless (not committed):
+- Eye trail: FOLLOW THIS TRAIL no longer offered on the eye trail before the eye is open (it silenced the other trails while its own later steps stayed dark).
+- Where next?: two blackouts / Coach burnt / Sanctum done now read "Centre Point is open. The Fetch will let you go."
+- Notebook FOR THE DAWN line hidden once the poem is whole or the night is forced.
+- Ezekiel's WALK OUT ONTO THE PLAIN works from the keyboard (Enter/Space).
+
+Dropped after checking: poem-whole slip vs the gate (line 2 needs a crossing, and Start resets the alba, so the gate is always open by then); "Lose" with the poem whole reaching Alba Complete (deliberate: every path ends at Centre Point).
+
+Ruled and done 2026-11-07 (synced, tested): 1 JEFFREY's speech first visit only; 2 Colony Left kept; 3 Colony/chippy/Lackland finding lines first visit only, Pillars left; 4 dedication note fades in after a choice; 5 The Wheel: "Come back" appears only after "Meet her look".
+
+Was for Sam to rule:
+1. Coach: JEFFREY's 3D click repeats the Friesian speech on later visits, after "he's disappeared to a timeshare". Gate it to the first visit?
+2. Colony Door: "Left" is still offered after COPPER and leads to "Wrong door". Keep or hide?
+3. Repeat arrivals reprinted every visit: Colony Door "a friend brought you there once before", Lackland's "You find the building on Frith Street", the chippy "You find it after some looking", Pillars "It wasn't raining till you got inside". First visit only?
+4. Dedicate Your Book never says the dedication can be changed in the notebook. Add a UI line?
+5. The Wheel: "Come back" lets you leave without "Meet her look".
+6. GPT prose notes (his call, no action taken): warm Dawn too settled after disastrous nights; Sanctum "You have everything you need" then "You did not find the poem"; Synthesis "pentagram you drew with gathered lilies" assumes flowers on the dream route; the run of endings (Sanctum, Fetch, Centre Point, Traveller wake, knot, EXPLICIT) asks for terminal attention repeatedly; dual ring "the tears and the tears" larger than the exchange; "Kiss him" lands on the title field; book-vs-poem aims after LINE 1; Pyramid PROPORTION never names the number; Nazca race arrives unmotivated; Easter "respawn" punctures the flight.
+
 **State:** everything below is synced, NOT committed (as of the evening of 2026-11-07). Codex CLI is installed for GPT second opinions (see memory reference_codex_gpt).
 
 **Done 2026-11-07, newest first:**

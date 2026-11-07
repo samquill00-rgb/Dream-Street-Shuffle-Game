@@ -122,6 +122,7 @@ class Run:
         self.errors = []
         self.page.on("pageerror", lambda e: self.errors.append(str(e)[:200]))
         self.port = port
+        self.info = ""
 
     def go(self, passage, wait=9000):
         from urllib.parse import quote
@@ -383,6 +384,75 @@ for _room, _passage in ROOMS:
     check("room-" + _room, "every object in %s opens, has a card, and is not hidden in its close-up" % _passage)(room_check(_room, _passage))
 
 
+# ---------------------------------------------------------------- the dream worlds
+# Each world from its preview start (?start=<world>), walked like a curious player: on every page press the first
+# way on not yet taken, up to 30 pages or back to Dean Street. On every page: no errors (the watchers), any 3D view
+# is not blank, and the page fits a 1440x900 laptop screen without scrolling.
+WORLDS = ["himalayas", "nazca", "easter", "pyramid", "ezekiel"]
+
+CLICKABLES = """() => { var out = [], seen = new Set();
+  [].forEach.call(document.querySelectorAll('body *'), function (e) {
+    if (e.closest('tw-header, .stat-bars, #stat-bars-lifted, .dss-ghost, #dss-hint-stack, #dss-lore-overlay, .notebook-link, #dss-debug-panel')) return;
+    var tag = e.tagName; if (tag === 'CANVAS' || tag === 'svg' || tag === 'HTML' || tag === 'BODY') return;
+    var cs = getComputedStyle(e); if (cs.cursor !== 'pointer' && tag !== 'TW-LINK') return;
+    if (e.parentElement && getComputedStyle(e.parentElement).cursor === 'pointer' && e.parentElement.closest('body *') && !/^TW-/.test(tag)) return;
+    if (!e.getClientRects().length || cs.visibility === 'hidden' || +cs.opacity < 0.2) return;
+    var r = e.getBoundingClientRect(); if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return;
+    var x = r.left + r.width / 2, y = r.top + r.height / 2, top = document.elementFromPoint(x, y); if (!top || !(top === e || e.contains(top))) return;
+    var t = (e.innerText || e.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim(); if (!t || t.length > 80 || seen.has(t) || /^(mute|unmute)/i.test(t)) return; seen.add(t);
+    out.push({ t: t, x: x, y: y }); });
+  return out; }"""
+
+
+def blank_canvases(r):
+    """Visible 3D views that rendered nothing (near-black and flat)."""
+    import io
+    from PIL import Image, ImageStat
+    boxes = r.js("() => [].filter.call(document.querySelectorAll('canvas'), function (c) { var b = c.getBoundingClientRect(); return b.width >= 300 && b.height >= 200 && c.getClientRects().length && getComputedStyle(c).visibility !== 'hidden' && !c.closest('.dss-ghost'); }).map(function (c) { var b = c.getBoundingClientRect(); return [Math.max(0, b.left), Math.max(0, b.top), Math.min(innerWidth, b.right), Math.min(innerHeight, b.bottom)]; })")
+    bad = []
+    for x0, y0, x1, y1 in boxes:
+        if x1 - x0 < 50 or y1 - y0 < 50:
+            continue
+        png = r.page.screenshot(clip={"x": x0, "y": y0, "width": x1 - x0, "height": y1 - y0})
+        st = ImageStat.Stat(Image.open(io.BytesIO(png)).convert("L"))
+        if st.mean[0] < 6 and st.stddev[0] < 4:
+            bad.append("a %dx%d 3D view is blank" % (x1 - x0, y1 - y0))
+    return bad
+
+
+def world_check(world):
+    def fn(r):
+        r.go(world, wait=10000)
+        taken, path, bad = set(), [], []
+        for step in range(30):
+            r.clear_lore(); r.clear_slips()
+            pn = r.pn()
+            path.append(pn)
+            if pn == "Dean Street" and step:
+                break
+            for b in blank_canvases(r):
+                bad.append("%s: %s" % (pn, b))
+            over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
+            if over > 4:
+                bad.append("%s: scrolls %d px on a 1440x900 screen" % (pn, over))
+            opts = r.js(CLICKABLES)
+            fresh = [o for o in opts if (pn, o["t"]) not in taken]
+            if not fresh:
+                break
+            o = fresh[0]
+            taken.add((pn, o["t"]))
+            r.page.mouse.click(o["x"], o["y"])
+            r.page.wait_for_timeout(3500)
+        r.info = "walked: " + " > ".join(dict.fromkeys(path))
+        r.expect(len(set(path)) > 1, "the walk never left %s" % path[0])
+        r.expect(not bad, "; ".join(dict.fromkeys(bad)))
+    return fn
+
+
+for _w in WORLDS:
+    check("world-" + _w, "the %s dream world: walks without errors, no blank 3D view, no scrolling at 1440x900" % _w)(world_check(_w))
+
+
 # ---------------------------------------------------------------- main
 def main(argv):
     want = [a.lower() for a in argv[1:]]
@@ -413,6 +483,8 @@ def main(argv):
             print("%s  %-34s %4.0fs  %s" % ("PASS" if ok else "FAIL", name, time.time() - t0, "" if ok else "(" + note + ")"))
             for line in ([err] if err else []) + problems:
                 print("        - " + line)
+            if getattr(r, "info", ""):
+                print("        . " + r.info[:400])
         browser.close()
     srv.shutdown()
     print("%d of %d passed in %.0f s%s" % (len(todo) - failed, len(todo), time.time() - t_all, "" if not failed else "; screenshots in " + SHOTS))

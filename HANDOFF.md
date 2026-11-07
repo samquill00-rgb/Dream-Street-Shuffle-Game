@@ -1,3 +1,21 @@
+# START HERE (2026-11-07 session: the second-opinion pass)
+**State:** everything below is synced, NOT committed (as of the evening of 2026-11-07). Codex CLI is installed for GPT second opinions (see memory reference_codex_gpt).
+
+**Done 2026-11-07, newest first:**
+- Branches checked in a scratch build (T-passages): Shana lived, Harp after RED / after the ASHTON glance, stolen notebook (Fetch, Dawn), Beaten with COPPER's word, Dawn ignored / one call. All pass.
+- Dedication moved: Name Your Book goes to Dean Street; Night Ahead Part Two (the cover story) ends on "Dedicate Your Book".
+- One teaching card per page (dssTeachFree / dssTeachClaim).
+- Rulings: Fetch counts "of 3 (5 in all)" / "of 6 (12 in all)"; the ASHTON glance no longer locks the Harp; glass-eye warning (Sam's words); JOHN gives Valletta in Beaten's good outcome (Sam picked line 1); Ham line when the manuscript is out of the bag (Sam's words). Kept as is: Step closer, the French ladder.
+- AOIFE/LILY mid-stretch: The Wheel's eyes show for everyone ("The daughter's eyes are in the mother's. You are coming home."); The Synthesis line ("Your two great lovers…"); the dual ring loosened to 1 flower, 1 lap; Dawn bends if AOIFE was ignored all night ($calledAoife set at the phone box); Shana's after-lines shifted (old praise line parked below).
+- Bugs: Shana's lived verdict never showed; Harp "Loyal" +5 after a cellar grass; stolen notebook counted the poem whole (Where Next, Fetch, Dawn); phone-box call struck AOIFE through in the notebook.
+- Prose fixes (Sam's calls): LINE 1 "beyond the pillars"; FRANKIE gives the matches; Easter turn-back "hunted down"; plumb, he pulls back, harmonica, teat; Colony perfume; Woman from the Line; Ronnie's pianist; names in capitals (ISADORA, DERBY'S, BEVAN GLYNDŴR, DONNY FLORENTINE, SUBCOMANDANTE FORTUNA, SHELLEY, TRISHA, O'FLATTERLY); the beer-mat couple renamed LEO and PONCHA (real people). Punctuation and curly-quote passes across prose, UI and voices.
+- Earlier the same day: Sholto Gooch (trombone), Devon Truze, Tom Longshanks (hum), Deirdre Furlong (replaces Guilliam), map halos.
+
+**In flight:** five GPT Astra jobs (late game, opening, dream worlds, repeat visits, way-out logic), answers in the session scratchpad night/ folder. Findings to be verified and either fixed (logic/UI) or listed for Sam (prose/design) in a section here.
+
+## Parked 2026-11-07: Shana's old praise after-line
+Replaced by the guard-dog line when Sam shifted the after-lines: “That’s as good as in the bag, it has to be.”
+
 # PARKED 2026-11-07 — GUILLIAM SONGSTRONG'S LINES (Sam's own)
 
 Guilliam was BEVAN GLYNDŴR under a second name, so the Pyramid corner now holds DEIRDRE FURLONG (Irish). Bevan stays outside the Halibut. Guilliam's lines, verbatim, in case they suit Bevan or anyone else:
@@ -8846,6 +8864,3 @@ Music sketches/Nazca/Nazca exploration v2.mid/.wav/.mp3 replaces earlier race-in
 
 ## Ezekiel theme export and variation — 2026-11-03
 Successfully opened Dream Street Shuffle experiment.logicx through Logic UI, keeping Egypt project open, then exported All MIDI Tracks to Music sketches/Dream Street Shuffle experiment.mid. Five tracks total incl tempo; lead first Bluebird has21notes G F G E D E C B G# A etc. Original project music not edited. Ezekiel variation in Music sketches/Ezekiel preserves21lead pitches and relative onsets at twice original duration, lead starts8s, 80s preview with organ foundation, lead, metallic wheel cycles and low brass. VST directions.md details exact pitches and source mapping. No minigame section. Source theme version still subject to Sam recognising it by ear. Naturally ending sketch, not certified loop.
-
-## Parked 2026-11-07: Shana's old praise after-line
-Replaced by the guard-dog line when Sam shifted the after-lines: “That’s as good as in the bag, it has to be.”

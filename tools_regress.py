@@ -153,7 +153,7 @@ class Run:
             raise Fail(msg)
 
     # rooms
-    def room_ready(self, room):
+    def room_ready(self, room, photos=True):
         self.wait_for("() => !!(window.__dssRooms && window.__dssRooms['%s'])" % room, 15000, "the %s room" % room)
         # the room's opening words: press its onward button if it is up
         for _ in range(3):
@@ -170,6 +170,16 @@ class Run:
         self.clear_lore()
         self.clear_slips()
         self.clear_lore()
+        # since 2026-11-07 the French holds every other object back until its photographs are looked at, once a run
+        if photos and room == "fi" and self.js("() => window.__dssRooms.fi.names().join('|')") == "Photographs":
+            self.look_at_photos()
+
+    def look_at_photos(self):
+        self.click_object("fi", "Photographs")
+        self.clear_lore(); self.clear_slips(); self.clear_lore()
+        self.js("() => window.__dssRooms.fi.back()")
+        self.wait_for("() => window.__dssRooms.fi.mode() === 'idle'", 8000, "the camera back from the photographs")
+        self.clear_lore(); self.clear_slips(); self.clear_lore()
 
     def clear_lore(self, rounds=4):
         """A lore card (THE GREAT WORK, a room's note) opens on the first press; read it and press On., like a player."""
@@ -268,6 +278,23 @@ def _(r):
     r.page.keyboard.press("Escape")
     r.wait_for("() => !document.querySelector('#dss-lore-overlay')", 4000, "the lore card to close")
     r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-type'), function (e) { return e.textContent.indexOf('REGRESSION') >= 0; })", 8000, "the slip to type once the lore card closed")
+
+
+@check("french-photographs-first", "2026-11-07 (Sam): the French teaches the VOICES; until its photographs are looked at, only they glow and the header's way back waits")
+def _(r):
+    r.go("The French")
+    r.room_ready("fi", photos=False)
+    names = r.js("() => window.__dssRooms.fi.names()")
+    r.expect(names == ["Photographs"], "before the photographs the room offers %s" % names)
+    r.expect(not r.js("() => [].some.call(document.querySelectorAll('.back-one-link'), function (e) { return e.getClientRects().length; })"), "the header's way back shows before the photographs")
+    r.click_object("fi", "Photographs")
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /VOICES/.test(e.textContent); })", 8000, "the VOICES slip on the photographs")
+    r.clear_slips(); r.clear_lore()
+    r.js("() => window.__dssRooms.fi.back()")
+    r.wait_for("() => window.__dssRooms.fi.mode() === 'idle'", 8000, "the camera back")
+    names = r.js("() => window.__dssRooms.fi.names()")
+    r.expect(len(names) >= 5 and "A man at the bar" in names, "after the photographs the room still offers only %s" % names)
+    r.expect(r.js("() => [].some.call(document.querySelectorAll('.back-one-link'), function (e) { return e.getClientRects().length; })"), "the header's way back is still hidden after the photographs")
 
 
 @check("french-door-sign-shows", "2026-11-07 note 7: SORTIR sat inside the door panel, the notice looked blank")
@@ -555,7 +582,7 @@ def _(r):
     r.expect(not bad, "; ".join(bad))
 
 
-@check("hub-second-visit", "the second Dean Street (after the poet, LILY and Name Your Book): same, and the French door goes in")
+@check("hub-second-visit", "the second Dean Street (after the poet, LILY and Name Your Book): same, only the French offered (not the Pillars), and its door goes in")
 def _(r):
     hub_ready(r)
     r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /See who/.test(x.textContent); })[0]; if (l) l.click(); }")
@@ -570,10 +597,19 @@ def _(r):
     r.wait_for("() => !document.querySelector('#coin-overlay') || getComputedStyle(document.querySelector('#coin-overlay')).display === 'none' || !document.querySelector('#coin-overlay').offsetParent", 8000, "the coin card to close")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
     bad, links = hub_problems(r, "the second Dean Street")
+    if any(re.search("Pillars|BELLETRIST", t) for t in links):
+        bad.append("the Pillars are offered before the French (2026-11-07: the French first)")
     got = walk_into(r, "french")
     if got == "Dean Street":
         bad.append("walking onto the French door did nothing")
     r.info = "links: %s; French door -> %s" % (links, got)
+    if got == "Approach The French":   # and once you have been in, the Pillars open
+        play_on(r, lambda pn: pn == "The French", steps=6)
+        r.room_ready("fi")
+        r.go("Dean Street", wait=10000)
+        r.clear_lore(); r.clear_slips(); r.clear_lore()
+        if not any(re.search("Pillars", t) for t in r.js(HUB_LINKS)):
+            bad.append("the Pillars are still closed after the French")
     r.expect(not bad, "; ".join(bad))
 
 

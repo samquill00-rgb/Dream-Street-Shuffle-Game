@@ -1,5 +1,10 @@
 # START HERE (2026-11-07 session: the second-opinion pass)
 
+# Open-items walk 2026-11-07 evening (Sam delegated the non-prose calls: "just do your pick")
+Done, synced: Ronnie's card "Keep at least one drink on the tray."; fight banner KNOCKOUT (was PERFECT SCORE); Pyramid card "Each mark takes back a stumble."; waltz CLEAN STEPS uses the report's 60*ZONE window; worm hut once a night ($wormPlayed hides the way in).
+Kept as is: hidden "excellent" results (fewer systems); the Donkey's ONE CALL TAKEN BACK (the count is right); Soho Square after the hut (the map shuts it); Who next? (Sam cut the click hint 5 Nov); ": A Cover Story" title; sound items 14-16 (unheard changes are blind); Synthesis boxes (the glide works); Title glints (approved look).
+Still Sam's: Bourchier mugging manuscript at Foyles; chippy "You must be starving!"; refused-AOIFE family vision / "You are coming home"; the ten night prose drafts.
+
 # GPT second pass 2026-11-07 afternoon (scratchpad night2/a1-a5)
 Fixed, synced, not committed (loads clean headless; the two Where next states are untested in play):
 - Pyramid Run HUD showed STUMBLES n/3 on retries; now prints 3 + dssEase like the card and finishRun.

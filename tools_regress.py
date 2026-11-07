@@ -153,7 +153,10 @@ class Run:
         for _ in range(3):
             btn = self.page.locator(".dss-room-dismiss:visible")
             if btn.count():
-                btn.first.click()
+                try:
+                    btn.first.click(timeout=3000)
+                except Exception:   # something sits over it (the Coach's): press it the way the keyboard does
+                    self.js("() => { var b = [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return e.getClientRects().length; })[0]; if (b) b.click(); }")
                 self.page.wait_for_timeout(1400)
             else:
                 break
@@ -344,6 +347,7 @@ def room_check(room, passage):
             blk = r.js(BLOCKED, [room, name])
             if blk:
                 bad.append("%s: hidden in its close-up behind %s" % (name, blk))
+                r.page.screenshot(path=os.path.join(SHOTS, "room-%s-%s.png" % (room, name.replace(' ', '_').replace('/', '_'))))
             r.js("([room]) => window.__dssRooms[room].back()", [room])
             r.page.wait_for_timeout(2200)
         r.expect(not bad, "; ".join(bad))

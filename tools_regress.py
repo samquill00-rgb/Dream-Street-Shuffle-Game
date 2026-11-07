@@ -558,6 +558,12 @@ def _(r):
     play_on(r, lambda pn: pn == "Dean Street")
     r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
+    # the second Dean Street hands you the Donkey coin: toss it, then pocket it, as a player does
+    for sel in ("#coin-toss-btn", "#coin-keep-btn"):
+        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
+        r.page.click(sel); r.page.wait_for_timeout(2500)
+    r.wait_for("() => !document.querySelector('#coin-overlay') || getComputedStyle(document.querySelector('#coin-overlay')).display === 'none' || !document.querySelector('#coin-overlay').offsetParent", 8000, "the coin card to close")
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
     bad, links = hub_problems(r, "the second Dean Street")
     got = walk_into(r, "french")
     if got == "Dean Street":

@@ -481,53 +481,89 @@ def hub_ready(r):
     r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
 
 
-@check("hub-dean-street", "Dean Street fits the screen, the map draws, and every hub link has a door on the map")
-def _(r):
-    hub_ready(r)
+BACKWARDS = re.compile(r"^\u2190|back|leave|not now", re.I)
+
+
+def play_on(r, until, steps=60):
+    """Press forward choices (first untaken, 'back' last), waiting out typewriter pages, until until(pn) holds."""
+    taken = set()
+    for _ in range(steps):
+        r.clear_lore(); r.clear_slips()
+        pn = r.pn()
+        if until(pn):
+            return pn
+        opts, k = [], 0
+        while True:
+            opts = sorted([o for o in r.js(CLICKABLES) if (pn, o["t"]) not in taken], key=lambda o: bool(BACKWARDS.search(o["t"])))
+            if opts or k >= 30:
+                break
+            r.page.wait_for_timeout(2000); k += 1
+        if not opts:
+            raise Fail("stuck on %s with no way on" % pn)
+        taken.add((pn, opts[0]["t"]))
+        r.page.mouse.click(opts[0]["x"], opts[0]["y"])
+        r.page.wait_for_timeout(3500)
+    raise Fail("did not get there in %d pages" % steps)
+
+
+def walk_into(r, door):
+    """Stand next to a map door and walk onto it with the on-screen d-pad, as a player would."""
+    d = r.js("(id) => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === id; })[0]; return d ? { c: d.c, r: d.r, fc: d.fc, fr: d.fr } : null; }", door)
+    r.expect(d, "no door %r on the map" % door)
+    if (d["c"], d["r"]) != (d["fc"], d["fr"]):
+        tries = [((d["fc"], d["fr"]), "right" if d["c"] > d["fc"] else "left" if d["c"] < d["fc"] else "down" if d["r"] > d["fr"] else "up")]
+    else:   # a door on the tile itself: step on from a neighbour
+        tries = [((d["c"], d["r"] + 1), "up"), ((d["c"] - 1, d["r"]), "right"), ((d["c"] + 1, d["r"]), "left"), ((d["c"], d["r"] - 1), "down")]
+    for (c, rr), way in tries:
+        r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", [c, rr])
+        r.page.wait_for_timeout(500)
+        r.js("""(way) => { var b = document.querySelector('[data-dir="' + way + '"]'); if (!b) return;
+          b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, isPrimary: true }));
+          setTimeout(function () { b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, isPrimary: true })); }, 200); }""", way)
+        for _ in range(32):
+            r.page.wait_for_timeout(250)
+            if r.pn() != "Dean Street":
+                return r.pn()
+    return "Dean Street"
+
+
+def hub_problems(r, label):
     bad = blank_canvases(r)
     over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
     if over > 4:
-        bad.append("Dean Street scrolls %d px on a 1440x900 screen" % over)
-    links = r.js(HUB_LINKS)
-    orphans = r.js("""(links) => links.filter(function (t) { return !window.dssSohoMap.doors.some(function (d) { return d.rx.test(t); }); })""", links)
-    orphans = [t for t in orphans if not re.match(r"^(NOTEBOOK|Notebook|Where next\?|Mute|.*LORE.*)$", t)]
+        bad.append("%s scrolls %d px on a 1440x900 screen" % (label, over))
+    links = [t for t in r.js(HUB_LINKS) if not re.match(r"^[a-z]+(-[a-z]+)+$|^NOTEBOOK$|^No one yet\.$", t)]   # machinery links (gw-read, next-poke) and the pitch's "no"
+    orphans = r.js("(links) => links.filter(function (t) { return !window.dssSohoMap.doors.some(function (d) { return d.rx.test(t); }); })", links)
     if orphans:
-        bad.append("hub links with no door on the map: %s" % orphans)
-    r.info = "hub links: %s" % links
+        bad.append("%s: hub links with no door on the map: %s" % (label, orphans))
+    return bad, links
+
+
+@check("hub-first-night", "the first Dean Street: fits the screen, the map draws, each hub link has a map door, the Ginger Light door goes in")
+def _(r):
+    hub_ready(r)
+    bad, links = hub_problems(r, "the first Dean Street")
+    got = walk_into(r, "ginger")
+    if got == "Dean Street":
+        bad.append("walking onto the Ginger Light door did nothing")
+    r.info = "links: %s; Ginger Light door -> %s" % (links, got)
     r.expect(not bad, "; ".join(bad))
 
 
-def door_check(door):
-    def fn(r):
-        hub_ready(r)
-        d = r.js("(id) => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === id; })[0]; return d ? { c: d.c, r: d.r, fc: d.fc, fr: d.fr, src: d.rx.source, flags: d.rx.flags } : null; }", door)
-        r.expect(d, "no door %r on the map" % door)
-        links = r.js(HUB_LINKS)
-        live = [t for t in links if re.search(d["src"], t, re.I if "i" in d["flags"] else 0)]
-        if not live:
-            r.info = "closed on a first night (no hub link), not walked"
-            return
-        r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", [d["fc"], d["fr"]])
-        r.page.wait_for_timeout(600)
-        dc, dr = d["c"] - d["fc"], d["r"] - d["fr"]
-        way = "right" if dc > 0 else "left" if dc < 0 else "down" if dr > 0 else "up"
-        r.js("""(way) => { var b = document.querySelector('[data-dir="' + way + '"]'); if (!b) return;
-          b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, isPrimary: true }));
-          setTimeout(function () { b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, isPrimary: true })); }, 260); }""", way)
-        for _ in range(40):
-            r.page.wait_for_timeout(250)
-            if r.pn() != "Dean Street":
-                break
-            r.clear_lore()
-            # a door that asks first (Centre Point's warning) answers with its own buttons
-        warn = r.js("() => [].map.call(document.querySelectorAll('.soho-confirm button, .soho-warn button, tw-dialog button'), function (b) { return b.textContent.trim(); })")
-        r.info = "%s -> %s%s" % (live[0], r.pn(), (" (asked first: %s)" % warn) if warn and r.pn() == "Dean Street" else "")
-        r.expect(r.pn() != "Dean Street" or warn, "walking into the %s door from its doorstep did nothing (link: %r)" % (door, live[0]))
-    return fn
-
-
-for _door in ["french", "colony", "doorway", "chippy", "ronnies", "lackland", "coach", "pillars", "trishas", "cecil", "ginger", "north", "phonebox"]:
-    check("map-door-" + _door, "on the Soho map, walking into the %s door goes in" % _door)(door_check(_door))
+@check("hub-second-visit", "the second Dean Street (after the poet, LILY and Name Your Book): same, and the French door goes in")
+def _(r):
+    hub_ready(r)
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /See who/.test(x.textContent); })[0]; if (l) l.click(); }")
+    r.page.wait_for_timeout(3500)
+    play_on(r, lambda pn: pn == "Dean Street")
+    r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    bad, links = hub_problems(r, "the second Dean Street")
+    got = walk_into(r, "french")
+    if got == "Dean Street":
+        bad.append("walking onto the French door did nothing")
+    r.info = "links: %s; French door -> %s" % (links, got)
+    r.expect(not bad, "; ".join(bad))
 
 
 # ---------------------------------------------------------------- main

@@ -2796,7 +2796,7 @@ window.dssAudio = (function() {
     }
     if (bed.source) {
       bed.source.onended = null; // a gapMs bed must not reschedule from the fading source
-      _letGo(bed.source, bed.gain ? bed.gain.gain.value : 0, BED_LEAVE_S);
+      _letGo(bed.source, bed.gain ? bed.gain.gain.value : 0, /^The Night Ahead$/.test(((document.getElementById('dss-pn') || {}).textContent || '').trim()) ? 6 : BED_LEAVE_S); /* 2026-11-07 (Sam, playtest note 1: "Fade the music out more slowly into this page"): the Title's street music lets go over 6 s into The Night Ahead */
       bed.source = null;
     }
     bed.started = false;
@@ -5529,6 +5529,34 @@ window.dssAudio = (function() {
   else document.addEventListener('DOMContentLoaded', watchMuteButton);
 })();
 
+// ====== MOTE PATHS (2026-11-07, Sam, playtest note 6: the petal trails "should mostly lead to the notebook from the object you click. They are all over the place") ======
+// Every trail to the NOTEBOOK starts and ends here. From: the found thing itself when it is on screen; when it has no box (a room's lily hook,
+// a haunt box still held back under the drink popup, a copy in the after-image) the 3D object you clicked, else your last press. Never the
+// screen's corner, which is where a hidden element measures from. To: the visible NOTEBOOK link, never the after-image's copy of it.
+(function() {
+  var lastPt = null, lastObj = null;
+  document.addEventListener('pointerdown', function(e) { if (!e.isTrusted) return; var p = { x: e.clientX, y: e.clientY, t: Date.now() }; lastPt = p; if (e.target && e.target.tagName === 'CANVAS') lastObj = p; }, true);
+  function onScreen(el) {
+    if (!el || !el.getClientRects || !el.getClientRects().length) return null;
+    if (el.closest && el.closest('.dss-ghost')) return null;
+    var r = el.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+    if (r.width < 2 || r.height < 2 || r.bottom < 8 || r.top > H - 8 || r.right < 8 || r.left > W - 8) return null;
+    return [Math.max(8, Math.min(W - 8, r.left + r.width / 2)), Math.max(8, Math.min(H - 8, r.top + r.height / 2))];
+  }
+  window.dssMoteFrom = function(el) {
+    var v = onScreen(el); if (v) return v;
+    var now = Date.now();
+    if (lastObj && now - lastObj.t < 60000 && (!lastPt || lastPt.t - lastObj.t < 20000)) return [lastObj.x, lastObj.y];
+    if (lastPt && now - lastPt.t < 60000) return [lastPt.x, lastPt.y];
+    return [window.innerWidth / 2, window.innerHeight / 2];
+  };
+  window.dssMoteTarget = function() {
+    var ls = document.querySelectorAll('#stat-bars-lifted .notebook-link, .notebook-link');
+    for (var q = 0; q < ls.length; q++) { if (ls[q].closest('.dss-ghost')) continue; var r = ls[q].getBoundingClientRect(); if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight) return [r.left + r.width / 2, r.top + r.height / 2]; }
+    return [window.innerWidth - 34, 30];
+  };
+})();
+
 // ====== LILY CLICK CHIME + PETAL MOTE ======
 // Inline <script> tags inside (click-replace:) hooks don't execute when
 // Harlowe inserts them via innerHTML, so use a delegated click listener
@@ -5536,17 +5564,10 @@ window.dssAudio = (function() {
 // up toward the notebook link in the header.
 (function() {
   function spawnLilyPetal(hook) {
-    var nb = document.querySelector('.notebook-link');
-    var hookRect = hook.getBoundingClientRect();
-    var startX = hookRect.left + hookRect.width / 2;
-    var startY = hookRect.top + hookRect.height / 2;
-    // If we can't find the notebook, just float upward and offscreen.
-    var dx = 0, dy = -260;
-    if (nb) {
-      var nbRect = nb.getBoundingClientRect();
-      dx = (nbRect.left + nbRect.width / 2) - startX;
-      dy = (nbRect.top + nbRect.height / 2) - startY;
-    }
+    /* 2026-11-07 (Sam, playtest note 6): from the flower, or the room object clicked when the hook has no box, to the visible NOTEBOOK (window.dssMoteFrom / dssMoteTarget) */
+    var from = window.dssMoteFrom(hook), to = window.dssMoteTarget();
+    var startX = from[0], startY = from[1];
+    var dx = to[0] - startX, dy = to[1] - startY;
     var petal = document.createElement('div');
     petal.className = 'lily-petal-mote';
     petal.style.left = startX + 'px';
@@ -9425,6 +9446,7 @@ window.__dssHintNext = function() {
   // should be after the coin is pocketed"). Now it waits for the coin, matches,
   // cigarette, eat and key overlays to leave. Capped at ~40s so an overlay that
   // never closes can swallow a beat but never a whole lesson.
+  try { if (document.querySelector('#dss-lore-overlay')) { setTimeout(window.__dssHintNext, 250); return; } } catch (e) {} /* 2026-11-07 (Sam, playtest note 3): a lore card holds the slips for as long as it is open (it hides them), not just the 40 s cap */
   try {
     if (window.dssOverlayBusy && window.dssOverlayBusy()) {
       window.__dssHintWait = (window.__dssHintWait || 0) + 1;
@@ -9577,6 +9599,8 @@ window.__dssHintShow = function(html, passage, go, then, modal, tag) {
     var i = 0, lastTick = 0, typeFrom = 0;
     var step = function() {
       if (!card.parentNode || card.__dssGoing) { setBody(text); release(); return; }
+      /* 2026-11-07 (Sam, playtest note 3: "I heard the typewriter typing but didn't see the slip"): a lore card hides the slips (visibility), so the slip waits under it, silent and untyped, and types itself out once the card is closed */
+      if (document.querySelector('#dss-lore-overlay') || getComputedStyle(card).visibility === 'hidden') { if (typeFrom) typeFrom = Date.now() - i * pace; setTimeout(step, 250); return; }
       if (!typeFrom) typeFrom = Date.now();
       i = Math.max(i + 1, Math.min(text.length, Math.floor((Date.now() - typeFrom) / pace)));
       setBody(text.slice(0, i));
@@ -15820,8 +15844,13 @@ window._passageGen = 0;
                       doSmash(1500);
                     }, 1800);
                   };
-                  window.addEventListener('dss:boxreveal', onBox);
-                  window.addEventListener('drinkpopup:closed', onDrinkFallback);
+                  /* 2026-11-07 (Sam, playtest note 6: "Restore the smashing glass sound a second or two after the drink popup closes"): the box cue could fire before the drink popup had even opened, so the smash went off under it; now it always follows the popup's close by 1.5 s */
+                  var onDrinkClosed = function() {
+                    window.removeEventListener('drinkpopup:closed', onDrinkClosed);
+                    if (window._passageGen !== smashGen) return;
+                    doSmash(1500);
+                  };
+                  window.addEventListener('drinkpopup:closed', onDrinkClosed);
                 }
                 // Venue door creak + first-entry whoosh, by venue tag.
                 // Track `_currentVenue` so we don't creak on every sub-passage
@@ -15962,13 +15991,12 @@ window._passageGen = 0;
                   setTimeout(function(){ window.dssSpawnMotes(box, cls, count, opts); }, 550);
                   return;
                 }
-                var rect = box.getBoundingClientRect();
                 /* Anchor motes at the box's centre so the gesture reads as
-                   "the collected thing is sending up wisps". The old
-                   top-right offset (0.78, 0.18) drifted the origin off the
-                   visible content and felt haphazard. */
-                var startTop = rect.top + rect.height * 0.5;
-                var startLeft = rect.left + rect.width * 0.5;
+                   "the collected thing is sending up wisps". 2026-11-07: through window.dssMoteFrom, so a box with no layout box starts from the
+                   object clicked, not the screen's top-left corner */
+                var _from = window.dssMoteFrom(box);
+                var startTop = _from[1];
+                var startLeft = _from[0];
                 var nbEl = document.querySelector('.notebook-link');
                 var nb = nbEl ? nbEl.getBoundingClientRect() : null;
                 /* 2026-10-21 (Sam): the motes went to the top right corner of the screen. 2026-10-31 (Sam, playtest: the trails "are all
@@ -16006,6 +16034,10 @@ window._passageGen = 0;
                 }
               };
               var performSpawn = function() {
+                /* 2026-11-07 (Sam, playtest note 6): a box still held back (THE DEBT waits out the drink popup with display:none) has no position yet;
+                   wait up to 4 s for it to show, so the trail leaves the box and not the screen's corner */
+                var _held = TYPES.some(function(t) { return Array.prototype.some.call(document.querySelectorAll(t.sel + ':not([data-motes])'), function(b) { return !b.closest('.dss-ghost') && b.style.display === 'none'; }); }); /* only a box a scene is holding back on purpose (inline display:none), never one hidden by design */
+                if (_held && (performSpawn._waits = (performSpawn._waits || 0) + 1) <= 16) { setTimeout(performSpawn, 250); return; }
                 // Compute the NOTEBOOK link's viewport-centre once per reveal so
                 // every spawned mote can target it. Motes that miss the notebook
                 // ruin the "filed away" gesture, so we redirect each mote toward
@@ -16022,16 +16054,17 @@ window._passageGen = 0;
                 TYPES.forEach(function(t) {
                   var boxes = document.querySelectorAll(t.sel + ':not([data-motes])');
                   for (var i = 0; i < boxes.length; i++) {
+                    if (boxes[i].closest('.dss-ghost')) continue; /* 2026-11-07 (Sam, playtest note 6): the after-image's copy of a box is not a find */
                     boxes[i].setAttribute('data-motes', '1');
                     anyBoxSpawned = true;
                     // Capture the box's viewport position NOW. Motes are fixed
                     // children of <body>, so they pin to the viewport even if
                     // the user scrolls during the animation — the start point
                     // is locked at the moment of collection.
-                    var rect = boxes[i].getBoundingClientRect();
-                    /* Centre-of-box origin — see dssSpawnMotes comment above. */
-                    var startTop = rect.top + rect.height * 0.5;
-                    var startLeft = rect.left + rect.width * 0.5;
+                    /* Centre-of-box origin — see dssSpawnMotes comment above (window.dssMoteFrom since 2026-11-07). */
+                    var _from = window.dssMoteFrom(boxes[i]);
+                    var startTop = _from[1];
+                    var startLeft = _from[0];
                     for (var k = 1; k <= t.n; k++) {
                       var m = document.createElement('span');
                       m.className = t.cls + ' ' + t.cls + '-' + k;
@@ -30729,7 +30762,7 @@ mesh(new THREE.BoxGeometry(0.34, 0.6, 0.02), blueDark, -0.22, 0.55, 0.045, doorG
 mesh(new THREE.BoxGeometry(0.34, 0.6, 0.02), blueDark, 0.22, 0.55, 0.045, doorG);
 mesh(new THREE.SphereGeometry(0.035, 10, 8), brass, 0.4, 1.05, 0.07, doorG);
 // a small notice pinned to it
-mesh(new THREE.PlaneGeometry(0.2, 0.26), new THREE.MeshStandardMaterial({ color: 0xe6dcc4, roughness: 0.9 }), 0.16, 1.92, 0.05, doorG);
+mesh(new THREE.PlaneGeometry(0.2, 0.26), new THREE.MeshStandardMaterial({ color: 0xe6dcc4, roughness: 0.9 }), 0.16, 1.92, 0.057, doorG); /* 2026-11-07 (Sam, playtest note 7: the door's notice was blank): was 0.05, inside the upper panel (front at 0.055) */
 // a thin line of light under it
 var doorLight = new THREE.PointLight(0xffd090, 0.0, 1.6); doorLight.position.set(W / 2 - 0.35, 0.08, -3.7); scene.add(doorLight);
 var doorGlow = mesh(new THREE.PlaneGeometry(1.0, 0.03), new THREE.MeshBasicMaterial({ color: 0xffd8a0, transparent: true, opacity: 0.0 }), 0, 0.035, 0.065, doorG);
@@ -30956,7 +30989,7 @@ var privTex = signTex(256, 320, function(cx, w, h) { cx.fillStyle = '#e6dcc4'; c
 var fade=cx.createLinearGradient(0,0,w,h);fade.addColorStop(0,'rgba(102,76,36,0.2)');fade.addColorStop(0.2,'rgba(102,76,36,0)');fade.addColorStop(0.8,'rgba(102,76,36,0)');fade.addColorStop(1,'rgba(102,76,36,0.2)');cx.fillStyle=fade;cx.fillRect(0,0,w,h);
 [[10,10],[w-10,10],[10,h-10],[w-10,h-10]].forEach(function(p){cx.fillStyle='#8b8067';cx.beginPath();cx.arc(p[0],p[1],2.5,0,Math.PI*2);cx.fill();});
 });
-mesh(new THREE.PlaneGeometry(0.2, 0.26), new THREE.MeshStandardMaterial({ map: privTex, roughness: 0.9 }), 0.16, 1.92, 0.052, doorG);
+mesh(new THREE.PlaneGeometry(0.2, 0.26), new THREE.MeshStandardMaterial({ map: privTex, roughness: 0.9 }), 0.16, 1.92, 0.06, doorG); /* 2026-11-07: was 0.052, behind the panel's face, so SORTIR never showed */
 // half-pint glasses in a row on the back bar, and pewter on the top shelf
 var pewter = new THREE.MeshStandardMaterial({ color: 0x8e8a80, roughness: 0.42, metalness: 0.85, envMap: roomEnv, envMapIntensity: 0.6 });
 for (var hp = 0; hp < 7; hp++) {
@@ -67551,8 +67584,8 @@ Opposite him is the only man who looks you in the eyes, who is thin like verdacc
 <!-- 2026-10-07 (Sam: "it still shows the 'reentry prose' when you come in ... fold those bits of prose into the story loop after the click on the figure"): the second- and third-visit lines that stood here now come up from "French Reentry", once a visit, at the top of whichever loop the first clicked figure opens. -->
 
 <div class="prose-tilde">~</div>
-<!-- 2026-10-24: Sam's approved book lore, offered from the paperback close-up. -->
-<span class="lore-card-only dss-claimed">(link: "⟡ LORE: Chariots of the Gods? ⟡")[(set: _lore to "Chariots of the Gods?")(display: "Lore Read")<div class="lore-box">(display: "Lore Chariots of the Gods")</div>]</span>
+<!-- 2026-10-24: Sam's approved book lore, offered from the paperback close-up. 2026-11-07 (Sam, playtest note 4: it opened on the famous artists, "It should be on the orange book"): lore-on-look, so it is no longer owed to the first press anywhere in the room; the paperback's Continue opens it -->
+<span class="lore-card-only lore-on-look dss-claimed">(link: "⟡ LORE: Chariots of the Gods? ⟡")[(set: _lore to "Chariots of the Gods?")(display: "Lore Read")<div class="lore-box">(display: "Lore Chariots of the Gods")</div>]</span>
 
 (if: _fc >= 2 and not (($haunts contains $haunt1) and ($haunts contains $haunt2) and ($haunts contains $haunt4)))[[[Get a drink at the bar|Which drink at the French?]]
 ]\
@@ -67672,7 +67705,7 @@ Soho’s rain churns up your silted bloodstream; even in the years that you aren
 </div>
 
 :: Name Your Book {"position":"100,350","size":"100,100"}
-<!-- 2026-11-07 (Sam, N6 A): a line to say what the box is for, outside the typewriter page (its ink rule would turn pink black); pink draft --><div class="claude-draft">When you open your eyes he’s gone. Your manuscript is on the bar, open at its blank title page.</div>
+<!-- 2026-11-07 (Sam, N6 A): a line to say what the box is for, outside the typewriter page (its ink rule would turn pink black); unpinked 2026-11-07 (Sam, playtest note 2: "formatted like the game") --><div class="nb-lead">When you open your eyes he’s gone. Your manuscript is on the bar, open at its blank title page.</div>
 <div class="typewriter-page typewriter-static book-naming">
 <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="nbStain1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#120802" stop-opacity="0.85"/><stop offset="40%" stop-color="#3f1c08" stop-opacity="0.55"/><stop offset="78%" stop-color="#7a3c0c" stop-opacity="0.22"/><stop offset="100%" stop-color="#a86014" stop-opacity="0"/></radialGradient><radialGradient id="nbStain2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#150902" stop-opacity="0.78"/><stop offset="45%" stop-color="#44200a" stop-opacity="0.50"/><stop offset="80%" stop-color="#80400e" stop-opacity="0.18"/><stop offset="100%" stop-color="#ae6416" stop-opacity="0"/></radialGradient><radialGradient id="nbWine" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#701020" stop-opacity="0.30"/><stop offset="60%" stop-color="#701020" stop-opacity="0.10"/><stop offset="100%" stop-color="#701020" stop-opacity="0"/></radialGradient></defs><circle cx="-12" cy="40" r="22" fill="url(#nbStain1)"/><circle cx="-4" cy="80" r="14" fill="url(#nbStain2)"/><ellipse cx="540" cy="60" rx="9" ry="20" transform="rotate(-12,540,60)" fill="rgba(68,32,7,0.40)"/><circle cx="528" cy="280" r="11" fill="url(#nbStain2)"/><ellipse cx="62" cy="320" rx="14" ry="20" transform="rotate(8,62,320)" fill="url(#nbWine)"/><circle cx="48" cy="180" r="3" fill="rgba(125,72,24,0.28)"/><circle cx="486" cy="200" r="2.5" fill="rgba(140,85,30,0.22)"/><circle cx="38" cy="270" r="2" fill="rgba(132,80,28,0.20)"/><circle cx="500" cy="120" r="2" fill="rgba(132,80,28,0.20)"/></svg>
 (set: $bookTitle to "")\

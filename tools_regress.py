@@ -453,6 +453,9 @@ def world_check(world):
                 break
             o = fresh[0]
             taken.add((pn, o["t"]))
+            over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
+            if over > 4:   # the page grew while it was played (a game's way on appearing below the fold)
+                bad.append("%s: scrolls %d px on a 1440x900 screen" % (pn, over))
             r.page.mouse.click(o["x"], o["y"])
             r.page.wait_for_timeout(3500)
         r.info = "walked: " + " > ".join(dict.fromkeys(path))

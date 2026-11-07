@@ -8846,3 +8846,6 @@ Music sketches/Nazca/Nazca exploration v2.mid/.wav/.mp3 replaces earlier race-in
 
 ## Ezekiel theme export and variation — 2026-11-03
 Successfully opened Dream Street Shuffle experiment.logicx through Logic UI, keeping Egypt project open, then exported All MIDI Tracks to Music sketches/Dream Street Shuffle experiment.mid. Five tracks total incl tempo; lead first Bluebird has21notes G F G E D E C B G# A etc. Original project music not edited. Ezekiel variation in Music sketches/Ezekiel preserves21lead pitches and relative onsets at twice original duration, lead starts8s, 80s preview with organ foundation, lead, metallic wheel cycles and low brass. VST directions.md details exact pitches and source mapping. No minigame section. Source theme version still subject to Sam recognising it by ear. Naturally ending sketch, not certified loop.
+
+## Parked 2026-11-07: Shana's old praise after-line
+Replaced by the guard-dog line when Sam shifted the after-lines: “That’s as good as in the bag, it has to be.”

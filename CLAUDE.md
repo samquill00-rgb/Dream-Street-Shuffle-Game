@@ -28,7 +28,12 @@ grep -o '<tw-passagedata[^>]*name="Dean Street"[^>]*' "Dream Street Shuffle.html
 3. He gives the line + new version, or says "next".
 4. Edit with `Edit` tool — never alter his creative text.
 5. After a loop of edits: `python3 sync_html.py` from the workspace folder (uses the bash tool).
-6. Tell him "synced, commit when ready." **Never run git commands.**
+6. Run the regression player: `~/.dss-regress/venv/bin/python tools_regress.py` (headless and muted, about 2 minutes; a name filters, e.g. `french`). Never call a fix done while a check fails, and report what it does NOT cover.
+7. Tell him "synced, commit when ready." **Never run git commands.**
+
+## Regression player (since 2026-11-07)
+
+`tools_regress.py` plays the built html like a player (real clicks on room objects via the read-only `window.__dssRooms` hook in `dssRoomPlay`) and checks that fixed playtest notes stay fixed. Watchers run in every check: page errors, a slip typing while hidden, a NOTEBOOK trail starting off screen or missing the NOTEBOOK. **Every playtest note fixed gets a `@check` that fails if the bug comes back** (prove it once by planting the old bug, then restore). Visual claims about a close-up are checked from the close-up camera, not the room's opening view. Setup if the venv is gone: `python3 -m venv ~/.dss-regress/venv && ~/.dss-regress/venv/bin/pip install playwright`.
 
 ## Critical rules
 

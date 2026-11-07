@@ -295,6 +295,65 @@ def _(r):
     r.expect(longest >= 4.5, "the music let go over %.1f s, not a slow fade (ramps: %s)" % (longest, ramps[:4]))
 
 
+# ---------------------------------------------------------------- every room, every object
+# A first-night visit to each room (a fresh save): every object you can click opens its close-up, its card is
+# not empty, and nothing solid stands between the close-up camera and the thing it looks at.
+ROOMS = [("fi", "The French"), ("ci", "The Colony Room"), ("pi", "Entering The Pillars of Hercules"), ("ri", "Ronnie Scott's"),
+         ("cu", "Turn to Copper"), ("cb", "Coach and Horses bar"), ("ti", "Trisha's"), ("lk", "Martin Lackland's Office"),
+         ("oi", "O'Flatterly's shop"), ("cf", "Chinese Fish and Chips")]
+
+BLOCKED = """([room, name]) => { var T = window.THREE, R = window.__dssRooms[room], sp = R.spot(name); if (!sp) return 'no spot';
+  var cam = new T.Vector3(); R.camera.getWorldPosition(cam);
+  var to = new T.Vector3().fromArray(sp.tgt), d = to.clone().sub(cam), L = d.length(); d.normalize();
+  var vis = []; R.scene.traverse(function (m) { if (!m.isMesh) return; var q = m; while (q && q.visible) q = q.parent; if (q) return;
+    var mt = Array.isArray(m.material) ? m.material[0] : m.material; if (!mt || mt.transparent || mt.depthWrite === false || mt.blending === T.AdditiveBlending) return; vis.push(m); });
+  var h = new T.Raycaster(cam, d, 0, L).intersectObjects(vis, false);
+  for (var i = 0; i < h.length; i++) { var o = h[i].object, own = false, q = o; while (q) { if (q === sp.root) { own = true; break; } q = q.parent; }
+    if (own) return ''; if (h[i].distance < L - 0.08) { var p = o.geometry && o.geometry.parameters, dims = p ? Object.keys(p).filter(function (k) { return typeof p[k] === 'number' && !/Segments/.test(k); }).map(function (k) { return +p[k].toFixed(2); }).join('x') : '';
+      return o.geometry.type.replace('Geometry', '') + ' ' + dims + ' at ' + h[i].distance.toFixed(2) + ' m of ' + L.toFixed(2); } }
+  return ''; }"""
+
+
+def room_check(room, passage):
+    def fn(r):
+        r.go(passage)
+        r.room_ready(room)
+        names = r.js("([room]) => window.__dssRooms[room].names()", [room])
+        r.expect(names, "no objects to click")
+        bad = []
+        for name in names:
+            if r.js("([room]) => window.__dssRooms[room].mode()", [room]) != "idle" or r.pn() != passage:
+                r.go(passage)
+                r.room_ready(room)
+            pt = r.js("([r, n]) => window.__dssRooms[r].point(n)", [room, name])
+            if not pt or not (0 < pt[0] < 1440 and 0 < pt[1] < 900):
+                bad.append("%s: not on screen from the room view" % name)
+                continue
+            r.clear_slips()
+            r.wait_for("([room]) => window.__dssRooms[room].mode() === 'idle' && !window.__dssRooms[room].blocked()".replace("([room])", "() ").replace("window.__dssRooms[room]", "window.__dssRooms['%s']" % room), 8000, "the room to be free to click")
+            r.page.mouse.move(pt[0], pt[1]); r.page.wait_for_timeout(150); r.page.mouse.click(pt[0], pt[1])
+            r.page.wait_for_timeout(2600)
+            if r.js("([room]) => window.__dssRooms[room].mode()", [room]) != "inspect":
+                under = r.js("([x, y]) => { var e = document.elementFromPoint(x, y); return e ? e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className && e.className.baseVal === undefined ? '.' + String(e.className).split(' ').join('.') : '') : 'nothing'; }", pt)
+                bad.append("%s: clicking it did not open its close-up (under the pointer: %s; page %s)" % (name, under, r.pn()))
+                r.page.screenshot(path=os.path.join(SHOTS, "room-%s-%s.png" % (room, name.replace(' ', '_').replace('/', '_'))))
+                continue
+            card = r.js("() => { var c = [].filter.call(document.querySelectorAll('.dss-room-card'), function (e) { return e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && +getComputedStyle(e).opacity > 0.1; })[0]; return c ? c.innerText.replace(/\\s+/g, ' ').trim() : null; }")
+            if not card or len(card) < 3:
+                bad.append("%s: its card is empty" % name)
+            blk = r.js(BLOCKED, [room, name])
+            if blk:
+                bad.append("%s: hidden in its close-up behind %s" % (name, blk))
+            r.js("([room]) => window.__dssRooms[room].back()", [room])
+            r.page.wait_for_timeout(2200)
+        r.expect(not bad, "; ".join(bad))
+    return fn
+
+
+for _room, _passage in ROOMS:
+    check("room-" + _room, "every object in %s opens, has a card, and is not hidden in its close-up" % _passage)(room_check(_room, _passage))
+
+
 # ---------------------------------------------------------------- main
 def main(argv):
     want = [a.lower() for a in argv[1:]]

@@ -22,7 +22,7 @@ Two kinds of check:
 Setup, once: python3 -m venv ~/.dss-regress/venv && ~/.dss-regress/venv/bin/pip install playwright
 (the Chrome for Testing it drives is already in ~/Library/Caches/ms-playwright).
 """
-import functools, glob, http.server, os, socketserver, sys, threading, time, traceback
+import functools, glob, re, http.server, os, socketserver, sys, threading, time, traceback
 from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -466,6 +466,68 @@ def world_check(world):
 
 for _w in WORLDS:
     check("world-" + _w, "the %s dream world: walks without errors, no blank 3D view, no scrolling at 1440x900" % _w)(world_check(_w))
+
+
+# ---------------------------------------------------------------- Dean Street and the Soho map
+# The hub on a fresh first night: it fits the laptop screen, its map draws, every hub link has a door on the map
+# (the map is the only way a player reaches them), and every open door, walked into from its doorstep, goes in.
+HUB_LINKS = """() => [].filter.call(document.querySelectorAll('.soho-hub-dock tw-link, tw-story tw-link'), function (l) { return !l.closest('tw-header, .dss-ghost, #dss-lore-overlay, #dss-hint-stack'); })
+  .map(function (l) { return l.textContent.replace(/\\s+/g, ' ').trim(); }).filter(function (t, i, a) { return t && a.indexOf(t) === i; })"""
+
+
+def hub_ready(r):
+    r.go("Dean Street", wait=10000)
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
+
+
+@check("hub-dean-street", "Dean Street fits the screen, the map draws, and every hub link has a door on the map")
+def _(r):
+    hub_ready(r)
+    bad = blank_canvases(r)
+    over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
+    if over > 4:
+        bad.append("Dean Street scrolls %d px on a 1440x900 screen" % over)
+    links = r.js(HUB_LINKS)
+    orphans = r.js("""(links) => links.filter(function (t) { return !window.dssSohoMap.doors.some(function (d) { return d.rx.test(t); }); })""", links)
+    orphans = [t for t in orphans if not re.match(r"^(NOTEBOOK|Notebook|Where next\?|Mute|.*LORE.*)$", t)]
+    if orphans:
+        bad.append("hub links with no door on the map: %s" % orphans)
+    r.info = "hub links: %s" % links
+    r.expect(not bad, "; ".join(bad))
+
+
+def door_check(door):
+    def fn(r):
+        hub_ready(r)
+        d = r.js("(id) => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === id; })[0]; return d ? { c: d.c, r: d.r, fc: d.fc, fr: d.fr, src: d.rx.source, flags: d.rx.flags } : null; }", door)
+        r.expect(d, "no door %r on the map" % door)
+        links = r.js(HUB_LINKS)
+        live = [t for t in links if re.search(d["src"], t, re.I if "i" in d["flags"] else 0)]
+        if not live:
+            r.info = "closed on a first night (no hub link), not walked"
+            return
+        r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", [d["fc"], d["fr"]])
+        r.page.wait_for_timeout(600)
+        dc, dr = d["c"] - d["fc"], d["r"] - d["fr"]
+        way = "right" if dc > 0 else "left" if dc < 0 else "down" if dr > 0 else "up"
+        r.js("""(way) => { var b = document.querySelector('[data-dir="' + way + '"]'); if (!b) return;
+          b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, isPrimary: true }));
+          setTimeout(function () { b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, isPrimary: true })); }, 260); }""", way)
+        for _ in range(40):
+            r.page.wait_for_timeout(250)
+            if r.pn() != "Dean Street":
+                break
+            r.clear_lore()
+            # a door that asks first (Centre Point's warning) answers with its own buttons
+        warn = r.js("() => [].map.call(document.querySelectorAll('.soho-confirm button, .soho-warn button, tw-dialog button'), function (b) { return b.textContent.trim(); })")
+        r.info = "%s -> %s%s" % (live[0], r.pn(), (" (asked first: %s)" % warn) if warn and r.pn() == "Dean Street" else "")
+        r.expect(r.pn() != "Dean Street" or warn, "walking into the %s door from its doorstep did nothing (link: %r)" % (door, live[0]))
+    return fn
+
+
+for _door in ["french", "colony", "doorway", "chippy", "ronnies", "lackland", "coach", "pillars", "trishas", "cecil", "ginger", "north", "phonebox"]:
+    check("map-door-" + _door, "on the Soho map, walking into the %s door goes in" % _door)(door_check(_door))
 
 
 # ---------------------------------------------------------------- main

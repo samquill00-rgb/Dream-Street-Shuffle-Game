@@ -1,5 +1,12 @@
 # START HERE (2026-11-07 session: the second-opinion pass)
 
+# GPT second pass 2026-11-07 afternoon (scratchpad night2/a1-a5)
+Fixed, synced, not committed (loads clean headless; the two Where next states are untested in play):
+- Pyramid Run HUD showed STUMBLES n/3 on retries; now prints 3 + dssEase like the card and finishRun.
+- Where next? no longer says "Centre Point is open" while the burnt hut leaves only the Coach, or while morale 5 or under gives the north door to Give up.
+For Sam: chippy "You must be starving!" shows after you've eaten; refused-AOIFE Dawn vs Alba Complete's family vision and The Wheel's "You are coming home"; Night Ahead Part Two appends ": A Cover Story" to the typed title; Who next? never says what clicking a name does; Pyramid card doesn't say marks take back stumbles (HUD does).
+
+
 ## Overnight Astra reports (scratchpad/night/a1-a5), verified 2026-11-07
 
 Fixed, synced, tested headless (not committed):

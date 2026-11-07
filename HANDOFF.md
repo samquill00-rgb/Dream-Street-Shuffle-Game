@@ -4,6 +4,10 @@
 Fixed, synced, not committed (loads clean headless; the two Where next states are untested in play):
 - Pyramid Run HUD showed STUMBLES n/3 on retries; now prints 3 + dssEase like the card and finishRun.
 - Where next? no longer says "Centre Point is open" while the burnt hut leaves only the Coach, or while morale 5 or under gives the north door to Give up.
+Third pass (GPT night3/a1-a3 + Claude state matrix, 18 states x Dean Street/Fetch/Dawn in a scratch build):
+- Fixed: The Climb HUD shows the eased PRINTS/SLIPS targets; the worm card says this round's target (Eighteen/Sixteen/Fourteen/Twelve). Tested at ease levels.
+- Matrix: Where next, map doors and Fetch agree in every state, including the hut and low-morale fixes; no errors on any page.
+- For Sam: Ronnie's tray wins with one drink left ("It’ll do."); fight "PERFECT SCORE" on any knockout; worm and house-of-cards hidden "excellent" +12; waltz "clean" 80 ms vs "perfectly" 60 ms; Bourchier mugging "picking up your manuscript" when the book is at Foyles (his prose); the Donkey's "ONE CALL TAKEN BACK" after ignoring the ship call; Soho Square empty after the hut burns; the worm hut replays as fresh.
 For Sam: chippy "You must be starving!" shows after you've eaten; refused-AOIFE Dawn vs Alba Complete's family vision and The Wheel's "You are coming home"; Night Ahead Part Two appends ": A Cover Story" to the typed title; Who next? never says what clicking a name does; Pyramid card doesn't say marks take back stumbles (HUD does).
 
 

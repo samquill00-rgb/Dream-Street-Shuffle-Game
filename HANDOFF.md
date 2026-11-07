@@ -3,7 +3,9 @@
 # Open-items walk 2026-11-07 evening (Sam delegated the non-prose calls: "just do your pick")
 Done, synced: Ronnie's card "Keep at least one drink on the tray."; fight banner KNOCKOUT (was PERFECT SCORE); Pyramid card "Each mark takes back a stumble."; waltz CLEAN STEPS uses the report's 60*ZONE window; worm hut once a night ($wormPlayed hides the way in).
 Kept as is: hidden "excellent" results (fewer systems); the Donkey's ONE CALL TAKEN BACK (the count is right); Soho Square after the hut (the map shuts it); Who next? (Sam cut the click hint 5 Nov); ": A Cover Story" title; sound items 14-16 (unheard changes are blind); Synthesis boxes (the glide works); Title glints (approved look).
-Still Sam's: Bourchier mugging manuscript at Foyles; chippy "You must be starving!"; refused-AOIFE family vision / "You are coming home"; the ten night prose drafts.
+Leftovers ruled by Sam the same evening (synced, scratch-tested, not committed):
+- Mugging: "and picking up your manuscript…" only while the book is in the bag. Chippy greeting skips the first visit after the meal ($chippyAteLap). Refused-AOIFE lines: kept.
+- Night drafts: N2 Synthesis, poem not whole: "You have everything the dream worlds can give you: …" (Sam's wording). N3 pentagram by $lilyCount (5 as written; 1-4 and 0 pink). N6 pink bridge line above Name Your Book. N8 PROPORTION "Thirteen to eight" (Sam: matches DEIRDRE FURLONG's price; the chamber art is a golden spiral). N1, N4, N5, N7, N9, N10 kept.
 
 # GPT second pass 2026-11-07 afternoon (scratchpad night2/a1-a5)
 Fixed, synced, not committed (loads clean headless; the two Where next states are untested in play):

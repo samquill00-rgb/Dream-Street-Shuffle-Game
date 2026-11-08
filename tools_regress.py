@@ -176,17 +176,18 @@ class Run:
 
     def look_at_photos(self):
         self.click_object("fi", "Photographs")
-        self.page.wait_for_timeout(2500)   # the voices' box fades in; the VOICES slip waits for the card to close
+        # 2026-11-08: the VOICES slip shows over the card at once; read it to the end, then Back to the room (one press)
+        self.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip.dss-hint-voices.typed'), function (e) { return getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length; })", 30000, "the VOICES slip, typed, over the photographs")
         self.back_click("fi")
         self.wait_for("() => window.__dssRooms.fi.mode() === 'idle'", 8000, "the camera back from the photographs")
         self.clear_lore(); self.clear_slips(); self.clear_lore()
 
     def clear_lore(self, rounds=4):
-        """A lore card (THE GREAT WORK, a room's note) opens on the first press; read it and press On., like a player."""
+        """A lore card (THE GREAT WORK, a room's note) opens on the first press; read it and press its button (Go on, Next note or the press it came from), like a player."""
         for _ in range(rounds):
             if not self.js("() => !!document.querySelector('#dss-lore-overlay')"):
                 return
-            on = self.page.locator("#dss-lore-overlay button, #dss-lore-overlay [role=button]", has_text="On.")
+            on = self.page.locator("#dss-lore-overlay .dss-lore-on")
             if on.count():
                 on.first.click()
             else:
@@ -282,7 +283,7 @@ def _(r):
     r.go("The French")
     r.room_ready("fi")
     r.click_object("fi", "An orange paperback")
-    r.press("Continue")
+    r.press("Go on")
     r.wait_for("() => !!document.querySelector('#dss-lore-overlay')", 5000, "the Chariots lore card")
     r.expect("Chariots" in r.js("() => document.querySelector('#dss-lore-overlay').textContent"), "the lore card is not Chariots of the Gods?")
     r.js("() => window.dssInlineHint('REGRESSION TEST SLIP, TYPED AFTER THE LORE CARD CLOSES', { now: true })")
@@ -302,12 +303,13 @@ def _(r):
     r.expect(names == ["Photographs"], "before the photographs the room offers %s" % names)
     r.click_object("fi", "Photographs")
     r.wait_for("() => /THE PRIME/.test(document.body.innerText)", 8000, "the voices on the photographs")
-    for _ in range(8):   # 2026-11-07 (Sam): the lily line came up over the photographs' voices; it waits for the room
+    # 2026-11-08 (Sam, note 5: "STILL THERE IS NO SLIP HERE EXPLAINING THE VOICES"): the VOICES slip is on screen while the voices are
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip.dss-hint-voices.typed'), function (e) { return getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length; })", 30000, "the VOICES slip on screen over the photographs' card")
+    for _ in range(4):   # 2026-11-07 (Sam): the lily line came up over the photographs' voices; it waits for the room
         r.page.wait_for_timeout(500)
         r.expect(not r.js("() => [].some.call(document.querySelectorAll('.dss-room-lily-hint'), function (e) { return e.getClientRects().length && +getComputedStyle(e).opacity > 0.3; })"), "the lily line showed while the photographs' card was up")
-    r.back_click("fi")
+    r.back_click("fi")   # one press: the typed VOICES slip lets it through
     r.wait_for("() => window.__dssRooms.fi.mode() === 'idle'", 8000, "the camera back")
-    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /VOICES/.test(e.textContent) && getComputedStyle(e).visibility !== 'hidden'; })", 10000, "the VOICES slip once the card closed")
     r.clear_slips(); r.clear_lore()
     names = r.js("() => window.__dssRooms.fi.names()")
     r.expect(len(names) >= 5, "after the photographs the room still offers only %s" % names)
@@ -386,7 +388,7 @@ def _(r):
     r.page.wait_for_timeout(4500)
     gap = r.js("() => window.__reg.smash.length ? window.__reg.smash[0] - window.__regClosed : null")
     r.expect(gap is not None, "no glass smash after the drink popup closed")
-    r.expect(1200 <= gap <= 2400, "the smash came %d ms after the popup closed (want about 1500)" % gap)
+    r.expect(2500 <= gap <= 3600, "the smash came %d ms after the popup closed (want about 2800, 2026-11-08 note 7: later)" % gap)
     r.expect(r.js("() => window.__reg.motes") > 0, "THE DEBT sent no trail to the NOTEBOOK")
 
 
@@ -485,7 +487,7 @@ WORLDS = ["himalayas", "nazca", "easter", "pyramid", "ezekiel"]
 
 CLICKABLES = """() => { var out = [], seen = new Set();
   [].forEach.call(document.querySelectorAll('body *'), function (e) {
-    if (e.closest('tw-header, .stat-bars, #stat-bars-lifted, .dss-ghost, #dss-hint-stack, #dss-lore-overlay, .notebook-link, #dss-debug-panel')) return;
+    if (e.closest('tw-header, .stat-bars, #stat-bars-lifted, .dss-ghost, #dss-hint-stack, #dss-lore-overlay, .notebook-link, #dss-debug-panel, #dss-note-btn')) return;   /* the test build's NOTE button is not a way on (2026-11-08: moved on screen by note 24) */
     var tag = e.tagName; if (tag === 'CANVAS' || tag === 'svg' || tag === 'HTML' || tag === 'BODY') return;
     var cs = getComputedStyle(e); if (cs.cursor !== 'pointer' && tag !== 'TW-LINK') return;
     if (e.parentElement && getComputedStyle(e.parentElement).cursor === 'pointer' && e.parentElement.closest('body *') && !/^TW-/.test(tag)) return;
@@ -678,6 +680,166 @@ def _(r):
 
 
 # ---------------------------------------------------------------- main
+
+# ---------------------------------------------------------------- 2026-11-08 playtest notes
+@check("feeding-after-choice", "2026-11-08 note 16: THE FEEDING haunt box waits for your choice at O'Flatterly's quest, then shows before you leave")
+def _(r):
+    r.go("O'Flatterly's quest", wait=6000)
+    r.clear_slips(); r.clear_lore()
+    r.page.wait_for_timeout(6000)   # the old hold showed it at 9 s by itself
+    r.expect(r.js("() => { var b = document.querySelector('.haunt-box:not(.dss-ghost .haunt-box)'); return !b || getComputedStyle(b).display === 'none'; }"), "THE FEEDING showed before a choice was clicked")
+    r.page.locator(".dss-room-veil tw-link", has_text="Not tonight.").first.click()
+    r.wait_for("() => { var b = document.querySelector('.haunt-box:not(.dss-ghost .haunt-box)'); return b && getComputedStyle(b).display !== 'none'; }", 2500, "THE FEEDING to show on the click")
+    r.expect(r.pn() == "O'Flatterly's quest", "the choice left before THE FEEDING was shown")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 25000, "the choice to go through once the box had shown")
+
+
+@check("go-on-not-continue", "2026-11-08 note 21: no link says Continue; the Interval's says Go on")
+def _(r):
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect("[[Continue|" not in html, "a [[Continue|...]] link is still in the build")
+    r.expect(not re.search(r">\s*GAME WON\s*<", html), "a GAME WON banner is still in the build (note 39)")
+    svg = open(os.path.join(ROOT, "assets", "interval-stairwell.svg"), encoding="utf-8").read()
+    r.expect("rotate(180" not in svg, "the Interval stairwell is drawn upside down again (note 19)")
+    r.go("The Interval", wait=5000)
+    r.wait_for("() => [].some.call(document.querySelectorAll('tw-passage tw-link, .dss-room-veil tw-link'), function (l) { return l.textContent.trim() === 'Go on'; })", 5000, "a Go on link on the Interval")
+
+
+@check("polaroid-close", "2026-11-08 note 20: the stairs' polaroid has a cross on its corner, a line saying how to put it away, and any click closes it")
+def _(r):
+    r.go("The Interval: the stairs", wait=5000)
+    r.clear_slips()
+    r.page.locator(".dss-room-veil tw-link, tw-passage tw-link", has_text="Turn and follow her").first.click()
+    r.wait_for("() => !!document.querySelector('#dss-photo-pop.in')", 8000, "the polaroid screen")
+    box = r.js("""() => { var f = document.querySelector('.dss-photo-pop-frame'), x = document.querySelector('.dss-photo-pop-frame .dss-photo-pop-x'), h = document.querySelector('.dss-photo-pop-hint');
+      if (!f || !x || !h) return null; var a = f.getBoundingClientRect(), b = x.getBoundingClientRect(); return { near: Math.abs(b.right - a.right) < 30 && Math.abs(b.top - a.top) < 30, hint: h.textContent, vis: getComputedStyle(h).visibility }; }""")
+    r.expect(box, "the polaroid screen has no frame, cross or hint")
+    r.expect(box["near"], "the cross is not on the polaroid's corner")
+    r.page.wait_for_timeout(800)
+    r.page.mouse.click(60, 840)
+    r.wait_for("() => !document.querySelector('#dss-photo-pop')", 3000, "a click anywhere to put the polaroid away")
+
+
+@check("barber-choice-after-scene", "2026-11-08 notes 27-28: at the barber's the choices wait under the 3D scene until its button is pressed")
+def _(r):
+    r.go("The Barbershop", wait=1500)
+    r.expect(r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-passage tw-link'), function (x) { return x.textContent.trim() === 'A haircut'; })[0]; return !!l && getComputedStyle(l).visibility === 'hidden'; }"), "the barber's choices show before the scene's button is pressed")
+    r.page.wait_for_timeout(3000)
+    r.page.get_by_text("AT THE BARBER’S DOOR").click()
+    r.page.wait_for_timeout(1500)
+    r.expect(r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-passage tw-link'), function (x) { return x.textContent.trim() === 'A haircut'; })[0]; return !!l && getComputedStyle(l).visibility === 'visible' && l.getClientRects().length > 0; }"), "the barber's choices did not show after the scene")
+
+
+@check("mandala-return", "2026-11-08 note 33: the Himalayan Return goes home through a kaleidoscope tunnel and a mandala, then clears")
+def _(r):
+    r.go("Himalayan Return", wait=2500)
+    r.expect(r.js("() => !!document.querySelector('.dss-mandala-intro canvas')"), "no mandala tunnel on the Himalayan Return")
+    r.page.wait_for_timeout(10500)
+    r.expect(r.js("() => !document.querySelector('.dss-mandala-intro')"), "the mandala tunnel did not clear")
+
+
+@check("map-pace-steady", "2026-11-08 note 35: the map's walk keeps its pace when the frame rate falls")
+def _(r):
+    hub_ready(r)
+    def walk(ms):
+        ok = r.js("() => window.__dssSohoTeleport(18, 3)")
+        r.expect(ok, "could not stand on Dean Street at 18,3")
+        r.page.wait_for_timeout(600)
+        r.js("""(ms) => { var b = document.querySelector('[data-dir="down"]');
+          b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 9, isPrimary: true }));
+          setTimeout(function () { b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 9, isPrimary: true })); }, ms); }""", ms)
+        r.page.wait_for_timeout(ms + 700)
+        return r.js("() => window.__dssSohoWhere()[1]") - 3
+    fast = walk(1800)
+    r.js("() => { window.__dssHog = true; (function hog() { if (!window.__dssHog) return; var t = performance.now(); while (performance.now() - t < 40) {} requestAnimationFrame(hog); })(); }")
+    slow = walk(1800)
+    r.js("() => { window.__dssHog = false; }")
+    r.info = "rows walked in 1.8 s: %d at full speed, %d with the page loaded" % (fast, slow)
+    r.expect(fast >= 4, "the walk barely moved (%d rows)" % fast)
+    r.expect(slow >= fast * 0.7, "the walk slowed with the frame rate: %d rows, against %d" % (slow, fast))
+
+
+@check("fetch-box-spaced", "2026-11-08 note 39: the Fetch's tally is two rows")
+def _(r):
+    r.go("The Fetch", wait=26000)
+    r.expect(r.js("() => document.querySelectorAll('.fetch-owed .fetch-owed-row').length") == 2, "the Fetch's tally is not two rows")
+
+
+@check("dawn-clean", "2026-11-08 notes 43-44: no readers' slips mid-dawn, no film grain on the Dawn, ANOTHER NIGHT waits for the petals")
+def _(r):
+    r.go("Dawn", wait=3000)
+    r.expect(r.js("() => { var d = document.getElementById('dawn-slips'); return !d || !d.getClientRects().length; }"), "the readers' slips show on the Dawn")
+    r.expect(r.js("() => getComputedStyle(document.body, '::after').display") == "none", "the film grain runs on the Dawn")
+    for _ in range(4):
+        b = r.page.locator(".dawn-page.dawn-pg-on .dawn-on")
+        if b.count():
+            b.first.click(); r.page.wait_for_timeout(2500)
+    r.expect(r.js("() => { var e = document.getElementById('dawn-play-again'); return !e || getComputedStyle(e).visibility === 'hidden' || !e.classList.contains('dawn-petal-restart'); }"), "ANOTHER NIGHT showed with the petal page")
+    r.wait_for("() => !!document.querySelector('.dawn-petal-wrap')", 6000, "the petals to rise soon after their page")
+    r.wait_for("() => { var e = document.getElementById('dawn-play-again'); return e && e.classList.contains('dawn-petal-restart'); }", 20000, "ANOTHER NIGHT after the petals")
+
+
+@check("french-ashtray-clear", "2026-11-08 note 6: the French bar's ashtray runs into nothing")
+def _(r):
+    r.go("The French", wait=9000)
+    hits = r.js("""() => { var T = window.THREE, reg = window._dssThreeRegistry || {}, out = [];
+      for (var k in reg) { var sc = reg[k] && reg[k].scene; if (!sc) continue; sc.updateMatrixWorld(true);
+        var ash = null; sc.traverse(function (o) { if (!ash && o.isGroup && o.children.some(function (c) { return c.geometry && c.geometry.type === 'LatheGeometry' && c.material && c.material.opacity === 0.3; })) ash = o; });
+        if (!ash) continue;
+        var g = new T.Box3().setFromObject(ash).expandByScalar(0.005);
+        sc.traverse(function (o) { if (!o.isMesh || !o.visible) return; for (var p = o; p; p = p.parent) if (p === ash) return;
+          var b = new T.Box3().setFromObject(o); if (b.isEmpty()) return; var s = b.getSize(new T.Vector3()); if (s.x > 0.3 || s.z > 0.3) return;
+          if (b.intersectsBox(g)) out.push(o.geometry.type); }); }
+      return out; }""")
+    r.expect(not hits, "the ashtray runs into %s" % hits)
+
+
+HALO_OFF = r"""(room) => { var T = window.THREE, R = window.__dssRooms[room], out = [];
+  R.camera.updateMatrixWorld(true); var W = R.wrap.getBoundingClientRect();
+  function scr(v) { var p = v.clone().project(R.camera); return [(p.x + 1) / 2 * W.width, (1 - p.y) / 2 * W.height]; }
+  R.names().forEach(function (n) { var sp = R.spot(n); if (!sp || !sp.root) return;
+    var wp = new T.Vector3(); if (sp.haloAt) wp.fromArray(sp.haloAt); else { sp.root.getWorldPosition(wp); if (sp.figure) wp.y += 0.45; }
+    var b = new T.Box3().setFromObject(sp.root); if (b.isEmpty()) return;
+    var xs = [], ys = []; for (var q = 0; q < 8; q++) { var s = scr(new T.Vector3(q & 1 ? b.max.x : b.min.x, q & 2 ? b.max.y : b.min.y, q & 4 ? b.max.z : b.min.z)); xs.push(s[0]); ys.push(s[1]); }
+    var x0 = Math.min.apply(0, xs), x1 = Math.max.apply(0, xs), y0 = Math.min.apply(0, ys), y1 = Math.max.apply(0, ys), h = scr(wp);
+    var mx = Math.max(12, (x1 - x0) * 0.1), my = Math.max(12, (y1 - y0) * 0.1);
+    var c = new T.Vector3(); b.getCenter(c);
+    if (!(h[0] >= x0 - mx && h[0] <= x1 + mx && h[1] >= y0 - my && h[1] <= y1 + my) || c.distanceTo(wp) > b.getSize(new T.Vector3()).length() * 0.75)
+      out.push(n + ' (halo at ' + h.map(Math.round) + ', object ' + [x0, y0, x1, y1].map(Math.round) + ')'); });
+  return out; }"""
+
+
+@check("room-halos-on-objects", "2026-11-08 nightwork (family J, after Sam's playtest note 37): in every room each object's halo sits on the object, not on the wall beside it")
+def _(r):
+    bad = []
+    for room, pn in ROOMS:
+        r.go(pn, wait=6000)
+        r.wait_for("() => !!(window.__dssRooms && window.__dssRooms['%s'])" % room, 15000, "the %s room" % room)
+        r.page.wait_for_timeout(2000)
+        off = r.js(HALO_OFF, room)
+        if off:
+            bad.append("%s: %s" % (room, "; ".join(off)))
+    r.expect(not bad, "halos off their objects: " + " | ".join(bad))
+
+
+@check("labels-named", "2026-11-08 nightwork (family E, after Sam's playtest notes 5, 14 and 21): no link or card button says only On. or Continue (the Dawn's own page turns excepted)")
+def _(r):
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    html = re.sub(r'<button class="dawn-on" type="button">On\.</button>', "", html)
+    found = re.findall(r"\[\[(?:On\.|Continue)\||>\s*On\.\s*</button>|textContent = [^;]{0,80}'On\.'", html)
+    r.expect(not found, "vague labels in the build: %s" % found[:6])
+
+
+@check("voices-slip-lets-back-through", "2026-11-08 nightwork (family A): a VOICES slip still typing does not swallow the first click on Back to the room")
+def _(r):
+    r.go("Coach and Horses bar")
+    r.room_ready("cb")
+    r.click_object("cb", "A cow")
+    r.wait_for("() => !!document.querySelector('.dss-hint-slip.dss-hint-voices:not(.typed):not(.out)')", 12000, "the VOICES slip to start typing")
+    b = r.page.locator(".dss-room-back:visible").first.bounding_box()
+    r.page.mouse.click(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+    r.wait_for("() => window.__dssRooms.cb.mode() !== 'inspect'", 4000, "one click on Back to the room to leave the close-up while VOICES types")
+
 def main(argv):
     want = [a.lower() for a in argv[1:]]
     todo = [c for c in CHECKS if not want or any(w in c[0] for w in want)]
@@ -709,10 +871,12 @@ def main(argv):
                 print("        - " + line)
             if getattr(r, "info", ""):
                 print("        . " + r.info[:400])
+        print("%d of %d passed in %.0f s%s" % (len(todo) - failed, len(todo), time.time() - t_all, "" if not failed else "; screenshots in " + SHOTS), flush=True)
+        # 2026-11-08: closing the browser after a long run sometimes never returns; the summary is out, so give it 20 s and go
+        threading.Timer(20, lambda: os._exit(1 if failed else 0)).start()
         browser.close()
     srv.shutdown()
-    print("%d of %d passed in %.0f s%s" % (len(todo) - failed, len(todo), time.time() - t_all, "" if not failed else "; screenshots in " + SHOTS))
-    return 1 if failed else 0
+    os._exit(1 if failed else 0)
 
 
 if __name__ == "__main__":

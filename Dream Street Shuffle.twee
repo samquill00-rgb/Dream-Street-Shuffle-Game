@@ -1549,9 +1549,16 @@ window.dssAudio = (function() {
     var src = ac.createBufferSource(); src.buffer = buf;
     var f = ac.createBiquadFilter(); f.type='highpass';
     f.frequency.value = 2000; f.Q.value = 0.7;
-    var g = ac.createGain(); g.gain.value = 0.5;
+    var g = ac.createGain(); g.gain.value = 0.8; /* 2026-11-08 (Sam, note 7: "too weak"): 0.5 to 0.8, and a body under the hiss (below) */
     src.connect(f); f.connect(g); g.connect(dry); g.connect(conv);
     src.start(now);
+    var bsrc = ac.createBufferSource(); bsrc.buffer = buf;
+    var bf = ac.createBiquadFilter(); bf.type = 'bandpass'; bf.frequency.value = 900; bf.Q.value = 0.8;
+    var bg = ac.createGain(); bg.gain.setValueAtTime(0.9, now); bg.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    bsrc.connect(bf); bf.connect(bg); bg.connect(dry); bg.connect(conv); bsrc.start(now);
+    var th = ac.createOscillator(), thg = ac.createGain(); th.type = 'sine'; th.frequency.setValueAtTime(140, now); th.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+    thg.gain.setValueAtTime(0.0001, now); thg.gain.exponentialRampToValueAtTime(0.5, now + 0.006); thg.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    th.connect(thg); thg.connect(dry); th.start(now); th.stop(now + 0.18);
     // ── Shimmery tinkles on top — broken-glass sparkle ────────────
     for (var k = 0; k < 5; k++) {
       var t0 = now + 0.08 + Math.random() * 0.4;
@@ -2797,7 +2804,7 @@ window.dssAudio = (function() {
     }
     if (bed.source) {
       bed.source.onended = null; // a gapMs bed must not reschedule from the fading source
-      _letGo(bed.source, bed.gain ? bed.gain.gain.value : 0, /^The Night Ahead$/.test(((document.getElementById('dss-pn') || {}).textContent || '').trim()) ? 6 : BED_LEAVE_S); /* 2026-11-07 (Sam, playtest note 1: "Fade the music out more slowly into this page"): the Title's street music lets go over 6 s into The Night Ahead */
+      _letGo(bed.source, bed.gain ? bed.gain.gain.value : 0, /^The Night Ahead$/.test(((document.getElementById('dss-pn') || {}).textContent || '').trim()) ? 12 : BED_LEAVE_S); /* 2026-11-08 (Sam, playtest note 1: "Longer fadeout"): 6 s became 12 s. 2026-11-07 (Sam, playtest note 1: "Fade the music out more slowly into this page"): the Title's street music lets go over 6 s into The Night Ahead */
       bed.source = null;
     }
     bed.started = false;
@@ -5984,10 +5991,11 @@ window.dssTeachClaim = function() { window._dssTeachGen = window._passageGen; };
     if (!explainQ.length || !window.dssInlineHint) return;
     if (document.querySelector('.dss-hint-slip:not(.out)') || (window.dssOverlayBusy && window.dssOverlayBusy()) || !window.dssTeachFree()) { explainTimer = setTimeout(explainPump, 400); return; }
     window.dssTeachClaim();
-    window.dssInlineHint(explainQ.shift(), { sticky: true });
+    var exT = explainQ.shift(); window.dssInlineHint(exT, { sticky: true, modal: !!explainModal[exT] }); /* 2026-11-08: an explainer may ask to stay until clicked */
     if (explainQ.length) explainTimer = setTimeout(explainPump, 600);
   }
-  window.dssExplainSlip = function(text) { if (explainQ.indexOf(text) < 0) explainQ.push(text); if (!explainTimer) explainTimer = setTimeout(explainPump, 300); };
+  var explainModal = {};
+  window.dssExplainSlip = function(text, opts) { if (opts && opts.modal) explainModal[text] = true; if (explainQ.indexOf(text) < 0) explainQ.push(text); if (!explainTimer) explainTimer = setTimeout(explainPump, 300); };
 
 })();
 
@@ -6068,7 +6076,7 @@ window.dssOverlayBusy = function() {
     '#coin-overlay,#match-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,#dss-lily-overlay,' +
     '#dss-quest-overlay,' + /* 2026-10-23: #venue-hint-overlay, #word-wise-overlay and #wtw-overlay dropped from this list; nothing makes them any more */
     '#liver-eat-overlay,#napkin-popup-overlay,.dss-rules-overlay,' +
-    '#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro,' +
+    '#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro,.dss-mandala-intro,' +
     '#dss-lore-overlay,' /* 2026-10-19 overnight: a lore note or THE RUMOUR, so nothing pops up over his words while they are being read */ +
     '#dss-gate-flash,' /* 2026-10-21: the gold wheel after a haunt */ +
     '#dss-photo-pop' /* 2026-10-31: a polaroid on its own screen */
@@ -6099,13 +6107,16 @@ window.dssOverlayBusy = function() {
     var o = document.createElement('div'); o.id = 'dss-photo-pop'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-label', 'A memory');
     var x = document.createElement('button'); x.type = 'button'; x.className = 'dss-photo-pop-x'; x.setAttribute('aria-label', 'Close'); x.textContent = '×';
     var spot = document.createComment('polaroid'); ph.parentNode.insertBefore(spot, ph);
-    o.appendChild(ph); o.appendChild(x); document.body.appendChild(o);
+    /* 2026-11-08 (Sam, playtest note 20: "some prompt to click off of the polaroid ... even if it is just a tiny cross"): the × sits on the photo's own corner, a line under it says how to put it away, and any click closes */
+    var fr = document.createElement('div'); fr.className = 'dss-photo-pop-frame'; fr.appendChild(ph); fr.appendChild(x);
+    var hn = document.createElement('div'); hn.className = 'dss-photo-pop-hint'; hn.textContent = 'Click anywhere to put it away.';
+    o.appendChild(fr); o.appendChild(hn); document.body.appendChild(o);
     requestAnimationFrame(function() { o.classList.add('in'); });
     var gen = window._passageGen;
     function close() { document.removeEventListener('keydown', onKey, true); o.classList.remove('in'); o.classList.add('out'); setTimeout(function() { if (o.parentNode) o.parentNode.removeChild(o); }, 500); }
     function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } }
     x.addEventListener('click', function(ev) { ev.stopPropagation(); close(); });
-    o.addEventListener('click', function(ev) { if (ev.target === o) close(); });
+    var t0 = Date.now(); o.addEventListener('click', function(ev) { if (Date.now() - t0 > 400) close(); });
     document.addEventListener('keydown', onKey, true);
     var w = setInterval(function() { if (window._passageGen !== gen) { clearInterval(w); if (o.parentNode) o.parentNode.removeChild(o); document.removeEventListener('keydown', onKey, true); } else if (!o.parentNode) clearInterval(w); }, 400);
   }
@@ -6213,7 +6224,7 @@ function tileAt(c, r) { return (c < 0 || r < 0 || c >= COLS || r >= ROWS) ? '#' 
 // arrival (the Ginger Light corner, the Cecil Court alley mouth, the north exit to Centre Point).
 var DOORS = [
   { id:'french',   c:20, r:30, fc:19, fr:30, name:'THE FRENCH',                 label:'The French',        col:[192,57,60],   rx:/The French/i },
-  { id:'colony',   c:15, r:22, fc:16, fr:22, name:'THE COLONY ROOM',            label:'Colony Room',       col:[112,196,96],  rx:/Colony Room/i },
+  { id:'colony',   c:15, r:21, fc:16, fr:21, name:'THE COLONY ROOM', /* 2026-11-08 (Sam, playtest note 26: "too close to the alleyway ... move it slightly higher"): r 22 → 21, off Meard Street */            label:'Colony Room',       col:[112,196,96],  rx:/Colony Room/i },
   { id:'doorway',  c:15, r:30, fc:16, fr:30, name:'A DOORWAY',                  label:'A doorway',         col:[150,168,200], rx:/doorway/i, quiet:true },
   { id:'chippy',   c:15, r:6,  fc:16, fr:6,  name:'THE HALIBUT (FISH AND CHIPS)', label:'The Halibut',    col:[240,208,112], rx:/chippy|Halibut/i },
   { id:'ronnies',  c:27, r:23, fc:28, fr:23, name:"RONNIE SCOTT’S",             label:"Ronnie Scott’s",    col:[138,111,216], rx:/Ronnie Scott/i },
@@ -7484,7 +7495,7 @@ function init(container) {
       if (f.gt >= f.fade) { S.fg = null; S.fgDone = true; }
     }
   }
-  function tick() {
+  function simStep() {
     if (!S.alive) return;
     S.t++;
     if (S.t <= 90 && applyRows()) settleLabels(); // the header lifts and the title block settles under us in the first frames: at init the map's top reads ~150px low
@@ -7646,8 +7657,22 @@ function init(container) {
     if (ct2.moveTo) { var mx2 = ct2.moveTo.x - ct2.x; ct2.x += Math.sign(mx2) * 0.6; ct2.t++; if (Math.abs(mx2) < 1) { ct2.x = ct2.moveTo.x; ct2.moveTo = null; ct2.next = 20 + Math.random()*30; } }
     else { ct2.next -= 1/60; if (ct2.next <= 0) { var lamp2 = LAMPS.filter(function(l){ return !lampOut(l) && l.r === ct2.row && Math.abs(l.c*T - ct2.x) > 3*T && Math.abs(l.c*T - ct2.x) < 14*T; }); if (lamp2.length) { var pick = lamp2[Math.floor(Math.random()*lamp2.length)]; ct2.moveTo = { x: pick.c*T + 2 }; } else ct2.next = 20 + Math.random()*30; } }
     ct2.blink = (S.t % 200) < 6;
-    draw();
+  }
+  /* 2026-11-08 (Sam, playtest note 35: "The walking pace of the figure on the map gets slower and slower as things go on"): the map moved one
+     step of its world per animation frame, so as the night filled the map (lit windows, trails, strangers) and the frame rate fell, the walk
+     slowed with it. The world now runs on its own clock: its step length is the page's own frame time measured over the first frames
+     (the pace Sam tuned on his machine, between 60 and 120 a second), and as many steps are run as real time asks, five at most a frame. */
+  function tick(now) {
+    if (!S.alive) return;
     S.raf = requestAnimationFrame(tick);
+    now = now || performance.now();
+    if (S.lastNow == null) { S.lastNow = now; S.acc = 0; S.dts = []; S.simMs = 1000 / 60; simStep(); draw(); return; }
+    var dt = Math.min(100, now - S.lastNow); S.lastNow = now;
+    if (S.dts.length < 40) { S.dts.push(dt); if (S.dts.length === 40) { var srt = S.dts.slice().sort(function(a, b) { return a - b; }); S.simMs = Math.max(1000 / 125, Math.min(1000 / 55, srt[12])); } }
+    S.acc += dt; var n = 0;
+    while (S.acc >= S.simMs && n < 5) { simStep(); S.acc -= S.simMs; n++; if (!S.alive) return; }
+    if (n >= 5) S.acc = 0;
+    if (n) draw();
   }
   function drawCab(x, cab) {
     var cx = Math.round(cab.x), cy = cab.y, fwd = cab.dir;
@@ -8515,7 +8540,7 @@ document.addEventListener('keydown', function(e) {
   function noteBtn() {
     if (!window.DSS_DEV || !document.body || document.getElementById('dss-note-btn')) return;
     var b = document.createElement('button'); b.type = 'button'; b.id = 'dss-note-btn'; b.textContent = 'NOTE'; b.title = 'Playtest note (Shift+N)';
-    b.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:2147482999;background:#173126;color:#d8f2e2;border:1px solid #4f9a76;border-radius:5px;padding:5px 10px;font:600 11px/1 system-ui,sans-serif;letter-spacing:.08em;cursor:pointer;opacity:.8';
+    b.style.cssText = 'position:fixed;left:10px;top:50%;z-index:2147482999;background:#173126;color:#d8f2e2;border:1px solid #4f9a76;border-radius:5px;padding:5px 10px;font:600 11px/1 system-ui,sans-serif;letter-spacing:.08em;cursor:pointer;opacity:.8';
     document.body.appendChild(b);
   }
   window.addEventListener('pointerdown', function(e) { if (e.target && e.target.id === 'dss-note-btn') { e.preventDefault(); e.stopImmediatePropagation(); if (!open) show(); } }, true);
@@ -8710,7 +8735,7 @@ window.dssQuestPopup = function() {
     (titleEl ? '<div class="dss-quest-name">' + titleEl.innerHTML + '</div>' : '') +
     '<p class="coin-overlay-text">' + (bodyEl ? bodyEl.innerHTML : offer.innerHTML) + '</p>' +
     '<div class="dss-key-foot"><button type="button" class="coin-overlay-btn dss-quest-go">' +
-      (goLink ? goLink.textContent.trim() : 'On.') + '</button></div>';
+      'Go on</button></div>'; /* 2026-11-08 nightwork (family E): the stay-on-the-page card said "On." */ /* 2026-11-08 (Sam, playtest note 17: "You shouldn't have to click 'I'll look for it' twice"): the card opens on that press, so its own button says Go on */
   overlay.appendChild(box);
   document.body.appendChild(overlay);
   var shown = false;
@@ -8814,8 +8839,9 @@ window.dssKeyPopup = function() {
         '<div class="coin-overlay-stage dss-key-stage">' + (window.DSS_KEY_ART[kid] || '') + '</div>' +
         '<p class="coin-overlay-text">' + msg + '</p>' +
         '<span class="inventory-note">' + ((window.DSS_KEY_LABEL[kid] || 'THE KEY').toUpperCase()) + ' \u00b7 POCKETED</span>' +
-        '<div class="dss-key-foot"><button type="button" class="coin-overlay-btn dss-key-leave">On.</button></div>';
-      for (var k = 1; k <= 12; k++) {
+        '<div class="dss-key-foot"><button type="button" class="coin-overlay-btn dss-key-leave">Go on</button></div>'; /* 2026-11-08 nightwork (family E): the POCKETED card's button said "On." */
+      if (window.dssSpawnMotes) window.dssSpawnMotes(box, 'item-mote', 12, { noScroll: true }); /* 2026-11-08 (note 11): pocketed things trail to the NOTEBOOK */
+      else for (var k = 1; k <= 12; k++) {
         var m = document.createElement('span');
         m.className = 'item-mote item-mote-' + k;
         box.appendChild(m);
@@ -8883,7 +8909,7 @@ window.dssLilyPopup = function(hook) {
   box.innerHTML = html;
   overlay.appendChild(box);
   document.body.appendChild(overlay);
-  if (count) for (var k = 1; k <= 12; k++) { var m = document.createElement('span'); m.className = 'item-mote item-mote-' + k; box.appendChild(m); }
+  if (count) { if (window.dssSpawnMotes) setTimeout(function() { window.dssSpawnMotes(box, 'item-mote', 12, { noScroll: true }); }, 60); else for (var k = 1; k <= 12; k++) { var m = document.createElement('span'); m.className = 'item-mote item-mote-' + k; box.appendChild(m); } } /* 2026-11-08 (note 11): the lily's petals trail to the NOTEBOOK */
   var a11y = window.dssModalA11y ? window.dssModalA11y(overlay, box, box.querySelector('.dss-lily-label'), close, { focusEl: box.querySelector('.dss-lily-close') }) : null;
   var done = false;
   function close() {
@@ -9518,6 +9544,7 @@ window.__dssHintShow = function(html, passage, go, then, modal, tag) {
     while (onScreen >= 3 && spare.length) { var oldest = spare.shift(); onScreen--; if (oldest.__dssFinish) oldest.__dssFinish(); }
     var card = document.createElement('div');
     card.className = 'dss-hint-slip';
+    if (/^VOICES\n/.test(String(html))) card.classList.add('dss-hint-voices'); /* 2026-11-08 (Sam, playtest note 5: "STILL THERE IS NO SLIP HERE EXPLAINING THE VOICES"): the VOICES slip shows at once, over the card where the voices speak, instead of waiting hidden for it to close */
     card.__dssBorn = Date.now();
     card.__dssPassage = passage || window.__dssHintPassage();
     var mark = document.createElement('span');
@@ -9559,8 +9586,8 @@ window.__dssHintShow = function(html, passage, go, then, modal, tag) {
       card.classList.add('dss-hint-modal');
       /* 2026-11-07 (Sam, playtest: "I went to the photos in the french and the mouse stopped working"): a modal slip that is hidden (the stack waits while a room's card is read) swallowed every click, so nothing could be pressed and nothing said why; it holds clicks only while it can be seen */
       var cardHidden = function() { try { return !card.getClientRects().length || getComputedStyle(card).visibility === 'hidden'; } catch (e) { return false; } };
-      var swallow = function(ev) { if (card.__dssGoing) { document.removeEventListener('click', swallow, true); document.removeEventListener('pointerdown', stopPd, true); return; } if (card.contains(ev.target) || cardHidden()) return; ev.preventDefault(); ev.stopImmediatePropagation(); if (card.classList.contains('typed')) card.__dssFinish(); };
-      var stopPd = function(ev) { if (card.__dssGoing || cardHidden()) return; if (!card.contains(ev.target)) { ev.preventDefault(); ev.stopImmediatePropagation(); } };
+      var swallow = function(ev) { if (card.__dssGoing) { document.removeEventListener('click', swallow, true); document.removeEventListener('pointerdown', stopPd, true); return; } if (card.contains(ev.target) || cardHidden()) return; if (card.classList.contains('dss-hint-voices')) { card.__dssFinish(); return; } /* 2026-11-08 nightwork (family A): also while it is still typing; the room check found Back to the room swallowed by a VOICES slip mid-type */ /* 2026-11-08: the VOICES slip, read beside the card, lets a click once it is typed go where it was aimed (it closes too), so Back to the room never needs two presses */ ev.preventDefault(); ev.stopImmediatePropagation(); if (card.classList.contains('typed')) card.__dssFinish(); };
+      var stopPd = function(ev) { if (card.__dssGoing || cardHidden() || card.classList.contains('dss-hint-voices')) return; if (!card.contains(ev.target)) { ev.preventDefault(); ev.stopImmediatePropagation(); } };
       document.addEventListener('click', swallow, true); document.addEventListener('pointerdown', stopPd, true);
     }
     stack.appendChild(card);
@@ -14313,7 +14340,7 @@ window.dssLore = (function() {
      regular chain of pressing steps. This should occur in all similar instances"): a note seen for the first time is owed, not opened on a timer.
      The player's next onward press on that page (a link in the words, or a room card's button) opens it first, as the card with On.; On. (or ×,
      or Escape) then carries the press on. Once a browser, as before; its ⟡ LORE mark still opens it any time. */
-  var owed = [], passing = false;
+  var owed = [], passing = false, pressLabel = ''; /* 2026-11-08 (Sam, playtest note 14: "should say 'Look in' not 'On'"): the words of the press a note was owed to, for the last note's button */
   /* 2026-10-31 (Sam: "so many options for LORE ... the LORE of a passage should appear automatically when you click off a page that has 'lore';
      there should be no button or way to click it before then"): every note on a page is owed the moment the page is drawn, with no ⟡ LORE mark
      in the words and no LORE button on a room card; the press that leaves the page opens it first, as the card with On., and On. carries the
@@ -14326,10 +14353,11 @@ window.dssLore = (function() {
     function live() { owed = owed.filter(function(o) { return o.gen === window._passageGen && !autoDone(o.t) && (o.fn || notes[o.t] || (o.l && o.l.isConnected)); }); }
     live(); if (!owed.length) return;
     ev.preventDefault(); ev.stopImmediatePropagation();
+    pressLabel = el.classList.contains('dss-room-strip-btn') ? '' : (el.textContent || '').replace(/\s+/g, ' ').replace(/^[\u2190\u2192\s]+|[\u2190\u2192\s]+$/g, '').trim();
     /* 2026-10-31 (two notes owed on one page, the first haunt's Great Work and Shelley's liver at O'Flatterly's Gift): each "On." opens the next owed note; the last one carries the press on */
     (function next() {
       live(); var o = owed.shift();
-      if (!o) { setTimeout(function() { if (!el.isConnected) return; passing = true; try { el.click(); } finally { passing = false; } }, 260); return; }
+      if (!o) { pressLabel = ''; setTimeout(function() { if (!el.isConnected) return; passing = true; try { el.click(); } finally { passing = false; } }, 260); return; }
       autoMark(o.t); autoFirst = o.t;
       thenDo = function() { setTimeout(next, 220); };
       if (o.fn) o.fn(); else open(o.l);
@@ -14368,7 +14396,7 @@ window.dssLore = (function() {
     c.appendChild(x); c.appendChild(h); c.appendChild(b);
     var after = thenDo; thenDo = null;
     function done() { if (held.parentNode === b) b.removeChild(held); close(); document.removeEventListener('keydown', onKey, true); if (after) after(); }
-    if (auto) { var on = document.createElement('button'); on.type = 'button'; on.className = 'dss-lore-on'; on.textContent = 'On.'; on.addEventListener('click', function(ev) { ev.stopPropagation(); done(); }); c.appendChild(on); setTimeout(function() { try { on.scrollIntoView({ block: 'nearest' }); } catch (e) {} }, 60); }
+    if (auto) { var on = document.createElement('button'); on.type = 'button'; on.className = 'dss-lore-on'; on.textContent = owed.length ? 'Next note' : (pressLabel && pressLabel.length <= 40) ? pressLabel : 'Go on'; /* 2026-11-08 nightwork (family E): was "On." for both */ on.addEventListener('click', function(ev) { ev.stopPropagation(); done(); }); c.appendChild(on); setTimeout(function() { try { on.scrollIntoView({ block: 'nearest' }); } catch (e) {} }, 60); }
     o.appendChild(c); document.body.appendChild(o);
     function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); done(); } }
     x.addEventListener('click', done);
@@ -14479,11 +14507,16 @@ window.dssLore = (function() {
     var iv = setInterval(function() {
       if (window._passageGen !== gen || !box.isConnected) { clearInterval(iv); return; }
       var shown = box.getClientRects().length > 0 && getComputedStyle(box).display !== 'none' && getComputedStyle(box).visibility !== 'hidden';
-      var busy = (window.dssOverlayBusy && window.dssOverlayBusy()) || document.querySelector('.dss-hint-slip:not(.out), tw-dialog, .dss-rules-overlay, #dss-gate-flash');
+      /* 2026-11-08 (Sam, playtest note 8: "When that wheel shows up there should be some explanation of the point of it"): a slip left standing (they stay until closed) kept this note away for good; only a slip still typing, or a must-read one, holds it now */
+      var busy = (window.dssOverlayBusy && window.dssOverlayBusy()) || document.querySelector('.dss-hint-slip:not(.out):not(.typed), .dss-hint-slip.dss-hint-modal:not(.out), tw-dialog, .dss-rules-overlay, #dss-gate-flash');
       if (!shown || busy) { since = 0; return; }
       since += 250; if (since < 2200) return;
       clearInterval(iv);
-      var src = document.getElementById('dss-lore-greatwork'); if (!src || window.dssLore.firstDone(NOTE)) return;
+      /* and once a GAME, not once a browser (the voices' rule): a new game opens it again on its first haunt */
+      var run = 0; try { run = +localStorage.getItem('dssRunFirst') || 0; } catch (e) {}
+      var seenRun = null; try { seenRun = localStorage.getItem('dssGreatWorkRun'); } catch (e) {}
+      var src = document.getElementById('dss-lore-greatwork'); if (!src || seenRun === String(run)) return;
+      try { localStorage.setItem('dssGreatWorkRun', String(run)); } catch (e) {}
       window.dssLore.autoFrom(NOTE, src);
       try { var gw = Array.prototype.filter.call(document.querySelectorAll('.dss-gw-read tw-link'), function(l) { return !l.closest('.dss-ghost'); }).pop(); if (gw) gw.click(); } catch (e) {}
       dressCard(box);
@@ -14636,7 +14669,7 @@ document.addEventListener('keydown', function(ev) {
     var btns = Array.prototype.filter.call(c.querySelectorAll('button, tw-link'), function(b) { return b.getClientRects().length; });
     // only a button that puts the card away (Pocket them, On., the flower's), never an action such as Toss it
     var b0 = btns.length === 1 && btns[0];
-    if (b0 && (b0.matches('.coin-overlay-dismiss, .dss-key-leave, .dss-lily-close') || (b0.matches('.dss-quest-go') && b0.textContent.trim() === 'On.'))) { ev.preventDefault(); ev.stopPropagation(); b0.click(); }
+    if (b0 && (b0.matches('.coin-overlay-dismiss, .dss-key-leave, .dss-lily-close') || (b0.matches('.dss-quest-go') && /^(On\.|Go on)$/.test(b0.textContent.trim())))) { ev.preventDefault(); ev.stopPropagation(); b0.click(); }
     return;
   }
 }, true);
@@ -15193,7 +15226,7 @@ window.dssWatkinsVision = function() {
   var tip = null;
   function bioPlace(w) { if (!tip) return; var r = w.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight; tip.style.left = Math.max(8, Math.min(innerWidth - tw - 8, r.left + r.width / 2 - tw / 2)) + 'px'; tip.style.top = Math.max(8, Math.min(innerHeight - th - 8, (r.top - th - 10 > 8 ? r.top - th - 10 : r.bottom + 10))) + 'px'; }
   /* 2026-11-02 (Sam: "multiple parts on one screen, you click it through"): a bio with pages shows one part at a time; a click on the name pins it, a click on the name or the window turns the part, the last click closes; a click elsewhere or Escape closes */
-  function bioPage(w) { if (!tip) return; var b = BIOS[tip.dataset.k], n = b.pages.length, i = +tip.dataset.i; tip.lastChild.previousSibling.textContent = b.pages[i]; tip.lastChild.innerHTML = '<span class="wk-bio-count">' + (i + 1) + ' / ' + n + '</span><span class="wk-bio-on">' + (i < n - 1 ? 'On.' : 'Close.') + '</span>'; bioPlace(w); }
+  function bioPage(w) { if (!tip) return; var b = BIOS[tip.dataset.k], n = b.pages.length, i = +tip.dataset.i; tip.lastChild.previousSibling.textContent = b.pages[i]; tip.lastChild.innerHTML = '<span class="wk-bio-count">' + (i + 1) + ' / ' + n + '</span><span class="wk-bio-on"' + (i < n - 1 ? ' aria-label="Next" style="font-size:1.25em;line-height:1">\u2192' : '>Close.') + '</span>' /* 2026-11-08 (Sam, playtest note 15: "shouldn't say 'On' ... just an arrow pointing right") */; bioPlace(w); }
   function bioNext(w) { if (!tip) return; var b = BIOS[tip.dataset.k]; if (!b.pages) { bioHide(); return; } var i = +tip.dataset.i + 1; if (i >= b.pages.length) { bioHide(); return; } tip.dataset.i = i; bioPage(w); }
   function bioShow(k, w) { bioHide(); var b = BIOS[k]; if (!b) return; tip = document.createElement('div'); tip.className = 'wk-bio' + (b.draft ? ' wk-bio-draft' : '') + (b.pages ? ' wk-bio-paged' : ''); tip.setAttribute('role', 'tooltip'); tip.dataset.k = k; tip.dataset.i = 0; tip.innerHTML = '<div class="wk-bio-name"></div><div class="wk-bio-text"></div>' + (b.pages ? '<div class="wk-bio-foot"></div>' : ''); tip.firstChild.textContent = b.name; document.body.appendChild(tip); tip.addEventListener('mouseenter', function() { hideCancel(); }); tip.addEventListener('mouseleave', function() { if (!tip.dataset.pin) hideSoon(); }); if (b.pages) { tip.addEventListener('click', function(ev) { ev.stopPropagation(); tip.dataset.pin = '1'; bioNext(w); }); bioPage(w); } else { tip.lastChild.textContent = b.text; bioPlace(w); } requestAnimationFrame(function() { if (tip) tip.classList.add('in'); }); }
   function bioHide() { hideCancel(); if (tip && tip.parentNode) tip.parentNode.removeChild(tip); tip = null; }
@@ -15718,7 +15751,7 @@ document.addEventListener('click', function(ev) {
   var el = ev.target && ev.target.closest && ev.target.closest('tw-link, .fi-action, .coin-overlay-btn, .dss-ease-btn, button');
   if (!el || el.closest('.stat-bars, #stat-bars-lifted, tw-header, #dss-lore-overlay, .dss-lore-x, .dss-room-back')) return;
   var t = (el.textContent || '').replace(/\s+/g, ' ').replace(/[⟡◆◇❀❁▲△★☆✦✧]/g, '').trim();
-  if (!t || t.length > 40 || /^(·|NOTEBOOK|Continue|On\.|Back to the room)$/i.test(t)) return;
+  if (!t || t.length > 40 || /^(·|NOTEBOOK|Continue|Go on|On\.|Back to the room)$/i.test(t)) return;
   window._dssLastChoice = { text: t, at: Date.now() };
 }, true);
 /* 2026-10-29 (Sam: "I think all of the quotes should be styled different, maybe make them type out on a typewriter"): each quoted verse (.verse) is
@@ -15750,9 +15783,12 @@ document.addEventListener('click', function(ev) {
     function step() {
       if (!v.isConnected || ended) return;
       if (i >= cs.length) { end(); return; }
-      var c = cs[i++]; c.classList.add('vt-in'); c.parentNode.insertBefore(caret, c.nextSibling);
+      var c = cs[i++]; c.classList.add('vt-in');
+      /* 2026-11-08 (Sam, playtest note 9 at the Ham: "Short bursts of words, not staggered letters. Like 'The night ahead'"): a speech panel sets down a whole word at a time */
+      if (v.classList.contains('dss-speech')) { while (i < cs.length && /\S/.test(cs[i].textContent) && !/[,.;:!?]/.test(c.textContent)) { c = cs[i++]; c.classList.add('vt-in'); } }
+      c.parentNode.insertBefore(caret, c.nextSibling);
       var ch = c.textContent;
-      if (ch.trim() && window.dssAudio && window.dssAudio.typewriterTick && Date.now() - lastKey > 38) { lastKey = Date.now(); try { window.dssAudio.typewriterTick(v.classList.contains('dss-speech') ? 0.16 : 0.12); } catch (e) {} } if (v.classList.contains('dss-speech')) { /* 2026-11-05 (Sam, playtest note 17: "in bursts of short and fast"): a run of letters at full speed, then a breath at punctuation or after a few words */ burst++; var brk = /[,.;:!?]/.test(ch) ? 240 + Math.random() * 160 : (ch === ' ' && burst > 6 && Math.random() < 0.22) ? 160 + Math.random() * 240 : 0; if (brk) burst = 0; setTimeout(step, brk || 13 + Math.random() * 13); } else setTimeout(step, pace * (ch === ' ' ? 60 : /[,.;:!?]/.test(ch) ? 190 : 34 + Math.random() * 46));
+      if (ch.trim() && window.dssAudio && window.dssAudio.typewriterTick && Date.now() - lastKey > 38) { lastKey = Date.now(); try { window.dssAudio.typewriterTick(v.classList.contains('dss-speech') ? 0.16 : 0.12); } catch (e) {} } if (v.classList.contains('dss-speech')) { /* 2026-11-05 (Sam, playtest note 17: "in bursts of short and fast"): a run of letters at full speed, then a breath at punctuation or after a few words */ burst++; var brk = /[,.;:!?]/.test(ch) ? 260 + Math.random() * 140 : (ch === ' ' && burst > 10 && Math.random() < 0.3) ? 140 + Math.random() * 160 : 0; if (brk) burst = 0; setTimeout(step, brk || (ch === ' ' ? 30 + Math.random() * 30 : 55 + Math.random() * 35)); } else setTimeout(step, pace * (ch === ' ' ? 60 : /[,.;:!?]/.test(ch) ? 190 : 34 + Math.random() * 46));
     }
     setTimeout(step, 450);
   }
@@ -15924,12 +15960,15 @@ window._passageGen = 0;
                     }, 1800);
                   };
                   /* 2026-11-07 (Sam, playtest note 6: "Restore the smashing glass sound a second or two after the drink popup closes"): the box cue could fire before the drink popup had even opened, so the smash went off under it; now it always follows the popup's close by 1.5 s */
+                  /* 2026-11-08 (Sam, playtest note 7: "either happens too early and is too weak or doesn't happen at all. Fire it later"): 2.8 s after the popup closes
+                     (was 1.5 s), and if no drink popup has come by 9 s the smash comes anyway, 2.8 s after it is clear there is none */
                   var onDrinkClosed = function() {
                     window.removeEventListener('drinkpopup:closed', onDrinkClosed);
                     if (window._passageGen !== smashGen) return;
-                    doSmash(1500);
+                    doSmash(2800);
                   };
                   window.addEventListener('drinkpopup:closed', onDrinkClosed);
+                  setTimeout(function() { if (smashed || window._passageGen !== smashGen || document.getElementById('drink-popup-overlay')) return; window.removeEventListener('drinkpopup:closed', onDrinkClosed); doSmash(2800); }, 9000);
                 }
                 // Venue door creak + first-entry whoosh, by venue tag.
                 // Track `_currentVenue` so we don't creak on every sub-passage
@@ -22422,6 +22461,95 @@ window.dssGetGrainURL = function() {
   gx.putImageData(gd, 0, 0);
   window.dssGrainURL = gc.toDataURL();
   return window.dssGrainURL;
+};
+/* 2026-11-08 (Sam, playtest note 33, Himalayan Return: "psychedelic visuals through the mandala, exactly the same as when you go through the drain except psychedelic and kaleidoscopically coloured"): the drain's flight and lifecycle, the pipe swapped for a kaleidoscope tunnel (a shader on the tube's inside), rings of colour passing, and a turning mandala gate at the end that the camera goes through into light. */
+window.dssMandalaTravel = function(host) {
+  if (!host || host.dataset.mandalaStarted) return;
+  host.dataset.mandalaStarted = '1';
+  var renderer, scene, camera, raf = 0, stopped = false, loader, observer;
+  var deadline = setTimeout(cleanup, 12000);
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function cleanup() {
+    if (stopped) return; stopped = true; clearTimeout(deadline); clearInterval(checkOwner); cancelAnimationFrame(raf);
+    window.removeEventListener('resize', resize); if (observer) observer.disconnect();
+    if (loader) { loader.onload = loader.onerror = null; loader.remove(); }
+    if (scene) { scene.traverse(function(o) { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
+    if (renderer) { renderer.dispose(); renderer.forceContextLoss(); }
+    host.remove();
+  }
+  function resize() { if (!renderer || !camera) return; camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+  observer = new MutationObserver(function() { if (!host.isConnected) cleanup(); }); observer.observe(document.body, { childList: true, subtree: true });
+  var owner = document.querySelector('tw-passage');
+  var checkOwner = setInterval(function() { if (stopped) { clearInterval(checkOwner); return; } if (owner && !owner.isConnected) cleanup(); }, 200);
+  if (reduced) { clearTimeout(deadline); deadline = setTimeout(cleanup, 800); return; }
+  function build() {
+    if (stopped || !host.isConnected) return;
+    try {
+      var T = window.THREE;
+      scene = new T.Scene(); scene.background = new T.Color(0x07040c);
+      camera = new T.PerspectiveCamera(78, 1, 0.04, 90);
+      renderer = new T.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;';
+      host.prepend(renderer.domElement); resize(); window.addEventListener('resize', resize);
+      var path = new T.CatmullRomCurve3([new T.Vector3(0, 0, 8), new T.Vector3(0, 0, -6), new T.Vector3(4, 2, -20), new T.Vector3(-3, 4, -34), new T.Vector3(2, 1, -48), new T.Vector3(0, 0, -62)]);
+      var radius = 2.6;
+      function frame(u) { var pt = path.getPointAt(u), t = path.getTangentAt(u).normalize(); var right = new T.Vector3().crossVectors(t, new T.Vector3(0, 1, 0)).normalize(); var up = new T.Vector3().crossVectors(right, t).normalize(); return { p: pt, t: t, right: right, up: up }; }
+      var uni = { uT: { value: 0 }, uFade: { value: 0 } };
+      var tubeMat = new T.ShaderMaterial({ uniforms: uni, side: T.BackSide,
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: [
+          'uniform float uT; uniform float uFade; varying vec2 vUv;',
+          'vec3 hsv(float h, float s, float v){ vec3 k = clamp(abs(mod(h*6.0 + vec3(0.0,4.0,2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); return v * mix(vec3(1.0), k, s); }',
+          'void main(){',
+          '  float along = vUv.x * 46.0 - uT * 1.6;',
+          '  float seg = 12.0; float a = fract(vUv.y * seg); a = abs(a - 0.5) * 2.0;',
+          '  float r1 = sin(along * 1.7 + a * 9.0 + uT * 2.2);',
+          '  float r2 = cos(a * 17.0 - along * 0.9 + uT * 1.3);',
+          '  float r3 = sin(length(vec2(a * 3.0, fract(along * 0.25) * 3.0 - 1.5)) * 9.0 - uT * 3.0);',
+          '  float pat = (r1 * r2 + r3) * 0.5;',
+          '  float hue = fract(along * 0.035 + a * 0.45 + uT * 0.11 + pat * 0.12);',
+          '  float v = 0.38 + 0.62 * smoothstep(-0.2, 0.9, pat);',
+          '  float edge = smoothstep(0.0, 0.08, abs(fract(along * 0.5) - 0.5));',
+          '  vec3 c = hsv(hue, 0.78, v) * (0.55 + 0.45 * edge);',
+          '  c += vec3(1.0, 0.86, 0.5) * pow(max(0.0, 1.0 - abs(pat - 0.85) * 6.0), 2.0) * 0.6;',
+          '  gl_FragColor = vec4(mix(c, vec3(1.0, 0.97, 0.9), uFade), 1.0);',
+          '}'].join('\n') });
+      var tube = new T.Mesh(new T.TubeGeometry(path, 220, radius, 48, false), tubeMat); scene.add(tube);
+      var zAxis = new T.Vector3(0, 0, 1), rings = [];
+      for (var i = 0; i < 18; i++) {
+        var f = frame(0.04 + i * 0.05), rm = new T.MeshBasicMaterial({ color: new T.Color().setHSL((i * 0.13) % 1, 0.85, 0.6), transparent: true, opacity: 0.55, blending: T.AdditiveBlending, depthWrite: false });
+        var ring = new T.Mesh(new T.TorusGeometry(radius - 0.35, 0.04, 6, 60), rm); ring.position.copy(f.p); ring.quaternion.setFromUnitVectors(zAxis, f.t); scene.add(ring); rings.push(ring);
+      }
+      /* the mandala gate: drawn once on a canvas, a ring with an open heart the camera flies through */
+      var mc = document.createElement('canvas'); mc.width = mc.height = 1024; var x = mc.getContext('2d'); x.translate(512, 512);
+      var cols = ['#e8b84a', '#c23a6b', '#3a8fc2', '#6bc23a', '#8a3ac2', '#e86a2a'];
+      for (var ringN = 0; ringN < 6; ringN++) { var rr = 470 - ringN * 52, petals = 8 + ringN * 4; for (var k = 0; k < petals; k++) { x.save(); x.rotate(k * Math.PI * 2 / petals + ringN * 0.2); x.beginPath(); x.moveTo(0, rr - 50); x.quadraticCurveTo(22, rr - 18, 0, rr + 8); x.quadraticCurveTo(-22, rr - 18, 0, rr - 50); x.fillStyle = cols[(ringN + k) % cols.length]; x.globalAlpha = 0.85; x.fill(); x.globalAlpha = 1; x.strokeStyle = '#f6d98a'; x.lineWidth = 2; x.stroke(); x.restore(); } x.beginPath(); x.arc(0, 0, rr - 54, 0, Math.PI * 2); x.strokeStyle = 'rgba(246,217,138,.8)'; x.lineWidth = 3; x.stroke(); }
+      var gateMap = new T.CanvasTexture(mc);
+      var gEnd = frame(0.972), gate = new T.Mesh(new T.RingGeometry(0.55, radius - 0.05, 96, 1), new T.MeshBasicMaterial({ map: gateMap, transparent: true, side: T.DoubleSide, depthWrite: false }));
+      /* RingGeometry's uvs run 0..1 across its square, so the canvas sits on it whole */
+      gate.position.copy(gEnd.p); gate.quaternion.setFromUnitVectors(zAxis, gEnd.t); scene.add(gate);
+      var glow = new T.Mesh(new T.CircleGeometry(radius + 0.2, 64), new T.MeshBasicMaterial({ color: 0xfff1c8, side: T.DoubleSide }));
+      var gBehind = frame(0.997); glow.position.copy(gBehind.p); glow.quaternion.setFromUnitVectors(zAxis, gBehind.t); scene.add(glow);
+      host.style.animation = 'none'; clearTimeout(deadline); deadline = setTimeout(cleanup, 10500);
+      function travel(t) { var u = Math.min(1, t / 8.2); return 0.01 + (0.99 - 0.01) * (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2); }
+      var start = performance.now();
+      function render(now) {
+        if (stopped) return;
+        var el = (now - start) / 1000, u = travel(el), f = frame(u);
+        camera.position.copy(f.p); camera.up.copy(f.up).applyAxisAngle(f.t, el * 0.35); camera.lookAt(path.getPointAt(Math.min(0.999, u + 0.03)));
+        uni.uT.value = el; uni.uFade.value = Math.max(0, Math.min(1, (el - 7.6) / 0.9)); scene.background.setRGB(0.027 + 0.973 * uni.uFade.value, 0.016 + 0.954 * uni.uFade.value, 0.047 + 0.853 * uni.uFade.value); /* the tube's open end goes to light with the walls */
+        gate.rotateZ(0.01); glow.material.color.setHSL((0.12 + el * 0.05) % 1, 0.9, 0.82);
+        rings.forEach(function(r, i) { r.material.color.setHSL((i * 0.13 + el * 0.18) % 1, 0.85, 0.6); });
+        host.style.opacity = String(1 - Math.max(0, Math.min(1, (el - 9.0) / 0.8)));
+        renderer.render(scene, camera);
+        if (el >= 9.8) cleanup(); else raf = requestAnimationFrame(render);
+      }
+      raf = requestAnimationFrame(render);
+    } catch (e) { console.warn('Mandala transition unavailable', e); cleanup(); }
+  }
+  if (window.THREE) build();
+  else { loader = document.createElement('script'); loader.src = 'vendor/three/three.min.js'; loader.onload = build; loader.onerror = cleanup; document.head.appendChild(loader); }
 };
 // Stylised sewer travel: actual camera motion through a curved, faceted pipe.
 window.dssDrainTravel = function(host) {
@@ -29149,7 +29277,7 @@ var idle = camMode === 'idle' && !interactionBlocked;
 restGlows.forEach(function(g) {
 var vis = idle && g.on && g.spot !== hoverSpot;
 g.sp.visible = vis && !g.lilyOn;
-if (vis) g.sp.material.opacity = Math.min(1, restLevel * (g.next ? 1.1 : 1) * (g.spot._cameFor ? 1.2 : 1) * (g.used ? 0.38 : 1) * (still ? 0.95 : 0.84 + 0.16 * Math.sin(t * (g.next || g.spot._cameFor ? 0.9 : 0.5) + g.ph))); /* 2026-10-16: the one you came for burns a little harder and faster */
+if (vis) g.sp.material.opacity = Math.min(1, restLevel * (g.spot.glowLoud ? (typeof g.spot.glowLoud === 'function' ? g.spot.glowLoud() : g.spot.glowLoud) : 1) * (g.next ? 1.1 : 1) * (g.spot._cameFor ? 1.2 : 1) * (g.used ? 0.38 : 1) * (still ? 0.95 : 0.84 + 0.16 * Math.sin(t * (g.next || g.spot._cameFor ? 0.9 : 0.5) + g.ph))); /* 2026-10-16: the one you came for burns a little harder and faster */
 if (g.core) { g.core.visible = vis && !g.lilyOn; if (g.core.visible) g.core.material.opacity = 0.65 * g.sp.material.opacity; }
 var lv = idle && g.on && g.lilyOn;
 g.lily.visible = lv;
@@ -29330,7 +29458,7 @@ if (row) acts.forEach(function(link) {
 if (link.tagName !== 'TW-HOOK' && window.dssLore && window.dssLore.isLore(link.textContent) && !(spot.loreNext && link.isConnected && window.dssLore.openNext && !window.dssLore.firstDone(link.textContent))) return; /* 2026-10-31 (Sam): no LORE buttons; the note opens when you leave */
 var b = document.createElement('span');
 b.className = 'fi-action'; b.textContent = window.dssLoreLabel ? window.dssLoreLabel(link.textContent.trim()) : link.textContent.trim(); b.style.cssText = BTN; keyable(b);
-if (link.tagName !== 'TW-HOOK' && (/^\s*⟡/.test(link.textContent) || (link.querySelector && link.querySelector('.dss-orn')) || (window.dssLore && window.dssLore.isLore && window.dssLore.isLore(link.textContent)))) { /* every ⟡ … ⟡ link is a lore note; the ornament pass swaps its ⟡ for .dss-orn spans */ /* 2026-10-21 (Sam, of Ronnie's photographs: "the lore is a great idea! Let's just make that more obvious when you click"): a note to read wears the lore's gold and says LORE */ var loreT = link.textContent.trim().replace(/^(?:⟡\s*)?(?:LORE:\s*)?/, '').replace(/\s*⟡\s*$/, '').trim(); if (link.closest('.lore-card-only')) { /* 2026-10-24 (Sam, playtest at the Pillars: "The Lore doesn't need to be highlighted here. They should be equal"): the Great Ham's lore button wears the plain button, beside his other */ b.innerHTML = '⟡ LORE · ' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); } else { b.className += ' fi-lore-btn'; b.innerHTML = '<span class="fi-lore-mark">⟡ LORE</span>' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); b.style.cssText = BTN + 'color:#ffe2a0;border-color:rgba(216,184,112,0.8);background:rgba(40,28,8,0.6);text-shadow:0 0 8px rgba(255,220,150,0.55);'; }  if (spot.loreNext && link.isConnected && window.dssLore.openNext && !window.dssLore.firstDone(link.textContent)) { b.className = 'fi-action'; b.textContent = 'Continue'; b.style.cssText = BTN; b._dssLoreNext = true; var brow = card.querySelector('.dss-room-back-row'); if (brow) brow.style.display = 'none'; } }
+if (link.tagName !== 'TW-HOOK' && (/^\s*⟡/.test(link.textContent) || (link.querySelector && link.querySelector('.dss-orn')) || (window.dssLore && window.dssLore.isLore && window.dssLore.isLore(link.textContent)))) { /* every ⟡ … ⟡ link is a lore note; the ornament pass swaps its ⟡ for .dss-orn spans */ /* 2026-10-21 (Sam, of Ronnie's photographs: "the lore is a great idea! Let's just make that more obvious when you click"): a note to read wears the lore's gold and says LORE */ var loreT = link.textContent.trim().replace(/^(?:⟡\s*)?(?:LORE:\s*)?/, '').replace(/\s*⟡\s*$/, '').trim(); if (link.closest('.lore-card-only')) { /* 2026-10-24 (Sam, playtest at the Pillars: "The Lore doesn't need to be highlighted here. They should be equal"): the Great Ham's lore button wears the plain button, beside his other */ b.innerHTML = '⟡ LORE · ' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); } else { b.className += ' fi-lore-btn'; b.innerHTML = '<span class="fi-lore-mark">⟡ LORE</span>' + loreT.replace(/&/g, '&amp;').replace(/</g, '&lt;'); b.style.cssText = BTN + 'color:#ffe2a0;border-color:rgba(216,184,112,0.8);background:rgba(40,28,8,0.6);text-shadow:0 0 8px rgba(255,220,150,0.55);'; }  if (spot.loreNext && link.isConnected && window.dssLore.openNext && !window.dssLore.firstDone(link.textContent)) { b.className = 'fi-action'; b.textContent = 'Go on'; b.style.cssText = BTN; b._dssLoreNext = true; var brow = card.querySelector('.dss-room-back-row'); if (brow) brow.style.display = 'none'; } }
 if (link.tagName === 'TW-HOOK') { b.textContent = 'Always take a flower'; }
 if (keyActs.indexOf(link) >= 0) b.classList.add('fi-key-btn'); /* 2026-10-29 (Sam, playtest note 17: "The red text here should be much more obvious and loud. I REALLY WANT THEM TO TAKE IT") */
 if (link.classList && link.classList.contains('claude-draft') || (link.parentNode && link.parentNode.classList && link.parentNode.classList.contains('claude-draft'))) b.style.color = '#ff3aa8';
@@ -29338,6 +29466,8 @@ b.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); });
 b.addEventListener('click', function(ev) { ev.stopPropagation(); if (b._dssLoreNext) { window.dssLore.openNext(link, function() { stepBack(); }); return; } if (window.dssLore && window.dssLore.isLore && window.dssLore.isLore(link.textContent)) { window.dssLore.open(link); return; } if (link.getAttribute && link.getAttribute('data-dss-stay')) { link.click(); if (b.parentNode && !link.hasAttribute('data-dss-repeat')) b.parentNode.removeChild(b); try { card.focus({ preventScroll: true }); } catch (e) {} return; } if (!link.isConnected) { stepBack(); return; } if (spot.lilyGuard && roomHolds() === 'There is a lily in this room. Gather it.') { var lgS = window._dssLilyGuard = window._dssLilyGuard || {}; lgS[spot.lilyGuard] = lgS[spot.lilyGuard] || 0; if (lgS[spot.lilyGuard] < 2) { lgS[spot.lilyGuard]++; stepBack(); setTimeout(function() { hint.classList.remove('dss-lily-hint-flash'); void hint.offsetWidth; hint.classList.add('dss-lily-hint-flash'); petalLine(); }, 650); return; } } /* 2026-10-31 (Sam, playtest: WAY OUT with the lily still in the room): the first two presses keep you in, flash the lily line and run the petal trail to it */ var kOff = keyActs.indexOf(link) >= 0 ? keyOffer : null, lilyH = link.tagName === 'TW-HOOK' ? link : null; link.click(); stepBack(); if (o.onPress) o.onPress(spot, link); if (kOff) keyTaken(kOff); if (lilyH) lilyTaken(lilyH); });
 row.appendChild(b);
 });
+/* 2026-11-08 (Sam, playtest note 25: "The leave the brass lighter option was small and insignificant"): a key offer gets a leave button of the same weight as the take, beside it; it steps back to the room */
+if (row && keyActs.length && row.querySelector('.fi-key-btn')) { var lvb = document.createElement('span'); lvb.className = 'fi-action fi-key-leave'; lvb.textContent = 'Leave it where it is'; lvb.style.cssText = BTN; keyable(lvb); lvb.addEventListener('pointerdown', function(ev) { ev.stopPropagation(); }); lvb.addEventListener('click', function(ev) { ev.stopPropagation(); if (roomBlocked()) return; stepBack(); }); row.appendChild(lvb); }
 var wrow = card.querySelector('.fi-wayon');
 if (wrow) wayOn.forEach(function(sp) {
 var b = document.createElement('span');
@@ -30044,7 +30174,7 @@ var windowMat=new T.MeshBasicMaterial({color:0x7d989d,transparent:true,opacity:0
 for(var bar=0;bar<4;bar++)box(0.025,0.4,0.03,wood,-0.22+bar*0.15,0,0.02,windowG);
 }
 var btn=document.createElement('button');btn.type='button';btn.textContent=label;btn.style.cssText='position:absolute;bottom:58px;left:50%;transform:translateX(-50%);max-width:94vw;box-sizing:border-box;padding:14px 28px;z-index:9010;background:rgba(12,10,8,.65);border:1px solid rgba(212,178,88,.45);color:#dfc58f;font:14px Courier New,monospace;letter-spacing:3px;cursor:pointer;';
-btn.addEventListener('click',function(){btn.disabled=true;k.wrap.style.transition=k.still?'none':'opacity .65s ease';k.wrap.style.opacity='0';setTimeout(function(){k.wrap.hidden=true;k.host.style.display='none';var passage=k.host.closest('tw-passage');if(passage){passage.setAttribute('tabindex','-1');passage.focus({preventScroll:true});}},k.still?0:650);});k.wrap.appendChild(btn);
+btn.addEventListener('click',function(){btn.disabled=true;var arP=k.host.closest('tw-passage');if(arP)arP.classList.add('dss-arrived');k.wrap.style.transition=k.still?'none':'opacity .65s ease';k.wrap.style.opacity='0';setTimeout(function(){k.wrap.hidden=true;k.host.style.display='none';var passage=k.host.closest('tw-passage');if(passage){passage.setAttribute('tabindex','-1');passage.focus({preventScroll:true});}},k.still?0:650);});k.wrap.appendChild(btn);
 var origin=k.camera.position.clone(),target=new T.Vector3(cam[3],cam[4],cam[5]);
 return {hotspots:[],frame:function(t,dt,still){var u=still?1:Math.min(t/5,1),ease=u*u*(3-2*u);k.camera.position.copy(origin);k.camera.position.z-=ease*0.6;k.camera.lookAt(target);if(rain&&!still)rain.position.y=-((t*0.9)%1);if(extra.frame)extra.frame(t,dt,still);}};
 }});}
@@ -31172,7 +31302,7 @@ for(var fibre=0;fibre<700;fibre++){cx.fillStyle=fibre%3?'rgba(248,237,205,0.2)':
 cx.globalCompositeOperation='destination-out';for(var chip=0;chip<24;chip++){cx.beginPath();cx.arc(chip%2?0:w,(chip*37)%h,1+chip%3,0,Math.PI*2);cx.fill();}
 });
 [1.2, 2.3, 4.6].forEach(function(al, i) { var p = onBar(al, 0.05 + rnd(i + 60) * 0.15, 1.142); var bm = mesh(new THREE.PlaneGeometry(0.11, 0.11), new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1 }), p[0], p[1], p[2]); bm.rotation.x = -Math.PI / 2; bm.rotation.z = rnd(i + 70) * 6; });
-var ashPos = onBar(3.3, -0.05, 1.14);
+var ashPos = onBar(3.48, -0.05, 1.14); /* 2026-11-08 (Sam, playtest note 6: "the ash tray was combining/interfering with another object"): its rim ran 2 cm into the glass beside it; 3.3 → 3.48 along the bar */
 var ashG=new THREE.Group();ashG.position.set(ashPos[0],ashPos[1],ashPos[2]);scene.add(ashG);
 var ashGlass=new THREE.MeshPhysicalMaterial({color:0xb6bca9,roughness:0.32,metalness:0,envMap:roomEnv,envMapIntensity:0.55,clearcoat:0.4,transparent:true,opacity:0.3,depthWrite:false,side:THREE.FrontSide});
 var ashProfile=[[0,0.001],[0.039,0.001],[0.047,0.005],[0.051,0.018],[0.050,0.023],[0.045,0.024],[0.039,0.010],[0,0.009]].map(function(p){return new THREE.Vector2(p[0],p[1]);});
@@ -31256,7 +31386,7 @@ function frIntro(k) { var pass = window.dssRoomScope(fiHost); var e = pass && pa
 /* 2026-11-07 (Sam: the French is the teaching place, and the photographs have to be looked at so the VOICES are learnt): until they are, this run, only the photographs glow; the door, the way out, waits with the rest */
 function fiHeld() { return !!(window.dssVoices && window.dssVoices.fiPhotosSeen && !window.dssVoices.fiPhotosSeen()); }
 var HOTSPOTS = [
-{ root: photoG, name: 'Photographs', /* 2026-10-19 (Sam, playtest: "zoom in a little closer to the easter egg image"): centred on his photograph (frame 5, x 1.34) from about 1.2 away, was pos [0.2, 1.95, -2.4], tgt [0.9, 2.0, -4.5] */ pos: [1.2, 2.0, -3.25], tgt: [1.34, 2.0, -4.45], haloAt: [1.78, 2.0, -4.4], haloSc: 1.4 }, // 2026-10-14 (Sam): the glow sat on a frame; now in the gap between frames 5 and 6
+{ root: photoG, name: 'Photographs', /* 2026-10-19 (Sam, playtest: "zoom in a little closer to the easter egg image"): centred on his photograph (frame 5, x 1.34) from about 1.2 away, was pos [0.2, 1.95, -2.4], tgt [0.9, 2.0, -4.5] */ pos: [1.2, 2.0, -3.25], tgt: [1.34, 2.0, -4.45], haloAt: [1.78, 2.0, -4.4], haloSc: 2.1, glowLoud: function() { return fiHeld() ? 2.4 : 1.5; } }, /* 2026-11-08 (Sam, playtest note 4: "much brighter and more obvious"): a bigger, louder glow (glowLoud), loudest while it is the only one */ // 2026-10-14 (Sam): the glow sat on a frame; now in the gap between frames 5 and 6
 { root: phoneG, name: 'A telephone', held: fiHeld, pos: [-2.2, 1.6, 0.6], tgt: [-3.45, 1.32, -0.35],
 actions: function() { return passageLinks('.phone-ringing tw-link'); },
 prose: function() { var d = passageLinks('.phone-ringing')[0]; if (!d) return ''; var c = d.cloneNode(true); Array.prototype.forEach.call(c.querySelectorAll('tw-link, tw-hook[name="lilyring"] tw-link'), function(l) { l.parentNode.removeChild(l); }); return c.textContent.replace(/\s+/g, ' ').trim(); } },
@@ -34660,12 +34790,13 @@ var haze = [[0, 2.2, barZ + 0.6, 4.5, 2.0], [-2.6, 2.0, 0.5, 2.4, 1.6], [1.2,1.9
 k.ghost(-4.7, 0, -0.6, 17, 0.14, true, false); k.ghost(3.1, 0, 2.7, 19, 0.12, true, false); k.ghost(2.8, 0.3, barZ + 0.9, 23, 0.16, true, false);
 // ---------- THE CLOSE-UPS ----------
 var hotspots = [
-{ root: cowG, name: 'A cow', pos: [0.15, 1.6, 2.1], tgt: [1.1, 1.05, -0.55], haloAt: [0.85, 1.95, -0.8], haloSc: 0.65,
-actions: function() { return k.byText(['Ride the beast', 'Milk her', 'Not tonight.']); } }, // 2026-10-16: the restored milking is the cow's other action /* 2026-10-29 nightwork (note 40's cow refusal sat on the loose-links strip, away from the cow): it joins the cow's card */
-{ root: bernard.hit, name: 'JEFFREY BERNARD', pos: [0.4, 1.5, 0.3], tgt: [-0.3, 0.7, barZ + 0.9], haloAt: [-0.85, 1.0, barZ + 1.0], haloSc: 0.55,
+{ root: cowG, name: 'A cow', pos: [0.15, 1.6, 2.1], tgt: [1.1, 1.05, -0.55], haloAt: (function() { /* 2026-11-08 (Sam, playtest note 37: "The cow's halo should be much more on it, not on the wall behind it"): the halo sits at the middle of the cow's own body, measured, not at a point beside and above it */ var bb = new THREE.Box3().setFromObject(cowG), c = bb.getCenter(new THREE.Vector3()); return [c.x, c.y + (bb.max.y - bb.min.y) * 0.08, c.z]; })(), haloSc: 1.0,
+actions: function() { return k.byText(['Ride the beast', 'Milk her', 'Not tonight.']); },
+prose: function() { /* 2026-11-08 (Sam, playtest note 36: the question made no sense in the pub's opening words, when you can leave the cow alone): it is asked at the cow */ return k.byText(['Ride the beast']).length ? 'What will you do with his cow?' : ''; } }, // 2026-10-16: the restored milking is the cow's other action /* 2026-10-29 nightwork (note 40's cow refusal sat on the loose-links strip, away from the cow): it joins the cow's card */
+{ root: bernard.hit, name: 'JEFFREY BERNARD', pos: [0.4, 1.5, 0.3], tgt: [-0.3, 0.7, barZ + 0.9], haloAt: (function() { /* 2026-11-08 nightwork (family J, after Sam's playtest note 37 on the cow): the halo stood half a metre to his left, on the bar front; it sits on him now, measured from his own box */ scene.updateMatrixWorld(true); var c = new THREE.Box3().setFromObject(bernard.hit).getCenter(new THREE.Vector3()); return [c.x, c.y, c.z]; })(), haloSc: 0.55,
 actions: function() { return k.byText(['Give JEFFREY a light']); },
 keepProse: true, prose: function() { if (Array.prototype.some.call(document.querySelectorAll('.cb-jeff-heard'), function(x) { return !x.closest('.dss-ghost'); })) return ''; /* 2026-11-07 (Sam, A): the speech on the first visit only */ return "He resumes a conversation he hadn’t begun:\n\n‘I’d very much like to wake up one morning with a cow of the Friesian variety and walk her down to Soho to the Coach and Horses, stopping on the way to buy twenty Players, ply her with vodkas until closing time, whip her off to an Indian restaurant, take her up to the Colony Room till 5.30 and then to the Yorkminster, Swiss Tavern, Three Greyhounds, get beaten up by Chinese waiters at midnight, have a row with the taxi driver, set the bed on fire, put it out with tears and then wake up on the floor. Could you then milk said cow? I doubt it.’"; } }, /* 2026-10-21 (Sam): his Friesian speech (15 April words, restored 2026-10-16 into the passage) now speaks on his click; first visit only, since he has gone to Bohemia after it */
-{ root: glassHit, name: 'JEFFREY BERNARD’S glass', pos: [-0.15, 1.5, barZ + 1.2], tgt: [0.45, 1.18, barZ + 0.2], haloAt: [-0.1, 1.4, barZ + 0.18], haloSc: 0.4 },
+{ root: glassHit, name: 'JEFFREY BERNARD’S glass', pos: [-0.15, 1.5, barZ + 1.2], tgt: [0.45, 1.18, barZ + 0.2], haloAt: (function() { /* 2026-11-08 nightwork (family J): the halo floated 0.55 m left of the glass and above the bar; it sits on the glass now */ scene.updateMatrixWorld(true); var c = new THREE.Box3().setFromObject(glassG).getCenter(new THREE.Vector3()); return [c.x, c.y + 0.04, c.z]; })(), haloSc: 0.4 },
 { root: optics, name: 'Optics', pos: [0.2, 1.7, -0.5], tgt: [0.2, 2.2, -D / 2 + 0.2], haloAt: [-0.5, 2.58, -D / 2 + 0.3], haloSc: 0.65 },
 { root: phoneHit, name: 'A telephone', pos: [-1.6, 1.6, -0.6], tgt: [-2.35, 1.45, -D / 2 + 0.3], haloAt: [-2.35, 1.5, -D / 2 + 0.3], haloSc: 0.5,
 actions: function() { return k.passageLinks('.phone-ringing tw-link'); }, prose: function() { return k.modalProse(); } },
@@ -53815,7 +53946,7 @@ tpSign.style.cssText = 'position:absolute;top:7%;left:50%;transform:translateX(-
 tpWrap.appendChild(tpSign); setTimeout(function() { tpSign.style.opacity = '1'; }, 2600);
 
 var tpBtn = document.createElement('div');
-tpBtn.textContent = tpFull ? (function() { var kn = document.getElementById('dss-pt-keyname'); return kn && kn.textContent.trim() ? 'OFFER THE ' + kn.textContent.trim().toUpperCase() : 'STEP THROUGH'; })() : 'BACK TO THE PILLARS'; /* 2026-11-05 (Sam, playtest note 29): the scene's button names the offering too */
+tpBtn.textContent = tpFull ? (function() { var kn = document.getElementById('dss-pt-keyname'); return kn && kn.textContent.trim() ? 'MAKE YOUR OFFERING' : 'STEP THROUGH'; })() : 'BACK TO THE PILLARS'; /* 2026-11-05 (Sam, playtest note 29): the scene's button names the offering too. 2026-11-08 (Sam, playtest note 29: "'offer the' is repeated, the first time it should just say 'Make your offering'"): the scene asks, the page's link names the thing */
 tpBtn.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);padding:14px min(36px, 8vw);white-space:nowrap;max-width:calc(100vw - 16px);box-sizing:border-box;font:16px "Courier New",monospace;color:rgba(212,178,88,0.85);border:1px solid rgba(212,178,88,0.3);letter-spacing:min(4px, 0.9vw);cursor:pointer;z-index:9004;background:transparent;opacity:0;transition:opacity 2s ease;';
 setTimeout(function() { tpBtn.style.opacity = '1'; }, tpStill ? 900 : (tpFull ? 7200 : 4200));
 tpBtn.addEventListener('mouseenter', function() { tpBtn.style.color = 'rgba(230,200,120,0.95)'; tpBtn.style.borderColor = 'rgba(212,178,88,0.6)'; });
@@ -57674,8 +57805,8 @@ document.addEventListener('keydown', function(e) {
     if (restart) {
       restartHome = document.createComment('Dawn restart home');
       restart.parentNode.insertBefore(restartHome, restart);
-      restart.classList.add('dawn-petal-restart');
-      document.body.appendChild(restart);
+      /* 2026-11-08 (Sam, playtest note 44): ANOTHER NIGHT comes once the petals have been rising a good while */
+      setTimeout(function(){ if (stopped || !restart) return; restart.classList.add('dawn-petal-restart'); document.body.appendChild(restart); }, 14000);
     }
     var TAU = Math.PI * 2;
 
@@ -57860,11 +57991,11 @@ document.addEventListener('keydown', function(e) {
       delay = setTimeout(startPetalStorm, wait);
     }
     observer = new IntersectionObserver(function(entries){
-      if (entries.some(function(e){return e.isIntersecting;})) fire(18000);
+      if (entries.some(function(e){return e.isIntersecting;})) fire(1500); /* 2026-11-08 (Sam, playtest note 44: "The rising petals should happen long before the 'another night' link"): 18 s → 1.5 s */
     }, {threshold:0.3});
     observer.observe(trigger);
     /* 2026-11-01: the Dawn is paged now (no scrolling on a laptop); the flood waits for the page that holds the trigger to be shown */
-    fallback = setInterval(function(){ if (trigger && trigger.getClientRects().length) fire(18000); }, 3000);
+    fallback = setInterval(function(){ if (trigger && trigger.getClientRects().length) fire(1500); }, 500);
   }
   // Only a changed passage trigger starts a new lifecycle. Canvas frames do
   // not mutate the DOM, and leaving Dawn cancels every pending timer/animation.
@@ -61441,7 +61572,7 @@ window.dssFilm = function(on) { document.documentElement.classList.toggle('dss-n
   }, 0);
 })();
 </script>]
-(if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3) and ($notebook is not "stolen"))[<div id="cp-container"></div>[[·|Alba Complete]]](else:)[<div id="cp-container"></div>[[·|Alba Incomplete]]]
+<!-- 2026-11-08 (Sam, playtest note 41: "you still get the white ending here even if you haven't collected enough things"): the white ending wants the poem AND the night lived, the Fetch's own count ($needLilies flowers, $needHaunts haunts); a whole poem without them goes the dark way -->(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3) and ($notebook is not "stolen") and ($lilyCount >= $needLilies) and ($haunts's length >= $needHaunts))[<div id="cp-container"></div>[[·|Alba Complete]]](else:)[<div id="cp-container"></div>[[·|Alba Incomplete]]]
 
 :: PP Pong [pong] {"position":"1300,1550","size":"100,100"}
 <span id="pp-data-opponent" style="display:none;">(print: $opponent)</span>
@@ -62176,7 +62307,7 @@ You surface to Dean Street.
 <script>/* Fallback for the iframe-ready class. The iframe's own onload sets it after 400ms — but if the iframe is very slow or fails to load entirely, lightning would never fire (it's CSS-gated on .iframe-ready). 4s fallback ensures the bolts play even in degraded-network / WebGL-down scenarios. In the common case (HTTP-prefetched iframe loads in <1s) the onload handler wins and the fallback no-ops. */setTimeout(function(){var d=document.querySelector('.dawn-approach');if(d&&!d.classList.contains('iframe-ready'))d.classList.add('iframe-ready');},4000);</script>\
 <div class="dawn-approach">
 <iframe class="dawn-approach-iframe" src="oxford-street-from-centre-point-3d-static.html" frameborder="0" scrolling="no" onload="this.classList.add('loaded');var d=this.closest('.dawn-approach');if(d)setTimeout(function(){d.classList.add('iframe-ready');},400);"></iframe>
-(set: _ll to "<path d='M 0,0 C 0.5,5 0,10 0,15' fill='none' stroke='#9aa888' stroke-width='1.0' stroke-linecap='round' opacity='0.85'/><path d='M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15' fill='#8a9678' opacity='0.65' stroke='#5a6850' stroke-width='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='#f5f0e2' stroke='none' opacity='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='none' stroke='#9a8868' stroke-width='0.45' opacity='0.7'/><path d='M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z' fill='#fbfaf3' stroke='none' opacity='0.14'/><path d='M 0,17 Q 0,35 0,52' fill='none' stroke='#a08868' stroke-width='0.38' opacity='0.68' stroke-linecap='round'/><path d='M -2,17 Q -3,34 -3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M 2,17 Q 3,34 3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M -5,17 Q -7,34 -8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M 5,17 Q 7,34 8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M -7.5,18 Q -10,32 -10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><path d='M 7.5,18 Q 10,32 10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><circle cx='-1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='0' cy='50' r='0.5' fill='#7a6438' opacity='0.62'/>")(set: _pv to "<div class='centre-pent-overlay'><svg viewBox='0 0 560 700' preserveAspectRatio='xMidYMid meet'><defs><radialGradient id='cpVig' cx='50%' cy='42%' r='55%'><stop offset='0%' stop-color='rgba(8,6,4,0.55)'/><stop offset='70%' stop-color='rgba(8,6,4,0.18)'/><stop offset='100%' stop-color='rgba(8,6,4,0)'/></radialGradient></defs><rect width='560' height='700' fill='url(#cpVig)'/>")(set: _pv to _pv + "<g opacity='0.06' stroke='#d4a574' fill='none'><line x1='80' y1='140' x2='80' y2='640' stroke-width='1.5'/><line x1='190' y1='135' x2='190' y2='645' stroke-width='2'/><line x1='360' y1='140' x2='360' y2='640' stroke-width='2'/><line x1='490' y1='140' x2='490' y2='640' stroke-width='2'/><line x1='10' y1='370' x2='545' y2='370' stroke-width='2'/><line x1='80' y1='520' x2='510' y2='520' stroke-width='1.5'/><line x1='50' y1='620' x2='520' y2='620' stroke-width='1.5'/></g>")(set: _pv to _pv + "<g opacity='0.55'><circle cx='306' cy='70' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='476' cy='188' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='499' cy='560' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='209.2' cy='548' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='176' cy='228' r='16' fill='rgba(245,208,112,0.20)'/></g>")(set: _pv to _pv + "<polygon points='306,70 499,560 176,228 476,188 209.2,548' fill='none' stroke='#f5d070' stroke-width='2.2' opacity='0.95' stroke-linejoin='round'/>")(set: _pv to _pv + "<g class='pent-lilies' opacity='0.95'>")(if: $tookLily1 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-1' transform='translate(306,70) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily2 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-2' transform='translate(476,188) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily3 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-3' transform='translate(499,560) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily4 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-4' transform='translate(209.2,548) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily5 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-5' transform='translate(176,228) translate(0,-25)'>" + _ll + "</g>")](set: _pv to _pv + "</g>")(set: _pv to _pv + "</svg><div class='centre-pent-gawain'>And the English call it everywhere, as I hear, the endless knot.</div></div>")(print: _pv)
+(set: _ll to "<path d='M 0,0 C 0.5,5 0,10 0,15' fill='none' stroke='#9aa888' stroke-width='1.0' stroke-linecap='round' opacity='0.85'/><path d='M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15' fill='#8a9678' opacity='0.65' stroke='#5a6850' stroke-width='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='#f5f0e2' stroke='none' opacity='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='none' stroke='#9a8868' stroke-width='0.45' opacity='0.7'/><path d='M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z' fill='#fbfaf3' stroke='none' opacity='0.14'/><path d='M 0,17 Q 0,35 0,52' fill='none' stroke='#a08868' stroke-width='0.38' opacity='0.68' stroke-linecap='round'/><path d='M -2,17 Q -3,34 -3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M 2,17 Q 3,34 3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M -5,17 Q -7,34 -8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M 5,17 Q 7,34 8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M -7.5,18 Q -10,32 -10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><path d='M 7.5,18 Q 10,32 10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><circle cx='-1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='0' cy='50' r='0.5' fill='#7a6438' opacity='0.62'/>")(set: _pv to "<div class='centre-pent-overlay'><svg viewBox='0 0 560 700' preserveAspectRatio='xMidYMid meet'><defs><radialGradient id='cpVig' cx='50%' cy='42%' r='55%'><stop offset='0%' stop-color='rgba(8,6,4,0.55)'/><stop offset='70%' stop-color='rgba(8,6,4,0.18)'/><stop offset='100%' stop-color='rgba(8,6,4,0)'/></radialGradient></defs><rect width='560' height='700' fill='url(#cpVig)'/>")(set: _pv to _pv + "<g opacity='0.06' stroke='#d4a574' fill='none'><line x1='80' y1='140' x2='80' y2='640' stroke-width='1.5'/><line x1='190' y1='135' x2='190' y2='645' stroke-width='2'/><line x1='360' y1='140' x2='360' y2='640' stroke-width='2'/><line x1='490' y1='140' x2='490' y2='640' stroke-width='2'/><line x1='10' y1='370' x2='545' y2='370' stroke-width='2'/><line x1='80' y1='520' x2='510' y2='520' stroke-width='1.5'/><line x1='50' y1='620' x2='520' y2='620' stroke-width='1.5'/></g>")(set: _pv to _pv + "<g opacity='0.55'><circle cx='306' cy='70' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='476' cy='188' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='499' cy='560' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='209.2' cy='548' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='176' cy='228' r='16' fill='rgba(245,208,112,0.20)'/></g>")(set: _pv to _pv + "<polygon points='306,70 499,560 176,228 476,188 209.2,548' fill='none' stroke='#f5d070' stroke-width='2.2' opacity='0.95' stroke-linejoin='round'/>")<!-- 2026-11-08 (Sam, playtest note 42: "the pentagram is missing a dot on its bottom right spoke"): each point's lily is one venue's flower (bottom right is Ronnie Scott's); a point whose flower was not gathered now keeps a hollow ring, so the star always has its five points -->(unless: $tookLily1 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='306' cy='70' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](unless: $tookLily2 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='476' cy='188' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](unless: $tookLily3 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='499' cy='560' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](unless: $tookLily4 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='209.2' cy='548' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](unless: $tookLily5 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='176' cy='228' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](set: _pv to _pv + "<g class='pent-lilies' opacity='0.95'>")(if: $tookLily1 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-1' transform='translate(306,70) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily2 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-2' transform='translate(476,188) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily3 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-3' transform='translate(499,560) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily4 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-4' transform='translate(209.2,548) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily5 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-5' transform='translate(176,228) translate(0,-25)'>" + _ll + "</g>")](set: _pv to _pv + "</g>")(set: _pv to _pv + "</svg><div class='centre-pent-gawain'>And the English call it everywhere, as I hear, the endless knot.</div></div>")(print: _pv)
 <div class="dawn-approach-overlay dawn-approach-overlay-white"></div>
 </div>
 (after: 16s)[(go-to: "White page")]
@@ -62187,7 +62318,7 @@ You surface to Dean Street.
 <script>/* See note on Dawn Approach White. Same iframe-ready fallback. */setTimeout(function(){var d=document.querySelector('.dawn-approach');if(d&&!d.classList.contains('iframe-ready'))d.classList.add('iframe-ready');},4000);</script>\
 <div class="dawn-approach">
 <iframe class="dawn-approach-iframe" src="oxford-street-from-centre-point-3d-static.html" frameborder="0" scrolling="no" onload="this.classList.add('loaded');var d=this.closest('.dawn-approach');if(d)setTimeout(function(){d.classList.add('iframe-ready');},400);"></iframe>
-(set: _ll to "<path d='M 0,0 C 0.5,5 0,10 0,15' fill='none' stroke='#9aa888' stroke-width='1.0' stroke-linecap='round' opacity='0.85'/><path d='M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15' fill='#8a9678' opacity='0.65' stroke='#5a6850' stroke-width='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='#f5f0e2' stroke='none' opacity='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='none' stroke='#9a8868' stroke-width='0.45' opacity='0.7'/><path d='M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z' fill='#fbfaf3' stroke='none' opacity='0.14'/><path d='M 0,17 Q 0,35 0,52' fill='none' stroke='#a08868' stroke-width='0.38' opacity='0.68' stroke-linecap='round'/><path d='M -2,17 Q -3,34 -3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M 2,17 Q 3,34 3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M -5,17 Q -7,34 -8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M 5,17 Q 7,34 8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M -7.5,18 Q -10,32 -10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><path d='M 7.5,18 Q 10,32 10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><circle cx='-1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='0' cy='50' r='0.5' fill='#7a6438' opacity='0.62'/>")(set: _pv to "<div class='centre-pent-overlay'><svg viewBox='0 0 560 700' preserveAspectRatio='xMidYMid meet'><defs><radialGradient id='cpVig2' cx='50%' cy='42%' r='55%'><stop offset='0%' stop-color='rgba(8,6,4,0.55)'/><stop offset='70%' stop-color='rgba(8,6,4,0.18)'/><stop offset='100%' stop-color='rgba(8,6,4,0)'/></radialGradient></defs><rect width='560' height='700' fill='url(#cpVig2)'/>")(set: _pv to _pv + "<g opacity='0.06' stroke='#d4a574' fill='none'><line x1='80' y1='140' x2='80' y2='640' stroke-width='1.5'/><line x1='190' y1='135' x2='190' y2='645' stroke-width='2'/><line x1='360' y1='140' x2='360' y2='640' stroke-width='2'/><line x1='490' y1='140' x2='490' y2='640' stroke-width='2'/><line x1='10' y1='370' x2='545' y2='370' stroke-width='2'/><line x1='80' y1='520' x2='510' y2='520' stroke-width='1.5'/><line x1='50' y1='620' x2='520' y2='620' stroke-width='1.5'/></g>")(set: _pv to _pv + "<g opacity='0.55'><circle cx='306' cy='70' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='476' cy='188' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='499' cy='560' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='209.2' cy='548' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='176' cy='228' r='16' fill='rgba(245,208,112,0.20)'/></g>")(set: _pv to _pv + "<polygon points='306,70 499,560 176,228 476,188 209.2,548' fill='none' stroke='#f5d070' stroke-width='2.2' opacity='0.95' stroke-linejoin='round'/>")(set: _pv to _pv + "<g class='pent-lilies' opacity='0.95'>")(if: $tookLily1 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-1' transform='translate(306,70) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily2 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-2' transform='translate(476,188) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily3 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-3' transform='translate(499,560) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily4 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-4' transform='translate(209.2,548) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily5 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-5' transform='translate(176,228) translate(0,-25)'>" + _ll + "</g>")](set: _pv to _pv + "</g>")(set: _pv to _pv + "</svg><div class='centre-pent-gawain'>And the English call it everywhere, as I hear, the endless knot.</div></div>")(print: _pv)
+(set: _ll to "<path d='M 0,0 C 0.5,5 0,10 0,15' fill='none' stroke='#9aa888' stroke-width='1.0' stroke-linecap='round' opacity='0.85'/><path d='M 0,15 C -5,14 -6,16 -8,20 C -4,17 4,17 8,20 C 6,16 5,14 0,15' fill='#8a9678' opacity='0.65' stroke='#5a6850' stroke-width='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='#f5f0e2' stroke='none' opacity='0.35'/><path d='M 0,15 C -8,16 -12,22 -12,31 C -12,38 -11,43 -11,46 Q -12,50 -10,53 Q -8,56 -5.5,53 Q -3.5,56 -1.5,53 Q 0,56 1.5,53 Q 3.5,56 5.5,53 Q 8,56 10,53 Q 12,50 11,46 C 11,43 12,38 12,31 C 12,22 8,16 0,15 Z' fill='none' stroke='#9a8868' stroke-width='0.45' opacity='0.7'/><path d='M 0,20 C -6,21 -7,26 -7,33 C -7,40 -3,46 0,46 C 3,46 7,40 7,33 C 7,26 6,21 0,20 Z' fill='#fbfaf3' stroke='none' opacity='0.14'/><path d='M 0,17 Q 0,35 0,52' fill='none' stroke='#a08868' stroke-width='0.38' opacity='0.68' stroke-linecap='round'/><path d='M -2,17 Q -3,34 -3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M 2,17 Q 3,34 3.5,52' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.62' stroke-linecap='round'/><path d='M -5,17 Q -7,34 -8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M 5,17 Q 7,34 8,51' fill='none' stroke='#a08868' stroke-width='0.34' opacity='0.6' stroke-linecap='round'/><path d='M -7.5,18 Q -10,32 -10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><path d='M 7.5,18 Q 10,32 10.5,49' fill='none' stroke='#b09878' stroke-width='0.3' opacity='0.5' stroke-linecap='round'/><circle cx='-1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='1.5' cy='49' r='0.6' fill='#7a6438' opacity='0.65'/><circle cx='0' cy='50' r='0.5' fill='#7a6438' opacity='0.62'/>")(set: _pv to "<div class='centre-pent-overlay'><svg viewBox='0 0 560 700' preserveAspectRatio='xMidYMid meet'><defs><radialGradient id='cpVig2' cx='50%' cy='42%' r='55%'><stop offset='0%' stop-color='rgba(8,6,4,0.55)'/><stop offset='70%' stop-color='rgba(8,6,4,0.18)'/><stop offset='100%' stop-color='rgba(8,6,4,0)'/></radialGradient></defs><rect width='560' height='700' fill='url(#cpVig2)'/>")(set: _pv to _pv + "<g opacity='0.06' stroke='#d4a574' fill='none'><line x1='80' y1='140' x2='80' y2='640' stroke-width='1.5'/><line x1='190' y1='135' x2='190' y2='645' stroke-width='2'/><line x1='360' y1='140' x2='360' y2='640' stroke-width='2'/><line x1='490' y1='140' x2='490' y2='640' stroke-width='2'/><line x1='10' y1='370' x2='545' y2='370' stroke-width='2'/><line x1='80' y1='520' x2='510' y2='520' stroke-width='1.5'/><line x1='50' y1='620' x2='520' y2='620' stroke-width='1.5'/></g>")(set: _pv to _pv + "<g opacity='0.55'><circle cx='306' cy='70' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='476' cy='188' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='499' cy='560' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='209.2' cy='548' r='16' fill='rgba(245,208,112,0.20)'/><circle cx='176' cy='228' r='16' fill='rgba(245,208,112,0.20)'/></g>")(set: _pv to _pv + "<polygon points='306,70 499,560 176,228 476,188 209.2,548' fill='none' stroke='#f5d070' stroke-width='2.2' opacity='0.95' stroke-linejoin='round'/>")<!-- 2026-11-08 (Sam, playtest note 42: "the pentagram is missing a dot on its bottom right spoke"): each point's lily is one venue's flower (bottom right is Ronnie Scott's); a point whose flower was not gathered now keeps a hollow ring, so the star always has its five points -->(unless: $tookLily1 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='306' cy='70' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](unless: $tookLily2 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='476' cy='188' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](unless: $tookLily3 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='499' cy='560' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](unless: $tookLily4 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='209.2' cy='548' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](unless: $tookLily5 is true)[(set: _pv to _pv + "<circle class='pent-miss' cx='176' cy='228' r='6' fill='none' stroke='#f5d070' stroke-width='1.4' opacity='0.6'/>")](set: _pv to _pv + "<g class='pent-lilies' opacity='0.95'>")(if: $tookLily1 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-1' transform='translate(306,70) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily2 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-2' transform='translate(476,188) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily3 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-3' transform='translate(499,560) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily4 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-4' transform='translate(209.2,548) translate(0,-25)'>" + _ll + "</g>")](if: $tookLily5 is true)[(set: _pv to _pv + "<g class='pent-lily pent-lily-5' transform='translate(176,228) translate(0,-25)'>" + _ll + "</g>")](set: _pv to _pv + "</g>")(set: _pv to _pv + "</svg><div class='centre-pent-gawain'>And the English call it everywhere, as I hear, the endless knot.</div></div>")(print: _pv)
 <div class="dawn-approach-overlay dawn-approach-overlay-black"></div>
 </div>
 (after: 16s)[(go-to: "Black page")]
@@ -63102,7 +63233,7 @@ She moos.
 </div>
 (if: $haunts's length is 1)[(set: $hauntExplained to true)(if: $hauntPrimerShown is not true)[(set: $hauntPrimerShown to true)<script>setTimeout(function(){ if(window.dssShowHauntPrimer) window.dssShowHauntPrimer(); }, 3500);</script>](if: $primerShown is false)[(set: $primerShown to true)<script>setTimeout(function(){ if(window.dssShowPrimer) window.dssShowPrimer(); }, 1600);</script>]]]
 
-(if: ($alba contains $alba1) and ($alba contains $alba2) and ($cowRideDone is false))[|cowq>[What will you do with his cow?
+(if: ($alba contains $alba1) and ($alba contains $alba2) and ($cowRideDone is false))[|cowq>[<span class="dss-cow-q">What will you do with his cow?</span>
 
 [[Ride the beast|Ride Jeffrey Bernard's cow]]
 <!-- 2026-10-28 (note 40): the cow can wait; the offer stands again next visit -->(link: "Not tonight.")[(replace: ?cowq)[]]]]]
@@ -63240,7 +63371,7 @@ COPPER gets closer.
 (if: $aoifeRework)[<!-- A3 — the family flashes up as a brief modal "vision" over the dawn screen,
      holds ~1.5s, then dissolves to reveal the ending text. Fixed overlay driven by a
      CSS keyframe; pointer-events:none so it never blocks "Traveller, wake!". -->
-<div class="a3-flash"><div class="memory-photo memory-aoife memory-photo-a3"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="aoifeA3" cx="50%" cy="34%" r="86%"><stop offset="0%" stop-color="#bcd0e8" stop-opacity="0.85"/><stop offset="30%" stop-color="#6a84b0" stop-opacity="0.46"/><stop offset="62%" stop-color="#28365a" stop-opacity="0.30"/><stop offset="100%" stop-color="#0a1020" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#aoifeA3)"/></svg><div class="mp-prose">There’s a whole remembered life still in the future, with your daughter and AOIFE.</div></div></div></div>
+<div class="a3-flash"><div class="memory-photo memory-aoife memory-photo-a3 mp-pop"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="aoifeA3" cx="50%" cy="34%" r="86%"><stop offset="0%" stop-color="#bcd0e8" stop-opacity="0.85"/><stop offset="30%" stop-color="#6a84b0" stop-opacity="0.46"/><stop offset="62%" stop-color="#28365a" stop-opacity="0.30"/><stop offset="100%" stop-color="#0a1020" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#aoifeA3)"/></svg><div class="mp-prose">There’s a whole remembered life still in the future, with your daughter and AOIFE.</div></div></div></div>
 ]\
 <div class="ending-pane">London is all before you: Tyburn, Bloomsbury, Fitzrovia; St. Giles, at your feet; and Soho, which has dulled your soul and dressed you for the sun, in midnight’s cloak, throbs low and still, through its bruised capillaries.
 
@@ -63282,7 +63413,7 @@ You found the poem, the path to dawn’s bleak Albion.
 ]\
 <!-- 2026-10-11 (Sam, A): the second meeting, his Beckett line above the way on. 2026-10-12 (Sam): the first meeting has his Baudelaire, by way of Eliot, in the same place. -->(if: _ready and $fetchMet >= 2)[<div style="margin:0 0 0.9em;font-style:italic;">‘I can’t go on, I’ll go on.’<span style="display:block;margin-top:0.35em;font-size:0.74em;font-style:normal;letter-spacing:0.08em;opacity:0.7;">Samuel Beckett, ‘The Unnamable’</span></div>](else:)[<div style="margin:0 0 0.9em;font-style:italic;">‘You! hypocrite lecteur! – mon semblable, – mon frère!’<span style="display:block;margin-top:0.35em;font-size:0.74em;font-style:normal;letter-spacing:0.08em;opacity:0.7;">Charles Baudelaire, ‘Au lecteur’, by way of T. S. Eliot, ‘The Waste Land’</span></div>]<!-- 2026-11-02 (Sam: "I want to add a lore note explaining what a fetch is. I'll write it later. Perhaps you could write a draft"): Claude's draft, edited by Sam and approved (pink off) the same evening -->(link: "⟡ LORE: The Fetch ⟡")[(set: _lore to "The Fetch")(display: "Lore Read")<div class="lore-box"><span>In Irish belief a fetch is your own double. Seen in the evening, it means your death is near. In the summer of 1822 Percy Bysshe Shelley met a figure of himself on the terrace of Casa Magni. It asked him, ‘How long do you mean to be content?’ A few weeks later he drowned in the Gulf of La Spezia.</span></div>](if: _ready)[[[Follow him|Approach Centre Point]]]
 (if: not _ready)[There are still flowers to gather in the night, and work yet to be done.
-<div class="fetch-owed"><!-- 2026-10-21 (ordering audit): the tally names LILY only once Night Ahead Part Two has -->(if: $lilyNamed is true)[LILY’S FLOWERS](else:)[FLOWERS] (print: $lilyCount) of (print: $needLilies) (5 in all) · HAUNTS (print: $haunts's length) of (print: $needHaunts) (12 in all)</div><!-- 2026-11-05 (Sam, playtest note 28: "2/3 and 4/6, nonsense"): the night's real totals, not the Fetch's threshold -->](else-if: not ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[(if: $lilyCount < 5 or $haunts's length < 12)[
+<div class="fetch-owed"><!-- 2026-10-21 (ordering audit): the tally names LILY only once Night Ahead Part Two has --><span class="fetch-owed-row">(if: $lilyNamed is true)[LILY’S FLOWERS](else:)[FLOWERS] (print: $lilyCount) of (print: $needLilies) <span class="fetch-owed-all">(5 in all)</span></span><span class="fetch-owed-row">HAUNTS (print: $haunts's length) of (print: $needHaunts) <span class="fetch-owed-all">(12 in all)</span></span></div><!-- 2026-11-05 (Sam, playtest note 28: "2/3 and 4/6, nonsense"): the night's real totals, not the Fetch's threshold -->](else-if: not ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[(if: $lilyCount < 5 or $haunts's length < 12)[
 You can leave now, perhaps it’s wise to get out. But there are still flowers to gather in the night, and work yet to be done.]]
 (unless: _ready and ($sanctumDone is true or $coachBurnt is true or $fetchMet >= 2))[
 
@@ -63293,7 +63424,7 @@ You can leave now, perhaps it’s wise to get out. But there are still flowers t
 <script>(function(){/* HTTP-prefetch the iframe HTML and the vendored THREE.js script. Avoiding a hidden iframe here because Chrome throttles script execution in off-screen iframes — Three.js inits but the scene-build script never runs, and we land on Dawn Approach with an empty canvas. Plain fetch puts the HTML in the cache; the THREE library link-preload primes the network so the fresh iframe on Dawn Approach mounts fast. */try{fetch('oxford-street-from-centre-point-3d-static.html',{cache:'force-cache'});}catch(e){}if(!document.getElementById('dss-three-prefetch')){var l=document.createElement('link');l.id='dss-three-prefetch';l.rel='preload';l.as='script';l.href='vendor/three/three.min.js';document.head.appendChild(l);}})();</script>\
 <div class="ending-pane ending-pane-dim">London is all before you: Tyburn, Bloomsbury, Fitzrovia; St. Giles, at your feet; and Soho, which has dulled your soul and dressed you for the sun, in midnight’s cloak, throbs low and still, through its bruised capillaries.
 
-You did not find the poem. Sometimes the night is its own work, and the dawn will come regardless.
+(if: ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3) and ($notebook is not "stolen"))[<span class="claude-draft">You found the poem, but left too much of the night ungathered.</span>](else:)[You did not find the poem.] Sometimes the night is its own work, and the dawn will come regardless.
 
 [[Traveller, sleep!|Dawn Approach Black]]</div>
 
@@ -63362,7 +63493,7 @@ Better not tomorrow.
      it stalls in backgrounded tabs). -->
 <div id="dawn-night-plan" class="dawn-night-plan" aria-hidden="true"></div>
 <!-- 2026-10-16 (Sam: suggestions to make the pitching better; 3, the dawn shows who you showed it to): tonight's slips, the reader's name and his words, under the night drawn. Same _passageGen guard as the plan. -->
-<div id="dawn-slips" class="dawn-slips" aria-hidden="true"></div>
+<!-- 2026-11-08 (Sam, playtest note 43: "What are these slips in the middle of the page they make no sense get rid"): the readers' slips are taken off the dawn; the element stays, hidden, for the script that fills it --><div id="dawn-slips" class="dawn-slips" aria-hidden="true" hidden style="display:none"></div>
 <script>(function(){ setTimeout(function(){ var pgGen = window._passageGen; setTimeout(function(){ if (window._passageGen !== pgGen) return; var box = document.getElementById('dawn-slips'), R = window.dssRefusals; if (!box || !R || !R.el) return; var n = R.night(), rows = R.list().filter(function(r) { return r.n === n; }); if (!rows.length) return; rows.forEach(function(r) { box.appendChild(R.el(r, 0)); }); setTimeout(function(){ if (window._passageGen === pgGen) box.classList.add('dawn-reveal'); }, 4000); }, 120); }, 0); })();</script>
 <script>
 /* 2026-10-13 (Sam, idea 4): THE NIGHT DRAWN. Tonight's walk on the map (localStorage 'dssRouteNow', kept by the map's
@@ -63490,7 +63621,7 @@ Better not tomorrow.
 (unless: $hasMatches is a boolean)[(set: $hasMatches to false)]
 (unless: $pillarsMatchesDue is a boolean)[(set: $pillarsMatchesDue to false)]
 <!-- THE MATCHBOX: due from the Pillars, shown on the way out (see Entering The Pillars of Hercules). -->
-(if: $pillarsMatchesDue is true)[(set: $pillarsMatchesDue to false)(if: $hasMatches is false)[(set: $hasMatches to true)<div id="match-overlay" style="display:none"><div class="coin-overlay-box" role="dialog" aria-modal="true" aria-label="A box of matches"><div class="coin-overlay-stage"><svg class="match-svg" viewBox="0 0 130 84" width="130" height="84" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mxCard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2c56a"/><stop offset="1" stop-color="#c39a3a"/></linearGradient><linearGradient id="mxTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0d98c"/><stop offset="1" stop-color="#d4b050"/></linearGradient><linearGradient id="mxSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a87f2a"/><stop offset="1" stop-color="#7a5818"/></linearGradient><linearGradient id="mxTray" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9c48e"/><stop offset="1" stop-color="#b89a5c"/></linearGradient><pattern id="mxGrit" width="2" height="2" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="rgba(255,255,255,0.08)"/><rect x="1" y="1" width="1" height="1" fill="rgba(0,0,0,0.3)"/></pattern></defs><ellipse cx="66" cy="72" rx="52" ry="4" fill="rgba(0,0,0,0.35)"/><rect x="4" y="38" width="44" height="26" fill="url(#mxTray)" stroke="#6e4e18" stroke-width="0.8"/><path d="M4,38 L14,30 L58,30 L48,38 Z" fill="#c9b070" stroke="#6e4e18" stroke-width="0.6" stroke-linejoin="round"/><path d="M6,39.5 L46,39.5 L46,46 L6,46 Z" fill="rgba(0,0,0,0.22)"/><rect x="8.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="13.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="18.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="23.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="28.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="33.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="38.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><ellipse cx="10" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="15" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="20" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="25" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="30" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="35" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="40" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="9.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="19.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="29.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="39.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><path d="M46,30 L56,20 L124,20 L114,30 Z" fill="url(#mxTop)" stroke="#6e4e18" stroke-width="0.9" stroke-linejoin="round"/><path d="M114,30 L124,20 L124,54 L114,64 Z" fill="url(#mxSide)" stroke="#6e4e18" stroke-width="0.9" stroke-linejoin="round"/><path d="M116,31 L122,25 L122,52 L116,58 Z" fill="#3a2a22"/><path d="M116,31 L122,25 L122,52 L116,58 Z" fill="url(#mxGrit)"/><rect x="46" y="30" width="68" height="34" fill="url(#mxCard)" stroke="#6e4e18" stroke-width="0.9"/><rect x="52" y="35" width="56" height="24" fill="#1f4a34" stroke="#c89a3e" stroke-width="0.6"/><rect x="54.5" y="37.5" width="51" height="19" fill="none" stroke="#e8c478" stroke-width="0.4" opacity="0.8"/><path d="M80,38.5 q-3,3.2 0,6.4 q3,-3.2 0,-6.4z M80,40.5 q-1.4,1.6 0,3.2 q1.4,-1.6 0,-3.2z" fill="#e8c478"/><text x="80" y="51" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="6.6" letter-spacing="0.9" fill="#f2e6c4">MATCHES</text><text x="80" y="55.2" text-anchor="middle" font-family="Georgia,serif" font-size="2.4" letter-spacing="0.35" fill="#c8b070">SAFETY &#183; AVERAGE CONTENTS 50</text><g transform="rotate(-14 70 74)"><rect x="56" y="73" width="24" height="2.2" rx="0.8" fill="#efe6d0" stroke="#8a7a50" stroke-width="0.4"/><rect x="56" y="73" width="8" height="2.2" rx="0.8" fill="#2a2018"/><ellipse cx="55.5" cy="74.1" rx="2" ry="2.4" fill="#1a1410"/></g><g transform="rotate(22 104 68)"><rect x="92" y="67" width="22" height="2.2" rx="0.8" fill="#efe6d0" stroke="#8a7a50" stroke-width="0.4"/><ellipse cx="114.5" cy="68.1" rx="2" ry="2.5" fill="#b83524"/></g></svg></div><p class="coin-overlay-text">On the way out you swipe a box of matches from a newly empty table. You’ve been looking for a light. Now you can smoke again.</p><span class="inventory-note">MATCHES ACQUIRED</span><button class="coin-overlay-btn coin-overlay-dismiss" id="match-keep-btn">Pocket them</button></div></div><script>(function(){var btn=document.getElementById("match-keep-btn"),o=document.getElementById("match-overlay");if(!btn||!o)return;var gen=window._passageGen;function othersBusy(){/* 2026-10-23 (the first-night map: the matches came up over THE RUMOUR): the same list as dssOverlayBusy, less this overlay itself and the three that are never made */return window._drinkPopupOpen===true||!!document.querySelector("#coin-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,#dss-lily-overlay,#dss-quest-overlay,#liver-eat-overlay,#napkin-popup-overlay,.dss-rules-overlay,#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro,#dss-lore-overlay,#dss-gate-flash");}function reveal(){if(window._passageGen!==gen || window._dssMatchPopupDone){if(o.parentNode)o.parentNode.removeChild(o);return;}if(othersBusy()){setTimeout(reveal,200);return;}window._dssMatchPopupDone=true;o.style.display="flex";}function close(){var box=o.querySelector(".coin-overlay-box");if(box){for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}}btn.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);}btn.addEventListener("click",function(){/* 2026-10-29 */if(window.dssAudio&&window.dssAudio.matchboxRattle){try{window.dssAudio.matchboxRattle();}catch(e){}}close();});o.addEventListener("click",function(e){if(e.target===o)close();});reveal();})();</script>]]\
+(if: $pillarsMatchesDue is true)[(set: $pillarsMatchesDue to false)(if: $hasMatches is false)[(set: $hasMatches to true)<div id="match-overlay" style="display:none"><div class="coin-overlay-box" role="dialog" aria-modal="true" aria-label="A box of matches"><div class="coin-overlay-stage"><svg class="match-svg" viewBox="0 0 130 84" width="130" height="84" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mxCard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2c56a"/><stop offset="1" stop-color="#c39a3a"/></linearGradient><linearGradient id="mxTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0d98c"/><stop offset="1" stop-color="#d4b050"/></linearGradient><linearGradient id="mxSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a87f2a"/><stop offset="1" stop-color="#7a5818"/></linearGradient><linearGradient id="mxTray" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9c48e"/><stop offset="1" stop-color="#b89a5c"/></linearGradient><pattern id="mxGrit" width="2" height="2" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="rgba(255,255,255,0.08)"/><rect x="1" y="1" width="1" height="1" fill="rgba(0,0,0,0.3)"/></pattern></defs><ellipse cx="66" cy="72" rx="52" ry="4" fill="rgba(0,0,0,0.35)"/><rect x="4" y="38" width="44" height="26" fill="url(#mxTray)" stroke="#6e4e18" stroke-width="0.8"/><path d="M4,38 L14,30 L58,30 L48,38 Z" fill="#c9b070" stroke="#6e4e18" stroke-width="0.6" stroke-linejoin="round"/><path d="M6,39.5 L46,39.5 L46,46 L6,46 Z" fill="rgba(0,0,0,0.22)"/><rect x="8.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="13.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="18.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="23.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="28.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="33.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><rect x="38.9" y="42" width="2.2" height="20" rx="0.7" fill="#efe6d0" stroke="#a89060" stroke-width="0.3"/><ellipse cx="10" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="15" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="20" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="25" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="30" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="35" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="40" cy="41" rx="1.9" ry="2.4" fill="#b83524"/><ellipse cx="9.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="19.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="29.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><ellipse cx="39.4" cy="40.2" rx="0.6" ry="0.8" fill="#f0c9b0" opacity="0.5"/><path d="M46,30 L56,20 L124,20 L114,30 Z" fill="url(#mxTop)" stroke="#6e4e18" stroke-width="0.9" stroke-linejoin="round"/><path d="M114,30 L124,20 L124,54 L114,64 Z" fill="url(#mxSide)" stroke="#6e4e18" stroke-width="0.9" stroke-linejoin="round"/><path d="M116,31 L122,25 L122,52 L116,58 Z" fill="#3a2a22"/><path d="M116,31 L122,25 L122,52 L116,58 Z" fill="url(#mxGrit)"/><rect x="46" y="30" width="68" height="34" fill="url(#mxCard)" stroke="#6e4e18" stroke-width="0.9"/><rect x="52" y="35" width="56" height="24" fill="#1f4a34" stroke="#c89a3e" stroke-width="0.6"/><rect x="54.5" y="37.5" width="51" height="19" fill="none" stroke="#e8c478" stroke-width="0.4" opacity="0.8"/><path d="M80,38.5 q-3,3.2 0,6.4 q3,-3.2 0,-6.4z M80,40.5 q-1.4,1.6 0,3.2 q1.4,-1.6 0,-3.2z" fill="#e8c478"/><text x="80" y="51" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="6.6" letter-spacing="0.9" fill="#f2e6c4">MATCHES</text><text x="80" y="55.2" text-anchor="middle" font-family="Georgia,serif" font-size="2.4" letter-spacing="0.35" fill="#c8b070">SAFETY &#183; AVERAGE CONTENTS 50</text><g transform="rotate(-14 70 74)"><rect x="56" y="73" width="24" height="2.2" rx="0.8" fill="#efe6d0" stroke="#8a7a50" stroke-width="0.4"/><rect x="56" y="73" width="8" height="2.2" rx="0.8" fill="#2a2018"/><ellipse cx="55.5" cy="74.1" rx="2" ry="2.4" fill="#1a1410"/></g><g transform="rotate(22 104 68)"><rect x="92" y="67" width="22" height="2.2" rx="0.8" fill="#efe6d0" stroke="#8a7a50" stroke-width="0.4"/><ellipse cx="114.5" cy="68.1" rx="2" ry="2.5" fill="#b83524"/></g></svg></div><p class="coin-overlay-text">On the way out you swipe a box of matches from a newly empty table. You’ve been looking for a light. Now you can smoke again.</p><span class="inventory-note">MATCHES ACQUIRED</span><button class="coin-overlay-btn coin-overlay-dismiss" id="match-keep-btn">Pocket them</button></div></div><script>(function(){var btn=document.getElementById("match-keep-btn"),o=document.getElementById("match-overlay");if(!btn||!o)return;var gen=window._passageGen;function othersBusy(){/* 2026-10-23 (the first-night map: the matches came up over THE RUMOUR): the same list as dssOverlayBusy, less this overlay itself and the three that are never made */return window._drinkPopupOpen===true||!!document.querySelector("#coin-overlay,#cig-overlay,#eat-overlay,#dss-key-overlay,#dss-lily-overlay,#dss-quest-overlay,#liver-eat-overlay,#napkin-popup-overlay,.dss-rules-overlay,#drink-popup-overlay,#spew-popup-overlay,.coach-plumbing-intro,#dss-lore-overlay,#dss-gate-flash");}function reveal(){if(window._passageGen!==gen || window._dssMatchPopupDone){if(o.parentNode)o.parentNode.removeChild(o);return;}if(othersBusy()){setTimeout(reveal,200);return;}window._dssMatchPopupDone=true;o.style.display="flex";}function close(){var box=o.querySelector(".coin-overlay-box");if(box){if(window.dssSpawnMotes){window.dssSpawnMotes(box,"item-mote",12,{noScroll:true});}else{for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}}}/* 2026-11-08 (Sam, playtest note 11: the matches' petals "didn't properly go to the notebook"): a real trail from the card to the NOTEBOOK */btn.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);}btn.addEventListener("click",function(){/* 2026-10-29 */if(window.dssAudio&&window.dssAudio.matchboxRattle){try{window.dssAudio.matchboxRattle();}catch(e){}}close();});o.addEventListener("click",function(e){if(e.target===o)close();});reveal();})();</script>]]\
 (unless: $afterMidnight is a boolean)[(set: $afterMidnight to false)]
 <!-- BACK-FILL: Aoife-rework flags, added later — heal older saves so the
      (if: $aoifeRework ...) guards below never hit an undefined variable. -->
@@ -63562,8 +63693,8 @@ Better not tomorrow.
      it is never a line of text on Dean Street. The map scans the rendered links
      and opens its north-edge door with it, so the only way out is to walk to the
      top of the map. Towards Dawn does the warning before you commit. -->\
-<div class="soho-hub-dock" aria-hidden="true" style="position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none"><!-- 2026-09-16, Sam: hide the dawn door until the first venue has been visited. $enteredVenue is set by the header the first time a passage tagged venue-* (or one of the three untagged interiors) renders, so approaching a door and turning back does not count; with no link and no greyed span the Centre Point tile draws shut. --><!-- 2026-10-11 (Sam): after the second blackout the dawn door is open whether or not the third pillar has been crossed, as the gents line promises. --><!-- 2026-10-12 (the wanderer playthrough): when "Give up on the night" is on offer (morale 5 or under) it has the north door; the dawn link used to take it first, so a player who couldn't yet finish could never give up -->(set: _givingUp to ($coachUrgent is false and $confidence <= 5))(if: $enteredVenue is true and ($crossedThreshold is true or ($blackouts >= 2 and $hutBurnt is false)) and not _givingUp)[[[Head towards dawn|Towards Dawn]]](if: $shipCall is "" and (history:) contains "Turn to Copper")[[[The phone box|The Phone Box Rings]]](else-if: $refusedCalls > 0 or ($hasCoin is false and $returns >= 3))[<!-- 2026-10-10 (Sam): the box stands on the map all night but only opens once a call has been refused (or the coin has been spent in it); before that it is drawn unlit and cannot be entered. 2026-10-11 structure pass 3: returns >= 3, not 2: the Donkey is handed over on the second lap's hub just below this dock, so on that one screen $hasCoin was still false and the box lit up before you had a coin, then went dark again. -->[[The phone box|The Phone Box]]](if: $mantraComplete is true and $goochMet is false)[[[Sholto Gooch|Sholto Gooch]]](if: $nazcaTracing is true and $truzeMet is false)[[[Devon Truze|Devon Truze]]]<!-- 2026-10-24 (Sam, Q5: "stagger them"): the phone box rings on the first lap back from the cellar; the Woman comes on the lap after. $cellarHubLap is the first hub after the cellar; alleys and the box do not count as laps --><!-- 2026-10-25 sweep (played live, night 2): the Woman showed on the first hub after the cellar beside the phone box. An unset $cellarHubLap reads as 0 in Harlowe, which "is a number", so the stamp never fired and the gate compared against 0. The lap is 0 until stamped (reset each night in StoryInit/Start) and the gate wants a stamped lap. -->(unless: $cellarHubLap > 0)[(if: (history:) contains "Turn to Copper")[(set: $cellarHubLap to $returns)]](if: ((history:) contains "Turn to Copper") and ($lineWomanMet is false) and ($cellarHubLap > 0) and ($returns > $cellarHubLap))[[[A Woman from the Crowd|The Woman from the Line]]](if: $easterGlyph is true and $longshanksMet is false)[[[Tom Longshanks|Tom Longshanks]]](if: $pyramidNumber is true and $songstrongMet is false)[[[Deirdre Furlong|Deirdre Furlong]]]</div>\
-(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)<div id="coin-overlay"><div class="coin-overlay-box" role="dialog" aria-modal="true" aria-label="A coin on the pavement"><div class="coin-overlay-stage"><div class="coin-overlay-disc" id="coin-overlay-disc"><div class="cp-face cp-heads"></div><div class="cp-face cp-tails"></div></div></div><p class="coin-overlay-text">You found a coin on the pavement, a rare one, called a ‘Donkey’. There’s only one. Toss it and pocket it. You’ll want it later.</p><span class="inventory-note">COIN ACQUIRED</span><button class="coin-overlay-btn" id="coin-toss-btn">Toss it</button><span class="coin-overlay-result" id="coin-overlay-result"></span><button class="coin-overlay-btn coin-overlay-dismiss" id="coin-keep-btn" style="visibility:hidden">Pocket it</button></div></div><script>(function(){var tossCount=0,maxToss=1,stage=document.querySelector(".coin-overlay-stage");var sequence=[false];var pocketed=false;function sparks(){for(var i=0;12>i;i++){var s=document.createElement("div");s.className="cp-spark";var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty("--sx",(Math.cos(a*Math.PI/180)*dist)+"px");s.style.setProperty("--sy",(Math.sin(a*Math.PI/180)*dist)+"px");s.style.animationDelay=(Math.random()*0.3)+"s";s.style.animationDuration=(0.5+Math.random()*0.5)+"s";stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById("coin-toss-btn").addEventListener("click",function(){var d=document.getElementById("coin-overlay-disc"),r=document.getElementById("coin-overlay-result"),b=this,o=document.getElementById("coin-overlay");if(pocketed)return;if(d.classList.contains("cp-flipping"))return;if(window.dssAudio)(window.dssAudio.coinDrop||window.dssAudio.coinFlip)();/* 2026-11-05: Sam's coin drop recording in place of the synthesised toss */var heads=sequence[tossCount];tossCount++;var endDeg=heads?"1440deg":"1620deg";var restDeg=heads?"0deg":"180deg";d.style.setProperty("--cp-end",endDeg);d.classList.remove("cp-flipping");void d.offsetWidth;d.classList.add("cp-flipping");sparks();r.textContent="";b.classList.add("coin-btn-hidden");setTimeout(function(){if(pocketed)return;r.textContent=heads?"Heads.":"Tails.";d.style.transform="rotateX("+restDeg+")";d.classList.remove("cp-flipping");if(tossCount>=maxToss){setTimeout(function(){if(pocketed)return;var kb=document.getElementById("coin-keep-btn"),tb0=document.getElementById("coin-toss-btn");if(kb){if(tb0&&tb0.parentNode){tb0.parentNode.insertBefore(kb,tb0);tb0.style.display="none";}kb.style.visibility="visible";kb.classList.remove("coin-overlay-dismiss");}},1000);}},2000);});var keepBtn=document.getElementById("coin-keep-btn");if(keepBtn){keepBtn.addEventListener("click",function(){if(pocketed)return;pocketed=true;if(window.dssAudio&&window.dssAudio.coinPocket){try{window.dssAudio.coinPocket();}catch(e){}}var o=document.getElementById("coin-overlay");var box=o&&o.querySelector(".coin-overlay-box");if(!o||!box)return;var tb=document.getElementById("coin-toss-btn");if(tb){tb.classList.add("coin-btn-hidden");tb.style.pointerEvents="none";}for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}this.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById("coin-overlay");if(ov){ov.addEventListener("click",function(e){if(e.target===ov&&tossCount>0){ov.classList.add("coin-overlay-fade");setTimeout(function(){ov.remove();},800);}});}})();</script>]\
+<div class="soho-hub-dock" aria-hidden="true" style="position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none"><!-- 2026-09-16, Sam: hide the dawn door until the first venue has been visited. $enteredVenue is set by the header the first time a passage tagged venue-* (or one of the three untagged interiors) renders, so approaching a door and turning back does not count; with no link and no greyed span the Centre Point tile draws shut. --><!-- 2026-10-11 (Sam): after the second blackout the dawn door is open whether or not the third pillar has been crossed, as the gents line promises. --><!-- 2026-10-12 (the wanderer playthrough): when "Give up on the night" is on offer (morale 5 or under) it has the north door; the dawn link used to take it first, so a player who couldn't yet finish could never give up -->(set: _givingUp to ($coachUrgent is false and $confidence <= 5))<!-- 2026-11-08 (Sam, playtest note 34: "best just not to have centre point open until you have all three lines, at least"): the third pillar crossed AND the three lines caught; the second blackout still opens it, as the gents line promises -->(set: _threeLines to (($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3)))(if: $enteredVenue is true and ((($crossedThreshold is true) and _threeLines) or ($blackouts >= 2 and $hutBurnt is false)) and not _givingUp)[[[Head towards dawn|Towards Dawn]]](if: $shipCall is "" and (history:) contains "Turn to Copper")[[[The phone box|The Phone Box Rings]]](else-if: $refusedCalls > 0 or ($hasCoin is false and $returns >= 3))[<!-- 2026-10-10 (Sam): the box stands on the map all night but only opens once a call has been refused (or the coin has been spent in it); before that it is drawn unlit and cannot be entered. 2026-10-11 structure pass 3: returns >= 3, not 2: the Donkey is handed over on the second lap's hub just below this dock, so on that one screen $hasCoin was still false and the box lit up before you had a coin, then went dark again. -->[[The phone box|The Phone Box]]](if: $mantraComplete is true and $goochMet is false)[[[Sholto Gooch|Sholto Gooch]]](if: $nazcaTracing is true and $truzeMet is false)[[[Devon Truze|Devon Truze]]]<!-- 2026-10-24 (Sam, Q5: "stagger them"): the phone box rings on the first lap back from the cellar; the Woman comes on the lap after. $cellarHubLap is the first hub after the cellar; alleys and the box do not count as laps --><!-- 2026-10-25 sweep (played live, night 2): the Woman showed on the first hub after the cellar beside the phone box. An unset $cellarHubLap reads as 0 in Harlowe, which "is a number", so the stamp never fired and the gate compared against 0. The lap is 0 until stamped (reset each night in StoryInit/Start) and the gate wants a stamped lap. -->(unless: $cellarHubLap > 0)[(if: (history:) contains "Turn to Copper")[(set: $cellarHubLap to $returns)]](if: ((history:) contains "Turn to Copper") and ($lineWomanMet is false) and ($cellarHubLap > 0) and ($returns > $cellarHubLap))[[[A Woman from the Crowd|The Woman from the Line]]](if: $easterGlyph is true and $longshanksMet is false)[[[Tom Longshanks|Tom Longshanks]]](if: $pyramidNumber is true and $songstrongMet is false)[[[Deirdre Furlong|Deirdre Furlong]]]</div>\
+(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)<div id="coin-overlay"><div class="coin-overlay-box" role="dialog" aria-modal="true" aria-label="A coin on the pavement"><div class="coin-overlay-stage"><div class="coin-overlay-disc" id="coin-overlay-disc"><div class="cp-face cp-heads"></div><div class="cp-face cp-tails"></div></div></div><p class="coin-overlay-text">You found a coin on the pavement, a rare one, called a ‘Donkey’. There’s only one. Toss it and pocket it. You’ll want it later.</p><span class="inventory-note">COIN ACQUIRED</span><button class="coin-overlay-btn" id="coin-toss-btn">Toss it</button><span class="coin-overlay-result" id="coin-overlay-result"></span><button class="coin-overlay-btn coin-overlay-dismiss" id="coin-keep-btn" style="visibility:hidden">Pocket it</button></div></div><script>(function(){var tossCount=0,maxToss=1,stage=document.querySelector(".coin-overlay-stage");var sequence=[false];var pocketed=false;function sparks(){for(var i=0;12>i;i++){var s=document.createElement("div");s.className="cp-spark";var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty("--sx",(Math.cos(a*Math.PI/180)*dist)+"px");s.style.setProperty("--sy",(Math.sin(a*Math.PI/180)*dist)+"px");s.style.animationDelay=(Math.random()*0.3)+"s";s.style.animationDuration=(0.5+Math.random()*0.5)+"s";stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById("coin-toss-btn").addEventListener("click",function(){var d=document.getElementById("coin-overlay-disc"),r=document.getElementById("coin-overlay-result"),b=this,o=document.getElementById("coin-overlay");if(pocketed)return;if(d.classList.contains("cp-flipping"))return;if(window.dssAudio)(window.dssAudio.coinDrop||window.dssAudio.coinFlip)();/* 2026-11-05: Sam's coin drop recording in place of the synthesised toss */var heads=sequence[tossCount];tossCount++;var endDeg=heads?"1440deg":"1620deg";var restDeg=heads?"0deg":"180deg";d.style.setProperty("--cp-end",endDeg);d.classList.remove("cp-flipping");void d.offsetWidth;d.classList.add("cp-flipping");sparks();r.textContent="";b.classList.add("coin-btn-hidden");setTimeout(function(){if(pocketed)return;r.textContent=heads?"Heads.":"Tails.";d.style.transform="rotateX("+restDeg+")";d.classList.remove("cp-flipping");if(tossCount>=maxToss){setTimeout(function(){if(pocketed)return;var kb=document.getElementById("coin-keep-btn"),tb0=document.getElementById("coin-toss-btn");if(kb){if(tb0&&tb0.parentNode){tb0.parentNode.insertBefore(kb,tb0);tb0.style.display="none";}kb.style.visibility="visible";kb.classList.remove("coin-overlay-dismiss");}},1000);}},2000);});var keepBtn=document.getElementById("coin-keep-btn");if(keepBtn){keepBtn.addEventListener("click",function(){if(pocketed)return;pocketed=true;if(window.dssAudio&&window.dssAudio.coinPocket){try{window.dssAudio.coinPocket();}catch(e){}}var o=document.getElementById("coin-overlay");var box=o&&o.querySelector(".coin-overlay-box");if(!o||!box)return;var tb=document.getElementById("coin-toss-btn");if(tb){tb.classList.add("coin-btn-hidden");tb.style.pointerEvents="none";}if(window.dssSpawnMotes){window.dssSpawnMotes(box,"item-mote",12,{noScroll:true});}else{for(var k=1;k<=12;k++){var m=document.createElement("span");m.className="item-mote item-mote-"+k;box.appendChild(m);}}/* 2026-11-08 (note 11): the coin too */this.style.display="none";setTimeout(function(){o.classList.add("coin-overlay-fade");setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById("coin-overlay");if(ov){ov.addEventListener("click",function(e){if(e.target===ov&&tossCount>0){ov.classList.add("coin-overlay-fade");setTimeout(function(){ov.remove();},800);}});}})();</script>]\
 <!-- OPEN NIGHT: one explanation for fresh games and migrated saves. -->\
 <!-- 2026-10-13 (Sam, the slip review 4 of 14): the open-night slip cut. It said "The night is yours to explore. Walking and returning to Dean Street cost nothing. Its mood changes as you discover things, but there is no deadline. Games, drinks and encounters still affect your morale and sobriety." $shownOpenNightTip is still set, for anything that reads it. -->(if: $returns >= 2 and $shownOpenNightTip is not true)[(set: $shownOpenNightTip to true)]\
 <!-- LEDGER teaching — the filled/hollow rule behind every glyph family on
@@ -63614,7 +63745,7 @@ Someone’s on the corner.
 
 <!-- 2026-09-16, spacing: this used to fire on hub visit 2, the same screen as the open-night slip (and the ledger tip), minutes after the 900-character primer inside the first venue. Now hub visit 4: one lesson per hub visit, open night (2), ledger (3), door marks (4). Order unchanged. -->\
 (if: $returns >= 4 and $visited's French is true and $shownVenueHint is false)[(set: $shownVenueHint to true)<script>setTimeout(function(){ if(window.venueHintPopup) window.venueHintPopup(); }, 300);</script>]
-(if: $hasLiver is true and ($confidence < 30 or $sobriety < 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)(set: $liverTipLap to $returns)(set: $streetTipLap to $returns)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You’re seriously flagging. You’ve still got SHELLEY’S liver. Now’s a good time to eat it.");},300);</script>]<!-- 2026-10-14 (regression run): the liver tip used to head this chain, so on its visit the doorway and chippy links below were not shown while NEXT pointed at them; it stands alone now -->(if: $returns >= 3 and $confidence < 30 and $sobriety < 30 and ($hadChippy is false or $hadBreather is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowBoth is false and $liverTipLap is not $returns)[(set: $shownLowBoth to true)(set: $streetTipLap to $returns)<span id="wtw-msg-low-both" style="display:none">(if: $hadChippy is false and $hadBreather is false)[You’re in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You’re in a bad way. Get some grub at the chippy.](else:)[You’re in a bad way. Find a doorway. Catch your breath.]</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-both');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent,'chippy,doorway');},300);</script>]
+(if: $hasLiver is true and ($confidence < 30 or $sobriety < 30) and $shownLiverTip is false)[(set: $shownLiverTip to true)(set: $liverTipLap to $returns)(set: $streetTipLap to $returns)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You’re seriously flagging. You’ve still got SHELLEY’S liver. Now’s a good time to eat it.");},300);</script>]<!-- 2026-10-14 (regression run): the liver tip used to head this chain, so on its visit the doorway and chippy links below were not shown while NEXT pointed at them; it stands alone now -->(if: $returns >= 3 and $confidence < 30 and $sobriety < 30 and ($hadChippy is false or $hadBreather is false) and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowBoth is false and $liverTipLap is not $returns)[(set: $shownLowBoth to true)(set: $streetTipLap to $returns)<span id="wtw-msg-low-both" style="display:none">(if: $hadChippy is false and $hadBreather is false)[You’re in a bad way. Get some grub at the chippy. Find a doorway. Catch your breath.](else-if: $hadChippy is false)[You’re in a bad way. Get some grub at the chippy.](else:)[You’re in a bad way. Find a doorway. Catch your breath.]</span><script>setTimeout(function(){var el=document.getElementById('wtw-msg-low-both');if(window.wordToTheWisePopup&&el)window.wordToTheWisePopup(el.textContent,/chippy/.test(el.textContent)?'chippy':'doorway');},300);/* 2026-11-08 (Sam, playtest note 13: "It told you to go to the chippy in the slip then led you to a doorway"): the lit way follows the slip, the chippy when it is named */</script>]
 (if: $hadChippy is false)[[[The Halibut (Fish and Chips)|Approach Chinese Fish and Chips]]
 ](if: $hadBreather is false)[[[Step into a doorway|A Doorway on Dean Street]]]
 ](else-if: $returns >= 3 and $confidence < 40 and $hadChippy is false and ($blackouts < 2) and ($hutBurnt is false))[(if: $shownLowConf is false and $liverTipLap is not $returns)[(set: $shownLowConf to true)(set: $streetTipLap to $returns)<script>setTimeout(function(){if(window.wordToTheWisePopup)window.wordToTheWisePopup("You seem hungry. Get some grub at the chippy.","chippy");},300);</script>]
@@ -63756,7 +63887,7 @@ The fire must burn with you or without you.
 (set: _dualRing to (_pillarsOpen and ($refusedDualRing is not true) and ($lilyCount >= 1) and ($hadLilyCall1 is true) and ($hadDualRing is false) and ($crossedThreshold is true) and (($returns - $lilyCall1ReturnsAt) >= 1) and ($visited contains "Pillars") and ($visited's Pillars is true)))\
 <div id="pi-container"></div>\
 <div class="pillars-scene">
-(if: $inisToldOfPillars is true and $dreamKey is not "")[<svg class="pillar centre" viewBox="0 0 34 280" preserveAspectRatio="xMidYMax meet"><defs><linearGradient id="pf3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#f0d090" stop-opacity="0.98"/><stop offset="50%" stop-color="#d4ae6a" stop-opacity="0.85"/><stop offset="100%" stop-color="#a08648" stop-opacity="0.45"/></linearGradient><radialGradient id="pf3glow" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#f5d490" stop-opacity="0.55"/><stop offset="100%" stop-color="#f5d490" stop-opacity="0"/></radialGradient></defs><ellipse cx="17" cy="140" rx="40" ry="180" fill="url(#pf3glow)"/><rect x="1" y="252" width="32" height="8" fill="none" stroke="url(#pf3)" stroke-width="1.3"/><rect x="4" y="246" width="26" height="7" fill="none" stroke="url(#pf3)" stroke-width="1.2"/><line x1="5" y1="246" x2="6" y2="20" stroke="url(#pf3)" stroke-width="1.3"/><line x1="29" y1="246" x2="28" y2="20" stroke="url(#pf3)" stroke-width="1.3"/><line x1="5.5" y1="44" x2="28.5" y2="44" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="66" x2="28.5" y2="66" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="88" x2="28.5" y2="88" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="110" x2="28.5" y2="110" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="132" x2="28.5" y2="132" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="154" x2="28.5" y2="154" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="176" x2="28.5" y2="176" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="198" x2="28.5" y2="198" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="220" x2="28.5" y2="220" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="242" x2="28.5" y2="242" stroke="url(#pf3)" stroke-width="0.75"/><line x1="10" y1="20" x2="10" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><line x1="14" y1="20" x2="14" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><line x1="17" y1="20" x2="17" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><line x1="20" y1="20" x2="20" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><line x1="24" y1="20" x2="24" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><path d="M6,20 Q5,10 3,4 L31,4 Q29,10 28,20" fill="none" stroke="url(#pf3)" stroke-width="1.3"/><rect x="1" y="0" width="32" height="5" fill="none" stroke="url(#pf3)" stroke-width="1.2"/></svg>(if: $sawThirdPillar is false)[<script>setTimeout(function(){var p=document.querySelector("tw-passage .pillar.centre");if(p)p.classList.add("first-sight");if(window.dssAudio&&window.dssAudio.loreUnravel){window.dssAudio.loreUnravel();}},150);</script>(set: $sawThirdPillar to true)]]
+(if: $inisToldOfPillars is true and $dreamKey is not "")[<svg class="pillar centre" viewBox="0 0 34 280" preserveAspectRatio="xMidYMax meet"><defs><linearGradient id="pf3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#f0d090" stop-opacity="0.98"/><stop offset="50%" stop-color="#d4ae6a" stop-opacity="0.85"/><stop offset="100%" stop-color="#a08648" stop-opacity="0.45"/></linearGradient><radialGradient id="pf3glow" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#f5d490" stop-opacity="0.55"/><stop offset="100%" stop-color="#f5d490" stop-opacity="0"/></radialGradient></defs><ellipse cx="17" cy="140" rx="40" ry="180" fill="url(#pf3glow)"/><rect x="1" y="252" width="32" height="8" fill="none" stroke="url(#pf3)" stroke-width="1.3"/><rect x="4" y="246" width="26" height="7" fill="none" stroke="url(#pf3)" stroke-width="1.2"/><line x1="5" y1="246" x2="6" y2="20" stroke="url(#pf3)" stroke-width="1.3"/><line x1="29" y1="246" x2="28" y2="20" stroke="url(#pf3)" stroke-width="1.3"/><line x1="5.5" y1="44" x2="28.5" y2="44" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="66" x2="28.5" y2="66" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="88" x2="28.5" y2="88" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="110" x2="28.5" y2="110" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="132" x2="28.5" y2="132" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="154" x2="28.5" y2="154" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="176" x2="28.5" y2="176" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="198" x2="28.5" y2="198" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="220" x2="28.5" y2="220" stroke="url(#pf3)" stroke-width="0.75"/><line x1="5.5" y1="242" x2="28.5" y2="242" stroke="url(#pf3)" stroke-width="0.75"/><line x1="10" y1="20" x2="10" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><line x1="14" y1="20" x2="14" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><line x1="17" y1="20" x2="17" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><line x1="20" y1="20" x2="20" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><line x1="24" y1="20" x2="24" y2="245" stroke="#d4ae6a" stroke-width="0.35" opacity="0.5"/><path d="M6,20 Q5,10 3,4 L31,4 Q29,10 28,20" fill="none" stroke="url(#pf3)" stroke-width="1.3"/><rect x="1" y="0" width="32" height="5" fill="none" stroke="url(#pf3)" stroke-width="1.2"/></svg>(if: $sawThirdPillar is false)[<script>setTimeout(function(){var p=document.querySelector("tw-passage .pillar.centre, .dss-room-veil .pillar.centre:not(.dss-ghost .pillar)");/* 2026-11-08 nightwork: the room lifts the prose into its veil */if(p)p.classList.add("first-sight");if(window.dssAudio&&window.dssAudio.loreUnravel){window.dssAudio.loreUnravel();}},150);</script>(set: $sawThirdPillar to true)]]
 (unless: $visited is a datamap)[(set: $visited to (dm:))]\
 (unless: $visited contains "Pillars")[(set: $visited's Pillars to false)]\
 <!-- THE MATCHBOX (2026-10-12, Sam: back to the Pillars). The card says "On the way out", so the Pillars only marks it due and it shows as you step back onto Dean Street. -->
@@ -64032,7 +64163,7 @@ You’re floored and COPPER stands over you, barely moved. He feints a final att
 </div>
 <div class="cellar-scene">
 <div class="cellar-light"></div>
-<div class="inventory-note">GAME WON</div>
+<!-- 2026-11-08 (Sam, playtest note 39: "GET RID OF 'GAME WON'"): the banner is gone -->
 <div class="pp-arena">
 <div class="pp-score"><span class="pp-result-win">🥊 STANDING 🥊</span></div>
 </div>
@@ -64058,7 +64189,7 @@ COPPER stumbles. This will go no further; though QUIET FRANKIE has begun to feel
 </div>
 <div class="cellar-scene">
 <div class="cellar-light"></div>
-<div class="inventory-note">GAME WON</div>
+<!-- 2026-11-08 (Sam, playtest note 39: "GET RID OF 'GAME WON'"): the banner is gone -->
 <div class="pp-arena">
 <div class="pp-score"><span class="pp-result-win">🥊 KNOCKOUT 🥊</span><!-- 2026-11-07 (Claude, Sam delegated): any knockout lands here, hurt or not --></div>
 </div>
@@ -65376,7 +65507,7 @@ He slaps the manuscript like an arse and says: <span class="dss-speech" data-spe
 </div>
 (if: $haunts's length is 1)[(set: $hauntExplained to true)(if: $hauntPrimerShown is not true)[(set: $hauntPrimerShown to true)<script>setTimeout(function(){ if(window.dssShowHauntPrimer) window.dssShowHauntPrimer(); }, 3500);</script>](if: $primerShown is false)[(set: $primerShown to true)<script>setTimeout(function(){ if(window.dssShowPrimer) window.dssShowPrimer(); }, 1600);</script>]]]
 
-<script>(function(){ /* 2026-10-24 (Sam: "hold THE FEEDING haunt box and its gate flash about 9 s so the Page 93 line has the page first"): the box stays out of the flow until the quest line has been on a visible page 9 s, then plays its own reveal; the gate flash waits for the box */ var gen = null, box = document.querySelector('tw-passage .haunt-box'); if (!box) return; box.style.display = 'none'; var left = 9000; setTimeout(function(){ gen = window._passageGen; tick(); }, 0); /* snapshot after the MutationObserver has counted this passage (the dark pass fix) */ function tick(){ setTimeout(function(){ if (window._passageGen !== gen) return; if (!document.hidden) left -= 300; if (left > 0) return tick(); box.style.display = ''; box.style.animation = 'none'; void box.offsetWidth; box.style.animation = ''; }, 300); } })();</script>
+<script>(function(){ /* 2026-11-08 (Sam, playtest note 16: "The haunt here should trigger after you click your choice of link"): THE FEEDING box stays out of the flow until a choice is clicked; the click is held, the box plays its reveal and gate flash, then the choice goes through (the errand card for "I’ll look for it"). Replaces the 2026-10-24 nine-second hold. Registered before the errand listener, so it hears the click first. */ var gen = null, box = document.querySelector('tw-passage .haunt-box'); if (!box) return; box.style.display = 'none'; var CHOICES = ['I’ll look for it', 'Not tonight.', 'Hand him page 93 (found on an earlier night)'], held = false; function onChoice(e) { if (window._passageGen !== gen) { window.removeEventListener('click', onChoice, true); return; } if (window.__dssFeedingPass) return; var l = e.target && e.target.closest && e.target.closest('tw-link'); if (!l || CHOICES.indexOf((l.textContent || '').trim()) < 0) return; e.preventDefault(); e.stopImmediatePropagation(); if (held) return; held = true; box.style.display = ''; box.style.animation = 'none'; void box.offsetWidth; box.style.animation = ''; var t0 = Date.now(), lbl = (l.textContent || '').trim(); (function wait() { setTimeout(function() { if (window._passageGen !== gen) return; var gated = box.hasAttribute('data-dss-gate'), busy = (window.dssOverlayBusy && window.dssOverlayBusy()) || !!document.querySelector('#dss-gate-flash, tw-dialog'); var since = gated ? (box.__fdGated || (box.__fdGated = Date.now())) : 0; if (Date.now() - t0 < 20000 && ((!gated && Date.now() - t0 < 3500) || busy || (gated && Date.now() - since < 4200))) return wait(); window.removeEventListener('click', onChoice, true); var go = null; Array.prototype.forEach.call(document.querySelectorAll('tw-passage tw-link, .dss-room-veil tw-link'), function(x) { if (!go && !x.closest('.dss-ghost') && (x.textContent || '').trim() === lbl) go = x; }); if (go) go.click(); /* the room card lifts the prose out of tw-passage into .dss-room-veil */ }, 300); })(); } setTimeout(function(){ gen = window._passageGen; window.addEventListener('click', onChoice, true); }, 0); })();</script>
 <!-- QUEST (modal 2026-09-14): parked off-screen and raised as a popup by
      window.dssQuestPopup. The [[I’ll look for it]] link below stays visible, so
      dismissing the popup can never strand the player. data-go names the link
@@ -65454,7 +65585,7 @@ He slaps the manuscript like an arse and says: <span class="dss-speech" data-spe
 (set: $confidence to ($statGain: $confidence, 14))\
 \
 (if: $pongStake is true)[(set: $pongStake to false)(set: $confidence to ($statGain: $confidence, 20))<div class="inventory-note">&#163;20 WON | MORALE +20</div>]\
-<div class="inventory-note">GAME WON</div>
+<!-- 2026-11-08 (Sam, playtest note 39: "GET RID OF 'GAME WON'"): the banner is gone -->
 <div class="pp-arena">
 <div class="pp-score"><span class="pp-result-win">★ VICTORY ★</span></div>
 </div>
@@ -65490,7 +65621,7 @@ He slaps the manuscript like an arse and says: <span class="dss-speech" data-spe
 :: Bar Canvas Win [venue-ronnies] {"position":"2050,1900","size":"100,100"}
 <div class="ronnies-scene">
 (display: "Ronnies Rule SVG h14")
-<div class="inventory-note">GAME WON</div>
+<!-- 2026-11-08 (Sam, playtest note 39: "GET RID OF 'GAME WON'"): the banner is gone -->
 <div class="pp-arena">
 <div class="pp-score"><span class="pp-result-win">★ SIGNED, SEALED, DELIVERED ★</span></div>
 </div>
@@ -65551,7 +65682,7 @@ Or some other way of putting it.
 
 Count yourself in, lucky, count you out.
 
-[[On.|Dean Street]]
+[[Back to Dean Street.|Dean Street]]<!-- 2026-11-08 nightwork (family E, after Sam's playtest note 5): was "On." -->
 </div>
 
 :: Rescue the page [dream pyre] {"position":"100,1850","size":"100,100"}
@@ -65609,7 +65740,7 @@ From beneath the counter he produces a small glass vial.
      the flag that lets the Pillars of Hercules venue render its third
      column. Inis becomes the esoteric gatekeeper for the world-portal. -->
 <!-- 2026-10-28 (Sam: the page ran past a laptop screen, "spread over two passages"): INIS's third-pillar speech moved, word for word, to O'Flatterly's Third Pillar --><!-- 2026-10-31 (Sam, playtest note 24): the Shelley’s Liver note moved to the pyre (Dido) -->
-(if: $inisToldOfPillars is false)[[[Continue|O'Flatterly's Third Pillar]]](else:)[(display: "Key Doors Open Line")
+(if: $inisToldOfPillars is false)[[[Go on|O'Flatterly's Third Pillar]]](else:)[(display: "Key Doors Open Line")
 [[Back to the street|After Cecil Court]]]
 
 :: O'Flatterly's Third Pillar [venue-cecilcourt char-inis bookshop] {"position":"600,1950","size":"100,100"}
@@ -65638,7 +65769,7 @@ To return to Soho from Cecil Court is to cross the Styx; in some or other direct
 
 You wonder, limning Cambridge Circus, whether, to move from Cecil Court – that foxed God’s acre, full of books that lived and died – into the purgatorial womb of Soho, where books are promised, midwifed, scuppered, dreamed, is to move from death to life or life to death.
 
-[[On.|Dean Street]]
+[[Back to Dean Street.|Dean Street]]<!-- 2026-11-08 nightwork (family E, after Sam's playtest note 5): was "On." -->
 </div>
 
 :: Ride Jeffrey Bernard's cow [cow char-jeff] {"position":"900,1200","size":"100,100"}
@@ -67209,7 +67340,7 @@ A little warm milk plashes on your lips. It tastes of grass and moonlight and so
 (set: $confidence to ($statGain: $confidence, 8))\
 (set: $sobriety to ($statGain: $sobriety, 8))\
 \
-<div class="inventory-note">GAME WON</div>
+<!-- 2026-11-08 (Sam, playtest note 39: "GET RID OF 'GAME WON'"): the banner is gone -->
 <div class="typewriter-page">
 Greek, Frith, Dean, Wardour, Berwick, Poland.
 
@@ -67792,7 +67923,7 @@ Salt on the lip. Cinder in the lashes. The pyre’s heat lifts from your face th
 
 A flight of stairs, the kind you find leaving a theatre; red carpet worn thin as your world in its dead middle. Brass banister under your hand, still warm from other hands. Somewhere, a radio is playing spare: Love, O careless Love…
 
-[[Continue|The Interval: the stairs]]
+[[Go on|The Interval: the stairs]]
 
 
 :: The Interval: the stairs [interval-radio] {"position":"900,300","size":"100,100"}
@@ -67841,7 +67972,7 @@ You’ve been thinking about the form of the aubade, the morning poem, the song 
 
 She’s why you’re here again, all told; you’d say that to yourself if you could stomach it.
 
-[[On.|LINE 1]]
+[[Go on|LINE 1]]<!-- 2026-11-08 nightwork (family E, after Sam's playtest note 21): was "On." -->
 </div>
 
 :: Night Ahead Part Two [night-ahead] {"position":"700,350","size":"100,100"}
@@ -68436,7 +68567,7 @@ He takes it, smiles and gives it back to you.
 <div class="typewriter-page">
 The way you drew the painter is the way the world looks when you step out of the French. Things are faithful to your wild cartoon, until you blink. Then the place scrolls like a fruit machine and pays out Soho, all its stares and faces, its irresistible odds.
 
-[[On.|Dean Street]]
+[[Back to Dean Street.|Dean Street]]<!-- 2026-11-08 nightwork (family E, after Sam's playtest note 5): was "On." -->
 </div>
 
 :: The Stranger at the French [venue-french char-john] {"position":"300,700","size":"100,100"}
@@ -68537,7 +68668,7 @@ He pulls //(print: $bookTitle)// close.
 
 You say you’ve not, thank him, and make to leave when he calls you back.
 
-<!-- 2026-10-28 (Sam: the page ran past a laptop screen; "fold and split"): the call-back and all after it moved, unchanged, to The Ham calls you back. The street exit is hidden here (the header's _backHide) so the call-back, the rumour and AOIFE's ring cannot be skipped. -->[[Continue|The Ham calls you back]]
+<!-- 2026-10-28 (Sam: the page ran past a laptop screen; "fold and split"): the call-back and all after it moved, unchanged, to The Ham calls you back. The street exit is hidden here (the header's _backHide) so the call-back, the rumour and AOIFE's ring cannot be skipped. -->[[Go on|The Ham calls you back]]
 </div></div>
 (if: $sobriety < 30)[<span id="critDrunk" hidden></span>]
 <script>
@@ -68920,7 +69051,7 @@ You remember that LILY rang. You’d not heard her voice sustained so long in so
 
 (if: $sawMemory1 is false)[(set: $sawMemory1 to true)<div class="memory-photo memory-photo-1"><div class="mp-image"><svg class="mp-bg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="fl1a" cx="70%" cy="75%" r="80%"><stop offset="0%" stop-color="#f5a868" stop-opacity="0.95"/><stop offset="28%" stop-color="#d8702a" stop-opacity="0.55"/><stop offset="60%" stop-color="#5a2018" stop-opacity="0.25"/><stop offset="100%" stop-color="#1a0a0a" stop-opacity="0"/></radialGradient></defs><rect width="300" height="200" fill="url(#fl1a)"/></svg><div class="mp-prose">A little earthquake in the heart upsets the world and you are twenty-one again, walking with her on your arm through the rain on St. Giles, past the funfair, before so very much went so far wrong.</div></div></div>]
 
-[[On.|Dean Street]]
+[[Back to Dean Street.|Dean Street]]<!-- 2026-11-08 nightwork (family E, after Sam's playtest note 5): was "On." -->
 </div>
 
 :: After Aoife [outdoor] {"position":"100,1350","size":"100,100"}
@@ -68930,7 +69061,7 @@ You remember that AOIFE rang; her voice cold from the cold flat. The baby small 
 
 You remember also days that weren’t like these. Seeing clockwise AOIFE, thin as midnight and brusque like a handyman, when you first came to London. How shocking she was; turning at that party from a bad conversation and dragging you with her in a riptide; seeming to be the whole ocean and its steadying moon.]
 
-[[On.|Dean Street]]
+[[Back to Dean Street.|Dean Street]]<!-- 2026-11-08 nightwork (family E, after Sam's playtest note 5): was "On." -->
 </div>
 
 :: Aoife memory 2 [outdoor] {"position":"100,1450","size":"100,100"}
@@ -68940,7 +69071,7 @@ You remember also days that weren’t like these. Seeing clockwise AOIFE, thin a
 <div class="typewriter-page">
 In Ireland when you met AOIFE’S brothers they were all lovely men. You remember how, at the day’s close, she surfaced in the star-ploughed Atlantic just as the sun was settling up with the horizon. She was molten, golden. It was that night, you think it’s most likely, that you became parents.
 
-[[On.|Dean Street]]
+[[Back to Dean Street.|Dean Street]]<!-- 2026-11-08 nightwork (family E, after Sam's playtest note 5): was "On." -->
 </div>
 
 :: The dual ring [char-aoife char-lily phone-call] {"position":"100,1500","size":"100,100"}
@@ -69001,7 +69132,7 @@ In Ireland when you met AOIFE’S brothers they were all lovely men. You remembe
 :: After the dual ring {"position":"100,1600","size":"100,100"}
 <!-- 2026-10-28: the dual ring's closing line on its own card (Sam's words unchanged; it faded in at 22 s on the call, here at once); then on to the blackout as before --><span class="lily-glimpse lily-fade">And the tears and the tears and the tears.</span>
 
-(after: 4s)[<div class="phone-exit">[[Continue|Coach and Horses lock]]</div>]
+(after: 4s)[<div class="phone-exit">[[Go on|Coach and Horses lock]]</div>]
 
 :: Title {"position":"100,50","size":"100,100"}
 <!-- 2026-10-21 (Sam): two looks for the title, one word to switch. "lights": the three blue beams breathing and swaying, the fog, and a slow fall of white petals, the premonition of the dawn (his ruling after a street scene and a pentangle were both tried and turned down). "street": the Ginger Light street scene built under the words (kept as an option; he liked it too). -->(set: _titleMode to "lights")\
@@ -69787,8 +69918,8 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 <!-- 2026-11-02 (Sam: "add the ones that you can"): one-time slips that say what a new thing is, the first time it appears -->\
 <!-- 2026-11-02 (Sam: "Yes, protect them"): with all twelve haunts the Great Work is held; every Blackout trigger is gated on fewer than twelve -->\
 (if: ($haunts's length >= 12) and ($opusSlipShown is not true))[(set: $opusSlipShown to true)<script>window.dssExplainSlip && window.dssExplainSlip('The Great Work is held. The night can no longer black you out.');</script>]\
-<!-- 2026-11-05 (Sam: "once the poem is collected there should be a slip that explains what else you need to do to escape the night and also what a full night is"): once, the first header after the third line -->(if: (($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3)) and ($albaWholeSlipShown is not true))[(set: $albaWholeSlipShown to true)<span class="dss-alba-whole-n" hidden>(print: $lilyCount)|(print: $haunts's length)</span><script>(function(){ var all = document.querySelectorAll('.dss-alba-whole-n'), e = null; for (var i = 0; i < all.length; i++) { if (!all[i].closest('.dss-ghost')) e = all[i]; } var n = (e ? e.textContent : '0|0').split('|'), f = +n[0] || 0, h = +n[1] || 0; var txt = 'THE POEM IS WHOLE\n\nAll three lines of the alba are yours. Centre Point, at the top of Dean Street, will let you leave the night whenever you choose.\n\nA full night is more than the poem: all five of LILY’S flowers, and all twelve haunts. You hold ' + f + (f === 1 ? ' flower' : ' flowers') + ' and ' + h + (h === 1 ? ' haunt' : ' haunts') + '. Stay as long as you like.'; if (window.dssExplainSlip) window.dssExplainSlip(txt); })();</script>]\
-(if: ($dreamKey is not "") and ($pocketSlipShown is not true))[(set: $pocketSlipShown to true)<script>window.dssExplainSlip && window.dssExplainSlip('In your pocket. The third pillar wants paying.');</script>]\
+<!-- 2026-11-05 (Sam: "once the poem is collected there should be a slip that explains what else you need to do to escape the night and also what a full night is"): once, the first header after the third line -->(if: (($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3)) and ($albaWholeSlipShown is not true))[(set: $albaWholeSlipShown to true)<span class="dss-alba-whole-n" hidden>(print: $lilyCount)|(print: $haunts's length)|(print: $needLilies)|(print: $needHaunts)</span><script>(function(){ var all = document.querySelectorAll('.dss-alba-whole-n'), e = null; for (var i = 0; i < all.length; i++) { if (!all[i].closest('.dss-ghost')) e = all[i]; } var n = (e ? e.textContent : '0|0|3|6').split('|'), f = +n[0] || 0, h = +n[1] || 0, nf = +n[2] || 3, nh = +n[3] || 6; /* 2026-11-08 (Sam, playtest notes 38, 39 and 41: "shouldn't say 'A full night is more' it should say 'You need more to get out'"; "make it clear that the game isn't in fact won"; the white ending came without enough gathered): the poem alone is not the way out; the slip stays until clicked */ var txt = 'THE POEM IS WHOLE\n\nAll three lines of the alba are yours.\n\nYou need more to get out. The dawn also wants ' + nf + ' of LILY’S flowers and ' + nh + ' haunts. You hold ' + f + (f === 1 ? ' flower' : ' flowers') + ' and ' + h + (h === 1 ? ' haunt' : ' haunts') + '.\n\nCentre Point will let you leave before then, but the night will not be won.'; if (window.dssExplainSlip) window.dssExplainSlip(txt, { modal: true }); })();</script>]\
+(if: ($dreamKey is not "") and ($pocketSlipShown is not true))[(set: $pocketSlipShown to true)<script>/* 2026-11-08 (Sam, playtest note 23: "It should name the key: 'The brass lighter is in your pocket'"): the slip reads the name off the header's pocket cell, drawn just below */ setTimeout(function(){ var cs = document.querySelectorAll('.pocket-cell'), n = ''; for (var i = 0; i < cs.length; i++) { if (!cs[i].closest('.dss-ghost')) { n = cs[i].textContent.replace(/^\s*\u26B2\s*/, '').trim(); break; } } window.dssExplainSlip && window.dssExplainSlip((n ? 'The ' + n + ' is in your pocket.' : 'Something is in your pocket.') + ' The third pillar wants paying.'); }, 0);</script>]\
 (if: $worldsVisited is an array)[(if: ($worldsVisited's length >= 5) and ($giftsSlipShown is not true))[(set: $giftsSlipShown to true)<script>window.dssExplainSlip && window.dssExplainSlip('All five gifts are brought back. The third pillar is waiting.');</script>]]\
 (if: $dreamKey is not "" and $keyNames is a datamap and $keyNames contains $dreamKey)[<span class="pocket-cell" title="In your pocket. The third pillar wants paying."><span class="pocket-glyph" aria-hidden="true">&#9906;</span>(print: $keyNames's ($dreamKey))</span>]<!-- 2026-11-05 (Sam, playtest note 20: "the key you have in your pocket should be more obvious, beyond the stats bar, maybe an icon in the bottom left of the screen"): the badge at the bottom left is kept on the body by a watcher in the UserScript (dssPocketBadge), which reads this cell -->\
 <span class="night-cell" title="The night deepens through discoveries. There is no time limit."><!-- 2026-10-09, Sam: "get rid of the other after midnight", then "just get rid of the reader". No phase label shows at all now. The hidden span keeps the 0–3 number that the map darkening, the dawn birdsong and THE THIRST's small-hours gate still read, so that logic is parked with midnight, not cut. The old labels were "Before midnight", "After midnight", "Small hours", "Dawn awaits". -->\
@@ -70029,6 +70160,8 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
    setInterval). Three children inside — input, subtitle, link.
    Layout matches every other typewriter-page passage so there's no
    special tw-passage padding override (and no FOUC jump). */
+/* 2026-11-08 (Sam, playtest note 2: "the text above the typewriter page should be given more space and centre aligned") */
+.nb-lead { text-align: center; max-width: 34em; margin: 22px auto 30px; line-height: 1.6; }
 .book-naming tw-expression textarea::placeholder { color: rgba(60, 30, 10, 0.38); font-weight: 400; }
 .book-naming .nb-input {
   text-align: center;
@@ -70133,12 +70266,15 @@ COPPER clocks you looking. Her face remains uncharacteristically poker, which ca
 .where-next-out { margin: 0.3em 0 0.05em 0.15em; font-style: italic; font-size: 0.92em; color: rgba(236,208,138,0.78); line-height: 1.35; } /* 2026-11-05 (Sam: "there needs to be some mechanism for telling you exactly what you need to find before you are able to go to centre point") */
 .where-next-out .book-pitch-opt tw-link { font-style: normal; }
 /* 2026-11-05 (Sam, playtest note 20): the pocket key's badge, bottom left, on every page the header draws; not over the Title or inside a dream */
-.dss-pocket-badge { position: fixed; left: 14px; bottom: 14px; z-index: 9000; display: flex; align-items: center; gap: 9px; padding: 7px 12px 7px 9px; background: rgba(14,10,6,0.86); border: 1px solid rgba(217,189,120,0.55); box-shadow: 0 0 18px rgba(216,184,112,0.18), 0 4px 14px rgba(0,0,0,0.5); border-radius: 2px; pointer-events: none; animation: dssPocketIn 0.9s ease both; }
-.dss-pocket-badge-glyph { font-size: 22px; line-height: 1; color: #ffd98a; text-shadow: 0 0 8px rgba(255,210,120,0.7); }
-.dss-pocket-badge-label { font: bold 9px 'Courier New', monospace; letter-spacing: 3px; color: #d8b870; display: block; }
-.dss-pocket-badge-name { font: italic 13px Georgia, 'Crimson Text', serif; color: #f3e4bd; display: block; }
+/* 2026-11-08 (Sam, playtest note 24: "that should be bigger"): about half as large again */ .dss-pocket-badge { position: fixed; left: 16px; bottom: 16px; z-index: 9000; display: flex; align-items: center; gap: 13px; padding: 11px 20px 11px 14px; background: rgba(14,10,6,0.86); border: 1px solid rgba(217,189,120,0.55); box-shadow: 0 0 18px rgba(216,184,112,0.18), 0 4px 14px rgba(0,0,0,0.5); border-radius: 2px; pointer-events: none; animation: dssPocketIn 0.9s ease both; }
+.dss-pocket-badge-glyph { font-size: 34px; line-height: 1; color: #ffd98a; text-shadow: 0 0 8px rgba(255,210,120,0.7); }
+.dss-pocket-badge-label { font: bold 11px 'Courier New', monospace; letter-spacing: 3px; color: #d8b870; display: block; }
+.dss-pocket-badge-name { font: italic 19px Georgia, 'Crimson Text', serif; color: #f3e4bd; display: block; }
 .dss-pocket-badge-label, .dss-pocket-badge-name { white-space: nowrap; }
-.dss-pocket-badge-text { display: flex; flex-direction: column; gap: 1px; }
+/* 2026-11-08 (Sam, playtest notes 27-28 at the barber's: "I didn't get a chance to click my choice here ... have the choice here not before the 3d rendered"): on the street arrivals the page's words and choices wait until the scene's own button is pressed; a 12 s safety shows them anyway if the scene never comes */
+@keyframes dssArrivalSafety { to { visibility: visible; } }
+tw-passage:is(:has(#bd-container), :has(#jd-container), :has(#bc-container)):not(.dss-arrived) > :not(:has(#bd-container, #jd-container, #bc-container)):not(#bd-container, #jd-container, #bc-container) { visibility: hidden; animation: dssArrivalSafety 0s linear 12s forwards; }
+.dss-pocket-badge-text { display: flex; flex-direction: column; gap: 3px; }
 @keyframes dssPocketIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (max-width: 700px) { .dss-pocket-badge { bottom: 8px; left: 8px; padding: 5px 9px; } }
 .book-pitch .book-pitch-opt, .book-pitch .book-pitch-on { margin-top: 0.08em; margin-bottom: 0.08em; }
@@ -73918,6 +74054,8 @@ tw-story:has(.typewriter-page) .dss-trail-chip { display: none; } /* it would ha
 .fi-action.fi-key-btn { display: block !important; margin: 12px auto 2px !important; padding: 13px 22px !important; font-size: 13px !important; font-weight: bold; color: #fff2f2 !important; border: 1px solid rgba(255,110,130,0.95) !important; background: linear-gradient(180deg, rgba(200,30,60,0.55), rgba(120,10,30,0.65)) !important; box-shadow: 0 0 18px rgba(255,50,80,0.45); animation: dssKeyBtn 1.8s ease-in-out infinite; }
 @keyframes dssKeyBtn { 0%, 100% { box-shadow: 0 0 12px rgba(255,50,80,0.35); } 50% { box-shadow: 0 0 26px rgba(255,60,90,0.75); } }
 @media (prefers-reduced-motion: reduce) { .dss-key-loud, .fi-action.fi-key-btn { animation: none; } }
+/* 2026-11-08 (Sam, playtest note 25): leaving the key is a real choice, the same size as taking it, in the bar's gold rather than the key's red */
+.fi-action.fi-key-leave { display: block !important; margin: 8px auto 2px !important; padding: 13px 22px !important; font-size: 13px !important; font-weight: bold; text-align: center; color: #f3e4bd !important; border: 1px solid rgba(216,184,112,0.85) !important; background: rgba(40,30,16,0.9) !important; }
 /* 2026-10-29 (Sam, playtest note 14, mock-up approved): plot speech from someone in the game world, set apart from the narration and from the
    typewriter's commentary: the speaker named in small caps, the words in a warm italic serif on a dark panel, a rule in the speaker's colour (--sp) */
 tw-passage .dss-speech, .dss-room-prose .dss-speech { display: block; margin: 0.5em 0; padding: 0.55em 1.1em 0.6em; border-left: 3px solid var(--sp, #c9a35e); border-radius: 0; background: rgba(26,20,13,0.82); font-family: 'Courier New', Courier, monospace; font-style: normal; font-size: 0.93em; line-height: 1.6; color: #f1e3c2; } /* 2026-11-05 (Sam, playtest note 6: "The typeface in the thing about Inis and similar should be different"): typed, so the typewriter's face, as the pages have */ /* 2026-10-29 nightwork: tightened (was margin .9em, padding .75/.85em, 1.05em/1.7): the Ham's call-back page ran 86 px over at 1280x800 once its errand moved into this panel */
@@ -75369,7 +75507,12 @@ letter-spacing: 0.01em;
    Encourages first-play exploration over the easy dawn ending. */
 /* 2026-10-12: the Fetch's count of what the night still owes before he leads you on */
 .nb-owed { color: #7a4a1e !important; opacity: 1 !important; text-align: center; margin: 0.2em 0 0.9em !important; }
-.fetch-owed { margin: 0.9em 0 0.2em; font: bold 11.5px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; color: #a9c4cc; opacity: 0.85; }
+.fetch-owed { margin: 1.1em 0 1.6em; padding: 0.8em 0 0.8em 1em; border-left: 2px solid rgba(169,196,204,0.35); font: bold 12px 'Courier New', monospace; letter-spacing: 2px; text-transform: uppercase; color: #a9c4cc; opacity: 0.9; }
+/* 2026-11-08 (Sam, playtest note 39: "space out the things in this box better. They're a mess"): the tally is two rows, each its own line, the totals quieter, and the way back has room above it */
+.fetch-owed-row { display: block; line-height: 2; white-space: nowrap; }
+.fetch-owed-all { opacity: 0.6; font-weight: normal; }
+#fetch-reveal .back-to-night-glow { display: inline-block; margin-top: 0.6em; }
+#fetch-reveal > div[style*="margin:0 0 0.9em"] { margin-bottom: 1.6em !important; }
 .back-to-night-glow {
   display: inline-block;
   animation: backToNightGlow 2.6s ease-in-out 1.4s 4 alternate;
@@ -76724,11 +76867,14 @@ z-index: 1;
 .verse .verse-credit, .lily-glimpse .verse-credit { display: block; margin-top: 0.6em; font-size: 0.8em; font-style: normal; letter-spacing: 0.08em; opacity: 0.88; white-space: normal; }
 .verse.verse-oneline, .lily-window .verse.verse-oneline { white-space: nowrap; font-size: clamp(0.66em, 1.9vw, 0.86em) !important; max-width: none; letter-spacing: 0 !important; padding-right: 0.6em; }
 /* 2026-10-31 (note 26): the polaroid's own screen */
-#dss-photo-pop { position: fixed; inset: 0; z-index: 9999970; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: rgba(4, 3, 2, 0.86); opacity: 0; transition: opacity 0.6s ease; overflow-y: auto; }
+#dss-photo-pop { position: fixed; inset: 0; z-index: 9999970; display: flex; flex-direction: column; cursor: pointer; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: rgba(4, 3, 2, 0.86); opacity: 0; transition: opacity 0.6s ease; overflow-y: auto; }
 #dss-photo-pop.in { opacity: 1; }
 #dss-photo-pop.out { opacity: 0; transition-duration: 0.45s; }
 #dss-photo-pop .memory-photo { margin: auto; width: min(420px, 100%); max-height: none; }
-.dss-photo-pop-x { position: fixed; top: 18px; right: 20px; width: 2em; height: 2em; border-radius: 50%; border: 1px solid rgba(216, 184, 112, 0.5); background: rgba(0, 0, 0, 0.4); color: #d8b870; font-size: 1.1em; line-height: 1; cursor: pointer; }
+.dss-photo-pop-frame { position: relative; margin: auto auto 0; width: min(420px, 100%); }
+#dss-photo-pop .dss-photo-pop-frame .memory-photo { margin: 0; width: 100%; }
+.dss-photo-pop-hint { margin: 14px auto auto; font-family: Georgia, serif; font-style: italic; font-size: 0.95em; color: rgba(216, 184, 112, 0.78); letter-spacing: 0.03em; }
+.dss-photo-pop-x { position: absolute; top: -12px; right: -12px; z-index: 2; box-shadow: 0 2px 8px rgba(0,0,0,.6); width: 2em; height: 2em; border-radius: 50%; border: 1px solid rgba(216, 184, 112, 0.5); background: rgba(12, 9, 6, 0.92); color: #d8b870; font-size: 1.1em; line-height: 1; cursor: pointer; }
 .dss-photo-pop-x:hover { background: rgba(216, 184, 112, 0.15); }
 .memory-photo-3 { --rot: -0.9deg; --halo: rgba(232, 110,  48, 0.58); }
 /* AOIFE MEMORIES — the cold-blue counterpart to Lily's warm photos. Same
@@ -76750,8 +76896,8 @@ body:not(.pp-bail-ok) .canvas-bail.pp-bail { display: none; }
 /* A3 plays as a brief modal "vision": a dimming scrim + the centred polaroid
    flash up over the Alba Complete screen, hold ~1.5s, then dissolve to reveal
    the ending text. pointer-events:none so it never blocks "Traveller, wake!". */
-.a3-flash { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; pointer-events: none; animation: a3FlashScrim 3.6s ease-in-out forwards; }
-.a3-flash .memory-photo { margin: 0; animation: a3FlashCard 3.6s ease-in-out forwards; }
+/* 2026-11-08 (Sam, playtest note 40: "That polaroid needs to last longer. it should only fade when you click"): the family polaroid is lifted onto the polaroid screen (.mp-pop, the stairs' own), which stays until a click; the old 3.6 s flash is retired */
+.a3-flash { display: none; }
 @keyframes a3FlashScrim { 0% { background: rgba(8,10,18,0.82); } 60% { background: rgba(8,10,18,0.82); } 100% { background: rgba(8,10,18,0); } }
 @keyframes a3FlashCard { 0% { opacity: 0; transform: scale(0.94) rotate(0.9deg); } 22% { opacity: 1; transform: scale(1) rotate(0.9deg); } 69% { opacity: 1; transform: scale(1) rotate(0.9deg); } 100% { opacity: 0; transform: scale(1.015) rotate(0.9deg); } }
 
@@ -78425,6 +78571,12 @@ tw-story[tags~="venue-ronnies"] #bar-arena { background-image: linear-gradient(r
 /* Coach drain travel — the 3D camera follows a masonry pipe down, around
    its bend and up into the porcelain outlet. This fade is also the fallback
    if the renderer cannot load; reduced motion gets only a short dissolve. */
+/* 2026-11-08 (Sam, playtest note 36): the cow's question is asked on the cow's own card, not in the Coach's opening words */
+.dss-room-fixed .dss-cow-q, .dss-room-prose .dss-cow-q, .dss-room-dismiss-wrap .dss-cow-q { display: none; }
+.dss-mandala-intro { position: fixed; inset: 0; background: #07040c; z-index: 9500; pointer-events: none; overflow: hidden; animation: dssMandalaFade 10s ease-out both; }
+.dss-mandala-intro canvas { width: 100%; height: 100%; display: block; }
+@keyframes dssMandalaFade { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .dss-mandala-intro { animation: coachPlumbStill .8s ease-out both; } .dss-mandala-intro canvas { display: none; } }
 .coach-plumbing-intro {
   position: fixed;
   inset: 0;
@@ -78743,6 +78895,11 @@ box-shadow:
   inset 0 0 30px rgba(60,30,15,0.35);
 animation: phoneRingingAppear 0.45s ease-out both, phoneRingingTremor 0.7s ease-in-out 0.45s infinite;
 }
+/* 2026-11-08 (Sam, playtest note 10: "The badge for when the phone rings should be more beer mat, a little bit of decoration at the edges"): a printed
+   beer mat's edge, a deckled outer rim of dots and a double inner rule a little in from it */
+.phone-ringing::before { content: ''; position: absolute; inset: 9px; border: 1px solid rgba(220,150,100,0.55); border-radius: 28px; pointer-events: none;
+  box-shadow: inset 0 0 0 3px rgba(26,16,10,0.9), inset 0 0 0 4px rgba(220,150,100,0.32); }
+.phone-ringing::after { content: ''; position: absolute; inset: 3px; border-radius: 33px; pointer-events: none; border: 2px dotted rgba(220,150,100,0.42); }
 /* Blur backdrop. Scoped via :has() so it only mounts while a .phone-ringing
    popup is up, and it softens the page behind so focus stays on the call.
    It used to catch clicks as well. It no longer does (2026-09-14): Sam was
@@ -79742,6 +79899,8 @@ tw-story[tags~="dawn-end"] .ending-pane::before {
    the sprig + wheel-emblem record.) */
 
 /* Play again — fades in at 30s, full restart that clears the auto save. */
+/* 2026-11-08 (Sam, playtest note 44): on the page it waits hidden; the petal storm lifts it to the foot of the screen once the petals have risen */
+.dawn-page .dawn-play-again:not(.dawn-petal-restart) { visibility: hidden; pointer-events: none; }
 .dawn-play-again {
   margin: 2.6em auto 1em;
   text-align: center;
@@ -80966,7 +81125,10 @@ tw-passage tw-link[data-dss-way="street"]:hover::after { border-bottom-color: rg
 
 /* Clear, shared return control for every interior close-up. */
 /* Instruction paper waits while an object card is read, then returns intact. */
-body:has(.dss-room-card[aria-hidden="false"]) .dss-hint-stack { visibility:hidden; }
+body:has(.dss-room-card[aria-hidden="false"]) .dss-hint-stack:not(:has(.dss-hint-voices)) { visibility:hidden; }
+/* 2026-11-08 (Sam, playtest note 5): the VOICES slip is the exception, read beside the voices it explains; any other slip in the stack still waits */
+body:has(.dss-room-card[aria-hidden="false"]) .dss-hint-stack .dss-hint-slip:not(.dss-hint-voices) { visibility:hidden; }
+.dss-hint-stack .dss-hint-slip.dss-hint-voices { z-index: 9100; }
 .dss-room-card-body { min-height:0; flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; padding:2px 4px 3px; }
 .dss-room-card-body:focus-visible { outline:1px solid rgba(232,214,166,.45); outline-offset:-1px; }
 .dss-room-back-row { flex:0 0 auto; margin-top:12px; }
@@ -81090,6 +81252,8 @@ body::after { content: ""; position: fixed; inset: -12%; pointer-events: none; z
 html:has(tw-story[tags~="white-page"]) body::before, html:has(tw-story[tags~="white-page"]) body::after, html.dss-no-film body::before, html.dss-no-film body::after { display: none; }
 /* 2026-11-05 afternoon (Sam: "the title page now looks undercooked"): no grain or vignette on the Title; it is as it was before the nightwork */
 html:has(#dss-title) body::before, html:has(#dss-title) body::after { display: none; }
+/* 2026-11-08 (Sam, playtest note 44: "why is this screen flashing? Stop it doing that"): the grain stepped six times a second over the Dawn's brightening sky; the Dawn goes clean, as the white page does */
+html:has(tw-story[tags~="dawn-end"]) body::before, html:has(tw-story[tags~="dawn-end"]) body::after { display: none; }
 @media (prefers-reduced-motion: reduce) { body::after { animation: none; } }
 /* the grain breathes with the page (04:35): heavier on the street and in the dream worlds, lighter on the typewriter paper and the dawn */
 html:has(tw-story[tags~="outdoor"]:not([tags~="hub"])) body::after, html:has(tw-story[tags~="dream"]) body::after { opacity: 0.10; }
@@ -81319,6 +81483,7 @@ A bright mandala draws itself extrinsically.
      Dean Street is reached with the mantra in the notebook and a
      permanent change to the critic's response (see The critic's
      judgement passage). -->
+<div class="dss-mandala-intro" aria-hidden="true"></div><script>(function(){ /* 2026-11-08 (Sam, playtest note 33): home through the mandala */ var host = document.querySelector('.dss-mandala-intro'); if (window.dssMandalaTravel) window.dssMandalaTravel(host); })();</script>
 <script>setTimeout(function(){if(window.dssAudio&&window.dssAudio.passageWhoosh)window.dssAudio.passageWhoosh();},200);</script>
 <div>
 Dean Street. You remember something, not much, about mountains, thunder and nothing else.
@@ -87712,7 +87877,7 @@ Massive earthworms are breaking through the walls!
 (set: _colonyOpen to (($coachUrgent is not true) and ($haunts is an array) and ($haunts contains $haunt1) and not (($knowsRonnies is true) and ($knowsCopperSecret is true) and ($metSalvu is true))))
 (if: _colonyOpen and ($metDavy is not true))[(set: _wC to "DAVY MERKIN")(set: $whoList to it + (a: (dm: "id", "colony", "name", "DAVY MERKIN", "place", "the Colony Room", "k", "davy", "link", "Get a drink with the man at the bar")))]
 (if: _colonyOpen and ($knowsRonnies is not true) and ($pitchedAgent is not true))[(set: _wC to (cond: _wC is "", "THE AGENT", _wC + ", THE AGENT"))(set: $whoList to it + (a: (dm: "id", "colony", "name", "THE AGENT", "place", "the Colony Room", "k", "agent", "link", "Talk to the famous agent")))]
-(if: ($knowsCecilCourt is true) and ($knowsAboutPage is not true))[(set: _wE to "INIS O’FLATTERLY")(set: $whoList to it + (a: (dm: "id", "cecil", "name", "INIS O’FLATTERLY", "place", "Cecil Court", "k", "inis", "link", "The Great Ham sent me|Approach")))]
+<!-- 2026-11-08 (Sam, playtest note 12: "The two boxes here repeat INIS. Only one box is needed, the first"): while Where next? sends you to him (the Ham has named him), he is not on this list too -->(if: ($knowsCecilCourt is true) and ($knowsAboutPage is not true) and ($metCritic is not true))[(set: _wE to "INIS O’FLATTERLY")(set: $whoList to it + (a: (dm: "id", "cecil", "name", "INIS O’FLATTERLY", "place", "Cecil Court", "k", "inis", "link", "The Great Ham sent me|Approach")))]
 (set: _coachOpen to (($coachUrgent is true) or (($inisToldOfPillars is true) and ($keySlip is "seed")) or (($alba is an array) and ($alba contains $alba1) and ($alba contains $alba2) and ($cowRideDone is not true))))
 (if: _coachOpen and ($sawJeffrey is not true))[(set: _wO to "JEFFREY BERNARD")(set: $whoList to it + (a: (dm: "id", "coach", "name", "JEFFREY BERNARD", "place", "the Coach and Horses", "k", "jeffrey", "link", "")))]
 (if: ($knowsRonnies is true) and ($completedSetlist is not true))[(set: _wR to "MOE")(set: $whoList to it + (a: (dm: "id", "ronnies", "name", "MOE", "place", "Ronnie Scott’s", "k", "moe", "link", "")))]
@@ -87738,7 +87903,7 @@ Massive earthworms are breaking through the walls!
      a name tried on an earlier night carries that night's verdict beside it, small (the hidden .book-pitch-k span holds
      the slip key; the script reads dssRefusals). -->
 (display: "Who Will Read")
-<span class="book-pitch-q">Who next?<!-- 2026-11-05 (Sam: "Yes, Who next?"): was "Who will you pitch the book to next?", since JOHN and BENITO, now on the list, do not read the book --><!-- 2026-11-05 (Sam: "The 'click' instruction, get rid of that, they'll work it out"): the "(Click a name for directions)" help line and its first-three-showings script are gone --></span>(for: each _w, ...$pitchAvail)[(if: (_w's id is $pitchTarget) and (_w's name is $pitchName))[<span class="book-pitch-on"><span class="book-pitch-k" hidden>(print: _w's k)</span>(print: _w's name) · (print: _w's place)</span>](else:)[<span class="book-pitch-opt"><span class="book-pitch-k" hidden>(print: _w's k)</span>(link: _w's name + " · " + _w's place)[(set: $pitchTarget to _w's id)(set: $pitchName to _w's name)(set: $pitchLink to _w's link)(replace: ?pitchflag)[(print: $pitchTarget)](replace: ?nextflag)[(display: "Next Target")](replace: ?next2flag)[](replace: ?pitchq)[(display: "Pitch Question")]]</span>]]<!-- 2026-10-28 (note 40): no one, for now; the path and the glow clear and the question comes back next lap --><span class="book-pitch-opt book-pitch-no">(link: "No one yet.")[(set: $pitchTarget to "")(set: $pitchName to "")(set: $pitchLink to "")(replace: ?pitchflag)[](replace: ?nextflag)[(display: "Next Target")](replace: ?next2flag)[](replace: ?pitchq)[]]</span>
+<span class="book-pitch-q">Who’s next?<!-- 2026-11-08 (Sam, playtest note 3): "Who’s next?" not "Who next?" --><!-- 2026-11-05 (Sam: "Yes, Who next?"): was "Who will you pitch the book to next?", since JOHN and BENITO, now on the list, do not read the book --><!-- 2026-11-05 (Sam: "The 'click' instruction, get rid of that, they'll work it out"): the "(Click a name for directions)" help line and its first-three-showings script are gone --></span>(for: each _w, ...$pitchAvail)[(if: (_w's id is $pitchTarget) and (_w's name is $pitchName))[<span class="book-pitch-on"><span class="book-pitch-k" hidden>(print: _w's k)</span>(print: _w's name) · (print: _w's place)</span>](else:)[<span class="book-pitch-opt"><span class="book-pitch-k" hidden>(print: _w's k)</span>(link: _w's name + " · " + _w's place)[(set: $pitchTarget to _w's id)(set: $pitchName to _w's name)(set: $pitchLink to _w's link)(replace: ?pitchflag)[(print: $pitchTarget)](replace: ?nextflag)[(display: "Next Target")](replace: ?next2flag)[](replace: ?pitchq)[(display: "Pitch Question")]]</span>]]<!-- 2026-10-28 (note 40): no one, for now; the path and the glow clear and the question comes back next lap --><span class="book-pitch-opt book-pitch-no">(link: "No one yet.")[(set: $pitchTarget to "")(set: $pitchName to "")(set: $pitchLink to "")(replace: ?pitchflag)[](replace: ?nextflag)[(display: "Next Target")](replace: ?next2flag)[](replace: ?pitchq)[]]</span>
 <script>(function(){ /* 2026-10-31 (note 7): the hint shows on the question's first three showings in this browser (a page, not each re-draw) */ var h = document.querySelectorAll('.book-pitch .book-pitch-help[hidden]'); if (!h.length) return; var g = String(window._passageGen), n = 0, last = ''; try { n = +localStorage.getItem('dssPitchHelpN') || 0; last = localStorage.getItem('dssPitchHelpGen') || ''; } catch (e) {} if (last !== g) { if (n >= 3) return; n++; try { localStorage.setItem('dssPitchHelpN', String(n)); localStorage.setItem('dssPitchHelpGen', g); } catch (e) {} } Array.prototype.forEach.call(h, function(e) { e.hidden = false; }); })();</script><script>(function(){ var R = window.dssRefusals; if (!R) return; var all = R.list(), n = R.night(), first = 0; try { first = +localStorage.getItem('dssRunFirst') || 0; } catch (e) {} all = all.filter(function(r) { return r.n >= first; }); /* 2026-10-23: earlier nights of this run only */ Array.prototype.forEach.call(document.querySelectorAll('.book-pitch .book-pitch-opt:not([data-ago]), .book-pitch .book-pitch-on:not([data-ago])'), function(el) { el.setAttribute('data-ago', '1'); var kEl = el.querySelector('.book-pitch-k'), k = kEl ? kEl.textContent.trim() : ''; if (!k) return; var prev = all.filter(function(r) { return r.k === k && r.n < n; }); if (!prev.length) return; var last = prev[prev.length - 1]; var s = document.createElement('span'); s.className = 'book-pitch-ago'; s.textContent = (n - last.n === 1 ? 'Last night: ' : 'On an earlier night: ') + last.line; el.appendChild(s); }); })();</script>
 }
 
@@ -87749,7 +87914,7 @@ Massive earthworms are breaking through the walls!
 (if: ($knowsCecilCourt is true) and ($metCritic is true) and ($knowsAboutPage is not true))[(set: _wn to it + (a: (a: "Find INIS O’FLATTERLY in Cecil Court.", "cecil")))]
 (if: ($knowsAboutPage is true) and ($hasMissingPage is not true) and ($returnedPage is not true))[(set: _wn to it + (a: (a: "Find page 93.", "pillars")))]
 (if: ($hasMissingPage is true) and ($returnedPage is not true))[(set: _wn to it + (a: (a: "Take page 93 back to INIS.", "cecil")))]
-<!-- 2026-11-05 (Sam: "there needs to be some mechanism for telling you exactly what you need to find before you are able to go to centre point"): THE WAY OUT, a standing line under the errands once INIS has named the third pillar: the gate at the top of the map wants the third pillar crossed (or two blackouts), and the Fetch beyond it wants the poem whole, or three of LILY's flowers and six haunts; the line names what is still owed, with the counts, and turns into a link that lights the gate once both are met -->(set: _out to "")(set: _outOpen to false)(if: $inisToldOfPillars is true)[(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](set: _whole to (($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3) and ($notebook is not "stolen")))(set: _lived to (($lilyCount >= $needLilies) and ($haunts's length >= $needHaunts)))(set: _gate to (($crossedThreshold is true) or ($blackouts >= 2)))(set: _ac to 0)(if: $alba contains $alba1)[(set: _ac to _ac + 1)](if: $alba contains $alba2)[(set: _ac to _ac + 1)](if: $alba contains $alba3)[(set: _ac to _ac + 1)](if: $notebook is "stolen")[(set: _ac to 0)](set: _have to "You hold " + (text: _ac) + (cond: _ac is 1, " line", " lines") + " of the poem, " + (text: $lilyCount) + (cond: $lilyCount is 1, " flower", " flowers") + " and " + (text: $haunts's length) + (cond: $haunts's length is 1, " haunt.", " haunts."))(if: not _gate)[(set: _out to "Centre Point will not open until you have crossed the third pillar. " + _have)](else-if: _whole or _lived or ($blackouts >= 2) or ($coachBurnt is true) or ($sanctumDone is true))[(set: _out to "Centre Point is open. The Fetch will let you go.")(set: _outOpen to true)](else:)[(set: _out to "Centre Point is open, but the Fetch will only let you go with the poem whole, or with " + (text: $needLilies) + " of LILY’S flowers and " + (text: $needHaunts) + " haunts. " + _have)]]<!-- 2026-11-07 (GPT second pass): no "Centre Point is open" while the burnt hut leaves only the Coach on the map, or while low morale gives the north door to Give up on the night --><span hidden>(if: (($hutBurnt is true) and ($coachBurnt is not true)) or (($coachUrgent is false) and ($confidence <= 5)))[(set: _out to "")(set: _outOpen to false)]</span>(set: _on to false)(for: each _o, ..._wn)[(if: _o's 2nd is $whereNext)[(set: _on to true)]](if: ($whereNext is "north") and _outOpen)[(set: _on to true)](unless: _on)[(set: $whereNext to "")]
+<!-- 2026-11-05 (Sam: "there needs to be some mechanism for telling you exactly what you need to find before you are able to go to centre point"): THE WAY OUT, a standing line under the errands once INIS has named the third pillar: the gate at the top of the map wants the third pillar crossed (or two blackouts), and the Fetch beyond it wants the poem whole, or three of LILY's flowers and six haunts; the line names what is still owed, with the counts, and turns into a link that lights the gate once both are met -->(set: _out to "")(set: _outOpen to false)(if: $inisToldOfPillars is true)[(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](set: _whole to (($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3) and ($notebook is not "stolen")))(set: _lived to (($lilyCount >= $needLilies) and ($haunts's length >= $needHaunts)))(set: _gate to ((($crossedThreshold is true) and ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3)) or ($blackouts >= 2)))(set: _ac to 0)(if: $alba contains $alba1)[(set: _ac to _ac + 1)](if: $alba contains $alba2)[(set: _ac to _ac + 1)](if: $alba contains $alba3)[(set: _ac to _ac + 1)](if: $notebook is "stolen")[(set: _ac to 0)](set: _have to "You hold " + (text: _ac) + (cond: _ac is 1, " line", " lines") + " of the poem, " + (text: $lilyCount) + (cond: $lilyCount is 1, " flower", " flowers") + " and " + (text: $haunts's length) + (cond: $haunts's length is 1, " haunt.", " haunts."))(if: not _gate)[(set: _out to "Centre Point, your way out of the night, will not open until you have crossed the third pillar and caught all three lines of the poem. " + _have)](else-if: _whole or _lived or ($blackouts >= 2) or ($coachBurnt is true) or ($sanctumDone is true))[(set: _out to "Centre Point, your way out of the night, is open.")(set: _outOpen to true)](else:)[(set: _out to "Centre Point, your way out of the night, is open, but you will need the poem whole, or " + (text: $needLilies) + " of LILY’S flowers and " + (text: $needHaunts) + " haunts, to leave. " + _have)]]<!-- 2026-11-07 (GPT second pass): no "Centre Point is open" while the burnt hut leaves only the Coach on the map, or while low morale gives the north door to Give up on the night --><span hidden>(if: (($hutBurnt is true) and ($coachBurnt is not true)) or (($coachUrgent is false) and ($confidence <= 5)))[(set: _out to "")(set: _outOpen to false)]</span>(set: _on to false)(for: each _o, ..._wn)[(if: _o's 2nd is $whereNext)[(set: _on to true)]](if: ($whereNext is "north") and _outOpen)[(set: _on to true)](unless: _on)[(set: $whereNext to "")]
 (if: (_wn's length > 0) or (_out is not ""))[<div class="book-pitch where-next"><span class="book-pitch-q">Where next?</span>(for: each _o, ..._wn)[(if: _o's 2nd is $whereNext)[<span class="book-pitch-on">(print: _o's 1st)</span>](else:)[<span class="book-pitch-opt"><span class="book-pitch-k" hidden>(print: _o's 2nd)</span>(link: _o's 1st)[(set: $whereNext to _o's 2nd)(replace: ?wnq)[(display: "Where Next")]]</span>]](if: _out is not "")[<div class="where-next-out">(if: _outOpen)[<span class="book-pitch-opt"><span class="book-pitch-k" hidden>north</span>(link: _out)[(set: $whereNext to "north")(replace: ?wnq)[(display: "Where Next")]]</span>](else:)[(print: _out)]</div>]</div><span class="dss-hub-flag" data-k="wherenext" hidden>(print: $whereNext)</span><script>(function(){ var fs = document.querySelectorAll('tw-passage .dss-hub-flag[data-k="wherenext"]'), id = ''; for (var i = 0; i < fs.length; i++) { if (!fs[i].closest('.dss-ghost')) id = fs[i].textContent.trim(); } if (id && window.dssWhereNextGo) window.dssWhereNextGo(id); })();</script>]
 }
 

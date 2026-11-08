@@ -176,7 +176,7 @@ class Run:
 
     def look_at_photos(self):
         self.click_object("fi", "Photographs")
-        self.clear_lore(); self.clear_slips(); self.clear_lore()
+        self.page.wait_for_timeout(2500)   # the voices' box fades in; the VOICES slip waits for the card to close
         self.js("() => window.__dssRooms.fi.back()")
         self.wait_for("() => window.__dssRooms.fi.mode() === 'idle'", 8000, "the camera back from the photographs")
         self.clear_lore(); self.clear_slips(); self.clear_lore()
@@ -280,21 +280,25 @@ def _(r):
     r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-type'), function (e) { return e.textContent.indexOf('REGRESSION') >= 0; })", 8000, "the slip to type once the lore card closed")
 
 
-@check("french-photographs-first", "2026-11-07 (Sam): the French teaches the VOICES; until its photographs are looked at, only they glow and the header's way back waits")
+@check("french-photographs-first", "2026-11-07 (Sam): the French teaches the VOICES; until its photographs are looked at, only they glow (the door, the way out, waits too)")
 def _(r):
     r.go("The French")
     r.room_ready("fi", photos=False)
     names = r.js("() => window.__dssRooms.fi.names()")
     r.expect(names == ["Photographs"], "before the photographs the room offers %s" % names)
-    r.expect(not r.js("() => [].some.call(document.querySelectorAll('.back-one-link'), function (e) { return e.getClientRects().length; })"), "the header's way back shows before the photographs")
     r.click_object("fi", "Photographs")
-    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /VOICES/.test(e.textContent); })", 8000, "the VOICES slip on the photographs")
-    r.clear_slips(); r.clear_lore()
+    r.wait_for("() => /THE PRIME/.test(document.body.innerText)", 8000, "the voices on the photographs")
+    for _ in range(8):   # 2026-11-07 (Sam): the lily line came up over the photographs' voices; it waits for the room
+        r.page.wait_for_timeout(500)
+        r.expect(not r.js("() => [].some.call(document.querySelectorAll('.dss-room-lily-hint'), function (e) { return e.getClientRects().length && +getComputedStyle(e).opacity > 0.3; })"), "the lily line showed while the photographs' card was up")
     r.js("() => window.__dssRooms.fi.back()")
     r.wait_for("() => window.__dssRooms.fi.mode() === 'idle'", 8000, "the camera back")
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /VOICES/.test(e.textContent) && getComputedStyle(e).visibility !== 'hidden'; })", 10000, "the VOICES slip once the card closed")
+    r.clear_slips(); r.clear_lore()
     names = r.js("() => window.__dssRooms.fi.names()")
-    r.expect(len(names) >= 5 and "A man at the bar" in names, "after the photographs the room still offers only %s" % names)
-    r.expect(r.js("() => [].some.call(document.querySelectorAll('.back-one-link'), function (e) { return e.getClientRects().length; })"), "the header's way back is still hidden after the photographs")
+    r.expect(len(names) >= 5, "after the photographs the room still offers only %s" % names)
+    r.expect("A blue door" in names, "the door (the way out) is still held after the photographs")
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-room-lily-hint'), function (e) { return e.getClientRects().length && +getComputedStyle(e).opacity > 0.3; })", 8000, "the lily line once back in the room")
 
 
 @check("french-door-sign-shows", "2026-11-07 note 7: SORTIR sat inside the door panel, the notice looked blank")
@@ -606,7 +610,11 @@ def _(r):
     if got == "Approach The French":   # and once you have been in, the Pillars open
         play_on(r, lambda pn: pn == "The French", steps=6)
         r.room_ready("fi")
-        r.go("Dean Street", wait=10000)
+        r.clear_slips(); r.clear_lore()   # the MORALE and SOBRIETY slips of a first arrival
+        r.click_object("fi", "A blue door")
+        r.press("Out onto the street")
+        r.wait_for("() => (document.getElementById('dss-pn') || {}).textContent === 'Dean Street'", 15000, "Dean Street through the French's door")
+        r.page.wait_for_timeout(3000)
         r.clear_lore(); r.clear_slips(); r.clear_lore()
         if not any(re.search("Pillars", t) for t in r.js(HUB_LINKS)):
             bad.append("the Pillars are still closed after the French")

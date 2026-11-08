@@ -8499,13 +8499,28 @@ document.addEventListener('keydown', function(e) {
   }
   window.dssPlaytestNote = show;
   window.dssPlaytestNotes = { list: load, exportMarkdown: function() { return asMarkdown(load()); } };
-  document.addEventListener('keydown', function(e) {
+  /* 2026-11-07 (Sam: "make sure I can press the notes on all of the scenes, sometimes I can't"): the key is heard on the window in the capture phase, registered
+     before any scene's, so no game or close-up that swallows keys can keep it; a text field still types its N (only a field that takes text) */
+  function noteKey(e) {
     if (!window.DSS_DEV || open) return;
     if (!((e.key === 'N' || e.key === 'n' || e.code === 'KeyN') && e.shiftKey) || e.ctrlKey || e.metaKey || e.altKey) return; /* 2026-10-31: Caps Lock (and some key paths) report Shift+N as 'n'; the physical key counts */
-    var a = document.activeElement, tag = a && a.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (a && a.isContentEditable)) return;
-    e.preventDefault(); e.stopPropagation(); show();
-  }, true);
+    var a = document.activeElement, tag = a && a.tagName, typ = a && a.type ? String(a.type).toLowerCase() : '';
+    if ((tag === 'INPUT' && /^(|text|search|email|url|tel|password|number)$/.test(typ)) || tag === 'TEXTAREA' || (a && a.isContentEditable)) return;
+    e.preventDefault(); e.stopImmediatePropagation(); show();
+  }
+  window.addEventListener('keydown', noteKey, true);
+  /* the scenes inside a frame (the Centre Point dawn, and three more) take the keys once clicked into; each same-origin frame hands Shift+N back here */
+  setInterval(function() { if (!window.DSS_DEV) return; Array.prototype.forEach.call(document.querySelectorAll('iframe'), function(f) { try { var w = f.contentWindow; if (!w || w.__dssNoteKey) return; w.__dssNoteKey = true; w.addEventListener('keydown', function(e) { if (!open && e.shiftKey && (e.key === 'N' || e.key === 'n' || e.code === 'KeyN') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); e.stopImmediatePropagation(); try { f.blur(); window.focus(); } catch (x) {} show(); } }, true); } catch (x) {} }); }, 1000);
+  /* and a button to click, on every screen, test mode only: bottom left, above everything; its press is taken on the window before any must-read slip or scene can swallow it */
+  function noteBtn() {
+    if (!window.DSS_DEV || !document.body || document.getElementById('dss-note-btn')) return;
+    var b = document.createElement('button'); b.type = 'button'; b.id = 'dss-note-btn'; b.textContent = 'NOTE'; b.title = 'Playtest note (Shift+N)';
+    b.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:2147482999;background:#173126;color:#d8f2e2;border:1px solid #4f9a76;border-radius:5px;padding:5px 10px;font:600 11px/1 system-ui,sans-serif;letter-spacing:.08em;cursor:pointer;opacity:.8';
+    document.body.appendChild(b);
+  }
+  window.addEventListener('pointerdown', function(e) { if (e.target && e.target.id === 'dss-note-btn') { e.preventDefault(); e.stopImmediatePropagation(); if (!open) show(); } }, true);
+  window.addEventListener('click', function(e) { if (e.target && e.target.id === 'dss-note-btn') { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  setInterval(noteBtn, 1000); noteBtn();
 })();
 
 // ====== COIN FLIP POPUP (notebook) ======
@@ -9603,7 +9618,7 @@ window.__dssHintShow = function(html, passage, go, then, modal, tag) {
     var step = function() {
       if (!card.parentNode || card.__dssGoing) { setBody(text); release(); return; }
       /* 2026-11-07 (Sam, playtest note 3: "I heard the typewriter typing but didn't see the slip"): a lore card hides the slips (visibility), so the slip waits under it, silent and untyped, and types itself out once the card is closed */
-      if (document.querySelector('#dss-lore-overlay') || getComputedStyle(card).visibility === 'hidden') { if (typeFrom) typeFrom = Date.now() - i * pace; setTimeout(step, 250); return; }
+      if (document.querySelector('#dss-lore-overlay') || getComputedStyle(card).visibility === 'hidden' || +getComputedStyle(card).opacity < 0.3) { /* 2026-11-07: nor while it is still fading in (its first letter ticked unseen) */ if (typeFrom) typeFrom = Date.now() - i * pace; setTimeout(step, 250); return; }
       if (!typeFrom) typeFrom = Date.now();
       i = Math.max(i + 1, Math.min(text.length, Math.floor((Date.now() - typeFrom) / pace)));
       setBody(text.slice(0, i));

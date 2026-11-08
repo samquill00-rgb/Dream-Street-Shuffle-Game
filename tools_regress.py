@@ -219,9 +219,11 @@ class Run:
     def back_click(self, room):
         """Step back out of a close-up the way a player does: a real mouse click on "Back to the room". Fails if the click does nothing."""
         b = self.page.locator(".dss-room-back:visible")
-        self.expect(b.count() > 0, "no 'Back to the room' button on the %s card" % room)
-        box = b.first.bounding_box()
-        self.page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        if b.count():
+            box = b.first.bounding_box()
+            self.page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        else:   # a card with no such button (a figure, an exit): Esc, as a player would
+            self.page.keyboard.press("Escape")
         for _ in range(40):
             self.page.wait_for_timeout(200)
             if self.js("([r]) => window.__dssRooms[r].mode()", [room]) != "inspect":

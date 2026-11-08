@@ -315,6 +315,52 @@ def _(r):
     r.wait_for("() => [].some.call(document.querySelectorAll('.dss-room-lily-hint'), function (e) { return e.getClientRects().length && +getComputedStyle(e).opacity > 0.3; })", 8000, "the lily line once back in the room")
 
 
+NOTE_OPEN = "() => !!document.querySelector('.pn-save') && !!document.querySelector('.pn-save').getClientRects().length"
+
+
+def note_opens(r, how, where):
+    """Open the playtest-notes box by Shift+N or the NOTE button, then close it with Esc."""
+    if how == "key":
+        r.page.keyboard.press("Shift+KeyN")
+    else:
+        b = r.js("() => { var b = document.getElementById('dss-note-btn'); if (!b) return null; var q = b.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; }")
+        if not b:
+            return "%s: no NOTE button" % where
+        r.page.mouse.click(b[0], b[1])
+    r.page.wait_for_timeout(600)
+    ok = r.js(NOTE_OPEN)
+    r.page.keyboard.press("Escape"); r.page.wait_for_timeout(400)
+    return "" if ok else "%s: %s did not open the notes" % (where, "Shift+N" if how == "key" else "the NOTE button")
+
+
+@check("notes-open-everywhere", "2026-11-07 (Sam): the playtest notes would not always open; Shift+N and the NOTE button, in a close-up with a must-read slip waiting, a dream world, and a scene inside a frame")
+def _(r):
+    bad = []
+    print("  step:", 'r.go("The French")', flush=True)
+    r.go("The French")
+    r.room_ready("fi", photos=False)
+    r.click_object("fi", "Photographs")   # the VOICES slip is waiting, hidden, under the card
+    r.page.wait_for_timeout(1500)
+    bad += [note_opens(r, "key", "the photographs' close-up"), note_opens(r, "button", "the photographs' close-up")]
+    print("  step:", 'r.page.goto("http://127.0.0.1', flush=True)
+    r.page.goto("http://127.0.0.1:%d/%s?t=%d&start=nazca" % (r.port, HTML, int(time.time())), timeout=90000)
+    r.page.wait_for_timeout(9000)
+    r.page.mouse.click(720, 450); r.page.wait_for_timeout(500)
+    bad += [note_opens(r, "key", "the Nazca world"), note_opens(r, "button", "the Nazca world")]
+    print("  step:", 'r.go("Dawn Approach White"', flush=True)
+    r.go("Dawn Approach White", wait=12000)
+    fr = r.js("() => { var f = document.querySelector('iframe'); if (!f) return null; var q = f.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; }")
+    if fr:
+        r.page.mouse.click(fr[0], fr[1]); r.page.wait_for_timeout(800)
+        inside = r.js("() => document.activeElement && document.activeElement.tagName")
+        bad.append(note_opens(r, "key", "the dawn approach (focus in %s)" % inside))
+    else:
+        bad.append("no frame on Dawn Approach White to click into")
+    print("  step:", 'bad = [b for b in bad if b]', flush=True)
+    bad = [b for b in bad if b]
+    r.expect(not bad, "; ".join(bad))
+
+
 @check("french-door-sign-shows", "2026-11-07 note 7: SORTIR sat inside the door panel, the notice looked blank")
 def _(r):
     r.go("The French")

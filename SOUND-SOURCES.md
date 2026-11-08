@@ -17,7 +17,8 @@
 
 **Licence still to confirm before release** (each could turn out to need a credit, or not be usable):
 - (Checked 2026-11-05 and moved: the four Smithsonian scans to courtesy, the coin drop to must-credit, the Munch door to courtesy, Abrash.JPG to none.)
-- Nothing open. (2026-11-05: the Bayeux scan and the slime graffiti were both replaced by drawings made for the game; see No credit needed.)
+- The pig outside McPullin's Saussage Factory (Barbershop arrival, 2026-11-08): Sam's download pig.blend (Blender 2.81, one mesh, "Skin.Europian" material with a "Skin Shadder" group, an unpacked cleanStudio2K.jpg studio reference), exported to models/pig.bin. Source page and licence unknown; ask Sam where it came from (Blend Swap and Sketchfab are the usual homes for files like this, and both carry CC-BY and CC0 models).
+- (2026-11-05: the Bayeux scan and the slime graffiti were both replaced by drawings made for the game; see No credit needed.)
 
 **No credit needed** (CC0, or built by Claude from scratch):
 - Everything else in the tables below that says CC0.

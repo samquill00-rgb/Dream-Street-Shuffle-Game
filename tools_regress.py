@@ -177,7 +177,7 @@ class Run:
     def look_at_photos(self):
         self.click_object("fi", "Photographs")
         self.page.wait_for_timeout(2500)   # the voices' box fades in; the VOICES slip waits for the card to close
-        self.js("() => window.__dssRooms.fi.back()")
+        self.back_click("fi")
         self.wait_for("() => window.__dssRooms.fi.mode() === 'idle'", 8000, "the camera back from the photographs")
         self.clear_lore(); self.clear_slips(); self.clear_lore()
 
@@ -215,6 +215,18 @@ class Run:
         self.page.mouse.click(pt[0], pt[1])
         self.page.wait_for_timeout(2600)   # the camera's walk to the close-up
         self.expect(self.js("([r]) => window.__dssRooms[r].mode()", [room]) == "inspect", "clicking %r did not open its close-up" % name)
+
+    def back_click(self, room):
+        """Step back out of a close-up the way a player does: a real mouse click on "Back to the room". Fails if the click does nothing."""
+        b = self.page.locator(".dss-room-back:visible")
+        self.expect(b.count() > 0, "no 'Back to the room' button on the %s card" % room)
+        box = b.first.bounding_box()
+        self.page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        for _ in range(40):
+            self.page.wait_for_timeout(200)
+            if self.js("([r]) => window.__dssRooms[r].mode()", [room]) != "inspect":
+                return
+        raise Fail("clicking 'Back to the room' in %s did nothing (the mouse is stuck)" % room)
 
     def card_buttons(self):
         return self.js("() => [].slice.call(document.querySelectorAll('.fi-action')).filter(function (b) { return b.getClientRects().length; }).map(function (b) { return b.textContent.trim(); })")
@@ -280,7 +292,7 @@ def _(r):
     r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-type'), function (e) { return e.textContent.indexOf('REGRESSION') >= 0; })", 8000, "the slip to type once the lore card closed")
 
 
-@check("french-photographs-first", "2026-11-07 (Sam): the French teaches the VOICES; until its photographs are looked at, only they glow (the door, the way out, waits too)")
+@check("french-photographs-first", "2026-11-07 (Sam): the French teaches the VOICES; until its photographs are looked at, only they glow (the door, the way out, waits too); Back to the room still clicks with the VOICES slip waiting (the mouse froze)")
 def _(r):
     r.go("The French")
     r.room_ready("fi", photos=False)
@@ -291,7 +303,7 @@ def _(r):
     for _ in range(8):   # 2026-11-07 (Sam): the lily line came up over the photographs' voices; it waits for the room
         r.page.wait_for_timeout(500)
         r.expect(not r.js("() => [].some.call(document.querySelectorAll('.dss-room-lily-hint'), function (e) { return e.getClientRects().length && +getComputedStyle(e).opacity > 0.3; })"), "the lily line showed while the photographs' card was up")
-    r.js("() => window.__dssRooms.fi.back()")
+    r.back_click("fi")
     r.wait_for("() => window.__dssRooms.fi.mode() === 'idle'", 8000, "the camera back")
     r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /VOICES/.test(e.textContent) && getComputedStyle(e).visibility !== 'hidden'; })", 10000, "the VOICES slip once the card closed")
     r.clear_slips(); r.clear_lore()
@@ -410,7 +422,7 @@ def room_check(room, passage):
             if blk:
                 bad.append("%s: hidden in its close-up behind %s" % (name, blk))
                 r.page.screenshot(path=os.path.join(SHOTS, "room-%s-%s.png" % (room, name.replace(' ', '_').replace('/', '_'))))
-            r.js("([room]) => window.__dssRooms[room].back()", [room])
+            r.back_click(room)
             r.page.wait_for_timeout(2200)
         r.expect(not bad, "; ".join(bad))
     return fn

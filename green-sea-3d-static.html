@@ -718,7 +718,7 @@ var winStoneMat = new THREE.MeshStandardMaterial({ color: 0xd5c4a9, roughness: 0
 var winDark = new THREE.MeshStandardMaterial({ color: 0x0a0a12, roughness: 0.9 });
 // Dressed window panes — Mediterranean idiom (lace half-curtains, oil-lamp
 // amber, shutter-dark interiors) rather than the London drape language.
-function makeGsWinMat(mode) {
+function makeGsWinMat(mode, moon) {
   var tex = makeCanvasTexture(96, 144, function(cx, w, h) {
     if (mode === 'warm' || mode === 'dim') {
       var amber = mode === 'warm' ? ['#c89a4a', '#946a2c', '#5a3e1a'] : ['#6a5636', '#4a3c26', '#2c2418'];
@@ -758,7 +758,7 @@ function makeGsWinMat(mode) {
     cx.fillStyle = 'rgba(10, 8, 6, 0.5)';
     cx.fillRect(0, 0, w, 4);
   });
-  paneMoon(tex, mode);
+  if (moon) paneMoon(tex, mode); /* 2026-11-08 (Sam: "put them back but only on the windows on the right"): the right-hand building only */
   return new THREE.MeshBasicMaterial({ map: tex });
 }
 // 2026-10-29 (Sam: "maybe the Green Sea bar could have a moon in every window, slightly different each time"): his moon (the game's
@@ -766,6 +766,7 @@ function makeGsWinMat(mode) {
 // are drawn afresh for each window on every visit, and a lamplit pane shows it more faintly than a dark one
 function paneMoon(tex, mode) {
   var url = null; try { url = window.parent && window.parent.DSS_MOON_URL; } catch (e) {}
+  if (!url) url = 'models/moon.png'; /* 2026-11-08: the same moon as a file, so the scene opened on its own still has it */
   if (!url || !tex || !tex.image || !tex.image.getContext) return;
   var im = new Image();
   im.onload = function() {
@@ -1520,7 +1521,7 @@ for (var rwr = 0; rwr < 2; rwr++) {
     var rwy = 4 + rwr * 3;
     var rwz = 2 + rwc * 3.5;
     var rwin = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.4),
-      makeGsWinMat((rwr === 0 && rwc === 1) ? 'dim' : 'dark'));
+      makeGsWinMat((rwr === 0 && rwc === 1) ? 'dim' : 'dark', true));
     rwin.rotation.y = -Math.PI / 2;
     rwin.position.set(rwx, rwy, rwz);
     scene.add(rwin);
@@ -1628,8 +1629,9 @@ var chairMat = new THREE.MeshStandardMaterial({ color: 0x2a5a7a, roughness: 0.65
 tableMat.map=cafeWear;chairMat.map=cafeWear;
 var chairSlatMat = new THREE.MeshStandardMaterial({ color: 0x3a7292, roughness: 0.7, metalness: 0.06 });
 
+var cafeTables = [], cafeChairs = [];
 function addTable(x, z, radius) {
-  var g = new THREE.Group();
+  var g = new THREE.Group(); cafeTables.push(g);
   g.position.set(x, 0, z);
   var top = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 0.035, 18), tableMat);
   top.position.y = 0.78; top.castShadow = true; g.add(top);
@@ -1652,7 +1654,7 @@ function addTable(x, z, radius) {
 }
 
 function addChair(x, z, rotY) {
-  var g = new THREE.Group();
+  var g = new THREE.Group(); cafeChairs.push(g);
   g.position.set(x, 0, z);
   g.rotation.y = rotY;
   var seat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.03, 0.38), chairMat);
@@ -1696,6 +1698,34 @@ addChair(-3.2, 6.2, Math.PI);
 addTable(3.5, 6.0, 0.45);
 addChair(2.9, 6.0, 0.4);
 addChair(4.1, 6.0, -0.3);
+
+/* 2026-11-08 (Sam: "I added some models of cafe furniture, can you please replace the furniture outside the Green Sea with these ones"):
+   his bistro set (models/cafeset.bin: ladder-back chair frame, seat, pedestal base, square top) takes the place of the built tables
+   and chairs in the same groups, so the placements, ashtrays and smoke stay where they were. Painted in the court's Tunisian blue
+   with white tops and seats; the table is scaled a touch so its top meets the ashtrays at 0.797 m. The built pieces stay until it loads. */
+(function() {
+  fetch('models/cafeset.bin').then(function(r) { return r.arrayBuffer(); }).then(function(buf) {
+    var dv = new DataView(buf), o = 8, n = dv.getUint32(4, true), gs = [];
+    for (var m = 0; m < n; m++) {
+      var nv = dv.getUint32(o, true), ni = dv.getUint32(o + 4, true); o += 8;
+      var g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(buf.slice(o, o + nv * 12)), 3)); o += nv * 12;
+      g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(buf.slice(o, o + nv * 12)), 3)); o += nv * 12;
+      o += nv * 8;
+      g.setIndex(new THREE.BufferAttribute(new Uint16Array(buf.slice(o, o + ni * 2)), 1)); o += ni * 2; o = (o + 3) & ~3;
+      gs.push(g);
+    }
+    if (gs.length < 4) return;
+    var frameMat = new THREE.MeshStandardMaterial({ color: 0x2a5a7a, map: cafeWear, roughness: 0.6, metalness: 0.3 });
+    var whiteMat = new THREE.MeshStandardMaterial({ color: 0xd9d2c2, map: cafeWear, roughness: 0.55, metalness: 0.02 });
+    function swap(g, parts) {
+      g.children.forEach(function(c) { c.visible = false; });
+      parts.forEach(function(pm) { var mm = new THREE.Mesh(pm[0], pm[1]); mm.castShadow = true; mm.receiveShadow = true; if (pm[2]) mm.scale.setScalar(pm[2]); g.add(mm); });
+    }
+    cafeChairs.forEach(function(g) { swap(g, [[gs[0], frameMat], [gs[1], whiteMat]]); });
+    cafeTables.forEach(function(g) { swap(g, [[gs[2], frameMat, 1.063], [gs[3], whiteMat, 1.063]]); });
+  }).catch(function() {});
+})();
 
 // Painted contact shadows anchor the furniture without photorealistic effects.
 var contactTex = makeCanvasTexture(64,64,function(cx,w,h) {

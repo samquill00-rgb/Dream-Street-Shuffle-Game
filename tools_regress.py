@@ -600,6 +600,18 @@ def _(r):
         r.page.unroute("**/*")
 
 
+@check("lk-back-gun-card", "2026-11-09 (Sam's words): Look at the gun in LACKLAND's back room opens his line, not pink")
+def _(r):
+    r.go("Lackland's Back Room", wait=9000)
+    r.clear_lore(); r.clear_slips()
+    r.wait_for("() => [].some.call(document.querySelectorAll('button'), function (b) { return b.textContent === 'Look at the gun' && b.getClientRects().length; })", 15000, "the Look at the gun button")
+    r.js("() => [].filter.call(document.querySelectorAll('button'), function (b) { return b.textContent === 'Look at the gun'; })[0].click()")
+    r.page.wait_for_timeout(600)
+    got = r.js("() => { var d = document.querySelector('dialog[open]'); if (!d) return null; var p = d.querySelector('p'); return { t: d.innerText, c: getComputedStyle(p).color }; }")
+    r.expect(got and "somebody might have to use it" in got["t"], "the gun card did not show Sam's line (%r)" % got)
+    r.expect(got["c"] != "rgb(255, 58, 168)", "the gun card is still pink")
+
+
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")
 def _(r):
     r.go("Dean Street", wait=6000)

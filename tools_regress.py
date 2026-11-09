@@ -392,6 +392,223 @@ def _(r):
     r.expect("Enter Trisha" in t and "They do not know you." not in t, "with Trisha's the live trail step, the doorman still refuses (%r)" % t[-300:])
 
 
+def scratch_passage(r, name, body):
+    """Serve the built html with one extra passage, for states a ?start= jump cannot set (e.g. a later night phase)."""
+    import html as _h
+    def handle(route):
+        resp = route.fetch(); t = resp.text()
+        tag = '<tw-passagedata pid="99999" name="%s" tags="" position="0,0" size="100,100">%s</tw-passagedata>' % (_h.escape(name), _h.escape(body))
+        route.fulfill(response=resp, body=t.replace("</tw-storydata>", tag + "</tw-storydata>", 1))
+    r.page.route("**/" + HTML + "*", handle)
+
+
+@check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
+def _(r):
+    scratch_passage(r, "T-phase1", '(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')
+    r.go("T-phase1", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(3000)
+    typed = lambda: r.js("() => [].map.call(document.querySelectorAll('.dss-hint-type, .dss-hint-slip'), function (e) { return e.textContent; }).join(' | ')")
+    r.wait_for("() => document.body.innerText.indexOf('barbershop on Meard Street') >= 0 || [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.indexOf('barbershop') >= 0; })", 20000, "the barbershop slip on Dean Street at night phase 1")
+    r.expect("Mister Jimmy" not in typed(), "Mister Jimmy's slip showed at night phase 1")
+    r.clear_slips()
+    scratch_passage(r, "T-phase2", '(set: $nightPhase to 2)(set: $returns to 4)(set: $barberSlipShown to true)[[Walk on|Dean Street]]')
+    r.go("T-phase2", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.indexOf('Mister Jimmy') >= 0; })", 20000, "Mister Jimmy's slip on Dean Street at night phase 2")
+
+
+@check("inis-speech-types-by-paragraph", "2026-11-09 (earlier note 28): INIS's speech should type like The Night Ahead, each paragraph in about the same time")
+def _(r):
+    r.go("O'Flatterly's Third Pillar", wait=200)
+    r.js("""() => { var t0 = performance.now(); window.__seen = new Map(); var iv = setInterval(function () { var v = document.querySelector('.dss-speech.vt-on:not(.dss-ghost .dss-speech)'); if (!v) return; v.querySelectorAll('.vt-c.vt-in').forEach(function (c) { if (!window.__seen.has(c)) window.__seen.set(c, performance.now() - t0); }); if (v.classList.contains('vt-done')) { clearInterval(iv); var w = document.createTreeWalker(v, NodeFilter.SHOW_ELEMENT), paras = [[]], ended = false; while (w.nextNode()) { var n = w.currentNode; if (n.tagName === 'BR') { if (paras[paras.length - 1].length) paras.push([]); } else if (n.classList.contains('vt-c') && window.__seen.has(n) && n.textContent.trim()) paras[paras.length - 1].push(window.__seen.get(n)); } paras = paras.filter(function (p) { return p.length > 3; }); window.__paras = paras.map(function (p) { var g = []; for (var k = 1; k < p.length; k++) g.push(p[k] - p[k - 1]); g.sort(function (x, y) { return x - y; }); return { n: p.length, med: Math.round(g[g.length >> 1]), breath: 0, start: Math.round(p[0]), end: Math.round(p[p.length - 1]) }; }); } }, 25); }""")
+    r.wait_for("() => !!window.__paras", 60000, "INIS's speech to finish typing")
+    d = r.js("() => window.__paras")
+    r.info = "paragraph times ms: %r" % d
+    r.expect(len(d) >= 2, "INIS's speech has fewer than two paragraphs (%r)" % d)
+    for q in d:   # The Night Ahead's rule: about 1550 ms a paragraph spread over its letters, 22 to 74 ms a letter (the 25 ms poll blurs it a little)
+        want = max(22, min(74, 1550.0 / q["n"]))
+        r.expect(abs(q["med"] - want) <= 30, "a paragraph of %d letters types at %d ms a letter, not The Night Ahead's %d" % (q["n"], q["med"], want))
+    breaths = [b["start"] - a["end"] for a, b in zip(d, d[1:])]
+    r.expect(min(breaths) >= 280, "no breath between INIS's paragraphs (%r ms)" % breaths)
+
+
+@check("endgame-1109", "2026-11-09 notes 34-40: LINE 3's gold bloom, THE WAY OUT slip, every typewriter page stained, the Dawn's route caption, THE END before ANOTHER NIGHT")
+def _(r):
+    scratch_passage(r, "T-l3", '(set: $alba to (a: $alba1, $alba2))[[Walk on|LINE 3]]')
+    r.go("T-l3", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(3000)
+    for _ in range(6):   # the dawn's approach first: press on until the line itself
+        if r.js("() => !!document.querySelector('.dss-poem-whole:not(.dss-ghost *)')"): break
+        l = r.page.locator("tw-link:visible:not(.dss-ghost tw-link)", has_text="Closer")
+        if l.count(): l.first.click()
+        r.page.wait_for_timeout(2500)
+    r.wait_for("() => { var e = document.querySelector('.dss-poem-whole .dpw-words'); return e && !e.closest('.dss-ghost') && +getComputedStyle(e).opacity > 0.6; }", 25000, "THE POEM IS COMPLETE to bloom in gold on LINE 3")
+    col = r.js("() => getComputedStyle(document.querySelector('.dss-poem-whole .dpw-words')).color")
+    r.expect(col.startswith("rgb(") and int(col[4:].split(",")[0]) > 200, "LINE 3's words are not gold (%s)" % col)
+    r.page.wait_for_timeout(5000)
+    sh = r.js("() => [document.scrollingElement.scrollHeight, innerHeight]")
+    r.expect(sh[0] <= sh[1] + 2, "LINE 3 with the poem whole scrolls at 1440x900 (%r)" % sh)
+    r.go("Things turn up", wait=4000)
+    bg = r.js("() => { var p = document.querySelector('.typewriter-page'); return p ? getComputedStyle(p, '::after').backgroundImage.slice(0, 4000) : 'no page'; }")
+    r.expect("tnaB1" in bg, "Things turn up's typewriter page lacks The Night Ahead's stains")
+    scratch_passage(r, "T-whole", '(set: $alba to (a: $alba1, $alba2, $alba3))(set: $returns to 3)[[Walk on|Dean Street]]')
+    r.go("T-whole", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.indexOf('THE WAY OUT') >= 0 && e.textContent.indexOf('You need more to get out') >= 0; })", 25000, "THE WAY OUT slip after the whole poem")
+    r.page.unroute("**/*")
+    r.go("Dawn", wait=2000)   # a walked night for the route map: ten steps along the first open row of the Soho plan
+    seeded = r.js("() => { var M = window.dssSohoMap, n = +localStorage.getItem('dssNightNo') || 0; if (!M || !M.tiles) return false; for (var y = 0; y < M.rows; y++) { var p = []; for (var x = 0; x < M.cols; x++) { if (M.tiles[y][x] !== '#') p.push(x + ',' + y); else if (p.length < 10) p = []; else break; } if (p.length >= 10) { localStorage.setItem('dssRouteNow', JSON.stringify({ n: n, p: p.slice(0, 10) })); return true; } } return false; }")
+    r.expect(seeded, "could not seed a route for the Dawn's map")
+    r.go("Dawn", wait=3000)
+    for _ in range(4):
+        b = r.page.locator(".dawn-page.dawn-pg-on .dawn-on")
+        if b.count():
+            b.first.click(); r.page.wait_for_timeout(2500)
+    r.expect(r.js("() => [].some.call(document.querySelectorAll('.dnp-caption'), function (e) { return /Your night.s route/.test(e.textContent); })"), "the Dawn's map has no 'Your night's route' caption")
+    r.wait_for("() => { var e = document.getElementById('dawn-play-again'); return e && e.classList.contains('dawn-petal-restart'); }", 60000, "ANOTHER NIGHT after the petals")
+    op = r.js("() => { var f = document.querySelector('.dawn-petal-finis'); return f ? +getComputedStyle(f).opacity : -1; }")
+    r.expect(op > 0.85, "ANOTHER NIGHT came before THE END had come in (THE END opacity %s)" % op)
+
+
+@check("ship-branches-render", "2026-11-09 ship rebuild: every call answer and fate renders the Harp's alley, the ask, the phone box and the Dawn with no Harlowe error")
+def _(r):
+    combos = []
+    for call in ["pending", "offered", "given", "kept", "other-told", "other-kept", "refused", "missed"]:
+        for fate in ["afloat", "sunk"]:
+            combos.append((call, fate, "false", "true", "false"))
+    combos += [("given", "afloat", "true", "true", "true"), ("given", "sunk", "true", "false", "true"), ("refused", "sunk", "false", "false", "true")]
+    bad = []
+    for call, fate, drunk, setup, resolved in combos:
+        for page in ["The Harp's Alley", "Harp Alley Ask", "The Phone Box Answered", "Dawn"]:
+            body = '(set: $shipCall to "%s")(set: $shipFate to "%s")(set: $shipCallDrunk to %s)(set: $shipSetup to %s)(set: $shipResolved to %s)(set: $metSalvu to true)(set: $harpMet to true)(set: $holdsAshtonName to true)(go-to: "%s")' % (call, fate, drunk, setup, resolved, page)
+            r.page.unroute("**/*")
+            scratch_passage(r, "T-ship", body)
+            r.go("T-ship", wait=2200)
+            e = r.js("() => [].map.call(document.querySelectorAll('tw-error, tw-story tw-expression[type=error]'), function (x) { return x.textContent.slice(0, 120); }).join(' | ')")
+            if e: bad.append("%s/%s/%s/%s %s: %s" % (call, fate, drunk, resolved, page, e))
+    r.page.unroute("**/*")
+    r.info = "%d combinations" % len(combos)
+    r.expect(not bad, "Harlowe errors: " + " || ".join(bad[:6]))
+
+
+@check("gents-letters-solve", "2026-11-09 note 32: the gents door's jumbled letters swap by clicks, turn gold in place, open the way out, and stay solved")
+def _(r):
+    r.go("Coach and Horses lock", wait=5000)
+    r.clear_lore(); r.clear_slips()
+    r.page.locator("text=/steady yourself/i").first.click(); r.page.wait_for_timeout(2500)
+    want = "JEFFREYBERNARDISUNWELL"
+    tiles = r.page.locator(".gents-letters:not(.dss-ghost *) .gl-tile")
+    r.expect(tiles.count() == len(want), "the gents door has %d letters, not %d" % (tiles.count(), len(want)))
+    r.expect(not r.js("() => !!document.querySelector('.gents-exit.gents-open:not(.dss-ghost *)')"), "the way out shows before the letters are sorted")
+    off = r.js("() => [].filter.call(document.querySelectorAll('.gents-letters:not(.dss-ghost *) .gl-tile'), function (b) { var q = b.getBoundingClientRect(); return q.top < 0 || q.bottom > innerHeight || q.left < 0 || q.right > innerWidth; }).length")
+    r.expect(off == 0, "%d of the letters are off screen at 1440x900" % off)
+    for i in range(len(want)):   # sort like a player: pick the wrong letter, then one further on that belongs here
+        cur = "".join(tiles.nth(k).inner_text() for k in range(len(want)))
+        if cur[i] == want[i]: continue
+        j = next(k for k in range(i + 1, len(want)) if cur[k] == want[i] and cur[k] != want[k])
+        tiles.nth(i).click(); tiles.nth(j).click(); r.page.wait_for_timeout(120)
+    r.page.wait_for_timeout(800)
+    r.expect(r.js("() => !!document.querySelector('.gents-exit.gents-open:not(.dss-ghost *)')"), "the way out did not show once JEFFREY BERNARD IS UNWELL read true")
+    gold = r.js("() => document.querySelectorAll('.gents-letters:not(.dss-ghost *) .gl-tile.gl-right').length")
+    r.expect(gold == len(want), "only %d letters are gold when solved" % gold)
+
+
+@check("colony-membership", "2026-11-09 (Sam): after the first Colony visit you are made a member (a slip, once) and the Donkey no longer picks the door")
+def _(r):
+    scratch_passage(r, "T-colony", '(set: $visited to (dm: "French", false, "Pillars", false, "Colony", true, "Ronnies", false))(set: $hasCoin to true)(set: $returns to 2)[[Walk on|Dean Street]]')
+    r.go("T-colony", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.indexOf('member of the Colony Room') >= 0; })", 20000, "the Colony membership slip")
+    r.page.unroute("**/*")
+    scratch_passage(r, "T-colony2", '(set: $visited to (dm: "French", false, "Pillars", false, "Colony", true, "Ronnies", false))(set: $hasCoin to true)(set: $colonyMember to true)[[Walk on|The Colony Room Door]]')
+    r.go("T-colony2", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(3000)
+    flag = r.js("() => { var f = [].filter.call(document.querySelectorAll('.dss-coin-flag'), function (e) { return !e.closest('.dss-ghost'); })[0]; return f ? f.textContent.trim() : 'none'; }")
+    r.expect(flag == "0", "a member holding the Donkey still has the coin pick the Colony door (flag %r)" % flag)
+    r.page.unroute("**/*")
+
+
+@check("lackland-talk-after-reading", "2026-11-09 note 13: once LACKLAND has read the book, a visit has a Talk to LACKLAND on his card")
+def _(r):
+    scratch_passage(r, "T-lk", '(set: $lacklandRead to true)[[Walk on|Martin Lackland\'s Office]]')
+    r.go("T-lk", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.room_ready("lk")
+    r.clear_lore(); r.clear_slips()
+    r.click_object("lk", "LACKLAND")
+    r.page.wait_for_timeout(700)
+    r.clear_lore()
+    r.press("Talk to LACKLAND")
+    r.page.wait_for_timeout(900)
+    if r.js("() => !!document.querySelector('#dss-lore-overlay.dss-lore-auto')"):   # a first-visit lore waiting behind the card comes first; then ask again
+        r.page.locator("#dss-lore-overlay.dss-lore-auto button:visible, #dss-lore-overlay.dss-lore-auto [role=button]:visible", has_text="Talk to LACKLAND").first.click()
+        r.page.wait_for_timeout(1200)
+    r.expect(r.js("() => [].some.call(document.querySelectorAll('#dss-lore-overlay .claude-draft'), function (e) { return /LACKLAND, on a visit after he has read the book/.test(e.textContent); })"), "Talk to LACKLAND did not open his line")
+    r.page.unroute("**/*")
+
+
+@check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")
+def _(r):
+    r.go("Dean Street", wait=6000)
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('.soho-hub-dock tw-link'), function (e) { return !e.closest('.dss-ghost'); })[0]; l.click(); }")
+    r.page.wait_for_timeout(3500)
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && /Back to Dean/.test(e.textContent); })[0]; l.click(); }")
+    worst = 0
+    for _ in range(18):
+        r.page.wait_for_timeout(300)
+        if r.pn() == "Dean Street":
+            worst = max(worst, r.js("() => document.scrollingElement.scrollHeight"))
+    r.info = "tallest %d px" % worst
+    r.expect(0 < worst <= 902, "back on Dean Street the page is %d px tall at 1440x900" % worst)
+
+
+@check("hub-crowded-fits", "2026-11-09 overnight bug-play: later in the night Dean Street's question boxes pushed the street 31 to 76 px past 900")
+def _(r):
+    scratch_passage(r, "T-hub3", '(set: $sobriety to 30)(set: $knowsCecilCourt to true)(set: $metCritic to true)(set: $returns to 4)[[Walk on|Dean Street]]')
+    r.go("T-hub3", wait=4000)
+    r.clear_slips()
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(6000)
+    r.page.unroute("**/*")
+    n = r.js("() => [].filter.call(document.querySelectorAll('.book-pitch'), function (b) { return !b.closest('.dss-ghost'); }).length")
+    r.expect(n >= 2, "the crowded street shows %d question boxes, not 2" % n)
+    # a third box, as on a later lap (Who's next?), then the street re-fits as on arrival
+    r.js("() => { var b = [].filter.call(document.querySelectorAll('.book-pitch'), function (x) { return !x.closest('.dss-ghost'); })[0]; var h = b.closest('tw-expression') || b; h.parentNode.insertBefore(h.cloneNode(true), h); document.querySelector('tw-story').classList.remove('dss-hub-tight'); window._passageGen = (window._passageGen || 0) + 1000; window.dispatchEvent(new Event('resize')); }")
+    r.page.wait_for_timeout(1200)
+    loose = r.js("() => document.scrollingElement.scrollHeight")
+    r.page.wait_for_timeout(4000)
+    tight = r.js("() => document.scrollingElement.scrollHeight")
+    r.info = "%d boxes: %d px before tightening, %d after (tight mode %s)" % (n + 1, loose, tight, r.js("() => document.querySelector('tw-story').classList.contains('dss-hub-tight')"))
+    r.expect(tight <= 902, "a crowded Dean Street is %d px tall at 1440x900" % tight)
+
+
+@check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
+def _(r):
+    r.go("Dean Street", wait=4000)
+    res = r.js("""() => { if (!window.FightGame) return 'no FightGame'; var c = document.createElement('canvas'); c.id = 'reg-fight'; c.width = 300; c.height = 200; document.body.appendChild(c);
+      var g; try { g = new window.FightGame('reg-fight'); } catch (e) { return 'could not build: ' + e.message; }
+      c.remove(); try { g.copperHP = 0; g.endGame(); return 'ok'; } catch (e) { return 'endGame threw: ' + e.message; } }""")
+    r.expect(res == "ok", res)
+
+
+@check("slip-pauses-under-overlay", "2026-11-09 overnight bug-play: the resting French's slip typed on, unseen, under a doorway's Hold popup")
+def _(r):
+    r.go("Dean Street", wait=5000)
+    r.clear_slips()
+    r.js("() => window.dssInlineHint('REGRESSION a slip long enough to still be typing when the popup comes over it, and then some more words.')")
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-type'), function (e) { return e.textContent.indexOf('REGRESSION') >= 0; })", 8000, "the slip to start typing")
+    r.js("() => { var o = document.createElement('div'); o.id = 'spew-popup-overlay'; o.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6)'; document.body.appendChild(o); }")
+    r.page.wait_for_timeout(2500)
+    held = r.js("() => [].map.call(document.querySelectorAll('.dss-hint-type'), function (e) { return e.textContent; }).join('')")
+    r.page.wait_for_timeout(1500)
+    r.expect(held == r.js("() => [].map.call(document.querySelectorAll('.dss-hint-type'), function (e) { return e.textContent; }).join('')"), "the slip went on typing under the popup")
+    r.js("() => document.getElementById('spew-popup-overlay').remove()")
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip.typed'), function (e) { return e.textContent.indexOf('and then some more words') >= 0; })", 15000, "the slip to finish once the popup closed")
+
+
 @check("jeffrey-speech-in-scene", "2026-11-09 note 2: JEFFREY's Friesian speech came up in the card on the right, unlike everyone else")
 def _(r):
     r.go("Coach and Horses bar")
@@ -419,6 +636,16 @@ def _(r):
     import re as _re
     m = _re.search(r"SILENCED\s+(\d+)\s*/", t, _re.I)
     r.expect(m and int(m.group(1)) >= 1, "with no shot of yours fired, nothing was silenced in 24 s (%r)" % (m.group(0) if m else t[:200]))
+
+
+@check("interval-pyre-art", "2026-11-09 note 26: the Interval stair image and the pyre were flat and lame; both are renders now, the pyre's fire drawn live")
+def _(r):
+    r.go("Dido", wait=7000)
+    res = r.js("() => { var w = document.querySelector('.dss-carthage-pyre-art'); if (!w) return 'no pyre art'; var im = w.querySelector('img'), cv = w.querySelector('canvas.dss-pyre-canvas'); if (!im || !im.naturalWidth || !/carthage-pyre\\.jpg/.test(im.src)) return 'the pyre plate did not load'; if (!cv || !cv.width) return 'no fire canvas'; var d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, lit = 0; for (var i = 3; i < d.length; i += 16) if (d[i] > 20) lit++; return lit > 50 ? 'ok' : 'the fire canvas is empty'; }")
+    r.expect(res == "ok", res)
+    r.go("The Interval", wait=6000)
+    res = r.js("() => { var im = document.querySelector('.dss-interval-stairs-art img'); return im && im.naturalWidth > 0 && /interval-stairwell\\.jpg/.test(im.src) ? 'ok' : 'the stairwell render did not load'; }")
+    r.expect(res == "ok", res)
 
 
 @check("french-door-sign-shows", "2026-11-07 note 7: SORTIR sat inside the door panel, the notice looked blank")
@@ -838,7 +1065,7 @@ def _(r):
             b.first.click(); r.page.wait_for_timeout(2500)
     r.expect(r.js("() => { var e = document.getElementById('dawn-play-again'); return !e || getComputedStyle(e).visibility === 'hidden' || !e.classList.contains('dawn-petal-restart'); }"), "ANOTHER NIGHT showed with the petal page")
     r.wait_for("() => !!document.querySelector('.dawn-petal-wrap')", 6000, "the petals to rise soon after their page")
-    r.wait_for("() => { var e = document.getElementById('dawn-play-again'); return e && e.classList.contains('dawn-petal-restart'); }", 20000, "ANOTHER NIGHT after the petals")
+    r.wait_for("() => { var e = document.getElementById('dawn-play-again'); return e && e.classList.contains('dawn-petal-restart'); }", 60000, "ANOTHER NIGHT after the petals")   # 2026-11-09 note 40: it now waits for THE END too
 
 
 @check("french-ashtray-clear", "2026-11-08 note 6: the French bar's ashtray runs into nothing")

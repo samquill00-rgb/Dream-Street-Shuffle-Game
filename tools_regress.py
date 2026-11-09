@@ -557,6 +557,30 @@ def _(r):
         r.page.unroute("**/*")
 
 
+@check("phone-other-question", "2026-11-09 (Sam's lines): with no name to give, FRANKIE asks who got you out (JOHN's rescue only); answer or hang up; out alone or never down, he only checks you're about")
+def _(r):
+    def call(saved, press, want):
+        scratch_passage(r, "T-call", '(set: $shipCall to "offered")(set: $shipSetup to true)(set: $holdsAshtonName to false)(set: $savedBy to "%s")(set: $sobriety to 80)[[Walk on|The Phone Box Answered]]' % saved)
+        r.go("T-call", wait=4000)
+        r.clear_slips()
+        r.page.locator("tw-link:has-text('Walk on')").first.click(); r.page.wait_for_timeout(2500)
+        r.clear_lore(); r.clear_slips()
+        if press:
+            r.page.locator("tw-link", has_text=press).first.click(); r.page.wait_for_timeout(1500)
+        t = r.js("() => { var p = document.querySelector('tw-story > tw-passage:not(.dss-ghost)'); return p ? p.innerText.replace(/\\s+/g, ' ') : ''; }")
+        r.expect(want in t, "savedBy %s, %s: expected %r, page reads %r" % (saved, press or "no press", want, t[:200]))
+        r.expect(not r.js("() => !!document.querySelector('tw-error')"), "a Harlowe error on the call")
+        r.page.unroute("**/*")
+        return t
+    t = call("john", None, "You’re going to tell me who it was.")
+    r.expect("Answer him" in t and "Hang up" in t, "JOHN's rescue: no Answer him / Hang up")
+    call("john", "Answer him", "clean as the driven snow")
+    call("john", "Hang up", "now you know that they know who you are")
+    t = call("nobody", None, "Stay easy.")
+    r.expect("Answer him" not in t, "out alone, but FRANKIE still asked a question")
+    call("", None, "Stay easy.")
+
+
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")
 def _(r):
     r.go("Dean Street", wait=6000)

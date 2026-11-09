@@ -480,7 +480,7 @@ def _(r):
 @check("ship-branches-render", "2026-11-09 ship rebuild: every call answer and fate renders the Harp's alley, the ask, the phone box and the Dawn with no Harlowe error")
 def _(r):
     combos = []
-    for call in ["pending", "offered", "given", "kept", "other-told", "other-kept", "refused", "missed"]:
+    for call in ["pending", "offered", "given", "kept", "other-told", "other-kept", "warned", "refused", "missed"]:
         for fate in ["afloat", "sunk"]:
             combos.append((call, fate, "false", "true", "false"))
     combos += [("given", "afloat", "true", "true", "true"), ("given", "sunk", "true", "false", "true"), ("refused", "sunk", "false", "false", "true")]
@@ -652,6 +652,17 @@ def _(r):
     r.expect(res == "ok", res)
     r.go("The Interval", wait=6000)
     res = r.js("() => { var im = document.querySelector('.dss-interval-stairs-art img'); return im && im.naturalWidth > 0 && /interval-stairwell\\.jpg/.test(im.src) ? 'ok' : 'the stairwell render did not load'; }")
+    r.expect(res == "ok", res)
+
+
+@check("blackout-kerb-plate", "2026-11-09 (Sam): the first Blackout's image was cartoon like, nothing like the game; it is a render from the kerb now")
+def _(r):
+    r.go("The Blackout", wait=900)
+    res = r.js("() => new Promise(function (done) { var v = document.querySelector('.dss-blackout-stage .dss-blackout-first'); if (!v) return done('no first-blackout plate'); var bg = getComputedStyle(v).backgroundImage, m = /url\\(\"?([^\")]+)\"?\\)/.exec(bg); if (!m || !/blackout-kerb\\.webp/.test(m[1])) return done('the stage is not showing the kerb render: ' + bg); if (parseFloat(getComputedStyle(v).opacity) < 0.5) return done('the plate is not on show in its first second'); var im = new Image(); im.onload = function () { done(im.naturalWidth === 1600 && im.naturalHeight === 900 ? 'ok' : 'the plate is ' + im.naturalWidth + 'x' + im.naturalHeight); }; im.onerror = function () { done('the kerb render did not load'); }; im.src = m[1]; })")
+    r.expect(res == "ok", res)
+    r.page.screenshot(path=os.path.join(SHOTS, "blackout-kerb-plate.png"))
+    r.page.wait_for_timeout(3600)
+    res = r.js("() => { var on = document.querySelector('.dss-blackout-on tw-link'); if (!on || parseFloat(getComputedStyle(on.closest('.dss-blackout-on')).opacity) < 0.9) return 'Come to is not showing after the fall'; var se = document.scrollingElement; return se.scrollHeight - innerHeight > 2 ? 'the Blackout page scrolls by ' + (se.scrollHeight - innerHeight) + ' px' : 'ok'; }")
     r.expect(res == "ok", res)
 
 

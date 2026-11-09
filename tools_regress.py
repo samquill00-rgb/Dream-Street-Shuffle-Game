@@ -392,6 +392,19 @@ def _(r):
     r.expect("Enter Trisha" in t and "They do not know you." not in t, "with Trisha's the live trail step, the doorman still refuses (%r)" % t[-300:])
 
 
+@check("jeffrey-speech-in-scene", "2026-11-09 note 2: JEFFREY's Friesian speech came up in the card on the right, unlike everyone else")
+def _(r):
+    r.go("Coach and Horses bar")
+    r.room_ready("cb")
+    r.click_object("cb", "JEFFREY BERNARD")
+    r.page.wait_for_timeout(600)
+    r.expect("Friesian" not in r.js("() => document.body.innerText"), "JEFFREY's speech shows in his card before 'Hear him out' is pressed")
+    r.press("Hear him out")
+    r.page.wait_for_timeout(900)
+    t = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-jeff-card'); return o ? o.innerText : ''; }")
+    r.expect("JEFFREY BERNARD" in t and "Friesian" in t and "I doubt it." in t and "The Spectator" in t, "'Hear him out' did not open his speech on a card of its own (%r)" % t[:120])
+
+
 @check("french-door-sign-shows", "2026-11-07 note 7: SORTIR sat inside the door panel, the notice looked blank")
 def _(r):
     r.go("The French")

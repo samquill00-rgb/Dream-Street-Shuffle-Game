@@ -405,6 +405,22 @@ def _(r):
     r.expect("JEFFREY BERNARD" in t and "Friesian" in t and "I doubt it." in t and "The Spectator" in t, "'Hear him out' did not open his speech on a card of its own (%r)" % t[:120])
 
 
+@check("fortuna-fires-too", "2026-11-09 note 29: SUBCOMANDANTE FORTUNA lowers the rifle, but only you had one")
+def _(r):
+    r.go("The Reclamation", wait=6000)
+    for sel in [".dss-rules-overlay button", "#rc-begin"]:
+        b = r.page.locator(sel + ":visible")
+        if b.count():
+            b.first.click(); r.page.wait_for_timeout(1500)
+    b = r.page.locator("#rc-begin:visible")
+    if b.count(): b.first.click()
+    r.page.wait_for_timeout(24000)
+    t = r.js("() => document.body.innerText")
+    import re as _re
+    m = _re.search(r"SILENCED\s+(\d+)\s*/", t, _re.I)
+    r.expect(m and int(m.group(1)) >= 1, "with no shot of yours fired, nothing was silenced in 24 s (%r)" % (m.group(0) if m else t[:200]))
+
+
 @check("french-door-sign-shows", "2026-11-07 note 7: SORTIR sat inside the door panel, the notice looked blank")
 def _(r):
     r.go("The French")

@@ -1092,7 +1092,7 @@ KIPLING_PROBE = """() => {
   var tex = fascia && fascia.material.map && fascia.material.map.image, ink = 0;
   if (tex && tex.getContext) { var d = tex.getContext('2d').getImageData(0, 0, tex.width, tex.height).data; for (var i = 0; i < d.length; i += 16) if (d[i] > 170 && d[i + 1] > 160) ink++; }
   return { front: true, tusks: tusks, helices: helices, lights: lights, band: !!kip.getObjectByName('kipling-helix-band'), lamp: lamp ? lamp.intensity : 0, ink: ink,
-    fascia: fascia ? corners(fascia) : null, crest: crest ? corners(crest) : null, jimmy: px(new T.Vector3(0, 1.45, -0.15)), w: innerWidth, h: innerHeight };
+    fascia: fascia ? corners(fascia) : null, crest: crest ? corners(crest) : null, cross: (function () { var c = sc.getObjectByName('jimmy-green-cross'); return c ? px(c.getWorldPosition(new T.Vector3())) : null; })(), jimmy: px(new T.Vector3(0, 1.45, -0.15)), w: innerWidth, h: innerHeight };
 }"""
 
 
@@ -1111,6 +1111,7 @@ def _(r):
             for x, y in p[name]:
                 r.expect(0 <= x <= p["w"] and 0 <= y <= p["h"], "Mr. Kipling's %s runs off the screen (a corner at %d,%d of %dx%d)" % ("name board" if name == "fascia" else "crest", x, y, p["w"], p["h"]))
         r.expect(min(c[0] for c in p["fascia"]) > p["jimmy"][0], "Mr. Kipling's is not to the right of Mister Jimmy's")
+        r.expect(p["cross"] and 0 < p["cross"][0] < p["jimmy"][0] and 0 < p["cross"][1] < p["h"], "Mister Jimmy's green cross is gone or off the screen (2026-11-09, Sam: the green short-armed cross, not the CHEMIST box)")
         r.expect(0.35 * p["w"] < p["jimmy"][0] < 0.65 * p["w"], "Mister Jimmy's is no longer the middle of the frame (its centre at %d of %d)" % (p["jimmy"][0], p["w"]))
         edge = p["w"] - max(c[0] for c in p["fascia"])
         worst = edge if worst is None else min(worst, edge)

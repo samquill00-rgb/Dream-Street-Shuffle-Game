@@ -80103,6 +80103,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
   var drifting = false, driftMs = 0, boost = 0, endFlare = 0;
   var patches = [], suckPool = [], suckIdx = 0, startLights = [];
   var eng = null;
+  var semi = null, semiTracks = null, semiSt = { on: false, done: true, s: 0, s0: 0, side: 1, honked: false }, SEMI_U = 250, SEMI_L = 95, SEMI_T = 0, semiP = null, semiD = null, semiN = null; /* the semi (2026-11-09); Sam: &quot;The truck should be rumbling away fast&quot; (SEMI_U was 170) */
   var item = null, itemBoxes = [], slicks = [], stones = [], condorAtk = null;
   var oppStun = 0, lastLead = null, finalLapNoted = false, driftStage = 0;
   var oppDropAt = 0;
@@ -80700,7 +80701,31 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
       o1.connect(eFilt); o2.connect(og2); og2.connect(eFilt);
       eFilt.connect(eGain); eGain.connect(actx.destination);
       o1.start(); o2.start();
+      /* 2026-11-09 (Sam: the semi &quot;Honking and rumbling noises&quot;): a low rumble (looped noise under 140 Hz, a 34 Hz saw and its octave) and an air horn chord, panned to where the truck is */
+      var sGain = actx.createGain(); sGain.gain.value = 0; var sPan = actx.createStereoPanner ? actx.createStereoPanner() : null;
+      var nb = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate), nd = nb.getChannelData(0), lastN = 0; for (var ni = 0; ni &lt; nd.length; ni++){ lastN = (lastN + 0.06*(Math.random()*2-1)) / 1.06; nd[ni] = lastN*3.2; }
+      var sNoise = actx.createBufferSource(); sNoise.buffer = nb; sNoise.loop = true;
+      var sLow = actx.createBiquadFilter(); sLow.type = &#x27;lowpass&#x27;; sLow.frequency.value = 160; sLow.Q.value = 0.9;
+      var s1 = actx.createOscillator(); s1.type = &#x27;sawtooth&#x27;; s1.frequency.value = 34; var s2 = actx.createOscillator(); s2.type = &#x27;square&#x27;; s2.frequency.value = 17; var s2g = actx.createGain(); s2g.gain.value = 0.5;
+      sNoise.connect(sLow); s1.connect(sLow); s2.connect(s2g); s2g.connect(sLow); sLow.connect(sGain);
+      if (sPan){ sGain.connect(sPan); sPan.connect(actx.destination); } else sGain.connect(actx.destination);
+      sNoise.start(); s1.start(); s2.start();
       eng = {
+        semi: function(level, pan, pitch){
+          var muted = (window.dssAudio &amp;&amp; window.dssAudio.isMuted &amp;&amp; window.dssAudio.isMuted());
+          sGain.gain.setTargetAtTime((muted || paused) ? 0 : 0.11*level, actx.currentTime, 0.08);
+          if (sPan) sPan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)), actx.currentTime, 0.05);
+          s1.frequency.setTargetAtTime(34*pitch, actx.currentTime, 0.1); s2.frequency.setTargetAtTime(17*pitch, actx.currentTime, 0.1);
+        },
+        horn: function(level, pan){
+          var muted = (window.dssAudio &amp;&amp; window.dssAudio.isMuted &amp;&amp; window.dssAudio.isMuted());
+          if (muted || level &lt;= 0) return;
+          var hp = sPan ? actx.createStereoPanner() : null, hb = actx.createBiquadFilter(); hb.type = &#x27;bandpass&#x27;; hb.frequency.value = 850; hb.Q.value = 0.7;
+          var hg = actx.createGain(); hg.gain.value = 0; hb.connect(hg); if (hp){ hp.pan.value = Math.max(-1, Math.min(1, pan)); hg.connect(hp); hp.connect(actx.destination); } else hg.connect(actx.destination);
+          var t0 = actx.currentTime, pk = 0.09*level;
+          [[0, 0.5], [0.66, 1.05]].forEach(function(bl){ hg.gain.setTargetAtTime(pk, t0 + bl[0], 0.012); hg.gain.setTargetAtTime(0, t0 + bl[0] + bl[1], 0.05); });
+          [185, 233, 277].forEach(function(f){ var ho = actx.createOscillator(); ho.type = &#x27;sawtooth&#x27;; ho.frequency.value = f * (0.995 + Math.random()*0.01); ho.connect(hb); ho.start(t0); ho.stop(t0 + 2.2); });
+        },
         resume: function(){ try { actx.resume(); } catch(e){} },
         update: function(sp, drift){
           var muted = (window.dssAudio &amp;&amp; window.dssAudio.isMuted &amp;&amp; window.dssAudio.isMuted());
@@ -80722,7 +80747,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
           b2.connect(bg3); bg3.connect(actx.destination);
           b2.start(); b2.stop(actx.currentTime + 0.3);
         },
-        kill: function(){ try { o1.stop(); o2.stop(); actx.close(); } catch(e){} }
+        kill: function(){ try { o1.stop(); o2.stop(); sNoise.stop(); s1.stop(); s2.stop(); actx.close(); } catch(e){} }
       };
     } catch(e){ eng = null; }
 
@@ -80872,6 +80897,30 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
       d4.scale.set(s3, s3, 1);
     };
 
+    /* 2026-11-09 (Sam&#x27;s vehicles.blend, public domain: &quot;make the semi drive in a straight line across the driving game at one point? A bit ahead of the driver. Honking and rumbling noises. Dust from the wheels. Adjusted for shadow and light&quot;): models/semi.bin (cab and box trailer, one mesh, unit length, cab toward -z) with its 128 px palette texture, 95 units long (about 18 m beside the 26-unit cars), lit and shadowed by the race&#x27;s low sun like the cars. Once a race, on the first lap, it crosses the middle of the longest straight at right angles, timed off your speed so it passes about a second ahead of you; it honks as it reaches the road, rumbles past, and throws dust from its wheels. It is scenery: no collision. */
+    semi = null; semiSt = { on: false, done: false, s: 0, s0: 0, side: 1, honked: false };
+    SEMI_T = (function(){ var best = 0, bestLen = 0, run = 0; for (var k = 0; k &lt; 2*N; k++){ var c = CURVE[k % N]; if (c &lt; 0.004){ run++; if (run &gt; bestLen &amp;&amp; run &lt;= N){ bestLen = run; best = k; } } else run = 0; } return ((best - bestLen*0.45) % N + N) % N / N; })();
+    semiP = cpt(SEMI_T); semiD = cdir(SEMI_T); semiN = { x: -semiD.y, y: semiD.x };
+    if (window.dssDSSM) window.dssDSSM(THREE, &#x27;models/semi.bin?v=1&#x27;, function(G){
+      if (disposed) return;
+      var tx = new THREE.TextureLoader().load(&#x27;models/semi.png?v=1&#x27;); tx.flipY = false; tx.magFilter = THREE.NearestFilter;
+      var m = new THREE.Mesh(G[0], new THREE.MeshStandardMaterial({ map: tx, roughness: 0.62, metalness: 0.15, envMap: paintEnv || null, envMapIntensity: 0.5 }));
+      m.castShadow = true; m.receiveShadow = true; m.scale.setScalar(SEMI_L);
+      semi = new THREE.Group(); semi.add(m); semi.visible = false; scene.add(semi);
+      /* Sam: &quot;Also add tracks from its tires&quot;: two tread strips on the ground along its line, from where it came on to its front wheels, left lying for the rest of the race */
+      var tc2 = document.createElement(&#x27;canvas&#x27;); tc2.width = 32; tc2.height = 64; var tg = tc2.getContext(&#x27;2d&#x27;); tg.fillStyle = &#x27;rgba(40,26,16,0.75)&#x27;; tg.fillRect(3, 0, 26, 64); tg.globalCompositeOperation = &#x27;destination-out&#x27;; tg.fillStyle = &#x27;rgba(0,0,0,0.65)&#x27;;
+      for (var tb = 0; tb &lt; 4; tb++){ tg.fillRect(3, tb*16 + 2, 11, 6); tg.fillRect(18, tb*16 + 10, 11, 6); }
+      for (var tn = 0; tn &lt; 120; tn++){ tg.fillStyle = &#x27;rgba(0,0,0,&#x27; + Math.random()*0.5 + &#x27;)&#x27;; tg.fillRect(Math.random()*32, Math.random()*64, 2, 2); }
+      var treadTex = new THREE.CanvasTexture(tc2); treadTex.wrapT = THREE.RepeatWrapping;
+      var treadMat = new THREE.MeshBasicMaterial({ map: treadTex, transparent: true, opacity: 0.6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+      semiTracks = new THREE.Group(); semiTracks.visible = false; scene.add(semiTracks);
+      [-7.6, 7.6].forEach(function(wx){ var tm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), treadMat); tm.rotation.x = -Math.PI/2; tm.position.set(wx, 0.28, 0); semiTracks.add(tm); });
+      semiTracks.userData.tex = treadTex;
+    });
+    semiTracks = null;
+    window.__nzRaceDev = { semi: function(){ var c = closestT(camX, camY); return { on: semiSt.on, done: semiSt.done, s: Math.round(semiSt.s), T: SEMI_T, loaded: !!semi, d: Math.round(c.d), t: +c.t.toFixed(3), lastT: +lastT.toFixed(3), racing: racing, spinning: spinning, speed: +speed.toFixed(2), laps: playerLapsT, fin: finished, tl: trackLength }; }, jumpBefore: function(dist){ var tt = ((SEMI_T - dist/trackLength) % 1 + 1) % 1, p = cpt(tt), d = cdir(tt); camX = p.x; camY = p.y; camAngle = Math.atan2(-d.x, d.y); moveAngle = camAngle; lastT = closestT(camX, camY).t; } }; /* dev only, for the regression player: put the car a set distance before the semi&#x27;s crossing */
+    window._nzSemiReset = function(){ semiSt.on = false; semiSt.done = false; semiSt.honked = false; if (semi) semi.visible = false; if (semiTracks) semiTracks.visible = false; if (eng &amp;&amp; eng.semi) eng.semi(0, 0, 1); };
+
     // ---- THE GOLD WAKE: the line lights where you have driven it ----
     var wakeC = document.createElement(&#x27;canvas&#x27;); wakeC.width = 32; wakeC.height = 64;
     var wkx = wakeC.getContext(&#x27;2d&#x27;);
@@ -81017,6 +81066,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
     itemBoxes.forEach(function(b){ b.taken = false; b.mesh.visible = true; });
     wakePool.forEach(function(w,i){w.userData.on=false;w.scale.setScalar(0);w.updateMatrix();wakeMesh.setMatrixAt(i,w.matrix);});wakeMesh.instanceMatrix.needsUpdate=true;
     dustPool.forEach(function(d){ d.userData.life = 0; d.material.opacity = 0; });
+    if (window._nzSemiReset) window._nzSemiReset();
     suckPool.forEach(function(s){ s.userData.mode = 0; s.material.opacity = 0; });
     var p = cpt(0), d = cdir(0);
     camX = p.x-d.y*24; camY = p.y+d.x*24; camAngle = Math.atan2(-d.x,d.y); moveAngle = camAngle;
@@ -81390,6 +81440,35 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
     var crossZ = odr.x*od2.y - odr.y*od2.x;
     if (oppBody) oppBody.rotation.z = Math.max(-0.12, Math.min(0.12, crossZ*26));
     for (var ow = 0; ow &lt; oppWheels.length; ow++) oppWheels[ow].rotation.x += racing &amp;&amp; oppStun &lt;= 0 ? 0.55*visualDt : 0;
+
+    // the semi (see its note by the dust): trigger, cross, dust, sound
+    if (semi &amp;&amp; !semiSt.done){
+      if (!semiSt.on &amp;&amp; racing &amp;&amp; !finished &amp;&amp; Math.floor(Math.max(0, playerLapsT)) === 0){
+        var ahead = (((SEMI_T - lastT) % 1) + 1) % 1 * trackLength;
+        if (ahead &lt; 950 &amp;&amp; ahead &gt; 380){
+          var tArr = ahead / (Math.max(speed, 2.4) * 60), tc = Math.max(0.9, tArr - 1.05);
+          semiSt.on = true; semiSt.side = Math.random() &lt; 0.5 ? -1 : 1; semiSt.s = semiSt.s0 = -SEMI_U * tc; semiSt.honked = false; semi.visible = true;
+          semi.rotation.y = Math.atan2(-semiN.x*semiSt.side, -semiN.y*semiSt.side);
+          if (semiTracks){ semiTracks.visible = true; semiTracks.position.set(semiP.x, 0, semiP.y); semiTracks.rotation.y = semi.rotation.y; }
+        }
+      }
+      if (semiSt.on){
+        if (!paused) semiSt.s += SEMI_U * (elapsed / 1000);
+        var sx = semiP.x + semiN.x*semiSt.side*semiSt.s, sz = semiP.y + semiN.y*semiSt.side*semiSt.s;
+        semi.position.set(sx, Math.sin(t*23)*0.25, sz);
+        if (semiTracks){ var ta = semiSt.s0 - SEMI_L*0.42, tb2 = semiSt.s + SEMI_L*0.42, tl = Math.max(1, tb2 - ta); semiTracks.children.forEach(function(tm){ tm.position.z = -(ta + tb2)/2; tm.scale.set(3.6, tl, 1); }); semiTracks.userData.tex.repeat.y = tl/14; }
+        var rx = sx - camX, rz = sz - camY, rd = Math.sqrt(rx*rx + rz*rz) || 1;
+        var fx = -Math.sin(camAngle), fz = Math.cos(camAngle), pan = (rx*(-fz) + rz*fx) / rd;
+        var lvl = Math.pow(Math.max(0, 1 - rd/1100), 1.6), closing = -(rx*semiN.x*semiSt.side + rz*semiN.y*semiSt.side) / rd;
+        if (eng &amp;&amp; eng.semi) eng.semi(lvl, pan, 1 + 0.06*closing);
+        if (!semiSt.honked &amp;&amp; semiSt.s &gt; -150){ semiSt.honked = true; if (eng &amp;&amp; eng.horn) eng.horn(Math.min(1, lvl*1.4 + 0.2), pan); }
+        if (!paused &amp;&amp; window._nzSpawnDust &amp;&amp; Math.random() &lt; 0.85){
+          var bx2 = -semiN.x*semiSt.side, bz2 = -semiN.y*semiSt.side, w2 = (Math.random() &lt; 0.5 ? -1 : 1) * 9;
+          [0.42, 0.3, -0.2].forEach(function(ax){ if (Math.random() &lt; 0.55) window._nzSpawnDust(sx + bx2*SEMI_L*ax - bz2*w2*0 + semiD.x*w2, sz + bz2*SEMI_L*ax + semiD.y*w2, 1.6); });
+        }
+        if (semiSt.s &gt; 1000){ semiSt.on = false; semiSt.done = true; semi.visible = false; if (eng &amp;&amp; eng.semi) eng.semi(0, 0, 1); }
+      }
+    }
 
     for (var i = 0; i &lt; dustPool.length; i++){
       var d5 = dustPool[i];
@@ -84674,6 +84753,11 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
+
+
 
 
 

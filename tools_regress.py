@@ -536,23 +536,25 @@ def _(r):
     r.page.unroute("**/*")
 
 
-@check("lackland-talk-after-reading", "2026-11-09 note 13: once LACKLAND has read the book, a visit has a Talk to LACKLAND on his card")
+@check("lackland-talk-after-reading", "2026-11-09 note 13: once LACKLAND has read the book, a visit has a Talk to LACKLAND on his card, with Sam's line for the verdict he gave")
 def _(r):
-    scratch_passage(r, "T-lk", '(set: $lacklandRead to true)[[Walk on|Martin Lackland\'s Office]]')
-    r.go("T-lk", wait=4000)
-    r.page.locator("tw-link:has-text('Walk on')").first.click()
-    r.room_ready("lk")
-    r.clear_lore(); r.clear_slips()
-    r.click_object("lk", "LACKLAND")
-    r.page.wait_for_timeout(700)
-    r.clear_lore()
-    r.press("Talk to LACKLAND")
-    r.page.wait_for_timeout(900)
-    if r.js("() => !!document.querySelector('#dss-lore-overlay.dss-lore-auto')"):   # a first-visit lore waiting behind the card comes first; then ask again
-        r.page.locator("#dss-lore-overlay.dss-lore-auto button:visible, #dss-lore-overlay.dss-lore-auto [role=button]:visible", has_text="Talk to LACKLAND").first.click()
-        r.page.wait_for_timeout(1200)
-    r.expect(r.js("() => [].some.call(document.querySelectorAll('#dss-lore-overlay .claude-draft'), function (e) { return /LACKLAND, on a visit after he has read the book/.test(e.textContent); })"), "Talk to LACKLAND did not open his line")
-    r.page.unroute("**/*")
+    for near, want in (("true", "chin up and head down"), ("false", "glassy as a snifter")):
+        scratch_passage(r, "T-lk", '(set: $lacklandRead to true)(set: $lacklandNear to %s)[[Walk on|Martin Lackland\'s Office]]' % near)
+        r.go("T-lk", wait=4000)
+        r.page.locator("tw-link:has-text('Walk on')").first.click()
+        r.room_ready("lk")
+        r.clear_lore(); r.clear_slips()
+        r.click_object("lk", "LACKLAND")
+        r.page.wait_for_timeout(700)
+        r.clear_lore()
+        r.press("Talk to LACKLAND")
+        r.page.wait_for_timeout(900)
+        if r.js("() => !!document.querySelector('#dss-lore-overlay.dss-lore-auto')"):   # a first-visit lore waiting behind the card comes first; then ask again
+            r.page.locator("#dss-lore-overlay.dss-lore-auto button:visible, #dss-lore-overlay.dss-lore-auto [role=button]:visible", has_text="Talk to LACKLAND").first.click()
+            r.page.wait_for_timeout(1200)
+        got = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-jeff-card'); return o ? o.textContent.replace(/\\s+/g, ' ') : ''; }")
+        r.expect(want in got, "after the %s verdict, Talk to LACKLAND showed %r" % ("near-yes" if near == "true" else "refusal", got[:120]))
+        r.page.unroute("**/*")
 
 
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")

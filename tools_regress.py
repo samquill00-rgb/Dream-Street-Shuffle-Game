@@ -359,6 +359,40 @@ def _(r):
     r.expect(not bad, "; ".join(bad))
 
 
+@check("trail-badge-shows", "2026-11-09 earlier note 34: no sign in the bottom left of which trail you were on")
+def _(r):
+    r.go("Dean Street", wait=5000)
+    r.expect(not r.js("() => !!document.querySelector('.dss-trail-badge')"), "a trail badge shows before any trail is begun")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); }")
+    r.page.wait_for_timeout(1500)
+    t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); if (!t) return ''; var b = t.getBoundingClientRect(); return (b.right <= innerWidth && b.right > innerWidth - 420 && b.top > 60 && b.top < 320 ? 'in ' : 'out ') + t.textContent; }")
+    r.expect(t.startswith("in ") and "THE HIMALAYAS TRAIL" in t and "Pillars of Hercules" in t, "the trail badge is missing, wrong or off its corner (%r)" % t)
+
+
+@check("trail-picks-up-part-way", "2026-11-09 Sam: a trail can be picked up at any step (the cellar starts two of them)")
+def _(r):
+    r.go("Dean Street", wait=5000)
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['pi/A lattice window'])); }")
+    r.page.wait_for_timeout(1500)
+    t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); return t ? t.textContent : ''; }")
+    r.expect("THE HIMALAYAS TRAIL" in t and "French" in t, "seeing only the trail's middle step lit no badge for its last (%r)" % t)
+
+
+@check("trishas-trail-door", "2026-11-09 Sam: the Nazca trail needs a way past Trisha's bouncers without the matchbook")
+def _(r):
+    r.page.add_init_script("(function () { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { if (x.getAttribute('data-trails') !== 'true') x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-lying') !== 'lighter cocaine ticket slip eye') x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; new MutationObserver(f).observe(document, { subtree: true, childList: true, attributes: true }); })();")
+    r.go("Dean Street", wait=3000)
+    r.js("() => localStorage.setItem('dssVoicesSeen', JSON.stringify([]))")
+    r.go("Failure: Trisha's", wait=4000)
+    t = r.js("() => document.querySelector('tw-story').innerText")
+    r.expect("They do not know you." in t, "off the trail, the doorman no longer refuses (%r)" % t[:200])
+    r.js("() => localStorage.setItem('dssVoicesSeen', JSON.stringify(['cu/A bulb']))")
+    r.go("Failure: Trisha's", wait=4000)
+    t = r.js("() => document.querySelector('tw-story').innerText")
+    t = t + " | pn " + r.pn() + " | br " + r.js("() => Array.from(document.querySelectorAll('.ts-trail-bridge')).map(function (b) { return b.innerHTML.slice(0, 300); }).join(' ## ')") + " | nx " + str(r.js("() => [window.dssVoices.isNext('ti','A jukebox'), window.dssVoices.activeTrail()]"))
+    r.expect("Enter Trisha" in t and "They do not know you." not in t, "with Trisha's the live trail step, the doorman still refuses (%r)" % t[-900:])
+
+
 @check("french-door-sign-shows", "2026-11-07 note 7: SORTIR sat inside the door panel, the notice looked blank")
 def _(r):
     r.go("The French")

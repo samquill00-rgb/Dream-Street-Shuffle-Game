@@ -389,8 +389,7 @@ def _(r):
     r.js("() => localStorage.setItem('dssVoicesSeen', JSON.stringify(['cu/A bulb']))")
     r.go("Failure: Trisha's", wait=4000)
     t = r.js("() => document.querySelector('tw-story').innerText")
-    t = t + " | pn " + r.pn() + " | br " + r.js("() => Array.from(document.querySelectorAll('.ts-trail-bridge')).map(function (b) { return b.innerHTML.slice(0, 300); }).join(' ## ')") + " | nx " + str(r.js("() => [window.dssVoices.isNext('ti','A jukebox'), window.dssVoices.activeTrail()]"))
-    r.expect("Enter Trisha" in t and "They do not know you." not in t, "with Trisha's the live trail step, the doorman still refuses (%r)" % t[-900:])
+    r.expect("Enter Trisha" in t and "They do not know you." not in t, "with Trisha's the live trail step, the doorman still refuses (%r)" % t[-300:])
 
 
 @check("french-door-sign-shows", "2026-11-07 note 7: SORTIR sat inside the door panel, the notice looked blank")

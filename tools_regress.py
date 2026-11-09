@@ -557,7 +557,7 @@ def _(r):
         r.page.unroute("**/*")
 
 
-@check("phone-other-question", "2026-11-09 (Sam's lines): with no name to give, FRANKIE asks who got you out (JOHN's rescue only); answer or hang up; out alone or never down, he only checks you're about")
+@check("phone-other-question", "2026-11-09 (Sam's lines): with no name to give, FRANKIE asks who got you out (JOHN's rescue only); tell him or hang up; out alone or never down, he only checks you're about")
 def _(r):
     def call(saved, press, want):
         scratch_passage(r, "T-call", '(set: $shipCall to "offered")(set: $shipSetup to true)(set: $holdsAshtonName to false)(set: $savedBy to "%s")(set: $sobriety to 80)[[Walk on|The Phone Box Answered]]' % saved)
@@ -567,18 +567,37 @@ def _(r):
         r.clear_lore(); r.clear_slips()
         if press:
             r.page.locator("tw-link", has_text=press).first.click(); r.page.wait_for_timeout(1500)
-        t = r.js("() => { var p = document.querySelector('tw-story > tw-passage:not(.dss-ghost)'); return p ? p.innerText.replace(/\\s+/g, ' ') : ''; }")
+        t = r.js("() => { var g = document.querySelector('.dss-ghost'); if (g) g.remove(); return document.querySelector('tw-story').innerText.replace(/\\s+/g, ' '); }")   # the scene lifts its words out of tw-passage
         r.expect(want in t, "savedBy %s, %s: expected %r, page reads %r" % (saved, press or "no press", want, t[:200]))
         r.expect(not r.js("() => !!document.querySelector('tw-error')"), "a Harlowe error on the call")
         r.page.unroute("**/*")
         return t
     t = call("john", None, "You’re going to tell me who it was.")
-    r.expect("Answer him" in t and "Hang up" in t, "JOHN's rescue: no Answer him / Hang up")
-    call("john", "Answer him", "clean as the driven snow")
+    r.expect("Tell him" in t and "Hang up" in t, "JOHN's rescue: no Tell him / Hang up")
+    call("john", "Tell him", "clean as the driven snow")
     call("john", "Hang up", "now you know that they know who you are")
     t = call("nobody", None, "Stay easy.")
-    r.expect("Answer him" not in t, "out alone, but FRANKIE still asked a question")
+    r.expect("Tell him" not in t, "out alone, but FRANKIE still asked a question")
     call("", None, "Stay easy.")
+
+
+@check("woman-line-paper-lore", "2026-11-09 (Sam): the Woman from the Line's paper carries a lore note on the overnight editions; her afloat news is Sam's line")
+def _(r):
+    for fate, want in (("afloat", "made it to Liverpool"), ("sunk", "all souls with her")):
+        scratch_passage(r, "T-line", '(set: $shipFate to "%s")(set: $sobriety to 80)(set: $shipSetup to true)[[Walk on|The Woman from the Line]]' % fate)
+        r.go("T-line", wait=4000)
+        r.clear_slips()
+        r.page.locator("tw-link:has-text('Walk on')").first.click(); r.page.wait_for_timeout(3500)
+        r.expect(not r.js("() => !!document.querySelector('tw-error')"), "a Harlowe error on the Woman from the Line (%s)" % fate)
+        seen = ""
+        for _ in range(20):
+            seen = r.js("() => { var o = document.querySelector('#dss-lore-overlay'); var g = document.querySelector('.dss-ghost'); if (g) g.remove(); return (o ? o.innerText : '') + ' | ' + document.querySelector('tw-story').innerText; }").replace("\n", " ")
+            if "TOMORROW" in seen.upper() and "Fleet Street" in seen: break
+            r.js("() => { if (document.querySelector('#dss-lore-overlay')) return; var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return /Tomorrow’s Paper/.test(e.textContent) && !e.closest('.dss-ghost'); })[0]; if (l && window.dssLore) window.dssLore.open(l); }")   # the link hides behind a dagger; press it as the dagger does
+            r.page.wait_for_timeout(500)
+        r.expect("Fleet Street" in seen, "%s: the lore note on the editions did not open (%r)" % (fate, seen[:200]))
+        r.expect(want in seen, "%s: expected %r" % (fate, want))
+        r.page.unroute("**/*")
 
 
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")
@@ -1059,6 +1078,57 @@ def _(r):
     r.page.get_by_text("AT THE BARBER’S DOOR").click()
     r.page.wait_for_timeout(1500)
     r.expect(r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-passage tw-link'), function (x) { return x.textContent.trim() === 'A haircut'; })[0]; return !!l && getComputedStyle(l).visibility === 'visible' && l.getClientRects().length > 0; }"), "the barber's choices did not show after the scene")
+
+
+KIPLING_PROBE = """() => {
+  var r = (window._dssThreeRegistry || {})['jd-wrap']; if (!r) return null;
+  var T = window.THREE, sc = r.scene, cam = r.camera, kip = sc.getObjectByName('kipling-front'); if (!kip) return { front: false };
+  sc.updateMatrixWorld(true); cam.updateMatrixWorld(true);
+  function px(v) { var p = v.clone().project(cam); return [(p.x + 1) / 2 * innerWidth, (1 - p.y) / 2 * innerHeight]; }
+  function corners(o) { var b = new T.Box3().setFromObject(o); return [px(new T.Vector3(b.min.x, b.min.y, b.max.z)), px(new T.Vector3(b.max.x, b.min.y, b.max.z)), px(new T.Vector3(b.min.x, b.max.y, b.max.z)), px(new T.Vector3(b.max.x, b.max.y, b.max.z))]; }
+  var tusks = [], lights = 0, helices = 0;
+  sc.traverse(function (o) { if (o.name === 'kipling-tusk') { var pa = o.geometry.attributes.position, v = new T.Vector3(), x0 = 9, x1 = -9, z1 = -9, y0 = 9, y1 = -9; for (var i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); z1 = Math.max(z1, v.z); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); } tusks.push([x0, x1, z1, y1 - y0]); } if (o.name === 'kipling-helix') helices++; if (o.isPointLight) lights++; });
+  var fascia = kip.getObjectByName('kipling-fascia'), crest = kip.getObjectByName('kipling-crest'), lamp = kip.getObjectByName('kipling-lamp');
+  var tex = fascia && fascia.material.map && fascia.material.map.image, ink = 0;
+  if (tex && tex.getContext) { var d = tex.getContext('2d').getImageData(0, 0, tex.width, tex.height).data; for (var i = 0; i < d.length; i += 16) if (d[i] > 170 && d[i + 1] > 160) ink++; }
+  return { front: true, tusks: tusks, helices: helices, lights: lights, band: !!kip.getObjectByName('kipling-helix-band'), lamp: lamp ? lamp.intensity : 0, ink: ink,
+    fascia: fascia ? corners(fascia) : null, crest: crest ? corners(crest) : null, jimmy: px(new T.Vector3(0, 1.45, -0.15)), w: innerWidth, h: innerHeight };
+}"""
+
+
+@check("kipling-front-in-drug-store", "2026-11-09 (Sam): Mr. Kipling's Mammoth Resurrection Emporium, a decorative front in the bay to the right of Mister Jimmy's; Jimmy's stays the middle of the frame")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Mister Jimmy’s Drug Store", wait=1500)
+    r.wait_for("() => !!((window._dssThreeRegistry || {})['jd-wrap'])", 15000, "the Drug Store approach scene")
+    r.page.wait_for_timeout(5500)   # the camera's settle
+    worst = None
+    for _i in range(13):   # the camera sways on a 31 s period: look at both ends of it
+        p = r.js(KIPLING_PROBE)
+        r.expect(p and p["front"], "no Kipling front in the Drug Store approach")
+        r.expect(p["fascia"] and p["crest"] and p["band"], "the Kipling front has lost its name board, its crest or its painted band")
+        for name in ("fascia", "crest"):
+            for x, y in p[name]:
+                r.expect(0 <= x <= p["w"] and 0 <= y <= p["h"], "Mr. Kipling's %s runs off the screen (a corner at %d,%d of %dx%d)" % ("name board" if name == "fascia" else "crest", x, y, p["w"], p["h"]))
+        r.expect(min(c[0] for c in p["fascia"]) > p["jimmy"][0], "Mr. Kipling's is not to the right of Mister Jimmy's")
+        r.expect(0.35 * p["w"] < p["jimmy"][0] < 0.65 * p["w"], "Mister Jimmy's is no longer the middle of the frame (its centre at %d of %d)" % (p["jimmy"][0], p["w"]))
+        edge = p["w"] - max(c[0] for c in p["fascia"])
+        worst = edge if worst is None else min(worst, edge)
+        r.page.wait_for_timeout(2000)
+    r.expect(p["ink"] > 2500, "the name board carries no lettering (%d light samples)" % p["ink"])
+    r.expect(len(p["tusks"]) >= 12 and p["helices"] == 2, "the window has %d tusks and %d helix colonnettes (wanted 12 or more, and 2)" % (len(p["tusks"]), p["helices"]))
+    sizes = sorted(t[3] for t in p["tusks"])
+    r.expect(sizes[0] < 0.4 and sizes[-1] > 1.4, "the tusks are not of several sizes (heights %.2f to %.2f)" % (sizes[0], sizes[-1]))
+    for x0, x1, zmax, _h in p["tusks"]:
+        r.expect(zmax < -0.25 and x0 > 2.1 and x1 < 3.12, "a tusk pokes out of the display (x %.2f to %.2f, front at z %.2f)" % (x0, x1, zmax))
+    r.expect(0 < p["lamp"] < 2, "the display lamp is off or not dim (intensity %.2f)" % p["lamp"])
+    r.expect(p["lights"] <= 12, "%d point lights in the Drug Store approach (the budget is 12)" % p["lights"])
+    r.expect(r.js("() => !!document.querySelector('tw-passage') && [].some.call(document.querySelectorAll('button'), function (b) { return b.textContent.trim() === 'GO TO THE COUNTER'; })"), "the Drug Store's own button is gone")
+    r.info = "name board stays %d px inside the right edge at the far end of the sway; %d tusks, %d point lights" % (worst, len(p["tusks"]), p["lights"])
+    # the barber's, which shares the terrace code, has no Kipling front
+    r.go("The Barbershop", wait=1500)
+    r.wait_for("() => !!((window._dssThreeRegistry || {})['bd-wrap'])", 15000, "the barber's approach scene")
+    r.expect(r.js("() => !window._dssThreeRegistry['bd-wrap'].scene.getObjectByName('kipling-front')"), "the Kipling front turned up at the barber's")
 
 
 @check("mandala-return", "2026-11-08 note 33: the Himalayan Return goes home through a kaleidoscope tunnel and a mandala, then clears")

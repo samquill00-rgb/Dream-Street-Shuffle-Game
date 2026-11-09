@@ -392,11 +392,16 @@ def _(r):
     r.expect("Enter Trisha" in t and "They do not know you." not in t, "with Trisha's the live trail step, the doorman still refuses (%r)" % t[-300:])
 
 
+SWAPS = []   # (old, new) pairs applied to the served html: only for proving a check fails with an old bug planted (see --plant)
+
+
 def scratch_passage(r, name, body):
     """Serve the built html with one extra passage, for states a ?start= jump cannot set (e.g. a later night phase)."""
     import html as _h
     def handle(route):
         resp = route.fetch(); t = resp.text()
+        for a, b in SWAPS:
+            assert a in t, "plant: %r not in the html" % a; t = t.replace(a, b)
         tag = '<tw-passagedata pid="99999" name="%s" tags="" position="0,0" size="100,100">%s</tw-passagedata>' % (_h.escape(name), _h.escape(body))
         route.fulfill(response=resp, body=t.replace("</tw-storydata>", tag + "</tw-storydata>", 1))
     r.page.route("**/" + HTML + "*", handle)
@@ -1151,8 +1156,112 @@ def _(r):
     r.expect(not clash, "objects in Trisha's overlap: " + "; ".join(clash[:8]))
 
 
+# ---------------------------------------------------------------- 2026-11-09 audio and feel
+TAP = r"""(function () {
+  /* listen to what the game actually sends to the speakers (--mute-audio silences the device, not the graph) */
+  var C = AudioNode.prototype.connect; window.__tap = { lv: [], starts: [] };
+  function tapFor(ac) { if (ac.__tapA) return ac.__tapA; var a = ac.createAnalyser(); a.fftSize = 2048; ac.__tapA = a; var buf = new Float32Array(2048);
+    setInterval(function () { a.getFloatTimeDomainData(buf); var s = 0; for (var i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+      window.__tap.lv.push([ac.currentTime, 10 * Math.log10(s / buf.length + 1e-12)]); }, 100); return a; }
+  AudioNode.prototype.connect = function (dst) { var r = C.apply(this, arguments); try { if (dst instanceof AudioDestinationNode) C.call(this, tapFor(dst.context)); } catch (e) {} return r; };
+  var S = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (w, off) { try { if (this.buffer && this.buffer.duration > 60) window.__tap.starts.push([this.context.currentTime, off || 0, this.buffer.duration]); } catch (e) {} return S.apply(this, arguments); };
+})();"""
+
+
+@check("dawn-piano-crossfade", "2026-11-09 note 38: the Dawn piano lets its final chord ring, then the next pass comes in over the tail, no stop-then-start silence")
+def _(r):
+    r.ctx.add_init_script(TAP)
+    scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Dawn", wait=3000)
+    r.page.mouse.click(5, 5)
+    r.wait_for("() => window.__tap.starts.length >= 2", 95000, "the piano's second pass")
+    r.page.wait_for_timeout(9000)
+    d = r.js("() => window.__tap")
+    (t1, off, dur), t2 = d["starts"][0], d["starts"][1][0]
+    r.info = "second pass at %.1f s, first ends at %.1f s" % (t2 - t1, dur - off)
+    FINAL_CHORD = 68.9   # where the last chord strikes in piano-eoin-roe.mp3 (file time)
+    at = t2 - t1 + off   # file time of the first pass when the second begins
+    r.expect(at >= FINAL_CHORD + 2, "the second pass came in %.1f s after the final chord; it needs 2 s to ring (Sam, later on 2026-11-09)" % (at - FINAL_CHORD))
+    r.expect(t2 < t1 + (dur - off), "the second pass waited for the first to end (%.1f s in; the first ends at %.1f s)" % (t2 - t1, dur - off))
+    peaks = {}
+    for t, db in d["lv"]:
+        if t2 - 1 <= t <= t2 + 8: k = int((t - t2) * 2); peaks[k] = max(peaks.get(k, -999), db)
+    low = min(peaks.values())
+    r.info += "; quietest half second across the seam %.1f dB" % low
+    r.expect(low > -72, "the sound drops to silence across the seam (%.1f dB)" % low)   # the room tone under the chord's tail sits near -59; true silence reads far below -100
+
+
+PONG_DRIVE = r"""() => {
+  /* play the rallies: meet each ball with the bat moving down, then up, then still, and record the return's path */
+  var P = window.__dssPong, cv = document.getElementById('pong-canvas'), W = cv.width, H = cv.height;
+  var hits = [], cur = null, n = 0, V = [6, -6, 0], prev = null;
+  function setMouse(my) { var r = cv.getBoundingClientRect(); my = Math.max(-40, Math.min(H + 40, my));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: r.left + 5, clientY: r.top + my * r.height / H, bubbles: true })); }
+  function pred(b) { var px = P.pPad.x + P.pPad.w + b.r, f = (b.x - px) / -b.dx, y = b.y + b.dy * f;
+    for (var k = 0; k < 6 && (y < b.r || y > H - b.r); k++) { if (y < b.r) y = 2 * b.r - y; if (y > H - b.r) y = 2 * (H - b.r) - y; } return [y, f]; }
+  function tick() { if (!cv.isConnected) return;
+    var b = P.ball, pad = P.pPad;
+    if (prev && prev.dx < 0 && b.dx > 0 && b.x < W / 2) { cur = { v: pad.y - prev.py, want: V[n % 3], ys: [], t: Date.now() / 1000 }; hits.push(cur); n++; }
+    if (cur && b.dx > 0) { if (b.y <= b.r + 0.5 || b.y >= H - b.r - 0.5) cur.wall = true; if (!cur.wall && cur.ys.length < 40) cur.ys.push(b.y); }
+    if (b.dx < 0) { cur = null; var pr = pred(b), v = V[n % 3], f = Math.min(pr[1], 12); setMouse(pr[0] + 3 * v - v * f); }   /* the bat lags the mouse by 3 frames of its speed */
+    prev = { dx: b.dx, py: pad.y }; window.__pongHits = hits; requestAnimationFrame(tick); }
+  requestAnimationFrame(tick); }"""
+
+
+@check("pong-spin-curves", "2026-11-09 note 16: sweep the bat as you hit and the ball curves the way you swept; a still bat hits straight")
+def _(r):
+    scratch_passage(r, "T-pong", '(set: $opponent to "Jack Curtis")(set: $sobriety to 90)(go-to: "PP Pong")')
+    r.go("T-pong", wait=5000)
+    r.page.get_by_text("Serve", exact=True).click(); r.page.wait_for_timeout(500)
+    r.expect(r.js("() => !!window.__dssPong"), "the pong game did not start")
+    r.js(PONG_DRIVE)
+    r.page.wait_for_timeout(35000)
+    swept, still = [], []
+    for h in r.js("() => window.__pongHits || []"):
+        ys = h["ys"]
+        if len(ys) < 20: continue
+        m = len(ys) - 1; bend = ys[m] - (ys[0] + (ys[1] - ys[0]) * m)   # how far the path left the straight line it set off on
+        (swept if abs(h["v"]) > 3 else still).append((h["v"], bend))
+    r.info = "swept %s; still %s" % (["%+.0f:%+.1f" % x for x in swept], ["%+.1f" % b for _, b in still])
+    r.expect(len(swept) >= 3 and still, "too few clean returns to judge (%s)" % r.info)
+    for v, bend in swept:
+        r.expect(bend * v > 0 and abs(bend) >= 6, "a bat swept at %+.1f px a frame sent the ball %+.1f px off straight" % (v, bend))
+    for v, bend in still:
+        r.expect(abs(bend) < 2, "a still bat curved the ball %+.1f px" % bend)
+
+
+@check("pong-spin-pops", "2026-11-09 (Sam): a swept hit sometimes throws a cartoon pop with one of his two lines; never on a still bat, never twice in 7 s, gone after about 2 s")
+def _(r):
+    scratch_passage(r, "T-pong", '(set: $opponent to "Jack Curtis")(set: $sobriety to 90)(go-to: "PP Pong")')
+    r.go("T-pong", wait=5000)
+    r.page.get_by_text("Serve", exact=True).click(); r.page.wait_for_timeout(500)
+    r.js("""() => { window.__dssPongPopAlways = true; window.__pops = [];   /* the game's chance roll is skipped while this flag is set */
+      new MutationObserver(function (ms) { ms.forEach(function (m) {
+        [].forEach.call(m.addedNodes, function (n) { if (n.classList && n.classList.contains('pp-spin-pop')) {
+          setTimeout(function () { var hit = (window.__pongHits || []).slice(-1)[0] || {}, q = n.getBoundingClientRect(); window.__pops.push({ t: Date.now(), text: n.textContent, v: hit.v, x: q.left, y: q.top, r: q.right, b: q.bottom, op: +getComputedStyle(n).opacity, el: n }); }, 400); } });
+      }); }).observe(document.body, { childList: true }); }""")
+    r.js(PONG_DRIVE)
+    r.page.wait_for_timeout(30000)
+    pops = r.js("() => window.__pops.map(function (p) { return { t: p.t, text: p.text, v: p.v, x: p.x, y: p.y, r: p.r, b: p.b, op: p.op, gone: !p.el.isConnected || Date.now() - p.t < 2500 }; })")
+    r.info = "%d pops: %s" % (len(pops), [p["text"][:18] for p in pops])
+    LINES = {"Call you Alastair Campbell the way you spin!", "How’s that for a dodgy dossier?"}
+    r.expect(len(pops) >= 2, "too few pops in 30 s of swept hits (%s)" % r.info)
+    for i, p in enumerate(pops):
+        r.expect(p["text"] in LINES, "a pop said %r" % p["text"])
+        r.expect(abs(p["v"] or 0) > 3, "a pop came on a hit with the bat at %s" % p["v"])
+        r.expect(p["x"] >= 0 and p["y"] >= 0 and p["r"] <= 1440 and p["b"] <= 900, "a pop ran off the screen")
+        r.expect(p["op"] > 0.8, "a pop was barely visible (opacity %.2f)" % p["op"])
+        r.expect(p["gone"], "a pop stayed on screen")
+        if i: r.expect(p["text"] != pops[i - 1]["text"], "the same line twice running"); r.expect(p["t"] - pops[i - 1]["t"] >= 6900, "two pops within 7 s")
+    r.page.screenshot(path=os.path.join(SHOTS, "pong-spin-pops.png"))
+
+
 def main(argv):
-    want = [a.lower() for a in argv[1:]]
+    # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
+    for a in argv[1:]:
+        if a.startswith("--plant="): SWAPS.append(tuple(a[8:].split("|||", 1)))
+    want = [a.lower() for a in argv[1:] if not a.startswith("--plant=")]
     todo = [c for c in CHECKS if not want or any(w in c[0] for w in want)]
     exe = chrome_path()
     if not exe:

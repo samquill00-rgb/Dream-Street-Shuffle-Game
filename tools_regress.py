@@ -626,7 +626,7 @@ def _(r):
     r.press("Hear him out")
     r.page.wait_for_timeout(900)
     t = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-jeff-card'); return o ? o.innerText : ''; }")
-    r.expect("JEFFREY BERNARD" in t and "Friesian" in t and "I doubt it." in t and "The Spectator" in t, "'Hear him out' did not open his speech on a card of its own (%r)" % t[:120])
+    r.expect("JEFFREY BERNARD" in t and "Friesian cow through Soho" in t and "waking up on the floor." in t and "Could you then milk said cow?’ he says, ‘I doubt it." in t and "After Jeffrey Bernard" in t and "twenty Players" not in t, "'Hear him out' did not open his speech on a card of its own (%r)" % t[:120])   # 2026-11-09: Sam's retelling, credited "after"
 
 
 @check("fortuna-fires-too", "2026-11-09 note 29: SUBCOMANDANTE FORTUNA lowers the rifle, but only you had one")

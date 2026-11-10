@@ -15808,7 +15808,7 @@ window.dssRingHold = (function() {
 (function() {
   var MIN = 0.80, gen = -1, settle = 0, until = 0, step = 0, z = 1, cur = null, base = null;
   var css = document.createElement('style');
-  css.textContent = 'tw-story.dss-pf { padding-bottom: 4px !important; } tw-story.dss-pf tw-passage { padding-bottom: 8px !important; } tw-story.dss-pf tw-passage tw-consecutive-br { height: .38em !important; }';
+  css.textContent = 'tw-story.dss-pf { padding-bottom: 4px !important; } tw-story.dss-pf tw-passage { padding-bottom: 8px !important; } tw-story.dss-pf tw-passage tw-consecutive-br { height: .38em !important; } html.dss-pf-hold { scrollbar-width: none; } html.dss-pf-hold::-webkit-scrollbar { display: none; }';
   document.head.appendChild(css);
   function page() { var ps = Array.prototype.filter.call(document.querySelectorAll('tw-story tw-passage'), function(p) { return !p.closest('.dss-ghost'); }); return ps.filter(function(p) { return !p.parentElement.closest('div'); })[0] || ps[0] || null; }
   var brs = [];
@@ -15827,21 +15827,26 @@ window.dssRingHold = (function() {
   /* a line break standing straight after a block only adds an empty line (as folded in the venue frames on 2026-10-23) */
   function pinned(b, root) { for (var e = b.parentElement; e && e !== root; e = e.parentElement) { var ps = getComputedStyle(e).position; if (ps === 'fixed' || ps === 'absolute') return true; } return false; } /* the header and overlays keep their breaks */
   function foldBreaks(root) { Array.prototype.forEach.call(root.querySelectorAll('br'), function(b) { if (pinned(b, root)) return; var pv = b.previousElementSibling; while (pv && pv.getBoundingClientRect().height === 0 && pv.tagName !== 'BR') pv = pv.previousElementSibling; if (isBlock(pv) && b.style.display !== 'none') { b.style.display = 'none'; brs.push(b); } }); }
+  /* 2026-11-09 (Sam: a long page such as Name Your Book showed a scrollbar for about three seconds before this fit tightened it): the scrollbar is hidden while a new page settles and is fitted (the page still scrolls by wheel or keys), and comes back once the fit is done or gives up, or after six seconds at most */
+  var holdT = 0;
+  function hold(on) { document.documentElement.classList.toggle('dss-pf-hold', on); clearTimeout(holdT); if (on) holdT = setTimeout(function() { hold(false); }, 6000); }
+  window.__dssPfHold = function() { hold(true); }; /* called the moment a new passage lands (the passage watcher below), so the bar never flashes before the first tick */
   function fit() {
-    if (window._passageGen !== gen) { gen = window._passageGen; undo(); settle = Date.now() + 1600; until = Date.now() + 20000; }
-    if (document.fullscreenElement || Date.now() < settle || Date.now() > until) return;
-    var st = document.querySelector('tw-story'), p = page(); if (!st || !p) return;
+    if (window._passageGen !== gen) { gen = window._passageGen; undo(); settle = Date.now() + 1600; until = Date.now() + 20000; hold(true); }
+    if (document.fullscreenElement || Date.now() > until) { hold(false); return; }
+    if (Date.now() < settle) return;
+    var st = document.querySelector('tw-story'), p = page(); if (!st || !p) { hold(false); return; }
     if (cur === p) unshrink(p); /* overlays that open later */
     var over = document.scrollingElement.scrollHeight - window.innerHeight;
-    if (over <= 0) return; /* 2026-11-09 overnight (bug-play): was 4, which left Maritime interlude scrolling by 3 px */
-    if (/(^|\s)(hub|dawn-end)(\s|$)/.test(st.getAttribute('tags') || '')) return;
-    if (document.getElementById('dss-worm-game') || Array.prototype.some.call(p.querySelectorAll('canvas'), function(c) { var r = c.getBoundingClientRect(); return r.height > 220 && r.width > 220; })) return; /* games and rooms have their own fit */
+    if (over <= 0) { hold(false); return; } /* 2026-11-09 overnight (bug-play): was 4, which left Maritime interlude scrolling by 3 px */
+    if (/(^|\s)(hub|dawn-end)(\s|$)/.test(st.getAttribute('tags') || '')) { hold(false); return; }
+    if (document.getElementById('dss-worm-game') || Array.prototype.some.call(p.querySelectorAll('canvas'), function(c) { var r = c.getBoundingClientRect(); return r.height > 220 && r.width > 220; })) { hold(false); return; } /* games and rooms have their own fit */
     if (step === 0) { st.classList.add('dss-pf'); step = 1; return; }
     if (step === 1) { foldBreaks(p); step = 2; return; }
     /* 2026-11-02 (Sam: "go ahead", PP Victory and the Ham 8-11 px over at 80%): a page still a few pixels over at the floor may go to 77%, no further */
     var floor = (z <= MIN + 0.001 && over <= 24) ? 0.77 : MIN;
-    if (z <= floor) return;
-    var h = p.getBoundingClientRect().height - (base ? base.ptPx : parseFloat(getComputedStyle(p).paddingTop) || 0); if (h < 100) return;
+    if (z <= floor) { hold(false); return; } /* at the floor and still over: the page scrolls, so its scrollbar shows */
+    var h = p.getBoundingClientRect().height - (base ? base.ptPx : parseFloat(getComputedStyle(p).paddingTop) || 0); if (h < 100) { hold(false); return; }
     var nz = Math.max(floor, z * (h - over - 6) / h);
     if (nz < z - 0.005) { zoomTo(p, nz); unshrink(p); }
   }
@@ -15854,17 +15859,17 @@ window.dssRingHold = (function() {
 (function() {
   var gen = -1, tries = 0;
   var css = document.createElement('style');
-  css.textContent = 'tw-story.dss-hub-tight .book-pitch { zoom: 0.88; margin-top: 0.3em !important; margin-bottom: 0.3em !important; } tw-story.dss-hub-tight #soho-map-container { margin-top: 0.35em !important; } tw-story.dss-hub-tight .game-title { font-size: 32px !important; } tw-story.dss-hub-tighter .book-pitch { zoom: 0.8; margin-top: 0.2em !important; margin-bottom: 0.2em !important; } tw-story.dss-hub-tighter .game-title { font-size: 27px !important; }';
+  css.textContent = 'tw-story.dss-hub-tight .book-pitch { zoom: 0.88; margin-top: 0.3em !important; margin-bottom: 0.3em !important; } tw-story.dss-hub-tight #soho-map-container { margin-top: 0.35em !important; } tw-story.dss-hub-tight .game-title { font-size: 32px !important; } tw-story.dss-hub-tighter .book-pitch { zoom: 0.8; margin-top: 0.2em !important; margin-bottom: 0.2em !important; } tw-story.dss-hub-tighter .game-title { font-size: 27px !important; } tw-story.dss-hub-tightest .book-pitch { zoom: 0.72; margin-top: 0.1em !important; margin-bottom: 0.1em !important; } tw-story.dss-hub-tightest #soho-map-container { margin-top: 0.2em !important; } tw-story.dss-hub-tightest .game-title { font-size: 24px !important; }'; /* 2026-11-10 (item 3: four boxes at once still ran 13 px over after the second step): a third step */
   document.head.appendChild(css);
   setInterval(function() {
     var st = document.querySelector('tw-story'); if (!st) return;
-    if (window._passageGen !== gen) { gen = window._passageGen; tries = 0; st.classList.remove('dss-hub-tight'); st.classList.remove('dss-hub-tighter'); }
-    if (!/(^|\s)hub(\s|$)/.test(st.getAttribute('tags') || '') || st.classList.contains('dss-hub-tighter') || tries > 12) return;
+    if (window._passageGen !== gen) { gen = window._passageGen; tries = 0; st.classList.remove('dss-hub-tight'); st.classList.remove('dss-hub-tighter'); st.classList.remove('dss-hub-tightest'); }
+    if (!/(^|\s)hub(\s|$)/.test(st.getAttribute('tags') || '') || st.classList.contains('dss-hub-tightest') || tries > 12) return;
     tries++;
     if (document.scrollingElement.scrollHeight <= window.innerHeight + 2) return;
     var boxes = Array.prototype.filter.call(document.querySelectorAll('.book-pitch'), function(b) { return !b.closest('.dss-ghost') && b.getClientRects().length; });
     if (!boxes.length) return;
-    st.classList.add(st.classList.contains('dss-hub-tight') ? 'dss-hub-tighter' : 'dss-hub-tight'); /* a second, tighter step only if the first left it scrolling */
+    st.classList.add(st.classList.contains('dss-hub-tighter') ? 'dss-hub-tightest' : st.classList.contains('dss-hub-tight') ? 'dss-hub-tighter' : 'dss-hub-tight'); /* each tighter step only if the one before left it scrolling */
     try { window.dispatchEvent(new Event('resize')); } catch (e) {}
   }, 700);
 })();
@@ -15953,6 +15958,7 @@ window._passageGen = 0;
         m.addedNodes.forEach(function(n) {
           if (n.nodeType === 1 && n.tagName === 'TW-PASSAGE') {
             window._passageGen++;
+            if (window.__dssPfHold) window.__dssPfHold();
             // Sweep stranded soft overlays from the departed passage. These
             // have no nav teardown of their own, and a hidden survivor keeps
             // dssOverlayBusy() true for the rest of the night (the match-
@@ -27998,6 +28004,8 @@ return /\svenue-(coach|colony|french|pillars|ronnies|trishas)\s/.test(tags) ? 'T
 })();
 sheet.appendChild(dismiss);
 veil.appendChild(sheet);
+/* 2026-11-09 (Sam, overnight walk: room clicks right after arrival seemed ignored): the room behind the opening words is dimmed and asleep until the onward button is pressed; a press on the dimmed room now pulses that button so the player sees the way in. The words are never skipped. */
+veil.addEventListener('pointerdown', function(ev) { if (ev.target.closest && ev.target.closest('.dss-room-prose, .dss-room-dismiss, tw-link, a, button')) return; if (!dismiss.getClientRects().length) return; dismiss.classList.remove('dss-room-dismiss-pulse'); void dismiss.offsetWidth; dismiss.classList.add('dss-room-dismiss-pulse'); clearTimeout(dismiss._pulseT); dismiss._pulseT = setTimeout(function() { dismiss.classList.remove('dss-room-dismiss-pulse'); }, 1300); });
 var story = wrap.closest('tw-story') || wrap;
 story.appendChild(veil);
 // 2026-10-11 structure pass 3: a pickup card the passage raises on entry (the chippy's matches) was carried into the
@@ -73414,6 +73422,8 @@ border-left: 2px solid rgba(140, 120, 180, 0.3);
 .dss-room-prose .dss-claimed, .dss-room-prose .dss-claimed-wrap, .dss-room-prose .dss-trim { display: none !important; }
 .dss-room-dismiss { flex: 0 0 auto; margin-top: 12px; font: 11px 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase; padding: 8px 18px; border: 1px solid rgba(255,58,168,0.35); background: rgba(8,5,3,0.6); cursor: pointer; user-select: none; -webkit-user-select: none; }
 .dss-room-veil-full .dss-room-dismiss { display: none; }
+.dss-room-dismiss-pulse { animation: dssDismissPulse 0.6s ease-out 2; }
+@keyframes dssDismissPulse { 0% { box-shadow: 0 0 0 0 rgba(255,58,168,0.7); border-color: rgba(255,58,168,1); color: #fff2e0; } 100% { box-shadow: 0 0 0 14px rgba(255,58,168,0); border-color: rgba(255,58,168,0.35); } }
 .dss-room-veil.dss-room-held { visibility: hidden; } /* 2026-10-11: a pickup card is up; the room's words wait behind it */
 .dss-room-prose-full { max-height: 100%; width: min(760px, 96%); }
 /* the bar game's canvas keeps its shape and fits the room's height, so the round is played without scrolling */

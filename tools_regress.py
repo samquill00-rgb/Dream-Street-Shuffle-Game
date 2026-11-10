@@ -612,6 +612,42 @@ def _(r):
     r.expect(got["c"] != "rgb(255, 58, 168)", "the gun card is still pink")
 
 
+@check("room-arrival-pulse", "2026-11-09 (Sam, item 1): clicks on a room right after arrival seemed ignored; the opening words hold the room, so a press on the dimmed room pulses the onward button")
+def _(r):
+    r.go("Entering The Pillars of Hercules", wait=6000)
+    r.clear_slips()
+    r.wait_for("() => { for (var k in (window.__dssRooms || {})) { var R = window.__dssRooms[k]; if (R.wrap.isConnected && R.wrap.dataset.words === 'modal') return true; } return false; }", 20000, "the Pillars opening words")
+    r.page.wait_for_timeout(800)
+    d = r.js("() => { var b = [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return e.getClientRects().length; })[0]; return b ? b.className : null; }")
+    r.expect(d and "pulse" not in d, "the onward button pulses before any press (%r)" % d)
+    r.page.mouse.click(120, 450)
+    r.page.wait_for_timeout(150)
+    d = r.js("() => { var b = [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return e.getClientRects().length; })[0]; return b ? { c: b.className, a: getComputedStyle(b).animationName } : null; }")
+    r.expect(d and "dss-room-dismiss-pulse" in d["c"] and d["a"] == "dssDismissPulse", "a press on the dimmed room did not pulse the onward button (%r)" % d)
+    r.page.wait_for_timeout(1500)
+    d = r.js("() => [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return e.getClientRects().length; })[0].className")
+    r.expect("pulse" not in d, "the pulse did not clear (%r)" % d)
+    words = r.js("() => [].filter.call(document.querySelectorAll('.dss-room-prose'), function (e) { return e.getClientRects().length; }).length")
+    r.expect(words >= 1, "the press skipped the opening words")
+
+
+@check("long-page-no-scrollbar", "2026-11-09 (Sam, item 2): Name Your Book showed a scrollbar for about three seconds before the page fit tightened it")
+def _(r):
+    r.go("Name Your Book", wait=0)
+    seen = []
+    for _ in range(24):
+        r.page.wait_for_timeout(250)
+        if r.pn() != "Name Your Book":
+            continue
+        seen.append(r.js("() => ({ over: document.scrollingElement.scrollHeight - window.innerHeight, bar: window.innerWidth - document.documentElement.clientWidth })"))
+    shown = [x for x in seen if x["bar"] > 0]
+    r.info("samples %d, over at most %d px" % (len(seen), max([x["over"] for x in seen] or [0])))
+    r.expect(len(seen) >= 8, "Name Your Book never came up")
+    r.expect(not shown, "a scrollbar showed while the page settled (%r)" % shown[:3])
+    end = seen[-1] if seen else {"over": 0}
+    r.expect(end["over"] <= 0, "Name Your Book still runs %d px past the window at 1440x900" % end["over"])
+
+
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")
 def _(r):
     r.go("Dean Street", wait=6000)
@@ -627,6 +663,7 @@ def _(r):
     r.expect(0 < worst <= 902, "back on Dean Street the page is %d px tall at 1440x900" % worst)
 
 
+@check("hub-crowded-four-fits", "2026-11-10 (item 3): with four question boxes up at once Dean Street still ran 13 px past 900 after the second tightening step")
 @check("hub-crowded-fits", "2026-11-09 overnight bug-play: later in the night Dean Street's question boxes pushed the street 31 to 76 px past 900")
 def _(r):
     scratch_passage(r, "T-hub3", '(set: $sobriety to 30)(set: $knowsCecilCourt to true)(set: $metCritic to true)(set: $returns to 4)[[Walk on|Dean Street]]')
@@ -638,12 +675,13 @@ def _(r):
     n = r.js("() => [].filter.call(document.querySelectorAll('.book-pitch'), function (b) { return !b.closest('.dss-ghost'); }).length")
     r.expect(n >= 2, "the crowded street shows %d question boxes, not 2" % n)
     # a third box, as on a later lap (Who's next?), then the street re-fits as on arrival
-    r.js("() => { var b = [].filter.call(document.querySelectorAll('.book-pitch'), function (x) { return !x.closest('.dss-ghost'); })[0]; var h = b.closest('tw-expression') || b; h.parentNode.insertBefore(h.cloneNode(true), h); document.querySelector('tw-story').classList.remove('dss-hub-tight'); window._passageGen = (window._passageGen || 0) + 1000; window.dispatchEvent(new Event('resize')); }")
+    extra = 2 if "four" in r.name else 1
+    r.js("(k) => { var b = [].filter.call(document.querySelectorAll('.book-pitch'), function (x) { return !x.closest('.dss-ghost'); })[0]; var h = b.closest('tw-expression') || b; for (var i = 0; i < k; i++) h.parentNode.insertBefore(h.cloneNode(true), h); document.querySelector('tw-story').classList.remove('dss-hub-tight', 'dss-hub-tighter', 'dss-hub-tightest'); window._passageGen = (window._passageGen || 0) + 1000; window.dispatchEvent(new Event('resize')); }", extra)
     r.page.wait_for_timeout(1200)
     loose = r.js("() => document.scrollingElement.scrollHeight")
     r.page.wait_for_timeout(4000)
     tight = r.js("() => document.scrollingElement.scrollHeight")
-    r.info = "%d boxes: %d px before tightening, %d after (tight mode %s)" % (n + 1, loose, tight, r.js("() => document.querySelector('tw-story').classList.contains('dss-hub-tight')"))
+    r.info = "%d boxes: %d px before tightening, %d after (tight mode %s)" % (n + extra, loose, tight, r.js("() => document.querySelector('tw-story').classList.contains('dss-hub-tight')"))
     r.expect(tight <= 902, "a crowded Dean Street is %d px tall at 1440x900" % tight)
 
 

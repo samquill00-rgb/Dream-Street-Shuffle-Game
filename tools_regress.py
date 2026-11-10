@@ -696,6 +696,20 @@ def _(r):
     r.page.unroute("**/*")
 
 
+@check("napkin-page-fits", "2026-11-10 playthrough: the napkin sketch page (BENITO) ran 3 to 5 px past the screen; the game-canvas fit now acts on any overflow and sizes the tilted napkin by its layout width")
+def _(r):
+    for w, h in ((1440, 900), (1280, 800)):
+        r.page.set_viewport_size({"width": w, "height": h})
+        r.go("Sketch the Painter", wait=9000)
+        r.clear_lore(); r.clear_slips()
+        r.page.wait_for_timeout(2500)
+        over = r.js("() => document.scrollingElement.scrollHeight - innerHeight")
+        cw = r.js("() => { var c = document.getElementById('napkin-canvas'); return c ? c.offsetWidth : 0; }")
+        r.expect(over <= 0, "the napkin page scrolls %d px at %dx%d" % (over, w, h))
+        r.expect(cw >= 200, "the napkin shrank to %d px at %dx%d" % (cw, w, h))
+    r.page.set_viewport_size({"width": 1440, "height": 900})
+
+
 @check("line1-why-left", "2026-11-10 note 41 (Sam, a second time): on LINE 1 the two paragraphs under THE FIRST LINE OF THREE sit left, not centred")
 def _(r):
     r.go("LINE 1", wait=7000)

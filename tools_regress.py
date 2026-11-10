@@ -699,6 +699,16 @@ def _(r):
     r.page.set_viewport_size({"width": 1440, "height": 900})
 
 
+@check("lk-book-voices", "2026-11-10 note 12 (Sam's rewrite): on LACKLAND's desk the book's card carries OLDBOY's 'Even you?' and THE THIRST's new line")
+def _(r):
+    r.go("Martin Lackland's Office", wait=6000)
+    r.clear_slips()
+    t = r.js("() => { var o = window.DSS_VOICES.objects.lk['Your book']; return [o.then, o.id, window.dssVoices.html('lk', 'Your book')]; }")
+    r.expect(t[0] == "They say there\u2019s one in all of us. Even you?", "OLDBOY's line is %r" % t[0])
+    r.expect(t[1] == "You\u2019d have written more books than you\u2019ve read.", "THE THIRST's line is %r" % t[1])
+    r.expect("Even you?" in t[2], "the book's card does not show OLDBOY's line (%r)" % t[2][:300])
+
+
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")
 def _(r):
     r.go("Dean Street", wait=6000)

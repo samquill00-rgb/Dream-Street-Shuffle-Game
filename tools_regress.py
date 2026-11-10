@@ -641,7 +641,7 @@ def _(r):
             continue
         seen.append(r.js("() => ({ over: document.scrollingElement.scrollHeight - window.innerHeight, bar: window.innerWidth - document.documentElement.clientWidth })"))
     shown = [x for x in seen if x["bar"] > 0]
-    r.info("samples %d, over at most %d px" % (len(seen), max([x["over"] for x in seen] or [0])))
+    r.info = "samples %d, over at most %d px" % (len(seen), max([x["over"] for x in seen] or [0]))
     r.expect(len(seen) >= 8, "Name Your Book never came up")
     r.expect(not shown, "a scrollbar showed while the page settled (%r)" % shown[:3])
     end = seen[-1] if seen else {"over": 0}
@@ -673,6 +673,30 @@ def _(r):
     r.page.wait_for_timeout(1500)
     b = r.js("() => { var b = document.querySelector('.dss-trail-badge'); return b ? b.innerText : null; }")
     r.expect(b and "TRAIL" in b, "tonight's look did not put up the trail badge (%r)" % b)
+
+
+@check("line1-why-left", "2026-11-10 note 41 (Sam, a second time): on LINE 1 the two paragraphs under THE FIRST LINE OF THREE sit left, not centred")
+def _(r):
+    r.go("LINE 1", wait=7000)
+    r.clear_slips()
+    got = r.js("() => { var w = [].filter.call(document.querySelectorAll('.alba-why'), function (e) { return !e.closest('.dss-ghost'); })[0]; if (!w) return null; var range = document.createRange(); range.selectNodeContents(w); var rs = [].slice.call(range.getClientRects()), b = w.getBoundingClientRect(); return { align: getComputedStyle(w).textAlign, gaps: rs.filter(function (x) { return x.width > 40; }).map(function (x) { return Math.round(x.left - b.left); }), op: getComputedStyle(w).opacity }; }")
+    r.info = repr(got)
+    r.expect(got and got["align"] in ("left", "start"), "the paragraphs under THE FIRST LINE OF THREE are %r, not left" % (got and got["align"]))
+    r.expect(got and max(got["gaps"] or [99]) <= 2, "a line under THE FIRST LINE OF THREE does not start at the left edge (%r)" % got)
+
+
+@check("alba-lines-one-line", "2026-11-10 (Sam): each line of the alba sits on one line in its box (LINE 1 wrapped 'leaves' onto a second line)")
+def _(r):
+    r.go("LINE 1", wait=6000)
+    r.clear_slips()
+    lines = ["As cool as the pale wet leaves", "of lily-of-the-valley", "She lay beside me in the dawn."]
+    for w in (1440, 1280, 800):
+        r.page.set_viewport_size({"width": w, "height": 900})
+        r.page.wait_for_timeout(400)
+        for t in lines:
+            got = r.js("(t) => { var b = [].filter.call(document.querySelectorAll('.revelation-box[data-alba]'), function (e) { return !e.closest('.dss-ghost'); })[0]; var em = b.querySelector('em'); em.innerHTML = '\u2018' + t + '\u2019<span class=alba-tw-cursor>\u2588</span>'; var lh = parseFloat(getComputedStyle(em).lineHeight); var br = b.getBoundingClientRect(), er = em.getBoundingClientRect(); return { h: em.getBoundingClientRect().height, lh: lh, over: em.scrollWidth - em.clientWidth, inside: er.right <= br.right + 1 && br.right <= innerWidth, fs: getComputedStyle(em).fontSize }; }", t)
+            r.expect(got["h"] < got["lh"] * 1.5 and got["over"] <= 1 and got["inside"], "at %d px wide '%s' does not sit on one line in its box (%r)" % (w, t, got))
+    r.page.set_viewport_size({"width": 1440, "height": 900})
 
 
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")

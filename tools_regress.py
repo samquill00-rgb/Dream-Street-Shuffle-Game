@@ -363,7 +363,7 @@ def _(r):
 def _(r):
     r.go("Dean Street", wait=5000)
     r.expect(not r.js("() => !!document.querySelector('.dss-trail-badge')"), "a trail badge shows before any trail is begun")
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); }")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
     r.page.wait_for_timeout(1500)
     t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); if (!t) return ''; var b = t.getBoundingClientRect(); return (b.right <= innerWidth && b.right > innerWidth - 420 && b.top > 60 && b.top < 320 ? 'in ' : 'out ') + t.textContent; }")
     r.expect(t.startswith("in ") and "THE HIMALAYAS TRAIL" in t and "Pillars of Hercules" in t, "the trail badge is missing, wrong or off its corner (%r)" % t)
@@ -372,7 +372,7 @@ def _(r):
 @check("trail-picks-up-part-way", "2026-11-09 Sam: a trail can be picked up at any step (the cellar starts two of them)")
 def _(r):
     r.go("Dean Street", wait=5000)
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['pi/A lattice window'])); }")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['pi/A lattice window'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'pi/A lattice window': true} })); }")
     r.page.wait_for_timeout(1500)
     t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); return t ? t.textContent : ''; }")
     r.expect("THE HIMALAYAS TRAIL" in t and "French" in t, "seeing only the trail's middle step lit no badge for its last (%r)" % t)
@@ -382,11 +382,11 @@ def _(r):
 def _(r):
     r.page.add_init_script("(function () { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { if (x.getAttribute('data-trails') !== 'true') x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-lying') !== 'lighter cocaine ticket slip eye') x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; new MutationObserver(f).observe(document, { subtree: true, childList: true, attributes: true }); })();")
     r.go("Dean Street", wait=3000)
-    r.js("() => localStorage.setItem('dssVoicesSeen', JSON.stringify([]))")
+    r.js("() => { localStorage.setItem('dssVoicesSeen', JSON.stringify([])); localStorage.removeItem('dssTrailTonight'); }")
     r.go("Failure: Trisha's", wait=4000)
     t = r.js("() => document.querySelector('tw-story').innerText")
     r.expect("They do not know you." in t, "off the trail, the doorman no longer refuses (%r)" % t[:200])
-    r.js("() => localStorage.setItem('dssVoicesSeen', JSON.stringify(['cu/A bulb']))")
+    r.js("() => { localStorage.setItem('dssVoicesSeen', JSON.stringify(['cu/A bulb'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'cu/A bulb': true} })); }")
     r.go("Failure: Trisha's", wait=4000)
     t = r.js("() => document.querySelector('tw-story').innerText")
     r.expect("Enter Trisha" in t and "They do not know you." not in t, "with Trisha's the live trail step, the doorman still refuses (%r)" % t[-300:])
@@ -646,6 +646,33 @@ def _(r):
     r.expect(not shown, "a scrollbar showed while the page settled (%r)" % shown[:3])
     end = seen[-1] if seen else {"over": 0}
     r.expect(end["over"] <= 0, "Name Your Book still runs %d px past the window at 1440x900" % end["over"])
+
+
+@check("trail-badge-not-before-trails", "2026-11-10 (Sam): the EZEKIEL TRAIL badge showed on the opening page (The Night Ahead), before Dean Street, from steps looked at on an earlier night")
+def _(r):
+    r.go("The Night Ahead", wait=3000)
+    r.js("() => { var t = window.DSS_VOICES.trails, k = Object.keys(t)[0]; localStorage.setItem('dssVoicesSeen', JSON.stringify([t[k].steps[0].at])); }")
+    r.page.wait_for_timeout(2500)
+    b = r.js("() => { var b = document.querySelector('.dss-trail-badge'); return b ? b.innerText : null; }")
+    r.expect(b is None, "a trail badge shows on the opening page (%r)" % b)
+
+
+@check("trail-badge-tonight-only", "2026-11-10 (Sam: \"this night only\"): the trail badge counts only steps looked at tonight, not on earlier nights")
+def _(r):
+    scratch_passage(r, "T-trail", '(set: $visitedCarthage to true)[[Walk on|Dean Street]]')
+    r.go("T-trail", wait=3000)
+    r.clear_slips()
+    r.js("() => { var t = window.DSS_VOICES.trails, k = Object.keys(t).filter(function (x) { return x !== 'eye'; })[0]; window.__tk = t[k].steps[0].at; localStorage.setItem('dssVoicesSeen', JSON.stringify([window.__tk])); localStorage.removeItem('dssTrailTonight'); }")
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(5000)
+    r.page.unroute("**/*")
+    r.expect(r.pn() == "Dean Street", "did not reach Dean Street (%s)" % r.pn())
+    b = r.js("() => { var b = document.querySelector('.dss-trail-badge'); return b ? b.innerText : null; }")
+    r.expect(b is None, "an earlier night's look put up a trail badge (%r)" % b)
+    r.js("() => window.dssVoices.see(window.__tk)")
+    r.page.wait_for_timeout(1500)
+    b = r.js("() => { var b = document.querySelector('.dss-trail-badge'); return b ? b.innerText : null; }")
+    r.expect(b and "TRAIL" in b, "tonight's look did not put up the trail badge (%r)" % b)
 
 
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")

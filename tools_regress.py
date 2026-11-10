@@ -675,6 +675,27 @@ def _(r):
     r.expect(b and "TRAIL" in b, "tonight's look did not put up the trail badge (%r)" % b)
 
 
+@check("more-keys-slip", "2026-11-10 note 20 (Sam): after the first crossing, Dean Street tells you once how to find another key")
+def _(r):
+    seen = "() => document.body.innerText.indexOf('MORE KEYS') >= 0 || [].some.call(document.querySelectorAll('.dss-hint-slip, .dss-hint-type'), function (e) { return e.textContent.indexOf('MORE KEYS') >= 0; })"
+    scratch_passage(r, "T-nokey", '(set: $visitedCarthage to true)(set: $worldsVisited to (a:))(set: $dreamKey to "")[[Walk on|Dean Street]]')
+    r.go("T-nokey", wait=3000)
+    r.clear_slips()
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(6000)
+    r.expect(not r.js(seen), "the MORE KEYS slip showed before any crossing")
+    r.page.unroute("**/*")
+    scratch_passage(r, "T-keys", '(set: $visitedCarthage to true)(set: $worldsVisited to (a: "nazca"))(set: $dreamKey to "")(set: $keysSlipShown to false)[[Walk on|Dean Street]]')
+    r.go("T-keys", wait=3000)
+    r.clear_slips()
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.wait_for(seen, 25000, "the MORE KEYS slip on Dean Street after the first crossing")
+    r.page.wait_for_timeout(8000)
+    txt = r.js("() => document.body.innerText")
+    r.expect("Four more lie in Soho" in txt and "three clues" in txt, "the MORE KEYS slip does not say four keys and three clues")
+    r.page.unroute("**/*")
+
+
 @check("line1-why-left", "2026-11-10 note 41 (Sam, a second time): on LINE 1 the two paragraphs under THE FIRST LINE OF THREE sit left, not centred")
 def _(r):
     r.go("LINE 1", wait=7000)

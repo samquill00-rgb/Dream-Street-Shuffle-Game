@@ -849,6 +849,7 @@ window.dssAudio = (function() {
   function setMuted(b) {
     _muted = DSS_SOUND_OFF ? true : !!b;
     if (_muted && _pp) { try { pubPass(null, 0.1); } catch(e) {} } /* 2026-11-11: the pub walk-by loop */
+    if (_muted && _shanty) { try { _shanty.stop(0.1); } catch(e) {} _shanty = null; } /* 2026-11-11: the Pillars shanty */
     try { if (!DSS_SOUND_OFF) localStorage.setItem('dssMuted2', _muted ? '1' : '0'); } catch(e) {}
     var ac = ctx; // Use existing context only — don't force-create one to mute.
     if (ac) {
@@ -3462,9 +3463,26 @@ window.dssAudio = (function() {
       gone.stopT = setTimeout(function() { if (_pp !== gone) return; _pp = null; try { gone.src && gone.src.stop(); } catch(e) {} try { gone.g.disconnect(); } catch(e) {} }, ramp * 1000 + 100);
     }
   }
+  /* 2026-11-11 (Sam: "trigger it a second or two in during the Pillar approach and just play it once, have it low in the mix"): his
+     "Drunken sailor", four parts recorded dry, given a small bar room and the door's dullness (tools_shanty.py, pillars-shanty.m4a at
+     the door clips' -29.9 LUFS). 1.5 s after the approach page opens it plays once, at 0.16 (about -46 LUFS, under the street);
+     leaving the page fades it over a second. Each visit to the approach plays it once. */
+  var SHANTY_URL = '__DSS_PILLARS_SHANTY_DATA_URI__', _shanty = null, _shantyT = null;
+  function pillarsShanty(on) {
+    if (_shantyT) { clearTimeout(_shantyT); _shantyT = null; }
+    if (_shanty) { try { _shanty.stop(1.0); } catch(e) {} _shanty = null; }
+    if (!on) return;
+    _sample(SHANTY_URL); /* warm the decode during the wait */
+    _shantyT = setTimeout(function() {
+      _shantyT = null; window.dssLastShanty = Date.now(); /* debug/test marker, muted or not */
+      if (_muted) return;
+      _shanty = _playSample(SHANTY_URL, 0.16, 0, null, true);
+    }, 1500);
+  }
   function _transitionForPassage(passageNode) {
     if (!passageNode) return;
     if (_pp) pubPass(null, 0.35);
+    try { var _tg = ' ' + (passageNode.getAttribute('tags') || '') + ' '; if (_tg.indexOf(' map-return-pillars ') >= 0) pillarsShanty(true); else if (_shanty || _shantyT) pillarsShanty(false); } catch(e) {}
     var tags = (passageNode.getAttribute('tags') || '').split(/\s+/).filter(Boolean);
     var venue = null, street = false;
     for (var i = 0; i < tags.length; i++) {
@@ -5384,7 +5402,7 @@ window.dssAudio = (function() {
     // Venue ambient beds
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
-    mapFootstep: mapFootstep, transitionDistance: transitionDistance, mapCab: mapCab, pubPass: pubPass, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
+    mapFootstep: mapFootstep, transitionDistance: transitionDistance, mapCab: mapCab, pubPass: pubPass, pillarsShanty: pillarsShanty, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
     scoreCue: scoreCue, _scoreState: function(){ var v=_scSt.voice; return { cue:_scSt.cue, voice: v ? { cue:v.cue, dead:v.dead, its:v.its.map(function(i){ return [i.off0, i.t0, +i.g.gain.value.toFixed(2), +i.h.gain.value.toFixed(2)]; }) } : null, bed: (function(b){ return b && b.gain ? +b.gain.gain.value.toFixed(2) : null; })(findBedByLabel('pyramid-music')), now: getCtx().currentTime }; },
     startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel,
     prewarmBed: prewarmBedByLabel,

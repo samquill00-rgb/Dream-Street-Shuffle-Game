@@ -1172,6 +1172,24 @@ def _(r):
         r.expect(abs(x) < 0.9 and abs(y) < 0.9 and z < 1, "%s is out of the Shelves close-up's view (%.2f, %.2f)" % (f, x, y))
 
 
+@check("pillars-shanty", "2026-11-11 Sam's Drunken sailor: plays once, a moment into the Pillars approach, and not on Lackland's")
+def _(r):
+    # a ?start= page is the first of the load, which the passage watcher does not see; hand it the page the way the watcher does
+    hand = "() => { window.dssLastShanty = 0; window.dssAudio.updateAmbientBedsForPassage(document.querySelector('tw-story > tw-passage')); }"
+    r.go("Approach The Pillars")
+    r.js(hand)
+    r.page.wait_for_timeout(700)
+    early = r.js("() => window.dssLastShanty || 0")
+    r.page.wait_for_timeout(2300)
+    r.expect(r.js("() => window.dssLastShanty || 0"), "the shanty did not start on the Pillars approach")
+    r.expect(not early, "the shanty started at once, not a moment in")
+    r.go("Approach Lacklands Office")
+    r.js(hand)
+    r.page.wait_for_timeout(3000)
+    r.expect(not r.js("() => window.dssLastShanty || 0"), "the shanty started on Lackland's approach")
+    r.info = "started on the Pillars approach only"
+
+
 @check("lackland-doorbell", "2026-11-11 Sam's street recording: his doorbell rings walking in to Lackland's, his footsteps walking out")
 def _(r):
     r.go("Approach Lacklands Office")

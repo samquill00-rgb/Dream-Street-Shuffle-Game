@@ -1172,6 +1172,21 @@ def _(r):
         r.expect(abs(x) < 0.9 and abs(y) < 0.9 and z < 1, "%s is out of the Shelves close-up's view (%.2f, %.2f)" % (f, x, y))
 
 
+@check("lackland-doorbell", "2026-11-11 Sam's street recording: his doorbell rings walking in to Lackland's, his footsteps walking out")
+def _(r):
+    r.go("Approach Lacklands Office")
+    r.page.wait_for_timeout(1500)
+    ok = r.js("""() => { var a = [].slice.call(document.querySelectorAll('tw-passage tw-link')).filter(function (l) { return l.textContent.trim() === '\u00b7'; })[0]; if (!a) return false; a.click(); return true; }""")
+    r.expect(ok, "no way in to Lackland's office on %s" % r.pn())
+    r.page.wait_for_timeout(3000)
+    t = r.js("() => window.dssLastTransition || ''")
+    r.expect(t == "out>venue-lackland", "walking in to Lackland's asked for %r, not the doorbell" % t)
+    src = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect(re.search(r"'out>venue-lackland':\s*\{\s*url:\s*'lackland-doorbell\.m4a'", src), "the Lackland door transition is not the doorbell file")
+    r.expect(re.search(r"'venue-lackland>out':\s*\{\s*url:\s*'lackland-steps-out\.m4a'", src), "leaving Lackland's is not the footsteps file")
+    r.info = "door: %s" % t
+
+
 @check("hub-opens-fit", "2026-11-11 dream-world run: Dean Street with both gold OPENS. lines (Coach and Halibut) fits 1440x900")
 def _(r):
     r.go("nazca", wait=10000)

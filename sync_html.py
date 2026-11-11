@@ -87,6 +87,11 @@ AUDIO_EMBEDS = [
     ("__DSS_TR_DOWN_DATA_URI__",     "french-stairs-down.m4a",                         "audio/mp4"),
     ("__DSS_TR_UP_DATA_URI__",       "french-stairs-up.m4a",                           "audio/mp4"),
     ("__DSS_STREET_DATA_URI__",      "the-street-layered-floor.m4a",                   "audio/mp4"),
+    # 2026-11-11: Sam's street recording (New Recording 150, five clips in street-live-originals/), cut by tools_street_clips.py
+    ("__DSS_STREET_WET_DATA_URI__",  "street-wet-loop.m4a",                            "audio/mp4"),   # under the street bed on outdoor pages
+    ("__DSS_LACKLAND_BELL_DATA_URI__", "lackland-doorbell.m4a",                        "audio/mp4"),   # Lackland's door, Frith Street
+    ("__DSS_LACKLAND_STEPS_DATA_URI__", "lackland-steps-out.m4a",                      "audio/mp4"),   # walking off from his door
+    ("__DSS_MAP_CAB_DATA_URI__",     "map-cab-wet.m4a",                                "audio/mp4"),   # the cab on the Soho map, and the window spot in rooms
     # 2026-10-23: CC0 sounds from OpenGameArt (SOUND-SOURCES.md), cut in the session scratchpad
     ("__DSS_DOORWAY_DROPS_DATA_URI__", "doorway-piss.m4a",                             "audio/mp4"),   # Sam's recording (2026-11-02): one 30 s stream, each doorway starts at its own point; was doorway-drops.m4a ("Water Drops", CeoxBlackj)
     ("__DSS_VOMIT_DATA_URI__",       "vomit-sickness.m4a",                             "audio/mp4"),   # "Sick Noises" by frosty ham: the retch hold

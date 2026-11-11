@@ -1219,6 +1219,40 @@ def _(r):
     r.expect("will not open" not in t and "Centre Point" not in t, "Where next? spells out the Centre Point gate before it is open")
 
 
+@check("pyre-pages-fit", "2026-11-11 polish run: Dido and Stay in Carthage ran 100 to 200 px past the window on empty lines; they fit at 1440x900 and 1280x800, Sam's paragraph gaps kept")
+def _(r):
+    got = []
+    for w, h in ((1440, 900), (1280, 800)):
+        r.page.set_viewport_size({"width": w, "height": h})
+        for n in ("Dido", "Stay in Carthage"):
+            r.go(n, wait=5000)
+            v = r.js("() => { var tp = document.querySelector('tw-story > tw-passage:not(.dss-ghost)'), l = [].filter.call(tp.querySelectorAll('tw-link'), function (x) { return x.getClientRects().length && /Rest here|Wake/.test(x.textContent); })[0], b = l && l.getBoundingClientRect(); var gaps = [].filter.call(tp.querySelectorAll('tw-consecutive-br'), function (g) { return g.getClientRects().length; }).length; return { over: document.scrollingElement.scrollHeight - innerHeight, link: b ? Math.round(b.bottom) : null, gaps: gaps }; }")
+            got.append("%s %dx%d over %s link %s gaps %s" % (n, w, h, v["over"], v["link"], v["gaps"]))
+            r.expect(v["over"] <= 0 and v["link"] and v["link"] <= h, "%s at %dx%d scrolls or hides its way on (%r)" % (n, w, h, v))
+            r.expect(v["gaps"] >= 2, "%s lost its paragraph gaps (%r)" % (n, v))
+    r.info = "; ".join(got)
+
+
+@check("room-entry-no-scrollbar", "2026-11-11 polish run: a scrollbar flashed for about a second on entering the French or the Colony at 1280x800, before the room lifted its words")
+def _(r):
+    r.page.set_viewport_size({"width": 1280, "height": 800})
+    for n in ("The French", "The Colony Room"):
+        r.go(n, wait=0)
+        bars = []
+        for _ in range(16):
+            r.page.wait_for_timeout(200)
+            bars.append(r.js("() => getComputedStyle(document.documentElement).overflowY === 'hidden' ? 0 : Math.max(0, document.scrollingElement.scrollHeight - innerHeight)"))   # headless scrollbars overlay, so measure what would scroll
+        r.expect(max(bars) == 0, "%s showed a scrollbar while its room built (%r)" % (n, bars))
+
+
+@check("ending-words-centred", "2026-11-11 polish run: EXPLICIT. LIBER. EST. sat flush left under the centred row of signals on the white and black ending pages")
+def _(r):
+    for n in ("White page", "Black page"):
+        r.go(n, wait=8500)
+        v = r.js("() => { var tp = document.querySelector('tw-story > tw-passage:not(.dss-ghost)'), sw = tp.querySelector('.ending-switchboard'), w = document.createTreeWalker(tp, NodeFilter.SHOW_TEXT), t; while ((t = w.nextNode())) if (/EXPLICIT/.test(t.textContent)) break; if (!t || !sw) return null; var rg = document.createRange(); rg.selectNodeContents(t); var a = rg.getBoundingClientRect(), b = sw.getBoundingClientRect(); return [Math.round(a.left + a.width / 2), Math.round(b.left + b.width / 2)]; }")
+        r.expect(v and abs(v[0] - v[1]) < 24, "%s: the closing words are off the signals' centre line (%r)" % (n, v))
+
+
 @check("title-no-save-note", "2026-11-11 note 6: the Title carries no instruction about saving")
 def _(r):
     r.go("Title", wait=14000)

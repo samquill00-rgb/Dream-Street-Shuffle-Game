@@ -15869,12 +15869,31 @@ window.dssRingHold = (function() {
 // its shape, until the page fits, to no less than 55% of its size. Fullscreen ("Expand") and the 3D rooms are left alone.
 (function() {
   var gen = -1, tries = 0, boxes = [];
+  function blankEl(e) { if (e.tagName === 'BR' || e.tagName === 'TW-CONSECUTIVE-BR') return 'br'; if (/^(IMG|CANVAS|SVG|svg|VIDEO|IFRAME|INPUT|BUTTON|TW-LINK|HR)$/.test(e.tagName)) return ''; var cs = getComputedStyle(e); if (cs.display === 'none') return 'blank'; if (e.querySelector('img, canvas, svg, video, iframe, input, button, tw-link, hr')) return ''; return (e.textContent || '').trim() === '' ? 'blank' : ''; }
+  function walk2(box) { var lead = true, tail = []; Array.prototype.forEach.call(box.childNodes, function(n) { if (n.nodeType === 3) { if (n.textContent.trim()) { lead = false; tail = []; } return; } if (n.nodeType !== 1) return; var b = blankEl(n); if (b === 'br') { if (lead) n.style.display = 'none'; else tail.push(n); } else if (b !== 'blank') { lead = false; tail = []; } }); tail.forEach(function(n) { n.style.display = 'none'; }); }
+  function squeeze(root) {
+    /* the line-level pieces in order: Harlowe's wrappers and inline spans are looked inside; a block with words is content (its own leading and trailing breaks go) */
+    var seq = [];
+    (function walk(el) { Array.prototype.forEach.call(el.childNodes, function(n) { if (n.nodeType === 3) { if (n.textContent.trim()) seq.push({ k: 'c' }); return; } if (n.nodeType !== 1 || n.tagName === 'SCRIPT' || n.tagName === 'STYLE') return; var b = blankEl(n); if (b === 'br') { seq.push({ k: 'br', el: n }); return; } if (b === 'blank') return; var cs = getComputedStyle(n); if (/^TW-(HOOK|EXPRESSION|INCLUDE|COLLAPSED)$/.test(n.tagName) || (cs.display === 'inline' && n.tagName === 'SPAN')) { walk(n); return; } if (cs.display !== 'inline' && cs.display !== 'contents' && (n.textContent || '').trim()) walk2(n); seq.push({ k: 'c' }); }); })(root);
+    var run = [], started = false;
+    function flush(atEnd) { if (!run.length) return; var keptBr = false, keptGap = false; run.forEach(function(x) { var gap = x.el.tagName === 'TW-CONSECUTIVE-BR'; if (!started || atEnd) { x.el.style.display = 'none'; return; } if (gap ? keptGap : keptBr) x.el.style.display = 'none'; else if (gap) keptGap = true; else keptBr = true; }); run = []; }
+    seq.forEach(function(x) { if (x.k === 'br') run.push(x); else { flush(false); started = true; } });
+    flush(true);
+  }
   function inFlow(el) { for (var e = el; e && e.tagName !== 'TW-STORY'; e = e.parentElement) { var ps = getComputedStyle(e).position; if (ps === 'fixed' || ps === 'absolute' || ps === 'sticky') return false; if (e.tagName === 'TW-PASSAGE') return true; } return false; }
   function fit() {
     if (window._passageGen !== gen) { gen = window._passageGen; tries = 0; boxes = []; settle = Date.now() + 1600; /* the page leaving is still in the DOM for a moment */ var st0 = document.querySelector('tw-story'); if (st0 && st0._dssFitPad) { st0._dssFitPad = 0; st0.style.paddingBottom = ''; } }
     if (tries > 14 || document.fullscreenElement || Date.now() < settle) return; tries++;
     var over = document.scrollingElement.scrollHeight - window.innerHeight;
     if (over <= 0) return; /* 2026-11-10 playthrough: any overflow (the napkin page ran 3 px over and was left to scroll) */
+    /* 2026-11-11 polish run: prose pages (Dido, Stay in Carthage at the pyre) ran 100 to 200 px past the window on runs of empty lines left by
+       hidden lore hooks and empty branches. First, each run of line breaks and empty bits between two pieces of the page is cut to one
+       paragraph gap (the first break and the first gap), and a run at the very start or end of a box goes; no words are touched. */
+    var tp0 = document.querySelector('tw-story > tw-passage:not(.dss-ghost)');
+    if (tp0 && !tp0._dssSqueezed && !document.querySelector('.dss-room-veil')) { tp0._dssSqueezed = true; squeeze(tp0); over = document.scrollingElement.scrollHeight - window.innerHeight; if (over <= 0) return; }
+    /* then a picture banner in the page's flow (the pyre, its fire canvas laid over it) is narrowed like a game, no smaller than 55% */
+    var art = Array.prototype.filter.call(document.querySelectorAll('tw-passage:not(.dss-ghost) .dss-carthage-pyre-art'), function(a) { return a.getBoundingClientRect().height > 160 && inFlow(a); })[0];
+    if (art) { var ah = art.getBoundingClientRect().height, aw = art.getBoundingClientRect().width, at = Math.max(ah * 0.55, ah - over - 6); if (at < ah - 2) { if (art._dssFit == null) { art._dssFit = { mw: art.style.maxWidth, ml: art.style.marginLeft, mr: art.style.marginRight }; boxes.push(art); } art.style.maxWidth = Math.floor(aw * at / ah) + 'px'; art.style.marginLeft = 'auto'; art.style.marginRight = 'auto'; settle = Date.now() + 500; } return; }
     var cvs = Array.prototype.filter.call(document.querySelectorAll('tw-passage canvas'), function(c) { var r = c.getBoundingClientRect(); return r.height > 220 && r.width > 220 && inFlow(c) && !c.closest('.soho-map-wrap'); }); /* not the Soho map: pixel art at its own scale */
     var dom = document.getElementById('dss-worm-game'); /* the worm hut's game is laid out in the page, not on a canvas */
     if (!cvs.length && !(dom && inFlow(dom))) return;
@@ -73599,7 +73618,7 @@ tw-passage:has(#lk-container):not(:has(#lk-wrap)) > :not(tw-include):not(tw-side
 tw-passage:has(#cf-container):not(:has(#cf-wrap)) > :not(tw-include):not(tw-sidebar),
 tw-passage:has(#cu-container):not(:has(#cu-wrap)) > :not(tw-include):not(tw-sidebar),
 tw-passage:has(#cx-container):not(:has(#cx-wrap)) > :not(tw-include):not(tw-sidebar),
-tw-passage:has(#oi-container):not(:has(#oi-wrap)) > :not(tw-include):not(tw-sidebar) { opacity: 0 !important; }
+tw-passage:has(#oi-container):not(:has(#oi-wrap)) > :not(tw-include):not(tw-sidebar) { opacity: 0 !important; } /* 2026-11-11 polish run: while a room is building, its words still sit in the page's flow (invisible) and ran 90 to 140 px past a 1280x800 window for about a second, so a scrollbar flashed on the way in; the page does not scroll until the room is up */ html:has(tw-story > tw-passage #fi-container):not(:has(#fi-wrap)), html:has(tw-story > tw-passage #ci-container):not(:has(#ci-wrap)), html:has(tw-story > tw-passage #pi-container):not(:has(#pi-wrap)), html:has(tw-story > tw-passage #ri-container):not(:has(#ri-wrap)), html:has(tw-story > tw-passage #cu-container):not(:has(#cu-wrap)), html:has(tw-story > tw-passage #cx-container):not(:has(#cx-wrap)), html:has(tw-story > tw-passage #cb-container):not(:has(#cb-wrap)), html:has(tw-story > tw-passage #ti-container):not(:has(#ti-wrap)), html:has(tw-story > tw-passage #lk-container):not(:has(#lk-wrap)), html:has(tw-story > tw-passage #cf-container):not(:has(#cf-wrap)), html:has(tw-story > tw-passage #oi-container):not(:has(#oi-wrap)) { overflow-y: hidden; }
 /* Venue names sit on their own readable plaque above scene washes and grain. */
 /* 2026-10-19 (Sam): the room's lily prompt, made obvious: the glow breathes; the sprig sits before the words */
 @keyframes dssLilyHintBreath { 0%, 100% { box-shadow: 0 0 14px rgba(150,220,130,0.35), 0 2px 10px rgba(0,0,0,0.5); } 50% { box-shadow: 0 0 26px rgba(170,235,150,0.7), 0 2px 10px rgba(0,0,0,0.5); } }
@@ -82173,6 +82192,8 @@ body:has(.dss-room-card[aria-hidden="false"]) .dss-hint-stack .dss-hint-slip:not
 [data-endgame="black"] .ending-switchboard { opacity:.72; filter:drop-shadow(0 0 8px #91a9c122); }
 [data-endgame="white"] .plus-ultra-fade,
 [data-endgame="black"] .plus-ultra-fade { letter-spacing:.16em; margin-top:1.2em; }
+/* 2026-11-11 polish run: the ending pages centred their row of signals but set EXPLICIT. LIBER. EST. and PLUS. ULTRA. flush left under it; the words now sit on the same centre line */
+tw-passage[tags~="white-page"], tw-passage[tags~="black-page"] { text-align:center; }
 [data-endgame="sanctum"], [data-endgame="sitting"], [data-endgame="alt"] { line-height:1.8; }
 [data-endgame="sanctum"] > .dss-end-frieze,[data-endgame="sitting"] > .dss-end-frieze,[data-endgame="alt"] > .dss-end-frieze { max-width:600px; margin-top:1.2em; }
 [data-endgame="synthesis"] .item-box { box-shadow:none; border:1px solid rgba(200,181,137,.22); background:linear-gradient(120deg,#1c2026,#171920); margin:1em auto; }

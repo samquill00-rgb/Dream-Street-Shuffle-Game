@@ -936,7 +936,7 @@ ROOMS = [("fi", "The French"), ("ci", "The Colony Room"), ("pi", "Entering The P
 BLOCKED = """([room, name]) => { var T = window.THREE, R = window.__dssRooms[room], sp = R.spot(name); if (!sp) return 'no spot';
   var cam = new T.Vector3(); R.camera.getWorldPosition(cam);
   var vis = []; R.scene.traverse(function (m) { if (!m.isMesh) return; var q = m; while (q && q.visible) q = q.parent; if (q) return;
-    var mt = Array.isArray(m.material) ? m.material[0] : m.material; if (!mt || mt.visible === false || mt.colorWrite === false || mt.transparent || mt.depthWrite === false || mt.blending === T.AdditiveBlending) return; vis.push(m); });   /* 2026-11-11: an invisible click box (the shop ladder's) is not a wall */
+    var mt = Array.isArray(m.material) ? m.material[0] : m.material; var mine = false; for (var w0 = m; w0; w0 = w0.parent) if (w0 === sp.root) { mine = true; break; } if (!mt || (!mine && (mt.visible === false || mt.colorWrite === false)) || mt.transparent || mt.depthWrite === false || mt.blending === T.AdditiveBlending) return; vis.push(m); });   /* 2026-11-11: an invisible click box (the shop ladder's) is not a wall */
   var box = new T.Box3().setFromObject(sp.root); if (box.isEmpty()) box.setFromCenterAndSize(new T.Vector3().fromArray(sp.tgt), new T.Vector3(0.1, 0.1, 0.1));
   var pts = [], c = new T.Vector3(); box.getCenter(c); pts.push(c);
   for (var q = 0; q < 8; q++) pts.push(new T.Vector3(q & 1 ? 0.75 : 0.25, q & 2 ? 0.75 : 0.25, q & 4 ? 0.75 : 0.25).multiply(new T.Vector3().subVectors(box.max, box.min)).add(box.min));

@@ -109,8 +109,8 @@ AUDIO_EMBEDS = [
 # replaced with base64 data URIs of the source PNG. Means the game works from
 # file:// or anywhere, and an asset can't go 404 because it's part of the HTML.
 IMAGE_EMBEDS = [
-    ("__DSS_COIN_HEADS_DATA_URI__", "coin-heads.svg", "image/svg+xml"),  # 2026-09-11: Sam's face PNG set into the struck vector frame; coin-heads.png stays on disk
-    ("__DSS_COIN_TAILS_DATA_URI__", "coin-tails.svg", "image/svg+xml"),  # 2026-09-11: vector relief reverse; coin-tails.png is the old Google-sourced quill, kept on disk
+    ("__DSS_COIN_HEADS_DATA_URI__", "coin-heads-relief.webp", "image/webp"),  # 2026-11-11 (Sam, note 1: "a relic from the old versions"): a Cycles relief, patina heads (tools_coin/: prep_heights.py, coin_render.py); the svg stays on disk. Was:  # 2026-09-11: Sam's face PNG set into the struck vector frame; coin-heads.png stays on disk
+    ("__DSS_COIN_TAILS_DATA_URI__", "coin-tails-relief.webp", "image/webp"),  # 2026-11-11: the relief reverse, same render. Was:  # 2026-09-11: vector relief reverse; coin-tails.png is the old Google-sourced quill, kept on disk
 ]
 
 # ============================================================

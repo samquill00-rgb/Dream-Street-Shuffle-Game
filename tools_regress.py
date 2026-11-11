@@ -840,7 +840,7 @@ def _(r):
     res = r.js("() => { var w = document.querySelector('.dss-carthage-pyre-art'); if (!w) return 'no pyre art'; var im = w.querySelector('img'), cv = w.querySelector('canvas.dss-pyre-canvas'); if (!im || !im.naturalWidth || !/carthage-pyre\\.jpg/.test(im.src)) return 'the pyre plate did not load'; if (!cv || !cv.width) return 'no fire canvas'; var d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, lit = 0; for (var i = 3; i < d.length; i += 16) if (d[i] > 20) lit++; return lit > 50 ? 'ok' : 'the fire canvas is empty'; }")
     r.expect(res == "ok", res)
     r.go("The Interval", wait=6000)
-    res = r.js("() => { var im = document.querySelector('.dss-interval-stairs-art img'); return im && im.naturalWidth > 0 && /interval-stairwell\\.jpg/.test(im.src) ? 'ok' : 'the stairwell render did not load'; }")
+    res = r.js("() => { var im = document.querySelector('.dss-interval-stairs-art img'); return im && im.naturalWidth > 0 && /interval-stairwell-down\\.jpg/.test(im.src) ? 'ok' : 'the stairwell render did not load'; }")
     r.expect(res == "ok", res)
 
 
@@ -1155,6 +1155,21 @@ def _(r):
     r.info = "badge: %s" % seen
     r.expect(seen["Dean Street"], "the stubbed trail shows no badge on Dean Street (the check cannot see the badge)")
     r.expect(not seen["The Interval"], "the trail badge shows in the Interval")
+
+
+@check("oi-cat-prints-hung", "2026-11-11 note 10: the two cat prints of O'Flatterly's Shelves hang in the shop, in view from the Shelves close-up")
+def _(r):
+    r.go("O'Flatterly's shop", wait=10000)
+    r.room_ready("oi"); r.clear_slips(); r.clear_lore()
+    d = r.page.locator(".dss-room-dismiss:visible")
+    if d.count(): d.first.click(); r.page.wait_for_timeout(1500)
+    r.click_object("oi", "Shelves"); r.page.wait_for_timeout(2500)
+    res = r.js("""() => { var R = window.__dssRooms.oi, cam = R.camera, out = []; R.scene.updateMatrixWorld(true); R.scene.traverse(function (o) { var m = o.material, t = m && m.map; if (!o.isMesh || !t || !t.userData || !t.userData.dssPrint) return; var p = new o.position.constructor(); o.getWorldPosition(p); p.project(cam); out.push([t.userData.dssPrint, +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(3)]); }); return out; }""")
+    r.info = "prints: %s" % res
+    files = sorted(x[0] for x in res)
+    r.expect(files == ["black-cat.jpg", "tuxedo-cat.jpg"], "the shop hangs %s, not the two cat prints" % files)
+    for f, x, y, z in res:
+        r.expect(abs(x) < 0.9 and abs(y) < 0.9 and z < 1, "%s is out of the Shelves close-up's view (%.2f, %.2f)" % (f, x, y))
 
 
 @check("hub-opens-fit", "2026-11-11 dream-world run: Dean Street with both gold OPENS. lines (Coach and Halibut) fits 1440x900")

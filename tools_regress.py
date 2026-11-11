@@ -1096,6 +1096,84 @@ def play_on(r, until, steps=60):
     raise Fail("did not get there in %d pages" % steps)
 
 
+@check("paperback-lore-again", "2026-11-11 note 5: the French's orange paperback still offers its LORE after it has been read once in this browser")
+def _(r):
+    r.go("The French", wait=9000)
+    r.room_ready("fi"); r.clear_slips(); r.clear_lore()
+    over = "() => { var o = document.getElementById('dss-lore-overlay'); return !!o && getComputedStyle(o).display !== 'none' && /CHARIOTS/i.test(o.innerText); }"
+    r.click_object("fi", "An orange paperback"); r.page.wait_for_timeout(1500)
+    r.page.locator(".fi-action:visible", has_text="Go on").first.click(timeout=5000)
+    r.wait_for(over, 6000, "the lore to open from Go on")
+    r.clear_lore(); r.page.wait_for_timeout(2500)
+    if r.js("() => window.__dssRooms.fi.mode()") == "inspect":
+        r.back_click("fi"); r.page.wait_for_timeout(2000)
+    r.click_object("fi", "An orange paperback"); r.page.wait_for_timeout(1500)
+    btns = r.js("() => [].map.call(document.querySelectorAll('.fi-action'), function (b) { return b.textContent.trim(); }).filter(Boolean)")
+    r.info = "second look: %s" % btns
+    lore = [t for t in btns if "LORE" in t.upper()]
+    r.expect(lore, "the read paperback's card offers no LORE (buttons: %s)" % btns)
+    r.page.locator(".fi-action:visible", has_text="LORE").first.click(timeout=5000)
+    r.wait_for(over, 6000, "the lore to open again from the paperback")
+
+
+@check("glass-smash-procedural", "2026-11-11 note 6: the Empty Glass smash is the old procedural crash, not the recorded glassHeavy take (a beep)")
+def _(r):
+    # the swap sits inside the audio closure (and dssAudio's export is wrapped again), so read the build itself
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), HTML.replace("%20", " ")), encoding="utf-8").read()
+    r.expect(re.search(r"glassSmash\s*=\s*_sfxSwap\(", src) is None, "glassSmash is swapped for a recorded take again")
+    r.expect("function glassSmash()" in src, "the procedural glassSmash is gone")
+
+
+@check("loading-not-pink", "2026-11-11 note 7: the 3D rooms' loading line is grey, not the draft pink")
+def _(r):
+    r.go("The French", wait=3000)
+    cols = r.js("""() => { var made = null, line = document.getElementById('dss-load-line'); if (!line) { line = made = document.createElement('div'); line.id = 'dss-load-line'; line.innerHTML = '<div class="dss-load-text">loading</div><div class="dss-load-bar"><i></i></div>'; document.body.appendChild(line); }
+      var t = getComputedStyle(line.querySelector('.dss-load-text')).color, b = getComputedStyle(line.querySelector('.dss-load-bar i')).backgroundColor; if (made) made.remove(); return [t, b]; }""")
+    r.info = "text %s, bar %s" % tuple(cols)
+    for c in cols:
+        m = [float(x) for x in re.findall(r"[\d.]+", c)[:3]]
+        r.expect(not (m[0] > m[1] + 50), "the loading line is still pink-red (%s)" % c)
+
+
+@check("belletrist-no-bell", "2026-11-11 note 8: looking at The Belletrist in the Pillars does not ring the shop bell ('bell' inside his name)")
+def _(r):
+    r.go("Dean Street", wait=5000)
+    got = r.js("() => [window.dssAudio.spotSound('The Belletrist') || '', window.dssAudio.spotSound('A shop bell') || '']")
+    r.info = "Belletrist -> %r, a shop bell -> %r" % tuple(got)
+    r.expect(got[0] != "bell", "The Belletrist still rings the bell")
+    r.expect(got[1] == "bell", "a real bell no longer rings (%r)" % got[1])
+
+
+@check("interval-no-trail-badge", "2026-11-11 note 11: the key trail badge does not show in the Interval (it does on Dean Street)")
+def _(r):
+    STUB = "() => { window.dssVoices = window.dssVoices || {}; window.dssVoices.activeTrail = function () { return { key: 'cocaine', world: 'himalayas', step: 0, of: 3, room: 'the French' }; }; }"
+    seen = {}
+    for pg in ("Dean Street", "The Interval"):
+        r.go(pg, wait=6000)
+        r.js(STUB); r.page.wait_for_timeout(1800)
+        seen[pg] = r.js("() => !!document.querySelector('.dss-trail-badge')")
+    r.info = "badge: %s" % seen
+    r.expect(seen["Dean Street"], "the stubbed trail shows no badge on Dean Street (the check cannot see the badge)")
+    r.expect(not seen["The Interval"], "the trail badge shows in the Interval")
+
+
+@check("hub-opens-fit", "2026-11-11 dream-world run: Dean Street with both gold OPENS. lines (Coach and Halibut) fits 1440x900")
+def _(r):
+    r.go("nazca", wait=10000)
+    for t in ["STEP DOWN FROM THE BUS", "Out onto the pampa", "Turn back from the heat", "Dean Street"]:
+        r.clear_lore(); r.clear_slips()
+        o = [x for x in r.js(CLICKABLES) if x["t"].lower().startswith(t.lower())]
+        r.expect(o, "no %r on %s" % (t, r.pn()))
+        r.page.mouse.click(o[0]["x"], o[0]["y"]); r.page.wait_for_timeout(3500)
+    r.page.wait_for_timeout(5000); r.clear_lore(); r.clear_slips(); r.clear_lore(); r.page.wait_for_timeout(1500)
+    r.expect(r.pn() == "Dean Street", "the turn-back did not reach Dean Street (on %s)" % r.pn())
+    n = r.js("() => document.querySelectorAll('tw-passage .haunt-opens').length")
+    r.expect(n == 2, "expected the two OPENS. lines on Dean Street, found %d" % n)
+    over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
+    r.info = "two OPENS. lines, over %d px" % over
+    r.expect(over <= 0, "Dean Street with two OPENS. lines scrolls %d px at 1440x900" % over)
+
+
 def walk_into(r, door):
     """Stand next to a map door and walk onto it with the on-screen d-pad, as a player would."""
     d = r.js("(id) => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === id; })[0]; return d ? { c: d.c, r: d.r, fc: d.fc, fr: d.fr } : null; }", door)

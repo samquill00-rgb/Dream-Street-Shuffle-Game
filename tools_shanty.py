@@ -1,7 +1,7 @@
 # Sam's "Drunken sailor" (four-part harmony, recorded dry), 2026-11-11, for the Pillars approach: heard from the street, coming out of the pub.
 # python3 tools_shanty.py  -> pillars-shanty.m4a. Original kept in shanty-originals/. Needs ffmpeg (aac_at). Stdlib only.
 # Only the first two lines (Sam, 2026-11-11: "just says 'what shall we do with a drunk sailor' twice and don't continue"): the take is cut
-# at 8.5 s, the breath after the second "sailor" (the song runs in 1.95 s bars from 0.45 s; the dip there is -36 dB), so the room rings out after it.
+# at 6.66 s, the breath after the second "sailor" (-39 dB at 6.62), so the room rings out after it. (8.5 s caught the third line: Sam, same night.)
 # The dry take is given a panelled bar room (a synthetic 1.75 s decay), and the top rolled off at 3.2 kHz as if through the door and glass.
 import subprocess, re, wave, array, math, random, os
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -27,8 +27,8 @@ w.writeframes(array.array("h", [int(x / pk * 32000) for x in ir]).tobytes()); w.
 
 wet = os.path.join(TMP, "wet.wav")
 subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", SRC, "-i", irp, "-filter_complex",
-    "[0:a]aresample=48000,atrim=end=8.5,afade=t=out:st=8.3:d=0.2,apad=pad_dur=2.5[d];[d]asplit[a][b];[a][1:a]afir=dry=10:wet=10[r];[b][r]amix=inputs=2:weights='0.5 0.6':normalize=0,"
-    "lowpass=f=3200,highpass=f=90,afade=t=out:st=9.8:d=1.2", "-ac", "2", wet], check=True)
+    "[0:a]aresample=48000,atrim=end=6.66,afade=t=out:st=6.52:d=0.14,apad=pad_dur=2.6[d];[d]asplit[a][b];[a][1:a]afir=dry=10:wet=10[r];[b][r]amix=inputs=2:weights='0.5 0.6':normalize=0,"
+    "lowpass=f=3200,highpass=f=90,afade=t=out:st=8.0:d=1.2", "-ac", "2", wet], check=True)
 gain = -29.9 - lufs(wet)                          # the door clips' level; the game sets it low (see pillarsShanty)
 out = os.path.join(HERE, "pillars-shanty.m4a")
 subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", wet, "-af", "volume=%.2fdB" % gain,

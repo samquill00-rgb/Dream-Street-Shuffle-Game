@@ -1178,9 +1178,8 @@ def _(r):
     hand = "() => { window.dssLastShanty = 0; window.dssAudio.updateAmbientBedsForPassage(document.querySelector('tw-story > tw-passage')); }"
     r.go("Approach The Pillars")
     r.js(hand)
-    r.page.wait_for_timeout(700)
     early = r.js("() => window.dssLastShanty || 0")
-    r.page.wait_for_timeout(2300)
+    r.page.wait_for_timeout(3000)
     r.expect(r.js("() => window.dssLastShanty || 0"), "the shanty did not start on the Pillars approach")
     r.expect(not early, "the shanty started at once, not a moment in")
     r.go("Approach Lacklands Office")

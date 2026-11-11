@@ -22,7 +22,7 @@ Two kinds of check:
 Setup, once: python3 -m venv ~/.dss-regress/venv && ~/.dss-regress/venv/bin/pip install playwright
 (the Chrome for Testing it drives is already in ~/Library/Caches/ms-playwright).
 """
-import functools, glob, re, http.server, os, socketserver, sys, threading, time, traceback
+import functools, glob, math, re, http.server, os, socketserver, sys, threading, time, traceback
 from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -367,6 +367,28 @@ def _(r):
     r.page.wait_for_timeout(1500)
     t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); if (!t) return ''; var b = t.getBoundingClientRect(); return (b.right <= innerWidth && b.right > innerWidth - 420 && b.top > 60 && b.top < 320 ? 'in ' : 'out ') + t.textContent; }")
     r.expect(t.startswith("in ") and "THE HIMALAYAS TRAIL" in t and "Pillars of Hercules" in t, "the trail badge is missing, wrong or off its corner (%r)" % t)
+
+
+@check("trail-compass", "2026-11-11 note 9: the trail badge is a compass whose hand points across the Soho map to the next step's door")
+def _(r):
+    r.go("Dean Street", wait=5000)
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
+    r.page.wait_for_timeout(1500)
+    r.expect(r.js("() => !!document.querySelector('.dss-trail-badge .dss-compass-hand')"), "the trail badge has no compass")
+    door = r.js("() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'pillars'; })[0]; return [d.fc, d.fr]; }")
+    got = []
+    for spot in ([19, 30], [43, 30], [30, 11]):
+        ok = r.js("([c, r0]) => { for (var dc = 0; dc < 4; dc++) for (var s = -1; s <= 1; s += 2) if (window.__dssSohoTeleport(c + dc * s, r0)) return [c + dc * s, r0]; return null; }", spot)
+        r.expect(ok, "could not stand at %s" % spot)
+        if not ok: return
+        r.page.wait_for_timeout(1400)
+        ang = r.js("() => { var m = new DOMMatrix(getComputedStyle(document.querySelector('.dss-trail-badge .dss-compass-hand')).transform); return Math.atan2(m.b, m.a) * 180 / Math.PI; }")
+        want = math.degrees(math.atan2(door[0] - ok[0], -(door[1] - ok[1])))
+        off = abs(((ang - want) + 540) % 360 - 180)
+        got.append("%s: %.0f (want %.0f)" % (ok, ang, want))
+        r.expect(off < 12, "the compass points %.0f degrees off the Pillars door from %s" % (off, ok))
+    r.info = "; ".join(got)
+    r.page.locator(".dss-trail-badge").screenshot(path=os.path.join(SHOTS, "trail-compass.png"))
 
 
 @check("trail-picks-up-part-way", "2026-11-09 Sam: a trail can be picked up at any step (the cellar starts two of them)")
@@ -1164,6 +1186,46 @@ def _(r):
     r.expect(files == ["black-cat.jpg", "tuxedo-cat.jpg"], "the shop hangs %s, not the two cat prints" % files)
     for f, x, y, z in res:
         r.expect(abs(x) < 0.9 and abs(y) < 0.9 and z < 1, "%s is out of the Shelves close-up's view (%.2f, %.2f)" % (f, x, y))
+
+
+@check("flagging-chippy-open", "2026-11-11 note 8: Flagging? offers the chippy only when Dean Street has its door open (low SOBRIETY alone opens the doorway first)")
+def _(r):
+    scratch_passage(r, "T-flag", '(set: $returns to 3)(set: $confidence to 70)(set: $sobriety to 30)(set: $hadChippy to false)(set: $hadBreather to false)[[Walk on|Dean Street]]')
+    r.go("T-flag", wait=4000)
+    r.page.wait_for_timeout(2500)   # the meters' rising numbers sit over the link for a moment
+    r.clear_slips(); r.page.wait_for_timeout(800); r.clear_slips()   # the MORALE / SOBRIETY primer slips block the page
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /Walk on/.test(x.textContent); })[0]; if (l) l.click(); }")
+    r.page.wait_for_timeout(5000)
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    r.expect(r.pn() == "Dean Street", "the walk on did not reach Dean Street (on %s; page: %r)" % (r.pn(), r.js("() => document.body.innerText.slice(0, 300)")))
+    box = r.js("() => { var b = document.querySelector('tw-passage .flag-next'); return b ? b.innerText : ''; }")
+    links = r.js(HUB_LINKS)
+    r.info = "box: %r; links: %s" % (box, [l for l in links if re.search("Halibut|doorway", l, re.I)])
+    r.expect(box, "no Flagging? box with SOBRIETY at 30")
+    chippy_open = any(re.search("Halibut", l) for l in links)
+    r.expect(chippy_open or "chippy" not in box.lower(), "Flagging? offers the chippy while Dean Street has no way to it")
+
+
+@check("where-next-no-gate-line", "2026-11-11 note 1: Where next? keeps quiet about Centre Point until its gate is open")
+def _(r):
+    scratch_passage(r, "T-wn", '(set: $returns to 3)(set: $knowsCecilCourt to true)(set: $metCritic to true)(set: $knowsAboutPage to true)(set: $hasMissingPage to true)(set: $returnedPage to true)(set: $inisToldOfPillars to true)(set: $nightAheadPart2Shown to true)[[Walk on|Dean Street]]')
+    r.go("T-wn", wait=4000)
+    r.page.wait_for_timeout(2500); r.clear_slips(); r.page.wait_for_timeout(800); r.clear_slips()
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /Walk on/.test(x.textContent); })[0]; if (l) l.click(); }")
+    r.page.wait_for_timeout(5000); r.clear_lore(); r.clear_slips(); r.clear_lore()
+    r.expect(r.pn() == "Dean Street", "the walk on did not reach Dean Street (on %s)" % r.pn())
+    t = r.js("() => [].map.call(document.querySelectorAll('tw-passage .where-next'), function (b) { return b.innerText; }).join(' | ')")
+    r.info = "where next: %r" % t
+    r.expect("will not open" not in t and "Centre Point" not in t, "Where next? spells out the Centre Point gate before it is open")
+
+
+@check("title-no-save-note", "2026-11-11 note 6: the Title carries no instruction about saving")
+def _(r):
+    r.go("Title", wait=14000)
+    t = r.js("() => (document.querySelector('tw-passage') || document.body).innerText")
+    r.expect("saves itself" not in t and "come back again" not in t, "the Title still tells you how saving works")
+    r.expect(re.search(r"BEGIN", t, re.I), "the Title did not render (no BEGIN)")
+    r.info = "no save note"
 
 
 @check("fi-beret-cat", "2026-11-11 note 4: the French's beret cat hangs left of the dog, the biggest frame, in sepia and in the Photographs close-up; no print tray")

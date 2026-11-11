@@ -848,6 +848,7 @@ window.dssAudio = (function() {
   function isMuted() { return _muted; }
   function setMuted(b) {
     _muted = DSS_SOUND_OFF ? true : !!b;
+    if (_muted && _pp) { try { pubPass(null, 0.1); } catch(e) {} } /* 2026-11-11: the pub walk-by loop */
     try { if (!DSS_SOUND_OFF) localStorage.setItem('dssMuted2', _muted ? '1' : '0'); } catch(e) {}
     var ac = ctx; // Use existing context only — don't force-create one to mute.
     if (ac) {
@@ -3433,8 +3434,37 @@ window.dssAudio = (function() {
     var f = Math.max(0, Math.min(1, 1 - tiles / 7));
     try { var t = ac.currentTime; me.g.gain.cancelScheduledValues(t); me.g.gain.setValueAtTime(me.g.gain.value, t); me.g.gain.linearRampToValueAtTime(Math.max(0.0001, me.base * f), t + 0.25); } catch(e) {}
   }
+  /* 2026-11-11 (Sam: "when you walk past a venue that is open which is a pub or club or bar but also you don't enter it, it should fade in
+     and out"): his pub walk-by (pub-pass-loop.m4a, 10.6 s seamless, levelled to the door clips) plays while the walker is near an open pub,
+     club or bar on the Soho map. The map sends the distance in tiles to the nearest one after each step: full on its step (1 tile), silent
+     by six. Going in fades it under the door clip; any page change fades it. The door you just came out of is left to its leave clip. */
+  var PUB_PASS_URL = '__DSS_PUB_PASS_DATA_URI__', _pp = null;
+  function pubPass(tiles, fadeSecs) {
+    var f = tiles == null ? 0 : Math.max(0, Math.min(1, 1 - (tiles - 1) / 5));
+    var target = _muted ? 0 : 0.22 * f * f;
+    window.dssPubPass = target; /* debug/test marker */
+    if (!_pp && target <= 0.0005) return;
+    var ac = getCtx(); if (!ac) return;
+    if (!_pp) {
+      var me = _pp = { g: ac.createGain(), src: null, stopT: null };
+      me.g.gain.value = 0; me.g.connect(ac.destination);
+      _sample(PUB_PASS_URL, function(buf) {
+        if (_pp !== me || me.src) return;
+        var ac2 = getCtx(), src = ac2.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(me.g);
+        src.start(ac2.currentTime, Math.random() * buf.duration); me.src = src;
+      });
+    }
+    var t = ac.currentTime, g = _pp.g.gain, ramp = fadeSecs || 0.6;
+    try { g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(Math.max(0.0001, target), t + ramp); } catch(e) {}
+    if (_pp.stopT) { clearTimeout(_pp.stopT); _pp.stopT = null; }
+    if (target <= 0.0005) {
+      var gone = _pp;
+      gone.stopT = setTimeout(function() { if (_pp !== gone) return; _pp = null; try { gone.src && gone.src.stop(); } catch(e) {} try { gone.g.disconnect(); } catch(e) {} }, ramp * 1000 + 100);
+    }
+  }
   function _transitionForPassage(passageNode) {
     if (!passageNode) return;
+    if (_pp) pubPass(null, 0.35);
     var tags = (passageNode.getAttribute('tags') || '').split(/\s+/).filter(Boolean);
     var venue = null, street = false;
     for (var i = 0; i < tags.length; i++) {
@@ -5354,7 +5384,7 @@ window.dssAudio = (function() {
     // Venue ambient beds
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
-    mapFootstep: mapFootstep, transitionDistance: transitionDistance, mapCab: mapCab, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
+    mapFootstep: mapFootstep, transitionDistance: transitionDistance, mapCab: mapCab, pubPass: pubPass, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
     scoreCue: scoreCue, _scoreState: function(){ var v=_scSt.voice; return { cue:_scSt.cue, voice: v ? { cue:v.cue, dead:v.dead, its:v.its.map(function(i){ return [i.off0, i.t0, +i.g.gain.value.toFixed(2), +i.h.gain.value.toFixed(2)]; }) } : null, bed: (function(b){ return b && b.gain ? +b.gain.gain.value.toFixed(2) : null; })(findBedByLabel('pyramid-music')), now: getCtx().currentTime }; },
     startBed: startBedByLabel, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel,
     prewarmBed: prewarmBedByLabel,
@@ -7404,6 +7434,21 @@ function init(container) {
   var beatText = hubFlag('beat'); if (beatText) S.beat = { text: beatText, t: Math.max(270, 60 + beatText.length * 5) };
   refreshBar();
 
+  /* 2026-11-11 (Sam): walking past an open pub, club or bar; the distance to the nearest goes to dssAudio.pubPass. The door you came
+     out of stays quiet (its leave clip is playing) until you have been seven tiles from it. */
+  var PUB_DOORS = ['french', 'colony', 'ronnies', 'coach', 'pillars', 'trishas'], pubQuiet = null;
+  if (spawnDoor) PUB_DOORS.forEach(function(id) { var d = doorById(id); if (d && d.fc === spawnDoor.c && d.fr === spawnDoor.r) pubQuiet = id; });
+  function pubNear() {
+    if (!(window.dssAudio && window.dssAudio.pubPass)) return;
+    var best = null;
+    PUB_DOORS.forEach(function(id) {
+      var d = doorById(id); if (!d || !doors[id] || doors[id].status !== 'open') return;
+      var n = Math.abs(S.c - d.c) + Math.abs(S.r - d.r);
+      if (id === pubQuiet) { if (n >= 7) pubQuiet = null; else return; }
+      if (best == null || n < best) best = n;
+    });
+    try { window.dssAudio.pubPass(best); } catch(e) {}
+  }
   function enter(door) {
     // arriving where a slip directed you puts the directions away
     if (window.dssDirections) { var dl = window.dssDirections.get(); if (dl && dl.split(',').map(function(v) { return v.trim(); }).indexOf(door.id) >= 0) window.dssDirections.set(''); }
@@ -7570,6 +7615,7 @@ function init(container) {
         // the trace (polish loop 2026-09-23): each step leaves a pale print on the wet pavement that the rain takes back over seven seconds
         S.stepK++; S.trail.push({ x: S.px + 8, y: S.py + 15, t: S.t, f: S.facing, k: S.stepK }); if (S.trail.length > 28) S.trail.shift(); routeStep();
         if (window.dssAudio && window.dssAudio.mapFootstep) { try { window.dssAudio.mapFootstep(); } catch(e) {} }
+        pubNear(); /* 2026-11-11: the pub walk-by */
         if (spawnDoor && window.dssAudio && window.dssAudio.transitionDistance) { try { window.dssAudio.transitionDistance(Math.abs(S.c - spawnDoor.c) + Math.abs(S.r - spawnDoor.r)); } catch(e) {} } /* 2026-10-21 (Sam): the pub heard from outside fades with the walk from its door */
         var here = doorAt(S.c, S.r);
         if (here && here.spot && doors[here.id].status === 'open' && !/^dw/.test(here.id)) { enter(here); } /* 2026-10-29 (Sam: walking past a doorway should not stop you in it; "you should have to actively press to enter it in order to piss or vomit"): a doorway waits for its button, E or Enter */

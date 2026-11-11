@@ -91,6 +91,7 @@ AUDIO_EMBEDS = [
     ("__DSS_STREET_WET_DATA_URI__",  "street-wet-loop.m4a",                            "audio/mp4"),   # under the street bed on outdoor pages
     ("__DSS_LACKLAND_BELL_DATA_URI__", "lackland-doorbell.m4a",                        "audio/mp4"),   # Lackland's door, Frith Street
     ("__DSS_LACKLAND_STEPS_DATA_URI__", "lackland-steps-out.m4a",                      "audio/mp4"),   # walking off from his door
+    ("__DSS_PUB_PASS_DATA_URI__",    "pub-pass-loop.m4a",                              "audio/mp4"),   # walking past an open pub, club or bar on the Soho map
     ("__DSS_MAP_CAB_DATA_URI__",     "map-cab-wet.m4a",                                "audio/mp4"),   # the cab on the Soho map, and the window spot in rooms
     # 2026-10-23: CC0 sounds from OpenGameArt (SOUND-SOURCES.md), cut in the session scratchpad
     ("__DSS_DOORWAY_DROPS_DATA_URI__", "doorway-piss.m4a",                             "audio/mp4"),   # Sam's recording (2026-11-02): one 30 s stream, each doorway starts at its own point; was doorway-drops.m4a ("Water Drops", CeoxBlackj)

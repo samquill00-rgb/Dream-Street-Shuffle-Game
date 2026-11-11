@@ -29,7 +29,7 @@ grep -o '<tw-passagedata[^>]*name="Dean Street"[^>]*' "Dream Street Shuffle.html
 4. Edit with `Edit` tool — never alter his creative text.
 5. After a loop of edits: `python3 sync_html.py` from the workspace folder (uses the bash tool).
 6. Run the regression player: `~/.dss-regress/venv/bin/python tools_regress.py` (headless and muted, about 20 minutes for everything; a name filters, e.g. `french` or `room-ti`). Never call a fix done while a check fails, and report what it does NOT cover.
-7. Tell him "synced, commit when ready." **Never run git commands.**
+7. Commit the finished work to `main` with a plain message (since 2026-11-11, Sam: "Yes you commit"). **Never push**: Dr Quill pushes himself (an earlier push from here broke things).
 
 ## Regression player (since 2026-11-07)
 
@@ -37,7 +37,7 @@ grep -o '<tw-passagedata[^>]*name="Dean Street"[^>]*' "Dream Street Shuffle.html
 
 ## Critical rules
 
-- **NO git commands.** Don't `git add`, `commit`, `push`. Dr Quill handles all commits via GitHub Desktop.
+- **Commit, never push.** Since 2026-11-11 Claude commits finished work (stage only the files the work changed; never commit preview or scratch copies). No `push`, no branch switching, no history rewriting (`reset`, `rebase`, `amend`, force anything). Dr Quill pushes from GitHub Desktop.
 - **Don't alter his creative text.** Verses keep their `<br>` line breaks. Prose changes only when he quotes them.
 - **`HANDOFF*.md` is gitignored** — safe to write.
 - **Be token-efficient.** Targeted Greps + partial Reads. Don't re-read files already in context.

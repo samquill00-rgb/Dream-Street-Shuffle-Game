@@ -1204,6 +1204,18 @@ def _(r):
     r.expect(over <= 0, "Dean Street with two OPENS. lines scrolls %d px at 1440x900" % over)
 
 
+def pub_pass_at(r, tile, way):
+    """Stand on a tile, take one step with the d-pad, and read the pub walk-by level the map asked for."""
+    r.js("() => { window.dssPubPass = null; }")
+    r.expect(r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", list(tile)), "tile %s is not walkable" % (tile,))
+    r.page.wait_for_timeout(400)
+    r.js("""(way) => { var b = document.querySelector('[data-dir="' + way + '"]'); if (!b) return;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, isPrimary: true }));
+      setTimeout(function () { b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, isPrimary: true })); }, 150); }""", way)
+    r.page.wait_for_timeout(900)
+    return r.js("() => window.dssPubPass")
+
+
 def walk_into(r, door):
     """Stand next to a map door and walk onto it with the on-screen d-pad, as a player would."""
     d = r.js("(id) => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === id; })[0]; return d ? { c: d.c, r: d.r, fc: d.fc, fr: d.fr } : null; }", door)
@@ -1248,7 +1260,7 @@ def _(r):
     r.expect(not bad, "; ".join(bad))
 
 
-@check("hub-second-visit", "the second Dean Street (after the poet, LILY and Name Your Book): same, only the French offered (not the Pillars), and its door goes in")
+@check("hub-second-visit", "the second Dean Street (after the poet, LILY and Name Your Book): same, only the French offered (not the Pillars), the pub walk-by fades with it, and its door goes in")
 def _(r):
     hub_ready(r)
     r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /See who/.test(x.textContent); })[0]; if (l) l.click(); }")
@@ -1265,6 +1277,10 @@ def _(r):
     bad, links = hub_problems(r, "the second Dean Street")
     if any(re.search("Pillars|BELLETRIST", t) for t in links):
         bad.append("the Pillars are offered before the French (2026-11-07: the French first)")
+    # 2026-11-11 (Sam: the pub walk-by "should fade in and out" as you pass an open pub without going in): far, then two tiles off the French
+    far, near = pub_pass_at(r, (17, 38), "up"), pub_pass_at(r, (19, 32), "up")
+    if not (far is not None and far < 0.01 and near is not None and near > 0.05):
+        bad.append("the pub walk-by did not fade with the French (far %s, near %s)" % (far, near))
     got = walk_into(r, "french")
     if got == "Dean Street":
         bad.append("walking onto the French door did nothing")

@@ -4,7 +4,7 @@
 #   lackland-steps-out.m4a 01-footsteps     walking off from his door (transition venue-lackland>out)
 #   map-cab-wet.m4a        03-cars...       one pass on the wet road, for the cab crossing Old Compton Street on the Soho map
 #   street-wet-loop.m4a    05-street        a seamless wet-street layer under the street bed on outdoor pages
-# 02-pub-walk-by is not used yet.
+#   pub-pass-loop.m4a      02-pub-walk-by   the pub heard from the pavement as you walk past an open pub, club or bar on the Soho map
 import subprocess, re, wave, array, math, os
 HERE = os.path.dirname(os.path.abspath(__file__)); SRC = os.path.join(HERE, "street-live-originals")
 TMP = os.path.join(HERE, "street-live-originals", "_work"); os.makedirs(TMP, exist_ok=True)
@@ -32,13 +32,19 @@ encode(cut("01-footsteps.wav", os.path.join(TMP, "steps.wav"), "highpass=f=60,af
 # the cab: 3.6-10.7 s holds the clip's one clear swell (peak about 8 s); faded in over the approach, out on the tail
 encode(cut("03-cars-in-the-rain.wav", os.path.join(TMP, "cab.wav"), "highpass=f=40,afade=t=in:d=2.2,afade=t=out:st=5.5:d=1.6", ss=3.6, t=7.1), "map-cab-wet.m4a", -26.0)
 
-# the street layer: an equal-power 4 s crossfade of the tail over the head; loop length a whole number of 1024-sample AAC frames
-w = wave.open(os.path.join(SRC, "05-street-ambience.wav")); n = w.getnframes(); a = array.array("h"); a.frombytes(w.readframes(n)); w.close()
-XF = 4 * 48000; L = ((n - XF) // 1024) * 1024
-out = array.array("h", a[:L])
-for i in range(XF):
-    f = i / XF; fi, fo = math.sin(math.pi / 2 * f), math.cos(math.pi / 2 * f)
-    out[i] = max(-32768, min(32767, int(a[i] * fi + a[L + i] * fo)))
-p = os.path.join(TMP, "street.wav"); w = wave.open(p, "wb"); w.setnchannels(1); w.setsampwidth(2); w.setframerate(48000); w.writeframes(out.tobytes()); w.close()
-print("street loop", L, "samples =", L / 48000, "s,", L // 1024, "frames")
-encode(p, "street-wet-loop.m4a", -36.1)   # the level of the street bed it lies under (the-street-layered-floor.m4a)
+def loop(src_wav, name, xf_secs):
+    # an equal-power crossfade of the tail over the head; loop length a whole number of 1024-sample AAC frames
+    w = wave.open(src_wav); n = w.getnframes(); a = array.array("h"); a.frombytes(w.readframes(n)); w.close()
+    XF = int(xf_secs * 48000); L = ((n - XF) // 1024) * 1024
+    out = array.array("h", a[:L])
+    for i in range(XF):
+        f = i / XF; fi, fo = math.sin(math.pi / 2 * f), math.cos(math.pi / 2 * f)
+        out[i] = max(-32768, min(32767, int(a[i] * fi + a[L + i] * fo)))
+    p = os.path.join(TMP, name); w = wave.open(p, "wb"); w.setnchannels(1); w.setsampwidth(2); w.setframerate(48000); w.writeframes(out.tobytes()); w.close()
+    print(name, "loop", L, "samples =", round(L / 48000, 3), "s,", L // 1024, "frames")
+    return p
+
+encode(loop(os.path.join(SRC, "05-street-ambience.wav"), "street.wav", 4), "street-wet-loop.m4a", -36.1)   # the street bed's own level (the-street-layered-floor.m4a)
+# the pub: the whole clip (Sam, 2026-11-11: "a bit longer so it catches more"; was 0.5-11 s, a 7.5 s loop), high-passed so the
+# footfalls give way to the room, and levelled over 10 s windows so the walk's tail-off holds up into the loop's crossfade
+encode(loop(cut("02-pub-walk-by.wav", os.path.join(TMP, "pub.wav"), "highpass=f=130,dynaudnorm=f=500:g=21:m=6"), "publoop.wav", 3), "pub-pass-loop.m4a", -29.9)

@@ -18086,6 +18086,8 @@ function init(container) {
   function onKeyUp(e) { var dir = KEYS[e.key]; if (dir) S.held[dir] = false; }
   function onBlur() { S.held = {}; }
   document.addEventListener('keydown', onKeyDown, true);
+  function onLockScroll() { if (S.alive && S.lockY != null && S.t < S.lockT && Math.abs(window.scrollY - S.lockY) > 2) { try { window.scrollTo(0, S.lockY); } catch(e) {} } }
+  window.addEventListener('scroll', onLockScroll, { passive: true });
   document.addEventListener('keyup', onKeyUp, true);
   window.addEventListener('blur', onBlur);
   dpad.addEventListener('pointerdown', function(e){ var b = e.target.closest('button'); if (!b) return; e.preventDefault(); var dd = b.getAttribute('data-dir'); S.held[dd] = true; if (!S.moving && !S.entering && !busy()) tryStep(dd); });
@@ -18162,7 +18164,9 @@ function init(container) {
     S.t++;
     if (S.t <= 90 && applyRows()) settleLabels(); // the header lifts and the title block settles under us in the first frames: at init the map's top reads ~150px low
     if(S.t%10===0){smashButton.style.display=nearWindow()&&!busy()?'block':'none';doorwayButton.style.display=inDoorway()&&!busy()?'block':'none';}
-    if (S.lockY != null && S.t < S.lockT && Math.abs(window.scrollY - S.lockY) > 2) { try { window.scrollTo(0, S.lockY); } catch(e) {} }
+    /* 2026-11-11 (Sam, playtest note 2, the slow walk): the arrow-key scroll guard read window.scrollY here on every frame while a key
+       was held, which made the browser lay out the whole page each frame (the map's overlays move every frame); it is now a scroll
+       listener (onLockScroll), which only runs when the page has actually scrolled. */
     if (S.noteFlash && S.noteFlash.t > 0) { S.noteFlash.t--; if (S.noteFlash.t === 0) { S.noteFlash = null; refreshBar(); } }
     // it only runs down while it is in the bar and nothing covers the map (a door faced, the first-visit hint or a card such as the matches holds it back)
     if (S.beat && S.beatOn && S.beat.t > 0 && !busy()) { S.beat.t--; if (S.beat.t === 0) { S.beat = null; refreshBar(); } }
@@ -18735,6 +18739,7 @@ function init(container) {
     S.alive = false;
     if (S.raf) cancelAnimationFrame(S.raf);
     document.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('scroll', onLockScroll, { passive: true });
     document.removeEventListener('keyup', onKeyUp, true);
     window.removeEventListener('blur', onBlur);
     window.removeEventListener('resize', onResize);
@@ -24826,7 +24831,8 @@ window.dssLore = (function() {
     Array.prototype.forEach.call(document.querySelectorAll('.haunt-box .haunt-work:not([data-gw])'), function(wk) {
       wk.setAttribute('data-gw', '1');
       var pr = wk.closest('.haunt-box').querySelector('.haunt-progress');
-      if (pr && /^\s*1 of 12\b/.test(pr.textContent) && !wk.closest('.dss-ghost') && window.dssLore && window.dssLore.autoFrom && !window.dssLore.firstDone(NOTE)) firstOpen(wk.closest('.haunt-box'));
+      /* 2026-11-11 (Sam, playtest note 7: "I haven't yet seen the full explanation of the haunts. Where did that go? Bring it back after the first haunt is gathered."): this also asked dssLore.firstDone, which is kept per BROWSER, so after the first game it never opened again; the run guard in firstOpen is the once-a-game rule */
+      if (pr && /^\s*1 of 12\b/.test(pr.textContent) && !wk.closest('.dss-ghost') && window.dssInlineHint) firstOpen(wk.closest('.haunt-box'));
     });
   }
   /* 2026-10-31 (Sam, playtest notes 16 and 17: "Haunts could be explained much more. Show the actual notebook page and explain how they relate to
@@ -24849,10 +24855,35 @@ window.dssLore = (function() {
       var seenRun = null; try { seenRun = localStorage.getItem('dssGreatWorkRun'); } catch (e) {}
       var src = document.getElementById('dss-lore-greatwork'); if (!src || seenRun === String(run)) return;
       try { localStorage.setItem('dssGreatWorkRun', String(run)); } catch (e) {}
-      window.dssLore.autoFrom(NOTE, src);
-      try { var gw = Array.prototype.filter.call(document.querySelectorAll('.dss-gw-read tw-link'), function(l) { return !l.closest('.dss-ghost'); }).pop(); if (gw) gw.click(); } catch (e) {}
-      dressCard(box);
+      slips(src, box);
     }, 250);
+  }
+  /* 2026-11-11 (Sam, playtest note 3, at the Coach: "This should be in the style of the typewriter, not the major scene typewriter but like,
+     how the stuff is explained in Inis's shop"): the note comes on the paper slips (dssInlineHint), page by page, as MORALE and SOBRIETY do,
+     instead of the big lore card typing itself out. His words unchanged, in his order: the label, then each paragraph and the verse, packed
+     into pages of about 420 characters; the last page names this haunt's gate. The full card stays behind the LORE mark in the NOTEBOOK. */
+  function slips(src, box) {
+    var note = src.querySelector('.editors-note'); if (!note) return;
+    var blocks = [];
+    Array.prototype.forEach.call(note.children, function(el) {
+      if (el.classList.contains('editors-note-label')) return;
+      var t = el.classList.contains('verse') ? el.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '') : el.textContent;
+      t = t.replace(/&amp;/g, '&').replace(/[ \t]+/g, ' ').trim(); if (t) blocks.push(t);
+    });
+    var nm = ((box.querySelector('.haunt-name') || {}).textContent || '').trim().toLowerCase(), at = -1;
+    GATES.forEach(function(g, i) { if (g[1].toLowerCase() === nm) at = i; });
+    if (at >= 0) blocks.push(GATES[at][1].toUpperCase() + ' is gate ' + ROMAN[at] + ', ' + GATES[at][0] + ', of Ripley’s twelve. Your NOTEBOOK keeps the wheel on its HAUNTS page; a gate is gilded when its haunt is caught.');
+    var pages = [], cur = '';
+    blocks.forEach(function(b) { if (cur && (cur.length + b.length) > 420) { pages.push(cur); cur = ''; } cur += (cur ? '\n\n' : '') + b; });
+    if (cur) pages.push(cur);
+    pages[0] = 'THE GREAT WORK\n\n' + pages[0];
+    function show(i) {
+      if (i >= pages.length) return;
+      window.dssInlineHint(pages[i], { sticky: true, modal: true, tag: pages.length > 1 ? (i + 1) + '/' + pages.length : '', then: function() { show(i + 1); } });
+    }
+    window.__dssGreatWorkSlips = pages.length; /* debug/test marker */
+    if (window.dssTeachClaim) window.dssTeachClaim();
+    show(0);
   }
   function dressCard(box) {
     var o = document.getElementById('dss-lore-overlay'); if (!o) return;
@@ -31205,8 +31236,14 @@ function settle() { if (!lamp.isConnected) return; var h3 = measure() - lampOffs
 setTimeout(settle, 700); setTimeout(settle, 1800);
 }
 // Debounced: waits 600ms after last DOM change (after gap cleanup at 300ms)
-var deanLampObs = new MutationObserver(function() {
+var deanLampObs = new MutationObserver(function(muts) {
 if (!document.getElementById('dean-lamp-svg')) return;
+/* 2026-11-11 (Sam, playtest note 2: "The walking has become really slow in the walkable map"): the map rewrites its caption bar and
+   buttons on every step, and each change re-sized the lamp 150 ms later (five full-page measures of every element's style and box),
+   which dragged the walk to a quarter of its pace on a slower machine (profiled: half the main thread). The map lives in a fixed-size
+   box beside the lamp, so changes inside it cannot move the pole; they are ignored. */
+var mapBox = document.getElementById('soho-map-container');
+if (mapBox) { var outside = false; for (var mi = 0; mi < muts.length; mi++) { if (!mapBox.contains(muts[mi].target)) { outside = true; break; } } if (!outside) return; }
 if (sizeTimer) clearTimeout(sizeTimer);
 sizeTimer = setTimeout(sizeLamp, 150);
 });
@@ -85348,7 +85385,7 @@ Among them is your notebook, full of work. You plead with him to return it. ‘N
 (if: ($knowsAboutPage is true) and ($hasMissingPage is not true) and ($returnedPage is not true))[(set: _wn to it + (a: (a: &quot;Find page 93.&quot;, &quot;pillars&quot;)))]
 (if: ($hasMissingPage is true) and ($returnedPage is not true))[(set: _wn to it + (a: (a: &quot;Take page 93 back to INIS.&quot;, &quot;cecil&quot;)))]
 (if: ($inisToldOfPillars is true) and ($dreamKey is a string) and ($dreamKey is not &quot;&quot;))[(set: _wn to it + (a: (a: &quot;The third pillar is open.&quot;, &quot;pillars&quot;)))]&lt;!-- 2026-11-09 (Sam, note 4): a held key points the way to the third pillar --&gt;
-&lt;!-- 2026-11-05 (Sam: &quot;there needs to be some mechanism for telling you exactly what you need to find before you are able to go to centre point&quot;): THE WAY OUT, a standing line under the errands once INIS has named the third pillar: the gate at the top of the map wants the third pillar crossed (or two blackouts), and the Fetch beyond it wants the poem whole, or three of LILY&#x27;s flowers and six haunts; the line names what is still owed, with the counts, and turns into a link that lights the gate once both are met --&gt;(set: _out to &quot;&quot;)(set: _outOpen to false)(if: $inisToldOfPillars is true)[(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](set: _whole to (($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3) and ($notebook is not &quot;stolen&quot;)))(set: _lived to (($lilyCount &gt;= $needLilies) and ($haunts&#x27;s length &gt;= $needHaunts)))(set: _gate to ((($crossedThreshold is true) and ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3)) or ($blackouts &gt;= 2)))(set: _ac to 0)(if: $alba contains $alba1)[(set: _ac to _ac + 1)](if: $alba contains $alba2)[(set: _ac to _ac + 1)](if: $alba contains $alba3)[(set: _ac to _ac + 1)](if: $notebook is &quot;stolen&quot;)[(set: _ac to 0)](set: _have to &quot;You hold &quot; + (text: _ac) + (cond: _ac is 1, &quot; line&quot;, &quot; lines&quot;) + &quot; of the poem, &quot; + (text: $lilyCount) + (cond: $lilyCount is 1, &quot; flower&quot;, &quot; flowers&quot;) + &quot; and &quot; + (text: $haunts&#x27;s length) + (cond: $haunts&#x27;s length is 1, &quot; haunt.&quot;, &quot; haunts.&quot;))(if: not _gate)[(set: _out to &quot;Centre Point, your way out of the night, will not open until you have crossed the third pillar and caught all three lines of the poem. &quot; + _have)](else-if: _whole or _lived or ($blackouts &gt;= 2) or ($coachBurnt is true) or ($sanctumDone is true))[(set: _out to &quot;Centre Point, your way out of the night, is open.&quot;)(set: _outOpen to true)](else:)[(set: _out to &quot;Centre Point, your way out of the night, is open, but you will need the poem whole, or &quot; + (text: $needLilies) + &quot; of LILY’S flowers and &quot; + (text: $needHaunts) + &quot; haunts, to leave. &quot; + _have)]]&lt;!-- 2026-11-07 (GPT second pass): no &quot;Centre Point is open&quot; while the burnt hut leaves only the Coach on the map, or while low morale gives the north door to Give up on the night --&gt;&lt;span hidden&gt;(if: (($hutBurnt is true) and ($coachBurnt is not true)) or (($coachUrgent is false) and ($confidence &lt;= 5)))[(set: _out to &quot;&quot;)(set: _outOpen to false)]&lt;/span&gt;(set: _on to false)(for: each _o, ..._wn)[(if: _o&#x27;s 2nd is $whereNext)[(set: _on to true)]](if: ($whereNext is &quot;north&quot;) and _outOpen)[(set: _on to true)](unless: _on)[(set: $whereNext to &quot;&quot;)]
+&lt;!-- 2026-11-05 (Sam: &quot;there needs to be some mechanism for telling you exactly what you need to find before you are able to go to centre point&quot;): THE WAY OUT, a standing line under the errands once INIS has named the third pillar: the gate at the top of the map wants the third pillar crossed (or two blackouts), and the Fetch beyond it wants the poem whole, or three of LILY&#x27;s flowers and six haunts; the line names what is still owed, with the counts, and turns into a link that lights the gate once both are met --&gt;(set: _out to &quot;&quot;)(set: _outOpen to false)(if: $inisToldOfPillars is true)[(unless: $needLilies is a number)[(set: $needLilies to 3)](unless: $needHaunts is a number)[(set: $needHaunts to 6)](set: _whole to (($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3) and ($notebook is not &quot;stolen&quot;)))(set: _lived to (($lilyCount &gt;= $needLilies) and ($haunts&#x27;s length &gt;= $needHaunts)))(set: _gate to ((($crossedThreshold is true) and ($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3)) or ($blackouts &gt;= 2)))(set: _ac to 0)(if: $alba contains $alba1)[(set: _ac to _ac + 1)](if: $alba contains $alba2)[(set: _ac to _ac + 1)](if: $alba contains $alba3)[(set: _ac to _ac + 1)](if: $notebook is &quot;stolen&quot;)[(set: _ac to 0)](set: _have to &quot;You hold &quot; + (text: _ac) + (cond: _ac is 1, &quot; line&quot;, &quot; lines&quot;) + &quot; of the poem, &quot; + (text: $lilyCount) + (cond: $lilyCount is 1, &quot; flower&quot;, &quot; flowers&quot;) + &quot; and &quot; + (text: $haunts&#x27;s length) + (cond: $haunts&#x27;s length is 1, &quot; haunt.&quot;, &quot; haunts.&quot;))&lt;!-- 2026-11-11 (Sam, playtest note 1: &quot;The &#x27;Where next?&#x27; box gives far too much info far too soon here. The player doesn&#x27;t need to know this yet.&quot;): before the gate opens the box says nothing about Centre Point (it read &quot;Centre Point, your way out of the night, will not open until you have crossed the third pillar and caught all three lines of the poem.&quot; with the counts); the line comes only once the gate is open --&gt;(if: not _gate)[(set: _out to &quot;&quot;)](else-if: _whole or _lived or ($blackouts &gt;= 2) or ($coachBurnt is true) or ($sanctumDone is true))[(set: _out to &quot;Centre Point, your way out of the night, is open.&quot;)(set: _outOpen to true)](else:)[(set: _out to &quot;Centre Point, your way out of the night, is open, but you will need the poem whole, or &quot; + (text: $needLilies) + &quot; of LILY’S flowers and &quot; + (text: $needHaunts) + &quot; haunts, to leave. &quot; + _have)]]&lt;!-- 2026-11-07 (GPT second pass): no &quot;Centre Point is open&quot; while the burnt hut leaves only the Coach on the map, or while low morale gives the north door to Give up on the night --&gt;&lt;span hidden&gt;(if: (($hutBurnt is true) and ($coachBurnt is not true)) or (($coachUrgent is false) and ($confidence &lt;= 5)))[(set: _out to &quot;&quot;)(set: _outOpen to false)]&lt;/span&gt;(set: _on to false)(for: each _o, ..._wn)[(if: _o&#x27;s 2nd is $whereNext)[(set: _on to true)]](if: ($whereNext is &quot;north&quot;) and _outOpen)[(set: _on to true)](unless: _on)[(set: $whereNext to &quot;&quot;)]
 (if: (_wn&#x27;s length &gt; 0) or (_out is not &quot;&quot;))[&lt;div class=&quot;book-pitch where-next&quot;&gt;&lt;span class=&quot;book-pitch-q&quot;&gt;Where next?&lt;/span&gt;(for: each _o, ..._wn)[(if: _o&#x27;s 2nd is $whereNext)[&lt;span class=&quot;book-pitch-on&quot;&gt;(print: _o&#x27;s 1st)&lt;/span&gt;](else:)[&lt;span class=&quot;book-pitch-opt&quot;&gt;&lt;span class=&quot;book-pitch-k&quot; hidden&gt;(print: _o&#x27;s 2nd)&lt;/span&gt;(link: _o&#x27;s 1st)[(set: $whereNext to _o&#x27;s 2nd)(replace: ?wnq)[(display: &quot;Where Next&quot;)]]&lt;/span&gt;]](if: _out is not &quot;&quot;)[&lt;div class=&quot;where-next-out&quot;&gt;(if: _outOpen)[&lt;span class=&quot;book-pitch-opt&quot;&gt;&lt;span class=&quot;book-pitch-k&quot; hidden&gt;north&lt;/span&gt;(link: _out)[(set: $whereNext to &quot;north&quot;)(replace: ?wnq)[(display: &quot;Where Next&quot;)]]&lt;/span&gt;](else:)[(print: _out)]&lt;/div&gt;]&lt;/div&gt;&lt;span class=&quot;dss-hub-flag&quot; data-k=&quot;wherenext&quot; hidden&gt;(print: $whereNext)&lt;/span&gt;&lt;script&gt;(function(){ var fs = document.querySelectorAll(&#x27;tw-passage .dss-hub-flag[data-k=&quot;wherenext&quot;]&#x27;), id = &#x27;&#x27;; for (var i = 0; i &lt; fs.length; i++) { if (!fs[i].closest(&#x27;.dss-ghost&#x27;)) id = fs[i].textContent.trim(); } if (id &amp;&amp; window.dssWhereNextGo) window.dssWhereNextGo(id); })();&lt;/script&gt;]
 }</tw-passagedata>
 <tw-passagedata pid="263" name="Flagging Next" tags="system" position="3050,3050" size="100,100">{&lt;!-- 2026-11-09 (Sam, playtest note 14: &quot;there should be a third box in the style of who next and where next which says chippy, a doorway&quot;): while you are flagging (the same test as the low-stat slips, without their once-only flags), a box beside the others offers the chippy and a doorway until each is used; a pick lights the way on the map like Where Next --&gt;
@@ -85600,6 +85637,9 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
 
 
 

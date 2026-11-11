@@ -1172,6 +1172,40 @@ def _(r):
         r.expect(abs(x) < 0.9 and abs(y) < 0.9 and z < 1, "%s is out of the Shelves close-up's view (%.2f, %.2f)" % (f, x, y))
 
 
+@check("great-work-slips", "2026-11-11 notes 3 and 7: the night's first haunt brings THE GREAT WORK on the paper slips (not the big typed card), each new game")
+def _(r):
+    r.go("O'Flatterly's quest", wait=6000)
+    r.clear_slips(); r.clear_lore()
+    r.page.locator(".dss-room-veil tw-link", has_text="Not tonight.").first.click()
+    got = None
+    for _ in range(60):
+        got = r.js("""() => { var s = [].filter.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /THE GREAT WORK/.test(e.textContent); })[0];
+          return { slip: !!s, card: !!document.querySelector('#dss-lore-overlay.dss-gw-card'), pages: window.__dssGreatWorkSlips || 0, pn: (document.getElementById('dss-pn') || {}).textContent }; }""")
+        if got["slip"] or got["card"]: break
+        r.page.wait_for_timeout(500)
+    r.info = "%s" % got
+    r.expect(not got["card"], "THE GREAT WORK opened as the big lore card")
+    r.expect(got["slip"], "THE GREAT WORK never came on a slip after the first haunt (on %s)" % got["pn"])
+
+
+@check("map-walk-pace", "2026-11-11 (Sam, playtest note 2: the walking had become really slow): with the CPU slowed 6x, holding an arrow still walks at full pace")
+def _(r):
+    hub_ready(r)
+    cdp = r.page.context.new_cdp_session(r.page)
+    cdp.send("Emulation.setCPUThrottlingRate", {"rate": 6})
+    try:
+        r.js("() => window.__dssSohoTeleport(17, 38)"); r.page.wait_for_timeout(600)
+        c0 = r.js("() => { var s = window.dssSohoMap.state; return [s.c, s.r]; }")
+        r.page.locator("#soho-map-container canvas").first.focus()
+        r.page.keyboard.down("ArrowUp"); r.page.wait_for_timeout(2000); r.page.keyboard.up("ArrowUp"); r.page.wait_for_timeout(400)
+        c1 = r.js("() => { var s = window.dssSohoMap.state; return [s.c, s.r]; }")
+    finally:
+        cdp.send("Emulation.setCPUThrottlingRate", {"rate": 1})
+    n = abs(c1[1] - c0[1]) + abs(c1[0] - c0[0])
+    r.info = "%d tiles in 2 s at 6x slower CPU (full pace is 8 or 9)" % n
+    r.expect(n >= 7, "the walk dragged: %d tiles in 2 s with the CPU slowed 6x (full pace is 8 or 9)" % n)
+
+
 @check("pillars-shanty", "2026-11-11 Sam's Drunken sailor: plays once, a moment into the Pillars approach, and not on Lackland's")
 def _(r):
     # a ?start= page is the first of the load, which the passage watcher does not see; hand it the page the way the watcher does

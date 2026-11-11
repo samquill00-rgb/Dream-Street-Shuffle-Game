@@ -1253,6 +1253,28 @@ def _(r):
         r.expect(v and abs(v[0] - v[1]) < 24, "%s: the closing words are off the signals' centre line (%r)" % (n, v))
 
 
+@check("mute-button-on-white", "2026-11-11 polish run: the mute button's dark glass showed as a flat grey block on the white pages")
+def _(r):
+    r.go("White page", wait=4000)
+    bg = r.js("() => { var b = document.getElementById('dss-mute-btn'); if (!b) return null; var m = getComputedStyle(b).backgroundColor.match(/[\\d.]+/g).map(Number); return m; }")
+    r.expect(bg and bg[0] > 200 and bg[1] > 200, "the mute button is still dark on the white page (%r)" % bg)
+
+
+@check("page-turn-no-scroll-flash", "2026-11-11 polish run: Watkins and the alba pages ran past a 1280x800 window for up to 3 s as they settled, so a scrollbar flashed on the way in")
+def _(r):
+    r.page.set_viewport_size({"width": 1280, "height": 800})
+    for dest in ("Watkins", "Alba Incomplete"):
+        scratch_passage(r, "T-turn", "[[Go on|%s]]" % dest)
+        r.go("T-turn", wait=3500)
+        r.clear_slips()
+        r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /Go on/.test(x.textContent); })[0]; if (l) l.click(); }")
+        seen = []
+        for _ in range(30):   # through the 1.6 s hold and well past it
+            r.page.wait_for_timeout(120)
+            seen.append(r.js("() => { var cs = getComputedStyle(document.documentElement); return (cs.overflowY === 'hidden' || cs.scrollbarWidth === 'none') ? 0 : Math.max(0, document.scrollingElement.scrollHeight - innerHeight); }"))   # a bar the player could see
+        r.expect(max(seen) == 0, "%s: the page could scroll while it settled (%r)" % (dest, seen))
+
+
 @check("title-no-save-note", "2026-11-11 note 6: the Title carries no instruction about saving")
 def _(r):
     r.go("Title", wait=14000)

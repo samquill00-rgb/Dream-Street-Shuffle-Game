@@ -1096,24 +1096,18 @@ def play_on(r, until, steps=60):
     raise Fail("did not get there in %d pages" % steps)
 
 
-@check("paperback-lore-again", "2026-11-11 note 5: the French's orange paperback still offers its LORE after it has been read once in this browser")
+@check("paperback-lore-again", "2026-11-11 notes 5 (twice): looking at the French's orange paperback opens its LORE by itself, on the first look and again after it has been read")
 def _(r):
     r.go("The French", wait=9000)
     r.room_ready("fi"); r.clear_slips(); r.clear_lore()
     over = "() => { var o = document.getElementById('dss-lore-overlay'); return !!o && getComputedStyle(o).display !== 'none' && /CHARIOTS/i.test(o.innerText); }"
-    r.click_object("fi", "An orange paperback"); r.page.wait_for_timeout(1500)
-    r.page.locator(".fi-action:visible", has_text="Go on").first.click(timeout=5000)
-    r.wait_for(over, 6000, "the lore to open from Go on")
-    r.clear_lore(); r.page.wait_for_timeout(2500)
-    if r.js("() => window.__dssRooms.fi.mode()") == "inspect":
-        r.back_click("fi"); r.page.wait_for_timeout(2000)
-    r.click_object("fi", "An orange paperback"); r.page.wait_for_timeout(1500)
-    btns = r.js("() => [].map.call(document.querySelectorAll('.fi-action'), function (b) { return b.textContent.trim(); }).filter(Boolean)")
-    r.info = "second look: %s" % btns
-    lore = [t for t in btns if "LORE" in t.upper()]
-    r.expect(lore, "the read paperback's card offers no LORE (buttons: %s)" % btns)
-    r.page.locator(".fi-action:visible", has_text="LORE").first.click(timeout=5000)
-    r.wait_for(over, 6000, "the lore to open again from the paperback")
+    for look in ("first", "second"):
+        r.click_object("fi", "An orange paperback")
+        r.wait_for(over, 8000, "the lore to open by itself on the %s look (nothing pressed)" % look)
+        r.clear_lore(); r.page.wait_for_timeout(2500)
+        if r.js("() => window.__dssRooms.fi.mode()") == "inspect":
+            r.back_click("fi"); r.page.wait_for_timeout(2000)
+    r.info = "opened by itself on both looks"
 
 
 @check("glass-smash-procedural", "2026-11-11 note 6: the Empty Glass smash is the old procedural crash, not the recorded glassHeavy take (a beep)")
@@ -1170,6 +1164,24 @@ def _(r):
     r.expect(files == ["black-cat.jpg", "tuxedo-cat.jpg"], "the shop hangs %s, not the two cat prints" % files)
     for f, x, y, z in res:
         r.expect(abs(x) < 0.9 and abs(y) < 0.9 and z < 1, "%s is out of the Shelves close-up's view (%.2f, %.2f)" % (f, x, y))
+
+
+@check("fi-beret-cat", "2026-11-11 note 4: the French's beret cat hangs left of the dog, the biggest frame, in sepia and in the Photographs close-up; no print tray")
+def _(r):
+    r.go("The French", wait=9000); r.room_ready("fi"); r.clear_slips(); r.clear_lore()
+    r.click_object("fi", "Photographs"); r.page.wait_for_timeout(3000)
+    r.expect(r.js("() => document.querySelectorAll('.dss-print-tray').length") == 0, "the French still offers 'Look at the prints'")
+    res = r.js("""() => { var R = window.__dssRooms.fi, cam = R.camera, out = null, dog = null; R.scene.updateMatrixWorld(true);
+      R.scene.traverse(function (o) { if (!o.isMesh) return; var t = o.material && o.material.map, p = new o.position.constructor(), s = new o.position.constructor(); o.getWorldPosition(p); o.getWorldScale(s);
+        if (t && t.userData && t.userData.dssPrint === 'beret-cat.jpg') { var q = p.clone().project(cam); out = { x: +p.x.toFixed(2), w: +(o.geometry.parameters.width * s.x).toFixed(2), sx: +q.x.toFixed(2), sy: +q.y.toFixed(2) }; } });
+      var grade = (window.dssPrints && JSON.stringify(window.dssPrints.forSpot('fi', 'Photographs'))) || ''; return { beret: out, sepia: /sepia\(\.7/.test(grade) }; }""")
+    r.info = "%s" % res
+    b = res["beret"]
+    r.expect(b, "no beret cat on the French's wall")
+    r.expect(abs(b["x"] - (-0.45)) < 0.1, "the beret cat is not in the frame left of the dog (x %.2f)" % b["x"])
+    r.expect(b["w"] > 0.5, "the beret cat is not the biggest picture (%.2f m wide)" % b["w"])
+    r.expect(abs(b["sx"]) < 0.9 and abs(b["sy"]) < 0.9, "the beret cat is out of the Photographs close-up (%.2f, %.2f)" % (b["sx"], b["sy"]))
+    r.expect(res["sepia"], "the beret cat is not graded sepia")
 
 
 @check("great-work-slips", "2026-11-11 notes 3 and 7: the night's first haunt brings THE GREAT WORK on the paper slips (not the big typed card), each new game")

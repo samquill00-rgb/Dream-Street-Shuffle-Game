@@ -283,8 +283,7 @@ def _(r):
     r.go("The French")
     r.room_ready("fi")
     r.click_object("fi", "An orange paperback")
-    r.press("Go on")
-    r.wait_for("() => !!document.querySelector('#dss-lore-overlay')", 5000, "the Chariots lore card")
+    r.wait_for("() => !!document.querySelector('#dss-lore-overlay')", 8000, "the Chariots lore card (it opens by itself since 2026-11-11 note 5)")
     r.expect("Chariots" in r.js("() => document.querySelector('#dss-lore-overlay').textContent"), "the lore card is not Chariots of the Gods?")
     r.js("() => window.dssInlineHint('REGRESSION TEST SLIP, TYPED AFTER THE LORE CARD CLOSES', { now: true })")
     r.page.wait_for_timeout(3000)
@@ -626,6 +625,7 @@ def _(r):
 def _(r):
     r.go("Lackland's Back Room", wait=9000)
     r.clear_lore(); r.clear_slips()
+    r.page.wait_for_timeout(3000); r.clear_slips(rounds=10)   # the night's first haunt brings THE GREAT WORK slips (2026-11-11), modal
     r.wait_for("() => [].some.call(document.querySelectorAll('button'), function (b) { return b.textContent === 'Look at the gun' && b.getClientRects().length; })", 15000, "the Look at the gun button")
     r.js("() => [].filter.call(document.querySelectorAll('button'), function (b) { return b.textContent === 'Look at the gun'; })[0].click()")
     r.page.wait_for_timeout(600)
@@ -936,7 +936,7 @@ ROOMS = [("fi", "The French"), ("ci", "The Colony Room"), ("pi", "Entering The P
 BLOCKED = """([room, name]) => { var T = window.THREE, R = window.__dssRooms[room], sp = R.spot(name); if (!sp) return 'no spot';
   var cam = new T.Vector3(); R.camera.getWorldPosition(cam);
   var vis = []; R.scene.traverse(function (m) { if (!m.isMesh) return; var q = m; while (q && q.visible) q = q.parent; if (q) return;
-    var mt = Array.isArray(m.material) ? m.material[0] : m.material; if (!mt || mt.transparent || mt.depthWrite === false || mt.blending === T.AdditiveBlending) return; vis.push(m); });
+    var mt = Array.isArray(m.material) ? m.material[0] : m.material; if (!mt || mt.visible === false || mt.colorWrite === false || mt.transparent || mt.depthWrite === false || mt.blending === T.AdditiveBlending) return; vis.push(m); });   /* 2026-11-11: an invisible click box (the shop ladder's) is not a wall */
   var box = new T.Box3().setFromObject(sp.root); if (box.isEmpty()) box.setFromCenterAndSize(new T.Vector3().fromArray(sp.tgt), new T.Vector3(0.1, 0.1, 0.1));
   var pts = [], c = new T.Vector3(); box.getCenter(c); pts.push(c);
   for (var q = 0; q < 8; q++) pts.push(new T.Vector3(q & 1 ? 0.75 : 0.25, q & 2 ? 0.75 : 0.25, q & 4 ? 0.75 : 0.25).multiply(new T.Vector3().subVectors(box.max, box.min)).add(box.min));
@@ -1236,7 +1236,7 @@ def _(r):
     res = r.js("""() => { var R = window.__dssRooms.fi, cam = R.camera, out = null, dog = null; R.scene.updateMatrixWorld(true);
       R.scene.traverse(function (o) { if (!o.isMesh) return; var t = o.material && o.material.map, p = new o.position.constructor(), s = new o.position.constructor(); o.getWorldPosition(p); o.getWorldScale(s);
         if (t && t.userData && t.userData.dssPrint === 'beret-cat.jpg') { var q = p.clone().project(cam); out = { x: +p.x.toFixed(2), w: +(o.geometry.parameters.width * s.x).toFixed(2), sx: +q.x.toFixed(2), sy: +q.y.toFixed(2) }; } });
-      var grade = (window.dssPrints && JSON.stringify(window.dssPrints.forSpot('fi', 'Photographs'))) || ''; return { beret: out, sepia: /sepia\(\.7/.test(grade) }; }""")
+      var grade = (window.dssPrints && JSON.stringify(window.dssPrints.forSpot('fi', 'Photographs'))) || ''; return { beret: out, sepia: /sepia\\(\\.7/.test(grade) }; }""")
     r.info = "%s" % res
     b = res["beret"]
     r.expect(b, "no beret cat on the French's wall")
@@ -1436,6 +1436,8 @@ def _(r):
     r.page.locator(".dss-room-veil tw-link", has_text="Not tonight.").first.click()
     r.wait_for("() => { var b = document.querySelector('.haunt-box:not(.dss-ghost .haunt-box)'); return b && getComputedStyle(b).display !== 'none'; }", 2500, "THE FEEDING to show on the click")
     r.expect(r.pn() == "O'Flatterly's quest", "the choice left before THE FEEDING was shown")
+    r.wait_for("() => !!window.__dssGreatWorkSlips", 8000, "THE GREAT WORK slips (the night's first haunt)")
+    r.page.wait_for_timeout(1500); r.clear_slips(rounds=10)   # 2026-11-11: the held choice goes once they are read (their click guard once swallowed it)
     r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 25000, "the choice to go through once the box had shown")
 
 

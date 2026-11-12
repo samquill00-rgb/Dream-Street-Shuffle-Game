@@ -1311,6 +1311,21 @@ def _(r):
     r.expect(not after["rooms"], "the room hook still holds gone rooms: %r" % after["rooms"])
 
 
+@check("phone-street-views-widen", "2026-11-12 phone pass (Sam: \"Yes, widen them\"): in portrait the street views showed a slot of each shopfront; they widen on tall screens and keep their own view on a laptop")
+def _(r):
+    fov = "() => { var e = (window._dssThreeRegistry || {})['ph-wrap']; return e && e.camera ? +e.camera.fov.toFixed(1) : null; }"
+    r.go("Approach The Pillars", wait=10000)
+    lap = r.js(fov)
+    r.page.set_viewport_size({"width": 390, "height": 844}); r.page.wait_for_timeout(1500)
+    ph = r.js(fov)
+    r.page.set_viewport_size({"width": 1440, "height": 900}); r.page.wait_for_timeout(1500)
+    back = r.js(fov)
+    r.info = "laptop %s, phone %s, laptop again %s" % (lap, ph, back)
+    r.expect(lap == 55.0, "the Pillars' street view is not its own 55 degrees on a laptop (%s)" % lap)
+    r.expect(ph and ph > 75, "the street view did not widen on a phone (%s)" % ph)
+    r.expect(back == 55.0, "the street view did not return to 55 degrees on a laptop (%s)" % back)
+
+
 @check("title-no-save-note", "2026-11-11 note 6: the Title carries no instruction about saving")
 def _(r):
     r.go("Title", wait=14000)

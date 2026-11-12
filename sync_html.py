@@ -469,6 +469,7 @@ html_content = html_content.replace("<body>", "<body>" + BOOT_VEIL, 1)
 # ── Preview / jump boot hook ───────────────────────────────────────────────
 # Reads the URL before Harlowe boots and, once the first passage has rendered,
 # navigates to a target passage through Harlowe's own link handler.
+#   ?start=test1..test4   opens the dev menu's test start points (2026-11-12).
 #   ?start=nazca          (himalayas, nazca, easter, pyramid, ezekiel) opens the
 #                         matching "Preview <World>" passage in the twee, which
 #                         seeds the story state and steps into that world. Any
@@ -493,7 +494,8 @@ PREVIEW_BOOT = (
     "  if (!target && q) {\n"
     "    var s = decodeURIComponent(q[1].replace(/\\+/g, ' ')).trim();\n"
     "    var WORLDS = { himalayas: 'Preview Himalayas', nazca: 'Preview Nazca', easter: 'Preview Easter Island',\n"
-    "                   pyramid: 'Preview Pyramid', ezekiel: 'Preview Ezekiel' };\n"
+    "                   pyramid: 'Preview Pyramid', ezekiel: 'Preview Ezekiel',\n"
+    "                   test1: 'Test Start 1', test2: 'Test Start 2', test3: 'Test Start 3', test4: 'Test Start 4' };\n"
     "    target = WORLDS[s.toLowerCase()] || s;\n"
     "  }\n"
     "  if (!target) return;\n"

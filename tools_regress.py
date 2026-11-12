@@ -1481,6 +1481,43 @@ def hub_problems(r, label):
     return bad, links
 
 
+TEST_STARTS = [
+    # (passage, morale, sobriety, doors that must be on Dean Street, doors that must not)
+    ("Test Start 1", 70, 70, [r"French"], [r"See who"]),
+    ("Test Start 2", 58, 52, [r"Ronnie", r"Cecil Court", r"Lackland", r"Colony Room"], [r"See who"]),   # COPPER's cellar is still to find
+    ("Test Start 3", 54, 46, [r"Pillars", r"Lackland"], [r"Ronnie", r"Visit the antiquarian", r"Colony Room"]),
+    ("Test Start 4", 48, 40, [r"Coach", r"Sholto Gooch", r"^Trisha"], [r"Go to Lackland", r"Colony Room"]),   # Trisha's stays open for its key
+]
+
+
+@check("test-start-points", "2026-11-12 (Sam, for a playtester): the dev menu's test start points build a whole night's state (stats, haunts, lilies, alba, pocket) and land on a working Dean Street")
+def _(r):
+    bad = []
+    for name, conf, sob, want, wont in TEST_STARTS:
+        r.go(name, wait=10000)
+        r.clear_lore(); r.clear_slips(); r.clear_lore()
+        if r.pn() != "Dean Street":
+            bad.append("%s landed on %r" % (name, r.pn())); continue
+        bars = r.js("() => [].map.call(document.querySelectorAll('#stat-bars-lifted .bar-fill, tw-header .bar-fill'), function (b) { return parseInt(b.style.width, 10); }).slice(0, 2)")
+        if bars != [conf, sob]:
+            bad.append("%s: bars %s, want %s" % (name, bars, [conf, sob]))
+        links = r.js(HUB_LINKS)
+        for w in want:
+            if not any(re.search(w, t) for t in links):
+                bad.append("%s: no %s door in %s" % (name, w, links))
+        for w in wont:
+            if any(re.search(w, t) for t in links):
+                bad.append("%s: %s door should be done in %s" % (name, w, links))
+        bad += [b for b in hub_problems(r, name)[0] if "The third pillar is open." not in b]   # the pocket slip's words, not a door
+    # Carthage is done on start 4 (LINE 2 seen, page back with INIS), so the Pillars door is the pub's, not the storm's: the jump has no LINE 2 in its history
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('.soho-hub-dock tw-link, tw-story tw-link'), function (e) { return !e.closest('.dss-ghost') && /^The Pillars$/.test(e.textContent.trim()); })[0]; l.click(); }")
+    r.page.wait_for_timeout(4000)
+    if r.pn() != "Approach The Pillars":
+        bad.append("Test Start 4: the Pillars door led to %r, not the pub's approach" % r.pn())
+    r.expect(not bad, "; ".join(bad))
+    r.info = "four start points land on Dean Street with their stats and doors"
+
+
 @check("hub-first-night", "the first Dean Street: fits the screen, the map draws, each hub link has a map door, the Ginger Light door goes in")
 def _(r):
     hub_ready(r)

@@ -1292,6 +1292,25 @@ def _(r):
     r.info = "; ".join(seen)
 
 
+@check("left-scenes-let-go", "2026-11-12 memory pass: a 35-minute night in one page grew from 12 to 183 MB; every room and 3D scene visited stayed in memory (resize and Escape listeners, the shared full-screen quad)")
+def _(r):
+    click = "(t) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf(t) >= 0 && !x.closest('.dss-ghost'); })[0]; if (l) { l.click(); return true; } return false; }"
+    scratch_passage(r, "T-in", "[[Go in|The French]]")
+    r.go("T-in", wait=3500); r.clear_slips()
+    r.expect(r.js(click, "Go in"), "no way into the French on the scratch page")
+    r.page.wait_for_timeout(10000); r.clear_slips(); r.clear_lore()
+    before = r.js("() => ({ pn: (document.getElementById('dss-pn') || {}).textContent, reg: Object.keys(window._dssThreeRegistry || {}), comps: (window.__dssComposers || []).length, gone: (window.__dssGone || []).length })")
+    r.expect("fi-wrap" in before["reg"] and before["comps"] >= 1 and before["gone"] >= 1, "the French did not register its scene (%r)" % before)
+    r.expect(r.js(click, "OUT ONTO THE STREET") or r.js(click, "Out onto the street"), "no way out of the French")
+    r.page.wait_for_timeout(7000)   # the page turn, then the sweep's four seconds
+    after = r.js("() => ({ pn: (document.getElementById('dss-pn') || {}).textContent, reg: Object.keys(window._dssThreeRegistry || {}).filter(function (k) { var e = window._dssThreeRegistry[k]; return !document.getElementById(k) && !(e.renderer && e.renderer.domElement && e.renderer.domElement.isConnected); }), comps: (window.__dssComposers || []).filter(function (x) { return !x.r.domElement.isConnected; }).length, gone: (window.__dssGone || []).filter(function (g) { return !g[0].isConnected; }).length, rooms: Object.keys(window.__dssRooms || {}).filter(function (k) { return !window.__dssRooms[k].wrap.isConnected; }) })")
+    r.info = "before %s; left behind %s" % (before, after)
+    r.expect("fi-wrap" not in (after["reg"] or []) and not after["reg"], "scenes no longer on the page are still held: %r" % after["reg"])
+    r.expect(after["comps"] == 0, "%d post-effects stacks of gone scenes are still held" % after["comps"])
+    r.expect(after["gone"] == 0, "%d listeners of gone room panels are still held" % after["gone"])
+    r.expect(not after["rooms"], "the room hook still holds gone rooms: %r" % after["rooms"])
+
+
 @check("title-no-save-note", "2026-11-11 note 6: the Title carries no instruction about saving")
 def _(r):
     r.go("Title", wait=14000)

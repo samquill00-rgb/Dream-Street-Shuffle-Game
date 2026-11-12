@@ -1275,6 +1275,23 @@ def _(r):
         r.expect(max(seen) == 0, "%s: the page could scroll while it settled (%r)" % (dest, seen))
 
 
+@check("phone-header-clear", "2026-11-12 phone pass: on a 390x844 phone the 145 px header hid the first typed lines of Night Ahead: LILY and the first two lines of Copper's Lair")
+def _(r):
+    r.page.set_viewport_size({"width": 390, "height": 844})
+    seen = []
+    for dest in ("Night Ahead: LILY", "Turn to Copper", "Things turn up"):
+        r.go(dest, wait=12000); r.clear_slips()
+        res = r.js("""() => { var h = document.getElementById('stat-bars-lifted'); var hb = h && h.getClientRects().length ? Math.round(h.getBoundingClientRect().bottom) : 0;
+          var box = document.querySelector('.dss-room-veil .dss-room-prose') || document.querySelector('.typewriter-page'); if (!box) return { hdr: hb, first: null };
+          var w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT, { acceptNode: function (n) { return n.nodeValue.trim() ? 1 : 3; } }), n = w.nextNode(), first = null;
+          if (n) { var rg = document.createRange(); rg.selectNodeContents(n); var rs = rg.getClientRects(); if (rs.length) first = Math.round(rs[0].top); } return { hdr: hb, first: first }; }""")
+        seen.append("%s %s" % (dest, res))
+        r.expect(res["first"] is not None, "%s: no words found on the page" % dest)
+        r.expect(res["hdr"] > 100, "%s: the header is not showing (%r)" % (dest, res))
+        r.expect(res["first"] is None or res["first"] >= res["hdr"], "%s: the first line sits under the header (%r)" % (dest, res))
+    r.info = "; ".join(seen)
+
+
 @check("title-no-save-note", "2026-11-11 note 6: the Title carries no instruction about saving")
 def _(r):
     r.go("Title", wait=14000)

@@ -2123,7 +2123,7 @@ def _(r):
     r.expect("pong-actress-warm.m4a" in html, "Pong plays the bright Actress render again")
 
 
-@check("prints-on-walls", "2026-11-13 note 16 (Sam: \"I don't like these picture gallery things at all ... on the walls in frames\"): his prints hang framed in LACKLAND's office, the cellar and the chippy, and no card carries a picture strip")
+@check("prints-on-walls", "2026-11-13 note 16 (Sam: \"I don't like these picture gallery things at all ... on the walls in frames\"): his prints hang framed in LACKLAND's office, the cellar and the chippy, and no card carries a picture strip; the Coach's and Ronnie's pictures hang together in view")
 def _(r):
     for room, passage, want, spot in (("lk", "Martin Lackland's Office", 3, "Shelves"), ("cu", "Turn to Copper", 1, "A chesterfield"), ("cf", "Chinese Fish and Chips", 2, "A menu")):
         r.go(passage, wait=9000)
@@ -2135,6 +2135,13 @@ def _(r):
         r.click_object(room, spot)
         r.page.wait_for_timeout(800)
         r.expect(r.js("() => document.querySelectorAll('.dss-print-tray, .dss-room-card button[aria-label*=\"print\" i]').length") == 0, "%s: the %s card still carries a picture strip" % (room, spot))
+    # 2026-11-13 (Sam: "Do the same for the Coach and Ronnie's"): their pictures hang together where the room's opening view shows them
+    for room, passage, name, want in (("cb", "Coach and Horses bar", "coach-wall-print", 5), ("ri", "Ronnie Scott's", "ronnie-wall-photo", 7)):
+        r.go(passage, wait=9000)
+        r.room_ready(room); r.clear_slips(); r.clear_lore()
+        got = r.js("""([room, name]) => { var R = window.__dssRooms[room], cam = R.camera, T = window.THREE, n = 0, seen = 0; R.scene.updateMatrixWorld(true); R.scene.traverse(function (o) { if (o.name !== name) return; n++; var v = new T.Vector3(); o.getWorldPosition(v); v.project(cam); if (Math.abs(v.x) < 0.95 && Math.abs(v.y) < 0.95 && v.z < 1) seen++; }); return [n, seen]; }""", [room, name])
+        r.expect(got[0] == want, "%s: %d pictures on the wall, expected %d" % (room, got[0], want))
+        r.expect(got[1] == want, "%s: only %d of its %d pictures are in the room's view" % (room, got[1], want))
 
 
 def main(argv):

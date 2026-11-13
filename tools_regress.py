@@ -621,17 +621,34 @@ def _(r):
         r.page.unroute("**/*")
 
 
-@check("lk-back-gun-card", "2026-11-09 (Sam's words): Look at the gun in LACKLAND's back room opens his line, not pink")
+@check("lk-back-gun-card", "2026-11-09 (Sam's words) + 2026-11-13 notes 21-23: the back room's modelled gun glows, a click on it flies in and shows his line in a room card; the ball rallies over the net; SECRET BACK ROOM caption; the button is not WATCH THE MATCH")
 def _(r):
     r.go("Lackland's Back Room", wait=9000)
     r.clear_lore(); r.clear_slips()
     r.page.wait_for_timeout(3000); r.clear_slips(rounds=10)   # the night's first haunt brings THE GREAT WORK slips (2026-11-11), modal
-    r.wait_for("() => [].some.call(document.querySelectorAll('button'), function (b) { return b.textContent === 'Look at the gun' && b.getClientRects().length; })", 15000, "the Look at the gun button")
-    r.js("() => [].filter.call(document.querySelectorAll('button'), function (b) { return b.textContent === 'Look at the gun'; })[0].click()")
-    r.page.wait_for_timeout(600)
-    got = r.js("() => { var d = document.querySelector('dialog[open]'); if (!d) return null; var p = d.querySelector('p'); return { t: d.innerText, c: getComputedStyle(p).color }; }")
+    r.wait_for("() => !!window.__dssBackRoomGun", 15000, "the back room gun")
+    r.page.wait_for_timeout(800)
+    labels = r.js("() => [].map.call(document.querySelectorAll('#pb-wrap button, #pb-wrap .dss-room-caption'), function (b) { return b.textContent; }).join(' | ') + ' | ' + document.body.innerText")
+    r.expect("WATCH THE MATCH" not in labels, "the arrival button still says WATCH THE MATCH above Watch the decider")
+    r.expect("SECRET BACK ROOM" in labels, "the caption is not LACKLAND'S SECRET BACK ROOM")
+    r.expect(not r.js("() => [].some.call(document.querySelectorAll('img, [src]'), function (e) { return /lackland-backroom-webley/.test(e.src || ''); })"), "the drawn Webley plane is back")
+    st = r.js("() => window.__dssBackRoomGun.state()")
+    r.expect(st["glow"] > 0.2, "the gun has no resting glow (%r)" % st)
+    zs = r.js("() => [0, .3, .6, .9, 1.2, 1.5, 1.8, 2.1].map(function (t) { return window.__dssBackRoomBall(t).z; })")
+    r.expect(min(zs) < -0.9 and max(zs) > 0.0, "the ball stays on one side of the net (%r)" % zs)
+    xy = r.js("() => window.__dssBackRoomGun.screen()")
+    r.page.mouse.click(xy["x"], xy["y"])
+    r.page.wait_for_timeout(2200)
+    st = r.js("() => window.__dssBackRoomGun.state()")
+    r.expect(st["card"] and st["zoom"] > 0.95, "a click on the gun did not fly in to it (%r)" % st)
+    got = r.js("() => { var d = document.querySelector('.dss-gun-card'); if (!d) return null; var p = d.querySelector('p'); return { t: d.innerText, c: getComputedStyle(p).color, o: getComputedStyle(d).opacity }; }")
     r.expect(got and "somebody might have to use it" in got["t"], "the gun card did not show Sam's line (%r)" % got)
     r.expect(got["c"] != "rgb(255, 58, 168)", "the gun card is still pink")
+    r.expect(float(got["o"]) > 0.9, "the gun card did not come up (%r)" % got)
+    r.page.keyboard.press("Escape")
+    r.page.wait_for_timeout(2200)
+    st = r.js("() => window.__dssBackRoomGun.state()")
+    r.expect(not st["card"] and st["zoom"] < 0.05, "Esc did not fly back to the room (%r)" % st)
 
 
 @check("room-arrival-pulse", "2026-11-09 (Sam, item 1): clicks on a room right after arrival seemed ignored; the opening words hold the room, so a press on the dimmed room pulses the onward button")
@@ -982,6 +999,7 @@ def room_check(room, passage):
             card = r.js("() => { var c = [].filter.call(document.querySelectorAll('.dss-room-card'), function (e) { return e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && +getComputedStyle(e).opacity > 0.1; })[0]; return c ? c.innerText.replace(/\\s+/g, ' ').trim() : null; }")
             if not card or len(card) < 3:
                 bad.append("%s: its card is empty" % name)
+            r.clear_lore()   # 2026-11-13: an object whose notes open by themselves on the look (LACKLAND's turntable, notes 17-18): read them, as a player would, before looking past them
             blk = "" if (room, name) in SEEN_BY_EYE else r.js(BLOCKED, [room, name])
             if blk:
                 bad.append("%s: hidden in its close-up behind %s" % (name, blk))
@@ -1393,10 +1411,13 @@ def _(r):
     hand = "() => { window.dssLastShanty = 0; window.dssAudio.updateAmbientBedsForPassage(document.querySelector('tw-story > tw-passage')); }"
     r.go("Approach The Pillars")
     r.js(hand)
+    r.page.wait_for_timeout(1500)
     early = r.js("() => window.dssLastShanty || 0")
-    r.page.wait_for_timeout(3000)
+    r.page.wait_for_timeout(2000)
     r.expect(r.js("() => window.dssLastShanty || 0"), "the shanty did not start on the Pillars approach")
-    r.expect(not early, "the shanty started at once, not a moment in")
+    r.expect(not early, "the shanty started within 1.5 s (2026-11-13 note 2: it waits 2.6 s)")
+    src = r.js("() => Array.from(document.scripts).map(s => s.textContent).join('\\n')")
+    r.expect("_playSample(SHANTY_URL, 0.45" in src, "the shanty is back at its old quiet level (2026-11-13 note 2)")
     r.go("Approach Lacklands Office")
     r.js(hand)
     r.page.wait_for_timeout(3000)
@@ -1670,13 +1691,21 @@ def _(r):
     r.wait_for("() => !document.querySelector('#dss-photo-pop')", 3000, "a click anywhere to put the polaroid away")
 
 
-@check("barber-choice-after-scene", "2026-11-08 notes 27-28: at the barber's the choices wait under the 3D scene until its button is pressed")
+@check("barber-choice-after-scene", "2026-11-08 notes 27-28: at the barber's the choices wait under the 3D scene until its button is pressed; 2026-11-13 notes 25-26: the button says TO THE BARBER'S, the shop bell rings on it (not on the map step), the runner goes at 3.4 m/s in all three scenes")
 def _(r):
     r.go("The Barbershop", wait=1500)
     r.expect(r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-passage tw-link'), function (x) { return x.textContent.trim() === 'A haircut'; })[0]; return !!l && getComputedStyle(l).visibility === 'hidden'; }"), "the barber's choices show before the scene's button is pressed")
     r.page.wait_for_timeout(3000)
-    r.page.get_by_text("AT THE BARBER’S DOOR").click()
+    r.js("() => { window.__bellRings = 0; var A = window.dssAudio, f = A.doorShopBell; A.doorShopBell = function () { window.__bellRings++; return f.apply(this, arguments); }; }")
+    r.page.wait_for_timeout(500)
+    r.expect(r.js("() => window.__bellRings") == 0, "the shop bell rang before the barber's button was pressed")
+    r.expect(r.page.get_by_text("AT THE BARBER’S DOOR").count() == 0, "the button still says AT THE BARBER’S DOOR (note 26)")
+    r.page.get_by_text("TO THE BARBER’S").click()
     r.page.wait_for_timeout(1500)
+    r.expect(r.js("() => window.__bellRings") == 1, "the shop bell did not ring once on the barber's button (%r)" % r.js("() => window.__bellRings"))
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect(not re.search(r"door\.id === 'barber'[^;]{0,80}doorShopBell", html), "the map step rings the barber's bell again (note 25)")
+    r.expect(html.count("speed:3.4,rate:0.75") == 2 and html.count("speed: 3.4, rate: 0.75") == 1 and "speed:6,rate:1.25" not in html, "the runner is back at his old sprint in one of his three scenes (note 25)")
     r.expect(r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-passage tw-link'), function (x) { return x.textContent.trim() === 'A haircut'; })[0]; return !!l && getComputedStyle(l).visibility === 'visible' && l.getClientRects().length > 0; }"), "the barber's choices did not show after the scene")
 
 
@@ -1963,6 +1992,135 @@ def _(r):
         r.expect(p["gone"], "a pop stayed on screen")
         if i: r.expect(p["text"] != pops[i - 1]["text"], "the same line twice running"); r.expect(p["t"] - pops[i - 1]["t"] >= 6900, "two pops within 7 s")
     r.page.screenshot(path=os.path.join(SHOTS, "pong-spin-pops.png"))
+
+
+@check("pocket-badge-rests", "2026-11-13 note 1 (Sam): the IN YOUR POCKET badge glows brighter, goes after a while and comes back while you hover the key's name in the header")
+def _(r):
+    r.go("Dean Street", wait=6000)
+    r.clear_lore(); r.clear_slips()
+    r.js("() => { var c = document.createElement('span'); c.className = 'pocket-cell'; c.id = 'test-pocket'; c.textContent = '⚲ THE BRASS LIGHTER'; c.style.cssText = 'position:fixed;left:20px;top:300px;z-index:99999999;padding:6px;background:#000;color:#fff'; document.body.appendChild(c); }")
+    op = "() => { var b = document.querySelector('.dss-pocket-badge'); return b ? +getComputedStyle(b).opacity : -1; }"
+    r.page.wait_for_timeout(2000)
+    r.expect(r.js(op) > 0.5, "the badge did not show when the key came into the pocket (%r)" % r.js(op))
+    r.expect(r.js("() => getComputedStyle(document.querySelector('.dss-pocket-badge')).animationName").find("dssPocketGlow") >= 0, "the badge has lost its glow")
+    r.page.wait_for_timeout(7500)
+    r.expect(r.js(op) < 0.05, "the badge did not go after a while (opacity %r)" % r.js(op))
+    box = r.js("() => { var b = document.getElementById('test-pocket').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }")
+    r.page.mouse.move(box[0], box[1]); r.page.wait_for_timeout(900)
+    r.expect(r.js(op) > 0.5, "hovering the pocket name did not bring the badge back (%r)" % r.js(op))
+    r.page.mouse.move(700, 600); r.page.wait_for_timeout(900)
+    r.expect(r.js(op) < 0.05, "the badge stayed after the pointer left the pocket name")
+
+
+@check("slip-ttl", "2026-11-13 note 3 (Sam): the 'X is in your pocket' slip goes by itself after a few seconds")
+def _(r):
+    r.go("Dean Street", wait=6000)
+    r.clear_lore(); r.clear_slips()
+    r.js("() => window.dssInlineHint('A slip that should go by itself.', { ttl: 2000 })")
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip:not(.out)'), function (e) { return /go by itself/.test(e.textContent); })", 6000, "the test slip")
+    r.wait_for("() => ![].some.call(document.querySelectorAll('.dss-hint-slip:not(.out)'), function (e) { return /go by itself/.test(e.textContent); })", 7000, "the slip to go by itself")
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect("ttl: 5000 }" in html, "the pocket slip no longer goes by itself (no ttl on its call)")
+
+
+@check("portal-para-gap", "2026-11-13 note 4 (Sam): no extra line between the Third Pillar Portal's second and third paragraphs (read from the build: the Portal turns a jump without the third pillar's state back to the Pillars)")
+def _(r):
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    i = html.find('name="Third Pillar Portal"')
+    r.expect(i >= 0, "no Third Pillar Portal in the build")
+    j = html.find("ezekiel-go", i)
+    k = html.find("third blue post rears", j)
+    seg = html[j:k]
+    close = seg.find("&lt;/div&gt;")
+    r.expect(close >= 0, "the Portal's roll has no end")
+    after = seg[close + len("&lt;/div&gt;"):]
+    after = re.sub(r"&lt;!--.*?--&gt;", "", after, flags=re.S)
+    r.expect(after.startswith("\\"), "the roll's line break is back before the third paragraph (%r)" % after[:40])
+
+
+@check("airport-pub-book", "2026-11-13 notes 5-6 (Sam): no 'The Enlightenment' hover box over the Airport Pub; Chariots of the Gods sits in a booth and opens its lore")
+def _(r):
+    r.go("Airport Pub", wait=12000)
+    r.clear_lore(); r.clear_slips()
+    for x, y in ((720, 450), (545, 489), (900, 400)):
+        r.page.mouse.move(x, y); r.page.wait_for_timeout(300)
+        r.expect(not r.js("() => [].some.call(document.querySelectorAll('div, span'), function (e) { return /The Enlightenment/.test(e.textContent) && e.children.length === 0 && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && +getComputedStyle(e).opacity > 0.1 && getComputedStyle(e).position !== 'static'; })"), "the Enlightenment hover box shows over the pub")
+    r.expect(r.js("() => typeof window.__apOpenBookLore === 'function'"), "the booth's book is gone")
+    r.js("() => window.__apOpenBookLore()")
+    r.wait_for("() => { var o = document.getElementById('dss-lore-overlay'); return !!o && /CHARIOTS/i.test(o.innerText); }", 6000, "the book to open its lore")
+
+
+@check("himalaya-notes", "2026-11-13 notes 7-10 (Sam): the Foothills page is dressed (ridges, prayer flags), the Climb's music has its long intro cut, no 'Himalayas ascent' label, the Cave's paragraphs evenly spaced")
+def _(r):
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect("climb-music-cut.m4a" in html, "the Climb plays its uncut music again (note 8)")
+    r.go("Foothills", wait=8000)
+    bg = r.js("() => { var t = document.querySelector('tw-story .dss-threshold'), p = document.querySelector('.dss-room-prose'); return [t ? getComputedStyle(t).backgroundImage : '', p ? getComputedStyle(p).backgroundImage : '']; }")
+    r.expect("svg" in bg[0], "the Foothills page has no ridges (%r)" % bg[0][:80])
+    r.expect("svg" in bg[1], "the Foothills words have no prayer flags (%r)" % bg[1][:80])
+    r.go("The Climb", wait=8000)
+    r.expect(not r.js("() => /ASCENT/i.test((document.querySelector('.hc-toolbar') || {}).textContent || '')"), "the Climb still says Himalayas ascent (note 9)")
+    r.go("The Cave", wait=8000)
+    r.clear_lore(); r.clear_slips()
+    r.expect(r.js("() => !!document.querySelector('.dss-cave-gap')"), "the Cave's choice sits tight under the words again (note 10)")
+
+
+@check("liver-in-notebook", "2026-11-13 note 11 (Sam): the liver tip says it is in your NOTEBOOK")
+def _(r):
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect("liver is in your NOTEBOOK" in html, "the liver tip does not say it is in your NOTEBOOK")
+
+
+@check("soho-square-alley", "2026-11-13 notes 12-14 (Sam): the alley side of Soho Square shows the 3D square, not the drawn hut; the worm page's Back to the Square sits under its last line, no scrolling")
+def _(r):
+    r.go("Alley: Soho Square", wait=9000)
+    r.clear_lore(); r.clear_slips()
+    r.wait_for("() => { var w = document.getElementById('sq-wrap'), c = document.getElementById('sq-container'); return !!w && !!c && c.dataset.state === 'alley'; }", 15000, "the 3D square on the alley page")
+    r.expect(not r.js("() => [].some.call(document.querySelectorAll('svg'), function (s) { return /hut/i.test(s.getAttribute('class') || '') && s.getClientRects().length; })"), "the drawn hut is still on the alley page")
+    r.go("Soho Square: the gardener’s hut", wait=6000)
+    r.clear_lore(); r.clear_slips()
+    b = r.js("() => { var l = [].filter.call(document.querySelectorAll('.worm-back tw-link'), function (x) { return !x.closest('.dss-ghost'); })[0]; if (!l) return null; var b = l.getBoundingClientRect(); return { bottom: b.bottom, inGame: !!l.closest('#dss-worm-game'), scroll: document.scrollingElement.scrollHeight - innerHeight }; }")
+    r.expect(b and b["inGame"], "Back to the Square is not under the worm's last line (%r)" % b)
+    r.expect(b["bottom"] <= 900, "Back to the Square is below the fold (%r)" % b)
+
+
+@check("lk-office-turntable-lore", "2026-11-13 notes 17, 18, 20 (Sam): the turntable's long note is two LORE notes that open by themselves on the look; the opening box ends Back to the office")
+def _(r):
+    r.go("Martin Lackland's Office", wait=12000)
+    r.room_ready("lk"); r.clear_slips(); r.clear_lore()
+    lbl = r.js("() => [].map.call(document.querySelectorAll('.dss-room-dismiss'), function (b) { return b.textContent.trim(); }).join('|')")
+    r.expect("Back to the office" in lbl and "Into the office" not in lbl, "the opening box's button says %r, not Back to the office" % lbl)
+    r.js("() => { try { localStorage.removeItem('dssLoreRead'); } catch (e) {} }")
+    r.click_object("lk", "A turntable")
+    seen = []
+    for _ in range(3):
+        r.wait_for("() => !!document.getElementById('dss-lore-overlay')", 8000, "a LORE note to open by itself on the turntable")
+        seen.append(r.js("() => document.getElementById('dss-lore-overlay').innerText"))
+        r.clear_lore(rounds=1); r.page.wait_for_timeout(1500)
+        if not r.js("() => !!document.getElementById('dss-lore-overlay')"): 
+            if len(seen) >= 2: break
+            r.page.wait_for_timeout(1500)
+            if not r.js("() => !!document.getElementById('dss-lore-overlay')"): break
+    joined = " || ".join(seen)
+    r.expect(len(seen) >= 2, "only one LORE note opened on the turntable (%r)" % joined[:200])
+    r.expect(re.search("listening to", joined, re.I) and "Garrard" in joined, "the two turntable notes were not both read (%r)" % joined[:300])
+
+
+@check("lk-reads-book", "2026-11-13 note 19 (Sam): LACKLAND reads the book with the Belletrist's turning-book animation, and his verdict waits for it to shut")
+def _(r):
+    r.go("Martin Lackland's Office", wait=12000)
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('.dss-room-prose tw-link'), function (x) { return x.textContent.trim() === 'Lay it down'; })[0]; if (l) l.click(); }")
+    r.wait_for("() => !!document.querySelector('.dss-readbook .critic-book-stage, .dss-readbook-widget')", 6000, "the reading book")
+    r.expect(r.js("() => getComputedStyle(document.querySelector('.dss-readbook-after')).visibility") == "hidden", "LACKLAND's verdict shows before the book has shut")
+    r.wait_for("() => getComputedStyle(document.querySelector('.dss-readbook-after')).visibility === 'visible'", 15000, "the verdict after the book shuts")
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect(html.count("dss-readbook&quot; data-pages") >= 3, "not every reader has the turning book (LACKLAND, the novelist, SHANA)")
+
+
+@check("pong-music-warm", "2026-11-13 note 24 (Sam): the pong music sits a little closer to the office track (the darker render)")
+def _(r):
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect("pong-actress-warm.m4a" in html, "Pong plays the bright Actress render again")
 
 
 def main(argv):

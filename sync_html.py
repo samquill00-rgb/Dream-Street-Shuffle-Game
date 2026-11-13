@@ -55,7 +55,7 @@ AUDIO_EMBEDS = [
     ("__DSS_TRISHAS_DATA_URI__",     "indoor-quiet-lounge-floor.m4a",                        "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a quiet lounge; generated the-trishas-ambience.m4a stays on disk
     ("__DSS_HIMALAYA_DATA_URI__",    "the-himalaya-ambience.m4a",                      "audio/mp4"),
     ("__DSS_HIMALAYA_MUSIC_DATA_URI__", "himalaya-music.m4a",                      "audio/mp4"),  # 2026-11-02: Sam's own "Meditation in Tibet", frame-aligned loop
-    ("__DSS_CLIMB_MUSIC_DATA_URI__",    "climb-music.m4a",                         "audio/mp4"),  # 2026-11-03: Sam's own Climb music; plays once, loops 84-100 s
+    ("__DSS_CLIMB_MUSIC_DATA_URI__",    "climb-music-cut.m4a",                     "audio/mp4"),  # 2026-11-03: Sam's own Climb music; 2026-11-13 (note 8) the 16-54 s middle cut out (climb-music.m4a is the full take), loops 46-62 s
     ("__DSS_NAZCA_DATA_URI__",       "the-nazca-ambience.m4a",                         "audio/mp4"),
     ("__DSS_NAZCA_MUSIC_DATA_URI__", "nazca-music.m4a",                              "audio/mp4"),   # 2026-11-03: Sam's render of the chill pampa sketch ("Nazca Atmosphere"); plays once, loops bars 5-32 (11.43-91.43 s at 84)
     ("__DSS_EASTER_MUSIC_DATA_URI__", "easter-music.m4a",                            "audio/mp4"),   # 2026-11-04: Sam's own "Easter Island atmosphere" (Logic); the whole 70 s file loops, no loop points
@@ -74,7 +74,7 @@ AUDIO_EMBEDS = [
     ("__DSS_EZEKIEL_DATA_URI__",     "the-ezekiel-ambience.m4a",                       "audio/mp4"),
     ("__DSS_RONNIES_MUSIC_DATA_URI__", "ronnies-firebird-jazz.m4a",                    "audio/mp4"),
     ("__DSS_MINIGAME_DATA_URI__",    "fight-halftime.m4a",                             "audio/mp4"),   # 2026-11-04 (Burial pass): the cellar fight's bed is a dark halftime at 140 (Music sketches/Beat scene); the-minigame-retro.m4a stays on disk
-    ("__DSS_PONGMINI_DATA_URI__", "pong-actress.m4a", "audio/mp4"),   # 2026-11-04: Sam (04:20): the Actress track on Pong instead of the HudMo one, at Pong's level; played at 1.12x
+    ("__DSS_PONGMINI_DATA_URI__", "pong-actress-warm.m4a", "audio/mp4"),   # 2026-11-04: Sam (04:20): the Actress track on Pong instead of the HudMo one, at Pong's level; played at 1.12x. 2026-11-13 (Sam, note 24: "a tiny bit too different" from the office music): darkened toward the office track (lowpass 2.4 kHz, -4 dB shelf over 3.5 kHz, +2 dB at 180 Hz; spectral centre 1578 -> 642 Hz, office 464), same loudness; pong-actress.m4a stays on disk
     ("__DSS_JAZZMINI_DATA_URI__", "the-jazzmini-loop.m4a", "audio/mp4"),   # 2026-11-04 04:30 (Sam: "I don't like any of them, don't add any"): the untreated original, as before the Burial pass
     ("__DSS_COWGAME_DATA_URI__", "the-cowgame-loop.m4a", "audio/mp4"),   # 2026-11-04 04:30 (Sam: "I don't like any of them, don't add any"): the untreated original, as before the Burial pass
     ("__DSS_WALTZ_DATA_URI__",       "the-cecil-court-waltz.m4a",                      "audio/mp4"),   # 2026-11-05 (Sam: "I want the waltz music to be as it was before"): the original back; cecil-court-waltz-burial.m4a (2026-11-04 Burial pass, 32.000 s) stays on disk, unlinked

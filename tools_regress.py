@@ -1518,6 +1518,65 @@ def _(r):
     r.info = "four start points land on Dean Street with their stats and doors"
 
 
+@check("doorway-gain-after-card", "2026-11-13 note 29 (Sam: \"I'm not sure if the doorway gave me stats back\"): the +4 and +6 rose and faded behind the Hold to piss card; they wait for it now")
+def _(r):
+    r.go("Test Start 2", wait=10000)
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && e.textContent.trim() === 'Livonia Street'; })[0]; l.click(); }")
+    r.wait_for("() => !!document.querySelector('#spew-popup-overlay canvas')", 8000, "the doorway card")
+    LBL = "() => [].map.call(document.querySelectorAll('#stat-bars-lifted .stat-delta'), function (d) { return +getComputedStyle(d).opacity; })"
+    r.page.wait_for_timeout(1200)
+    under = r.js(LBL)
+    r.expect(len(under) == 2 and max(under) < 0.05, "the +4/+6 played behind the card: opacities %s" % under)
+    box = r.js("() => { var b = document.querySelector('#spew-popup-overlay canvas').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }")
+    r.page.mouse.move(*box); r.page.mouse.down(); r.page.wait_for_timeout(1500); r.page.mouse.up()
+    r.wait_for("() => !document.getElementById('spew-popup-overlay')", 15000, "the card to close")
+    r.page.wait_for_timeout(2600)
+    after = r.js(LBL)
+    r.expect(len(after) == 2 and min(after) > 0.5, "no +4/+6 after the card closed: opacities %s" % after)
+    r.info = "the doorway's +4/+6 wait for the card, then show"
+
+
+@check("slip-writes-in-one-go", "2026-11-13 note 28 (Sam): the slips should not type letter by letter, they should write it all straight up in one go")
+def _(r):
+    r.go("Test Start 2", wait=10000)
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    msg = "REGRESSION SLIP: every word of this sentence should land on the paper at the same moment, with nothing left to type."
+    r.js("(m) => window.dssInlineHint(m, { now: true })", msg)
+    seen = []
+    for _ in range(200):
+        t = r.js("(m) => [].map.call(document.querySelectorAll('.dss-hint-type'), function (e) { return e.textContent; }).filter(function (t) { return t && m.indexOf(t) === 0; })", msg)
+        lens = sorted(set(len(x) for x in t if x))
+        seen += [l for l in lens if l not in seen]
+        if len(msg) in seen:
+            break
+        r.page.wait_for_timeout(80)
+    r.expect(seen and seen[0] == len(msg), "the slip typed in pieces: lengths seen %s of %d" % (seen[:8], len(msg)))
+    r.info = "the slip landed whole"
+
+
+@check("french-photo-glow-left", "2026-11-13 note 27 (Sam): the Photographs glow moves to the left of the man raising a glass (frame 5, x 1.34), into the gap by the dog")
+def _(r):
+    r.go("The French")
+    r.room_ready("fi", photos=False)
+    src = r.js("() => [].map.call(document.querySelectorAll('script'), function (s) { return s.textContent; }).join('\\n').match(/name: 'Photographs',[^\\n]*?haloAt: \\[([-0-9.]+),/)")
+    r.expect(src, "no haloAt for the French's Photographs")
+    x = float(src[1])
+    r.expect(0.6 < x < 1.1, "the Photographs glow sits at x %.2f, not in the gap left of his photograph (0.6 to 1.1)" % x)
+    r.info = "the glow sits at x %.2f" % x
+
+
+@check("ginger-french-spaced", "2026-11-13 note 26 (Sam): space the French and the Ginger Light out a little more on Dean Street; the Ginger Light's lamp and door move up together")
+def _(r):
+    hub_ready(r)
+    d = r.js("() => { var m = window.dssSohoMap, o = {}; m.doors.forEach(function (x) { if (x.id === 'french' || x.id === 'ginger') o[x.id] = [x.c, x.r, x.fc, x.fr]; }); return o; }")
+    gap = d["french"][3] - d["ginger"][3]
+    r.expect(gap >= 6, "the Ginger Light and the French are %d tiles apart on Dean Street, want 6 or more: %s" % (gap, d))
+    tile = r.js("(g) => window.dssSohoMap.tiles[g[3]][g[2]]", d["ginger"])
+    r.expect(tile == "P", "the Ginger Light's corner is not pavement (%r)" % tile)
+    r.info = "%d tiles apart" % gap
+
+
 @check("hub-first-night", "the first Dean Street: fits the screen, the map draws, each hub link has a map door, the Ginger Light door goes in")
 def _(r):
     hub_ready(r)
@@ -1778,10 +1837,10 @@ def _(r):
     r.go("Coach and Horses bar")
     r.room_ready("cb")
     r.click_object("cb", "A cow")
-    r.wait_for("() => !!document.querySelector('.dss-hint-slip.dss-hint-voices:not(.typed):not(.out)')", 12000, "the VOICES slip to start typing")
+    r.wait_for("() => !!document.querySelector('.dss-hint-slip.dss-hint-voices:not(.out)')", 12000, "the VOICES slip to land")   # 2026-11-13 note 28: slips land written, so there is no 'still typing' moment; it must not swallow the click while it is up
     b = r.page.locator(".dss-room-back:visible").first.bounding_box()
     r.page.mouse.click(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
-    r.wait_for("() => window.__dssRooms.cb.mode() !== 'inspect'", 4000, "one click on Back to the room to leave the close-up while VOICES types")
+    r.wait_for("() => window.__dssRooms.cb.mode() !== 'inspect'", 4000, "one click on Back to the room to leave the close-up while the VOICES slip is up")
 
 TI_OVERLAPS = """() => { var R = window.__dssRooms.ti, out = [], items = [];
   function box(o) { var b = new THREE.Box3(), any = false; o.updateMatrixWorld(true); o.traverse(function(m) { if (!m.isMesh || !m.visible || !m.geometry) return; var ms = Array.isArray(m.material) ? m.material : [m.material];

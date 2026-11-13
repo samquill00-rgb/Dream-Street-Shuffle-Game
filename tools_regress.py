@@ -2142,6 +2142,16 @@ def _(r):
         got = r.js("""([room, name]) => { var R = window.__dssRooms[room], cam = R.camera, T = window.THREE, n = 0, seen = 0; R.scene.updateMatrixWorld(true); R.scene.traverse(function (o) { if (o.name !== name) return; n++; var v = new T.Vector3(); o.getWorldPosition(v); v.project(cam); if (Math.abs(v.x) < 0.95 && Math.abs(v.y) < 0.95 && v.z < 1) seen++; }); return [n, seen]; }""", [room, name])
         r.expect(got[0] == want, "%s: %d pictures on the wall, expected %d" % (room, got[0], want))
         r.expect(got[1] == want, "%s: only %d of its %d pictures are in the room's view" % (room, got[1], want))
+    # 2026-11-13 (Sam: "Do the same for Trisha's and the Colony"): Trisha's nine photographs hang a size up on cream mounts, most in view; the Colony's salon hang shows both his prints
+    r.go("Trisha's", wait=9000)
+    r.room_ready("ti"); r.clear_slips(); r.clear_lore()
+    got = r.js("""() => { var R = window.__dssRooms.ti, cam = R.camera, T = window.THREE, n = 0, seen = 0, big = 0; R.scene.updateMatrixWorld(true); R.scene.traverse(function (o) { if (o.name !== 'trisha-wall-photo') return; n++; if (o.scale.x >= 1.25) big++; var v = new T.Vector3(); o.getWorldPosition(v); v.project(cam); if (Math.abs(v.x) < 0.95 && Math.abs(v.y) < 0.95 && v.z < 1) seen++; }); return [n, seen, big]; }""")
+    r.expect(got[0] == 9 and got[2] == 9, "ti: %d mounted photographs (%d a size up), expected 9" % (got[0], got[2]))
+    r.expect(got[1] >= 7, "ti: only %d of the photographs are in the room's view" % got[1])
+    r.go("The Colony Room", wait=9000)
+    r.room_ready("ci"); r.clear_slips(); r.clear_lore()
+    got = r.js("""() => { var R = window.__dssRooms.ci, cam = R.camera, T = window.THREE, n = 0, seen = 0; R.scene.updateMatrixWorld(true); R.scene.traverse(function (o) { var m = o.material, d = m && m.map && m.map.userData; if (!d || !d.dssPrint) return; n++; var v = new T.Vector3(); o.getWorldPosition(v); v.project(cam); if (Math.abs(v.x) < 0.95 && Math.abs(v.y) < 0.95 && v.z < 1) seen++; }); return [n, seen]; }""")
+    r.expect(got[0] == 2 and got[1] == 2, "ci: his two prints are not both on the Colony's walls in view (%r)" % got)
 
 
 def main(argv):

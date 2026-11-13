@@ -2154,6 +2154,26 @@ def _(r):
     r.expect(got[0] == 2 and got[1] == 2, "ci: his two prints are not both on the Colony's walls in view (%r)" % got)
 
 
+@check("gents-door-heart", "2026-11-13 (Sam: \"prepare this image to add to the graffiti on the gents door\", \"below it, '2025-2066'\"): the SILVER DARLINGS heart and its date are on the Coach's gents door, loaded and in view from the door's close-up, above the sigil")
+def gents_door_heart(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Coach and Horses lock", wait=9000)
+    r.page.get_by_text("STEADY YOURSELF").first.click(); r.page.wait_for_timeout(4000)
+    # the letters on the back of the door are another check's business: mark them sorted and go up to the bar
+    r.js("() => { var l = document.querySelector('.gents-letters-bridge tw-link'); if (l) l.click(); }"); r.page.wait_for_timeout(1500)
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return /gather your limbs/.test(e.textContent); })[0]; if (l) l.click(); }"); r.page.wait_for_timeout(9000)
+    r.room_ready("cb"); r.clear_slips(); r.clear_lore()
+    r.click_object("cb", "The Gents"); r.page.wait_for_timeout(3500)
+    got = r.js("""() => { var R = window.__dssRooms.cb, cam = R.camera, T = window.THREE, out = null; R.scene.updateMatrixWorld(true);
+      R.scene.traverse(function (o) { if (o.name !== 'gents-door-heart') return; var g = o.geometry.parameters, im = o.material.map && o.material.map.image, seen = 0, low = 9;
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (c) { var v = new T.Vector3(c[0] * g.width / 2, c[1] * g.height / 2, 0); o.localToWorld(v); low = Math.min(low, v.y); v.project(cam); if (Math.abs(v.x) < 0.95 && Math.abs(v.y) < 0.95 && v.z < 1) seen++; });
+        out = { w: im ? (im.naturalWidth || im.width || 0) : 0, seen: seen, low: low }; }); return out; }""")
+    r.expect(got is not None, "no heart on the gents door")
+    r.expect(got["w"] >= 512, "the heart's picture did not load (assets/gents-door-silver-darlings.png)")
+    r.expect(got["seen"] == 4, "only %d of the heart's four corners are in view from the door's close-up" % got["seen"])
+    r.expect(got["low"] > 1.05, "the date under the heart runs into the sigil (the picture's foot is at %.2f, the sigil's head at 1.08)" % got["low"])
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

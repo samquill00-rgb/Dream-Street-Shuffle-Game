@@ -824,15 +824,21 @@ def _(r):
 
 @check("hub-return-fits", "2026-11-09 overnight bug-play: back on Dean Street from a door, the street lamp ran 76 to 87 px past 900 and the page scrolled")
 def _(r):
+    if SWAPS: scratch_passage(r, "T-plant", "x")
     r.go("Dean Street", wait=6000)
     r.js("() => { var l = [].filter.call(document.querySelectorAll('.soho-hub-dock tw-link'), function (e) { return !e.closest('.dss-ghost'); })[0]; l.click(); }")
     r.page.wait_for_timeout(3500)
-    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && /Back to Dean/.test(e.textContent); })[0]; l.click(); }")
-    worst = 0
-    for _ in range(18):
-        r.page.wait_for_timeout(300)
-        if r.pn() == "Dean Street":
-            worst = max(worst, r.js("() => document.scrollingElement.scrollHeight"))
+    # 2026-11-14: measured on every frame, in the page. Polling every 300 ms from here caught the too-tall street about one run in four
+    # (the lamp stood 870 px tall between its two sizing passes, a frame or three at a time), which made this check a coin toss
+    r.js("""() => { window.__tall = 0; window.__frames = 0; var t0 = performance.now(); (function loop() {
+        var lamp = [].filter.call(document.querySelectorAll('#dean-lamp-svg'), function (e) { return !e.closest('.dss-ghost'); })[0];
+        if (lamp) { window.__frames++; window.__tall = Math.max(window.__tall, document.scrollingElement.scrollHeight); }
+        if (performance.now() - t0 < 5600) requestAnimationFrame(loop); })();
+      var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && /Back to Dean/.test(e.textContent); })[0]; l.click(); }""")
+    r.page.wait_for_timeout(6000)
+    r.expect(r.pn() == "Dean Street", "the way back led to %s" % r.pn())
+    worst = r.js("() => window.__tall")
+    r.expect(r.js("() => window.__frames") > 60, "the street was only measured on %d frames" % r.js("() => window.__frames"))
     r.info = "tallest %d px" % worst
     r.expect(0 < worst <= 902, "back on Dean Street the page is %d px tall at 1440x900" % worst)
 

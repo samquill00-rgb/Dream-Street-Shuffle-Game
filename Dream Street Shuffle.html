@@ -31392,25 +31392,41 @@ return lamp.getBoundingClientRect().top - passage.getBoundingClientRect().top;
 // moves the target by a pixel and the loop chases its own tail. Tried, measured,
 // reverted -- it reached 5254px on a 600px-wide window. Two passes cannot run
 // away, which matters more here than landing exactly.
+/* 2026-11-14 (regression hub-return-fits, about one return in four: the page stood 1000 px tall at 1440x900): the second pass used to
+   wait for the next frame. With the pole dropped for the first pass the map spreads into its room and stands about 110 px taller, so
+   the first pass set the pole 870 px tall, down to 1000, and the page was that tall until the second pass came (a frame, sometimes
+   three, and this ran a dozen times in the first seconds of a return). Both passes now run at once, before anything is painted: drop
+   the pole, measure the page without it, set it, measure again with it in place, set it. Still two passes and no more. */
+function settle() {
+if (!lamp.isConnected) return;
+var was = +lamp.getAttribute('height') || 0;
 lamp.setAttribute('height', '1');
-var h = measure() - lampOffset();
-if (h < 50) h = 50;
-lamp.setAttribute('height', Math.ceil(h));
-// rAF stalls in a backgrounded tab, so a timeout backs it up.
-var repassed = false;
-function pass2() {
-if (repassed) return; repassed = true;
-var h2 = measure() - lampOffset();
-if (h2 < 50) h2 = 50;
-lamp.setAttribute('height', Math.ceil(h2));
+var h3 = measure() - lampOffset(); if (h3 < 50) h3 = 50;
+lamp.setAttribute('height', Math.ceil(h3));
+var h4 = measure() - lampOffset(); if (h4 < 50) h4 = 50;
+lamp.setAttribute('height', Math.abs(h4 - was) > 1 ? Math.ceil(h4) : was);
 }
-requestAnimationFrame(pass2);
-setTimeout(pass2, 120);
+settle();
 /* 2026-11-09 overnight (bug-play: on every return to Dean Street the lamp came out 76 to 87 px too tall and the page scrolled at
-   1440x900; a later re-size settled it): the map re-fits itself after the lamp's two passes, so measure twice more once it has.
-   With the float in place this measure is a fixed point (see findContentBottom), so these cannot run away. */
-function settle() { if (!lamp.isConnected) return; var h3 = measure() - lampOffset(); if (h3 < 50) h3 = 50; if (Math.abs(h3 - (+lamp.getAttribute('height') || 0)) > 1) lamp.setAttribute('height', Math.ceil(h3)); }
+   1440x900; a later re-size settled it): the map re-fits itself after the lamp's two passes, so size twice more once it has. */
 setTimeout(settle, 700); setTimeout(settle, 1800);
+/* and the map says when it has changed size, so the pole follows it within a breath instead of waiting on those two. Only while the map
+   sits beside the pole (where it clears the pole its size hangs off the pole's own foot, and following it would chase its tail), and a
+   bounded number of times for each sizing. Walking the map never changes the size of its box, so this costs the walk nothing. */
+try {
+  if (window._dssLampMapRO) window._dssLampMapRO.disconnect();
+  var mapBox2 = document.getElementById('soho-map-container'), follows = 0, followT = null;
+  if (mapBox2 && window.ResizeObserver) {
+    window._dssLampMapRO = new ResizeObserver(function() {
+      if (!lamp.isConnected) { window._dssLampMapRO.disconnect(); return; }
+      if (follows >= 8) return;
+      var c = window.getComputedStyle(mapBox2).clear; if (c && c !== 'none') return;
+      if (followT) clearTimeout(followT);
+      followT = setTimeout(function() { follows++; settle(); }, 60);
+    });
+    window._dssLampMapRO.observe(mapBox2);
+  }
+} catch (e) {}
 }
 // Debounced: waits 600ms after last DOM change (after gap cleanup at 300ms)
 var deanLampObs = new MutationObserver(function(muts) {
@@ -85995,6 +86011,9 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
 
 
 

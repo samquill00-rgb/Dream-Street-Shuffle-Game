@@ -2514,6 +2514,180 @@ def where_next_alley_road(r):
     r.page.unroute("**/*")
 
 
+# ---------------------------------------------------------------- 2026-11-14, Sam's 21 notes of 22:41
+def _built():
+    import html as _h
+    t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)   # a planted bug is applied to the text read here
+    return t
+
+N14_BASE = '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")'
+N14_ERRAND = N14_BASE + '(set: $metGreenSeaFriend to false)(set: $inisToldOfPillars to false)(set: $keyLighter to "seed")(set: $dreamKey to "")(set: $returnedPage to false)'
+N14_CLICK = "(t) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf(t) >= 0 && !x.closest('.dss-ghost'); })[0]; if (!l) return false; l.click(); return true; }"
+N14_PRESS = "(t) => { var e = [].filter.call(document.querySelectorAll('button, .fi-action, tw-link, [role=button]'), function (x) { return x.getClientRects().length && !x.closest('.dss-ghost') && new RegExp(t, 'i').test(x.textContent.trim()); })[0]; if (!e) return false; e.click(); return true; }"
+
+
+@check("notes-1114-source", "2026-11-14 notes 1, 3, 5, 8, 12, 13, 19 (Sam): the comma before 'either' is cut; the Ginger Light's cat is out of its scene; the French's whole-tone figure is plucked; the beret cat print is matt; stat changes are numbers only; the bronze hand shines; INIS's third-pillar speech types faster")
+def notes_1114_source(r):
+    t = _built()
+    r.expect("credit for her either." in t and "credit for her, either." not in t, "note 1: the comma before 'either' is back in The Night Ahead")
+    r.expect(t.count("scene.add(gingerCat);") == 1 and "restore with scene.add(gingerCat); */" in t, "note 3: the Ginger Light's cat is added to its scene again")
+    r.expect("function pluck(n, when, amp, ring)" in t, "note 5: the French's whole-tone figure is not the plucked one")
+    r.expect("emissiveMap: beretPrint" not in t and "brightness(.94)" in t, "note 8: the beret cat print glows by its own light again, or is back at its old brightness")
+    r.expect("className = 'stat-why'" not in t and "className='stat-why'" not in t, "note 12: a stat change names the choice behind it again")
+    cc = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cecil-court-3d-static.html"), encoding="utf-8").read()
+    for a, b in SWAPS: cc = cc.replace(a, b)
+    r.expect("emissive: 0x8a5a26, emissiveIntensity: 0.5" in cc and "PointLight(0xffb070, 2.6, 7.5, 2)" in cc, "note 13: the bronze hand in Cecil Court has lost its own light or its lamp")
+    r.expect("cecil-court-3d-static.html?v=20261114a" in t, "note 13: the game still loads the older Cecil Court scene")
+    r.expect('class="dss-speech dss-speech-quick" data-speaker="INIS' in t and "classList.contains('dss-speech-quick') ? 0.7 : 1" in t, "note 19: INIS's third-pillar speech is back at the slow pace")
+    r.go("Dean Street", wait=1500)
+
+
+@check("alba-star-flares", "2026-11-14 note 4 (Sam: \"When the alba pip thing lights up in the stats bar it should glow gold a moment. This should happen every time\"): the star of a line just caught flares gold, and it is a star on screen, not one in the after-image of the last page")
+def alba_star_flares(r):
+    scratch_passage(r, "T-alba", '[[go|LINE 1]]')   # a real page turn, so the page left stands as an after-image when the line lands
+    r.go("T-alba", wait=3000)
+    r.expect(r.js(N14_CLICK, "go"), "the test link is missing")
+    r.wait_for("() => (window.dssAlbaKindled || 0) >= 1", 12000, "the first line's star to be lit")
+    st = r.js("() => [].map.call(document.querySelectorAll('.alba-jewel.alba-jewel-kindle'), function (j) { return { ghost: !!j.closest('.dss-ghost'), box: j.getClientRects().length, filled: j.classList.contains('alba-jewel-filled'), anim: getComputedStyle(j).animationName }; })")
+    r.expect(len(st) >= 1, "no star is flaring just after the line was caught")
+    r.expect(all((not s["ghost"]) and s["box"] and s["filled"] for s in st), "the star that flared is hidden or in the after-image (%r)" % st)
+    r.expect(any("alba-jewel-kindle" in s["anim"] for s in st), "the flaring star has no gold flare animation (%r)" % st)
+    r.page.unroute("**/*")
+
+
+@check("stat-slips-hold", "2026-11-14 note 7 (Sam: \"You shouldn't be able to click fast through morale and sobriety slips, they are important to read\"): each of the two slips ignores its paper, its cross and a click elsewhere until it has been up long enough to read")
+def stat_slips_hold(r):
+    r.go("The French", wait=9000)
+    r.expect(r.js(N14_PRESS, "^to the bar$"), "no TO THE BAR button in the French")
+    SLIP = "(tag) => { var c = [].filter.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (c) { var g = c.querySelector('.dss-hint-tag'); return g && g.textContent === tag; })[0]; return c ? { held: c.classList.contains('dss-hint-held'), typed: c.classList.contains('typed') } : null; }"
+    for tag, name in (("1/2", "MORALE"), ("2/2", "SOBRIETY")):
+        r.wait_for("(function(){ var f = %s; var s = f(%r); return !!(s && s.typed); })" % (SLIP, tag), 20000, "the %s slip" % name)
+        t0 = time.time()
+        r.expect(r.js(SLIP, tag)["held"], "the %s slip is not held when it lands" % name)
+        r.page.locator("#dss-hint-stack .dss-hint-slip:not(.out) .dss-hint-x").last.click(force=True, timeout=3000)
+        r.page.locator("#dss-hint-stack .dss-hint-slip:not(.out) .dss-hint-inner").last.click(force=True, timeout=3000)
+        r.page.mouse.click(700, 500)
+        r.page.keyboard.press("Escape")
+        r.page.wait_for_timeout(500)
+        r.expect(r.js(SLIP, tag) is not None, "the %s slip could be clicked away within a second of landing" % name)
+        r.wait_for("(function(){ var f = %s; var s = f(%r); return !!(s && !s.held); })" % (SLIP, tag), 9000, "the %s slip to let go" % name)
+        held_for = time.time() - t0
+        r.expect(held_for >= 2.5, "the %s slip let go after %.1f s; it should hold 3 s or more" % (name, held_for))
+        r.page.locator("#dss-hint-stack .dss-hint-slip:not(.out) .dss-hint-x").last.click()
+        r.page.wait_for_timeout(700)
+        r.expect(r.js(SLIP, tag) is None, "the %s slip did not close once it could be" % name)
+
+
+@check("lore-not-offered-again", "2026-11-14 note 9 (Sam, the French: \"Because the lore is unmissable here, it shouldn't have a button with an option to see what you just saw again straight away\"): once the orange paperback's note has been read, its card no longer offers it")
+def lore_not_offered_again(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("The French", wait=9000)
+    r.expect(r.js(N14_PRESS, "^to the bar$"), "no TO THE BAR button in the French")
+    r.page.wait_for_timeout(2500); r.clear_slips()
+    r.click_object("fi", "Photographs"); r.page.wait_for_timeout(2500); r.clear_slips(); r.back_click("fi"); r.page.wait_for_timeout(2500); r.clear_slips()
+    r.click_object("fi", "An orange paperback")
+    r.wait_for("() => !!document.querySelector('#dss-lore-overlay .dss-lore-on')", 8000, "the paperback's note to open as the next press")
+    r.expect(r.js("() => document.querySelector('#dss-lore-overlay .dss-lore-on').textContent.trim()") == "Go on", "the note's foot button does not read Go on")
+    r.page.locator("#dss-lore-overlay .dss-lore-on").first.click()
+    r.page.wait_for_timeout(2600); r.clear_slips()
+    if r.js("() => window.__dssRooms.fi.mode()") == "inspect": r.back_click("fi"); r.page.wait_for_timeout(2200)
+    r.click_object("fi", "An orange paperback"); r.page.wait_for_timeout(2400)
+    btns = r.js("() => { var c = document.querySelector('.dss-room-card[aria-hidden=\"false\"]'); return c ? [].filter.call(c.querySelectorAll('.fi-action'), function (b) { return b.getClientRects().length; }).map(function (b) { return b.textContent.trim(); }) : null; }")
+    r.expect(btns is not None, "the paperback's card did not open the second time")
+    r.expect(not any("LORE" in b.upper() or "CHARIOTS" in b.upper() or b == "Go on" for b in btns), "the card offers the note again straight after it was read (%r)" % btns)
+    r.expect(not r.js("() => !!document.querySelector('#dss-lore-overlay')"), "the note opened by itself a second time")
+    r.page.unroute("**/*")
+
+
+@check("glass-panes", "2026-11-14 note 10 (Sam: the lily line and the trail badge \"should be translucent glass panes not the badges they are\"): both are square-cornered, see-through panes, and the trail badge is no longer a disc")
+def glass_panes(r):
+    scratch_passage(r, "T-glass", N14_ERRAND + '(set: $hasMissingPage to false)(go-to: "Dean Street")')
+    r.go("T-glass", wait=7000); r.clear_slips()
+    r.wait_for("() => !!document.querySelector('.dss-trail-badge')", 6000, "the trail badge")
+    PANE = "(sel) => { var e = document.querySelector(sel); if (!e) return null; var c = getComputedStyle(e), b = e.getBoundingClientRect(), al = (c.backgroundImage.match(/rgba\\([^)]*\\)/g) || []).map(function (x) { return parseFloat(x.replace(/.*,/, '')); }); return { radius: parseFloat(c.borderTopLeftRadius), alphas: al, w: Math.round(b.width), h: Math.round(b.height), dir: c.flexDirection }; }"
+    tb = r.js(PANE, ".dss-trail-badge")
+    r.expect(tb["radius"] <= 6, "the trail badge has round corners again (%r)" % tb)
+    r.expect(tb["alphas"] and max(tb["alphas"]) <= 0.5, "the trail badge is not see-through (%r)" % tb)
+    r.expect(tb["w"] > tb["h"] * 1.6 and tb["dir"] == "row", "the trail badge is a disc again, not a pane on its side (%r)" % tb)
+    r.page.unroute("**/*")
+    r.go("Entering The Pillars of Hercules", wait=9000); r.clear_slips(); r.clear_lore()
+    r.wait_for("() => !!document.querySelector('.dss-room-lily-hint')", 9000, "the Pillars' lily line")
+    lh = r.js(PANE, ".dss-room-lily-hint")
+    r.expect(lh["radius"] <= 6, "the lily line is an oval badge again (%r)" % lh)
+    r.expect(lh["alphas"] and max(lh["alphas"]) <= 0.5, "the lily line is not see-through (%r)" % lh)
+
+
+@check("errand-badge", "2026-11-14 notes 15 and 20 (Sam: \"The errand should appear in the same way the path/quests do\"; \"You should be able to click the badge ... the corresponding venue in the menu should flash red\"): INIS's page-93 errand wears the trail badge, to the Pillars and then to Cecil Court, and a press on it flashes that venue in the menu and on the map")
+def errand_badge(r):
+    BADGE = "() => { var b = document.querySelector('.dss-trail-badge'); return b ? b.innerText.replace(/\\s+/g, ' ').trim() : ''; }"
+    for i, (label, sets, want, door, line) in enumerate([("the page to find", '(set: $hasMissingPage to false)', "Next, the Pillars.", "pillars", "Find page 93."), ("the page in the pocket", '(set: $hasMissingPage to true)', "Next, Cecil Court.", "cecil", "Take page 93 back to INIS.")]):
+        r.page.unroute("**/*")
+        scratch_passage(r, "T-errand%d" % i, N14_ERRAND + sets + '(go-to: "Dean Street")')
+        r.go("T-errand%d" % i, wait=7000); r.clear_slips()
+        r.wait_for("() => !!document.querySelector('.dss-trail-badge')", 6000, "the errand's badge with %s" % label)
+        b = r.js(BADGE)
+        r.expect("PAGE 93" in b and want in b, "%s: the badge reads %r" % (label, b))
+        r.expect(r.js("() => !!document.querySelector('.dss-trail-badge .dss-compass-hand')"), "%s: the badge has no compass" % label)
+        r.page.locator(".dss-trail-badge").first.click()
+        r.page.wait_for_timeout(350)
+        fl = r.js("() => [].map.call(document.querySelectorAll('.dss-menu-flash'), function (e) { return (e.getAttribute('aria-label') || e.innerText).trim(); })")
+        mark = r.js("() => window.dssTrailFlashed || null")
+        r.expect(mark and mark["door"] == door and mark["n"] >= 1, "%s: pressing the badge flashed nothing (%r)" % (label, mark))
+        r.expect(any(line in f for f in fl), "%s: the Where next? line %r did not flash (%r)" % (label, line, fl))
+    r.page.unroute("**/*")
+    scratch_passage(r, "T-errand-done", N14_BASE + '(set: $keyLighter to "seed")(set: $dreamKey to "")(go-to: "Dean Street")')
+    r.go("T-errand-done", wait=7000); r.clear_slips(); r.page.wait_for_timeout(1500)
+    r.expect("PAGE 93" not in r.js(BADGE), "the errand's badge still shows after page 93 is back with INIS")
+    r.page.unroute("**/*")
+
+
+@check("lore-foot-go-on", "2026-11-14 note 16 (Sam, the storm page: \"Seek the shore appears too as the button here, it would be 'go on' the second time\"): a lore note owed to a press no longer wears that press's words on its foot button")
+def lore_foot_go_on(r):
+    scratch_passage(r, "T-storm", N14_ERRAND + '(set: $hasMissingPage to false)(set: $pillarsVisits to 1)(go-to: "Maritime interlude")')
+    r.go("T-storm", wait=7000); r.clear_slips()
+    r.expect(r.pn() == "Maritime interlude", "the start landed on %r" % r.pn())
+    pt = r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /Seek the shore/.test(x.textContent) && !x.closest('.dss-ghost') && x.getClientRects().length; })[0]; if (!l) return null; l.scrollIntoView({ block: 'center' }); var b = l.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }")
+    r.expect(pt, "no Seek the shore on the storm page")
+    r.page.mouse.click(pt[0], pt[1])   # a real press: the notes owed to it open first
+    labels = []
+    for _ in range(4):
+        r.wait_for("() => !!document.querySelector('#dss-lore-overlay .dss-lore-on') || ((document.getElementById('dss-pn') || {}).textContent || '').trim() !== 'Maritime interlude'", 8000, "a lore note or the page to turn")
+        if r.pn() != "Maritime interlude": break
+        labels.append(r.js("() => document.querySelector('#dss-lore-overlay .dss-lore-on').textContent.trim()"))
+        r.page.locator("#dss-lore-overlay .dss-lore-on").first.click()
+        r.page.wait_for_timeout(1500)
+    r.info = "foot buttons: %r" % labels
+    r.expect(labels, "no lore note opened on the press")
+    r.expect(all(l in ("Go on", "Next note") for l in labels) and labels[-1] == "Go on", "a note's foot button repeats the press's own words (%r)" % labels)
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'The coast of Carthage'", 8000, "the press to carry on to Carthage after the notes")
+    r.page.unroute("**/*")
+
+
+@check("where-next-pick-clears-slip", "2026-11-14 note 18 (Sam: \"When you select find p93 from the main list the slip should disappear\"): picking a Where next? line sends off the slip that offers directions to the same door")
+def where_next_pick_clears_slip(r):
+    scratch_passage(r, "T-pick", N14_ERRAND + '(set: $hasMissingPage to true)(set: $pageReminderShown to false)(go-to: "Dean Street")')
+    r.go("T-pick", wait=5000)
+    UP = "() => [].some.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (c) { return /waiting for it in Cecil Court/.test(c.textContent); })"
+    r.wait_for(UP, 20000, "the slip that says page 93 is in your pocket")
+    r.expect(r.js(N14_CLICK, "Take page 93 back to INIS."), "no Take page 93 back to INIS. line in Where next?")
+    r.page.wait_for_timeout(1500)
+    r.expect(not r.js(UP), "the slip stayed up after its line was picked in Where next?")
+    r.expect("cecil" in (r.js("() => window.dssDirections.get()") or ""), "the pick did not light the way to Cecil Court")
+    r.page.unroute("**/*")
+
+
+@check("french-done-says-so", "2026-11-14 note 21 (Sam: \"What does this mean when it shows the lilies and an empty box and 'not now'?\"): a French with nothing left says so in a sentence, with no stray haunt marks under it")
+def french_done_says_so(r):
+    scratch_passage(r, "T-frdone", N14_BASE + '(go-to: "The French")')
+    r.go("T-frdone", wait=9000); r.clear_slips(); r.clear_lore()
+    v = r.js("() => { var v = document.querySelector('.dss-room-veil.dss-room-veil-on'); if (!v) return null; return { text: v.innerText, marks: [].filter.call(v.querySelectorAll('.hp, .lp'), function (e) { return e.getClientRects().length; }).length }; }")
+    r.expect(v is not None, "the French's opening panel did not show")
+    r.expect("There is nothing more for you in the French tonight." in v["text"] and "NOT NOW" not in v["text"].upper(), "the panel reads %r" % v["text"][:160])
+    r.expect(v["marks"] == 0, "%d stray haunt or lily marks stand under the line" % v["marks"])
+    r.page.unroute("**/*")
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

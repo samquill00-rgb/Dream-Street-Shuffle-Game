@@ -2222,6 +2222,14 @@ def shelley_bust(r):
     got = r.js(ROT)
     r.expect(got and got[2] >= 3, "the bust did not load its three parts with their pictures (%r)" % (got,))
     home = got[0]
+    # 2026-11-14 (Sam: "make the halo/sprite under the bust brighter so it matches the others"): its resting glow is as strong as the brightest in the room
+    GL = "() => { var g = null; window.__dssRooms['oi'].scene.traverse(function (o) { if (o.name === 'restGlow') g = o; }); var out = []; for (var i = 0; i < 10; i++) { var c = g.children[i * 2]; out.push(c && c.visible ? c.material.opacity : 0); } return out; }"
+    peak = [0.0] * 10
+    for _ in range(14):
+        cur = r.js(GL); peak = [max(a_, b_) for a_, b_ in zip(peak, cur)]; r.page.wait_for_timeout(250)
+    others = max(peak[:9])
+    r.expect(peak[9] > 0 and peak[9] >= others * 0.55,   # the glows breathe out of step (down to 0.68 of full); a used-up one sits at 0.38
+              "the bust's resting glow is dimmer than the room's others (%.2f against %.2f; all %r)" % (peak[9], others, [round(x, 2) for x in peak]))
     r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-room.png"))
     r.click_object("oi", "A bust of Percy Bysshe Shelley")
     r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-close.png"))

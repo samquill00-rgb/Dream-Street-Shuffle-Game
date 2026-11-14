@@ -90,6 +90,7 @@ AUDIO_EMBEDS = [
     ("__DSS_STREET_DATA_URI__",      "the-street-layered-floor.m4a",                   "audio/mp4"),
     # 2026-11-11: Sam's street recording (New Recording 150, five clips in street-live-originals/), cut by tools_street_clips.py
     ("__DSS_STREET_WET_DATA_URI__",  "street-wet-loop.m4a",                            "audio/mp4"),   # under the street bed on outdoor pages
+    ("__DSS_HARP_ALLEY_THEME_DATA_URI__", "harp-alley-theme.m4a",                      "audio/mp4"),   # 2026-11-14: Sam's own guitar and bass for Brydges Place (harp-originals/ProfJoshThemeBASS.mp3), 1 dB up, 32 bars at 130; the six harp-alley pages
     ("__DSS_LACKLAND_BELL_DATA_URI__", "lackland-doorbell.m4a",                        "audio/mp4"),   # Lackland's door, Frith Street
     ("__DSS_LACKLAND_STEPS_DATA_URI__", "lackland-steps-out.m4a",                      "audio/mp4"),   # walking off from his door
     ("__DSS_PILLARS_SHANTY_DATA_URI__", "pillars-shanty.m4a",                          "audio/mp4"),   # 2026-11-11: Sam's "Drunken sailor" (shanty-originals/, tools_shanty.py), once on the Pillars approach

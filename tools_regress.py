@@ -2349,6 +2349,54 @@ def pub_calls(r):
     r.expect("'venue-french':      { min: 50, max: 130, fn: function(){ pubCall(); } }" in html.replace("&#39;", "'"), "the French no longer schedules the shout")
 
 
+@check("harp-alley-theme", "2026-11-14 (Sam: \"it's now in claudework can you add it to the alleyway behind the harp\"): his guitar and bass recording plays on the Harp alley's approach, holds through the meeting, repeats on its 32 bars, and stops on the way out")
+def harp_alley_theme(r):
+    import html as _h
+    root = os.path.dirname(os.path.abspath(__file__))
+    t = _h.unescape(open(os.path.join(root, "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)   # a planted bug is applied to the text read here
+    r.expect(os.path.exists(os.path.join(root, "harp-alley-theme.m4a")), "harp-alley-theme.m4a is not beside the html")
+    m = re.search(r"label: 'harp-alley-theme', dataUri: 'harp-alley-theme\.m4a'[^\n]*?loopStart: ([\d.]+), loopEnd: ([\d.]+)", t)
+    r.expect(m is not None, "the Harp alley's recording is not registered with its file and loop points")
+    bars = float(m.group(2)) - float(m.group(1))
+    r.expect(abs(bars - 32 * 4 * 60 / 130.0) < 0.002, "the recording's repeat is %.3f s long, not its 32 bars at 130 (59.077 s)" % bars)
+    for name in ["Harp Alley Approach", "The Harp's Alley", "Harp Alley Ask", "Harp Alley Answer", "Harp Alley Standoff", "Harp Alley End"]:
+        tag = re.search(r'<tw-passagedata[^>]*name="%s"[^>]*tags="([^"]*)"' % re.escape(name), t)
+        r.expect(tag is not None and "harp-alley" in tag.group(1).split(), "%s does not carry the harp-alley tag" % name)
+    PLAYING = "() => window.dssAudio.bedPlaying('harp-alley-theme')"
+    # a ?start= page is the first of the load, which the passage watcher does not see; hand it the page the way the watcher does
+    HAND = "() => window.dssAudio.updateAmbientBedsForPassage(document.querySelector('tw-story > tw-passage'))"
+    CLICK = "(t) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf(t) >= 0 && !x.closest('.dss-ghost'); })[0]; if (!l) return false; l.click(); return true; }"
+    r.go("Dean Street", wait=3000)
+    r.js(HAND)
+    r.page.wait_for_timeout(1200)
+    r.expect(not r.js(PLAYING), "the Harp alley's recording plays on Dean Street")
+    r.go("Harp Alley Approach", wait=4000)
+    r.js(HAND)
+    r.wait_for(PLAYING, 8000, "the recording to start on the alley's approach")
+    scratch_passage(r, "T-harp-theme", '(set: $shipCall to "kept")(set: $shipFate to "afloat")(set: $shipResolved to true)(go-to: "The Harp\'s Alley")')
+    r.go("T-harp-theme", wait=2500)
+    r.js(HAND)
+    r.wait_for(PLAYING, 8000, "the recording to start in the alley")
+    waits = []
+    for link, page in (("Hear him out", "Harp Alley Ask"), ("Give him nothing", "Harp Alley Answer"), ("His hand is in his pocket", "Harp Alley Standoff"), ("Let it lie", "Harp Alley End")):
+        # a press can land while the page is still settling (the meters move on the Answer page); press again until the page turns, as a player would
+        t0 = time.time()
+        while time.time() - t0 < 8 and r.pn() != page:
+            r.expect(r.js(CLICK, link) or r.pn() == page, "no %r link on %r" % (link, r.pn()))
+            r.page.wait_for_timeout(900)
+        waits.append("%s %.1fs" % (page.replace("Harp Alley ", ""), time.time() - t0))
+        r.expect(r.pn() == page, "pressing %r landed on %r, not %r" % (link, r.pn(), page))
+        r.expect(r.js(PLAYING), "the recording stopped on %s" % page)
+        r.expect(r.js("() => window.dssAudio.bedLevel('harp-alley-theme')") > 0.05, "the recording is all but silent on %s" % page)
+    r.expect(r.js(CLICK, "Back to the street"), "no way back to the street on %r" % r.pn())
+    r.page.wait_for_timeout(5000)
+    r.expect(r.pn() == "Dean Street", "the way out of the alley landed on %r" % r.pn())
+    r.expect(not r.js(PLAYING), "the recording is still playing on Dean Street after the alley")
+    r.info = "page turns: " + ", ".join(waits)
+    r.page.unroute("**/*")
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

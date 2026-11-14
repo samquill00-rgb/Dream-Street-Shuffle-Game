@@ -1,3 +1,6 @@
+# START HERE (night of 2026-11-13 to 14)
+See HANDOFF-night-2026-11-14.md: the Shelley bust in the bookshop, Sam's new recordings, and the sound audit (tools_sound_audit.py; six findings waiting for his ear, nothing in the mix changed).
+
 # START HERE (2026-11-07 session: the second-opinion pass)
 
 # Open-items walk 2026-11-07 evening (Sam delegated the non-prose calls: "just do your pick")

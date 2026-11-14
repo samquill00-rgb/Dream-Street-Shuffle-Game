@@ -203,6 +203,8 @@ class Run:
                 if not self.js("() => !!document.querySelector('#dss-hint-stack .dss-hint-slip:not(.out)')"):
                     return
             self.wait_for("() => [].every.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (c) { return c.classList.contains('typed'); })", 30000, "a slip to finish typing")
+            # 2026-11-14 note 7: the MORALE and SOBRIETY slips cannot be closed until they have been up long enough to read
+            self.wait_for("() => !document.querySelector('#dss-hint-stack .dss-hint-slip.dss-hint-held:not(.out)')", 12000, "a held slip to let go")
             x = self.page.locator("#dss-hint-stack .dss-hint-slip:not(.out) .dss-hint-x")
             if x.count():
                 x.last.click()
@@ -1462,9 +1464,9 @@ def _(r):
     r.js(hand)
     r.page.wait_for_timeout(1500)
     early = r.js("() => window.dssLastShanty || 0")
-    r.page.wait_for_timeout(2000)
-    r.expect(r.js("() => window.dssLastShanty || 0"), "the shanty did not start on the Pillars approach")
-    r.expect(not early, "the shanty started within 1.5 s (2026-11-13 note 2: it waits 2.6 s)")
+    r.page.wait_for_timeout(950)
+    r.expect(r.js("() => window.dssLastShanty || 0"), "the shanty had not started 2.45 s into the Pillars approach (2026-11-14 note 11: \"a tiny bit sooner\", 2.0 s in; it was 2.6)")
+    r.expect(not early, "the shanty started within 1.5 s (2026-11-13 note 2: \"happen too quickly\")")
     src = r.js("() => Array.from(document.scripts).map(s => s.textContent).join('\\n')")
     r.expect("_playSample(SHANTY_URL, 0.45" in src, "the shanty is back at its old quiet level (2026-11-13 note 2)")
     r.go("Approach Lacklands Office")
@@ -1727,7 +1729,7 @@ def _(r):
     r.wait_for("() => [].some.call(document.querySelectorAll('tw-passage tw-link, .dss-room-veil tw-link'), function (l) { return l.textContent.trim() === 'Go on'; })", 5000, "a Go on link on the Interval")
 
 
-@check("polaroid-close", "2026-11-08 note 20: the stairs' polaroid has a cross on its corner, a line saying how to put it away, and any click closes it")
+@check("polaroid-close", "2026-11-08 note 20: the stairs' polaroid has a cross on its corner and a line saying how to put it away; 2026-11-14 note 17: the first press pockets it and it stays up to read, the second puts it away")
 def _(r):
     r.go("The Interval: the stairs", wait=5000)
     r.clear_slips()
@@ -1737,9 +1739,16 @@ def _(r):
       if (!f || !x || !h) return null; var a = f.getBoundingClientRect(), b = x.getBoundingClientRect(); return { near: Math.abs(b.right - a.right) < 30 && Math.abs(b.top - a.top) < 30, hint: h.textContent, vis: getComputedStyle(h).visibility }; }""")
     r.expect(box, "the polaroid screen has no frame, cross or hint")
     r.expect(box["near"], "the cross is not on the polaroid's corner")
+    r.expect(box["hint"] == "Pocket the polaroid", "the line under the polaroid reads %r" % box["hint"])
+    # 2026-11-14 note 17 (Sam: "'Pocket the polaroid' shouldn't close it immediately, that should need a second click so you can still read it")
     r.page.wait_for_timeout(800)
     r.page.mouse.click(60, 840)
-    r.wait_for("() => !document.querySelector('#dss-photo-pop')", 3000, "a click anywhere to put the polaroid away")
+    r.page.wait_for_timeout(900)
+    st = r.js("() => { var o = document.querySelector('#dss-photo-pop'), h = document.querySelector('.dss-photo-pop-hint'); return o ? [o.classList.contains('pocketed'), o.classList.contains('out'), h ? h.textContent : ''] : null; }")
+    r.expect(st is not None and not st[1], "the first press put the polaroid away at once")
+    r.expect(st[0] and "pocket" in st[2].lower() and st[2] != "Pocket the polaroid", "the first press did not pocket it and say so (%r)" % (st,))
+    r.page.mouse.click(60, 840)
+    r.wait_for("() => !document.querySelector('#dss-photo-pop')", 3000, "the second press to put the polaroid away")
 
 
 @check("barber-choice-after-scene", "2026-11-08 notes 27-28: at the barber's the choices wait under the 3D scene until its button is pressed; 2026-11-13 notes 25-26: the button says TO THE BARBER'S, the shop bell rings on it (not on the map step), the runner goes at 3.4 m/s in all three scenes")

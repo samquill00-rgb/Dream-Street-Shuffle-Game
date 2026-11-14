@@ -2228,6 +2228,9 @@ def shelley_bust(r):
     # 2026-11-14 (Sam: "I want that audio to loop when you click and examine the statue"): his recording plays while the bust is examined, and stops on stepping back
     r.expect("shelley-bust-loop.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the bust's recording is not linked in the html")
     r.wait_for("() => window.dssAudio.bedPlaying('shelley-bust')", 6000, "the bust's recording to start in its close-up")
+    # 2026-11-14 (Sam: "bring the background sound bed right down to a minimum while the bust music runs"): the shop's own beds drop to a twentieth while it plays, and come back
+    low = r.js("() => [window.dssAudio.bedLevel('bookshop'), window.dssAudio.bedLevel('soho-wall')]")
+    r.expect(low[0] < 0.02 and low[1] < 0.02, "the shop's beds are not turned down while the bust's recording plays (%r)" % (low,))
     pt = r.js("([r, n]) => window.__dssRooms[r].point(n)", ["oi", "A bust"])
     r.page.mouse.move(pt[0] - 120, pt[1]); r.page.mouse.down()
     for i in range(1, 13):
@@ -2239,6 +2242,8 @@ def shelley_bust(r):
     r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-turned.png"))
     r.back_click("oi"); r.page.wait_for_timeout(3500)
     r.expect(not r.js("() => window.dssAudio.bedPlaying('shelley-bust')"), "the bust's recording is still playing after stepping back")
+    up = r.js("() => [window.dssAudio.bedLevel('bookshop'), window.dssAudio.bedLevel('soho-wall')]")
+    r.expect(up[0] > 0.1 and up[1] > low[1] * 10, "the shop's beds did not come back after the bust's close-up (%r)" % (up,))
     back = r.js(ROT)[0]
     r.expect(abs(back - home) < 0.02, "the bust did not swing home after the close-up (%.2f, home %.2f)" % (back, home))
 

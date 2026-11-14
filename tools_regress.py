@@ -2395,7 +2395,8 @@ def harp_alley_theme(r):
     r.wait_for(PLAYING, 8000, "the recording to start in the alley")
     waits = []
     for link, page in (("Hear him out", "Harp Alley Ask"), ("Give him nothing", "Harp Alley Answer"), ("His hand is in his pocket", "Harp Alley Standoff"), ("Let it lie", "Harp Alley End")):
-        # a press can land while the page is still settling (the meters move on the Answer page); press again until the page turns, as a player would
+        # this jump skips the French, so the night's first change of MORALE falls in the alley and the MORALE and SOBRIETY slips come up here; they hold every press until read (2026-11-14 note 7), so read them as a player would
+        r.clear_slips()
         t0 = time.time()
         while time.time() - t0 < 8 and r.pn() != page:
             r.expect(r.js(CLICK, link) or r.pn() == page, "no %r link on %r" % (link, r.pn()))
@@ -2404,6 +2405,7 @@ def harp_alley_theme(r):
         r.expect(r.pn() == page, "pressing %r landed on %r, not %r" % (link, r.pn(), page))
         r.expect(r.js(PLAYING), "the recording stopped on %s" % page)
         r.expect(r.js("() => window.dssAudio.bedLevel('harp-alley-theme')") > 0.05, "the recording is all but silent on %s" % page)
+    r.clear_slips()
     r.expect(r.js(CLICK, "Back to the street"), "no way back to the street on %r" % r.pn())
     r.page.wait_for_timeout(5000)
     r.expect(r.pn() == "Dean Street", "the way out of the alley landed on %r" % r.pn())

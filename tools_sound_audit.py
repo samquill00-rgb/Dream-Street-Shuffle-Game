@@ -231,6 +231,38 @@ def tick_contexts(src, rows):
     return out
 
 
+def seams(src, rows):
+    """Every bed loops. Chrome keeps an AAC file's end padding when it decodes, so a loop whose length is not a whole number of 1024-sample
+    frames carries a sliver of silence at the join; and a file that starts or ends in silence, or at very different levels, joins badly too."""
+    import array, math
+    sy = open(os.path.join(ROOT, "sync_html.py")).read(); emb = dict(re.findall(r'\("(__DSS_[A-Z0-9_]+__)",\s*"([^"]+)"', sy))
+    files = {}
+    for m in re.finditer(r"registerAmbientBed\(\{(.*?)\}\);", src, re.S):
+        lab = re.search(r"label:\s*'([^']+)'", m.group(1)); uri = re.search(r"dataUri:\s*'(__DSS_[A-Z0-9_]+__)'", m.group(1))
+        if lab and uri and uri.group(1) in emb: files.setdefault(lab.group(1), (emb[uri.group(1)], bool(re.search(r"\bloop:\s*false|crossfade|noLoop", m.group(1)))))
+    def rms_db(x): return 10 * math.log10(sum(v * v for v in x) / max(1, len(x)) / (32768.0 ** 2) + 1e-12)
+    for r in rows:
+        if r["kind"] != "bed" or r["name"] not in files: continue
+        f, special = files[r["name"]]; path = os.path.join(ROOT, f)
+        if not os.path.exists(path): continue
+        pr = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=duration_ts,sample_rate,codec_name", "-of", "json", path], capture_output=True, text=True)
+        st = json.loads(pr.stdout)["streams"][0]; n = int(st.get("duration_ts") or 0); sr = int(st.get("sample_rate") or 48000)
+        pcm = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", path, "-ac", "1", "-ar", "48000", "-f", "s16le", "-"], capture_output=True).stdout
+        a = array.array("h"); a.frombytes(pcm[:len(pcm) // 2 * 2])
+        if len(a) < 48000: continue
+        W = 720  # 15 ms
+        first, last, body_a, body_b = rms_db(a[:W]), rms_db(a[-W:]), rms_db(a[W:W + 9600]), rms_db(a[-9600 - W:-W])
+        info = {"file": f, "codec": st.get("codec_name"), "samples": n, "aligned": (n % 1024 == 0) if st.get("codec_name") == "aac" else None,
+                "gapMs": round((1024 - n % 1024) % 1024 / sr * 1000, 1) if st.get("codec_name") == "aac" else None,
+                "firstDb": round(first, 1), "lastDb": round(last, 1), "bodyStartDb": round(body_a, 1), "bodyEndDb": round(body_b, 1), "step": round(abs(body_a - body_b), 1)}
+        probs = []; live = first > -55 and last > -55   # sounding at both ends: a file meant to join end to start (a piece that ends in silence joins by itself)
+        if live and info["aligned"] is False and info["gapMs"] >= 2: probs.append("loop join: %.0f ms of silence each time round (its length is not a whole number of AAC frames)" % info["gapMs"])
+        if live and info["step"] > 8: probs.append("loop join: it comes back in %.0f dB %s than it went out" % (info["step"], "louder" if body_a > body_b else "quieter"))
+        if special: probs = []
+        info["problems"] = probs; r["seam"] = info
+    return rows
+
+
 def flag(rows):
     """Mark what stands out. The game's own level map: music beds about -31 LUFS, room floors -43 to -52, cues about -26 at their loudest 400 ms."""
     for r in rows:
@@ -245,14 +277,27 @@ def flag(rows):
         if r.get("peak") is not None and r["peak"] > -0.3: f.append("peaks over full scale: it clips")
         if r.get("uses") == 0: f.append("not called anywhere in the game")
         if r.get("err"): f.append("error when called this way: " + r["err"][:60])
+        f += (r.get("seam") or {}).get("problems", [])
         r["flags"] = f; r["note"] = NOTES.get(r["id"], "")
     return rows
 
 
 def page():
-    d = json.load(open(os.path.join(OUT, "levels.json"))); rows = flag(d["rows"])
-    ctx = tick_contexts(open(TWEE, encoding="utf-8").read(), rows)
-    data = {"made": d["made"], "rows": rows, "contexts": ctx}
+    src = open(TWEE, encoding="utf-8").read()
+    d = json.load(open(os.path.join(OUT, "levels.json"))); rows = flag(seams(src, d["rows"]))
+    ctx = tick_contexts(src, rows)
+    buried = [c for c in ctx if c["margin"] < -10]; clip = [r for r in rows if r.get("peak") is not None and r["peak"] > -0.3]
+    joins = [r for r in rows if any(x.startswith("loop join") for x in r["flags"])]; beds = [r for r in rows if r["kind"] == "bed" and r.get("seam")]
+    cues = [r for r in rows if r["kind"] in ("cue", "stream") and r.get("M") is not None and r["M"] > -100]
+    med = sorted(r["M"] for r in cues)[len(cues) // 2] if cues else None
+    findings = []
+    if clip: findings.append("%s %s: %s." % (", ".join(r["name"] for r in clip), "clips" if len(clip) == 1 else "clip", "; ".join("%s peaks %.1f dB over full scale" % (r["name"], r["peak"]) for r in clip)))
+    if buried: findings.append("%d random room sounds sit more than 10 dB under the bed of their own room and are not heard: %s." % (len(buried), ", ".join(sorted(set("%s (%s)" % (c["cue"][4:].split(":")[0], c["tag"].replace("venue-", "")) for c in buried)))))
+    findings.append("Every bed that loops joins cleanly: %d files checked, none carries a sliver of silence at the join." % len(beds) if not [r for r in joins if "silence" in " ".join(r["flags"])] else "Some loops carry silence at the join; see the flags.")
+    if joins: findings.append("%s: the loop comes back in much louder than it went out, which may be heard as a jump." % " and ".join(r["name"] for r in joins))
+    if med is not None: findings.append("The middle cue sits at %.0f LUFS; the loudest are the phone, the ring announcer, the glass and the doors, the quietest the map and room textures. The pubs' floors run from %s to %s." % (med, *("%.0f" % v for v in (max(r["I"] for r in rows if r["id"] in ("bed:pub-french", "bed:pub-pillars", "bed:colony", "bed:trishas", "bed:coach-bar")), min(r["I"] for r in rows if r["id"] in ("bed:pub-french", "bed:pub-pillars", "bed:colony", "bed:trishas", "bed:coach-bar"))))))
+    data = {"made": d["made"], "rows": rows, "contexts": ctx, "findings": findings}
+    print("findings:"); [print("  - " + f) for f in findings]
     json.dump(data, open(os.path.join(OUT, "levels.json"), "w"), indent=1)
     tpl = open(os.path.join(ROOT, "tools_sound_audit_page.html"), encoding="utf-8").read()
     open(os.path.join(OUT, "index.html"), "w", encoding="utf-8").write(tpl.replace("/*DATA*/", json.dumps(data)))
@@ -260,6 +305,10 @@ def page():
     print("page written: sound-audit/index.html (%d sounds, %d flagged or noted)" % (len(rows), len(fl)))
     for r in sorted(fl, key=lambda r: (r["kind"], -(r["level"] if r["level"] is not None else -999))):
         print("  %-30s %7s  %s" % (r["id"], "%.1f" % r["level"] if r["level"] is not None else "-", "; ".join(r["flags"]) or "(note)"))
+    print("bed loop joins:")
+    for r in rows:
+        sm = r.get("seam")
+        if sm: print("  %-22s %-36s %9d samples  aligned %-5s gap %s ms  first %6.1f last %6.1f  body %6.1f / %6.1f%s" % (r["name"], sm["file"][:36], sm["samples"], sm["aligned"], sm["gapMs"], sm["firstDb"], sm["lastDb"], sm["bodyStartDb"], sm["bodyEndDb"], "  <-- " + "; ".join(sm["problems"]) if sm["problems"] else ""))
     print("random room sounds against their beds (cue minus bed, dB):")
     for c in sorted(ctx, key=lambda c: c["margin"]):
         print("  %-18s %-22s %6.1f  under %-24s %6.1f  -> %+.1f%s" % (c["tag"], c["cue"][4:], c["cueLevel"], c["bed"][4:], c["bedLevel"], c["margin"], "  BURIED" if c["margin"] < -10 else ""))

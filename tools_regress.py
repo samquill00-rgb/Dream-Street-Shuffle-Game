@@ -2558,6 +2558,7 @@ def alba_star_flares(r):
 
 @check("stat-slips-hold", "2026-11-14 note 7 (Sam: \"You shouldn't be able to click fast through morale and sobriety slips, they are important to read\"): each of the two slips ignores its paper, its cross and a click elsewhere until it has been up long enough to read")
 def stat_slips_hold(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     r.go("The French", wait=9000)
     r.expect(r.js(N14_PRESS, "^to the bar$"), "no TO THE BAR button in the French")
     SLIP = "(tag) => { var c = [].filter.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (c) { var g = c.querySelector('.dss-hint-tag'); return g && g.textContent === tag; })[0]; return c ? { held: c.classList.contains('dss-hint-held'), typed: c.classList.contains('typed') } : null; }"
@@ -2602,20 +2603,21 @@ def lore_not_offered_again(r):
 
 @check("glass-panes", "2026-11-14 note 10 (Sam: the lily line and the trail badge \"should be translucent glass panes not the badges they are\"): both are square-cornered, see-through panes, and the trail badge is no longer a disc")
 def glass_panes(r):
-    scratch_passage(r, "T-glass", N14_ERRAND + '(set: $hasMissingPage to false)(go-to: "Dean Street")')
-    r.go("T-glass", wait=7000); r.clear_slips()
-    r.wait_for("() => !!document.querySelector('.dss-trail-badge')", 6000, "the trail badge")
     PANE = "(sel) => { var e = document.querySelector(sel); if (!e) return null; var c = getComputedStyle(e), b = e.getBoundingClientRect(), al = (c.backgroundImage.match(/rgba\\([^)]*\\)/g) || []).map(function (x) { return parseFloat(x.replace(/.*,/, '')); }); return { radius: parseFloat(c.borderTopLeftRadius), alphas: al, w: Math.round(b.width), h: Math.round(b.height), dir: c.flexDirection }; }"
-    tb = r.js(PANE, ".dss-trail-badge")
-    r.expect(tb["radius"] <= 6, "the trail badge has round corners again (%r)" % tb)
-    r.expect(tb["alphas"] and max(tb["alphas"]) <= 0.5, "the trail badge is not see-through (%r)" % tb)
-    r.expect(tb["w"] > tb["h"] * 1.6 and tb["dir"] == "row", "the trail badge is a disc again, not a pane on its side (%r)" % tb)
-    r.page.unroute("**/*")
+    # the lily line first, on a fresh night (the trail state below has the Pillars' lily already gathered)
     r.go("Entering The Pillars of Hercules", wait=9000); r.clear_slips(); r.clear_lore()
     r.wait_for("() => !!document.querySelector('.dss-room-lily-hint')", 9000, "the Pillars' lily line")
     lh = r.js(PANE, ".dss-room-lily-hint")
     r.expect(lh["radius"] <= 6, "the lily line is an oval badge again (%r)" % lh)
     r.expect(lh["alphas"] and max(lh["alphas"]) <= 0.5, "the lily line is not see-through (%r)" % lh)
+    scratch_passage(r, "T-glass", N14_ERRAND + '(set: $hasMissingPage to false)(go-to: "Dean Street")')
+    r.go("T-glass", wait=7000); r.clear_slips()
+    r.wait_for("() => !!document.querySelector('.dss-trail-badge')", 6000, "the trail badge")
+    tb = r.js(PANE, ".dss-trail-badge")
+    r.expect(tb["radius"] <= 6, "the trail badge has round corners again (%r)" % tb)
+    r.expect(tb["alphas"] and max(tb["alphas"]) <= 0.5, "the trail badge is not see-through (%r)" % tb)
+    r.expect(tb["w"] > tb["h"] * 1.6 and tb["dir"] == "row", "the trail badge is a disc again, not a pane on its side (%r)" % tb)
+    r.page.unroute("**/*")
 
 
 @check("errand-badge", "2026-11-14 notes 15 and 20 (Sam: \"The errand should appear in the same way the path/quests do\"; \"You should be able to click the badge ... the corresponding venue in the menu should flash red\"): INIS's page-93 errand wears the trail badge, to the Pillars and then to Cecil Court, and a press on it flashes that venue in the menu and on the map")
@@ -2659,7 +2661,7 @@ def lore_foot_go_on(r):
         r.page.wait_for_timeout(1500)
     r.info = "foot buttons: %r" % labels
     r.expect(labels, "no lore note opened on the press")
-    r.expect(all(l in ("Go on", "Next note") for l in labels) and labels[-1] == "Go on", "a note's foot button repeats the press's own words (%r)" % labels)
+    r.expect(all(l in ("Go on", "Next note") for l in labels) and labels[-1] == "Go on", "a note's foot button repeats the press's own words, or the last says Next note (%r)" % labels)
     r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'The coast of Carthage'", 8000, "the press to carry on to Carthage after the notes")
     r.page.unroute("**/*")
 

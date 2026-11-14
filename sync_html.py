@@ -100,7 +100,6 @@ AUDIO_EMBEDS = [
     ("__DSS_VOMIT_DATA_URI__",       "vomit-sickness.m4a",                             "audio/mp4"),   # "Sick Noises" by frosty ham: the retch hold
     ("__DSS_REVO_DATA_URI__",        "revo-shout.m4a",                                 "audio/mp4"),   # 2026-11-14: Sam's own shout "Revo!" for the naked runner (revo-originals/), trimmed and turned down
     ("__DSS_REVO_ONE_DATA_URI__",    "revo-shout-one.m4a",                             "audio/mp4"),   # 2026-11-14: the first shout alone, for the two shorter runs
-    ("__DSS_TONY_ADAMS_DATA_URI__",  "tony-adams-chant.m4a",                           "audio/mp4"),   # 2026-11-14: Sam's own Tony Adams chant for the coin toss (voice-originals/, tools_voice_clips.sh)
     ("__DSS_PUB_CALLS_DATA_URI__",   "pub-calls.m4a",                                  "audio/mp4"),   # 2026-11-14: four of Sam's own odd shouts in one sheet, 4.5 s a slot, for the pubs' hubbub
     ("__DSS_GLASS_SMASH_DATA_URI__", "glass-window-smash.m4a",                         "audio/mp4"),   # "Glass Break" by Till Behrend: smashed map windows
     ("__DSS_COIN_DROP_DATA_URI__",   "coin-drop.m4a",                                  "audio/mp4"),   # 2026-11-05: Sam's coin drop (hjm-coindrop_v1.wav), the Donkey toss on Dean Street

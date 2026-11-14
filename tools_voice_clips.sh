@@ -1,6 +1,6 @@
 #!/bin/bash
 # 2026-11-14 (Sam: "process the sounds how you like and add reverb"): his five phone recordings (voice-originals/New Recording 154-158.m4a).
-# 154 is the Tony Adams chant for the coin toss (tony-adams-chant.m4a); 156 is an odd shout for the pubs' hubbub (155, 157 and 158 were dropped at Sam's word, to be recorded again), in a sheet
+# 156 is an odd shout for the pubs' hubbub (155, 157 and 158 were dropped at Sam's word, to be recorded again), in a sheet
 # (pub-calls.m4a, 4.5 s a slot). Each: silence trimmed, high-passed, a synthetic room (decaying noise as the impulse) mixed under it,
 # then levelled to -24 LUFS. Run from the project folder; needs ffmpeg.
 set -e
@@ -17,16 +17,8 @@ proc() { # in out wet lowpass [semitones: the pitch moved with its formants, so 
   ffmpeg -hide_banner -loglevel error -y -i "$W/wet.wav" -af "volume=${G}dB,alimiter=limit=0.95,afade=t=out:st=$(python3 -c "print(max(0, $D - 0.25))"):d=0.25" "$2"
   echo "$1 -> $2: was $I LUFS, gain $G dB, $(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$2") s"
 }
-# then (Sam: "With the chant, just take the second half of it"; "not to cut off the very end"; "like a whole stadium in unison"): the
-# recording is two halves with a pause between (1.5 to 4.7 s, 5.5 to 9.5 s). The second alone, run on a second past its last word, and
-# multiplied into a terrace by tools_crowd.py, then levelled to -24 LUFS with a long fade on the bowl's tail.
-python3 tools_crowd.py "voice-originals/New Recording 154.m4a" 5.40 10.45 "$W/crowd.wav" "$W"
-I=$(ffmpeg -hide_banner -i "$W/crowd.wav" -af ebur128 -f null - 2>&1 | grep -E '^\s+I:' | tail -1 | awk '{print $2}')
-D=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$W/crowd.wav")
-ffmpeg -hide_banner -loglevel error -y -i "$W/crowd.wav" -af "volume=$(python3 -c "print(round(-24.0 - ($I), 2))")dB,alimiter=limit=0.95,afade=t=out:st=$(python3 -c "print($D - 1.2)"):d=1.2" "$W/tony.wav"
-echo "chant: crowd was $I LUFS, $D s"
-ffmpeg -hide_banner -loglevel error -y -i "$W/tony.wav" -c:a aac -b:a 160k tony-adams-chant.m4a
-N=0; IN=""; FC=""
+# The Tony Adams chant (New Recording 154, its second half made a stadium by tools_crowd.py) was taken out of the game the same night at
+# Sam's word. To make it again: python3 tools_crowd.py "voice-originals/New Recording 154.m4a" 5.40 10.45 out.wav
 # 2026-11-14 (Sam: "process the pub voices to make them sound more anonymous, perhaps pitch shift them"): each shout a different stranger, two lower, two higher, each with its own top end
 # then (Sam: "I only like pub shout two, the others need to be redone so I'll do them tomorrow"): 156 alone for now, up 2.5 semitones;
 # add the new takes here as further slots (4.5 s each) and raise PUB_CALLS_N in the game to match

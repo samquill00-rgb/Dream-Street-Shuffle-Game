@@ -16,9 +16,14 @@ proc() { # in out wet lowpass
   ffmpeg -hide_banner -loglevel error -y -i "$W/wet.wav" -af "volume=${G}dB,alimiter=limit=0.95,afade=t=out:st=$(python3 -c "print(max(0, $D - 0.25))"):d=0.25" "$2"
   echo "$1 -> $2: was $I LUFS, gain $G dB, $(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$2") s"
 }
-# then (Sam: "With the chant, just take the second half of it"): the recording is two halves with a pause between (1.5 to 4.7 s, 5.5 to 9.5 s); the second alone
-ffmpeg -hide_banner -loglevel error -y -i "voice-originals/New Recording 154.m4a" -af "atrim=start=5.40:end=9.72,asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=4.12:d=0.2" "$W/tony-half.wav"
-proc "$W/tony-half.wav" "$W/tony.wav" 0.30 7000
+# then (Sam: "With the chant, just take the second half of it"; "not to cut off the very end"; "like a whole stadium in unison"): the
+# recording is two halves with a pause between (1.5 to 4.7 s, 5.5 to 9.5 s). The second alone, run on a second past its last word, and
+# multiplied into a terrace by tools_crowd.py, then levelled to -24 LUFS with a long fade on the bowl's tail.
+python3 tools_crowd.py "voice-originals/New Recording 154.m4a" 5.40 10.45 "$W/crowd.wav" "$W"
+I=$(ffmpeg -hide_banner -i "$W/crowd.wav" -af ebur128 -f null - 2>&1 | grep -E '^\s+I:' | tail -1 | awk '{print $2}')
+D=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$W/crowd.wav")
+ffmpeg -hide_banner -loglevel error -y -i "$W/crowd.wav" -af "volume=$(python3 -c "print(round(-24.0 - ($I), 2))")dB,alimiter=limit=0.95,afade=t=out:st=$(python3 -c "print($D - 1.2)"):d=1.2" "$W/tony.wav"
+echo "chant: crowd was $I LUFS, $D s"
 ffmpeg -hide_banner -loglevel error -y -i "$W/tony.wav" -c:a aac -b:a 160k tony-adams-chant.m4a
 N=0; IN=""; FC=""
 for k in 155 156 157 158; do proc "voice-originals/New Recording $k.m4a" "$W/c$k.wav" 0.55 5200; IN="$IN -i $W/c$k.wav"; FC="$FC[$N]apad=whole_dur=4.5,atrim=end=4.5[a$N];"; N=$((N+1)); done

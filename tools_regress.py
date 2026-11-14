@@ -2277,6 +2277,13 @@ def revo_shout(r):
     r.expect(0.33 <= at <= 0.48, "he shouted %.2f of the way along his run, not a little over a third" % at)
     r.wait_for("() => (window.__dssRunnerDbg || []).some(function (s) { return s.done; })", 15000, "the end of his run")
     r.expect(r.js("() => window.__dssRevoShouts") == 1, "he shouted %r times on one run" % r.js("() => window.__dssRevoShouts"))
+    r.expect(r.js("() => window.__dssRevoLast") == "two", "the chippy's long run did not play the whole recording")
+    # 2026-11-14 (Sam: "Make it just one revo shout on these shorter scenes"): the barber's and Mister Jimmy's play the first shout alone
+    for passage in ("The Barbershop", "Mister Jimmy\u2019s Drug Store"):
+        r.go(passage, wait=3000)
+        r.wait_for("() => (window.__dssRunnerDbg || []).some(function (s) { return s.shout; })", 25000, "his shout at %s" % passage)
+        r.expect(r.js("() => window.__dssRevoLast") == "one", "%s: his short run played both shouts" % passage)
+    r.expect("revo-shout-one.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the one-shout recording is not linked in the html")
 
 
 def main(argv):

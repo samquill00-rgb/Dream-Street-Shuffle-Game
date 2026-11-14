@@ -2292,6 +2292,18 @@ def revo_shout(r):
     r.expect("revo-shout-one.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the one-shout recording is not linked in the html")
 
 
+@check("nazca-no-steps", "2026-11-14 (Sam, sound audit: \"Why do i have steps here?\"): gravel steps played at random on every Nazca page, the race included, with nobody walking")
+def nazca_no_steps(r):
+    import html as _h
+    t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)   # a planted bug is applied to the text read here
+    m = re.search(r"'nazca':\s*\{\s*min:[^\n]*", t)
+    r.expect(m is not None, "no random-sound entry for Nazca was found in the build")
+    r.expect("gravelSteps" not in m.group(0).split("/*")[0], "Nazca's random sounds include the gravel steps again")
+    r.expect("gust(" in m.group(0), "Nazca's random sounds have lost the wind")
+    r.go("Dean Street", wait=1500)
+
+
 @check("pub-calls", "2026-11-14 (Sam: \"The rest of the sounds, non tony can just be part of the general hubbub\"): his odd shouts come now and then in a pub, never in the gents, and the recording is linked; the Tony Adams chant is gone from the coin toss (Sam, later: \"get rid of the stadium chant from the game too\")")
 def pub_calls(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

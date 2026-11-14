@@ -206,6 +206,7 @@ NOTES = {
     "bed:piano-eoin": "The Dawn piano is the loudest bed in the game, 8 dB over the Dean Street theme. It is the ending, so probably meant.",
     "bed:cave-shanti": "Plays 9 dB louder than the same file does as the Climb music: it starts further into the piece, where the chant is at full voice.",
     "bed:world-ezekiel-music": "Reads quiet only because its first 20 seconds are quiet; the piece as a whole is level with the other world musics.",
+    "cue:pageRustle": "The look-at sound for photographs, books, shelves, menus and tickets (15 call sites): 22 dB over the pubs' beds, the most forward of the look sounds.",
     "cue:typewriterTick": "Could not be recorded: it is a 20 ms click, shorter than the recorder's smallest frame. It is heard in the game (11 call sites).",
     "cue:typeKey": "The same 20 ms click as typewriterTick, under another name.",
     "cue:footstep": "Called here with no surface, which gives its quietest form; on cobble (the Soho map) it is mapFootstep, 11 dB louder.",
@@ -263,6 +264,47 @@ def seams(src, rows):
     return rows
 
 
+def look_contexts(src, rows):
+    """The sound each room object makes when you look at it (SPOT_CUES, by the object's name) against the loudest bed in that room.
+    Visits the ten rooms once to read their objects' names; the answer is kept in sound-audit/rooms.json."""
+    cache = os.path.join(OUT, "rooms.json")
+    if os.path.exists(cache) and os.path.getmtime(cache) > os.path.getmtime(os.path.join(ROOT, "Dream Street Shuffle.html")):
+        rooms = json.load(open(cache))
+    else:
+        rooms = {}; srv = tr.serve(); port = srv.server_address[1]
+        from urllib.parse import quote
+        with sync_playwright() as p:
+            browser = p.chromium.launch(executable_path=tr.chrome_path(), headless=True, args=tr.FLAGS)
+            for rid, passage in tr.ROOMS:
+                pg = browser.new_context(viewport={"width": 1440, "height": 900}).new_page()
+                try:
+                    pg.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (port, tr.HTML, int(time.time()), quote(passage)), timeout=90000)
+                    pg.wait_for_function("(r) => !!(window.__dssRooms && window.__dssRooms[r])", arg=rid, timeout=25000); pg.wait_for_timeout(2500)
+                    rooms[passage] = pg.evaluate("(r) => window.__dssRooms[r].names()", rid)
+                except Exception as e:
+                    rooms[passage] = []
+                pg.context.close()
+            browser.close()
+        srv.shutdown(); json.dump(rooms, open(cache, "w"), indent=1)
+    m = re.search(r"var SPOT_CUES = \[(.*?)\];", src, re.S)
+    cues = re.findall(r"\['([a-z ]+)',\s*([A-Za-z]+)\]", m.group(1)) if m else []
+    tags = {n.strip(): t.split() for n, t in re.findall(r"^:: ([^\[\{\n]+?)\s*\[([^\]]*)\]", src, re.M)}
+    by = {r["id"]: r for r in rows}; out = []
+    for passage, names in rooms.items():
+        beds = [r for r in rows if r["kind"] == "bed" and set(r.get("tags") or []) & set(tags.get(passage, [])) and r.get("I") is not None]
+        if not beds: continue
+        top = max(beds, key=lambda r: r["I"])
+        for name in names:
+            n = name.lower()
+            for key, fn in cues:
+                if (re.search(r"\bbells?\b", n) if key == "bell" else key in n):
+                    c = by.get("cue:" + fn)
+                    if c and c.get("M") is not None:
+                        out.append({"tag": passage + ": " + name, "cue": c["id"], "cueLevel": c["M"], "bed": top["id"], "bedLevel": top["I"], "margin": round(c["M"] - top["I"], 1), "look": True})
+                    break
+    return out
+
+
 def flag(rows):
     """Mark what stands out. The game's own level map: music beds about -31 LUFS, room floors -43 to -52, cues about -26 at their loudest 400 ms."""
     for r in rows:
@@ -285,7 +327,7 @@ def flag(rows):
 def page():
     src = open(TWEE, encoding="utf-8").read()
     d = json.load(open(os.path.join(OUT, "levels.json"))); rows = flag(seams(src, d["rows"]))
-    ctx = tick_contexts(src, rows)
+    ctx = tick_contexts(src, rows); looks = look_contexts(src, rows)
     buried = [c for c in ctx if c["margin"] < -10]; clip = [r for r in rows if r.get("peak") is not None and r["peak"] > -0.3]
     joins = [r for r in rows if any(x.startswith("loop join") for x in r["flags"])]; beds = [r for r in rows if r["kind"] == "bed" and r.get("seam")]
     cues = [r for r in rows if r["kind"] in ("cue", "stream") and r.get("M") is not None and r["M"] > -100]
@@ -296,7 +338,11 @@ def page():
     findings.append("Every bed that loops joins cleanly: %d files checked, none carries a sliver of silence at the join." % len(beds) if not [r for r in joins if "silence" in " ".join(r["flags"])] else "Some loops carry silence at the join; see the flags.")
     if joins: findings.append("%s: the loop comes back in much louder than it went out, which may be heard as a jump." % " and ".join(r["name"] for r in joins))
     if med is not None: findings.append("The middle cue sits at %.0f LUFS; the loudest are the phone, the ring announcer, the glass and the doors, the quietest the map and room textures. The pubs' floors run from %s to %s." % (med, *("%.0f" % v for v in (max(r["I"] for r in rows if r["id"] in ("bed:pub-french", "bed:pub-pillars", "bed:colony", "bed:trishas", "bed:coach-bar")), min(r["I"] for r in rows if r["id"] in ("bed:pub-french", "bed:pub-pillars", "bed:colony", "bed:trishas", "bed:coach-bar"))))))
-    data = {"made": d["made"], "rows": rows, "contexts": ctx, "findings": findings}
+    lb = [c for c in looks if c["margin"] < -10]
+    if lb: findings.append("%d look-at sounds in the rooms sit more than 10 dB under the room's bed: %s." % (len(lb), ", ".join("%s (%s)" % (c["tag"].split(": ", 1)[1], c["tag"].split(": ", 1)[0]) for c in lb)))
+    lf = sorted(looks, key=lambda c: -c["margin"])
+    if lf and lf[0]["margin"] > 18: findings.append("No look-at sound is buried. The most forward is %s, %.0f dB over the pubs' beds (photographs, shelves, menus, tickets)." % (lf[0]["cue"][4:], lf[0]["margin"]))
+    data = {"made": d["made"], "rows": rows, "contexts": ctx + looks, "findings": findings}
     print("findings:"); [print("  - " + f) for f in findings]
     json.dump(data, open(os.path.join(OUT, "levels.json"), "w"), indent=1)
     tpl = open(os.path.join(ROOT, "tools_sound_audit_page.html"), encoding="utf-8").read()
@@ -309,6 +355,9 @@ def page():
     for r in rows:
         sm = r.get("seam")
         if sm: print("  %-22s %-36s %9d samples  aligned %-5s gap %s ms  first %6.1f last %6.1f  body %6.1f / %6.1f%s" % (r["name"], sm["file"][:36], sm["samples"], sm["aligned"], sm["gapMs"], sm["firstDb"], sm["lastDb"], sm["bodyStartDb"], sm["bodyEndDb"], "  <-- " + "; ".join(sm["problems"]) if sm["problems"] else ""))
+    print("look-at sounds against their room's bed:")
+    for c in sorted(looks, key=lambda c: c["margin"]):
+        print("  %-46s %-16s %6.1f  under %-20s %6.1f  -> %+.1f%s" % (c["tag"][:46], c["cue"][4:], c["cueLevel"], c["bed"][4:], c["bedLevel"], c["margin"], "  BURIED" if c["margin"] < -10 else ""))
     print("random room sounds against their beds (cue minus bed, dB):")
     for c in sorted(ctx, key=lambda c: c["margin"]):
         print("  %-18s %-22s %6.1f  under %-24s %6.1f  -> %+.1f%s" % (c["tag"], c["cue"][4:], c["cueLevel"], c["bed"][4:], c["bedLevel"], c["margin"], "  BURIED" if c["margin"] < -10 else ""))

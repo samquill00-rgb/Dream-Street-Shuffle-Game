@@ -117,6 +117,30 @@ def uses(s, name):
     return max(0, n), ticks, spot
 
 
+def room_plays(src):
+    """What each room's random sound really plays (2026-11-14): (tag, sound, its arguments as the row id spells them, its room gain or None).
+    Before this the audit set every variant of a sound against a room (both gusts in the Himalayas, where only one is played)."""
+    out = []
+    m = re.search(r"var TAG_TICKS = \{(.*?)\n  \};", src, re.S)
+    if not m: return out
+    for line in m.group(1).split("\n"):
+        t = re.match(r"\s*'([a-z-]+)':\s*\{\s*min:", line)
+        if not t: continue
+        for name, args, gain in re.findall(r"_tick\(\s*(?:function\(\)\{\s*)?([A-Za-z]+)(?:\(([^)]*)\);\s*\})?\s*(?:,\s*([\d.]+))?\s*\)", line.split("/*")[0]):
+            a = [{"false": "False", "true": "True"}.get(x.strip(), x.strip()) for x in args.split(",")] if args.strip() else []
+            out.append((t.group(1), name, a, float(gain) if gain else None))
+    return out
+
+
+def spot_boosts(src):
+    m = re.search(r"var SPOT_BOOST = \{(.*?)\};", src)
+    return {n: float(g) for n, g in re.findall(r"'([^']+)':\s*([\d.]+)", m.group(1))} if m else {}
+
+
+def at_id(name, args, where):
+    return "cue:" + name + (":" + "-".join(args) if args else "") + "@" + re.sub(r"[^a-z0-9]+", "_", where.lower())
+
+
 def run(want):
     src, beds = source_facts()
     srv = tr.serve(); port = srv.server_address[1]
@@ -192,6 +216,15 @@ def run(want):
                 if secs: take(rid, "stream", n, code, secs * 1000, secs * 1000, ("window.dssAudio." + (stop if "(" in stop else stop + "()")) if stop else None, {"uses": u, "ticks": ticks, "spot": spot})
                 else: take(rid, "cue", n, code, 900, 9000, None, {"uses": u, "ticks": ticks, "spot": spot})
             if n in STREAMS and not STREAMS[n][1]: fresh()   # a stream with no stop: start clean
+        # ---- a sound a room plays louder than the sound's own level (2026-11-14): recorded as that room plays it; "@" filters to these
+        for tag, n, a, gain in room_plays(src):
+            if not gain: continue
+            js_args = ", ".join({"False": "false", "True": "true"}.get(x, x) for x in a)
+            take(at_id(n, a, tag), "cue", n, "window.dssAudio.tick(function(){ window.dssAudio.%s(%s); }, %s)" % (n, js_args, gain), 900, 9000, None, {"uses": 1, "ticks": True, "spot": False, "boost": gain, "where": tag})
+        cues_ = dict(re.findall(r"\['([a-z ]+)',\s*([A-Za-z]+)\]", (re.search(r"var SPOT_CUES = \[(.*?)\];", src, re.S) or re.search("()", "")).group(1)))
+        for nm, gain in spot_boosts(src).items():
+            fn = next((f for k, f in cues_.items() if k in nm), None)
+            if fn: take(at_id(fn, [], nm), "cue", fn, "window.dssAudio.spotSound(%s)" % json.dumps(nm), 900, 9000, None, {"uses": 1, "ticks": False, "spot": True, "boost": gain, "where": nm})
         browser.close()
     srv.shutdown()
     os.makedirs(OUT, exist_ok=True)
@@ -220,15 +253,13 @@ def tick_contexts(src, rows):
     by = {r["id"]: r for r in rows}; out = []
     m = re.search(r"var TAG_TICKS = \{(.*?)\n  \};", src, re.S)
     if not m: return out
-    for tag, body in re.findall(r"'([a-z-]+)':\s*\{\s*min:\s*\d+,\s*max:\s*\d+,\s*fn:\s*function\(\)\{(.*?)\}\s*\}", m.group(1)):
+    for tag, name, args, gain in room_plays(src):
         beds = [r for r in rows if r["kind"] == "bed" and tag in (r.get("tags") or []) and r.get("I") is not None]
         if not beds: continue
         top = max(beds, key=lambda r: r["I"])
-        for name in sorted(set(re.findall(r"\b([a-zA-Z]+)\b", body))):
-            for rid in [k for k in by if k == "cue:" + name or k.startswith("cue:" + name + ":")]:
-                c = by[rid]
-                if c.get("M") is None: continue
-                out.append({"tag": tag, "cue": rid, "cueLevel": c["M"], "bed": top["id"], "bedLevel": top["I"], "margin": round(c["M"] - top["I"], 1)})
+        c = (by.get(at_id(name, args, tag)) if gain else None) or by.get("cue:" + name + (":" + "-".join(args) if args else ""))
+        if not c or c.get("M") is None: continue
+        out.append({"tag": tag, "cue": c["id"], "cueLevel": c["M"], "bed": top["id"], "bedLevel": top["I"], "margin": round(c["M"] - top["I"], 1)})
     return out
 
 
@@ -298,7 +329,7 @@ def look_contexts(src, rows):
             n = name.lower()
             for key, fn in cues:
                 if (re.search(r"\bbells?\b", n) if key == "bell" else key in n):
-                    c = by.get("cue:" + fn)
+                    c = by.get(at_id(fn, [], n)) or by.get("cue:" + fn)
                     if c and c.get("M") is not None:
                         out.append({"tag": passage + ": " + name, "cue": c["id"], "cueLevel": c["M"], "bed": top["id"], "bedLevel": top["I"], "margin": round(c["M"] - top["I"], 1), "look": True})
                     break

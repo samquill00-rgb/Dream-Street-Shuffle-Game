@@ -2292,6 +2292,36 @@ def revo_shout(r):
     r.expect("revo-shout-one.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the one-shout recording is not linked in the html")
 
 
+@check("quiet-sounds-raised", "2026-11-14 (Sam's verdicts on the sound audit page, \"too quiet\"): seven sounds sat 10 to 21 dB under the music of their own rooms: the vinyl crackle (Lackland), the chair and the glass (Ronnie's), the gust (Himalayas), the gull (Easter Island), the knock on Ronnie's empty table, the stairs at Trisha's")
+def quiet_sounds_raised(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    import html as _h
+    t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)   # a planted bug is applied to the text read here
+    def gain(pat):
+        m = re.search(pat, t); return float(m.group(1)) if m else 0
+    for what, pat, least in (("the vinyl crackle in Lackland's office", r"'venue-lackland':[^\n]*_tick\(vinylCrackle, ([\d.]+)\)", 2.5), ("the chair scrape at Ronnie's", r"'venue-ronnies':[^\n]*_tick\(chairScrape, ([\d.]+)\)", 4.0),
+                             ("the glass at Ronnie's", r"'venue-ronnies':[^\n]*_tick\(glassSetDown, ([\d.]+)\)", 1.5), ("the gust in the Himalayas", r"'himalayan':[^\n]*gust\(false\); \}, ([\d.]+)\)", 1.3),
+                             ("the gull on Easter Island", r"'easter':[^\n]*_tick\(gullFar, ([\d.]+)\)", 3.5), ("the knock on Ronnie's empty table", r"SPOT_BOOST = \{[^}]*'an empty table': ([\d.]+)", 1.7),
+                             ("the stairs at Trisha's", r"SPOT_BOOST = \{[^}]*'stairs': ([\d.]+)", 2.0)):
+        r.expect(gain(pat) >= least, "%s is back at its old level (gain %s, wanted at least %s)" % (what, gain(pat), least))
+    # and the gain really is in the sound's path: a boosted sound must reach the speakers through one extra gain node
+    r.go("Dean Street", wait=3000)
+    res = r.js("""() => { var A = window.dssAudio; if (!A || typeof A.tick !== 'function') return 'no dssAudio.tick';
+      var made = [], P = (window.AudioContext || window.webkitAudioContext).prototype, orig = P.createGain;
+      P.createGain = function () { var g = orig.call(this); made.push(g); return g; };
+      try { A.tick(function () { A.gullFar(); }, 5); } finally { P.createGain = orig; }
+      var hit = made.filter(function (g) { return Math.abs(g.gain.value - 5) < 0.01; }).length;
+      return hit === 1 ? 'ok' : 'a sound asked for at gain 5 made ' + hit + ' gain nodes at 5 (of ' + made.length + ')'; }""")
+    r.expect(res == "ok", res)
+    res = r.js("""() => { var A = window.dssAudio, made = [], P = (window.AudioContext || window.webkitAudioContext).prototype, orig = P.createGain;
+      P.createGain = function () { var g = orig.call(this); made.push(g); return g; };
+      try { A.spotSound('Stairs'); A.spotSound('A counter'); } finally { P.createGain = orig; }
+      var a = made.filter(function (g) { return Math.abs(g.gain.value - 2.5) < 0.01; }).length;
+      return a === 1 ? 'ok' : 'looking at the stairs made ' + a + ' gain nodes at 2.5'; }""")
+    r.expect(res == "ok", res)
+
+
 @check("nazca-no-steps", "2026-11-14 (Sam, sound audit: \"Why do i have steps here?\"): gravel steps played at random on every Nazca page, the race included, with nobody walking")
 def nazca_no_steps(r):
     import html as _h

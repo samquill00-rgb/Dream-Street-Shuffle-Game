@@ -11543,6 +11543,7 @@ window.dssAudio = (function() {
   // If it's still suspending, wait for the resume promise then run.
   var _noDuckNext = false; // set by quiet, frequent SFX (map footsteps) so they don't pump the beds
   var _noBedDuckNext = false;
+  var _boostNext = 1; /* 2026-11-14 (Sam's sound audit verdicts): a room can ask for its own random sound louder than the sound's own level, see _tick */
   function _play(fn) {
     if (_muted) { _noDuckNext = false; _noBedDuckNext = false; return; }
     var ac = getCtx(); if (!ac) { _noDuckNext = false; _noBedDuckNext = false; return; } /* 2026-11-05: both flags clear on the early returns, or a tick while muted left the next real sound unducked once */
@@ -11555,7 +11556,14 @@ window.dssAudio = (function() {
     _noDuckNext = false;
     if (!_noBedDuckNext) { try { _duckAllBeds(); } catch(e) {} } // 2026-10-18: room ticks must not dip the bed they belong to
     _noBedDuckNext = false;
-    try { fn(ac); }
+    /* 2026-11-14: a boosted sound is built exactly as before, but what it sends to the speakers goes through one gain first */
+    var out = ac;
+    if (_boostNext > 1.01) {
+      try { var bg = ac.createGain(); bg.gain.value = _boostNext; bg.connect(ac.destination);
+        out = new Proxy(ac, { get: function(t, k) { if (k === 'destination') return bg; var v = t[k]; return typeof v === 'function' ? v.bind(t) : v; } });
+      } catch(e) { out = ac; }
+    }
+    try { fn(out); }
     catch(e) { if (window.console && console.error) console.error('dssAudio:', e); }
   }
   // 2026-10-24 (Sam): Jeffrey's phrase ends on the Pyramid's octave reference.
@@ -13513,7 +13521,7 @@ window.dssAudio = (function() {
   // Small random textures for rooms that had none. Every one is quiet, short,
   // randomised in pitch, level and timing, and plays through _tick so it never
   // ducks the bed it belongs to. Levels sit under the beds, not over them.
-  function _tick(fn) { _noDuckNext = true; _noBedDuckNext = true; try { fn(); } catch(e) { _noDuckNext = false; _noBedDuckNext = false; } }
+  function _tick(fn, boost) { _noDuckNext = true; _noBedDuckNext = true; _boostNext = boost > 0 ? boost : 1; try { fn(); } catch(e) { _noDuckNext = false; _noBedDuckNext = false; } _boostNext = 1; } /* boost: a gain on this one playing (2026-11-14) */
   function _rnd(a, b) { return a + Math.random() * (b - a); }
   function _burstNoise(ac, secs, shape) {
     var n = Math.max(1, Math.floor(ac.sampleRate * secs)), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
@@ -13862,25 +13870,30 @@ window.dssAudio = (function() {
     ['photograph', pageRustle], ['book', pageRustle], ['menu', pageRustle], ['ticket', pageRustle], ['shelves', pageRustle],
     ['bell', doorShopBell], ['window', mapCab], ['stairs', flagstoneSteps], ['door', doorCreak]
   ]; /* 2026-11-07 sound run: 'window' was distantTraffic, which started the looping September street drone (and its horns) indoors until you left the room; now one cab passing outside */
+  /* 2026-11-14 (Sam's verdicts, "too quiet"): the knock on the empty table at Ronnie's (under the band) +6 dB, the stairs at Trisha's +8 dB.
+     By the object's whole name, and each name is in one room only. */
+  var SPOT_BOOST = { 'an empty table': 2.0, 'stairs': 2.5 };
   function spotSound(name) {
     var n = String(name || '').toLowerCase();
-    for (var i = 0; i < SPOT_CUES.length; i++) { if (SPOT_CUES[i][0] === 'bell' ? /\bbells?\b/.test(n) : n.indexOf(SPOT_CUES[i][0]) !== -1) { _tick(SPOT_CUES[i][1]); return SPOT_CUES[i][0]; } } /* 2026-11-11 (Sam, note 8: "The bell sound should not happen here or anywhere in this pub scene. It shouldn't trigger when you click the bellettrist"): 'bell' is a whole word now; The Belletrist rang the shop bell */
+    for (var i = 0; i < SPOT_CUES.length; i++) { if (SPOT_CUES[i][0] === 'bell' ? /\bbells?\b/.test(n) : n.indexOf(SPOT_CUES[i][0]) !== -1) { _tick(SPOT_CUES[i][1], SPOT_BOOST[n] || 1); return SPOT_CUES[i][0]; } } /* 2026-11-11 (Sam, note 8: "The bell sound should not happen here or anywhere in this pub scene. It shouldn't trigger when you click the bellettrist"): 'bell' is a whole word now; The Belletrist rang the shop bell */
     return null;
   }
   var TAG_TICKS = {
     'venue-cellar':      { min: 5,  max: 12, fn: function(){ _tick(dripDrop); } }, /* 2026-11-07 sound run: was dripDrop() bare, which ducked the cellar bed on every drip */
     // 2026-10-18 night: rooms that had no sound of their own. Each fn picks, so no room has one noise only.
-    'venue-lackland':    { min: 14, max: 32, fn: function(){ _tick(vinylCrackle); } },
+    /* 2026-11-14 (Sam's verdicts on the sound audit page, "too quiet"): these sat 11 to 21 dB under the music that came to their rooms
+       after them. Each is raised in its own room only (the second argument is a gain), to sit about 5 to 8 dB under that music. */
+    'venue-lackland':    { min: 14, max: 32, fn: function(){ _tick(vinylCrackle, 3.2); } }, /* +10 dB */
     'venue-french':      { min: 50, max: 130, fn: function(){ pubCall(); } }, /* 2026-11-14 (Sam): his odd shouts in the pubs' hubbub; rarer while there is only the one (was every 20 to 60 s) */
     'venue-coach':       { min: 50, max: 130, fn: function(){ pubCall(); } },
     'venue-colony':      { min: 60, max: 140, fn: function(){ pubCall(); } },
     'venue-pillars':     { min: 50, max: 130, fn: function(){ pubCall(); } },
     'venue-trishas':     { min: 70, max: 160, fn: function(){ pubCall(); } },
     'venue-cecilcourt':  { min: 10, max: 26, fn: function(){ _tick(Math.random() < 0.3 ? shopBellFar : flagstoneSteps); } },
-    'venue-ronnies':     { min: 9,  max: 22, fn: function(){ _tick(Math.random() < 0.25 ? chairScrape : glassSetDown); } },
-    'himalayan':         { min: 8,  max: 20, fn: function(){ _tick(Math.random() < 0.2 ? distantBell : function(){ gust(false); }); } },
+    'venue-ronnies':     { min: 9,  max: 22, fn: function(){ if (Math.random() < 0.25) _tick(chairScrape, 6.7); else _tick(glassSetDown, 1.8); } }, /* +16.5 dB, +5 dB (four readings each: the glass at 3.2 came out level with the band) */
+    'himalayan':         { min: 8,  max: 20, fn: function(){ if (Math.random() < 0.2) _tick(distantBell); else _tick(function(){ gust(false); }, 1.4); } }, /* the gust +3 dB */
     'nazca':             { min: 8,  max: 20, fn: function(){ _tick(function(){ gust(true); }); } }, /* 2026-11-14 (Sam, sound audit: "Why do i have steps here?"): one time in three this was gravel steps, on every Nazca page, the race included, with nobody walking; the wind only now */
-    'easter':            { min: 7,  max: 16, fn: function(){ _tick(Math.random() < 0.25 ? gullFar : function(){ surfWash(false); }); } },
+    'easter':            { min: 7,  max: 16, fn: function(){ if (Math.random() < 0.25) _tick(gullFar, 5.0); else _tick(function(){ surfWash(false); }); } }, /* the gull +14 dB */
     'pyramid':           { min: 10, max: 25, fn: function(){ _tick(sandSlip); } },
     'ezekiel':           { min: 12, max: 30, fn: function(){ _tick(wheelCreak); } },
     'carthage-cicadas':  { min: 9,  max: 20, fn: function(){ _tick(function(){ surfWash(true); }); } },
@@ -16070,6 +16083,7 @@ window.dssAudio = (function() {
     prewarmBed: prewarmBedByLabel,
     playTransition: playTransition,
     // 2026-10-18 night: room ticks, exported for the effects board
+    tick: _tick, /* 2026-11-14: for the sound audit, which records a sound at the level its room plays it */
     vinylCrackle: vinylCrackle, shopBellFar: shopBellFar, flagstoneSteps: flagstoneSteps, gravelSteps: gravelSteps, glassSetDown: glassSetDown, chairScrape: chairScrape,
     gust: gust, surfWash: surfWash, gullFar: gullFar, sandSlip: sandSlip, wheelCreak: wheelCreak, crockery: crockery, _tick: _tick, fairyTwinkle: fairyTwinkle,
     handsetLift: handsetLift, jukeboxClunk: jukeboxClunk, filamentPing: filamentPing, globeSpin: globeSpin, woodCreak: woodCreak, woodKnock: woodKnock, gasHiss: gasHiss,
@@ -86011,6 +86025,8 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
 
 
 

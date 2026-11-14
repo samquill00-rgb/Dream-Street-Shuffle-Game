@@ -2212,6 +2212,33 @@ def gents_door_heart(r):
     r.expect(n == 0, "the heart is on the bar side of the gents door as well (Sam: only on the inside)")
 
 
+@check("shelley-bust", "2026-11-14 (Sam: \"I want you to be able to move around it and admire the whole\", \"I want it on its own plinth in the shop\"): the scanned bust of SHELLEY stands on its plinth in O'FLATTERLY's shop, loads, opens its close-up, turns under a drag without stepping back, and swings home afterwards")
+def shelley_bust(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("O'Flatterly's shop")
+    r.room_ready("oi"); r.clear_slips(); r.clear_lore()
+    ROT = "() => { var g = null; window.__dssRooms['oi'].scene.traverse(function (o) { if (o.name === 'shelley-bust') g = o.parent; }); return g ? [g.rotation.y, g.children.length, g.children.filter(function (c) { return c.material && c.material.map && c.material.map.image && c.material.map.image.width > 0; }).length] : null; }"
+    r.wait_for(ROT.replace("return g ? [", "return !!g && !![").replace("] : null; }", "][2]; }"), 15000, "the bust's model and pictures")
+    got = r.js(ROT)
+    r.expect(got and got[2] >= 3, "the bust did not load its three parts with their pictures (%r)" % (got,))
+    home = got[0]
+    r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-room.png"))
+    r.click_object("oi", "A bust")
+    r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-close.png"))
+    pt = r.js("([r, n]) => window.__dssRooms[r].point(n)", ["oi", "A bust"])
+    r.page.mouse.move(pt[0] - 120, pt[1]); r.page.mouse.down()
+    for i in range(1, 13):
+        r.page.mouse.move(pt[0] - 120 + i * 20, pt[1]); r.page.wait_for_timeout(30)
+    r.page.mouse.up(); r.page.wait_for_timeout(900)
+    turned = r.js(ROT)[0]
+    r.expect(abs(turned - home) > 1.5, "a drag across the close-up did not turn the bust (%.2f to %.2f)" % (home, turned))
+    r.expect(r.js("([r]) => window.__dssRooms[r].mode()", ["oi"]) == "inspect", "the drag stepped back out of the bust's close-up")
+    r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-turned.png"))
+    r.back_click("oi"); r.page.wait_for_timeout(3500)
+    back = r.js(ROT)[0]
+    r.expect(abs(back - home) < 0.02, "the bust did not swing home after the close-up (%.2f, home %.2f)" % (back, home))
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

@@ -1660,6 +1660,8 @@ def _(r):
     for sel in ("#coin-toss-btn", "#coin-keep-btn"):
         r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
         r.page.click(sel); r.page.wait_for_timeout(2500)
+    # 2026-11-14 (Sam: "the tony adams chant that should appear when you toss the coin"): one toss, one chant
+    r.expect(r.js("() => window.__dssTonyChants || 0") == 1, "tossing the Donkey coin started the Tony Adams chant %r times, not once" % r.js("() => window.__dssTonyChants || 0"))
     r.wait_for("() => !document.querySelector('#coin-overlay') || getComputedStyle(document.querySelector('#coin-overlay')).display === 'none' || !document.querySelector('#coin-overlay').offsetParent", 8000, "the coin card to close")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
     bad, links = hub_problems(r, "the second Dean Street")
@@ -2284,6 +2286,21 @@ def revo_shout(r):
         r.wait_for("() => (window.__dssRunnerDbg || []).some(function (s) { return s.shout; })", 25000, "his shout at %s" % passage)
         r.expect(r.js("() => window.__dssRevoLast") == "one", "%s: his short run played both shouts" % passage)
     r.expect("revo-shout-one.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the one-shout recording is not linked in the html")
+
+
+@check("pub-calls", "2026-11-14 (Sam: \"The rest of the sounds, non tony can just be part of the general hubbub\"): his odd shouts come now and then in a pub, never in the gents, and both recordings are linked; a second toss while the chant is going does not start it again")
+def pub_calls(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect("tony-adams-chant.m4a" in html and "pub-calls.m4a" in html, "the chant or the pub shouts are not linked in the html")
+    r.go("Coach and Horses lock", wait=4000)
+    r.js("() => { window.__dssPubCalls = 0; window.dssAudio.pubCall(); window.dssAudio.pubCall(); }")
+    r.expect(r.js("() => window.__dssPubCalls") == 0, "a pub shout played in the gents")
+    r.js("() => { window.__dssTonyChants = 0; window.dssAudio.coinFlip(); window.dssAudio.coinFlip(); }")
+    r.expect(r.js("() => window.__dssTonyChants") == 1, "a second toss started the chant again over itself")
+    r.go("The French", wait=4000)
+    r.js("() => { window.__dssPubCalls = 0; }")
+    r.wait_for("() => window.__dssPubCalls >= 1", 60000, "a shout in the French's hubbub (they come every 20 to 50 seconds)")
 
 
 def main(argv):

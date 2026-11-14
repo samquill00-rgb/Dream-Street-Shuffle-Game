@@ -53,6 +53,7 @@
 - The doorway piss (doorway-piss.m4a, 2026-11-02) is Sam's own recording (New Recording 148). No credit needed, if it is his.
 - The Pillars shanty (pillars-shanty.m4a, 2026-11-11) is Sam's own four-part "Drunken sailor" (Drunken sailor game.mp3, kept in shanty-originals/), given a synthetic room and a low-pass by tools_shanty.py. The tune and words are traditional. No credit needed.
 - The street sounds (street-wet-loop.m4a, lackland-doorbell.m4a, lackland-steps-out.m4a, map-cab-wet.m4a, pub-pass-loop.m4a, 2026-11-11) are Sam's own phone recording (New Recording 150), cut into five clips (street-live-originals/) and levelled by tools_street_clips.py. No credit needed.
+- The bust of SHELLEY's loop (shelley-bust-loop.m4a, 2026-11-14) is Sam's own recording ("Pearls eyes shelley audio.mp3", kept in shelley-originals/), cut by 128 samples to a whole number of AAC frames and turned down 9.6 dB; nothing else done. No credit needed, unless it quotes outside words or music.
 - The Himalaya music (himalaya-music.m4a, 2026-11-02) is Sam's own composition, "Meditation in Tibet". No credit needed, unless it uses outside samples.
 - The Climb music (climb-music.m4a, 2026-11-03) is Sam's own, built on his chant sequence ("The cllimb minigame.mp3"). No credit needed, unless it uses outside samples.
 - The Easter Island music (easter-music.m4a, 2026-11-04) is Sam's own "Easter Island atmosphere" (Logic). No credit needed, unless it uses outside samples.

@@ -2225,6 +2225,9 @@ def shelley_bust(r):
     r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-room.png"))
     r.click_object("oi", "A bust")
     r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-close.png"))
+    # 2026-11-14 (Sam: "I want that audio to loop when you click and examine the statue"): his recording plays while the bust is examined, and stops on stepping back
+    r.expect("shelley-bust-loop.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the bust's recording is not linked in the html")
+    r.wait_for("() => window.dssAudio.bedPlaying('shelley-bust')", 6000, "the bust's recording to start in its close-up")
     pt = r.js("([r, n]) => window.__dssRooms[r].point(n)", ["oi", "A bust"])
     r.page.mouse.move(pt[0] - 120, pt[1]); r.page.mouse.down()
     for i in range(1, 13):
@@ -2235,6 +2238,7 @@ def shelley_bust(r):
     r.expect(r.js("([r]) => window.__dssRooms[r].mode()", ["oi"]) == "inspect", "the drag stepped back out of the bust's close-up")
     r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-turned.png"))
     r.back_click("oi"); r.page.wait_for_timeout(3500)
+    r.expect(not r.js("() => window.dssAudio.bedPlaying('shelley-bust')"), "the bust's recording is still playing after stepping back")
     back = r.js(ROT)[0]
     r.expect(abs(back - home) < 0.02, "the bust did not swing home after the close-up (%.2f, home %.2f)" % (back, home))
 

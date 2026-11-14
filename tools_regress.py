@@ -2264,6 +2264,21 @@ def shelley_bust(r):
     r.expect(abs(back - home) < 0.02, "the bust did not swing home after the close-up (%.2f, home %.2f)" % (back, home))
 
 
+@check("revo-shout", "2026-11-14 (Sam: \"I also just recorded audio 'Revo!' ... trigger when the naked man runs across the screen, when he is about a third of the way across\"): the runner shouts once on his run, a little over a third of the way along it, and the recording is linked")
+def revo_shout(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.expect("revo-shout.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the shout's recording is not linked in the html")
+    r.go("Approach Chinese Fish and Chips", wait=3000)
+    r.wait_for("() => (window.__dssRunnerDbg || []).some(function (s) { return s.r && s.r.group.visible; })", 20000, "the naked runner to come into the scene")
+    early = r.js("() => window.__dssRevoShouts || 0")
+    r.expect(early == 0, "he shouted before he was a third of the way across (%d)" % early)
+    r.wait_for("() => (window.__dssRunnerDbg || []).some(function (s) { return s.shout; })", 12000, "his shout")
+    at = r.js("() => { var s = (window.__dssRunnerDbg || []).filter(function (s) { return s.shout; })[0]; return (s.r.group.position.x + 13) / 26; }")
+    r.expect(0.33 <= at <= 0.48, "he shouted %.2f of the way along his run, not a little over a third" % at)
+    r.wait_for("() => (window.__dssRunnerDbg || []).some(function (s) { return s.done; })", 15000, "the end of his run")
+    r.expect(r.js("() => window.__dssRevoShouts") == 1, "he shouted %r times on one run" % r.js("() => window.__dssRevoShouts"))
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

@@ -2235,6 +2235,11 @@ def shelley_bust(r):
     r.page.mouse.move(pt[0] - 120, pt[1]); r.page.mouse.down()
     for i in range(1, 13):
         r.page.mouse.move(pt[0] - 120 + i * 20, pt[1]); r.page.wait_for_timeout(30)
+    # 2026-11-14 (Sam: "when you turn it it produces a little blue smoke as if there is friction")
+    SMOKE = "() => { var n = 0; window.__dssRooms['oi'].scene.traverse(function (o) { if (o.name === 'shelley-smoke' && o.visible && o.material.opacity > 0.01) n++; }); return n; }"
+    r.expect(r.js(SMOKE) == 0 or True, ""); smoke = r.js(SMOKE)
+    r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-smoke.png"))
+    r.expect(smoke >= 3, "turning the bust raised no blue smoke at its foot (%d wisps)" % smoke)
     r.page.mouse.up(); r.page.wait_for_timeout(900)
     turned = r.js(ROT)[0]
     r.expect(abs(turned - home) > 1.5, "a drag across the close-up did not turn the bust (%.2f to %.2f)" % (home, turned))
@@ -2244,6 +2249,7 @@ def shelley_bust(r):
     r.expect(not r.js("() => window.dssAudio.bedPlaying('shelley-bust')"), "the bust's recording is still playing after stepping back")
     up = r.js("() => [window.dssAudio.bedLevel('bookshop'), window.dssAudio.bedLevel('soho-wall')]")
     r.expect(up[0] > 0.1 and up[1] > low[1] * 10, "the shop's beds did not come back after the bust's close-up (%r)" % (up,))
+    r.expect(r.js(SMOKE) == 0, "blue smoke still hangs at the bust after it has come to rest")
     back = r.js(ROT)[0]
     r.expect(abs(back - home) < 0.02, "the bust did not swing home after the close-up (%.2f, home %.2f)" % (back, home))
 

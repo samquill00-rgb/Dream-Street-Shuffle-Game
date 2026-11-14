@@ -36877,7 +36877,15 @@ var pearlMap = ld('models/shelley-bust-pearl.jpg'), pearl = new THREE.MeshPhysic
 cv.addEventListener('pointerdown', function(ev) { if (!bustLooking || ev.isPrimary === false) return; bustDrag = { id: ev.pointerId, x: ev.clientX }; bustVel = 0; });
 cv.addEventListener('pointermove', function(ev) { if (!bustDrag || ev.pointerId !== bustDrag.id) return; var dx = ev.clientX - bustDrag.x; bustDrag.x = ev.clientX; bustG.rotation.y += dx * 0.011; bustVel = dx * 0.011; });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(function(e) { cv.addEventListener(e, function() { bustDrag = null; }); }); })();
-function bustFrame(dt) { if (bustLooking) { if (!bustDrag && Math.abs(bustVel) > 0.0002) { bustG.rotation.y += bustVel; bustVel *= 0.93; } } else if (bustG.rotation.y !== BUST_HOME) { var d = bustG.rotation.y - BUST_HOME; d = Math.atan2(Math.sin(d), Math.cos(d)); bustG.rotation.y = Math.abs(d) < 0.002 ? BUST_HOME : BUST_HOME + d * Math.max(0, 1 - Math.min(1, (dt || 0.016) * 4)); } }
+/* 2026-11-14 (Sam: "make it so that when you turn it it produces a little blue smoke as if there is friction"): a few soft blue wisps rise from where the bronze foot grinds on the plinth, as many as the turn is fast, and thin out in about a second. Sprites from a small pool; nothing is made per frame. */
+var smokeTex = tex(64, 64, function(cx, w, h) { var g = cx.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(0.35, 'rgba(255,255,255,0.42)'); g.addColorStop(1, 'rgba(255,255,255,0)'); cx.fillStyle = g; cx.fillRect(0, 0, w, h); });
+var smokePool = [], smokeAcc = 0, bustLastRot = BUST_HOME, bustClock = 0;
+for (var sp = 0; sp < 44; sp++) { var sm = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0x6f9cff, transparent: true, opacity: 0, depthWrite: false, fog: false })); sm.visible = false; sm.name = 'shelley-smoke'; sm.userData.life = 0; scene.add(sm); smokePool.push(sm); }
+function smokePuff() { for (var i = 0; i < smokePool.length; i++) { var p = smokePool[i]; if (p.visible) continue; var a = Math.random() * Math.PI * 2, r = 0.05 + Math.random() * 0.012; p.position.set(BUST_X + Math.cos(a) * r, BUST_Y + 0.004 + Math.random() * 0.008, BUST_Z + Math.sin(a) * r); p.userData.life = 0; p.userData.span = 1.3 + Math.random() * 0.9; p.userData.vx = Math.cos(a) * 0.012 + (Math.random() - 0.5) * 0.01; p.userData.vz = Math.sin(a) * 0.012 + (Math.random() - 0.5) * 0.01; p.userData.vy = 0.075 + Math.random() * 0.06; p.userData.s0 = 0.03 + Math.random() * 0.02; p.material.rotation = Math.random() * 6.28; p.visible = true; return; } }
+function bustFrame() { var now = performance.now() / 1000, dt = Math.min(0.05, bustClock ? now - bustClock : 0.016); bustClock = now;
+if (bustLooking) { if (!bustDrag && Math.abs(bustVel) > 0.0002) { bustG.rotation.y += bustVel; bustVel *= 0.93; } } else if (bustG.rotation.y !== BUST_HOME) { var d = bustG.rotation.y - BUST_HOME; d = Math.atan2(Math.sin(d), Math.cos(d)); bustG.rotation.y = Math.abs(d) < 0.002 ? BUST_HOME : BUST_HOME + d * Math.max(0, 1 - Math.min(1, dt * 4)); }
+var turned = Math.abs(bustG.rotation.y - bustLastRot); bustLastRot = bustG.rotation.y; if (bustLooking && turned > 0.0015) { smokeAcc += Math.min(turned, 0.4) * 11; while (smokeAcc >= 1) { smokeAcc -= 1; smokePuff(); } }
+for (var i = 0; i < smokePool.length; i++) { var p = smokePool[i]; if (!p.visible) continue; var u = p.userData; u.life += dt; var q = u.life / u.span; if (q >= 1) { p.visible = false; p.material.opacity = 0; continue; } p.position.x += u.vx * dt; p.position.z += u.vz * dt; p.position.y += u.vy * dt; u.vy *= 1 - dt * 0.6; var sc = u.s0 * (1 + q * 3.2); p.scale.set(sc, sc, 1); p.material.opacity = 0.6 * Math.sin(Math.min(1, q * 5) * Math.PI / 2) * (1 - q) * (1 - q); } }
 // ---------- THE CLOSE-UPS ----------
 var CZ = -D / 2 + 1.7;
 var hotspots = [
@@ -36892,10 +36900,10 @@ figure: true, actions: function() { return k.byText(['The Great Ham sent me', 'A
 { root: winHit, name: 'A window', pos: [0.5, 1.6, 1.0], tgt: [W / 2, 1.5, 1.0], haloAt: [W / 2 - 0.15, 1.5, 1.0], haloSc: 2.0 },
 { root: doorHit, name: 'A door', pos: [0.8, 1.3, -0.2], tgt: [W / 2, 1.2, -0.2], haloAt: [W / 2 - 0.15, 1.2, -0.2], haloSc: 1.2,
 actions: function() { return window.dssStreetExit(); } }, /* 2026-10-20: the shop's door is its way out (it was only looked at) */
-{ root: bustHit, name: 'A bust', pos: [BUST_X - 0.1, BUST_Y + 0.18, BUST_Z + 0.31], tgt: [BUST_X, BUST_Y + 0.115, BUST_Z], haloAt: [BUST_X, BUST_Y + 0.18, BUST_Z], haloSc: 0.55, keepProse: true, prose: function() { return 'Drag to turn the bust.'; }, onLook: function(on) { bustLooking = on; bustDrag = null; bustVel = 0; try { var A = window.dssAudio; if (A) { if (on) { A.startBed('shelley-bust'); A.soloBed('shelley-bust', true); } else { A.fadeBed('shelley-bust', 700); A.soloBed('shelley-bust', false); } } } catch (e) {} } } /* 2026-11-14 (Sam): the card's words are a how-to of mine until he writes his own */
+{ root: bustHit, name: 'A bust', pos: [BUST_X - 0.09, BUST_Y + 0.16, BUST_Z + 0.285], tgt: [BUST_X, BUST_Y + 0.104, BUST_Z], haloAt: [BUST_X, BUST_Y + 0.18, BUST_Z], haloSc: 0.55, keepProse: true, prose: function() { return 'Drag to turn the bust.'; }, onLook: function(on) { bustLooking = on; bustDrag = null; bustVel = 0; try { var A = window.dssAudio; if (A) { if (on) { A.startBed('shelley-bust'); A.soloBed('shelley-bust', true); } else { A.fadeBed('shelley-bust', 700); A.soloBed('shelley-bust', false); } } } catch (e) {} } } /* 2026-11-14 (Sam): the card's words are a how-to of mine until he writes his own */
 ];
 return { hotspots: hotspots, frame: function(t, dt, still) {
-bustFrame(dt);
+bustFrame();
 oiBookMagic.frame(t, still);
 oiBookSwaps.frame(t, still);
 if (still) return;

@@ -519,26 +519,65 @@ def _(r):
     r.expect(not bad, "Harlowe errors: " + " || ".join(bad[:6]))
 
 
-@check("gents-letters-solve", "2026-11-09 note 32: the gents door's jumbled letters swap by clicks, turn gold in place, open the way out, and stay solved")
+@check("gents-letters-solve", "2026-11-09 note 32, then 2026-11-14 (Sam: \"Can you put the anagram on the door? Make it the main thing\"): the jumbled letters are on the inside of the gents door in the 3D view, swap by real clicks there, turn gold, and open the way out; the page carries no tiles, only a way back to the door")
 def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     r.go("Coach and Horses lock", wait=5000)
     r.clear_lore(); r.clear_slips()
-    r.page.locator("text=/steady yourself/i").first.click(); r.page.wait_for_timeout(2500)
+    D = "window._dssGentsDoor"
+    r.wait_for("() => !!(%s && %s.wrap && %s.wrap.isConnected)" % (D, D, D), 15000, "the letters on the gents door")
     want = "JEFFREYBERNARDISUNWELL"
-    tiles = r.page.locator(".gents-letters:not(.dss-ghost *) .gl-tile")
-    r.expect(tiles.count() == len(want), "the gents door has %d letters, not %d" % (tiles.count(), len(want)))
+    cur = r.js("() => %s.letters()" % D)
+    r.expect(sorted(cur) == sorted(want) and cur != want, "the door reads %r, not a jumble of JEFFREY BERNARD IS UNWELL" % cur)
+    pts = r.js("([n]) => { var o = []; for (var i = 0; i < n; i++) o.push(%s.point(i)); return o; }" % D, [len(want)])
+    off = [i for i, q in enumerate(pts) if not (20 < q[0] < 1420 and 20 < q[1] < 760)]
+    r.expect(not off, "%d of the door's letters are off screen or under the buttons at 1440x900" % len(off))
+    r.expect(min(abs(pts[i + 1][0] - pts[i][0]) for i in range(6)) >= 18, "the door's letters are closer than 18px apart: too small to click")
     r.expect(not r.js("() => !!document.querySelector('.gents-exit.gents-open:not(.dss-ghost *)')"), "the way out shows before the letters are sorted")
-    off = r.js("() => [].filter.call(document.querySelectorAll('.gents-letters:not(.dss-ghost *) .gl-tile'), function (b) { var q = b.getBoundingClientRect(); return q.top < 0 || q.bottom > innerHeight || q.left < 0 || q.right > innerWidth; }).length")
-    r.expect(off == 0, "%d of the letters are off screen at 1440x900" % off)
+    # Steady Yourself with the letters unsorted: the page has no tiles of its own, and a way back to the door
+    r.page.locator("text=/steady yourself/i").first.click(); r.page.wait_for_timeout(2500)
+    r.expect(r.js("() => document.querySelectorAll('.gents-letters:not(.dss-ghost *) .gl-tile').length") == 0, "the page still carries its own letter tiles while the door has them")
+    back = r.page.locator(".gents-letters:not(.dss-ghost *) .gl-door")
+    r.expect(back.count() == 1, "no way back to the door on the page while the letters are unsorted")
+    back.first.click(); r.page.wait_for_timeout(1200)
+    r.expect(not r.js("() => %s.wrap.hidden" % D), "Back to the door did not bring the gents back")
+    q = r.js("() => %s.point(0)" % D); r.page.mouse.move(q[0], q[1]); r.page.wait_for_timeout(250)
+    r.expect(r.js("() => %s.wrap.style.cursor" % D) == "pointer", "no pointer cursor over a letter on the door")
     for i in range(len(want)):   # sort like a player: pick the wrong letter, then one further on that belongs here
-        cur = "".join(tiles.nth(k).inner_text() for k in range(len(want)))
+        cur = r.js("() => %s.letters()" % D)
         if cur[i] == want[i]: continue
         j = next(k for k in range(i + 1, len(want)) if cur[k] == want[i] and cur[k] != want[k])
-        tiles.nth(i).click(); tiles.nth(j).click(); r.page.wait_for_timeout(120)
+        for n in (i, j):
+            q = r.js("([n]) => %s.point(n)" % D, [n]); r.page.mouse.click(q[0], q[1]); r.page.wait_for_timeout(120)
     r.page.wait_for_timeout(800)
+    r.expect(r.js("() => %s.letters()" % D) == want and r.js("() => %s.solved()" % D), "the door reads %r after sorting by clicks, and is not marked sorted" % r.js("() => %s.letters()" % D))
     r.expect(r.js("() => !!document.querySelector('.gents-exit.gents-open:not(.dss-ghost *)')"), "the way out did not show once JEFFREY BERNARD IS UNWELL read true")
-    gold = r.js("() => document.querySelectorAll('.gents-letters:not(.dss-ghost *) .gl-tile.gl-right').length")
-    r.expect(gold == len(want), "only %d letters are gold when solved" % gold)
+    r.page.locator("text=/steady yourself/i").first.click(); r.page.wait_for_timeout(2500)
+    r.expect(r.page.locator(".gents-exit:not(.dss-ghost *) tw-link:visible").count() == 1, "the way out is not on the page after the door is sorted")
+    r.expect(r.js("() => document.querySelectorAll('.gents-letters:not(.dss-ghost *) .gl-door').length") == 0, "Back to the door still shows once the letters are sorted")
+
+
+@check("gents-just-solve", "2026-11-14 (Sam: \"have 'Just solve it, I need a drink.' as a button to solve it fast\"): his button is in the gents with the letters unsorted, clear of Steady Yourself, sorts the door in a few seconds, opens the way out and goes")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Coach and Horses lock", wait=5000)
+    r.clear_lore(); r.clear_slips()
+    D = "window._dssGentsDoor"
+    r.wait_for("() => !!(%s && %s.wrap && %s.wrap.isConnected)" % (D, D, D), 15000, "the letters on the gents door")
+    qb = r.page.locator(".gents-just-solve:visible")
+    r.expect(qb.count() == 1, "no quick-solve button in the gents")
+    r.expect(qb.first.inner_text().strip() == "Just solve it, I need a drink.", "the quick-solve button reads %r, not his words" % qb.first.inner_text())
+    clash = r.js("""() => { var q = document.querySelector('.gents-just-solve').getBoundingClientRect(), bad = []; if (q.left < 0 || q.right > innerWidth || q.top < 0 || q.bottom > innerHeight) bad.push('off screen');
+      [].forEach.call(%s.wrap.querySelectorAll('button, .dss-room-caption'), function (e) { if (e.classList.contains('gents-just-solve')) return; var b = e.getBoundingClientRect(); if (b.width && q.left < b.right && q.right > b.left && q.top < b.bottom && q.bottom > b.top) bad.push('over ' + (e.textContent || '').trim().slice(0, 24)); });
+      for (var i = 0; i < 22; i++) { var pt = %s.point(i); if (pt[0] > q.left && pt[0] < q.right && pt[1] > q.top && pt[1] < q.bottom) bad.push('over letter ' + i); } return bad.join(', '); }""" % (D, D))
+    r.expect(not clash, "the quick-solve button is " + clash)
+    r.expect(not r.js("() => %s.solved()" % D), "the door is sorted before anything is pressed")
+    qb.first.click()
+    r.wait_for("() => %s.solved() && %s.letters() === %s.want" % (D, D, D), 5000, "the door to sort itself after Just solve it")
+    r.expect(r.js("() => !!document.querySelector('.gents-exit.gents-open:not(.dss-ghost *)')"), "the way out did not show after Just solve it")
+    r.expect(r.page.locator(".gents-just-solve").count() == 0, "the quick-solve button is still there once the door is sorted")
+    r.page.locator("text=/steady yourself/i").first.click(); r.page.wait_for_timeout(2500)
+    r.expect(r.page.locator(".gents-exit:not(.dss-ghost *) tw-link:visible").count() == 1, "the way out is not on the page after Just solve it")
 
 
 @check("colony-membership", "2026-11-09 (Sam): after the first Colony visit you are made a member (a slip, once) and the Donkey no longer picks the door")
@@ -2154,7 +2193,7 @@ def _(r):
     r.expect(got[0] == 2 and got[1] == 2, "ci: his two prints are not both on the Colony's walls in view (%r)" % got)
 
 
-@check("gents-door-heart", "2026-11-13/14 (Sam: \"prepare this image to add to the graffiti on the gents door\", \"below it, '2025-2066'\", then \"I want it only on the inside\"): the SILVER DARLINGS heart and its date are on the inside of the Coach's gents door, loaded and whole in the gents' view, under the plate; none on the bar side")
+@check("gents-door-heart", "2026-11-13/14 (Sam: \"prepare this image to add to the graffiti on the gents door\", \"below it, '2025-2066'\", then \"I want it only on the inside\", \"have the graffiti as decorative\"): the SILVER DARLINGS heart and its date are on the inside of the Coach's gents door, loaded and whole in the gents' view, small under the letters; none on the bar side")
 def gents_door_heart(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     r.go("Coach and Horses lock", wait=9000)
@@ -2166,7 +2205,7 @@ def gents_door_heart(r):
     r.expect(got is not None, "no heart on the inside of the gents door")
     r.expect(got["w"] >= 512, "the heart's picture did not load (assets/gents-door-silver-darlings.png)")
     r.expect(got["seen"] == 4, "only %d of the heart's four corners are in the gents' view" % got["seen"])
-    r.expect(got["top"] < 1.72, "the heart runs up into the GENTS plate (its head is at %.2f, the plate's foot at 1.72)" % got["top"])
+    r.expect(got["top"] < 1.10, "the heart runs up into the letters (its head is at %.2f, the letters' foot at 1.10): it is decoration, under them" % got["top"])
     r.go("Coach and Horses bar", wait=9000)
     r.room_ready("cb")
     n = r.js("() => { var n = 0; window.__dssRooms.cb.scene.traverse(function (o) { if (o.name === 'gents-door-heart') n++; }); return n; }")

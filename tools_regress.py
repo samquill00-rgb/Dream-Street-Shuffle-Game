@@ -2233,7 +2233,7 @@ def shelley_bust(r):
     # 2026-11-14 (Sam: "bring the background sound bed right down to a minimum while the bust music runs"): the shop's own beds drop to a twentieth while it plays, and come back
     low = r.js("() => [window.dssAudio.bedLevel('bookshop'), window.dssAudio.bedLevel('soho-wall')]")
     r.expect(low[0] < 0.02 and low[1] < 0.02, "the shop's beds are not turned down while the bust's recording plays (%r)" % (low,))
-    pt = r.js("([r, n]) => window.__dssRooms[r].point(n)", ["oi", "A bust of Percy Bysshe Shelley"])
+    pt = [720, 380]   # the middle of the view, clear of the card (the object's own point is its halo, now down on the plinth and under the card in the close-up)
     r.page.mouse.move(pt[0] - 120, pt[1]); r.page.mouse.down()
     for i in range(1, 13):
         r.page.mouse.move(pt[0] - 120 + i * 20, pt[1]); r.page.wait_for_timeout(30)

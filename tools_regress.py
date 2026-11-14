@@ -1203,7 +1203,7 @@ def _(r):
     r.expect("function glassSmash()" in src, "the procedural glassSmash is gone")
 
 
-@check("loading-not-pink", "2026-11-11 note 7: the 3D rooms' loading line is grey, not the draft pink")
+@check("loading-pink", "2026-11-14 note 6 (Sam: \"'Loading' used to be pink, now it is not, turn it pink again\"; it was greyed on 2026-11-11, note 7): the loading line, its bar and the 3D rooms' own 'loading' are pink")
 def _(r):
     r.go("The French", wait=3000)
     cols = r.js("""() => { var made = null, line = document.getElementById('dss-load-line'); if (!line) { line = made = document.createElement('div'); line.id = 'dss-load-line'; line.innerHTML = '<div class="dss-load-text">loading</div><div class="dss-load-bar"><i></i></div>'; document.body.appendChild(line); }
@@ -1211,7 +1211,11 @@ def _(r):
     r.info = "text %s, bar %s" % tuple(cols)
     for c in cols:
         m = [float(x) for x in re.findall(r"[\d.]+", c)[:3]]
-        r.expect(not (m[0] > m[1] + 50), "the loading line is still pink-red (%s)" % c)
+        r.expect(m[0] > m[1] + 50 and m[2] > m[1] + 50, "the loading line is not pink (%s)" % c)
+    html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read()
+    for a, b in SWAPS: html = html.replace(a, b)
+    room = re.search(r"content: (?:&#39;|')loading(?:&#39;|');[^}]*?color: (#[0-9a-fA-F]{6})", html)
+    r.expect(room is not None and room.group(1).lower() == "#ff3aa8", "the 3D rooms' own 'loading' is not pink (%s)" % (room.group(1) if room else "not found"))
 
 
 @check("belletrist-no-bell", "2026-11-11 note 8: looking at The Belletrist in the Pillars does not ring the shop bell ('bell' inside his name)")
@@ -1632,12 +1636,14 @@ def _(r):
     r.info = "the glow sits at x %.2f" % x
 
 
-@check("ginger-french-spaced", "2026-11-13 note 26 (Sam): space the French and the Ginger Light out a little more on Dean Street; the Ginger Light's lamp and door move up together")
+@check("ginger-french-spaced", "2026-11-13 note 26 (Sam): space the French and the Ginger Light out a little more on Dean Street; then 2026-11-14 note 2: \"Move the ginger light back down one square\": five tiles apart, its lamp on the same tile as its door")
 def _(r):
     hub_ready(r)
     d = r.js("() => { var m = window.dssSohoMap, o = {}; m.doors.forEach(function (x) { if (x.id === 'french' || x.id === 'ginger') o[x.id] = [x.c, x.r, x.fc, x.fr]; }); return o; }")
     gap = d["french"][3] - d["ginger"][3]
-    r.expect(gap >= 6, "the Ginger Light and the French are %d tiles apart on Dean Street, want 6 or more: %s" % (gap, d))
+    r.expect(gap == 5, "the Ginger Light and the French are %d tiles apart on Dean Street, want 5 (four before the 13th, six until the 14th): %s" % (gap, d))
+    lamp = r.js("() => (window.dssSohoMap.lamps || []).filter(function (l) { return l.ginger; }).map(function (l) { return [l.c, l.r]; })[0] || null")
+    if lamp is not None: r.expect(lamp == [d["ginger"][0], d["ginger"][1]], "the Ginger Light's lamp (%r) is not on its door's tile (%r)" % (lamp, d["ginger"][:2]))
     tile = r.js("(g) => window.dssSohoMap.tiles[g[3]][g[2]]", d["ginger"])
     r.expect(tile == "P", "the Ginger Light's corner is not pavement (%r)" % tile)
     r.info = "%d tiles apart" % gap

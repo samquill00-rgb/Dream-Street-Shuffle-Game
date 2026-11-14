@@ -2690,6 +2690,22 @@ def french_done_says_so(r):
     r.page.unroute("**/*")
 
 
+@check("cecil-cow-at-once", "2026-11-05 note 33 (Sam: \"The cow should fly over the moon straight away then cecil court loads\"): the cow's flight starts as the scene opens, and ENTER CECIL COURT waits for it, fading in at about 7 s (it was 1.5 s, with the cow at 6 s)")
+def cecil_cow_at_once(r):
+    cc = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cecil-court-3d-static.html"), encoding="utf-8").read()
+    for a, b in SWAPS: cc = cc.replace(a, b)
+    r.expect(re.search(r"var phase = \(t - cowT0\) % \d+;", cc) and "phase < COW_FLIGHT" in cc, "the cow's flight no longer starts with its clock (a wait before take-off is back)")
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Cecil Court Approach", wait=2500)
+    OP = "() => { var b = [].filter.call(document.querySelectorAll('button'), function (x) { return /ENTER CECIL COURT/.test(x.textContent); })[0]; return b ? +getComputedStyle(b).opacity : -1; }"
+    r.expect(r.js(OP) >= 0, "no ENTER CECIL COURT button on the approach")
+    r.page.wait_for_timeout(2000)
+    early = r.js(OP)
+    r.expect(early < 0.2, "ENTER CECIL COURT is already showing 4.5 s in (opacity %.2f); it should wait for the cow" % early)
+    r.wait_for("(function(){ var f = %s; return f() > 0.8; })" % OP, 9000, "ENTER CECIL COURT to fade in after the cow")
+    r.page.unroute("**/*")
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

@@ -1,6 +1,6 @@
 #!/bin/bash
 # 2026-11-14 (Sam: "process the sounds how you like and add reverb"): his five phone recordings (voice-originals/New Recording 154-158.m4a).
-# 154 is the Tony Adams chant for the coin toss (tony-adams-chant.m4a); 155-158 are odd shouts for the pubs' hubbub, cut into one sheet
+# 154 is the Tony Adams chant for the coin toss (tony-adams-chant.m4a); 156 is an odd shout for the pubs' hubbub (155, 157 and 158 were dropped at Sam's word, to be recorded again), in a sheet
 # (pub-calls.m4a, 4.5 s a slot). Each: silence trimmed, high-passed, a synthetic room (decaying noise as the impulse) mixed under it,
 # then levelled to -24 LUFS. Run from the project folder; needs ffmpeg.
 set -e
@@ -28,6 +28,7 @@ echo "chant: crowd was $I LUFS, $D s"
 ffmpeg -hide_banner -loglevel error -y -i "$W/tony.wav" -c:a aac -b:a 160k tony-adams-chant.m4a
 N=0; IN=""; FC=""
 # 2026-11-14 (Sam: "process the pub voices to make them sound more anonymous, perhaps pitch shift them"): each shout a different stranger, two lower, two higher, each with its own top end
-STS=(-3.5 2.5 -5 1.5); LPS=(4200 5600 3600 5000); J=0
-for k in 155 156 157 158; do proc "voice-originals/New Recording $k.m4a" "$W/c$k.wav" 0.6 ${LPS[$J]} ${STS[$J]}; J=$((J+1)); IN="$IN -i $W/c$k.wav"; FC="$FC[$N]apad=whole_dur=4.5,atrim=end=4.5[a$N];"; N=$((N+1)); done
-ffmpeg -hide_banner -loglevel error -y $IN -filter_complex "${FC}[a0][a1][a2][a3]concat=n=4:v=0:a=1" -c:a aac -b:a 144k pub-calls.m4a
+# then (Sam: "I only like pub shout two, the others need to be redone so I'll do them tomorrow"): 156 alone for now, up 2.5 semitones;
+# add the new takes here as further slots (4.5 s each) and raise PUB_CALLS_N in the game to match
+proc "voice-originals/New Recording 156.m4a" "$W/c156.wav" 0.6 5600 2.5
+ffmpeg -hide_banner -loglevel error -y -i "$W/c156.wav" -af "apad=whole_dur=4.5,atrim=end=4.5" -c:a aac -b:a 144k pub-calls.m4a

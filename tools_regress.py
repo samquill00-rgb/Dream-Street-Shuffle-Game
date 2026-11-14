@@ -2299,8 +2299,9 @@ def pub_calls(r):
     r.js("() => { window.__dssTonyChants = 0; window.dssAudio.coinFlip(); window.dssAudio.coinFlip(); }")
     r.expect(r.js("() => window.__dssTonyChants") == 1, "a second toss started the chant again over itself")
     r.go("The French", wait=4000)
-    r.js("() => { window.__dssPubCalls = 0; }")
-    r.wait_for("() => window.__dssPubCalls >= 1", 60000, "a shout in the French's hubbub (they come every 20 to 50 seconds)")
+    r.js("() => { window.__dssPubCalls = 0; window.dssAudio.pubCall(); window.dssAudio.pubCall(); }")
+    r.expect(r.js("() => window.__dssPubCalls") == 2, "the pub shout did not play in the French")
+    r.expect("'venue-french':      { min: 50, max: 130, fn: function(){ pubCall(); } }" in html.replace("&#39;", "'"), "the French no longer schedules the shout")
 
 
 def main(argv):

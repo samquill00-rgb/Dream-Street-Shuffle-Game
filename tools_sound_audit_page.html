@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound audit</title>
+<style>
+:root { --bg: #14110d; --card: #1c1711; --line: #3a3024; --fg: #ebe1cb; --dim: #a79a80; --gold: #d8b062; --loud: #e0705a; --quiet: #6fa3d8; --ok: #86b97a; --flag: #e6c15a; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 Georgia, 'Times New Roman', serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 22px 16px 80px; }
+h1 { font-size: 24px; font-weight: normal; letter-spacing: .03em; margin: 0 0 2px; }
+p.sub { color: var(--dim); margin: 0 0 16px; max-width: 70ch; }
+.bar { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 0; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.bar label { color: var(--dim); font-size: 13px; }
+select, input[type=search], input[type=text], textarea, button { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--gold); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button[aria-pressed=true] { background: var(--gold); color: #1a1408; border-color: var(--gold); }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th { text-align: left; font-weight: normal; color: var(--dim); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; padding: 8px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px; border-bottom: 1px solid #2a231a; vertical-align: middle; }
+tr.kind td { background: #0f0d0a; color: var(--gold); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; padding-top: 16px; }
+td.name small { display: block; color: var(--dim); font: 12px/1.3 ui-monospace, Menlo, monospace; word-break: break-all; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.play { width: 38px; height: 34px; padding: 0; font-size: 15px; }
+.play.on { background: var(--gold); color: #1a1408; border-color: var(--gold); }
+.meter { position: relative; width: 150px; height: 9px; background: #2a231a; border-radius: 5px; }
+.meter i { position: absolute; top: -3px; width: 4px; height: 15px; border-radius: 2px; background: var(--fg); }
+.meter b { position: absolute; top: 0; bottom: 0; background: rgba(216,176,98,.22); border-radius: 5px; }
+.flags { color: var(--flag); font-size: 13px; }
+.verdict { display: flex; gap: 4px; flex-wrap: wrap; }
+.verdict button { padding: 3px 7px; font-size: 12.5px; }
+.verdict button[aria-pressed=true][data-v=loud] { background: var(--loud); border-color: var(--loud); color: #1a0d08; }
+.verdict button[aria-pressed=true][data-v=quiet] { background: var(--quiet); border-color: var(--quiet); color: #08121a; }
+.verdict button[aria-pressed=true][data-v=wrong] { background: var(--flag); border-color: var(--flag); color: #1a1408; }
+.verdict button[aria-pressed=true][data-v=fine] { background: var(--ok); border-color: var(--ok); color: #0b1408; }
+.verdict input { width: 150px; padding: 3px 7px; font-size: 12.5px; }
+.notes { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+.notes h2 { font-size: 17px; font-weight: normal; margin: 0 0 6px; }
+.notes textarea { width: 100%; min-height: 150px; font: 13px/1.4 ui-monospace, Menlo, monospace; }
+.wide { overflow-x: auto; }
+@media (max-width: 760px) { .meter { width: 90px; } td.hide, th.hide { display: none; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Sound audit</h1>
+<p class="sub" id="sub"></p>
+<div class="bar">
+  <div class="chips" id="chips" role="group" aria-label="Show"></div>
+  <label>Find <input type="search" id="q" placeholder="name" size="14"></label>
+  <label>Play over <select id="bed"><option value="">nothing</option></select></label>
+  <button id="stop">Stop all</button>
+</div>
+<section id="ctx" class="notes" style="margin:16px 0 4px" hidden>
+  <h2>Random room sounds against the bed they play over</h2>
+  <p class="sub" style="margin-bottom:8px">These come at random while you stand in a place. One that sits ten or more decibels under its bed is not heard. Play each over its bed and judge.</p>
+  <div class="wide"><table id="c"><thead><tr><th></th><th>Sound</th><th>Where</th><th>Its level</th><th>The bed there</th><th>Bed level</th><th>Difference</th><th>Your verdict</th></tr></thead><tbody></tbody></table></div>
+</section>
+<div class="wide"><table id="t"><thead><tr><th></th><th>Sound</th><th>Level</th><th class="hide">Peak</th><th class="hide">Length</th><th class="hide">Called</th><th>Flags</th><th>Your verdict</th></tr></thead><tbody></tbody></table></div>
+<div class="notes">
+  <h2>Your notes</h2>
+  <p class="sub" style="margin-bottom:8px">Every verdict you set is listed here. Copy it and paste it to Claude.</p>
+  <textarea id="out" readonly aria-label="Your verdicts as text"></textarea>
+  <p style="margin:8px 0 0"><button id="copy">Copy notes</button> <button id="clear">Clear all verdicts</button></p>
+</div>
+</main>
+<script>
+var DATA = /*DATA*/;
+var rows = DATA.rows, KEY = 'dssSoundAudit';
+var verdicts = {}; try { verdicts = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+function keep() { try { localStorage.setItem(KEY, JSON.stringify(verdicts)); } catch (e) {} notes(); }
+var KINDS = [['music', 'Music'], ['bed', 'Beds (each loops in its place)'], ['stream', 'Running sounds (go on until stopped)'], ['cue', 'One-shot cues']];
+var FILTERS = [['all', 'All'], ['flag', 'Flagged'], ['bed', 'Music and beds'], ['cue', 'Cues'], ['mine', 'With my verdict']], filt = 'flag';
+var cur = null, curBtn = null, bedAudio = null;
+function stopAll() { if (cur) { cur.pause(); cur = null; } if (curBtn) { curBtn.classList.remove('on'); curBtn.textContent = '▶'; curBtn = null; } if (bedAudio) { bedAudio.pause(); bedAudio = null; } }
+function play(r, btn) {
+  var same = curBtn === btn; stopAll(); if (same) return;
+  var under = document.getElementById('bed').value;
+  if (under && under !== r.id) { var b = rows.filter(function (x) { return x.id === under; })[0]; if (b && b.clip) { bedAudio = new Audio(b.clip); bedAudio.loop = true; bedAudio.play(); } }
+  cur = new Audio(r.clip); curBtn = btn; btn.classList.add('on'); btn.textContent = '■';
+  cur.onended = function () { if (curBtn === btn) { btn.classList.remove('on'); btn.textContent = '▶'; cur = null; curBtn = null; if (bedAudio) { bedAudio.pause(); bedAudio = null; } } };
+  cur.play();
+}
+function playOver(cue, bed, btn) {
+  var same = curBtn === btn; stopAll(); if (same) return;
+  if (bed && bed.clip) { bedAudio = new Audio(bed.clip); bedAudio.loop = true; bedAudio.play(); }
+  curBtn = btn; btn.classList.add('on'); btn.textContent = '\u25A0';
+  var n = 0, go = function () { if (curBtn !== btn) return; cur = new Audio(cue.clip); cur.onended = function () { n++; if (n < 3 && curBtn === btn) setTimeout(go, 1800); else if (curBtn === btn) stopAll(); }; cur.play(); };
+  setTimeout(go, 2500); /* the bed alone first, then the sound three times */
+}
+function verdictCell(c, id, label) {
+  var vd = document.createElement('div'); vd.className = 'verdict'; var v = verdicts[id] || {};
+  [['loud', 'Too loud'], ['quiet', 'Too quiet'], ['wrong', 'Wrong'], ['fine', 'Fine']].forEach(function (o) {
+    var b = document.createElement('button'); b.dataset.v = o[0]; b.textContent = o[1]; b.setAttribute('aria-pressed', v.v === o[0] ? 'true' : 'false');
+    b.onclick = function () { var x = verdicts[id] || {}; if (x.v === o[0]) delete x.v; else x.v = o[0]; if (!x.v && !x.n) delete verdicts[id]; else verdicts[id] = x; keep(); [].forEach.call(vd.querySelectorAll('button'), function (bb) { bb.setAttribute('aria-pressed', (verdicts[id] || {}).v === bb.dataset.v ? 'true' : 'false'); }); };
+    vd.appendChild(b); });
+  var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'note'; inp.value = v.n || ''; inp.setAttribute('aria-label', 'Note on ' + label);
+  inp.oninput = function () { var x = verdicts[id] || {}; if (inp.value) x.n = inp.value; else delete x.n; if (!x.v && !x.n) delete verdicts[id]; else verdicts[id] = x; keep(); };
+  vd.appendChild(inp); c.appendChild(vd);
+}
+function drawCtx() {
+  var list = (DATA.contexts || []).slice().sort(function (a, b) { return a.margin - b.margin; }); if (!list.length) return;
+  document.getElementById('ctx').hidden = false; var tb = document.querySelector('#c tbody'); tb.textContent = '';
+  var by = {}; rows.forEach(function (r) { by[r.id] = r; });
+  list.forEach(function (x) {
+    var cue = by[x.cue], bed = by[x.bed], tr = tb.insertRow(), c;
+    c = tr.insertCell(); var b = document.createElement('button'); b.className = 'play'; b.textContent = '\u25B6'; b.setAttribute('aria-label', 'Play ' + cue.name + ' over ' + bed.name); b.onclick = function () { playOver(cue, bed, b); }; c.appendChild(b);
+    c = tr.insertCell(); c.className = 'name'; c.textContent = cue.name; var sm = document.createElement('small'); sm.textContent = cue.code.replace('window.dssAudio.', ''); c.appendChild(sm);
+    c = tr.insertCell(); c.textContent = x.tag;
+    c = tr.insertCell(); c.className = 'num'; c.textContent = x.cueLevel.toFixed(1);
+    c = tr.insertCell(); c.textContent = bed.name;
+    c = tr.insertCell(); c.className = 'num'; c.textContent = x.bedLevel.toFixed(1);
+    c = tr.insertCell(); c.className = 'num' + (x.margin < -10 ? ' flags' : ''); c.textContent = (x.margin > 0 ? '+' : '') + x.margin.toFixed(1) + ' dB' + (x.margin < -10 ? ' \u00B7 buried' : '');
+    c = tr.insertCell(); verdictCell(c, x.cue + ' in ' + x.tag, cue.name + ' in ' + x.tag);
+  });
+}
+function pos(lv) { return Math.max(0, Math.min(100, (lv + 62) / 56 * 100)); }
+function show(r) {
+  if (filt === 'flag' && !r.flags.length && !r.note) return false;
+  if (filt === 'bed' && r.kind !== 'bed' && r.kind !== 'music') return false;
+  if (filt === 'cue' && r.kind !== 'cue' && r.kind !== 'stream') return false;
+  if (filt === 'mine' && !verdicts[r.id]) return false;
+  var q = document.getElementById('q').value.trim().toLowerCase(); return !q || r.id.toLowerCase().indexOf(q) >= 0;
+}
+function draw() {
+  var tb = document.querySelector('#t tbody'); tb.textContent = '';
+  KINDS.forEach(function (k) {
+    var list = rows.filter(function (r) { return r.kind === k[0] && show(r); }).sort(function (a, b) { return (b.level == null ? -999 : b.level) - (a.level == null ? -999 : a.level); });
+    if (!list.length) return;
+    var h = tb.insertRow(); h.className = 'kind'; var hc = h.insertCell(); hc.colSpan = 8; hc.textContent = k[1] + ' · ' + list.length + ', loudest first';
+    list.forEach(function (r) {
+      var tr = tb.insertRow(), c;
+      c = tr.insertCell(); if (r.clip) { var b = document.createElement('button'); b.className = 'play'; b.textContent = '▶'; b.setAttribute('aria-label', 'Play ' + r.name); b.onclick = function () { play(r, b); }; c.appendChild(b); }
+      c = tr.insertCell(); c.className = 'name'; c.textContent = r.name; var sm = document.createElement('small'); sm.textContent = r.kind === 'bed' ? (r.tags && r.tags.length ? 'on pages tagged ' + r.tags.join(', ') : 'started by hand') + ' · gain ' + r.volume : r.code.replace('window.dssAudio.', ''); c.appendChild(sm);
+      c = tr.insertCell(); c.className = 'num';
+      if (r.level != null) { var m = document.createElement('div'); m.className = 'meter'; var band = document.createElement('b'); var lo = r.kind === 'bed' ? -40 : -32, hi = r.kind === 'bed' ? -30 : -20; band.style.left = pos(lo) + '%'; band.style.width = (pos(hi) - pos(lo)) + '%'; var tick = document.createElement('i'); tick.style.left = 'calc(' + pos(r.level) + '% - 2px)'; if (r.flags.length) tick.style.background = 'var(--flag)'; m.appendChild(band); m.appendChild(tick); c.appendChild(m); var t = document.createElement('span'); t.textContent = r.level.toFixed(1) + ' LUFS'; c.appendChild(t); } else c.textContent = 'silent';
+      c = tr.insertCell(); c.className = 'num hide'; c.textContent = r.peak == null ? '' : r.peak.toFixed(1) + ' dB';
+      c = tr.insertCell(); c.className = 'num hide'; c.textContent = r.secs == null ? '' : r.secs.toFixed(1) + ' s';
+      c = tr.insertCell(); c.className = 'num hide'; c.textContent = r.uses == null ? '' : (r.uses === 0 ? 'never' : r.uses + (r.uses === 1 ? ' place' : ' places')) + (r.ticks ? ', at random' : '') + (r.spot ? ', on a look' : '');
+      c = tr.insertCell(); c.className = 'flags'; c.textContent = r.flags.join('; '); if (r.note) { var nt = document.createElement('div'); nt.style.cssText = 'color:var(--fg);font-size:13px;margin-top:3px;max-width:44ch'; nt.textContent = r.note; c.appendChild(nt); }
+      c = tr.insertCell(); var vd = document.createElement('div'); vd.className = 'verdict'; var v = verdicts[r.id] || {};
+      [['loud', 'Too loud'], ['quiet', 'Too quiet'], ['wrong', 'Wrong'], ['fine', 'Fine']].forEach(function (o) {
+        var b = document.createElement('button'); b.dataset.v = o[0]; b.textContent = o[1]; b.setAttribute('aria-pressed', v.v === o[0] ? 'true' : 'false');
+        b.onclick = function () { var x = verdicts[r.id] || {}; if (x.v === o[0]) delete x.v; else x.v = o[0]; if (!x.v && !x.n) delete verdicts[r.id]; else verdicts[r.id] = x; keep(); [].forEach.call(vd.querySelectorAll('button'), function (bb) { bb.setAttribute('aria-pressed', (verdicts[r.id] || {}).v === bb.dataset.v ? 'true' : 'false'); }); };
+        vd.appendChild(b); });
+      var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'note'; inp.value = v.n || ''; inp.setAttribute('aria-label', 'Note on ' + r.name);
+      inp.oninput = function () { var x = verdicts[r.id] || {}; if (inp.value) x.n = inp.value; else delete x.n; if (!x.v && !x.n) delete verdicts[r.id]; else verdicts[r.id] = x; keep(); };
+      vd.appendChild(inp); c.appendChild(vd);
+    });
+  });
+}
+function notes() {
+  var W = { loud: 'too loud', quiet: 'too quiet', wrong: 'wrong', fine: 'fine' }, lines = [];
+  rows.forEach(function (r) { var v = verdicts[r.id]; if (!v) return; lines.push(r.id + (r.level != null ? ' (' + r.level.toFixed(1) + ' LUFS)' : '') + ': ' + [v.v ? W[v.v] : '', v.n || ''].filter(Boolean).join(', ')); });
+  (DATA.contexts || []).forEach(function (x) { var id = x.cue + ' in ' + x.tag, v = verdicts[id]; if (!v) return; lines.push(id + ' (' + (x.margin > 0 ? '+' : '') + x.margin.toFixed(1) + ' dB against ' + x.bed + '): ' + [v.v ? W[v.v] : '', v.n || ''].filter(Boolean).join(', ')); });
+  document.getElementById('out').value = lines.length ? 'Sound audit of ' + DATA.made + '\n' + lines.join('\n') : '';
+}
+(function () {
+  var fl = rows.filter(function (r) { return r.flags.length || r.note; }).length;
+  document.getElementById('sub').textContent = rows.length + ' sounds, recorded ' + DATA.made + ' as the game plays them, after its own gains. ' + fl + ' are flagged or carry a note. Each plays here at its in-game level, so set your volume as you would to play. The gold band on each meter is where its kind usually sits.';
+  var ch = document.getElementById('chips'); FILTERS.forEach(function (f) { var b = document.createElement('button'); b.textContent = f[1]; b.setAttribute('aria-pressed', f[0] === filt ? 'true' : 'false'); b.onclick = function () { filt = f[0]; [].forEach.call(ch.children, function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); }); draw(); }; ch.appendChild(b); });
+  var sel = document.getElementById('bed'); rows.filter(function (r) { return (r.kind === 'bed' || r.kind === 'music') && r.clip && r.heard; }).forEach(function (r) { var o = document.createElement('option'); o.value = r.id; o.textContent = r.name; sel.appendChild(o); });
+  document.getElementById('q').oninput = draw; document.getElementById('stop').onclick = stopAll;
+  document.getElementById('copy').onclick = function () { var o = document.getElementById('out'); o.select(); try { navigator.clipboard.writeText(o.value); } catch (e) { document.execCommand('copy'); } };
+  document.getElementById('clear').onclick = function () { verdicts = {}; keep(); draw(); drawCtx(); };
+  draw(); drawCtx(); notes();
+})();
+</script>
+</body>
+</html>

@@ -2394,6 +2394,106 @@ def harp_alley_theme(r):
     r.expect(r.pn() == "Dean Street", "the way out of the alley landed on %r" % r.pn())
     r.expect(not r.js(PLAYING), "the recording is still playing on Dean Street after the alley")
     r.info = "page turns: " + ", ".join(waits)
+
+
+STEP_SPY = r"""(function () { window.__spy = { real: [], synth: 0 }; var S = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (w, off, dur) { try { var d = this.buffer ? this.buffer.duration : 0;
+      if (d > 6.5 && d < 7.2) window.__spy.real.push([off || 0, dur || 0]);   /* Sam's footsteps clip, 6.87 s */
+      if (d > 0.040 && d < 0.050) window.__spy.synth++;                       /* a synthesised flagstone step, a 45 ms burst */
+    } catch (e) {} return S.apply(this, arguments); }; })();"""
+
+
+@check("harp-alley-steps", "2026-11-14 (Sam: \"there should be some clicking footsteps in the alley approach here\", then of the synthesised ones \"these footprints sound awful ... find a better sound from the real life ones I gave you\"): his own recorded footsteps fall on the Harp alley's approach, a few at a time, never the synthesised ones, and not in the meeting")
+def harp_alley_steps(r):
+    import html as _h
+    t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)   # a planted bug is applied to the text read here
+    m = re.search(r"'harp-approach':\s*\{[^\n]*", t)
+    r.expect(m is not None, "the alley's approach has no timed sound of its own")
+    line = m.group(0).split("/*")[0]
+    r.expect("alleySteps" in line, "the approach's timed sound is not the recorded footsteps (%s)" % line.strip()[:90])
+    r.expect("flagstoneSteps" not in line, "the synthesised flagstone steps are back on the approach")
+    tag = re.search(r'<tw-passagedata[^>]*name="Harp Alley Approach"[^>]*tags="([^"]*)"', t)
+    r.expect(tag is not None and "harp-approach" in tag.group(1).split(), "the approach does not carry the harp-approach tag")
+    r.ctx.add_init_script(STEP_SPY)
+    scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Harp Alley Approach", wait=3000)
+    r.wait_for("() => window.__spy.real.length >= 1", 14000, "a pass of recorded footsteps on the approach")
+    r.page.wait_for_timeout(7000)
+    d = r.js("() => window.__spy")
+    r.info = "%d passes: %s" % (len(d["real"]), ", ".join("%.1f s from %.1f" % (x[1], x[0]) for x in d["real"]))
+    r.expect(d["synth"] == 0, "%d synthesised steps played on the approach" % d["synth"])
+    r.expect(all(0.8 < x[1] < 4.0 for x in d["real"]), "a pass is not a few steps long (%r)" % d["real"])
+    r.page.get_by_text("INTO THE ALLEY").first.click()
+    r.page.wait_for_timeout(3500)
+    r.expect(r.pn() == "The Harp's Alley", "INTO THE ALLEY landed on %r" % r.pn())
+    n0 = r.js("() => window.__spy.real.length")
+    r.page.wait_for_timeout(11000)
+    r.expect(r.js("() => window.__spy.real.length") == n0, "footsteps go on falling during the meeting")
+    r.page.unroute("**/*")
+
+
+AC_SPY = r"""(function () { var A = window.AudioContext; if (!A) return; window.__acs = [];
+  window.AudioContext = function (o) { var c = o ? new A(o) : new A(); window.__acs.push(c); return c; }; window.AudioContext.prototype = A.prototype; })();"""
+
+
+@check("approach-press-unlocks-sound", "2026-11-14 (Sam, on the Harp alley's music: \"it should play when you hit the approach not wait till after\"): the 3D approaches are full-screen frames, and a press inside one never unlocked the page's sound, so the alley opened from a link stayed silent until INTO THE ALLEY")
+def approach_press_unlocks_sound(r):
+    # this browser allows sound without a press, so the lock is put on by hand: the page's audio is suspended, as a browser leaves it on a cold load, and a real press on the view must bring it back
+    r.ctx.add_init_script(AC_SPY)
+    scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Harp Alley Approach", wait=6000)
+    r.expect(r.js("() => typeof window.dssAudio.ctxState === 'function'"), "dssAudio.ctxState is gone")
+    r.expect(r.js("() => { var f = document.querySelector('#ha-wrap iframe'); return !!f; }"), "the alley's approach has no frame")
+    stuck = 0
+    for i in range(3):
+        st = r.js("async () => { var a = (window.__acs || []); for (var i = 0; i < a.length; i++) { if (a[i].state === 'running') await a[i].suspend(); } return window.dssAudio.ctxState(); }")
+        r.expect(st == "suspended", "could not lock the page's sound for the test (%r)" % st)
+        r.page.mouse.click(700 + 20 * i, 300)
+        r.page.wait_for_timeout(350)
+        if r.js("() => window.dssAudio.ctxState()") != "running": stuck += 1
+        r.page.wait_for_timeout(300)
+    r.expect(stuck == 0, "a press on the alley view left the page's sound locked (%d of 3 presses)" % stuck)
+    r.expect(r.pn() == "Harp Alley Approach", "the presses on the view left the approach (%r)" % r.pn())
+    r.page.unroute("**/*")
+
+
+@check("where-next-alley-road", "2026-11-14 (Sam: \"I want to make it more likely that a player arrives in the alley\", \"Signpost both gaps\"): Where next? names the Green Sea once page 93 is back and the bar is unvisited (not while a key is held), and Cecil Court once PROF. E. LEE is met and its door has reopened")
+def where_next_alley_road(r):
+    BASE = '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")'
+    NOKEY = '(set: $keyLighter to "seed")(set: $dreamKey to "")'
+    SEA, CECIL, THIRD = "The Green Sea is open now.", "Cecil Court is open again.", "The third pillar is open."
+    STATES = [   # the night, the sets on top of the third test start, lines wanted, lines unwanted
+        ("page back, bar unvisited, no key", '(set: $metGreenSeaFriend to false)' + NOKEY, [SEA], [CECIL, THIRD]),
+        ("page back, bar unvisited, key held", '(set: $metGreenSeaFriend to false)', [THIRD], [SEA, CECIL]),
+        ("PROF. E. LEE met, no key", NOKEY, [CECIL], [SEA]),
+        ("PROF. E. LEE met, key held", '', [CECIL, THIRD], [SEA]),
+        ("the alley done", '(set: $harpMet to true)' + NOKEY, [], [SEA, CECIL]),
+    ]
+    LINES = "() => { var b = [].filter.call(document.querySelectorAll('.where-next'), function (x) { return !x.closest('.dss-ghost'); })[0]; return b ? b.innerText : ''; }"
+    CLICK = "(t) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf(t) >= 0 && !x.closest('.dss-ghost'); })[0]; if (!l) return false; l.click(); return true; }"
+    HUB = "(t) => [].some.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.trim() === t && !x.closest('.dss-ghost, .where-next'); })"
+    for i, (label, sets, want, unwanted) in enumerate(STATES):
+        r.page.unroute("**/*")
+        scratch_passage(r, "T-road%d" % i, BASE + sets + '(go-to: "Dean Street")')
+        r.go("T-road%d" % i, wait=5500)
+        r.expect(r.pn() == "Dean Street", "%s: the start landed on %r" % (label, r.pn()))
+        e = r.js("() => [].map.call(document.querySelectorAll('tw-error'), function (x) { return x.textContent.slice(0, 100); }).join(' | ')")
+        r.expect(not e, "%s: Harlowe errors: %s" % (label, e))
+        box = r.js(LINES)
+        for w in want: r.expect(w in box, "%s: Where next? does not say %r (it says %r)" % (label, w, box[:160]))
+        for u in unwanted: r.expect(u not in box, "%s: Where next? says %r" % (label, u))
+        if i == 0:
+            r.expect(r.js(CLICK, SEA), "the Green Sea line cannot be picked"); r.page.wait_for_timeout(1200)
+            r.expect("pillars" in (r.js("() => window.dssDirections.get()") or ""), "picking the Green Sea line does not light the way to the Pillars")
+            r.expect(r.js(CLICK, "The Pillars"), "no Pillars door on Dean Street"); r.page.wait_for_timeout(3500)
+            r.expect(r.pn() == "Maritime interlude", "the Pillars door leads to %r, not the storm and its shore" % r.pn())
+            r.expect(r.js("() => [].some.call(document.querySelectorAll('.mar-shore tw-link'), function (x) { return /Seek the shore/.test(x.textContent) && !x.closest('.dss-ghost'); })"), "Seek the shore is not in its gold box on the storm page")
+        if i == 2:
+            r.expect(r.js(HUB, "Back to Cecil Court"), "the line shows but Dean Street has no Back to Cecil Court door")
+            r.expect(r.js(CLICK, CECIL), "the Cecil Court line cannot be picked"); r.page.wait_for_timeout(1200)
+            r.expect("cecil" in (r.js("() => window.dssDirections.get()") or ""), "picking the Cecil Court line does not light the way there")
+    r.page.unroute("**/*")
     r.page.unroute("**/*")
 
 

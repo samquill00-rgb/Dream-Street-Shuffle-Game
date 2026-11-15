@@ -46,6 +46,7 @@ AUDIO_EMBEDS = [
     ("__DSS_COACH_NIGHT_DATA_URI__", "indoor-busy-bar-floor.m4a",                            "audio/mp4"),   # 2026-10-18: Sam's French recordings layered as a busy bar; generated the-coach-night-ambience.m4a stays on disk
     ("__DSS_SOHO_DAWN_DATA_URI__",   "the-soho-dawn-ambience.m4a",                     "audio/mp4"),
     ("__DSS_GREEN_SEA_DATA_URI__",   "the-green-sea-cafe-ambience.m4a",                "audio/mp4"),
+    ("__DSS_GREEN_SEA_MUSIC_DATA_URI__", "green-sea-music.m4a",                        "audio/mp4"),   # 2026-11-14: Sam's own guitar piece for the Green Sea (green-sea-originals/New guitar fill.mp3), 1.6 dB down, 16 bars at 120; the approach, LINE 2 and LINE 2 Oxford
     ("__DSS_CARTHAGE_DATA_URI__",    "the-carthage-cicadas-ambience.m4a",              "audio/mp4"),
     ("__DSS_CARTHAGE_MELODY_DATA_URI__", "carthage-melody.m4a",                            "audio/mp4"),
     ("__DSS_DIDOS_LAMENT_DATA_URI__", "didos-lament.m4a",                               "audio/mp4"),

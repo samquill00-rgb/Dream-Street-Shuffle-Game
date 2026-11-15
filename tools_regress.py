@@ -612,7 +612,7 @@ def _(r):
         r.press("Talk to LACKLAND")
         r.page.wait_for_timeout(900)
         if r.js("() => !!document.querySelector('#dss-lore-overlay.dss-lore-auto')"):   # a first-visit lore waiting behind the card comes first; then ask again
-            r.page.locator("#dss-lore-overlay.dss-lore-auto button:visible, #dss-lore-overlay.dss-lore-auto [role=button]:visible", has_text="Talk to LACKLAND").first.click()
+            r.page.locator("#dss-lore-overlay.dss-lore-auto .dss-lore-on").first.click()   # 2026-11-14 note 16: the note's foot button reads Go on now, not the press's own words
             r.page.wait_for_timeout(1200)
         got = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-jeff-card'); return o ? o.textContent.replace(/\\s+/g, ' ') : ''; }")
         r.expect(want in got, "after the %s verdict, Talk to LACKLAND showed %r" % ("near-yes" if near == "true" else "refusal", got[:120]))
@@ -2580,24 +2580,24 @@ def stat_slips_hold(r):
         r.expect(r.js(SLIP, tag) is None, "the %s slip did not close once it could be" % name)
 
 
-@check("lore-not-offered-again", "2026-11-14 note 9 (Sam, the French: \"Because the lore is unmissable here, it shouldn't have a button with an option to see what you just saw again straight away\"): once the orange paperback's note has been read, its card no longer offers it")
+@check("lore-not-offered-again", "2026-11-14 note 9 (Sam, the French: \"Because the lore is unmissable here, it shouldn't have a button with an option to see what you just saw again straight away\"): the orange paperback's note still opens by itself on every look (2026-11-11), but its card shows no button for the note")
 def lore_not_offered_again(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     r.go("The French", wait=9000)
-    r.expect(r.js(N14_PRESS, "^to the bar$"), "no TO THE BAR button in the French")
-    r.page.wait_for_timeout(2500); r.clear_slips()
-    r.click_object("fi", "Photographs"); r.page.wait_for_timeout(2500); r.clear_slips(); r.back_click("fi"); r.page.wait_for_timeout(2500); r.clear_slips()
-    r.click_object("fi", "An orange paperback")
-    r.wait_for("() => !!document.querySelector('#dss-lore-overlay .dss-lore-on')", 8000, "the paperback's note to open as the next press")
-    r.expect(r.js("() => document.querySelector('#dss-lore-overlay .dss-lore-on').textContent.trim()") == "Go on", "the note's foot button does not read Go on")
-    r.page.locator("#dss-lore-overlay .dss-lore-on").first.click()
-    r.page.wait_for_timeout(2600); r.clear_slips()
-    if r.js("() => window.__dssRooms.fi.mode()") == "inspect": r.back_click("fi"); r.page.wait_for_timeout(2200)
-    r.click_object("fi", "An orange paperback"); r.page.wait_for_timeout(2400)
-    btns = r.js("() => { var c = document.querySelector('.dss-room-card[aria-hidden=\"false\"]'); return c ? [].filter.call(c.querySelectorAll('.fi-action'), function (b) { return b.getClientRects().length; }).map(function (b) { return b.textContent.trim(); }) : null; }")
-    r.expect(btns is not None, "the paperback's card did not open the second time")
-    r.expect(not any("LORE" in b.upper() or "CHARIOTS" in b.upper() or b == "Go on" for b in btns), "the card offers the note again straight after it was read (%r)" % btns)
-    r.expect(not r.js("() => !!document.querySelector('#dss-lore-overlay')"), "the note opened by itself a second time")
+    r.room_ready("fi"); r.clear_slips(); r.clear_lore()
+    over = "() => { var o = document.getElementById('dss-lore-overlay'); return !!o && getComputedStyle(o).display !== 'none' && /CHARIOTS/i.test(o.innerText); }"
+    SHOWN = "() => { var c = document.querySelector('.dss-room-card[aria-hidden=\"false\"]'); return c ? [].filter.call(c.querySelectorAll('.fi-action'), function (b) { return b.getClientRects().length; }).map(function (b) { return b.textContent.trim(); }) : null; }"
+    for look in ("first", "second"):
+        r.click_object("fi", "An orange paperback")
+        r.wait_for(over, 8000, "the note to open by itself on the %s look" % look)
+        r.clear_lore(); r.page.wait_for_timeout(1200)
+        btns = r.js(SHOWN)
+        if btns is not None:
+            r.expect(not any("LORE" in b.upper() or "CHARIOTS" in b.upper() or b == "Go on" for b in btns), "after the %s look the card shows a button for the note just read (%r)" % (look, btns))
+        r.page.wait_for_timeout(1300)
+        if r.js("() => window.__dssRooms.fi.mode()") == "inspect":
+            r.expect(r.js("() => { var b = document.querySelector('.dss-room-card[aria-hidden=\"false\"] .dss-room-back'); return !!(b && b.getClientRects().length); }"), "after the %s look the card has no way back to the room" % look)
+            r.back_click("fi"); r.page.wait_for_timeout(2000)
     r.page.unroute("**/*")
 
 

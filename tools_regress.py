@@ -2071,7 +2071,7 @@ def _(r):
     op = "() => { var b = document.querySelector('.dss-pocket-badge'); return b ? +getComputedStyle(b).opacity : -1; }"
     r.page.wait_for_timeout(2000)
     r.expect(r.js(op) > 0.5, "the badge did not show when the key came into the pocket (%r)" % r.js(op))
-    r.expect(r.js("() => getComputedStyle(document.querySelector('.dss-pocket-badge')).animationName").find("dssPocketGlow") >= 0, "the badge has lost its glow")
+    r.expect(r.js("() => getComputedStyle(document.querySelector('.dss-pocket-badge')).animationName").find("dssAmberPaneBreath") >= 0, "the badge has lost its glow (since 2026-11-14 the amber pane's breath)")
     r.page.wait_for_timeout(7500)
     r.expect(r.js(op) < 0.05, "the badge did not go after a while (opacity %r)" % r.js(op))
     box = r.js("() => { var b = document.getElementById('test-pocket').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }")
@@ -2713,6 +2713,71 @@ def cecil_cow_at_once(r):
     r.expect(early < 0.2, "ENTER CECIL COURT is already showing 4.5 s in (opacity %.2f); it should wait for the cow" % early)
     r.wait_for("(function(){ var f = %s; return f() > 0.8; })" % OP, 9000, "ENTER CECIL COURT to fade in after the cow")
     r.page.unroute("**/*")
+
+
+@check("critic-knows-this-run-only", "2026-11-05 note 32 (Sam: 'I know this one' on a first visit): THE GREAT HAM knows the book only from an earlier night of THIS run; a refusal left in the browser by an earlier run counts for nothing")
+def critic_knows_this_run_only(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    SLIP = "() => { var s = document.querySelector('#critAftermath .dss-refusal[data-k=\"ham\"]'); return s ? s.textContent : ''; }"
+    SEED = "([night, first, n]) => { localStorage.setItem('dssNightNo', String(night)); localStorage.setItem('dssRunFirst', String(first)); localStorage.setItem('dssRefusals', JSON.stringify([{ k: 'ham', who: 'THE GREAT HAM', line: 'Not for me.', n: n }])); }"
+    r.go("Dean Street", wait=3000)
+    r.js(SEED, [6, 6, 3])        # his refusal is from night 3; this run began on night 6
+    r.go("The critic's judgement", wait=5000)
+    r.expect(r.js("() => +localStorage.getItem('dssNightNo')") == 6 and r.js("() => +localStorage.getItem('dssRunFirst')") == 6, "the jump moved the night counters, so this check proves nothing")
+    slip = r.js(SLIP)
+    r.expect(slip, "no slip for THE GREAT HAM on the critic's page")
+    r.expect("know this one" not in slip, "he knows the book from an earlier run's refusal (%r)" % slip[:80])
+    r.js(SEED, [6, 5, 5])        # the run began on night 5 and he refused it then
+    r.go("The critic's judgement", wait=5000)
+    slip = r.js(SLIP)
+    r.expect("know this one" in slip, "he no longer knows the book on a return night of the same run (%r)" % slip[:80])
+    if SWAPS: r.page.unroute("**/*")
+
+
+@check("beast-window-stays", "2026-11-05 note 34 (Sam: \"I can't click the 'on' for the beast without the popup disappearing\"): the Beast's window in Watkins waits 350 ms after the pointer leaves his name, stays while the pointer is on it, and a click on it pins it and turns to part 2")
+def beast_window_stays(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Watkins", wait=3000)
+    r.clear_lore(); r.clear_slips()
+    HIM = "() => { var w = [].filter.call(document.querySelectorAll('.wk-him.wk-bio-link'), function (x) { return !x.closest('.dss-ghost') && x.getClientRects().length; })[0]; if (!w) return null; var b = w.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, op: +getComputedStyle(w).opacity }; }"
+    TIP = "() => { var t = document.querySelector('.wk-bio'); if (!t) return null; var b = t.getBoundingClientRect(), c = t.querySelector('.wk-bio-count'); return { x: b.left + b.width / 2, y: b.top + b.height / 2, k: t.dataset.k, pin: t.dataset.pin || '', count: c ? c.textContent.trim() : '' }; }"
+    r.wait_for("(function(){ var f = %s; var h = f(); return h && h.op > 0.8; })" % HIM, 45000, "the Beast's name to be written on the page")
+    r.page.wait_for_timeout(800)
+
+    def hover():
+        for _ in range(6):
+            h = r.js(HIM); r.page.mouse.move(h["x"], h["y"], steps=4); r.page.wait_for_timeout(180)
+            t = r.js(TIP)
+            if t and t["k"] == "him": return t
+            r.page.mouse.move(8, 8); r.page.wait_for_timeout(500)
+        return None
+
+    t = hover()
+    r.expect(t, "hovering the Beast's name opened no window")
+    if not t: return
+    r.expect(t["count"].startswith("1 /"), "the window did not open on its first part (%r)" % t["count"])
+    r.page.mouse.move(8, 8)                      # off the name, nowhere near the window
+    r.page.wait_for_timeout(180)
+    r.expect(r.js(TIP), "the window shut the moment the pointer left his name (no grace)")
+    r.page.wait_for_timeout(700)
+    r.expect(not r.js(TIP), "the window stayed open with the pointer away and nothing pinned")
+    t = hover()
+    r.expect(t, "the window did not open a second time")
+    if not t: return
+    r.page.mouse.move(t["x"], t["y"], steps=6)   # across the gap onto the window
+    r.page.wait_for_timeout(800)
+    t = r.js(TIP)
+    r.expect(t, "the window shut while the pointer was on it")
+    if not t: return
+    r.page.mouse.click(t["x"], t["y"])
+    r.page.wait_for_timeout(300)
+    t = r.js(TIP)
+    r.expect(t and t["pin"] == "1" and t["count"].startswith("2 /"), "a click on the window did not pin it and turn to part 2 (%r)" % (t,))
+    r.page.mouse.move(8, 8)
+    r.page.wait_for_timeout(800)
+    r.expect(r.js(TIP), "the pinned window shut when the pointer left it")
+    r.page.screenshot(path=os.path.join(SHOTS, "beast-window.png"))
+    if SWAPS: r.page.unroute("**/*")
 
 
 def main(argv):

@@ -12251,8 +12251,17 @@ window.dssAudio = (function() {
     /* 2026-11-15 (Sam, yes to the sound audit's pick: it peaked 3.6 dB over full scale): both paths 4 dB down, was wet 0.55, dry 0.85; then 1 dB more (Sam: "Yes, 1 dB more"), as at -4 dB it still touched full scale */
     var wet = ac.createGain(); wet.gain.value = 0.31;
     var dry = ac.createGain(); dry.gain.value = 0.48;
-    conv.connect(wetCut); wetCut.connect(wet); wet.connect(ac.destination);
-    dry.connect(ac.destination);
+    /* 2026-11-15 (Sam: "Yes, limiter"): the crash is random noise, so its sharpest instant lands differently every smash and still went
+       0.2 to 1.2 dB over full scale at -5 dB. A soft ceiling on the smash alone: everything under 0.7 of full scale passes untouched, and
+       only the rare sharp instants above it are rounded off, never past 0.95 (-0.45 dB). A DynamicsCompressor was tried first and took the
+       whole smash 2.7 dB down. lim is a gain of 0.5 into the shaper, whose curve spans -2 to 2 so the peaks over full scale are inside it. */
+    var lim = ac.createGain(); lim.gain.value = 0.5;
+    var ceil = ac.createWaveShaper(), cN = 4096, cv = new Float32Array(cN);
+    for (var ci = 0; ci < cN; ci++) { var cx = (ci / (cN - 1)) * 4 - 2, ca = Math.abs(cx); cv[ci] = ca <= 0.7 ? cx : (cx < 0 ? -1 : 1) * (0.7 + 0.25 * Math.tanh((ca - 0.7) / 0.25)); }
+    ceil.curve = cv; ceil.oversample = '4x';
+    lim.connect(ceil); ceil.connect(ac.destination);
+    conv.connect(wetCut); wetCut.connect(wet); wet.connect(lim);
+    dry.connect(lim);
     // ── Smash core (noise burst) ──────────────────────────────────
     var bufLen = Math.floor(ac.sampleRate * dur);
     var buf = ac.createBuffer(1, bufLen, ac.sampleRate);
@@ -86158,6 +86167,8 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
 
 
 

@@ -2325,6 +2325,9 @@ def sound_picks_2026_11_15(r):
     for a, b in SWAPS: t = t.replace(a, b)
     m = re.search(r"var wet = ac\.createGain\(\); wet\.gain\.value = ([\d.]+);\s*var dry = ac\.createGain\(\); dry\.gain\.value = ([\d.]+);", t)
     r.expect(m and float(m.group(1)) <= 0.32 and float(m.group(2)) <= 0.49, "the glass smash is back at its clipping level (wet, dry %s)" % (m.groups() if m else None,))
+    g = re.search(r"function glassSmash\(\) \{.*?\n  \}\n", t, re.S)
+    r.expect(g and "createWaveShaper" in g.group(0) and "ceil.connect(ac.destination)" in g.group(0) and "dry.connect(lim)" in g.group(0) and "wet.connect(lim)" in g.group(0),
+             "the glass smash no longer goes through its soft ceiling (it peaked over full scale without it)")
     m = re.search(r"label: 'coach-bar',.{0,400}?\n\s*volume: ([\d.]+)", t, re.S)
     r.expect(m and float(m.group(1)) >= 0.35, "the Coach's floor is back down (volume %s)" % (m.group(1) if m else None))
     m = re.search(r"label: 'green-sea-music',.{0,300}?loopStart: ([\d.]+), loopEnd: ([\d.]+)", t)

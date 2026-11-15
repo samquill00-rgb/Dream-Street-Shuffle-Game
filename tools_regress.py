@@ -1065,7 +1065,7 @@ for _room, _passage in ROOMS:
 # Each world from its preview start (?start=<world>), walked like a curious player: on every page press the first
 # way on not yet taken, up to 30 pages or back to Dean Street. On every page: no errors (the watchers), any 3D view
 # is not blank, and the page fits a 1440x900 laptop screen without scrolling.
-WORLD_ENDS = {"Night Ahead Part Two": 1, "The Fetch": 1}
+WORLD_ENDS = {"Night Ahead Part Two": 1, "The Fetch": 1, "Black page": 1, "White page": 1}   # 2026-11-15: the two last pages of the game have no way on by design; a walk that goes on past the Fetch ends there
 WORLDS = ["himalayas", "nazca", "easter", "pyramid", "ezekiel"]
 
 CLICKABLES = """() => { var out = [], seen = new Set();
@@ -1115,6 +1115,15 @@ def world_check(world):
                 bad.append("%s: scrolls %d px on a 1440x900 screen" % (pn, over))
             opts = r.js(CLICKABLES)
             fresh = [o for o in opts if (pn, o["t"]) not in taken]
+            # 2026-11-15: a way on that fades in slowly (Centre Point's CLIMB IT is not a fifth visible until about 5 s in, and whole by 9) was
+            # sampled a moment too early and read as a dead end; look again for up to 8 s before saying the walk has stopped
+            waited = 0
+            while not fresh and waited < 4 and r.pn() == pn and not r.js("() => /hold to hum|held down/i.test(document.body.innerText)"):
+                r.page.wait_for_timeout(2000); waited += 1
+                opts = r.js(CLICKABLES)
+                fresh = [o for o in opts if (pn, o["t"]) not in taken]
+            if r.pn() != pn:
+                continue
             if not fresh and r.js("() => /hold to hum|held down/i.test(document.body.innerText)"):
                 # a hold game (the King's Chamber hum): hold Space for different lengths until it lets you on
                 for hold in (1200, 2000, 2800, 3600, 1600, 2400, 3200):

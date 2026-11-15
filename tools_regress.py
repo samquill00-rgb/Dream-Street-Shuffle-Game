@@ -2316,7 +2316,7 @@ def revo_shout(r):
     r.expect("revo-shout-one.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the one-shout recording is not linked in the html")
 
 
-@check("sound-picks-2026-11-15", "2026-11-15 (Sam, yes to the sound audit's picks, and of the Green Sea piece: \"cut the first 8 seconds off ... and fade in\"): the glass smash is 4 dB down (it clipped), the Coach's floor 5 dB up, and the Green Sea music starts at the piece's 0:08 with a fade, then loops its 24 s without the fade")
+@check("sound-picks-2026-11-15", "2026-11-15 (Sam, yes to the sound audit's picks, and of the Green Sea piece: \"cut the first 8 seconds off ... and fade in\"): the glass smash is 5 dB down (it clipped), the Coach's floor 5 dB up, and the Green Sea music starts at the piece's 0:08 with a fade, then loops its 24 s without the fade")
 def sound_picks_2026_11_15(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     import html as _h, subprocess
@@ -2324,7 +2324,7 @@ def sound_picks_2026_11_15(r):
     t = _h.unescape(open(os.path.join(here, "Dream Street Shuffle.html"), encoding="utf-8").read())
     for a, b in SWAPS: t = t.replace(a, b)
     m = re.search(r"var wet = ac\.createGain\(\); wet\.gain\.value = ([\d.]+);\s*var dry = ac\.createGain\(\); dry\.gain\.value = ([\d.]+);", t)
-    r.expect(m and float(m.group(1)) <= 0.36 and float(m.group(2)) <= 0.55, "the glass smash is back at its clipping level (wet, dry %s)" % (m.groups() if m else None,))
+    r.expect(m and float(m.group(1)) <= 0.32 and float(m.group(2)) <= 0.49, "the glass smash is back at its clipping level (wet, dry %s)" % (m.groups() if m else None,))
     m = re.search(r"label: 'coach-bar',.{0,400}?\n\s*volume: ([\d.]+)", t, re.S)
     r.expect(m and float(m.group(1)) >= 0.35, "the Coach's floor is back down (volume %s)" % (m.group(1) if m else None))
     m = re.search(r"label: 'green-sea-music',.{0,300}?loopStart: ([\d.]+), loopEnd: ([\d.]+)", t)

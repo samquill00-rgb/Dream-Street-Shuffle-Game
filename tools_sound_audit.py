@@ -234,7 +234,7 @@ def run(want):
 
 # what the numbers cannot say: things found by reading the code beside the measurement (2026-11-14)
 NOTES = {
-    "cue:glassSmash": "4 dB down since 15 November (you said yes to the pick: it peaked 3.6 dB over full scale). It now peaks right at full scale, and as the crash is random noise some smashes may still touch it. Still the loudest cue.",
+    "cue:glassSmash": "5 dB down since 15 November (you said yes to the pick: it peaked 3.6 dB over full scale; 4 dB still touched full scale, so 1 dB more). Still the loudest cue.",
     "bed:coach-bar": "5 dB up since 15 November (you said yes to the pick): it was the quietest pub, 10 dB under the Pillars, and now sits about 5 under them, near the French.",
     "bed:piano-eoin": "The Dawn piano is the loudest bed in the game, 8 dB over the Dean Street theme. It is the ending, so probably meant.",
     "bed:cave-shanti": "Plays 9 dB louder than the same file does as the Climb music: it starts further into the piece, where the chant is at full voice.",

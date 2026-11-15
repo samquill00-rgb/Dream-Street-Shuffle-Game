@@ -1,3 +1,6 @@
+# START HERE (night of 2026-11-14 to 15)
+See HANDOFF-night-2026-11-15.md: the Harp alley theme and footsteps, 21 playtest notes, the Green Sea music; all committed, not pushed; open: the list of cards without words, the sound audit.
+
 # START HERE (night of 2026-11-13 to 14)
 See HANDOFF-night-2026-11-14.md: the Shelley bust in the bookshop, Sam's new recordings, and the sound audit (tools_sound_audit.py; six findings waiting for his ear, nothing in the mix changed).
 

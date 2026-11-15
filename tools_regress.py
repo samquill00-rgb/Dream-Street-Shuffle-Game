@@ -2316,7 +2316,30 @@ def revo_shout(r):
     r.expect("revo-shout-one.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the one-shout recording is not linked in the html")
 
 
-@check("quiet-sounds-raised", "2026-11-14 (Sam's verdicts on the sound audit page, \"too quiet\"): seven sounds sat 10 to 21 dB under the music of their own rooms: the vinyl crackle (Lackland), the chair and the glass (Ronnie's), the gust (Himalayas), the gull (Easter Island), the knock on Ronnie's empty table, the stairs at Trisha's")
+@check("sound-picks-2026-11-15", "2026-11-15 (Sam, yes to the sound audit's picks, and of the Green Sea piece: \"cut the first 8 seconds off ... and fade in\"): the glass smash is 4 dB down (it clipped), the Coach's floor 5 dB up, and the Green Sea music starts at the piece's 0:08 with a fade, then loops its 24 s without the fade")
+def sound_picks_2026_11_15(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    import html as _h, subprocess
+    here = os.path.dirname(os.path.abspath(__file__))
+    t = _h.unescape(open(os.path.join(here, "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)
+    m = re.search(r"var wet = ac\.createGain\(\); wet\.gain\.value = ([\d.]+);\s*var dry = ac\.createGain\(\); dry\.gain\.value = ([\d.]+);", t)
+    r.expect(m and float(m.group(1)) <= 0.36 and float(m.group(2)) <= 0.55, "the glass smash is back at its clipping level (wet, dry %s)" % (m.groups() if m else None,))
+    m = re.search(r"label: 'coach-bar',.{0,400}?\n\s*volume: ([\d.]+)", t, re.S)
+    r.expect(m and float(m.group(1)) >= 0.35, "the Coach's floor is back down (volume %s)" % (m.group(1) if m else None))
+    m = re.search(r"label: 'green-sea-music',.{0,300}?loopStart: ([\d.]+), loopEnd: ([\d.]+)", t)
+    r.expect(m and abs(float(m.group(1)) - 24.0) < 0.05 and abs(float(m.group(2)) - 48.0) < 0.05, "the Green Sea music loops from the old points (%s)" % (m.groups() if m else None,))
+    f = os.path.join(here, "green-sea-music.m4a")
+    def rms(a, b):
+        o = subprocess.run(["ffmpeg", "-nostats", "-v", "info", "-i", f, "-af", "atrim=%s:%s,volumedetect" % (a, b), "-f", "null", "-"], capture_output=True, text=True).stderr
+        mm = re.search(r"mean_volume: (-?[\d.]+) dB", o); return float(mm.group(1)) if mm else None
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f], capture_output=True, text=True).stdout or 0)
+    r.expect(abs(dur - 48.0) < 0.2, "green-sea-music.m4a is not the 48 s two-copy file (%.2f s)" % dur)
+    head, inloop = rms(0, 0.5), rms(24, 24.5)
+    r.expect(head is not None and inloop is not None and head < inloop - 12, "the Green Sea music does not fade in, or its loop fades too (first 0.5 s %s dB, loop's first 0.5 s %s dB)" % (head, inloop))
+
+
+@check("quiet-sounds-raised","2026-11-14 (Sam's verdicts on the sound audit page, \"too quiet\"): seven sounds sat 10 to 21 dB under the music of their own rooms: the vinyl crackle (Lackland), the chair and the glass (Ronnie's), the gust (Himalayas), the gull (Easter Island), the knock on Ronnie's empty table, the stairs at Trisha's")
 def quiet_sounds_raised(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     import html as _h

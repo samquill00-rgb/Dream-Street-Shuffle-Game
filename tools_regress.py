@@ -1065,9 +1065,13 @@ for _room, _passage in ROOMS:
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     bad = []
-    for room, passage in ROOMS:
+    for room, passage in ROOMS + [("cx", "Approach Coppers Lair")]:   # the Copper's Lair approach shares the rooms' build (playtest 2026-11-16)
         r.go(passage)
-        r.room_ready(room)
+        if room == "cx":
+            r.wait_for("() => !!document.getElementById('cx-wrap')", 15000, "the Copper's Lair approach")
+            r.page.wait_for_timeout(2500)
+        else:
+            r.room_ready(room)
         r.page.wait_for_timeout(800)
         m = r.js("([id]) => { var w = document.getElementById(id + '-wrap'); if (!w) return null; return [Math.round(w.getBoundingClientRect().bottom), window.innerHeight, document.documentElement.scrollHeight]; }", [room])
         if not m:

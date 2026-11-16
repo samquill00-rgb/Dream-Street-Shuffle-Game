@@ -1,3 +1,9 @@
+# START HERE (16 Nov evening: the playtest fixes)
+See HANDOFF-fixes-2026-11-16-evening.md: what was fixed from the 15-16 Nov notes, the calls made for Sam, the tests, and a ranked list of what next. Synced, NOT committed.
+
+# START HERE (playtest of 2026-11-15 and 16)
+See HANDOFF-night-2026-11-15b.md: five playtest blocks; the notes, worst first (one broken: the dream-world games start behind their rules card); the room band fixed (e0c32b0, 2069231). Card words still Sam's.
+
 # START HERE (night of 2026-11-14 to 15)
 See HANDOFF-night-2026-11-15.md: the Harp alley theme and footsteps, 21 playtest notes, the Green Sea music; all committed, not pushed; open: the list of cards without words, the sound audit.
 

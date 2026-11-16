@@ -1061,6 +1061,22 @@ for _room, _passage in ROOMS:
     check("room-" + _room, "every object in %s opens, has a card, and is not hidden in its close-up" % _passage)(room_check(_room, _passage))
 
 
+@check("rules-card-holds-keys", "2026-11-16 playtest (Broken 1): with a rules card up, a click off it and an arrow or Space started the Pyramid Run, the Climb or the Reclamation unseen under the card")
+def _(r):
+    for pas, cov in (("Pyramid Run", "pr-cover"), ("The Climb", "hc-cover"), ("The Reclamation", "rc-cover")):
+        r.go(pas, wait=8000)
+        r.expect(r.js("() => !!document.getElementById('dss-rules-overlay')"), "%s: no rules card came up" % pas)
+        r.page.mouse.click(30, 450); r.page.wait_for_timeout(300)
+        for k in ("ArrowRight", "Space", "ArrowUp"):
+            r.page.keyboard.down(k); r.page.wait_for_timeout(400); r.page.keyboard.up(k)
+        r.page.wait_for_timeout(1200)
+        st = "() => { var c = document.getElementById('%s'); return c ? !c.hidden && getComputedStyle(c).display !== 'none' : false; }" % cov
+        r.expect(r.js(st), "%s: the game started under its rules card" % pas)
+        r.js("() => { var b = document.querySelector('.dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(1500)
+        r.expect(not r.js(st), "%s: Play did not start the game" % pas)
+    r.info = "keys held off all three games until Play"
+
+
 @check("rooms-reach-the-foot", "2026-11-16 (Sam: \"Fix the room band\"): nine of the ten rooms stopped about 100 px above the foot of a 1440x900 window and left a dark band; every room now runs to the foot and the page does not scroll")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

@@ -1061,6 +1061,24 @@ for _room, _passage in ROOMS:
     check("room-" + _room, "every object in %s opens, has a card, and is not hidden in its close-up" % _passage)(room_check(_room, _passage))
 
 
+@check("rooms-reach-the-foot", "2026-11-16 (Sam: \"Fix the room band\"): nine of the ten rooms stopped about 100 px above the foot of a 1440x900 window and left a dark band; every room now runs to the foot and the page does not scroll")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    bad = []
+    for room, passage in ROOMS:
+        r.go(passage)
+        r.room_ready(room)
+        r.page.wait_for_timeout(800)
+        m = r.js("([id]) => { var w = document.getElementById(id + '-wrap'); if (!w) return null; return [Math.round(w.getBoundingClientRect().bottom), window.innerHeight, document.documentElement.scrollHeight]; }", [room])
+        if not m:
+            bad.append("%s: no %s-wrap" % (room, room))
+        elif m[0] < m[1] - 6:
+            bad.append("%s ends at %d of %d" % (room, m[0], m[1]))
+        elif m[2] > m[1] + 1:
+            bad.append("%s scrolls (%d of %d)" % (room, m[2], m[1]))
+    r.expect(not bad, "; ".join(bad))
+
+
 # ---------------------------------------------------------------- the dream worlds
 # Each world from its preview start (?start=<world>), walked like a curious player: on every page press the first
 # way on not yet taken, up to 30 pages or back to Dean Street. On every page: no errors (the watchers), any 3D view

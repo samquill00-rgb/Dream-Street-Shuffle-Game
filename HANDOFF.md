@@ -1,3 +1,9 @@
+# START HERE (16 Nov night: the leftovers, paused by Sam)
+- Done: the Pyramid Run strip keeps room for two lines (120ec86, check pyramid-hud-two-lines, proved).
+- Reproduced on the Mac, not fixed: the cellar fight's end card scrolls (a loss 33 px at 1440x900, a win 154 px at 1280x800; replay with "Fight starts" and random arrow keys). Suspect: the page fitter (setInterval fit, ~line 16145) gives up after 14 tries in a long fight. Unconfirmed.
+- Not started: the night-two "Cannot set properties of null" error (seen once), the Airport Pub at 44 fps, the unplayed routes (White page and Fetch by play, the pitch, NOTEBOOK beside a room, LILY's call accepted in the Coach).
+- Full regression not run on this build: Sam triggers it himself at the end of the night.
+
 # START HERE (16 Nov evening: the playtest fixes)
 See HANDOFF-fixes-2026-11-16-evening.md: what was fixed from the 15-16 Nov notes, the calls made for Sam, the tests, and a ranked list of what next. Synced, NOT committed.
 

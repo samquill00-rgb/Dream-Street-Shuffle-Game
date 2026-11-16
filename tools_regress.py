@@ -1077,6 +1077,27 @@ def _(r):
     r.info = "keys held off all three games until Play"
 
 
+@check("pyramid-hud-two-lines", "2026-11-16 leftovers: at 1280x800 a hazard hint took the Pyramid Run's status strip to a second line, the page ran 12 px past the window and the fitter shrank the game a step mid-run")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.page.set_viewport_size({"width": 1280, "height": 800})
+    r.go("Pyramid Run", wait=6000)
+    r.js("() => { var b = document.querySelector('.dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(4000)
+    r.js("() => { var b = document.getElementById('pr-pause'); if (b) b.click(); }"); r.page.wait_for_timeout(500)
+    M = "() => { var h = document.getElementById('pyr-run-hud'), f = document.querySelector('.pr-frame'); return [h.offsetHeight, Math.round(f.getBoundingClientRect().width), document.scrollingElement.scrollHeight - innerHeight]; }"
+    a = r.js(M)
+    r.expect(a[2] <= 0, "the page scrolls %d px before any hint" % a[2])
+    r.js("() => { document.getElementById('pyr-run-hud').textContent = 'SNAKE HEADS · HOLD ↑, RELEASE, JUMP AGAIN   ·   MARKS 0/7 · EACH TAKES BACK A STUMBLE   ·   STUMBLES 0/3'; }")
+    r.page.wait_for_timeout(250)
+    b = r.js(M)
+    r.page.wait_for_timeout(2500)
+    c = r.js(M)
+    r.expect(b[2] <= 0, "a two-line hint pushed the page %d px past the window" % b[2])
+    r.expect(b[0] <= a[0], "the strip grew from %d to %d px" % (a[0], b[0]))
+    r.expect(abs(c[1] - a[1]) <= 1, "the game shrank from %d to %d px wide" % (a[1], c[1]))
+    r.info = "strip %d px, game %d px wide, no scroll" % (a[0], a[1])
+
+
 @check("rooms-reach-the-foot", "2026-11-16 (Sam: \"Fix the room band\"): nine of the ten rooms stopped about 100 px above the foot of a 1440x900 window and left a dark band; every room now runs to the foot and the page does not scroll")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

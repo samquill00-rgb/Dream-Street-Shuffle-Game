@@ -1,8 +1,14 @@
-# START HERE (16 Nov night: the leftovers, paused by Sam)
-- Done: the Pyramid Run strip keeps room for two lines (120ec86, check pyramid-hud-two-lines, proved).
-- Reproduced on the Mac, not fixed: the cellar fight's end card scrolls (a loss 33 px at 1440x900, a win 154 px at 1280x800; replay with "Fight starts" and random arrow keys). Suspect: the page fitter (setInterval fit, ~line 16145) gives up after 14 tries in a long fight. Unconfirmed.
-- Not started: the night-two "Cannot set properties of null" error (seen once), the Airport Pub at 44 fps, the unplayed routes (White page and Fetch by play, the pitch, NOTEBOOK beside a room, LILY's call accepted in the Coach).
-- Full regression not run on this build: Sam triggers it himself at the end of the night.
+# START HERE (17 Nov: the leftovers done, playthroughs paused by Sam)
+Commits: 120ec86 (Pyramid strip), 4a77577 (fight end card + bar timers). Working tree clean.
+- Fixed, cellar fight end card scrolling: the page fitter (IIFE ~.twee 16131-16191, setInterval fit 600 ms, 15-try cap) counted EVERY look as a try, so it died ~10 s into every page. Now a look that finds the page fitting, or finds nothing to shrink, is not a try (`tries--`). Three real fights end at 0 px at both sizes. Check fight-end-card-fits (1440x900 + 1280x800), proved.
+- Fixed, night-two "Cannot set properties of null (setting 'textContent')": the bar game's pour-round and carry timers wrote to the scoreboard after leaving the bar. Guards `if (!this.canvas || !this.canvas.isConnected) return;` in both setTimeouts, _startCarryTransition and _resultCarry. Check bar-timers-after-leaving, proved (the plant gives the exact error).
+- Fixed, Pyramid strip (120ec86): min-height calc(3.2em + 14px) on `.pr-stage #pyr-run-hud:not(.pr-summary)`. Check pyramid-hud-two-lines.
+- Targeted checks passing on this build: fight-end-card-fits, bar-timers-after-leaving, pyramid-hud-two-lines, napkin-page-fits, pyre-pages-fit, long-page-no-scrollbar, room-entry-no-scrollbar, page-turn-no-scroll-flash, hub-opens-fit, hub-return-fits, rules-card-holds-keys. bar-timers failed once on a stale build ("the bar game did not start"); passes on the current one.
+- Played, no errors and no scroll: LILY call 1 accepted (HANG UP back to the Coach bar); the dual ring into the Coach and Horses lock; NOTEBOOK opened beside five rooms (fi, cb, lk at 1440x900; ti, ri at 1280x800), all six tabs, Esc closes; the LACKLAND pitch through to the manuscript; the White ending walk as far as Alba Complete.
+- For Sam's eye, not changed: Airport Pub runs ~44 fps with 12 point + 6 spot lights (2 shadowed) against a budget of ~12; smooth needs light cuts.
+- Open, not fixed: Pyramid Run under the rules card overflows ~2.7 s at load before the fitter settles it.
+- Paused by Sam (resume later): the White ending walk past "Traveller, wake!" to Dawn Approach White and the White page (scratch walker scratchpad/left/white.py: Test Start 4 + a scratch T-white passage setting the third alba; the polaroid closes via `#dss-photo-pop .dss-photo-pop-hint`), then the hour of error-hunting playthroughs (night walker scratchpad/play-D/night.py `<start> <tag> <seconds> [w h] [first|last]`). Scratchpad may be cleared.
+- Full regression NOT run on this build: Sam triggers it himself at the end of the night.
 
 # START HERE (16 Nov evening: the playtest fixes)
 See HANDOFF-fixes-2026-11-16-evening.md: what was fixed from the 15-16 Nov notes, the calls made for Sam, the tests, and a ranked list of what next. Synced, NOT committed.

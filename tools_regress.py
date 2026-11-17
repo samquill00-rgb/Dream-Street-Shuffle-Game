@@ -1077,6 +1077,42 @@ def _(r):
     r.info = "keys held off all three games until Play"
 
 
+@check("fight-end-card-fits", "2026-11-17 leftovers: the cellar fight's TRY AGAIN / MOVE ON and GET OUT ran 33 to 154 px under the fold, because the page fitter counted every look as a try and stopped for good about ten seconds into any page")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    bad = []
+    for W, H in ((1440, 900), (1280, 800)):
+        r.page.set_viewport_size({"width": W, "height": H})
+        r.go("Fight starts", wait=6000)
+        r.js("() => { var b = document.querySelector('.dss-rules-play'); if (b) b.click(); }")
+        r.page.wait_for_timeout(16000)   # well past the old fitter's last look
+        r.js("() => { document.getElementById('fight-end').innerHTML = '<span>🤜 STANDING 🤜</span><br><button class=\"fight-continue-btn\">Get out</button>'; }")
+        over = 1
+        for _i in range(40):   # the fitter takes a step or two; the fight's own lines come and go meanwhile
+            r.page.wait_for_timeout(200)
+            over = r.js("() => document.scrollingElement.scrollHeight - innerHeight")
+            if over <= 0: break
+        if over > 0: bad.append("%dx%d: the end card leaves the page %d px past the window" % (W, H, over))
+    r.expect(not bad, "; ".join(bad))
+
+
+@check("bar-timers-after-leaving", "2026-11-17 leftovers: a night-two walk logged \"Cannot set properties of null (setting 'textContent')\": the bar game's pour and carry timers wrote to its scoreboard after the page was left")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Ronnie’s Drinks", wait=8000)
+    r.wait_for("() => !!window.currentBarGame || [].some.call(document.querySelectorAll('tw-link, button'), function (e) { return /Go to the bar|START|Play/i.test(e.textContent) && e.getClientRects().length; })", 15000, "the bar game or its way in")
+    for _i in range(4):
+        if r.js("() => !!(window.currentBarGame && window.currentBarGame.canvas && window.currentBarGame.canvas.isConnected)"): break
+        r.js("() => { var b = document.getElementById('bar-start-btn'); if (b && b.getClientRects().length) { b.click(); return; } var l = [].filter.call(document.querySelectorAll('tw-link, button'), function (e) { return /Go to the bar|START/i.test(e.textContent) && e.getClientRects().length; })[0]; if (l) l.click(); }")
+        r.page.wait_for_timeout(2500)
+    r.expect(r.js("() => !!(window.currentBarGame && window.currentBarGame.canvas && window.currentBarGame.canvas.isConnected)"), "the bar game did not start")
+    r.js("() => { window.__dssOldBar = window.currentBarGame; var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return /out onto the street/i.test(e.textContent); })[0]; if (l) l.click(); }")
+    r.wait_for("() => !document.getElementById('bar-canvas')", 8000, "leaving Ronnie's Drinks")
+    r.js("() => { var g = window.__dssOldBar; setTimeout(function () { g._startCarryTransition(); }, 0); setTimeout(function () { g._resultCarry(); }, 50); }")
+    r.page.wait_for_timeout(2500)
+    r.info = "the pour and carry steps ran after leaving, quietly"
+
+
 @check("pyramid-hud-two-lines", "2026-11-16 leftovers: at 1280x800 a hazard hint took the Pyramid Run's status strip to a second line, the page ran 12 px past the window and the fitter shrank the game a step mid-run")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

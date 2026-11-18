@@ -3357,6 +3357,54 @@ def doorway_taper(r):
     r.expect(again[:2] == [4, 6], "the first doorway after a venue paid +%d/+%d, not +4/+6" % (again[0], again[1]))
 
 
+@check("doorway-press-waits", "2026-11-18 (Sam's playtest, Test Start 4): a second doorway visit seconds after the first gave no gain, no card and no slip. E was dropped without a word when pressed while the walker was still stepping onto the doorway, or while anything was up; the press now waits and goes in (plant: function doorwayAhead(){if(S.entering)return null;|||function doorwayAhead(){if(S.entering||S.moving||busy())return null;)")
+def doorway_press_waits(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Test Start 4", wait=10000)
+    CARD = "() => !!document.querySelector('#spew-popup-overlay canvas')"
+    MAP = "() => !!(window.dssSohoMap && window.dssSohoMap.state && window.dssSohoMap.state.alive && typeof window.__dssSohoTeleport === 'function')"
+
+    def hold_card():
+        r.page.wait_for_timeout(900)
+        box = r.js("() => { var b = document.querySelector('#spew-popup-overlay canvas').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }")
+        r.page.mouse.move(*box); r.page.mouse.down(); r.page.wait_for_timeout(1500); r.page.mouse.up()
+        r.wait_for("() => !document.getElementById('spew-popup-overlay')", 15000, "the card to close")
+        r.wait_for(MAP, 10000, "the Soho map back after the card")
+
+    def step_on_and_press(visit):
+        """From the tile beside the Livonia Street doorway, step onto it and press E at once, as a player does while the walker is still moving."""
+        r.clear_lore(); r.clear_slips()
+        r.wait_for(MAP, 15000, "the Soho map")
+        r.expect(r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", [5, 10]), "the tile beside the Livonia Street doorway is not walkable")
+        r.page.wait_for_timeout(600)
+        r.page.keyboard.press("ArrowLeft")
+        moving = r.js("() => !!window.dssSohoMap.state.moving")
+        r.page.keyboard.press("e")
+        r.expect(moving, "the %s visit: the walker had finished the step before E, so this visit proves nothing" % visit)
+        r.wait_for(CARD, 5000, "the doorway card after E pressed mid-step (%s visit)" % visit)
+        hold_card()
+
+    step_on_and_press("first")
+    step_on_and_press("second")   # Sam's case: seconds after the first card has gone
+    # with something up (a stand-in for the gold wheel after a haunt), standing in the doorway: the press waits, then goes in
+    r.clear_lore(); r.clear_slips()
+    r.wait_for(MAP, 15000, "the Soho map")
+    r.expect(r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", [4, 10]), "the Livonia Street doorway's tile is not walkable")
+    r.page.wait_for_timeout(700)
+    r.js("() => { var o = document.createElement('div'); o.id = 'dss-gate-flash'; o.style.cssText = 'position:fixed;left:0;top:0;width:10px;height:10px;pointer-events:none'; document.body.appendChild(o); }")
+    r.page.wait_for_timeout(300)
+    r.page.keyboard.press("e")
+    r.page.wait_for_timeout(1500)
+    held = r.js("() => { var b = [].filter.call(document.querySelectorAll('.dss-doorway-btn'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; })[0]; return { card: !!document.getElementById('spew-popup-overlay'), btn: b ? (b.style.opacity || '1') : null, want: !!window.dssSohoMap.state.doorWant }; }")
+    r.expect(not held["card"], "the doorway went in over something that was up")
+    r.expect(held["want"], "E in the doorway while something was up was dropped (nothing held it)")
+    r.expect(held["btn"] == ".5", "the doorway button is %r while the press waits (wanted shown and dimmed to .5)" % held["btn"])
+    r.js("() => document.getElementById('dss-gate-flash').remove()")
+    r.wait_for(CARD, 4000, "the doorway card once nothing was up")
+    hold_card()
+    r.info = "E mid-step went in twice running; E under an overlay waited (button %s) and went in when it cleared" % held["btn"]
+
+
 @check("portal-button-wait", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Middle way\"): the Third Pillar Portal shows nothing to press for about 10 s; the first crossing of a run keeps that, a later crossing in the same run shows its button after about 3 s")
 def portal_button_wait(r):
     BTN = "() => { var b = [].filter.call(document.querySelectorAll('div'), function (e) { return /^(MAKE YOUR OFFERING|STEP THROUGH|BACK TO THE PILLARS)$/.test(e.textContent.trim()) && e.style.position === 'fixed'; })[0]; return b ? { t: b.textContent.trim(), on: b.style.opacity === '1' } : null; }"

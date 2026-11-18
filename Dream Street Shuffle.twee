@@ -7650,9 +7650,18 @@ function init(container) {
   var doorwayButton=document.createElement('button');doorwayButton.type='button';doorwayButton.className='dss-smash-btn dss-doorway-btn';doorwayButton.textContent='Step into the doorway.';doorwayButton.style.cssText='display:none;margin:0 0 0 .7em;padding:.15em .6em;color:#e8d9b8;background:#15151b;border:1px solid #8a7a5c;cursor:pointer;font:14px "Crimson Text",Georgia,serif;letter-spacing:.02em;vertical-align:baseline';
   /* 2026-11-16 (playtest Friction 4): the button sat in its own row above the d-pad and pushed the page 20 to 41 px past the
      foot of a 1440x900 window. It now rides on the caption row, beside "Press E to step in", and takes no room of its own. */
-  function placeDoorBtn(){var on=!!inDoorway()&&!busy();doorwayButton.style.display=on?'inline-block':'none';if(on&&doorwayButton.parentNode!==right)right.appendChild(doorwayButton);}
-  function stepIn(){var h=inDoorway();if(!h||busy())return;doorwayButton.style.display='none';enter(h);}
-  doorwayButton.addEventListener('click',function(e){e.preventDefault();stepIn();try{cv.focus({preventScroll:true});}catch(e2){}});
+  /* 2026-11-18 (Sam's playtest, Test Start 4: a second doorway visit seconds after the first gave no gain, no card and no slip): E was dropped
+     without a word in two cases, pressed while the walker was still finishing the step onto the doorway (inDoorway() wants him stood still),
+     and pressed while anything was up (busy(): the doorway card runs on about 7.9 s after a finished hold). A press now waits: doorwayAhead()
+     is the doorway he stands in or is stepping onto, wantIn() goes in at once if it can and otherwise holds the wish in S.doorWant, and
+     doorWantTick() (every frame) takes him in as soon as he stands in it and nothing is up. Walking off, going in elsewhere or 12 s drop it.
+     The button now shows in the doorway even while something is up, dimmed while it waits. */
+  function placeDoorBtn(){var on=!!inDoorway();doorwayButton.style.display=on?'inline-block':'none';var wait=on&&(busy()||!!S.doorWant);doorwayButton.style.opacity=wait?'.5':'';doorwayButton.style.cursor=wait?'wait':'pointer';if(on&&doorwayButton.parentNode!==right)right.appendChild(doorwayButton);}
+  function stepIn(){var h=inDoorway();if(!h||busy())return;S.doorWant=null;doorwayButton.style.display='none';enter(h);}
+  function doorwayAhead(){if(S.entering)return null;var c=S.moving?S.c+S.dx:S.c,r=S.moving?S.r+S.dy:S.r,h=doorAt(c,r);return (h&&h.spot&&/^dw/.test(h.id)&&doors[h.id]&&doors[h.id].status==='open'&&h.c===c&&h.r===r)?h:null;}
+  function wantIn(){var h=doorwayAhead();if(!h)return false;if(inDoorway()&&!busy()){stepIn();return true;}S.doorWant={id:h.id,c:h.c,r:h.r,t0:Date.now()};placeDoorBtn();return true;}
+  function doorWantTick(){var w=S.doorWant;if(!w)return;var c=S.moving?S.c+S.dx:S.c,r=S.moving?S.r+S.dy:S.r;if(S.entering||Date.now()-w.t0>12000||c!==w.c||r!==w.r){S.doorWant=null;placeDoorBtn();return;}if(inDoorway()&&!busy())stepIn();}
+  doorwayButton.addEventListener('click',function(e){e.preventDefault();wantIn();try{cv.focus({preventScroll:true});}catch(e2){}});
   BREAKABLE_WINDOWS.forEach(function(w){wasBroken[w.id]=broken(w);});
   var hintSeen = false; try { hintSeen = sessionStorage.getItem('dssMapHintDone') === '1'; } catch(e) {}
   function setBar(name, html, note) { place.textContent = name || ''; right.innerHTML = html || ''; if (note) { var ns = document.createElement('span'); ns.className = 'smb-note'; ns.textContent = note; if (html) right.appendChild(document.createTextNode(' ')); right.appendChild(ns); } placeDoorBtn(); }
@@ -7759,7 +7768,7 @@ function init(container) {
   var KEYS = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right', W:'up', S:'down', A:'left', D:'right' };
   function onKeyDown(e) {
     if ((e.key==='e'||e.key==='E')&&nearWindow()&&!busy()) { e.preventDefault(); if(!e.repeat)smashWindow(); return; }
-    if ((e.key==='e'||e.key==='E'||e.key==='Enter')&&inDoorway()&&!busy()) { e.preventDefault(); if(!e.repeat)stepIn(); return; }
+    if ((e.key==='e'||e.key==='E'||e.key==='Enter')&&doorwayAhead()) { var ae0=document.activeElement; if (!(ae0&&(ae0.tagName==='INPUT'||ae0.tagName==='TEXTAREA'||ae0.isContentEditable))) { if (!busy()) { e.preventDefault(); if(!e.repeat)wantIn(); return; } if (e.key!=='Enter'&&!e.repeat) { wantIn(); return; } } } /* 2026-11-18: see doorwayAhead(); while something is up E is held (left to the card, not prevented) and Enter is the card's own */
     var dir = KEYS[e.key]; if (!dir) return;
     var ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
     if (/^Arrow/.test(e.key)) e.preventDefault();
@@ -7850,6 +7859,7 @@ function init(container) {
     S.t++;
     if (S.t <= 90 && applyRows()) settleLabels(); // the header lifts and the title block settles under us in the first frames: at init the map's top reads ~150px low
     if(S.t%10===0){smashButton.style.display=nearWindow()&&!busy()?'block':'none';placeDoorBtn();}
+    doorWantTick(); /* 2026-11-18: a held doorway press goes in once he stands in it and nothing is up */
     /* 2026-11-11 (Sam, playtest note 2, the slow walk): the arrow-key scroll guard read window.scrollY here on every frame while a key
        was held, which made the browser lay out the whole page each frame (the map's overlays move every frame); it is now a scroll
        listener (onLockScroll), which only runs when the page has actually scrolled. */

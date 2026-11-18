@@ -39537,7 +39537,7 @@ window.dssPrints = (function() {
       { file: 'tabby-portrait.jpg', alt: 'A black-and-white portrait of the tabby cat' }
     ] },
     cu: { 'A chesterfield': [
-      { file: 'ginger-cat.jpg', alt: 'A ginger cat on a leather sofa', crop: [.40,.205,.60,.44], grade: soft }
+      { file: 'boot-leather.jpg', alt: 'The leather of a pair of platform boots, laid out flat' } /* 2026-11-18 (Sam: the picture above the sofa, "use this image"): the texture of Ashton's boots (models/wiz-boots-0.jpg), whole, ungraded. Was: { file: 'ginger-cat.jpg', alt: 'A ginger cat on a leather sofa', crop: [.40,.205,.60,.44], grade: soft } */
     ] },
     lk: { 'Shelves': [
       { file: 'grey-cat.jpg', alt: 'A grey cat beside a man on a sofa', crop: [.14,.035,.61,.79], grade: mono },
@@ -44593,6 +44593,28 @@ var ashton = k.ghost(-0.45, 0, -D / 2 + 2.4 + 0.55, 5, 0.82, true, true, 0.95); 
 // by vertex clustering (keyed on uv and normal octant, so the leather's inside and outside do not fuse). models/wiz-boots.bin:
 // 'DSSV', part count, then per boot vertex and index counts, float32 positions, uint16 uvs, uint32 indices, int8 normals padded to 4.
 var bootG = new THREE.Group(); bootG.position.set(-0.45, 0, -D / 2 + 2.4 + 0.55); scene.add(bootG);
+// 2026-11-18 (Sam: "Also the shoes that are there. Make them studded with red jewels. Blood red"): faceted stones set close over the outside of each boot, about 1.6 cm apart. A vertex counts as
+// outside when its normal points away from the boot's own centre line at that height (the lining points in); none on the sole or within a centimetre of the floor.
+var gemGeo = new THREE.OctahedronGeometry(0.006, 0); gemGeo.scale(1, 0.55, 1);
+var gemMat = new THREE.MeshStandardMaterial({ color: 0x420107, roughness: 0.08, metalness: 0.3, envMap: k.roomEnv, envMapIntensity: 2.4, emissive: 0x160002, emissiveIntensity: 1 }); /* (Sam: "a darker blood red") */
+function studBoot(bm, seed) {
+var P = bm.geometry.attributes.position.array, N = bm.geometry.attributes.normal.array, n = P.length / 3, lo = Infinity, hi = -Infinity, B = 30, cx = new Float32Array(B), cz = new Float32Array(B), cn = new Float32Array(B), i;
+for (i = 0; i < n; i++) { lo = Math.min(lo, P[i * 3 + 1]); hi = Math.max(hi, P[i * 3 + 1]); }
+function bin(y) { return Math.min(B - 1, Math.floor((y - lo) / (hi - lo) * B)); }
+for (i = 0; i < n; i++) { var bb = bin(P[i * 3 + 1]); cx[bb] += P[i * 3]; cz[bb] += P[i * 3 + 2]; cn[bb]++; }
+var cand = [];
+for (i = 0; i < n; i++) { var y = P[i * 3 + 1], ny = N[i * 3 + 1] / 127, b2 = bin(y); if (y < lo + 0.012 || y > hi - 0.01 || ny < -0.5 || !cn[b2]) continue; /* not on the sole, not on the rim */
+if ((P[i * 3] - cx[b2] / cn[b2]) * N[i * 3] + (P[i * 3 + 2] - cz[b2] / cn[b2]) * N[i * 3 + 2] <= 0) continue; cand.push(i); }
+cand.sort(function(a, b) { return rnd(a * 0.37 + seed * 11) - rnd(b * 0.37 + seed * 11); });
+var D = 0.0165, grid = {}, keep = [];
+cand.forEach(function(v) { var x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2], gx = Math.floor(x / D), gy = Math.floor(y / D), gz = Math.floor(z / D);
+for (var a = -1; a <= 1; a++) for (var b = -1; b <= 1; b++) for (var c = -1; c <= 1; c++) { var cell = grid[(gx + a) + ',' + (gy + b) + ',' + (gz + c)]; if (cell) for (var q = 0; q < cell.length; q++) { var u = cell[q], dx = P[u * 3] - x, dy = P[u * 3 + 1] - y, dz = P[u * 3 + 2] - z; if (dx * dx + dy * dy + dz * dz < D * D) return; } }
+(grid[gx + ',' + gy + ',' + gz] = grid[gx + ',' + gy + ',' + gz] || []).push(v); keep.push(v); });
+var gems = new THREE.InstancedMesh(gemGeo, gemMat, keep.length), up = new THREE.Vector3(0, 1, 0), nv = new THREE.Vector3(), q = new THREE.Quaternion(), tw = new THREE.Quaternion(), sc = new THREE.Vector3(), at = new THREE.Vector3(), mx = new THREE.Matrix4();
+keep.forEach(function(v, j) { nv.set(N[v * 3], N[v * 3 + 1], N[v * 3 + 2]).normalize(); q.setFromUnitVectors(up, nv); tw.setFromAxisAngle(up, rnd(v + seed) * 6.28); q.multiply(tw);
+var s2 = 0.85 + rnd(v * 3 + seed) * 0.3; sc.set(s2, s2, s2); at.set(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]).addScaledVector(nv, 0.0012); mx.compose(at, q, sc); gems.setMatrixAt(j, mx); });
+gems.instanceMatrix.needsUpdate = true; bm.add(gems); (window._dssBootGems = window._dssBootGems || []).push(keep.length); /* debug: stones per boot */
+}
 fetch('models/wiz-boots.bin?v=1').then(function(r) { return r.ok ? r.arrayBuffer() : null; }).then(function(buf) {
 if (!buf || !k.renderer.domElement.isConnected) return;
 var parts = new Uint32Array(buf, 4, 1)[0], o = 8, tl = new THREE.TextureLoader();
@@ -44607,6 +44629,7 @@ geo.setAttribute('normal', new THREE.BufferAttribute(new Int8Array(buf, o, n * 3
 var pl = place[pi] || place[0];
 var bm = mesh(geo, new THREE.MeshStandardMaterial({ map: tx('models/wiz-boots-' + pi + '.jpg?v=1'), normalMap: tx('models/wiz-boots-' + pi + '-n.jpg?v=1'), roughness: 0.5, metalness: 0, side: THREE.DoubleSide, envMap: k.roomEnv, envMapIntensity: 0.4 }), pl[0], pl[1], pl[2], bootG);
 bm.rotation.set(pl[3], pl[4], pl[5]); bm.castShadow = true; bm.receiveShadow = true;
+studBoot(bm, pi);
 }
 }).catch(function() {});
 // 2026-11-18 (Sam: "I just added a 3d model of a dog ... can you add that dog by Ashton granger's feet?", then "not totally by the feet, a little in the centre too"):
@@ -44813,6 +44836,21 @@ mesh(new THREE.BoxGeometry(0.1, 0.06, 0.2), new THREE.MeshStandardMaterial({ map
 sofaG.rotation.x = -0.012; sofaG.rotation.z = 0.01; /* down at the near front corner */
 var tape = mesh(new THREE.CylinderGeometry(0.1135, 0.1135, 0.06, 24, 1, true), new THREE.MeshStandardMaterial({ color: 0xb08a50, roughness: 0.35, metalness: 0.05, envMap: k.roomEnv, envMapIntensity: 0.6, side: THREE.DoubleSide }), -0.12, 0.8, SL / 2 - 0.065, sofaG); tape.rotation.z = Math.PI / 2;
 mesh(new THREE.BoxGeometry(0.22, 0.01, 0.3), M.paper, -0.12, 0.475, 0.35, sofaG).rotation.y = 0.3;
+// 2026-11-18 (Sam: "Can you add these handcuffs, put them on the sofa", with a small picture of a pair of nickel cuffs; no model came with it): built here, on the near cushion in front of the racing
+// paper. Two flat bands, each with its lock housing and keyhole and a swivel, three links of chain between, one cuff turned a little off the line.
+(function() {
+var cuffMat = new THREE.MeshStandardMaterial({ color: 0xdcdde0, metalness: 0.45, roughness: 0.28, envMap: k.roomEnv, envMapIntensity: 1.6 }) /* not fully metal: the cellar's dark walls turned them black */, holeMat = new THREE.MeshStandardMaterial({ color: 0x0c0c0c, roughness: 0.6 });
+var cuffs = new THREE.Group(); cuffs.position.set(-0.27, 0.471, 0.6); cuffs.rotation.y = 1.15; sofaG.add(cuffs); window._dssCellarCuffs = cuffs; /* debug: the handcuffs' group */
+function band() { var sh = new THREE.Shape(); sh.absarc(0, 0, 0.037, 0, Math.PI * 2, false); var ho = new THREE.Path(); ho.absarc(0, 0, 0.0305, 0, Math.PI * 2, true); sh.holes.push(ho);
+var g = new THREE.ExtrudeGeometry(sh, { depth: 0.008, bevelEnabled: true, bevelThickness: 0.001, bevelSize: 0.0008, bevelSegments: 1, curveSegments: 40 }); g.rotateX(-Math.PI / 2); return g; }
+function cuff(cx, cz, ry) { var c = new THREE.Group(); c.position.set(cx, 0, cz); c.rotation.y = ry; cuffs.add(c);
+var b = mesh(band(), cuffMat, 0, 0.001, 0, c); b.castShadow = true;
+var hs = mesh(new THREE.BoxGeometry(0.013, 0.012, 0.042), cuffMat, 0.041, 0.006, 0.006, c); hs.castShadow = true; /* the lock housing, on the side toward the chain */
+mesh(new THREE.CylinderGeometry(0.0016, 0.0016, 0.001, 8), holeMat, 0.041, 0.0125, 0.016, c); /* its keyhole */
+var sw = mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.009, 12), cuffMat, 0.052, 0.006, 0, c); sw.rotation.z = Math.PI / 2; } /* the swivel */
+cuff(-0.085, 0, 0); cuff(0.085, 0.006, Math.PI - 0.25);
+[[-0.017, false], [0, true], [0.017, false]].forEach(function(l) { var lk = mesh(new THREE.TorusGeometry(0.0072, 0.0017, 6, 16), cuffMat, l[0], l[1] ? 0.0099 : 0.0027, l[1] ? 0.001 : 0.002, cuffs); lk.scale.x = 1.45; if (!l[1]) lk.rotation.x = Math.PI / 2; lk.castShadow = true; });
+})();
 // ---------- STOCK: crates and a barrel by the left wall, a safe, the puddle ----------
 var crateMat = new THREE.MeshStandardMaterial({ map: k.grain[2], roughness: 0.9 });
 [[-2.3, -1.6, 0], [-2.2, -0.9, 0.5], [-2.35, -1.25, 0.3]].forEach(function(c, i) { var cr = mesh(new THREE.BoxGeometry(0.55, 0.42, 0.5), crateMat, c[0], 0.21 + (i === 2 ? 0.42 : 0), c[1], undefined); cr.rotation.y = c[2] * 0.3; cr.castShadow = true;
@@ -86375,6 +86413,13 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
+
+
+
+
 
 
 

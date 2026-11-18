@@ -1197,6 +1197,10 @@ def _(r):
 # is not blank, and the page fits a 1440x900 laptop screen without scrolling.
 WORLD_ENDS = {"Night Ahead Part Two": 1, "The Fetch": 1, "Black page": 1, "White page": 1}   # 2026-11-15: the two last pages of the game have no way on by design; a walk that goes on past the Fetch ends there
 WORLDS = ["himalayas", "nazca", "easter", "pyramid", "ezekiel"]
+# 2026-11-18: pages that go on by themselves, with nothing to press (the Dawn Approach is a view held for 16 s, then the last page comes). The walker
+# gave every page 8 s to show a way on, which with its other waits came to about 16 s: a full run on 16 Nov lost that race once on Dawn Approach Black
+# and called the page a dead end. These are waited on for up to 40 s (in 2 s looks) before the walk says it has stopped.
+WORLD_SLOW = {"Dawn Approach Black": 20, "Dawn Approach White": 20}
 
 CLICKABLES = """() => { var out = [], seen = new Set();
   [].forEach.call(document.querySelectorAll('body *'), function (e) {
@@ -1248,7 +1252,7 @@ def world_check(world):
             # 2026-11-15: a way on that fades in slowly (Centre Point's CLIMB IT is not a fifth visible until about 5 s in, and whole by 9) was
             # sampled a moment too early and read as a dead end; look again for up to 8 s before saying the walk has stopped
             waited = 0
-            while not fresh and waited < 4 and r.pn() == pn and not r.js("() => /hold to hum|held down/i.test(document.body.innerText)"):
+            while not fresh and waited < WORLD_SLOW.get(pn, 4) and r.pn() == pn and not r.js("() => /hold to hum|held down/i.test(document.body.innerText)"):
                 r.page.wait_for_timeout(2000); waited += 1
                 opts = r.js(CLICKABLES)
                 fresh = [o for o in opts if (pn, o["t"]) not in taken]
@@ -2934,6 +2938,199 @@ def beast_window_stays(r):
     r.expect(r.js(TIP), "the pinned window shut when the pointer left it")
     r.page.screenshot(path=os.path.join(SHOTS, "beast-window.png"))
     if SWAPS: r.page.unroute("**/*")
+
+
+# ---------------------------------------------------------------- the 16 Nov evening fixes (checks added 2026-11-18)
+# Those fixes were made in a session that could not reach the Mac's browser, so they went in without checks. One check
+# each here, every one proved against its old fault planted in the served html.
+@check("doorway-button-on-the-caption", "2026-11-16 playtest (Friction 4): the doorways' 'Step into the doorway.' button sat in a row of its own above the d-pad, its top edge at 901 px of a 1440x900 window, and the page scrolled 20 to 41 px; it rides on the caption row now")
+def doorway_button_on_the_caption(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Test Start 2", wait=10000)
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
+    BTN = "() => { var b = [].filter.call(document.querySelectorAll('.dss-doorway-btn'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; })[0]; if (!b) return null; var q = b.getBoundingClientRect(), row = document.querySelector('.smb-glyphs'), w = row ? row.getBoundingClientRect() : null; return { top: Math.round(q.top), bottom: Math.round(q.bottom), onRow: !!b.closest('.smb-glyphs'), rowTop: w ? Math.round(w.top) : -1, rowBottom: w ? Math.round(w.bottom) : -1, over: document.scrollingElement.scrollHeight - innerHeight }; }"
+    seen = None
+    for d in r.js("() => window.dssSohoMap.doors.filter(function (d) { return /^dw/.test(d.id); }).map(function (d) { return [d.c, d.r, d.id]; })"):
+        if not r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", d[:2]): continue
+        r.page.wait_for_timeout(900)
+        seen = r.js(BTN)
+        if seen: seen["door"] = d[2]; break
+    r.expect(seen, "standing in an open doorway shows no 'Step into the doorway.' button")
+    r.info = "%(door)s: button %(top)d to %(bottom)d px, caption row %(rowTop)d to %(rowBottom)d, page over %(over)d" % seen
+    r.expect(seen["onRow"], "the button is not on the caption row (it has a row of its own again)")
+    r.expect(seen["bottom"] <= 900, "the button's foot is at %d px of a 900 px window" % seen["bottom"])
+    r.expect(seen["over"] <= 0, "with the button up the page runs %d px past the window" % seen["over"])
+
+
+@check("soho-square-any-gate", "2026-11-16 playtest (Friction 8): Soho Square went in only from the hut's own tile, so walking straight up through the south gate passed it with no prompt; coming into the garden through any gate goes in now")
+def soho_square_any_gate(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    went = []
+    for tile, way in (((36, 10), "up"), ((33, 8), "right"), ((38, 8), "left"), ((36, 5), "down")):
+        r.go("Test Start 2", wait=10000)   # the Square's door is not open at the start of a first night
+        r.clear_lore(); r.clear_slips(); r.clear_lore()
+        r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
+        r.expect("Soho Square" in r.js(HUB_LINKS), "Soho Square is not open on this Dean Street, so this check proves nothing")
+        if not r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", list(tile)): continue   # no gate on this side
+        r.page.wait_for_timeout(500)
+        r.js("""(way) => { var b = document.querySelector('[data-dir="' + way + '"]'); if (!b) return;
+          b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, isPrimary: true }));
+          setTimeout(function () { b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, isPrimary: true })); }, 200); }""", way)
+        pn = "Dean Street"
+        for _ in range(24):
+            r.page.wait_for_timeout(250); pn = r.pn()
+            if pn != "Dean Street": break
+        at = r.js("() => { var s = window.dssSohoMap && window.dssSohoMap.state; return s ? [s.c, s.r] : null; }") if pn == "Dean Street" else None
+        if pn == "Dean Street" and at and 34 <= at[0] <= 37 and 6 <= at[1] <= 9:
+            r.expect(False, "one step %s from %s stands in the garden at %s and the Square has not opened" % (way, tile, at))
+        if pn != "Dean Street": went.append("%s from %s: %s" % (way, tile, pn))
+    r.info = "; ".join(went)
+    r.expect(len(went) >= 2, "fewer than two gates could be tried (%s)" % went)
+
+
+@check("soho-square-things-glow", "2026-11-16 playtest (Friction 7): Soho Square's hut door, statue and gate rested at 0.055, too faint to read as things to press on a still night-one scene; their resting light breathes between 0.06 and 0.18")
+def soho_square_things_glow(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Soho Square: the hut", wait=9000)
+    r.clear_lore(); r.clear_slips()
+    r.wait_for("() => !!(window._dssThreeRegistry && window._dssThreeRegistry['sq-wrap'] && window._dssThreeRegistry['sq-wrap'].scene)", 15000, "the 3D square")
+    r.page.mouse.move(5, 5)   # nothing hovered
+    r.js("""() => { var sc = window._dssThreeRegistry['sq-wrap'].scene, ms = []; sc.traverse(function (o) { var m = o.material; if (m && m.color && m.color.getHex() === 0xc3bcab && m.transparent) ms.push(m); });
+      window.__glow = { n: ms.length, lo: ms.map(function () { return 9; }), hi: ms.map(function () { return 0; }) };
+      var t0 = performance.now(); (function tick() { ms.forEach(function (m, i) { window.__glow.lo[i] = Math.min(window.__glow.lo[i], m.opacity); window.__glow.hi[i] = Math.max(window.__glow.hi[i], m.opacity); }); if (performance.now() - t0 < 6000) requestAnimationFrame(tick); })(); }""")
+    r.page.wait_for_timeout(6300)
+    g = r.js("() => window.__glow")
+    r.info = "%d resting lights; lowest %s, highest %s" % (g["n"], ["%.3f" % x for x in g["lo"]], ["%.3f" % x for x in g["hi"]])
+    r.expect(g["n"] >= 3, "found %d resting lights in the Square, expected the door, the statue and the gate" % g["n"])
+    r.expect(min(g["lo"]) >= 0.055, "a resting light drops to %.3f" % min(g["lo"]))
+    r.expect(min(g["hi"]) >= 0.15, "a resting light never rises past %.3f (they sat at 0.055)" % min(g["hi"]))
+    r.expect(max(g["hi"]) <= 0.19, "a resting light reaches %.3f, as bright as the hover's 0.23" % max(g["hi"]))
+
+
+@check("stat-numbers-brief", "2026-11-16 playtest (Looks wrong 1): the +4, +5 and +30 beside the bars lingered about 5 s and rose 46 px, off the top of the window and over the word SOBRIETY; they are gone in 2.6 s within 16 px")
+def stat_numbers_brief(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Test Start 2", wait=10000)
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && e.textContent.trim() === 'Livonia Street'; })[0]; l.click(); }")
+    r.wait_for("() => !!document.querySelector('#spew-popup-overlay canvas')", 8000, "the doorway card")
+    r.page.wait_for_timeout(1200)
+    # every frame: each number's opacity and how far its animation has lifted it
+    r.js("""() => { var L = window.__sd = { rows: [] }, t0 = performance.now(); (function tick() { var ds = document.querySelectorAll('#stat-bars-lifted .stat-delta');
+      L.rows.push([Math.round(performance.now() - t0)].concat([].map.call(ds, function (d) { var cs = getComputedStyle(d), m = new DOMMatrixReadOnly(cs.transform === 'none' ? '' : cs.transform); return [+(+cs.opacity).toFixed(2), Math.round(m.m42)]; })));
+      if (performance.now() - t0 < 16000) requestAnimationFrame(tick); })(); }""")
+    box = r.js("() => { var b = document.querySelector('#spew-popup-overlay canvas').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }")
+    r.page.mouse.move(*box); r.page.mouse.down(); r.page.wait_for_timeout(1500); r.page.mouse.up()
+    r.wait_for("() => !document.getElementById('spew-popup-overlay')", 15000, "the card to close")
+    r.page.wait_for_timeout(7000)
+    rows = r.js("() => window.__sd.rows")
+    shown = [x for x in rows if len(x) > 1 and any(d[0] > 0.05 for d in x[1:])]
+    r.expect(shown, "no stat number showed after the doorway")
+    secs = (shown[-1][0] - shown[0][0]) / 1000.0
+    rise = -min(d[1] for x in shown for d in x[1:] if d[0] > 0.05)
+    r.info = "on show %.1f s, risen %d px" % (secs, rise)
+    r.expect(secs <= 3.0, "the numbers stayed %.1f s (2.6 s is the length now; 5.2 s carried them off the top)" % secs)
+    r.expect(rise <= 18, "the numbers rose %d px (16 px is the rise now; 46 px took a +30 over SOBRIETY)" % rise)
+
+
+@check("chamber-line-once", "2026-11-16 playtest (Looks wrong 4): after three missed tries the King's Chamber printed 'AL HUBZ stops the song.' twice, once in the frame and once as the caption")
+def chamber_line_once(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("King's Chamber", wait=9000)
+    r.clear_lore(); r.clear_slips()
+    r.js("() => { var b = document.querySelector('.dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(1500)
+    r.wait_for("() => !!window._harmonyDev", 8000, "the hum game")
+    for _ in range(8):   # a tap is let go too soon: three of them end it
+        st = r.js("() => window._harmonyDev.state()")
+        if st["done"]: break
+        r.page.keyboard.down("Space"); r.page.wait_for_timeout(160); r.page.keyboard.up("Space"); r.page.wait_for_timeout(2600)
+    st = r.js("() => window._harmonyDev.state()")
+    r.expect(st["done"], "three taps did not end the hum (%r)" % st)
+    COUNT = "() => [].filter.call(document.querySelectorAll('tw-story *'), function (e) { if (e.closest('.dss-ghost, #dss-hint-stack') || e.children.length || !/AL HUBZ stops the song\\./.test(e.textContent) || !e.getClientRects().length) return false; for (var a = e; a && a.tagName !== 'TW-STORY'; a = a.parentElement) { var cs = getComputedStyle(a); if (cs.visibility === 'hidden' || +cs.opacity < 0.2) return false; } return true; }).length"
+    most = 0; least = 9
+    for _ in range(12):   # the old second copy came 1.5 s after the end and stayed 4 s
+        n = r.js(COUNT); most = max(most, n); least = min(least, n); r.page.wait_for_timeout(300)
+    r.info = "the line shows %d time(s)" % most
+    r.expect(most >= 1, "'AL HUBZ stops the song.' is not on the page after the third miss")
+    r.expect(most <= 1, "'AL HUBZ stops the song.' shows %d times at once" % most)
+
+
+@check("reclamation-board-at-the-end", "2026-11-16 playtest (Looks wrong 5): the Reclamation's scoreboard still read RELOADING over its end card")
+def reclamation_board_at_the_end(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The Reclamation", wait=9000)
+    r.clear_lore(); r.clear_slips()
+    r.js("() => { var b = document.querySelector('.dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(2500)
+    r.wait_for("() => !!window._rcDev", 10000, "the Reclamation")
+    r.page.locator("#rc-canvas").first.focus()
+    for _ in range(12):   # empty the clip: the rifle reloads by itself, or on R
+        if r.js("() => window._rcDev.snapshot().reloading"): break
+        r.page.keyboard.press("Space"); r.page.wait_for_timeout(350)
+        if r.js("() => window._rcDev.snapshot().rounds") == 0: r.page.keyboard.press("r"); r.page.wait_for_timeout(120)
+    r.expect(r.js("() => window._rcDev.snapshot().reloading"), "could not get the rifle reloading, so this check proves nothing")
+    r.js("() => window._rcDev.lose()")
+    r.wait_for("() => { var e = document.getElementById('rc-lose'); return !!e && getComputedStyle(e).display !== 'none'; }", 15000, "the Reclamation's end card")
+    r.page.wait_for_timeout(600)
+    board = r.js("() => { var b = document.querySelector('.rc-scoreboard'); return b ? b.innerText.replace(/\\s+/g, ' ') : ''; }")
+    r.info = "the board at the end: %s" % board[-60:]
+    r.expect(board, "no scoreboard on the page")
+    r.expect("RELOADING" not in board, "the scoreboard reads RELOADING over the end card")
+
+
+@check("hold-to-drink-space", "2026-11-16 playtest (for Sam's eye 9, his call delegated): 'Hold to drink' took only a mouse or a finger while the hum and the Climb hold Space; Space holds the glass too")
+def hold_to_drink_space(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Dido", wait=7000)
+    r.clear_lore(); r.clear_slips()
+    r.js("() => window.showDrinkPopup('whisky')")
+    r.wait_for("() => !!document.getElementById('drink-popup-overlay')", 6000, "the drink card")
+    TXT = "() => { var o = document.getElementById('drink-popup-overlay'); return o ? o.innerText : null; }"
+    r.wait_for("() => /Hold to drink/.test((document.getElementById('drink-popup-overlay') || {}).innerText || '')", 8000, "'Hold to drink'")
+    r.page.wait_for_timeout(3500)   # the glass fills first
+    r.page.keyboard.down("Space"); r.page.wait_for_timeout(900)
+    mid = r.js(TXT)
+    r.page.wait_for_timeout(5000); r.page.keyboard.up("Space")
+    r.expect(mid is None or "Hold to drink" not in mid, "holding Space did not lift the glass ('Hold to drink' still asks)")
+    r.wait_for("() => window._drinkPopupOpen !== true", 12000, "the card to close after the drink")
+    r.info = "Space drank the glass and the card closed"
+
+
+@check("ronnies-street-link-band", "2026-11-16 playtest (Friction 5): Ronnie's Drinks scrolls down to the pour, and the fixed '← OUT ONTO THE STREET' sat over the prose; on that page the link wears a band of the panel's dark")
+def ronnies_street_link_band(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Ronnie’s Drinks", wait=8000)
+    r.clear_lore(); r.clear_slips()
+    m = r.js("() => { var l = [].filter.call(document.querySelectorAll('.back-one-link'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; })[0]; if (!l) return null; var cs = getComputedStyle(l); return { bg: cs.backgroundColor, pos: cs.position }; }")
+    r.expect(m, "no street link showing on Ronnie's Drinks")
+    r.info = "the link: %(pos)s, background %(bg)s" % m
+    solid = re.match(r"rgb\(", m["bg"]) or (re.match(r"rgba\(", m["bg"]) and float(m["bg"].rstrip(")").split(",")[-1]) >= 0.97)
+    r.expect(solid, "the street link has no band behind it (background %s), so the prose shows through" % m["bg"])
+
+
+@check("touch-dpad-beside-the-map", "2026-11-16 playtest (Friction 6): on a touch screen as wide as a laptop the Soho map's d-pad sat under the map, 183 px below the fold of Dean Street at 1440x900; it stands beside the map's foot")
+def touch_dpad_beside_the_map(r):
+    ctx = r.ctx.browser.new_context(viewport={"width": 1440, "height": 900}, has_touch=True, is_mobile=True)
+    try:
+        page = ctx.new_page()
+        errs = []; page.on("pageerror", lambda e: errs.append(str(e)[:200]))
+        if SWAPS:
+            class _P: pass
+            _P.page = page; scratch_passage(_P, "T-nothing", "")
+        from urllib.parse import quote
+        page.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote("Dean Street")), timeout=90000)
+        page.wait_for_timeout(12000)
+        m = page.evaluate("() => { var d = [].filter.call(document.querySelectorAll('.soho-dpad'), function (e) { return !e.closest('.dss-ghost'); })[0], w = document.querySelector('.soho-map-wrap'); if (!d || !w) return null; var b = d.getBoundingClientRect(), q = w.getBoundingClientRect(); return { touch: matchMedia('(hover: none) and (pointer: coarse)').matches, iw: innerWidth, ih: innerHeight, show: getComputedStyle(d).display, top: Math.round(b.top), bottom: Math.round(b.bottom), left: Math.round(b.left), right: Math.round(b.right), mapRight: Math.round(q.right), mapBottom: Math.round(q.bottom) }; }")
+        r.expect(m, "no d-pad or no map on Dean Street")
+        r.info = "d-pad %(left)d-%(right)d x %(top)d-%(bottom)d; map ends %(mapRight)d x %(mapBottom)d; window %(iw)dx%(ih)d" % m
+        r.expect(m["touch"] and m["iw"] >= 1100, "the browser is not acting as a wide touch screen (%r), so this check proves nothing" % m)
+        r.expect(m["show"] != "none", "the d-pad is not shown on a touch screen")
+        r.expect(m["bottom"] <= m["ih"], "the d-pad's foot is at %d px of a %d px window" % (m["bottom"], m["ih"]))
+        r.expect(m["left"] >= m["mapRight"] - 4, "the d-pad is not beside the map (it starts at %d px, the map ends at %d)" % (m["left"], m["mapRight"]))
+        r.expect(m["right"] <= m["iw"], "the d-pad runs off the right edge (%d of %d px)" % (m["right"], m["iw"]))
+        r.expect(not errs, "page errors: %s" % errs[:2])
+    finally:
+        ctx.close()
 
 
 def main(argv):

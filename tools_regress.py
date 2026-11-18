@@ -3133,6 +3133,371 @@ def touch_dpad_beside_the_map(r):
         ctx.close()
 
 
+# ---------------------------------------------------------------- Sam's rulings of 17-18 Nov (built 2026-11-18)
+STATS = "() => [].map.call(document.querySelectorAll('#stat-bars-lifted .stat-pct'), function (e) { return parseInt(e.textContent, 10); })"   # [MORALE, SOBRIETY] as the header shows them
+NO_HARLOWE_ERROR = "() => [].filter.call(document.querySelectorAll('tw-error'), function (e) { return !e.closest('.dss-ghost'); }).map(function (e) { return e.textContent.slice(0, 120); })"
+
+
+def press_link(r, text, exact=True):
+    """Press a Harlowe link by its words (a JS click, so a parked or hidden link takes it too)."""
+    return r.js("([t, ex]) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { var x = e.textContent.replace(/\\s+/g, ' ').trim(); return !e.closest('.dss-ghost') && (ex ? x === t : x.toLowerCase().indexOf(t.toLowerCase()) >= 0); })[0]; if (l) l.click(); return !!l; }", [text, exact])
+
+
+@check("night-ahead-says-click", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Yes, good\"): The Night Ahead types for 38 s unless clicked and nothing said a click finishes it; a faint 'Click to finish.' comes in at the foot about 4 s in and goes when the typing ends or is clicked through, on that page alone")
+def night_ahead_says_click(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    HINT = "() => { var h = document.querySelector('.tw-skip-hint'); if (!h) return null; var b = h.getBoundingClientRect(); return { t: h.textContent.trim(), op: +(+getComputedStyle(h).opacity).toFixed(2), bottom: Math.round(b.bottom) }; }"
+    WAY = "() => { var l = [].filter.call(document.querySelectorAll('.typewriter-page tw-link'), function (e) { return !e.closest('.dss-ghost'); })[0]; return l ? +getComputedStyle(l.closest('tw-expression') || l).opacity : -1; }"
+    bad = []
+    for W, H in ((1440, 900), (1280, 800)):
+        r.page.set_viewport_size({"width": W, "height": H})
+        r.go("The Night Ahead", wait=1900)
+        early = r.js(HINT)
+        if early and early["op"] > 0.05: bad.append("%dx%d: the line is up at once (%r)" % (W, H, early))
+        r.page.wait_for_timeout(5200)   # about 7 s in: the line came at 4 s and has faded up
+        h = r.js(HINT); over = r.js("() => document.scrollingElement.scrollHeight - innerHeight")
+        if not h or h["op"] < 0.5: bad.append("%dx%d: no 'Click to finish.' 7 s into the typing (%r)" % (W, H, h))
+        elif h["t"] != "Click to finish.": bad.append("%dx%d: the line reads %r" % (W, H, h["t"]))
+        elif h["bottom"] > H: bad.append("%dx%d: the line's foot is at %d px" % (W, H, h["bottom"]))
+        if over > 0: bad.append("%dx%d: the page runs %d px past the window" % (W, H, over))
+        r.page.mouse.click(40, 320)   # a click on the page finishes the typing
+        r.page.wait_for_timeout(1600)
+        h = r.js(HINT)
+        if h and h["op"] > 0.1: bad.append("%dx%d: the line stays after the click (%r)" % (W, H, h))
+        if r.js(WAY) < 0.3: bad.append("%dx%d: the click did not finish the page (the way on is not showing)" % (W, H))
+    # left alone, the line goes when the typing ends
+    r.page.set_viewport_size({"width": 1440, "height": 900})
+    r.go("The Night Ahead", wait=6500)
+    r.expect((r.js(HINT) or {}).get("op", 0) > 0.5, "no line on the page left to type itself")
+    r.wait_for("(%s)() > 0.3" % WAY, 60000, "the page to finish typing by itself")
+    r.page.wait_for_timeout(1500)
+    h = r.js(HINT)
+    if h and h["op"] > 0.1: bad.append("the line stays after the typing ends (%r)" % h)
+    # and no other typewriter page has one (his 2 Nov ruling)
+    r.go("Night Ahead Part Two", wait=7500)
+    r.expect(r.js("() => !!document.querySelector('.typewriter-page')"), "Night Ahead Part Two is not a typewriter page, so this check proves nothing about the others")
+    h = r.js(HINT)
+    if h: bad.append("Night Ahead Part Two shows a line too (%r)" % h)
+    r.info = "the line comes about 4 s in, goes on a click and when the typing ends; Part Two has none"
+    r.expect(not bad, "; ".join(bad))
+
+
+@check("maltese-thirty-once", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Fix the repeat\"): the Maltese Gangsters page pays SOBRIETY +30, and '← Back' from the Copper's Lair approach returned to it and paid again each time; it pays once a night")
+def maltese_thirty_once(r):
+    scratch_passage(r, "T-malt", '(set: $sobriety to 40)(set: $prevSobriety to 40)(set: $confidence to 60)(set: $prevConfidence to 60)(set: $metSalvu to false)(set: $statsExplained to true)[[Walk on|Maltese Gangsters]]')
+    r.go("T-malt", wait=5000); r.clear_lore(); r.clear_slips()   # a first night's slips hold every press until read
+    r.expect(press_link(r, "Walk on"), "the scratch page has no way on")
+    seen = []
+    for lap in range(2):
+        r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Maltese Gangsters'", 12000, "the Maltese Gangsters page")
+        r.page.wait_for_timeout(2500); r.clear_lore(); r.clear_slips()
+        r.expect(press_link(r, "continue"), "no way on from the Maltese Gangsters page")
+        r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Approach Coppers Lair'", 12000, "the Copper's Lair approach")
+        r.page.wait_for_timeout(3000); r.clear_lore(); r.clear_slips()
+        st = r.js(STATS); r.expect(len(st) == 2, "no stat bars on the Copper's Lair approach (%r)" % st)
+        seen.append(st[1])
+        if lap == 0: r.expect(press_link(r, "← Back"), "no '← Back' on the Copper's Lair approach")
+    r.info = "SOBRIETY 40, then %d after the first knock and %d after going back and knocking again" % (seen[0], seen[1])
+    r.expect(not r.js(NO_HARLOWE_ERROR), "a Harlowe error on the page: %s" % r.js(NO_HARLOWE_ERROR))
+    r.expect(seen[0] == 70, "the first arrival took SOBRIETY from 40 to %d, not 70" % seen[0])
+    r.expect(seen[1] == seen[0], "going back and in again paid a second time: SOBRIETY %d, then %d" % (seen[0], seen[1]))
+
+
+@check("haircut-once-a-run", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Once a run on haircut\"): the barber's haircut gave MORALE +6 every night; it is once a run, the shave stays once a night, and a fresh BEGIN forgets it")
+def haircut_once_a_run(r):
+    OFFERS = "() => [].filter.call(document.querySelectorAll('tw-passage tw-link'), function (e) { return !e.closest('.dss-ghost'); }).map(function (e) { return e.textContent.trim(); })"
+    PARKED = "() => [].map.call(document.querySelectorAll('#dss-alba-carry tw-link'), function (e) { return e.textContent.trim(); })"
+    SET = '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 2 Set")(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)(set: $returns to 6)'
+    # 1. the barber on a night whose run has had its haircut: the shave alone
+    scratch_passage(r, "T-cut", SET + '(set: $barberCutRun to true)[[Walk on|The Barbershop]]')
+    r.go("T-cut", wait=5000); r.expect(press_link(r, "Walk on"), "the scratch page has no way on")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'The Barbershop'", 12000, "the Barbershop")
+    r.page.wait_for_timeout(2500); r.clear_lore(); r.clear_slips()
+    later = r.js(OFFERS)
+    r.expect(not r.js(NO_HARLOWE_ERROR), "a Harlowe error at the barber's: %s" % r.js(NO_HARLOWE_ERROR))
+    r.expect("A shave" in later, "no shave offered on a later night of the run (%s)" % later)
+    r.expect("A haircut" not in later, "the haircut is offered again on a later night of the same run (%s)" % later)
+    r.page.unroute("**/*")
+    # 2. a first visit offers both; the haircut is remembered for the run's next night
+    scratch_passage(r, "T-cut", SET + '[[Walk on|The Barbershop]]')
+    r.go("T-cut", wait=5000); r.js("() => localStorage.removeItem('dssCutHeld')"); r.expect(press_link(r, "Walk on"), "the scratch page has no way on")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'The Barbershop'", 12000, "the Barbershop")
+    r.page.wait_for_timeout(2500); r.clear_lore(); r.clear_slips()
+    first = r.js(OFFERS)
+    r.expect("A haircut" in first and "A shave" in first, "a first visit does not offer both (%s)" % first)
+    press_link(r, "A haircut"); r.page.wait_for_timeout(1200)
+    press_link(r, "Back to the street")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 12000, "Dean Street")
+    r.page.wait_for_timeout(2500)
+    r.expect(r.js("() => localStorage.getItem('dssCutHeld')") == "1", "the haircut was not kept for the run's next night (dssCutHeld is %r)" % r.js("() => localStorage.getItem('dssCutHeld')"))
+    r.page.unroute("**/*")
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    # 3. Another night of the same run brings it back: the parked carry is pressed, and the street's header still holds it
+    r.js("() => { localStorage.setItem('dssRunCarry', '1'); localStorage.setItem('dssCutHeld', '1'); }")
+    r.go("Start", wait=6000)
+    r.expect(r.pn() == "The Night Ahead", "Start did not lead to The Night Ahead (on %s)" % r.pn())
+    parked = r.js(PARKED)
+    r.expect("cut-carry" not in parked, "the run's haircut was not carried into its next night (still parked: %s)" % parked)
+    r.page.mouse.click(40, 320); r.page.wait_for_timeout(2500)
+    r.expect(press_link(r, "Step into the night"), "no way on from The Night Ahead")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 15000, "Dean Street")
+    r.page.wait_for_timeout(3000)
+    r.expect(r.js("() => localStorage.getItem('dssCutHeld')") == "1", "the carried haircut was lost by Dean Street (dssCutHeld is %r)" % r.js("() => localStorage.getItem('dssCutHeld')"))
+    # 4. a fresh BEGIN forgets it
+    r.js("() => { localStorage.removeItem('dssRunCarry'); localStorage.setItem('dssCutHeld', '1'); }")
+    r.go("Start", wait=6000)
+    r.expect("cut-carry" in r.js(PARKED), "a fresh BEGIN carried the last run's haircut")
+    r.expect(r.js("() => localStorage.getItem('dssCutHeld')") is None, "a fresh BEGIN kept the last run's haircut (dssCutHeld is %r)" % r.js("() => localStorage.getItem('dssCutHeld')"))
+    r.info = "later night: %s; first visit: %s; carried by Another night, forgotten by BEGIN" % (later, first)
+
+
+def doorway_visit(r, link="Livonia Street"):
+    """One doorway visit from Dean Street: press its link, hold the card until it closes, and say how the two bars moved and whether their numbers showed."""
+    r.clear_lore(); r.clear_slips()
+    before = r.js(STATS)
+    r.expect(press_link(r, link), "no %r on Dean Street" % link)
+    r.wait_for("() => !!document.querySelector('#spew-popup-overlay canvas')", 10000, "the doorway card")
+    r.page.wait_for_timeout(900)
+    box = r.js("() => { var b = document.querySelector('#spew-popup-overlay canvas').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }")
+    r.page.mouse.move(*box); r.page.mouse.down(); r.page.wait_for_timeout(1500); r.page.mouse.up()
+    r.wait_for("() => !document.getElementById('spew-popup-overlay')", 15000, "the card to close")
+    shown = 0
+    for _ in range(14):   # the numbers come once the card has gone
+        r.page.wait_for_timeout(200)
+        shown = max(shown, r.js("() => [].filter.call(document.querySelectorAll('#stat-bars-lifted .stat-delta'), function (d) { return +getComputedStyle(d).opacity > 0.4; }).length"))
+    r.page.wait_for_timeout(1200)
+    after = r.js(STATS)
+    return [after[0] - before[0], after[1] - before[1], shown]
+
+
+@check("doorway-taper", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Do your pick\"): every doorway visit paid MORALE +4 and SOBRIETY +6; each visit before the next venue pays half the one before (4 and 6, 2 and 3, 1 and 1, nothing), and a venue starts it again")
+def doorway_taper(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Test Start 2", wait=10000)
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    got = [doorway_visit(r) for _ in range(4)]
+    r.expect(not r.js(NO_HARLOWE_ERROR), "a Harlowe error on Dean Street: %s" % r.js(NO_HARLOWE_ERROR))
+    r.info = "four visits running: %s" % ", ".join("+%d/+%d (%d numbers shown)" % tuple(g) for g in got)
+    r.expect([g[:2] for g in got] == [[4, 6], [2, 3], [1, 1], [0, 0]], "four visits running paid %s, not +4/+6, +2/+3, +1/+1, nothing" % [g[:2] for g in got])
+    r.expect(got[0][2] == 2 and got[1][2] == 2 and got[2][2] == 2, "a paying visit showed no numbers by the bars (numbers shown per visit: %s)" % [g[2] for g in got])
+    # a venue starts it again
+    if SWAPS: r.page.unroute("**/*")
+    scratch_passage(r, "T-door", '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 2 Set")(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)(set: $returns to 6)(set: $doorwayRun to 3)[[In|Ronnie’s Drinks]]')
+    r.go("T-door", wait=5000); r.expect(press_link(r, "In"), "the scratch page has no way on")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Ronnie’s Drinks'", 12000, "Ronnie's Drinks")
+    r.page.wait_for_timeout(3000); r.clear_lore(); r.clear_slips()
+    r.expect(press_link(r, "out onto the street", exact=False), "no way out of Ronnie's Drinks (links: %s)" % r.js("() => [].map.call(document.querySelectorAll('tw-link'), function (e) { return e.textContent.trim(); })"))
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 15000, "Dean Street")
+    r.page.wait_for_timeout(4000)
+    again = doorway_visit(r)
+    r.info += "; after a venue: +%d/+%d" % (again[0], again[1])
+    r.expect(again[:2] == [4, 6], "the first doorway after a venue paid +%d/+%d, not +4/+6" % (again[0], again[1]))
+
+
+@check("portal-button-wait", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Middle way\"): the Third Pillar Portal shows nothing to press for about 10 s; the first crossing of a run keeps that, a later crossing in the same run shows its button after about 3 s")
+def portal_button_wait(r):
+    BTN = "() => { var b = [].filter.call(document.querySelectorAll('div'), function (e) { return /^(MAKE YOUR OFFERING|STEP THROUGH|BACK TO THE PILLARS)$/.test(e.textContent.trim()) && e.style.position === 'fixed'; })[0]; return b ? { t: b.textContent.trim(), on: b.style.opacity === '1' } : null; }"
+    scratch_passage(r, "T-portal", '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")(set: $returns to 12)[[Walk on|Third Pillar Portal]]')
+
+    def crossing(run):
+        r.go("T-portal", wait=4000)
+        r.js("([n]) => localStorage.setItem('dssRunFirst', n)", [run])
+        r.expect(press_link(r, "Walk on"), "the scratch page has no way on")
+        r.wait_for("(%s)() !== null" % BTN, 30000, "the portal's button to be made")
+        t0 = time.time(); b = r.js(BTN)
+        while not b["on"] and time.time() - t0 < 12:
+            r.page.wait_for_timeout(100); b = r.js(BTN)
+        return b["t"], time.time() - t0
+
+    t1, w1 = crossing("7"); t2, w2 = crossing("7"); t3, w3 = crossing("8")
+    r.info = "%s: %.1f s on the run's first crossing, %.1f s on its second, %.1f s on a new run's first (each then fades in over 2 s)" % (t1, w1, w2, w3)
+    r.expect(t1 != "BACK TO THE PILLARS", "the scratch state does not open the crossing, so this check proves nothing")
+    r.expect(6.3 <= w1 <= 8.2, "the first crossing's button started in after %.1f s, not about 7.2" % w1)
+    r.expect(w2 <= 1.9, "a later crossing in the same run still waits %.1f s for its button" % w2)
+    r.expect(6.3 <= w3 <= 8.2, "a new run's first crossing waited %.1f s, not about 7.2" % w3)
+
+
+def touch_page(r, passage="Dean Street", wait=12000):
+    """A second page that acts as a touch screen as wide as a laptop (the checks' own page has a mouse)."""
+    ctx = r.ctx.browser.new_context(viewport={"width": 1440, "height": 900}, has_touch=True, is_mobile=True)
+    page = ctx.new_page()
+    if SWAPS:
+        class _P: pass
+        _P.page = page; scratch_passage(_P, "T-nothing", "")
+    from urllib.parse import quote
+    page.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote(passage)), timeout=90000)
+    page.wait_for_timeout(wait)
+    return ctx, page
+
+
+@check("touch-caption-no-below", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Your pick\"): the touch caption said 'Use the arrows below to walk' while on a wide touch screen the arrows stand beside the map; it says 'Use the arrows to walk.'")
+def touch_caption_no_below(r):
+    ctx, page = touch_page(r, wait=9000)
+    try:
+        cap = ""
+        for _ in range(20):
+            cap = page.evaluate("() => { var n = [].filter.call(document.querySelectorAll('.smb-note'), function (e) { return !e.closest('.dss-ghost'); })[0]; return n ? n.textContent.trim() : ''; }")
+            if cap: break
+            page.wait_for_timeout(500)
+        r.info = "the caption: %s" % cap
+        r.expect(page.evaluate("() => matchMedia('(hover: none) and (pointer: coarse)').matches"), "the browser is not acting as a touch screen, so this check proves nothing")
+        r.expect(cap == "Use the arrows to walk. Stop on a lit step, or tap a door’s name, to go in.", "the first-walk caption on a touch screen reads %r" % cap)
+    finally:
+        ctx.close()
+
+
+# ---------------------------------------------------------------- the Climb (2026-11-18), played through its own test hooks (window._hcDev: snapshot, warp)
+CLIMB = """() => { function up(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } var s = window._hcDev.snapshot();
+  return { s: s.s, u: s.u, dy: s.y - s.ground, w: s.width, slips: s.slips, prints: s.prints, whirl: s.whirl, fin: s.finished, gr: s.grounded, gust: s.gust, wind: s.wind, ending: s.ending,
+    hud: (document.getElementById('hc-hud') || {}).textContent || '', hudH: (document.getElementById('hc-hud') || {}).offsetHeight || 0, ban: (document.getElementById('hc-banner') || {}).textContent || '',
+    card: !!document.querySelector('.dss-ease-card'), lose: up('hc-lose'), win: up('hc-win'), over: document.scrollingElement.scrollHeight - innerHeight }; }"""
+
+
+def climb_start(r):
+    r.go("The Climb", wait=8000)
+    r.expect(r.js("() => !!window._hcDev"), "the Climb's test hooks are missing (the dev flag is off), so it cannot be played here")
+    r.js("() => { var b = document.querySelector('.dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(1300)
+    r.page.locator("#hc-canvas").first.focus()
+    r.page.keyboard.press("ArrowRight"); r.page.wait_for_timeout(300)   # any key starts the climb
+
+
+def climb_settle(r):
+    """Wait out a rescue; a fresh climb when the slips are nearly spent (the fourth ends it)."""
+    for _ in range(60):
+        if not r.js(CLIMB)["whirl"]: break
+        r.page.wait_for_timeout(100)
+    m = r.js(CLIMB)
+    if m["slips"] >= 3 or m["fin"]: climb_start(r)
+
+
+@check("climb-lost-on-slips", "2026-11-16 playtest (Friction 1 and 2, Looks wrong 2): a climber stuck on the mountain never saw TRY AGAIN / MOVE ON, because the climb was judged only at the summit; a held up-arrow stood still after 'SAFE AT THE FLAGS'; and 'THE WIND KEEPS YOU' showed on a fall in calm air")
+def climb_lost_on_slips(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    climb_start(r)
+    kb = r.page.keyboard; kb.down("ArrowUp")
+    t0 = time.time(); prev = r.js(CLIMB); falls = []; downs = 0; held = None; left = False; left_until = 0; end = prev
+    while time.time() - t0 < 150:
+        m = r.js(CLIMB); now = time.time() - t0
+        if m["whirl"] and not prev["whirl"]:
+            falls.append((m["ban"], m["gust"], m["wind"]))
+            if left: kb.up("ArrowLeft"); left = False
+        if prev["whirl"] and not m["whirl"]:
+            downs += 1
+            if downs == 1 and not m["fin"]: held = [m["s"], m["s"], now]            # where he was set down, the furthest since, when
+            if downs == 2 and not m["fin"]: kb.down("ArrowLeft"); left = True; left_until = now + 4   # off the side while the rescue's calm holds
+        if held and now - held[2] <= 3.2: held[1] = max(held[1], m["s"])
+        if held and now - held[2] > 3.2 and held[1] - held[0] < 1.0: end = m; break   # the held arrow was dropped: he will stand here for good
+        if left and now > left_until: kb.up("ArrowLeft"); left = False
+        end = m
+        if m["fin"] or m["slips"] >= 6: break
+        prev = m; r.page.wait_for_timeout(110)
+    kb.up("ArrowUp")
+    if left: kb.up("ArrowLeft")
+    r.page.wait_for_timeout(900); end = r.js(CLIMB)
+    calm = [f for f in falls if f[1] != "blowing" and abs(f[2]) < 0.3]
+    windy = [f for f in falls if f[1] == "blowing" or abs(f[2]) > 0.6]
+    r.info = "%d slips in %.0f s; set down at %s and walked on to %s with the arrow held; falls: %s" % (end["slips"], time.time() - t0, held and round(held[0], 1), held and round(held[1], 1), "; ".join("%s (gust %s, wind %.2f)" % f for f in falls))
+    r.expect(held is not None, "the climber never fell, so nothing was judged")
+    r.expect(held[1] - held[0] >= 1.0, "after SAFE AT THE FLAGS the held up-arrow did nothing: set down at %.1f, still at %.1f three seconds on" % (held[0], held[1]))
+    r.expect(end["fin"] and end["card"], "slips reached %d and no TRY AGAIN / MOVE ON card came" % end["slips"])
+    r.expect(end["slips"] == 4, "the card came at %d slips, not at the fourth (one past the three allowed)" % end["slips"])
+    r.expect(end["lose"] and not end["win"], "a climb lost on slips does not show the losing way on alone (lose %s, win %s)" % (end["lose"], end["win"]))
+    r.expect(calm, "no fall happened in calm air, so the SWEPT BACK wording was not judged")
+    r.expect(all(f[0] == "SWEPT BACK" for f in calm), "a fall in calm air said %r" % [f[0] for f in calm if f[0] != "SWEPT BACK"][:1])
+    r.expect(all("THE WIND KEEPS YOU" in f[0] for f in windy), "a fall in wind said %r" % [f[0] for f in windy if "THE WIND KEEPS YOU" not in f[0]][:1])
+
+
+@check("climb-side-is-a-fall", "2026-11-18 (Sam, playing the Climb by hand: \"I was able to walk quite far off the path before it noticed\"): a walker who stepped off the side of the path did not fall; he walked on air until three units past the edge")
+def climb_side_is_a_fall(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    climb_start(r)
+    kb = r.page.keyboard; notes = []; bad = []
+    for key in ("ArrowLeft", "ArrowRight"):
+        climb_settle(r)
+        r.js("() => window._hcDev.warp(110)"); r.page.wait_for_timeout(80)
+        m0 = r.js(CLIMB); kb.down(key); t0 = time.time(); far = 0; low = 0; off = None; slip = None
+        while time.time() - t0 < 5:
+            m = r.js(CLIMB)
+            if m["whirl"] or m["slips"] > m0["slips"]: slip = time.time(); break
+            beyond = abs(m["u"]) - m["w"] / 2
+            if beyond > 0 and off is None: off = time.time()
+            far = max(far, beyond); low = min(low, m["dy"])
+            r.page.wait_for_timeout(20)
+        kb.up(key)
+        notes.append("%s: %.1f past the edge, %.1f below the snow, the slip %.2f s after leaving the path" % (key, far, -low, (slip or 0) - (off or 0)))
+        if slip is None or off is None: bad.append("%s: walking off the side for 5 s was never a slip" % key)
+        elif low > -0.6: bad.append("%s: he walked on air, %.1f units past the edge, never lower than %.2f below the snow" % (key, far, -low))
+        elif far > 2.5: bad.append("%s: he was %.1f units past the edge before it was a fall" % (key, far))
+    # and the path itself still holds a walker: a gap's lip stops him, standing, with no slip
+    climb_settle(r); r.js("() => window._hcDev.warp(27)"); m0 = r.js(CLIMB); kb.down("ArrowUp"); r.page.wait_for_timeout(1500); kb.up("ArrowUp"); m = r.js(CLIMB)
+    if not (29.9 < m["s"] < 30.0 and m["gr"] and m["slips"] == m0["slips"]): bad.append("the first gap's lip no longer stops a walker (at %.2f, on the ground %s, slips +%d)" % (m["s"], m["gr"], m["slips"] - m0["slips"]))
+    r.info = "; ".join(notes)
+    r.expect(not bad, "; ".join(bad))
+
+
+@check("climb-gap-is-a-fall", "2026-11-18 (Sam, playing the Climb by hand: \"I jumped down one of the gaps and it didn't register that as a fall\"): a jump that came down inside a gap carried on under the far lip and fell on beneath the mountain, 50 units down, with no slip")
+def climb_gap_is_a_fall(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    climb_start(r)
+    kb = r.page.keyboard; notes = []; bad = []
+    for lip in (74, 151, 410):
+        # set him down half a unit inside the gap, at the lip's height, walking on: where a jump that fell short comes down. (Hops timed by hand were tried
+        # first: the same hop went in or over from one run to the next, so the place is set and the fall is watched.)
+        climb_settle(r)
+        kb.down("ArrowUp"); r.js("([a]) => window._hcDev.warp(a)", [lip + 0.5]); m0 = r.js(CLIMB); t0 = time.time(); low = 0; slip = False; m = m0
+        while time.time() - t0 < 2.6:
+            m = r.js(CLIMB)
+            if m["whirl"] or m["slips"] > m0["slips"]: slip = True; break
+            low = min(low, m["dy"]); r.page.wait_for_timeout(15)
+        kb.up("ArrowUp")
+        notes.append("in the gap at %d: %s, %.1f below at the lowest" % (lip, "a slip after %.2f s" % (time.time() - t0) if slip else "NO slip", -low))
+        if not slip: bad.append("coming down in the gap at %d was not a fall: 2.6 s on he is %.1f below the snow at %.1f with no slip" % (lip, -low, m["s"]))
+        elif low < -3.5: bad.append("the fall into the gap at %d went %.1f below the snow before it counted" % (lip, -low))
+    over = None
+    for _ in range(4):   # a full jump still makes it (the wind can take one; four tries)
+        climb_settle(r)
+        r.js("() => window._hcDev.warp(72.2)"); r.page.wait_for_timeout(80); m0 = r.js(CLIMB)
+        kb.down("ArrowUp"); kb.down("Space"); r.page.wait_for_timeout(700); kb.up("Space"); r.page.wait_for_timeout(900); kb.up("ArrowUp"); m = r.js(CLIMB)
+        if m["s"] > 75.5 and m["gr"] and m["slips"] == m0["slips"] and not m["whirl"]: over = m["s"]; break
+    notes.append("a held jump from 1.8 back: %s" % ("across to %.1f" % over if over else "never across in four tries"))
+    if not over: bad.append("a held jump over the gap at 74 did not land in four tries")
+    r.info = "; ".join(notes)
+    r.expect(not bad, "; ".join(bad))
+
+
+@check("climb-bonus-on-slips", "2026-11-18 (Sam, playing the Climb: \"The 'prints' following part of this is redundant now\"; the trail stays: \"Yes, keep trail\"): the PRINTS count is retired; the HUD and the card no longer name it and the bonus is judged on slips alone")
+def climb_bonus_on_slips(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The Climb", wait=8000)
+    words = r.js("() => document.body.innerText.replace(/\\s+/g, ' ')")
+    r.expect("Keep at most 3 slips for the bonus." in words, "the card does not say 'Keep at most 3 slips for the bonus.'")
+    r.expect("footprints with" not in words and not r.js("() => !!document.querySelector('.hc-need-p')"), "the card still asks for a number of footprints")
+    r.expect("FOLLOW THE BLUE FOOTPRINTS" in words, "the card lost FOLLOW THE BLUE FOOTPRINTS, which stays")
+    climb_start(r)
+    kb = r.page.keyboard; kb.down("ArrowUp"); huds = []; hs = []; over = 0
+    for _ in range(25):
+        m = r.js(CLIMB); huds.append(m["hud"]); over = max(over, m["over"])
+        if m["hudH"]: hs.append(m["hudH"])
+        r.page.wait_for_timeout(120)
+    kb.up("ArrowUp")
+    r.expect(any("SLIPS 0 / 3" in h and "BREATH" in h for h in huds), "the strip shows no SLIPS and BREATH while climbing (%r)" % huds[-1])
+    r.expect(not any("PRINTS" in h for h in huds), "the strip still counts PRINTS (%r)" % [h for h in huds if "PRINTS" in h][0][:80] if any("PRINTS" in h for h in huds) else "")
+    r.expect(hs and max(hs) - min(hs) <= 1, "the strip changed height while climbing (%s px)" % sorted(set(hs)))
+    r.expect(over <= 0, "the page ran %d px past the window while climbing" % over)
+    r.expect(r.js("() => window._hcDev.snapshot().activePrints") > 0, "no blue prints are laid on the snow: the trail has gone with the count")
+    # the summit with no slips and fewer than ten prints: the bonus all the same
+    climb_start(r)
+    kb.press("e"); r.page.wait_for_timeout(300)   # the test key: set down nine units under the summit
+    kb.down("ArrowUp"); m = r.js(CLIMB); t0 = time.time()
+    while time.time() - t0 < 40 and not m["fin"]:
+        r.page.wait_for_timeout(250); m = r.js(CLIMB)
+    kb.up("ArrowUp"); r.page.wait_for_timeout(600); m = r.js(CLIMB)
+    r.info = "the summit with %d slips and %d prints: %s" % (m["slips"], m["prints"], "the bonus" if m["win"] else "no bonus")
+    r.expect(m["fin"], "the climber did not reach the summit from nine units under it (at %.1f, slips %d)" % (m["s"], m["slips"]))
+    r.expect(m["slips"] <= 3 and m["prints"] < 10, "this run had %d slips and %d prints, so it does not show the bonus is judged on slips alone" % (m["slips"], m["prints"]))
+    r.expect(m["win"] and not m["lose"], "a summit with %d slips and %d prints did not win the bonus" % (m["slips"], m["prints"]))
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

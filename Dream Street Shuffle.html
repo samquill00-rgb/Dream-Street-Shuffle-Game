@@ -2505,6 +2505,8 @@ border-left: 2px solid rgba(140, 120, 180, 0.3);
 tw-story:has(#fi-wrap), tw-passage:has(#fi-wrap) { padding-bottom: 0 !important; }
 /* 2026-11-16 (Sam: "Fix the room band"): the same for the other nine rooms, which stopped about 100 px above the foot of a 1440x900 window and left a dark band; their size code takes the page's padding off the room's height, so with none the room runs to the foot */
 tw-story:has(#ci-wrap), tw-passage:has(#ci-wrap), tw-story:has(#pi-wrap), tw-passage:has(#pi-wrap), tw-story:has(#ri-wrap), tw-passage:has(#ri-wrap), tw-story:has(#cu-wrap), tw-passage:has(#cu-wrap), tw-story:has(#cb-wrap), tw-passage:has(#cb-wrap), tw-story:has(#ti-wrap), tw-passage:has(#ti-wrap), tw-story:has(#lk-wrap), tw-passage:has(#lk-wrap), tw-story:has(#oi-wrap), tw-passage:has(#oi-wrap), tw-story:has(#cf-wrap), tw-passage:has(#cf-wrap), tw-story:has(#cx-wrap), tw-passage:has(#cx-wrap) { padding-bottom: 0 !important; } /* #cx-wrap: the Copper's Lair approach, which shares the rooms' build (playtest 2026-11-16: it still ended at 797 of 900) */
+/* 2026-11-18 (Sam, the playtest's grey strip under the header above every 3D room: "Remove it"): the strip was the page's own 44 px clearance under the header, with the page column's panel showing in it. A room page has no words to clear, so its room starts at the header's foot and is 44 px taller. Keyed on the room's container, which is in the page from the start, so the room is sized once, to the right height */
+tw-story:has(#stat-bars-lifted) tw-passage:has(#fi-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#ci-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#pi-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#ri-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#cb-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#ti-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#lk-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#cf-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#cu-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#cx-container), tw-story:has(#stat-bars-lifted) tw-passage:has(#oi-container) { padding-top: var(--dss-header-h, 148px); }
 tw-passage:has(#fi-container):not(:has(#fi-wrap)) > :not(tw-include):not(tw-sidebar),
 tw-passage:has(#ci-container):not(:has(#ci-wrap)) > :not(tw-include):not(tw-sidebar),
 tw-passage:has(#pi-container):not(:has(#pi-wrap)) > :not(tw-include):not(tw-sidebar),
@@ -33958,6 +33960,72 @@ window._dssBindScene = function(wrapId, scene, renderer, camera) {
   window.addEventListener('resize', resize);
   window._dssThreeRegistry[wrapId] = { scene: scene, renderer: renderer, resize: resize, camera: camera };   // camera kept for test probes (2026-10-31)
 };
+/* 2026-11-18 (Sam, the Airport Pub at 44 fps: "Yes, cut them"): the pub was slow because it drew 1,449 separate objects a frame, not because of its lights.
+   dssBatchStatic(scene, skip) joins the still, solid, lit meshes that share one look (the same material settings and shadow flags) into one mesh each,
+   in world space, so the picture is the same and the draw calls fall. Left alone: anything in skip (and its children), see-through and unlit materials,
+   sprites, instanced or skinned meshes, mirrored meshes, materials with their own shader hook. Call it once the scene is built and before its first frame. */
+window.dssBatchStatic = function(scene, skip) {
+  var made = 0, joined = 0;
+  try {
+    var skipSet = new Set();
+    (skip || []).forEach(function(o) { if (o && o.traverse) o.traverse(function(c) { skipSet.add(c); }); });
+    scene.updateMatrixWorld(true);
+    var MAPS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'alphaMap', 'aoMap', 'bumpMap', 'envMap', 'lightMap', 'displacementMap', 'specularMap'];
+    var NUMS = ['roughness', 'metalness', 'emissiveIntensity', 'opacity', 'side', 'blending', 'alphaTest', 'envMapIntensity', 'bumpScale', 'shininess', 'aoMapIntensity', 'lightMapIntensity', 'polygonOffsetFactor', 'polygonOffsetUnits', 'refractionRatio', 'reflectivity'];
+    var FLAGS = ['flatShading', 'wireframe', 'fog', 'depthWrite', 'depthTest', 'polygonOffset', 'colorWrite', 'toneMapped', 'dithering', 'vertexColors', 'premultipliedAlpha'];
+    var keyOf = function(m) {
+      var k = [m.type, m.color ? m.color.getHex() : '', m.emissive ? m.emissive.getHex() : '', m.specular ? m.specular.getHex() : '', m.normalScale ? m.normalScale.x + ',' + m.normalScale.y : ''];
+      NUMS.forEach(function(n) { k.push(m[n] === undefined ? '' : m[n]); });
+      FLAGS.forEach(function(n) { k.push(m[n] ? 1 : 0); });
+      MAPS.forEach(function(n) { k.push(m[n] ? m[n].uuid : ''); });
+      return k.join('|');
+    };
+    var mapped = function(m) { return MAPS.some(function(n) { return !!m[n]; }); };
+    var groups = {}, order = [];
+    scene.traverse(function(o) {
+      if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || skipSet.has(o) || o.children.length || o.renderOrder !== 0 || (o.userData && o.userData.dssNoBatch)) return;
+      for (var p = o; p; p = p.parent) if (!p.visible) return;
+      var m = o.material, g = o.geometry;
+      if (!m || Array.isArray(m) || !g || !g.isBufferGeometry || !g.attributes.position) return;
+      if (!(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial)) return;
+      if (m.transparent || m.opacity < 1 || m.vertexColors || m.visible === false || Object.prototype.hasOwnProperty.call(m, 'onBeforeCompile')) return;
+      if (g.morphAttributes && Object.keys(g.morphAttributes).length) return;
+      if (mapped(m) && !g.attributes.uv) return;
+      if (o.matrixWorld.determinant() < 0) return;
+      var key = keyOf(m) + '#' + (o.castShadow ? 1 : 0) + (o.receiveShadow ? 1 : 0) + (o.layers ? o.layers.mask : 0);
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(o);
+    });
+    var v = new THREE.Vector3(), nm = new THREE.Matrix3();
+    order.forEach(function(key) {
+      var list = groups[key]; if (list.length < 2) return;
+      var first = list[0], useUv = mapped(first.material), parts = [], total = 0;
+      list.forEach(function(o) {
+        var g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry;
+        if (!g.attributes.normal) { g = g.clone(); g.computeVertexNormals(); }
+        parts.push({ o: o, g: g }); total += g.attributes.position.count;
+      });
+      var pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = useUv ? new Float32Array(total * 2) : null, at = 0;
+      parts.forEach(function(pt) {
+        var P = pt.g.attributes.position, N = pt.g.attributes.normal, U = pt.g.attributes.uv, mw = pt.o.matrixWorld; nm.getNormalMatrix(mw);
+        for (var i = 0; i < P.count; i++, at++) {
+          v.fromBufferAttribute(P, i).applyMatrix4(mw); pos[at * 3] = v.x; pos[at * 3 + 1] = v.y; pos[at * 3 + 2] = v.z;
+          v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor[at * 3] = v.x; nor[at * 3 + 1] = v.y; nor[at * 3 + 2] = v.z;
+          if (uv) { uv[at * 2] = U.getX(i); uv[at * 2 + 1] = U.getY(i); }
+        }
+      });
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      if (uv) geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      var mesh = new THREE.Mesh(geo, first.material);
+      mesh.castShadow = first.castShadow; mesh.receiveShadow = first.receiveShadow; mesh.layers.mask = first.layers.mask;
+      mesh.matrixAutoUpdate = false; mesh.userData.dssBatched = list.length; mesh.name = 'dss-batch';
+      scene.add(mesh); made++; joined += list.length;
+      list.forEach(function(o) { if (o.parent) o.parent.remove(o); });
+    });
+  } catch (e) { if (window.console) console.warn('dssBatchStatic', e); }
+  return { meshes: made, joined: joined };
+};
 window._dssDisposeWrap = function(wrapId) {
   var entry = window._dssThreeRegistry && window._dssThreeRegistry[wrapId];
   if (entry) {
@@ -41365,11 +41433,15 @@ var barMid = P1.clone().add(P2).multiplyScalar(0.5);
 barG.position.copy(barMid); barG.rotation.y = barAng;
 // counter body (customer side faces +x in local space), pale panels below the top
 var body = mesh(new THREE.BoxGeometry(0.62, 1.08, barLen), mahogany, 0, 0.54, 0, barG); body.castShadow = true; body.receiveShadow = true;
-var panelMat = new THREE.MeshStandardMaterial({ map: paintTex('#d9c9a2', 61), roughness: 0.65, envMap: roomEnv, envMapIntensity: 0.18 });
+/* 2026-11-18 (Sam, the playtest's "flat pale rectangles" on the bar front and "big pale ripples" on its top: "Fix both"). The panels were flat cream paint; they are the bar's own dark wood now, each with a thin brass edge (a brass back plate 12 mm wider all round). The top used the room's grain stretched over the whole length of the bar, so each line of grain was drawn six times too long and read as ripples; it has its own copy of the grain, turned to run along the bar, repeated every 1.3 m along it and 1.8 times across it, with the varnish's reflections calmed */
+var panelMat = new THREE.MeshStandardMaterial({ map: grainB, bumpMap: grainB, bumpScale: 0.004, roughness: 0.5, envMap: roomEnv, envMapIntensity: 0.3 });
 for (var pi = 0; pi < Math.floor(barLen / 0.7); pi++) {
+mesh(new THREE.BoxGeometry(0.016, 0.644, 0.524), brass, 0.319, 0.5, -barLen / 2 + 0.42 + pi * 0.7, barG);
 mesh(new THREE.BoxGeometry(0.02, 0.62, 0.5), panelMat, 0.32, 0.5, -barLen / 2 + 0.42 + pi * 0.7, barG);
 }
-var top = mesh(new THREE.BoxGeometry(0.78, 0.06, barLen + 0.1), counterTop, 0, 1.11, 0, barG); top.castShadow = true; top.receiveShadow = true;
+var barTopGrain = grainC.clone(); barTopGrain.wrapS = barTopGrain.wrapT = THREE.RepeatWrapping; barTopGrain.center.set(0.5, 0.5); barTopGrain.rotation = Math.PI / 2; barTopGrain.repeat.set(1.8, barLen / 1.3); barTopGrain.needsUpdate = true;
+var barTopMat = new THREE.MeshStandardMaterial({ map: barTopGrain, bumpMap: barTopGrain, bumpScale: 0.0015, roughness: 0.44, envMap: roomEnv, envMapIntensity: 0.4, metalness: 0.08 });
+var top = mesh(new THREE.BoxGeometry(0.78, 0.06, barLen + 0.1), barTopMat, 0, 1.11, 0, barG); top.castShadow = true; top.receiveShadow = true;
 mesh(new THREE.BoxGeometry(0.04, 0.05, barLen + 0.1), brass, 0.4, 1.135, 0, barG);
 var rail = mesh(new THREE.CylinderGeometry(0.02, 0.02, barLen, 8), brass, 0.48, 0.2, 0, barG); rail.rotation.x = Math.PI / 2;
 rail.material=new THREE.MeshStandardMaterial({map:pubWear('#aa8950',12,false),color:0xc5a36a,roughness:0.48,metalness:0.65,envMap:roomEnv,envMapIntensity:0.4});
@@ -41378,7 +41450,7 @@ mesh(new THREE.CylinderGeometry(0.035,0.035,0.012,16),rail.material,0.48,0.012,r
 var bracket=mesh(new THREE.CylinderGeometry(0.012,0.012,0.19,10),rail.material,0.48,0.105,rz,barG);}
 // the curved end nearest the back
 var endCap = mesh(new THREE.CylinderGeometry(0.39, 0.39, 1.08, 24, 1, false, 0, Math.PI), mahogany, 0, 0.54, -barLen / 2, barG); endCap.rotation.y = Math.PI / 2;
-mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.06, 24, 1, false, 0, Math.PI), counterTop, 0, 1.11, -barLen / 2 - 0.05, barG).rotation.y = Math.PI / 2;
+mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.06, 24, 1, false, 0, Math.PI), barTopMat, 0, 1.11, -barLen / 2 - 0.05, barG).rotation.y = Math.PI / 2;
 // pump handles on the counter
 var pumpMat = new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.35 });
 var ivory = new THREE.MeshStandardMaterial({ color: 0xe6dcc0, roughness: 0.4 });
@@ -44537,6 +44609,23 @@ var bm = mesh(geo, new THREE.MeshStandardMaterial({ map: tx('models/wiz-boots-' 
 bm.rotation.set(pl[3], pl[4], pl[5]); bm.castShadow = true; bm.receiveShadow = true;
 }
 }).catch(function() {});
+// 2026-11-18 (Sam: "I just added a 3d model of a dog ... can you add that dog by Ashton granger's feet?", then "not totally by the feet, a little in the centre too"):
+// his resting-dog.glb (his own dog, modelled from his photographs; 37 MB, mostly mesh fur) lies on the floor on the room side of her chair, head by her, body out toward
+// the middle of the cellar, face turned to the stairs. models/dog.bin is the same model cut down by tools/dog_to_dssf.py (the skin decimated, about two strands in five
+// of the coat kept and drawn wider); window.dssFur builds it. It breathes. It is not an object to click: it has no card.
+// The same evening (Sam: "make the dog's snout less weird shaped. It looks like she ate a bee's nest. Make it more gentle and elegant", then "the snout still goes too far
+// up the face, can you smooth it a bit"): the converter now tapers the muzzle to a smaller nose, starts it under the eyes and smooths its ridges away (?v=2).
+var DOG = { x: 0.42, z: -D / 2 + 2.4 + 0.72, ry: 0.2, s: 0.72 }; /* about 1.06 m nose to tail; placed by eye from the room view and from her close-up, clear of her card */
+// 2026-11-18 (Sam: "I added this rug to the claudework folder, can you put it under the dog"): his photograph of a Konya prayer rug (Vintage_Konya_Prayer_Seccade._CL_Lane_Collection.jpg),
+// flattened square-on by tools/prayer_rug_flatten.py (the floorboards keyed out round its fringe; the photo gives it 1 : 1.59) into models/prayer-rug.jpg and its edge models/prayer-rug-a.png.
+// It lies along her, the prayer niche toward her head, a centimetre of pile on the floor; the dog lies on it, and her contact shadow sits on it.
+var RUG = { w: 0.78, l: 1.24, y: 0.008 };
+var rugG = new THREE.Group(); rugG.position.set(DOG.x, 0, DOG.z); rugG.rotation.y = DOG.ry + Math.PI / 2; scene.add(rugG); window._dssCellarRug = rugG; /* debug: the rug's group */
+(function() { var tl = new THREE.TextureLoader(), map = tl.load('models/prayer-rug.jpg?v=1'), edge = tl.load('models/prayer-rug-a.png?v=1'); map.anisotropy = edge.anisotropy = Math.min(8, k.renderer.capabilities.getMaxAnisotropy());
+var rugTop = mesh(new THREE.PlaneGeometry(RUG.w * 1.024, RUG.l * 1.07), new THREE.MeshStandardMaterial({ map: map, alphaMap: edge, alphaTest: 0.5, bumpMap: map, bumpScale: 0.004, roughness: 0.96, metalness: 0 }), 0, RUG.y, 0, rugG); rugTop.rotation.x = -Math.PI / 2; rugTop.receiveShadow = true; })();
+var dogG = new THREE.Group(); dogG.position.set(DOG.x, RUG.y - 0.002, DOG.z); dogG.rotation.y = DOG.ry; dogG.scale.setScalar(DOG.s); scene.add(dogG); var dogBreathe = null; window._dssCellarDog = dogG; /* debug: the dog's group */
+if (window.dssFur) window.dssFur(THREE, 'models/dog.bin?v=2', { envMap: k.roomEnv, envMapIntensity: 0.5, shadow: true }, function(f) { if (!k.renderer.domElement.isConnected) return; dogG.add(f.group); dogBreathe = f.breathe; });
+k.contact(DOG.x, RUG.y + 0.002, DOG.z, 1.25);
 // ---------- COPPER, between you and the room ----------
 var copper = k.ghost(-0.85, 0, 2.3, 7, 0.9, false, true, 0.92);                    // a big man in a small body, or the other way round
 copper.hit.scale.set(1.5, 1, 1.5);
@@ -44891,6 +44980,7 @@ if (still) return;
 var sw = Math.sin(t * 0.6) * 0.06; bulbG.rotation.z = sw; bulbG.rotation.x = Math.cos(t * 0.45) * 0.03;
 bulbLight.intensity = 1.35 + 0.08 * Math.sin(t * 9.3) + 0.07 * Math.sin(t * 2.1) + (Math.sin(t * 0.37) > 0.992 ? -0.35 : 0); bulbGlow.material.opacity = 0.55 + 0.03 * Math.sin(t * 9.3);
 tableLight.intensity = 0.9 + 0.04 * Math.sin(t * 1.7);
+if (dogBreathe) dogBreathe(t);
 for (var i = 0; i < haze.length; i++) { var h = haze[i]; h.position.x += Math.sin(t * h.userData.sp + h.userData.ph) * 0.0015; h.material.opacity = h.userData.base * (0.8 + 0.2 * Math.sin(t * 0.3 + h.userData.ph)); }
 var mp = moteGeo.attributes.position.array; for (var mi2 = 0; mi2 < MOTES; mi2++) { var ms = moteSeed[mi2]; mp[mi2 * 3 + 1] += ms[1] * dt * Math.sin(t * 0.3 + ms[0]) - 0.006 * dt; mp[mi2 * 3] += Math.sin(t * ms[2] + ms[0]) * 0.0006; if (mp[mi2 * 3 + 1] < 0.2) mp[mi2 * 3 + 1] = 1.65; } moteGeo.attributes.position.needsUpdate = true; motes.material.opacity = 0.4 + 0.15 * Math.sin(t * 0.8);
 /* the rat: wait under cover, run a route out of whatever it is under to the next cover (one or two sniffs on the way), gone again */
@@ -67699,7 +67789,7 @@ window._dssDisposeWrap('ap-wrap');
   // ============================================================
   // CONCOURSE
   // ============================================================
-  var terminalFloor = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshStandardMaterial({ map: terminalTileTex, roughness: 0.18, metalness: 0.12 }));
+  var terminalFloor = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshStandardMaterial({ map: terminalTileTex, roughness: 0.18, metalness: 0.12, emissive: 0x121210, emissiveMap: terminalTileTex })); /* 2026-11-18: the faint glow stands in for the wash the two troffer lights gave the concourse floor (measured in one page: the floor by the pub 65.4 with the lights, 60.8 without, 65.3 with this) */
   terminalFloor.rotation.x = -Math.PI / 2; terminalFloor.position.set(0, 0, 44); terminalFloor.receiveShadow = true; scene.add(terminalFloor);
   // The sign's light lying on the polished concourse tile in front of the
   // bay: one additive plane from the frontage out to z 3.3, a warm wash
@@ -67733,7 +67823,7 @@ window._dssDisposeWrap('ap-wrap');
     var geo = new THREE.PlaneGeometry(2.4, 0.6), mat = new THREE.MeshBasicMaterial({ color: 0xd8d4b0 });
     for (var x = -14; x <= 14; x += 7) for (var z = 3; z <= 24; z += 7) {
       var p = new THREE.Mesh(geo, mat.clone()); p.rotation.x = Math.PI / 2; p.position.set(x, 5.58, z); scene.add(p); troffers.push(p);
-      if (x === 0 && z <= 10) { var l = new THREE.PointLight(0xd0ccaa, 0.3, 14, 2); l.position.set(x, 5.2, z); scene.add(l); }
+      /* 2026-11-18 (Sam, the pub at 44 fps: "Yes, cut them"): the two real lights among the troffers are gone. They were the weakest lights in the scene (0.3) and the two that took a frame from 12 ms to 19; the panels and their glow stay */
       glowSprite('rgba(210,225,255,', 2.6, x, 5.45, z).material.opacity = 0.35;
     }
   })();
@@ -68306,6 +68396,8 @@ window._dssDisposeWrap('ap-wrap');
     }
     renderer.render(scene, camera);
   }
+  /* 2026-11-18 (Sam, the pub at 44 fps): join the still furniture into a few meshes before the first frame. Left out: what moves (bunting, the swinging pendants), what flickers, what is pressed */
+  if (window.dssBatchStatic) window._dssApBatch = window.dssBatchStatic(scene, clickableObjects.concat(troffers, [subSign, apSheen], bunting.map(function(b) { return b.m; }), pendantGroups.map(function(P) { return P.g; })));
   animate();
 var apBtn = document.createElement('div');
 apBtn.textContent = 'ENTER THE ENLIGHTENMENT';
@@ -68922,6 +69014,7 @@ window._dssDisposeWrap('nz-wrap');
 /* 2026-11-08 (Sam's download mayflower.zip, public domain: "add them to the carthage approach and maybe some in soho sq"): the pack's meadow buttercups, a plant photographed on white (models/mayflower.png, 512 px with alpha, from its 786 px texture) on three crossed cards, as its own OBJ does. window.dssMayflowers(T, scene, clumps, o) merges every plant into one mesh: clumps are [x, y, z, plants, radius]; each plant 0.22 to 0.4 m, turned at random; the normals point up so the cards light like the ground they stand on; o.seed fixes the scatter, o.srgb for sRGB scenes, o.glow a faint warmth so the yellow survives the night. */ window.dssMayflowers=function(T,scene,clumps,o){o=o||{};var s=o.seed||1,R=function(){s=(s*16807)%2147483647;return (s-1)/2147483646;},P=[],U=[],I=[];clumps.forEach(function(c){for(var n=0;n<c[3];n++){var a=R()*6.283,r=Math.sqrt(R())*c[4],x=c[0]+Math.cos(a)*r,z=c[2]+Math.sin(a)*r,h=(o.min||0.22)+R()*((o.max||0.4)-(o.min||0.22)),w=h*0.5,rot=R()*3.1416;for(var q=0;q<3;q++){var an=rot+q*1.0472,dx=Math.cos(an)*w,dz=Math.sin(an)*w,b=P.length/3;P.push(x-dx,c[1],z-dz,x+dx,c[1],z+dz,x+dx,c[1]+h,z+dz,x-dx,c[1]+h,z-dz);U.push(0,0,1,0,1,1,0,1);I.push(b,b+1,b+2,b,b+2,b+3);}}});var g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(P,3));g.setAttribute('uv',new T.Float32BufferAttribute(U,2));var N=new Float32Array(P.length);for(var k=1;k<N.length;k+=3)N[k]=1;g.setAttribute('normal',new T.BufferAttribute(N,3));g.setIndex(I);g.computeBoundingSphere();var tx=new T.TextureLoader().load('models/mayflower.png?v=1');if(o.srgb)tx.encoding=T.sRGBEncoding;tx.anisotropy=4;var m=new T.Mesh(g,new T.MeshStandardMaterial({map:tx,alphaTest:0.45,side:T.DoubleSide,roughness:0.85,emissive:new T.Color(o.glow||0x1a1200),emissiveMap:tx}));m.receiveShadow=true;scene.add(m);return m;};
 /* 2026-11-08 (Sam's download mushrooms.blend, CC-BY 3.0, credited in SOUND-SOURCES.md: "add those to soho square and also elsewhere"): the pack's six mushrooms (0, 1 orange caps; 2, 3 red caps; 4, 5 bracket fungi), exported to models/mushrooms.bin (DSSM: per mesh float positions, normals, uvs, uint16 index; base at y 0) with their 512 px colour and normal maps. window.dssMushrooms(T, scene, list, o): list items [kind, x, y, z, scale, turn]; o.trunks items [kind, trunk x, trunk z, trunk radius, height, angle round the trunk, scale] seat a bracket fungus on a trunk, its flat back to the bark; o.srgb for sRGB scenes. */ window.dssMushrooms=function(T,scene,list,o){o=o||{};fetch('models/mushrooms.bin?v=1').then(function(r){return r.arrayBuffer();}).then(function(buf){if(new TextDecoder().decode(new Uint8Array(buf,0,4))!=='DSSM')return;var dv=new DataView(buf),n=dv.getUint32(4,true),off=8,G=[];for(var k=0;k<n;k++){var nv=dv.getUint32(off,true),ni=dv.getUint32(off+4,true);off+=8;var g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(new Float32Array(buf.slice(off,off+nv*12)),3));off+=nv*12;g.setAttribute('normal',new T.BufferAttribute(new Float32Array(buf.slice(off,off+nv*12)),3));off+=nv*12;var uv=new Float32Array(buf.slice(off,off+nv*8));for(var q=1;q<uv.length;q+=2)uv[q]=1-uv[q];g.setAttribute('uv',new T.BufferAttribute(uv,2));off+=nv*8;g.setIndex(new T.BufferAttribute(new Uint16Array(buf.slice(off,off+ni*2)),1));off+=ni*2;off=(off+3)&~3;g.computeBoundingSphere();G.push(g);}var L=new T.TextureLoader(),tx=L.load('models/mushrooms.jpg?v=1'),nm=L.load('models/mushrooms-n.jpg?v=1');tx.flipY=nm.flipY=false;if(o.srgb)tx.encoding=T.sRGBEncoding;var m=new T.MeshStandardMaterial({map:tx,normalMap:nm,roughness:0.62,emissive:new T.Color(o.glow||0x000000)});function put(kind,x,y,z,s,ry,tilt){var me=new T.Mesh(G[kind],m);me.position.set(x,y,z);me.rotation.set(0,ry,tilt||0);me.scale.setScalar(s);me.castShadow=true;me.receiveShadow=true;scene.add(me);}(list||[]).forEach(function(a){put(a[0],a[1],a[2],a[3],a[4],a[5]||0,(a[6]||0));});(o.trunks||[]).forEach(function(a){var dx=Math.cos(a[5]),dz=Math.sin(a[5]);put(a[0],a[1]+dx*a[3],a[4],a[2]+dz*a[3],a[6],Math.atan2(dz,-dx));});}).catch(function(){});};
 /* 2026-11-08 window.dssDSSM(T, url, cb): reads a DSSM model file (count, then per mesh: vertex and index counts, float positions, normals, uvs, uint16 index, padded to 4 bytes) and hands cb the BufferGeometries. */ window.dssDSSM=function(T,url,cb){fetch(url).then(function(r){return r.arrayBuffer();}).then(function(buf){if(new TextDecoder().decode(new Uint8Array(buf,0,4))!=='DSSM')return;var dv=new DataView(buf),n=dv.getUint32(4,true),off=8,G=[];for(var k=0;k<n;k++){var nv=dv.getUint32(off,true),ni=dv.getUint32(off+4,true);off+=8;var g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(new Float32Array(buf.slice(off,off+nv*12)),3));off+=nv*12;g.setAttribute('normal',new T.BufferAttribute(new Float32Array(buf.slice(off,off+nv*12)),3));off+=nv*12;var uv=new Float32Array(buf.slice(off,off+nv*8));for(var q=1;q<uv.length;q+=2)uv[q]=1-uv[q];g.setAttribute('uv',new T.BufferAttribute(uv,2));off+=nv*8;g.setIndex(new T.BufferAttribute(new Uint16Array(buf.slice(off,off+ni*2)),1));off+=ni*2;off=(off+3)&~3;g.computeBoundingSphere();G.push(g);}cb(G);}).catch(function(){});};
+/* 2026-11-18 window.dssFur(T, url, opt, cb): reads a DSSF model (models/dog.bin, written by tools/dog_to_dssf.py from Sam's resting-dog.glb): solid meshes with a colour on every vertex, and a coat of fur stored a strand at a time (root, middle, tip, a width, the normal of the skin under it, a root and a tip colour), which is drawn here as tapered blades lit by the skin's normal, so the coat shades as one form. Hands cb { group, breathe(t) }: the body and the chest ruff (groups 1 and 2) swell a little on y about their own pivots. Colours are used as written (the rooms put out display values); opt: envMap, envMapIntensity, shadow. */ window.dssFur=function(T,url,opt,cb){opt=opt||{};fetch(url).then(function(r){return r.ok?r.arrayBuffer():null;}).then(function(buf){if(!buf||new TextDecoder().decode(new Uint8Array(buf,0,4))!=='DSSF')return;var dv=new DataView(buf),o=8;function f3(){var a=[dv.getFloat32(o,true),dv.getFloat32(o+4,true),dv.getFloat32(o+8,true)];o+=12;return a;}function u32(){var v=dv.getUint32(o,true);o+=4;return v;}function take(C,n){var a=new C(buf.slice(o,o+n*C.BYTES_PER_ELEMENT));o=(o+n*C.BYTES_PER_ELEMENT+3)&~3;return a;}var mn=f3(),sz=f3(),ng=u32(),root=new T.Group(),groups=[],piv=[],qx=sz[0]/65535,qy=sz[1]/65535,qz=sz[2]/65535;for(var gi=0;gi<ng;gi++){var pv=f3();piv.push(pv);var G=new T.Group();G.position.set(pv[0],pv[1],pv[2]);root.add(G);groups.push(G);}var matte=new T.MeshStandardMaterial({vertexColors:true,roughness:0.86,metalness:0,side:T.DoubleSide}),gloss=new T.MeshStandardMaterial({vertexColors:true,roughness:0.18,metalness:0,envMap:opt.envMap||null,envMapIntensity:opt.envMapIntensity||0.5}),coat=new T.MeshStandardMaterial({vertexColors:true,roughness:0.9,metalness:0});var nm=u32();for(var mi=0;mi<nm;mi++){var grp=u32(),gl=u32(),nv=u32(),ni=u32(),q=take(Uint16Array,nv*3),nr=take(Int8Array,nv*3),cl=take(Uint8Array,nv*3),ix=take(Uint16Array,ni),p=piv[grp],pos=new Float32Array(nv*3);for(var v=0;v<nv;v++){pos[v*3]=mn[0]+q[v*3]*qx-p[0];pos[v*3+1]=mn[1]+q[v*3+1]*qy-p[1];pos[v*3+2]=mn[2]+q[v*3+2]*qz-p[2];}var g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(pos,3));g.setAttribute('normal',new T.BufferAttribute(nr,3,true));g.setAttribute('color',new T.BufferAttribute(cl,3,true));g.setIndex(new T.BufferAttribute(ix,1));var m=new T.Mesh(g,gl?gloss:matte);m.castShadow=!!opt.shadow;m.receiveShadow=true;groups[grp].add(m);}var nf=u32();for(var fi=0;fi<nf;fi++){var fg=u32(),ns=u32(),pt=take(Uint16Array,ns*9),fc=take(Uint8Array,ns*6),fn=take(Int8Array,ns*3),fw=take(Uint8Array,ns),fp=piv[fg],P=new Float32Array(ns*15),N=new Int8Array(ns*15),C=new Uint8Array(ns*15),I=new Uint32Array(ns*18);for(var s=0;s<ns;s++){var a=s*9,b=s*15,rx=mn[0]+pt[a]*qx-fp[0],ry=mn[1]+pt[a+1]*qy-fp[1],rz=mn[2]+pt[a+2]*qz-fp[2],mx=mn[0]+pt[a+3]*qx-fp[0],my=mn[1]+pt[a+4]*qy-fp[1],mz=mn[2]+pt[a+5]*qz-fp[2],dx=mx-rx,dy=my-ry,dz=mz-rz,nx=fn[s*3],ny=fn[s*3+1],nz=fn[s*3+2],ax=ny*dz-nz*dy,ay=nz*dx-nx*dz,az=nx*dy-ny*dx,al=Math.sqrt(ax*ax+ay*ay+az*az)||1;ax/=al;ay/=al;az/=al;var bx=dy*az-dz*ay,by=dz*ax-dx*az,bz=dx*ay-dy*ax,bl=Math.sqrt(bx*bx+by*by+bz*bz)||1;bx/=bl;by/=bl;bz/=bl;/* each blade is turned a little about its own length, so some of the coat always faces the eye, at the outline too */ var tw=(((s*0.6180339887)%1)-0.5)*2.6,ca=Math.cos(tw),sa=Math.sin(tw),w=fw[s]*0.000025,sx=(ax*ca+bx*sa)*w,sy=(ay*ca+by*sa)*w,sz2=(az*ca+bz*sa)*w;P[b]=rx-sx;P[b+1]=ry-sy;P[b+2]=rz-sz2;P[b+3]=rx+sx;P[b+4]=ry+sy;P[b+5]=rz+sz2;P[b+6]=mx-sx*0.66;P[b+7]=my-sy*0.66;P[b+8]=mz-sz2*0.66;P[b+9]=mx+sx*0.66;P[b+10]=my+sy*0.66;P[b+11]=mz+sz2*0.66;P[b+12]=mn[0]+pt[a+6]*qx-fp[0];P[b+13]=mn[1]+pt[a+7]*qy-fp[1];P[b+14]=mn[2]+pt[a+8]*qz-fp[2];for(var c=0;c<5;c++){N[b+c*3]=nx;N[b+c*3+1]=ny;N[b+c*3+2]=nz;for(var ch=0;ch<3;ch++)C[b+c*3+ch]=c<2?fc[s*6+ch]:c<4?(fc[s*6+ch]+fc[s*6+3+ch])>>1:fc[s*6+3+ch];}/* both windings, so a blade seen from behind keeps the skin's normal */ var i0=s*5,ib=s*18;I[ib]=i0;I[ib+1]=i0+1;I[ib+2]=i0+3;I[ib+3]=i0;I[ib+4]=i0+3;I[ib+5]=i0+2;I[ib+6]=i0+2;I[ib+7]=i0+3;I[ib+8]=i0+4;I[ib+9]=i0;I[ib+10]=i0+3;I[ib+11]=i0+1;I[ib+12]=i0;I[ib+13]=i0+2;I[ib+14]=i0+3;I[ib+15]=i0+2;I[ib+16]=i0+4;I[ib+17]=i0+3;}var fgeo=new T.BufferGeometry();fgeo.setAttribute('position',new T.BufferAttribute(P,3));fgeo.setAttribute('normal',new T.BufferAttribute(N,3,true));fgeo.setAttribute('color',new T.BufferAttribute(C,3,true));fgeo.setIndex(new T.BufferAttribute(I,1));var fm=new T.Mesh(fgeo,coat);fm.receiveShadow=true;groups[fg].add(fm);}cb({group:root,breathe:function(t){var sw=Math.sin(t*Math.PI/4.58);sw=1+0.012*sw*sw;if(groups[1])groups[1].scale.y=sw;if(groups[2])groups[2].scale.y=sw;}});}).catch(function(e){if(window.console)console.warn('dssFur',e);});};
 /* 2026-11-09 (Sam's ModularPipes pack: "a pack of pipes for the cellar? Maybe one in trisha's on the ceiling too"): window.dssPipes(T, parent, runs, opt, cb) lays the kit (models/pipes.bin: pipe, coupling, elbow, tee, all at pipe radius 1; its fifth piece, the finned wall base, read as arrow flights so the clips are a plain band, stand-off and plate) along axis-aligned polylines. run = { r: radius in metres, pts: [[x,y,z],...], tee: { index: [bx,by,bz] }, wall: [wx,wy,wz] toward the surface the brackets fix to, every: bracket spacing in metres, on: [[x,y,z],...] points to bracket at instead }. opt = { alive: a function that says the scene is still up (checked when the model arrives), tex: 'rusty' (the kit's yellow gas paint) or 'painted' (plain gloss in color; metal: true for copper and the like), color, glow (emissive), clip, env }. The pieces are long pipes stretched to fit, couplings between them, elbows at corners, tees where asked. */ window.dssPipes=function(T,parent,runs,opt,cb){if(!window.dssDSSM)return;opt=opt||{};window.dssDSSM(T,'models/pipes.bin?v=1',function(gs){if(!gs||gs.length<5)return;if(opt.alive&&!opt.alive())return;var tl=new T.TextureLoader();function tx(u){var t=tl.load(u);t.flipY=false;t.anisotropy=4;return t;}var rusty=opt.tex!=='painted';var mat=new T.MeshStandardMaterial({map:tx(rusty?'models/pipe-rustypaintedmetal.jpg?v=1':'models/pipe-paintedmetal.jpg?v=1'),normalMap:tx('models/pipe-rusty-normal.jpg?v=1'),roughnessMap:tx('models/pipe-rusty-rough.jpg?v=1'),color:opt.color!=null?opt.color:0xffffff,metalness:0.45,roughness:1,envMap:opt.env||null,envMapIntensity:0.5});mat.normalScale.set(0.6,0.6);if(!rusty){mat.map=null;mat.roughnessMap=null;mat.roughness=opt.metal?0.34:0.42;mat.metalness=opt.metal?0.55:0.25;mat.envMapIntensity=opt.metal?1.2:0.5;mat.normalScale.set(0.3,0.3);}if(opt.glow)mat.emissive=new T.Color(opt.glow);var clipMat=new T.MeshStandardMaterial({color:opt.clip!=null?opt.clip:0x2a2622,roughness:0.6,metalness:0.5,envMap:opt.env||null,envMapIntensity:0.4});var g=new T.Group();g.name='dssPipes';parent.add(g);var Y=new T.Vector3(0,1,0),PL=50.83,CH=1.42,EA=2.0,TB=2.25;function V(a){return new T.Vector3(a[0],a[1],a[2]);}function put(geo,pos,q,s,sy){var m=new T.Mesh(geo,mat);m.position.copy(pos);m.quaternion.copy(q);m.scale.set(s,sy||s,s);m.castShadow=!!opt.shadow;m.receiveShadow=true;g.add(m);return m;}function basisQ(e1,e2,t1,t2){var Me=new T.Matrix4().makeBasis(e1,e2,e1.clone().cross(e2)),Mt=new T.Matrix4().makeBasis(t1,t2,t1.clone().cross(t2));return new T.Quaternion().setFromRotationMatrix(Mt.multiply(Me.transpose()));}runs.forEach(function(run){var r=run.r,P=run.pts.map(V),tee=run.tee||{},wall=run.wall?V(run.wall).normalize():null,every=run.every||1.4;for(var i=0;i<P.length-1;i++){var a=P[i],b=P[i+1],d=b.clone().sub(a),L=d.length();d.normalize();var s0=(i>0?(tee[i]?CH:EA)*r:0),s1=(i<P.length-2?(tee[i+1]?CH:EA)*r:0),len=L-s0-s1;if(len<=0.01)continue;var n=Math.max(1,Math.ceil(len/(PL*r))),pl=len/n,q=new T.Quaternion().setFromUnitVectors(Y,d);for(var j=0;j<n;j++){var c=a.clone().addScaledVector(d,s0+pl*(j+0.5));put(gs[0],c,q,r,pl/(PL*r)*r);if(j<n-1)put(gs[1],a.clone().addScaledVector(d,s0+pl*(j+1)),q,r);}if(wall&&Math.abs(wall.dot(d))<0.5){var qb=basisQ(new T.Vector3(0,1,0),new T.Vector3(-1,0,0),d,wall);function clip(at){var c=new T.Group();c.position.copy(a).addScaledVector(d,at);c.quaternion.copy(qb);g.add(c);var band=new T.Mesh(new T.TorusGeometry(r*1.12,r*0.16,6,16),clipMat);band.rotation.x=Math.PI/2;c.add(band);var st=new T.Mesh(new T.BoxGeometry(r*1.3,r*0.32,r*0.5),clipMat);st.position.x=-r*1.75;c.add(st);var pl=new T.Mesh(new T.BoxGeometry(r*0.2,r*1.6,r*1.2),clipMat);pl.position.x=-r*2.35;c.add(pl);}if(run.on)run.on.forEach(function(o){var at=V(o).sub(a).dot(d);if(at>s0+0.08&&at<s0+len-0.08)clip(at);});else{var nb=Math.max(1,Math.floor(len/every));for(var k=0;k<nb;k++)clip(s0+len*(k+0.5)/nb);}}}for(var i2=1;i2<P.length-1;i2++){var din=P[i2].clone().sub(P[i2-1]).normalize(),dout=P[i2+1].clone().sub(P[i2]).normalize();if(tee[i2])put(gs[3],P[i2],basisQ(new T.Vector3(0,1,0),new T.Vector3(0,0,-1),din,V(tee[i2]).normalize()),r);else put(gs[2],P[i2],basisQ(new T.Vector3(0,-1,0),new T.Vector3(0,0,-1),din.clone().negate(),dout),r);}});if(cb)cb(g);});};
 /* 2026-11-08 (Sam's download spaceships01.zip by Viktor Hahn, CC-BY 3.0, credited in SOUND-SOURCES.md: "add a spaceship ... in the opening approach to the nascar scenes. Make it big and add some lights that flash"): the pack's carrier (models/carrier.bin, 15.6 units nose +z to tail -z, its colour, normal and emission maps cut to 1024/512 px). window.dssCarrier(T, cb, o) hands cb {group, frame(t, still)}: navigation lights on additive glow sprites, red to port and green to starboard at the wingtips, a white double strobe on the tail fin and the nose, a slow red beacon under the belly, a chase of amber lights down the spine, the engines' blue glow breathing; still holds every light on. */ window.dssCarrier=function(T,cb,o){o=o||{};var g=new T.Group(),c=document.createElement('canvas');c.width=c.height=64;var x=c.getContext('2d'),gr=x.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.18,'rgba(255,255,255,.75)');gr.addColorStop(.45,'rgba(255,255,255,.18)');gr.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=gr;x.fillRect(0,0,64,64);var gm=new T.CanvasTexture(c),L=[];function lamp(px,py,pz,col,s,kind,ph){var sp=new T.Sprite(new T.SpriteMaterial({map:gm,color:col,transparent:true,depthWrite:false,blending:T.AdditiveBlending,fog:false,toneMapped:false}));sp.position.set(px,py,pz);sp.scale.set(s,s,1);g.add(sp);L.push({s:sp,k:kind,p:ph||0,b:s});}lamp(5.95,-1.4,-5.5,0xff2a1a,1.6,'nav');lamp(-5.95,-1.4,-5.5,0x29ff5a,1.6,'nav');lamp(0.2,3.0,-5.6,0xffffff,2.2,'strobe');lamp(0.42,0.05,9.85,0xffffff,1.8,'strobe',0.35);lamp(0.85,-1.85,-1.97,0xff3020,2.0,'beacon');for(var a=0;a<7;a++)lamp(0,1.95-a*0.16,-4+a*1.9,0xffb040,0.75,'chase',a);[-1.6,0,1.6].forEach(function(ex){lamp(ex,0.2,-6.1,0x5ab8ff,2.6,'engine',ex);});window.dssDSSM(T,'models/carrier.bin?v=1',function(G){var tl=new T.TextureLoader(),d=tl.load('models/carrier.jpg?v=1'),n=tl.load('models/carrier-n.jpg?v=1'),e=tl.load('models/carrier-e.png?v=1');d.flipY=n.flipY=e.flipY=false;if(o.srgb){d.encoding=T.sRGBEncoding;e.encoding=T.sRGBEncoding;}d.anisotropy=4;var m=new T.Mesh(G[0],new T.MeshStandardMaterial({map:d,normalMap:n,emissiveMap:e,emissive:new T.Color(0x9fdcff),emissiveIntensity:1.6,metalness:0.55,roughness:0.42,color:new T.Color(o.tint||0xffffff)}));g.add(m);});cb({group:g,frame:function(t,still){L.forEach(function(l){var v=1;if(!still){if(l.k==='nav')v=0.75+0.25*Math.sin(t*2.2);else if(l.k==='strobe'){var q=(t+l.p)%1.6;v=(q<0.07||(q>0.22&&q<0.29))?1.6:0.04;}else if(l.k==='beacon')v=Math.pow(Math.max(0,Math.sin(t*3.4)),6)*1.3+0.05;else if(l.k==='chase')v=((Math.floor(t*6)-l.p)%7+7)%7===0?1.5:0.12;else v=0.82+0.12*Math.sin(t*5.3+l.p)+0.06*Math.sin(t*17+l.p);}l.s.material.opacity=Math.min(1,v);var sc=l.b*(l.k==='strobe'?(v>1?1.5:0.6):(0.7+0.3*Math.min(1,v)));l.s.scale.set(sc,sc,1);});}});};
 /* 2026-11-08 (Sam's download paisano2.blend, a gaucho with his guitar: "add him to the Nazca approach", then "make the gaucho guitarist lean or sit on a rock"): the model is posed seated and its own action, Guitarreando, strums; baked headless (bl_gaucho.py: decimated before the armature so the shape holds, the textures sampled into vertex colours, every second frame of 50) to models/gaucho.bin in the runner's DSSH layout (no fur weights used). His feet are at y 0.39 and his seat 0.41 above them; window.dssBaked(T, url, cb) hands cb {group, pose(time)} with the figure dropped so his feet stand at y 0. */ window.dssBaked=function(T,url,cb){fetch(url).then(function(r){return r.ok?r.arrayBuffer():null;}).then(function(buf){if(!buf||new TextDecoder().decode(new Uint8Array(buf,0,4))!=='DSSH')return;var h=new Uint32Array(buf,4,3),nv=h[0],ni=h[1],nf=h[2],fps=new Float32Array(buf,16,1)[0],bb=new Float32Array(buf,20,6),o=44,pad=function(n){return Math.ceil(n/4)*4;};var c8=new Uint8Array(buf,o,nv*3);o+=pad(nv*3)+pad(nv);var idx=new Uint16Array(buf.slice(o,o+ni*2));o+=pad(ni*2);var FP=[],FN=[];for(var f=0;f<nf;f++){var q=new Int16Array(buf,o,nv*3),fp=new Float32Array(nv*3);for(var i=0;i<nv*3;i++){var a=i%3;fp[i]=bb[a]+(q[i]+32768)/65535*(bb[3+a]-bb[a])-(a===1?bb[1]:0);}o+=pad(nv*6);var n8=new Int8Array(buf,o,nv*3),fn=new Float32Array(nv*3);for(i=0;i<nv*3;i++)fn[i]=n8[i]/127;o+=pad(nv*3);FP.push(fp);FN.push(fn);}var col=new Float32Array(nv*3);for(i=0;i<nv*3;i++)col[i]=Math.pow(c8[i]/255,2.2);var g=new T.BufferGeometry(),pos=new T.BufferAttribute(new Float32Array(FP[0]),3),nor=new T.BufferAttribute(new Float32Array(FN[0]),3);pos.setUsage(T.DynamicDrawUsage);nor.setUsage(T.DynamicDrawUsage);g.setAttribute('position',pos);g.setAttribute('normal',nor);g.setAttribute('color',new T.BufferAttribute(col,3));g.setIndex(new T.BufferAttribute(idx,1));g.computeBoundingSphere();var grp=new T.Group(),body=new T.Mesh(g,new T.MeshStandardMaterial({vertexColors:true,roughness:0.8,side:T.DoubleSide}));body.castShadow=true;body.receiveShadow=true;grp.add(body);cb({group:grp,pose:function(time){var fr=((time*fps)%nf+nf)%nf,i0=Math.floor(fr),i1=(i0+1)%nf,a=fr-i0,P0=FP[i0],P1=FP[i1],N0=FN[i0],N1=FN[i1],pa=pos.array,na=nor.array;for(var i=0;i<nv*3;i++){pa[i]=P0[i]+(P1[i]-P0[i])*a;na[i]=N0[i]+(N1[i]-N0[i])*a;}pos.needsUpdate=true;nor.needsUpdate=true;}});}).catch(function(){});};
@@ -84409,7 +84502,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
   // The wind: a crosswind that wanders, plus gusts on top. Sam: the wind should be what you are mostly fighting.
   var wind={strength:0,target:0,timer:0};
   // The whirlwind that carries a fallen climber back to the flags.
-  var whirl={active:false,t:0,dur:1.7,fs:0,fu:0,fy:0,ts:0,ty:0}, whirlMesh=null;
+  var whirl={active:false,t:0,dur:1.7,fs:0,fu:0,fy:0,ts:0,ty:0}, whirlMesh=null, whirlSeed=[], whirlFine=null, whirlBig=null, whirlPuff=null;
   var rescueGrace=0, rescueShelter=false, corniceWarned=false;
   var climbing=false, corniceTimer=-1, corniceBroken=false, corniceMesh=null;
   // PASS 2 state: post stack, snowfall, gusts, dawn.
@@ -84620,7 +84713,7 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
     corniceMesh=mesh(cube,brittleIce,center(227.5),height(227.5)-.08,-227.5,width(227.5),.25,3);
     corniceMesh.rotation.x=Math.atan(.19);
     avalancheMesh=new THREE.InstancedMesh(sphere,snow,28);avalancheMesh.visible=false;scene.add(avalancheMesh);
-    whirlMesh=new THREE.InstancedMesh(sphere,snow,44);whirlMesh.visible=false;scene.add(whirlMesh);
+    /* 2026-11-18: the whirlwind&#x27;s 44 glossy spheres are gone; it is built as blown snow beside the snowfall below, whose flake it shares */
     // Rounded, weathered ridge geometry, shared by every distant peak.
     var ridge=new THREE.SphereGeometry(1,20,14),rp=ridge.attributes.position;
     for(var ri=0;ri&lt;rp.count;ri++){var rx=rp.getX(ri),ry=rp.getY(ri),rz=rp.getZ(ri);var erosion=1+.13*Math.sin(rx*9+ry*5)*Math.cos(rz*8-ry*3);rp.setXYZ(ri,rx*erosion+ry*ry*.13,ry,rz*erosion);}
@@ -85009,6 +85102,11 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
         shader.fragmentShader=&#x27;uniform float hcTime; varying float hcFlake;\n&#x27;+shader.fragmentShader.replace(&#x27;#include &lt;color_fragment&gt;&#x27;,&#x27;#include &lt;color_fragment&gt;\nfloat twinkle=pow(max(0.0,sin(hcTime*1.7+hcFlake*62.8)),10.0);\ndiffuseColor.rgb*=0.8+twinkle*1.3;&#x27;);
       };
       snowPoints=new THREE.Points(snowGeo,snowMat);snowPoints.frustumCulled=false;scene.add(snowPoints);
+      /* 2026-11-18 (Sam, the whirlwind drawn as glossy white balls: &quot;Redraw&quot;): blown snow. 240 fine flecks, each trailing two fainter ones so it streaks as it turns, 80 larger ones and thirty soft puffs of spindrift for body, all the snowfall&#x27;s own flake. Each point carries its own fade (a four-part colour), so flecks come and go at the foot and the head of the funnel. Same place, same timing as before */
+      (function(){var WN=240;for(var wi=0;wi&lt;WN;wi++)whirlSeed.push([Math.random()*6.2832,Math.random(),Math.random(),.75+Math.random()*.6,.7+Math.random()*.6]);
+        var cloud=function(n,size,opacity,blend){var g=new THREE.BufferGeometry();g.setAttribute(&#x27;position&#x27;,new THREE.BufferAttribute(new Float32Array(n*3),3));g.setAttribute(&#x27;color&#x27;,new THREE.BufferAttribute(new Float32Array(n*4),4));var m=new THREE.PointsMaterial({color:0xf4f8ff,vertexColors:true,size:size,map:flakeTex,transparent:true,opacity:opacity,depthWrite:false,sizeAttenuation:true});if(blend)m.blending=blend;var p=new THREE.Points(g,m);p.frustumCulled=false;return p;};
+        whirlFine=cloud(WN*3,.17,1);whirlBig=cloud(80,.32,1);whirlPuff=cloud(30,2.1,1);whirlPuff.material.color.setHex(0xb4c2d2);
+        whirlMesh=new THREE.Group();whirlMesh.add(whirlPuff);whirlMesh.add(whirlFine);whirlMesh.add(whirlBig);whirlMesh.visible=false;scene.add(whirlMesh);})();
       // Broad, feathered veils of spindrift beyond the immediate jumping area.
       // Share the flake texture; normal scene cleanup owns every material.
       for(var mb=0;mb&lt;7;mb++){
@@ -85218,7 +85316,12 @@ She holds tomorrow’s paper. ‘Still on the water,’ she answers as if you’
       // Spun, limbs flailing, and a helix of snow climbing round him.
       if(!reducedMotion){climber.rotation.y+=dt*15;climber.rotation.z=Math.sin(time*9)*.35;}
       climber.userData.limbs.forEach(function(l,i){l.rotation.x=reducedMotion?0:Math.sin(time*26+i*1.7)*.9;});
-      if(whirlMesh){var wb=new THREE.Object3D();for(var wn=0;wn&lt;44;wn++){var wa2=wn*.72+time*8,wr=.7+(wn%6)*.22;wb.position.set(climber.position.x+Math.cos(wa2)*wr,climber.position.y+.2+(wn/44)*3.4,climber.position.z+Math.sin(wa2)*wr);wb.scale.setScalar(.09+(wn%3)*.04);wb.updateMatrix();whirlMesh.setMatrixAt(wn,wb.matrix);}whirlMesh.instanceMatrix.needsUpdate=true;}
+      if(whirlMesh &amp;&amp; whirlFine){var wcx=climber.position.x,wcy=climber.position.y,wcz=climber.position.z,FP=whirlFine.geometry.attributes.position.array,FC=whirlFine.geometry.attributes.color.array,BP=whirlBig.geometry.attributes.position.array,BC=whirlBig.geometry.attributes.color.array,PP=whirlPuff.geometry.attributes.position.array,PC=whirlPuff.geometry.attributes.color.array;
+        for(var wn=0;wn&lt;whirlSeed.length;wn++){var sd=whirlSeed[wn],hh=(sd[1]+time*.5*sd[4])%1,wa2=sd[0]+time*7.5*sd[3],wr=(.45+sd[2]*1.45)*(.5+.85*hh),wfade=Math.min(1,Math.sin(hh*Math.PI)*1.6),wy=wcy+.05+hh*4.3+Math.sin(time*5+sd[0])*.06,gl=.78+.22*sd[2];
+          for(var tk=0;tk&lt;3;tk++){var ta=wa2-.12*tk,ti=wn*3+tk;FP[ti*3]=wcx+Math.cos(ta)*wr;FP[ti*3+1]=wy-.025*tk;FP[ti*3+2]=wcz+Math.sin(ta)*wr;FC[ti*4]=gl*.9;FC[ti*4+1]=gl*.96;FC[ti*4+2]=gl;FC[ti*4+3]=wfade*(tk===0?1:(tk===1?.42:.18));}
+          if(wn&lt;80){var wr2=wr*.85+.12;BP[wn*3]=wcx+Math.cos(wa2+2.1)*wr2;BP[wn*3+1]=wy+.15;BP[wn*3+2]=wcz+Math.sin(wa2+2.1)*wr2;BC[wn*4]=.92;BC[wn*4+1]=.97;BC[wn*4+2]=1;BC[wn*4+3]=wfade*.8;}
+          if(wn&lt;30){var pa=sd[0]+time*2.6*sd[3],pr=(.3+sd[2]*1.1)*(.5+.85*hh);PP[wn*3]=wcx+Math.cos(pa)*pr;PP[wn*3+1]=wcy+.2+hh*4.0;PP[wn*3+2]=wcz+Math.sin(pa)*pr;PC[wn*4]=1;PC[wn*4+1]=1;PC[wn*4+2]=1;PC[wn*4+3]=wfade*.16;}}
+        [whirlFine,whirlBig,whirlPuff].forEach(function(w){w.geometry.attributes.position.needsUpdate=true;w.geometry.attributes.color.needsUpdate=true;});}
     }else{
       climber.rotation.z=Math.max(-.22,Math.min(.22,-(wind.strength*(plateau(s)?plateau(s)[3]:1))*.12)); // leans into a strong wind
       climber.userData.limbs.forEach(function(l,i){l.rotation.x=reducedMotion?0:Math.sin(running+(Math.floor(i/2)+i%2)*Math.PI)*.24;});
@@ -86272,6 +86375,12 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
+
+
+
 
 
 

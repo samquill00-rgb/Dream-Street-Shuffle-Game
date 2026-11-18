@@ -1062,6 +1062,49 @@ for _room, _passage in ROOMS:
     check("room-" + _room, "every object in %s opens, has a card, and is not hidden in its close-up" % _passage)(room_check(_room, _passage))
 
 
+DOG_SEEN = """() => { var T = window.THREE, R = window.__dssRooms.cu, d = window._dssCellarDog, a = R.spot('ASHTON GRANGER');
+  R.scene.updateMatrixWorld(true); var box = new T.Box3().setFromObject(d), c = new T.Vector3(); box.getCenter(c);
+  var cam = new T.Vector3(); R.camera.getWorldPosition(cam);
+  var vis = []; R.scene.traverse(function (m) { if (!m.isMesh) return; var q = m; while (q && q.visible) q = q.parent; if (q) return;
+    var mt = Array.isArray(m.material) ? m.material[0] : m.material; if (!mt || mt.visible === false || mt.colorWrite === false || mt.transparent || mt.depthWrite === false || mt.blending === T.AdditiveBlending) return; vis.push(m); });
+  var pts = [c]; for (var q = 0; q < 8; q++) pts.push(new T.Vector3(q & 1 ? 0.75 : 0.25, q & 2 ? 0.75 : 0.25, q & 4 ? 0.75 : 0.25).multiply(new T.Vector3().subVectors(box.max, box.min)).add(box.min));
+  var seen = 0, onScreen = 0;
+  pts.forEach(function (pt) { var s = pt.clone().project(R.camera); if (Math.abs(s.x) < 1 && Math.abs(s.y) < 1 && s.z < 1) onScreen++;
+    var dir = pt.clone().sub(cam), L = dir.length(); dir.normalize(); var h = new T.Raycaster(cam, dir, 0, L).intersectObjects(vis, false), own = false;
+    if (h.length) for (var w = h[0].object; w; w = w.parent) if (w === d) own = true;
+    if (!h.length || own || h[0].distance > L - 0.05) seen++; });
+  var cv = R.wrap.querySelector('canvas').getBoundingClientRect(), s0 = c.clone().project(R.camera);
+  var card = [].filter.call(document.querySelectorAll('.dss-room-card'), function (e) { return e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && +getComputedStyle(e).opacity > 0.1; })[0], cr = card ? card.getBoundingClientRect() : null;
+  var px = cv.left + (s0.x + 1) / 2 * cv.width, py = cv.top + (1 - s0.y) / 2 * cv.height;
+  return { min: box.min.toArray(), max: box.max.toArray(), c: c.toArray(), ashton: a ? a.tgt : null, seen: seen, onScreen: onScreen, at: [Math.round(px), Math.round(py)],
+    underCard: !!cr && px > cr.left && px < cr.right && py > cr.top && py < cr.bottom, names: R.names() }; }"""
+
+
+@check("cellar-dog-by-ashton", "2026-11-18 (Sam: \"can you add that dog by Ashton granger's feet?\", then \"not totally by the feet, a little in the centre too\", then \"can you put it [the rug] under the dog\"): his dog lies on his prayer rug on the cellar floor beside ASHTON's chair, on the room's side of it, in view from the room and from her close-up")
+def cellar_dog_by_ashton(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Turn to Copper"); r.room_ready("cu")
+    r.wait_for("() => { var d = window._dssCellarDog, n = 0; if (d) d.traverse(function (m) { if (m.isMesh) n++; }); return n >= 5; }", 15000, "the dog's model (models/dog.bin) to load into the cellar")
+    g = r.js(DOG_SEEN)
+    r.expect(g["ashton"], "no ASHTON GRANGER in the cellar to lie beside")
+    ax, az = g["ashton"][0], g["ashton"][2]
+    r.expect(-0.03 < g["min"][1] < 0.05 and g["max"][1] < 0.7, "the dog is not lying on the floor (it runs from %.2f to %.2f m up)" % (g["min"][1], g["max"][1]))
+    gap = math.hypot(max(g["min"][0] - ax, 0, ax - g["max"][0]), max(g["min"][2] - az, 0, az - g["max"][2]))
+    r.expect(gap < 0.6, "the dog is %.2f m from ASHTON's chair, not by her feet" % gap)
+    r.expect(ax < g["c"][0] and abs(g["c"][0]) < abs(ax) + 0.05, "the dog is not on the room's side of her chair (its middle is at x %.2f, her chair at %.2f, the room's middle at 0)" % (g["c"][0], ax))
+    r.expect(g["onScreen"] >= 7 and g["seen"] >= 5, "the dog is not in view from the room (%d of 9 points on screen, %d not hidden)" % (g["onScreen"], g["seen"]))
+    r.expect(not any("dog" in n.lower() for n in g["names"]), "the dog has become a thing to click, with no card written for it")
+    # 2026-11-18 (Sam: "can you put it under the dog"): his prayer rug lies flat on the floor, under the middle of the dog
+    rug = r.js("() => { var T = window.THREE, g = window._dssCellarRug, m = null; if (!g) return null; g.traverse(function (o) { if (o.isMesh) m = o; }); if (!m || !m.material.map || !m.material.map.image) return { loaded: false }; var b = new T.Box3().setFromObject(g); return { loaded: true, min: b.min.toArray(), max: b.max.toArray() }; }")
+    r.expect(rug and rug["loaded"], "the prayer rug (models/prayer-rug.jpg) is not in the cellar")
+    r.expect(rug["max"][1] < 0.02 and rug["min"][0] < g["c"][0] < rug["max"][0] and rug["min"][2] < g["c"][2] < rug["max"][2], "the prayer rug is not under the dog (rug x %.2f..%.2f, z %.2f..%.2f; the dog's middle %.2f, %.2f)" % (rug["min"][0], rug["max"][0], rug["min"][2], rug["max"][2], g["c"][0], g["c"][2]))
+    r.click_object("cu", "ASHTON GRANGER"); r.page.wait_for_timeout(3200)
+    c = r.js(DOG_SEEN)
+    r.expect(c["onScreen"] >= 5 and c["seen"] >= 5, "the dog is not in view from ASHTON's close-up (%d of 9 points on screen, %d not hidden)" % (c["onScreen"], c["seen"]))
+    r.expect(not c["underCard"], "in ASHTON's close-up the dog lies under her card (its middle at %r)" % c["at"])
+    r.info = "%.2f m from her chair, middle at x %.2f (chair %.2f); room view %d/9 in view, her close-up %d/9" % (gap, g["c"][0], ax, g["seen"], c["seen"])
+
+
 @check("rules-card-holds-keys", "2026-11-16 playtest (Broken 1): with a rules card up, a click off it and an arrow or Space started the Pyramid Run, the Climb or the Reclamation unseen under the card")
 def _(r):
     for pas, cov in (("Pyramid Run", "pr-cover"), ("The Climb", "hc-cover"), ("The Reclamation", "rc-cover")):
@@ -3496,6 +3539,94 @@ def climb_bonus_on_slips(r):
     r.expect(m["fin"], "the climber did not reach the summit from nine units under it (at %.1f, slips %d)" % (m["s"], m["slips"]))
     r.expect(m["slips"] <= 3 and m["prints"] < 10, "this run had %d slips and %d prints, so it does not show the bonus is judged on slips alone" % (m["slips"], m["prints"]))
     r.expect(m["win"] and not m["lose"], "a summit with %d slips and %d prints did not win the bonus" % (m["slips"], m["prints"]))
+
+
+@check("airport-pub-drawn-together", "2026-11-18 (Sam, the Airport Pub at 44 fps: \"Yes, cut them\"): the pub drew 1,449 separate objects a frame and carried twelve point lights; its still furniture is joined into a few meshes (dssBatchStatic) and the two troffer lights are gone, their wash kept as a faint glow on the concourse floor")
+def airport_pub_drawn_together(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Airport Pub", wait=12000)
+    r.clear_lore(); r.clear_slips()
+    m = r.js("""() => new Promise(function (res) { var R = window._dssThreeRegistry && window._dssThreeRegistry['ap-wrap']; if (!R) return res(null);
+      var pts = 0, spots = 0, shadows = 0, floor = null; R.scene.traverse(function (o) { if (o.isPointLight && o.visible) pts++; if (o.isSpotLight && o.visible) { spots++; if (o.castShadow) shadows++; }
+        if (o.isMesh && o.geometry && o.geometry.type === 'PlaneGeometry' && o.geometry.parameters.width === 90 && o.getWorldPosition(new THREE.Vector3()).y < 1) floor = o; });
+      var n = 0, t0 = performance.now(); (function f() { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else res({ batch: window._dssApBatch || null, calls: R.renderer.info.render.calls, pts: pts, spots: spots, shadows: shadows, glow: floor ? floor.material.emissive.getHex() : -1, fps: Math.round(n / 3) }); })(); })""")
+    r.expect(m, "the Airport Pub's 3D scene did not come up")
+    r.info = "%s still meshes joined into %s; %d draw calls a frame; %d point lights, %d spots (%d shadowed); %d fps here" % ((m["batch"] or {}).get("joined"), (m["batch"] or {}).get("meshes"), m["calls"], m["pts"], m["spots"], m["shadows"], m["fps"])
+    r.expect(m["batch"] and m["batch"]["joined"] >= 800, "the pub's still furniture is not joined: %s" % m["batch"])
+    r.expect(m["calls"] <= 800, "the pub draws %d objects a frame (it was 1,449 unjoined, about 620 joined)" % m["calls"])
+    r.expect(m["pts"] <= 10, "the pub has %d point lights; ten is where a frame fits in its time" % m["pts"])
+    r.expect(m["shadows"] == 2, "the threshold's two shadowed downlights are %d now (both stay: dropping one gained nothing)" % m["shadows"])
+    r.expect(m["glow"] > 0, "the concourse floor has lost the glow that stands in for the troffer lights")
+    r.expect(r.js("() => typeof window.__apOpenBookLore === 'function'"), "the booth's book went with the joining")
+
+
+@check("climb-whirl-is-snow", "2026-11-18 (Sam, the Climb's whirlwind drawn as large glossy white balls: \"Redraw\"): the rescue's whirlwind is blown snow, hundreds of soft flecks that fade in and out, not 44 shaded spheres")
+def climb_whirl_is_snow(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    climb_start(r)
+    W = """() => { var sc = window._hcDev.scene, balls = 0, g = null; sc.traverse(function (o) { if (o.isInstancedMesh && o.visible && o.geometry && o.geometry.type === 'SphereGeometry' && o.count === 44) balls++;
+        if (o.isGroup && o.children.length === 3 && o.children.every(function (c) { return c.isPoints; })) g = o; });
+      if (!g) return { balls: balls, group: false };
+      var n = 0, lit = 0, lo = 1e9, hi = -1e9, alpha = true; g.children.forEach(function (c) { var p = c.geometry.attributes.position, col = c.geometry.attributes.color; if (!col || col.itemSize !== 4) { alpha = false; return; }
+        n += p.count; for (var i = 0; i < p.count; i++) if (col.getW(i) > 0.3) { lit++; var y = p.getY(i); if (y < lo) lo = y; if (y > hi) hi = y; } });
+      return { balls: balls, group: true, vis: g.visible, n: n, lit: lit, tall: lit ? hi - lo : 0, alpha: alpha }; }"""
+    r.js("() => window._hcDev.warp(110)"); r.page.wait_for_timeout(120)
+    kb = r.page.keyboard; kb.down("ArrowRight"); t0 = time.time()
+    while time.time() - t0 < 6 and not r.js(CLIMB)["whirl"]: r.page.wait_for_timeout(40)
+    kb.up("ArrowRight")
+    r.expect(r.js(CLIMB)["whirl"], "walking off the side never brought the whirlwind")
+    r.page.wait_for_timeout(500); m = r.js(W)
+    r.expect(m["balls"] == 0, "the whirlwind is the 44 glossy spheres again")
+    r.expect(m["group"] and m["vis"], "the whirlwind's snow is not on show during the rescue: %s" % m)
+    r.expect(m["alpha"] and m["n"] >= 600, "the whirlwind has %d flecks (it should be over 600, each with its own fade)" % m.get("n", 0))
+    r.expect(m["lit"] >= 200 and m["tall"] >= 2.0, "mid-rescue only %d flecks show, over %.1f units of height" % (m["lit"], m["tall"]))
+    for _ in range(60):
+        if not r.js(CLIMB)["whirl"]: break
+        r.page.wait_for_timeout(100)
+    r.page.wait_for_timeout(200)
+    r.expect(not r.js(W)["vis"], "the whirlwind's snow stays on show after he is set down")
+    r.info = "%d flecks, %d showing mid-rescue over %.1f units of height; gone at the set-down" % (m["n"], m["lit"], m["tall"])
+
+
+@check("french-bar-is-wood", "2026-11-18 (Sam, the playtest's 'flat pale rectangles' on the French's bar front and 'big pale ripples' on its top: \"Fix both\"): the panels are the bar's dark wood on brass back plates, and the top's grain runs along the bar at its own scale")
+def french_bar_is_wood(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The French"); r.room_ready("fi")
+    m = r.js("""() => { var sc = window._dssThreeRegistry['fi-wrap'].scene, panels = [], plates = 0, top = null;
+      function dims(o, a, b, c) { var p = o.geometry && o.geometry.type === 'BoxGeometry' && o.geometry.parameters; return !!p && Math.abs(p.width - a) < 1e-3 && Math.abs(p.height - b) < 1e-3 && (c == null || Math.abs(p.depth - c) < 1e-3); }
+      sc.traverse(function (o) { if (!o.isMesh) return; if (dims(o, 0.02, 0.62, 0.5)) panels.push(o); if (dims(o, 0.016, 0.644, 0.524) && o.material.metalness > 0.5) plates++; if (dims(o, 0.78, 0.06)) top = o; });
+      function lum(tex) { if (!tex || !tex.image) return -1; var c = document.createElement('canvas'); c.width = c.height = 32; var x = c.getContext('2d'); x.drawImage(tex.image, 0, 0, 32, 32); var d = x.getImageData(0, 0, 32, 32).data, s = 0; for (var i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; return s / (d.length / 4); }
+      var t = top && top.material.map;
+      return { panels: panels.length, plates: plates, lum: panels.length ? Math.round(lum(panels[0].material.map)) : -1, top: !!top, rep: t ? [t.repeat.x, t.repeat.y] : null, rot: t ? t.rotation : null, env: top ? top.material.envMapIntensity : null }; }""")
+    r.info = "%d panels on %d brass plates, panel wood at brightness %s of 255; the top's grain repeats %s, turned %s" % (m["panels"], m["plates"], m["lum"], m["rep"] and [round(v, 2) for v in m["rep"]], m["rot"] and round(m["rot"], 2))
+    r.expect(m["panels"] >= 4 and m["top"], "the bar's panels or its top were not found (%d panels)" % m["panels"])
+    r.expect(0 <= m["lum"] < 75, "the bar's panels are pale again (brightness %s of 255; the dark wood is about 40, the old cream about 200)" % m["lum"])
+    r.expect(m["plates"] == m["panels"], "%d of the %d panels have a brass edge" % (m["plates"], m["panels"]))
+    r.expect(m["rep"] and m["rep"][1] >= 2 and abs(m["rot"] - math.pi / 2) < 0.02, "the top's grain is stretched over the whole bar again (repeat %s, turned %s)" % (m["rep"], m["rot"]))
+    r.expect(m["env"] <= 0.45, "the top's varnish reflects at %.2f (calmed to 0.4)" % m["env"])
+
+
+@check("rooms-start-at-the-header", "2026-11-18 (Sam, the playtest's grey strip under the header above every 3D room: \"Remove it\"): every room began 44 px under the header's foot and the page column's panel showed in the gap; each room now starts at the header's foot, still ends at the foot of the window, and the page does not scroll")
+def rooms_start_at_the_header(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    bad = []; seen = []
+    for room, passage in ROOMS + [("cx", "Approach Coppers Lair")]:
+        r.go(passage)
+        if room == "cx":
+            r.wait_for("() => !!document.getElementById('cx-wrap')", 15000, "the Copper's Lair approach")
+            r.page.wait_for_timeout(2500)
+        else:
+            r.room_ready(room)
+        r.page.wait_for_timeout(800)
+        m = r.js("([id]) => { var w = document.getElementById(id + '-wrap'), h = document.getElementById('stat-bars-lifted'); if (!w || !h) return null; var a = w.getBoundingClientRect(), b = h.getBoundingClientRect(); return [Math.round(a.top), Math.round(b.bottom), Math.round(a.bottom), window.innerHeight, document.documentElement.scrollHeight]; }", [room])
+        if not m:
+            bad.append("%s: no room or no header" % room); continue
+        seen.append("%s %d" % (room, m[0] - m[1]))
+        if abs(m[0] - m[1]) > 3: bad.append("%s starts %d px under the header's foot" % (room, m[0] - m[1]))
+        if m[2] < m[3] - 6: bad.append("%s ends at %d of %d" % (room, m[2], m[3]))
+        if m[4] > m[3] + 1: bad.append("%s scrolls (%d of %d)" % (room, m[4], m[3]))
+    r.info = "px between the header's foot and the room: " + ", ".join(seen)
+    r.expect(not bad, "; ".join(bad))
 
 
 def main(argv):

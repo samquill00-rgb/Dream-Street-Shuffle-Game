@@ -129,9 +129,10 @@ class Run:
         self.port = port
         self.info = ""
 
-    def go(self, passage, wait=9000):
+    def go(self, passage, wait=9000, extra=""):
         from urllib.parse import quote
-        self.page.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (self.port, HTML, int(time.time()), quote(passage)), timeout=90000)
+        # extra="&dev=0" turns the dev flag off for the rest of this check's context (the game remembers it), so the page is laid out as a player gets it, without the testing links
+        self.page.goto("http://127.0.0.1:%d/%s?t=%d&start=%s%s" % (self.port, HTML, int(time.time()), quote(passage), extra), timeout=90000)
         self.page.wait_for_timeout(wait)
 
     def js(self, code, *args):
@@ -1075,6 +1076,40 @@ def _(r):
         r.js("() => { var b = document.querySelector('.dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(1500)
         r.expect(not r.js(st), "%s: Play did not start the game" % pas)
     r.info = "keys held off all three games until Play"
+
+
+TURN_TRACE = """() => { var log = window.__turn = { t0: performance.now(), rows: [] };
+  function tick() { var tp = document.querySelector('tw-story > tw-passage'), se = document.scrollingElement;
+    var c = [].filter.call(document.querySelectorAll('tw-story > tw-passage canvas'), function (c) { var b = c.getBoundingClientRect(); return b.height > 150 && b.width > 150; })[0];
+    log.rows.push([Math.round(performance.now() - log.t0), se.scrollHeight - innerHeight, tp ? +(+getComputedStyle(tp).opacity).toFixed(2) : 0, c ? Math.round(c.getBoundingClientRect().width) : 0, ((document.getElementById('dss-pn') || {}).textContent || '').trim()]);
+    if (performance.now() - log.t0 < 5000) requestAnimationFrame(tick); }
+  requestAnimationFrame(tick); }"""
+
+
+@check("game-pages-fit-from-the-turn", "2026-11-18 leftovers (the 15-16 Nov playtest: 'Pyramid Run under the rules card overflows ~2.7 s at load before the fitter settles it'): the page fitter waited 1.6 s after a page turn, so the Pyramid Run, the Climb and the Reclamation faded in 200 to 400 px past the window and, at 1280x800, jumped a size smaller about 2 s later")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    bad, notes = [], []
+    for W, H in ((1440, 900), (1280, 800)):
+        r.page.set_viewport_size({"width": W, "height": H})
+        for frm, link, game in (("Descending Corridor", "Into the dark", "Pyramid Run"), ("The Mountain", "Follow him", "The Climb"), ("Among the Moai", "Fight", "The Reclamation")):
+            r.go(frm, wait=6000, extra="&dev=0")   # as a player has it: the testing links add a row to these pages
+            r.clear_lore(); r.clear_slips()
+            ok = r.js("([t]) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return e.textContent.indexOf(t) >= 0 && !e.closest('.dss-ghost'); })[0]; window.__l = l; return !!l; }", [link])
+            r.expect(ok, "no %r on %s" % (link, frm))
+            r.js(TURN_TRACE); r.js("() => window.__l.click()")   # a real page turn, traced every frame for 5 s
+            r.page.wait_for_timeout(5400)
+            rows = [x for x in r.js("() => window.__turn.rows") if x[4] == game]
+            r.expect(len(rows) > 30, "%r on %s did not reach %s" % (link, frm, game))
+            seen = [x for x in rows if x[2] >= 0.3]   # from the moment the new page can be seen
+            over = max(x[1] for x in seen); wide = [x[3] for x in seen if x[3]]
+            if over > 0:
+                bad.append("%s at %dx%d runs %d px past the window while it fades in (until %d ms after the press)" % (game, W, H, over, max(x[0] for x in seen if x[1] > 0)))
+            if wide and max(wide) - min(wide) > 2:
+                bad.append("%s at %dx%d changes size on show, %d to %d px wide" % (game, W, H, max(wide), min(wide)))
+            notes.append("%s %dx%d: %d px wide" % (game, W, H, wide[-1] if wide else 0))
+    r.info = "; ".join(notes)
+    r.expect(not bad, "; ".join(bad))
 
 
 @check("fight-end-card-fits", "2026-11-17 leftovers: the cellar fight's TRY AGAIN / MOVE ON and GET OUT ran 33 to 154 px under the fold, because the page fitter counted every look as a try and stopped for good about ten seconds into any page")

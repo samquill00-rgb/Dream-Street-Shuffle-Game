@@ -26430,45 +26430,71 @@ window.dssRingHold = (function() {
 // its shape, until the page fits, to no less than 55% of its size. Fullscreen ("Expand") and the 3D rooms are left alone.
 (function() {
   var gen = -1, tries = 0, boxes = [];
+  /* 2026-11-18 (leftover from the 15-16 Nov playtest: "Pyramid Run under the rules card overflows ~2.7 s at load before the fitter settles it"; the Climb, the Reclamation and the race did the same, and at 1280x800 the game then jumped a size smaller under its card): the fit waited 1.6 s after a page turn, so every game page ran 200 to 400 px past the window while it faded in. Now a page with a game in its flow is fitted the moment its header has been lifted, before the fade-in shows it. These early looks are provisional: each change is noted in undos, taken back and made again whenever the page's layout moves under it, and taken back for good when the first full look (the same one as before, at the same moment) takes over. */
+  var undos = [], rec = false, earlyOn = false, pkey = '', asked = false;
+  function hide(n) { if (rec) { var d0 = n.style.display; undos.push(function() { n.style.display = d0; }); } n.style.display = 'none'; }
+  function undoAll() { for (var i = undos.length - 1; i >= 0; i--) { try { undos[i](); } catch (e) {} } undos = []; if (asked) { asked = false; self = true; try { window.dispatchEvent(new Event('resize')); } catch (e) {} self = false; } } /* a game that sizes its own canvas is asked to take its room back */
+  function overNow(p) { var o = document.scrollingElement.scrollHeight - window.innerHeight; if (p) { var st = document.querySelector('tw-story'); if (st) o = Math.min(o, Math.ceil(st.getBoundingClientRect().bottom + window.scrollY - window.innerHeight)); } return o; } /* an early look measures the story's own box: the page is still 8 px low in its fade-in rise, which the window's scroll height counts and the settled page does not have */
+  function unbox(b) { return function() { var f = b._dssFit; if (!f) return; if ('zoom' in f) b.style.zoom = f.zoom; else { b.style.maxWidth = f.mw; b.style.marginLeft = f.ml; b.style.marginRight = f.mr; } b._dssFit = null; var i = boxes.indexOf(b); if (i >= 0) boxes.splice(i, 1); }; }
   function blankEl(e) { if (e.tagName === 'BR' || e.tagName === 'TW-CONSECUTIVE-BR') return 'br'; if (/^(IMG|CANVAS|SVG|svg|VIDEO|IFRAME|INPUT|BUTTON|TW-LINK|HR)$/.test(e.tagName)) return ''; var cs = getComputedStyle(e); if (cs.display === 'none') return 'blank'; if (e.querySelector('img, canvas, svg, video, iframe, input, button, tw-link, hr')) return ''; return (e.textContent || '').trim() === '' ? 'blank' : ''; }
-  function walk2(box) { var lead = true, tail = []; Array.prototype.forEach.call(box.childNodes, function(n) { if (n.nodeType === 3) { if (n.textContent.trim()) { lead = false; tail = []; } return; } if (n.nodeType !== 1) return; var b = blankEl(n); if (b === 'br') { if (lead) n.style.display = 'none'; else tail.push(n); } else if (b !== 'blank') { lead = false; tail = []; } }); tail.forEach(function(n) { n.style.display = 'none'; }); }
+  function walk2(box) { var lead = true, tail = []; Array.prototype.forEach.call(box.childNodes, function(n) { if (n.nodeType === 3) { if (n.textContent.trim()) { lead = false; tail = []; } return; } if (n.nodeType !== 1) return; var b = blankEl(n); if (b === 'br') { if (lead) hide(n); else tail.push(n); } else if (b !== 'blank') { lead = false; tail = []; } }); tail.forEach(function(n) { hide(n); }); }
   function squeeze(root) {
     /* the line-level pieces in order: Harlowe's wrappers and inline spans are looked inside; a block with words is content (its own leading and trailing breaks go) */
     var seq = [];
-    (function walk(el) { Array.prototype.forEach.call(el.childNodes, function(n) { if (n.nodeType === 3) { if (n.textContent.trim()) seq.push({ k: 'c' }); return; } if (n.nodeType !== 1 || n.tagName === 'SCRIPT' || n.tagName === 'STYLE') return; var b = blankEl(n); if (b === 'br') { seq.push({ k: 'br', el: n }); return; } if (b === 'blank') return; var cs = getComputedStyle(n); if (/^TW-(HOOK|EXPRESSION|INCLUDE|COLLAPSED)$/.test(n.tagName) || (cs.display === 'inline' && n.tagName === 'SPAN')) { walk(n); return; } if (cs.display !== 'inline' && cs.display !== 'contents' && (n.textContent || '').trim()) walk2(n); seq.push({ k: 'c' }); }); })(root);
+    (function walk(el) { Array.prototype.forEach.call(el.childNodes, function(n) { if (n.nodeType === 3) { if (n.textContent.trim()) seq.push({ k: 'c' }); return; } if (n.nodeType !== 1 || n.tagName === 'SCRIPT' || n.tagName === 'STYLE') return; var b = blankEl(n); if (b === 'br') { seq.push({ k: 'br', el: n }); return; } if (b === 'blank') return; var cs = getComputedStyle(n); if (/^TW-(HOOK|EXPRESSION|INCLUDE|COLLAPSED|TRANSITION-CONTAINER)$/.test(n.tagName) || (cs.display === 'inline' && n.tagName === 'SPAN')) { walk(n); return; } /* 2026-11-18: for its first 0.8 s a page sits inside Harlowe's transition wrapper, which is looked inside like the other wrappers, so an early look sees the page the settled one will */ if (cs.display !== 'inline' && cs.display !== 'contents' && (n.textContent || '').trim()) walk2(n); seq.push({ k: 'c' }); }); })(root);
     var run = [], started = false;
-    function flush(atEnd) { if (!run.length) return; var keptBr = false, keptGap = false; run.forEach(function(x) { var gap = x.el.tagName === 'TW-CONSECUTIVE-BR'; if (!started || atEnd) { x.el.style.display = 'none'; return; } if (gap ? keptGap : keptBr) x.el.style.display = 'none'; else if (gap) keptGap = true; else keptBr = true; }); run = []; }
+    function flush(atEnd) { if (!run.length) return; var keptBr = false, keptGap = false; run.forEach(function(x) { var gap = x.el.tagName === 'TW-CONSECUTIVE-BR'; if (!started || atEnd) { hide(x.el); return; } if (gap ? keptGap : keptBr) hide(x.el); else if (gap) keptGap = true; else keptBr = true; }); run = []; }
     seq.forEach(function(x) { if (x.k === 'br') run.push(x); else { flush(false); started = true; } });
     flush(true);
   }
   function inFlow(el) { for (var e = el; e && e.tagName !== 'TW-STORY'; e = e.parentElement) { var ps = getComputedStyle(e).position; if (ps === 'fixed' || ps === 'absolute' || ps === 'sticky') return false; if (e.tagName === 'TW-PASSAGE') return true; } return false; }
+  function turn() { if (window._passageGen === gen) return; gen = window._passageGen; tries = 0; boxes = []; undos = []; pkey = ''; earlyOn = true; settle = Date.now() + 1600; /* the page leaving is still in the DOM for a moment */ var st0 = document.querySelector('tw-story'); if (st0 && st0._dssFitPad) { st0._dssFitPad = 0; st0.style.paddingBottom = ''; } }
+  function games() { return Array.prototype.filter.call(document.querySelectorAll('tw-passage canvas'), function(c) { var r = c.getBoundingClientRect(); return r.height > 220 && r.width > 220 && inFlow(c) && !c.closest('.soho-map-wrap, .dss-ghost'); }); } /* not the Soho map: pixel art at its own scale */
   function fit() {
-    if (window._passageGen !== gen) { gen = window._passageGen; tries = 0; boxes = []; settle = Date.now() + 1600; /* the page leaving is still in the DOM for a moment */ var st0 = document.querySelector('tw-story'); if (st0 && st0._dssFitPad) { st0._dssFitPad = 0; st0.style.paddingBottom = ''; } }
-    if (tries > 14 || document.fullscreenElement || Date.now() < settle) return; tries++;
-    var over = document.scrollingElement.scrollHeight - window.innerHeight;
+    turn();
+    if (tries > 14 || document.fullscreenElement || Date.now() < settle) return;
+    if (earlyOn) { earlyOn = false; undoAll(); } /* the early looks hand over: their changes are taken back, and this look makes them again for good in the same breath, so nothing moves on screen */
+    tries++; look(false);
+  }
+  function pageKey(tp) { return Math.round(tp.parentElement.getBoundingClientRect().height) + '|' + tp.offsetHeight + '|' + tp.offsetTop + '|' + window.innerWidth + 'x' + window.innerHeight; }
+  function early() {
+    turn();
+    if (!earlyOn || document.fullscreenElement) return;
+    var tp = document.querySelector('tw-story > tw-passage:not(.dss-ghost)');
+    if (!tp || tp.querySelector('.stat-bars')) { pkey = ''; return; } /* the header is still in the page's flow */
+    var k = pageKey(tp);
+    if (undos.length) { if (k === pkey) return; undoAll(); } /* the layout moved under the last early fit: take it back and fit again at once */
+    else if (k !== pkey) { pkey = k; return; } /* not fitted yet: wait until the page has stood still for a tick, so a game is not sized to a page still tidying itself */
+    rec = true; try { look(true); } catch (e) {} rec = false;
+    pkey = pageKey(tp);
+  }
+  function look(p) {
+    var over = overNow(p);
+    if (p && (over <= 0 || (!games().length && !(document.getElementById('dss-worm-game') && inFlow(document.getElementById('dss-worm-game')))))) return; /* an early look is only for a page with a game in its flow */
     if (over <= 0) { tries--; return; } /* 2026-11-17 (leftovers): a look that finds the page fitting is not a try either. Every look counted, so about ten seconds into any page the fitter stopped for good, and a game whose end card came later (the cellar fight's TRY AGAIN and GET OUT) ran off the foot */ /* 2026-11-10 playthrough: any overflow (the napkin page ran 3 px over and was left to scroll) */
     /* 2026-11-11 polish run: prose pages (Dido, Stay in Carthage at the pyre) ran 100 to 200 px past the window on runs of empty lines left by
        hidden lore hooks and empty branches. First, each run of line breaks and empty bits between two pieces of the page is cut to one
        paragraph gap (the first break and the first gap), and a run at the very start or end of a box goes; no words are touched. */
     var tp0 = document.querySelector('tw-story > tw-passage:not(.dss-ghost)');
-    if (tp0 && !tp0._dssSqueezed && !document.querySelector('.dss-room-veil')) { tp0._dssSqueezed = true; squeeze(tp0); over = document.scrollingElement.scrollHeight - window.innerHeight; if (over <= 0) return; }
+    if (tp0 && !tp0._dssSqueezed && !document.querySelector('.dss-room-veil')) { tp0._dssSqueezed = true; if (p) undos.push(function() { tp0._dssSqueezed = false; }); squeeze(tp0); over = overNow(p); if (over <= 0) return; }
     /* then a picture banner in the page's flow (the pyre, its fire canvas laid over it) is narrowed like a game, no smaller than 55% */
     var art = Array.prototype.filter.call(document.querySelectorAll('tw-passage:not(.dss-ghost) .dss-carthage-pyre-art'), function(a) { return a.getBoundingClientRect().height > 160 && inFlow(a); })[0];
+    if (art && p) return; /* the pyre pages keep to the full look alone */
     if (art) { var ah = art.getBoundingClientRect().height, aw = art.getBoundingClientRect().width, at = Math.max(ah * 0.55, ah - over - 6); if (at < ah - 2) { if (art._dssFit == null) { art._dssFit = { mw: art.style.maxWidth, ml: art.style.marginLeft, mr: art.style.marginRight }; boxes.push(art); } art.style.maxWidth = Math.floor(aw * at / ah) + 'px'; art.style.marginLeft = 'auto'; art.style.marginRight = 'auto'; settle = Date.now() + 500; } return; }
-    var cvs = Array.prototype.filter.call(document.querySelectorAll('tw-passage canvas'), function(c) { var r = c.getBoundingClientRect(); return r.height > 220 && r.width > 220 && inFlow(c) && !c.closest('.soho-map-wrap'); }); /* not the Soho map: pixel art at its own scale */
+    var cvs = games();
     var dom = document.getElementById('dss-worm-game'); /* the worm hut's game is laid out in the page, not on a canvas */
-    if (!cvs.length && !(dom && inFlow(dom))) { tries--; return; } /* 2026-11-17 (leftovers, the cellar fight's end card under the fold): a try with no game in the page to narrow is not counted. The fight page spent all fifteen while its arena was hidden behind the opening words, so when TRY AGAIN or GET OUT came the fitter had given up */
+    if (!cvs.length && !(dom && inFlow(dom))) { if (!p) tries--; return; } /* 2026-11-17 (leftovers, the cellar fight's end card under the fold): a try with no game in the page to narrow is not counted. The fight page spent all fifteen while its arena was hidden behind the opening words, so when TRY AGAIN or GET OUT came the fitter had given up */
     cvs.sort(function(a, b) { return b.getBoundingClientRect().height - a.getBoundingClientRect().height; });
     var c = cvs.length ? cvs[0] : dom;
     /* first the slack under the game: the story's foot padding and the line breaks left after the game's block */
-    var st = document.querySelector('tw-story'), top = c; while (top.parentElement && top.parentElement.tagName !== 'TW-PASSAGE') top = top.parentElement;
-    if (st && !st._dssFitPad) { st._dssFitPad = 1; st.style.paddingBottom = '4px'; }
-    for (var sib = top.nextElementSibling; sib; sib = sib.nextElementSibling) if ((sib.tagName === 'BR' || sib.tagName === 'TW-CONSECUTIVE-BR') && sib.style.display !== 'none') sib.style.display = 'none';
-    over = document.scrollingElement.scrollHeight - window.innerHeight;
+    var st = document.querySelector('tw-story'), top = c; while (top.parentElement && top.parentElement.tagName !== 'TW-PASSAGE' && top.parentElement.tagName !== 'TW-TRANSITION-CONTAINER') top = top.parentElement;
+    if (st && !st._dssFitPad) { st._dssFitPad = 1; st.style.paddingBottom = '4px'; if (p) undos.push(function() { st._dssFitPad = 0; st.style.paddingBottom = ''; }); }
+    for (var sib = top.nextElementSibling; sib; sib = sib.nextElementSibling) if ((sib.tagName === 'BR' || sib.tagName === 'TW-CONSECUTIVE-BR') && sib.style.display !== 'none') hide(sib);
+    over = overNow(p);
     if (over <= 0) return;
     if (c === dom) { /* CSS zoom scales its layout and its clicks together */
       var dh = dom.getBoundingClientRect().height, z0 = parseFloat(dom.style.zoom) || 1, z = Math.max(0.6, z0 * (dh - over - 6) / dh);
-      if (z < z0 - 0.01) { if (dom._dssFit == null) { dom._dssFit = { zoom: dom.style.zoom }; boxes.push(dom); } dom.style.zoom = z.toFixed(3); settle = Date.now() + 500; }
+      if (z < z0 - 0.01) { if (dom._dssFit == null) { dom._dssFit = { zoom: dom.style.zoom }; boxes.push(dom); if (p) undos.push(unbox(dom)); } dom.style.zoom = z.toFixed(3); if (!p) settle = Date.now() + 500; }
       return;
     }
     var cr = c.getBoundingClientRect(), box = c;
@@ -26476,9 +26502,10 @@ window.dssRingHold = (function() {
     var h = cr.height, target = Math.max(h * 0.55, h - over - 6);
     if (target >= h - 2) return;
     var bw = box.offsetWidth || box.getBoundingClientRect().width, bcs = getComputedStyle(box), frame = bcs.boxSizing === 'border-box' ? 0 : Math.max(0, bw - parseFloat(bcs.width)); /* 2026-11-10 playthrough: the napkin is tilted, so its bounding box is wider than its layout width; sized from the box, the last small step came out at the width it already had, stalled, and the fallback below threw it back to full size. Layout width, less any frame outside the content box */
-    if (box._dssFit == null) { box._dssFit = { mw: box.style.maxWidth, ml: box.style.marginLeft, mr: box.style.marginRight }; boxes.push(box); }
+    if (box._dssFit == null) { box._dssFit = { mw: box.style.maxWidth, ml: box.style.marginLeft, mr: box.style.marginRight }; boxes.push(box); if (p) undos.push(unbox(box)); }
     var stepMw = box.style.maxWidth;
-    box.style.maxWidth = Math.floor(bw * target / h - frame) + 'px'; box.style.marginLeft = 'auto'; box.style.marginRight = 'auto'; settle = Date.now() + 900; /* let the game redraw at the new size before looking again */
+    box.style.maxWidth = Math.floor(bw * target / h - frame) + 'px'; box.style.marginLeft = 'auto'; box.style.marginRight = 'auto'; if (!p) settle = Date.now() + 900; /* let the game redraw at the new size before looking again */
+    if (p) { if (c.getBoundingClientRect().height > h - 2) { asked = true; self = true; try { window.dispatchEvent(new Event('resize')); } catch (e) {} self = false; if (c.getBoundingClientRect().height > h - 2) unbox(box)(); } return; } /* an early look asks a game that sizes its own canvas, as below, and leaves one that does not answer to the full look */
     if (c.getBoundingClientRect().height > h - 2) {
       /* a game that sizes its canvas's height from its width on resize: ask it to, then check */
       self = true; try { window.dispatchEvent(new Event('resize')); } catch (e) {} self = false;
@@ -26487,6 +26514,7 @@ window.dssRingHold = (function() {
   }
   var self = false, settle = 0;
   setInterval(fit, 600);
+  setInterval(early, 70);
   window.addEventListener('resize', function() { if (self) return; boxes.forEach(function(b) { if (b._dssFit) { if ('zoom' in b._dssFit) b.style.zoom = b._dssFit.zoom; else { b.style.maxWidth = b._dssFit.mw; b.style.marginLeft = b._dssFit.ml; b.style.marginRight = b._dssFit.mr; } b._dssFit = null; } }); boxes = []; tries = 0; });
 })();
 /* 2026-10-25 (Sam, item 5: "tighten the layout on the scrolling pages without touching any words"): a page of words with no game
@@ -86224,6 +86252,8 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
 
 
 

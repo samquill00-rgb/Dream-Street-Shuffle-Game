@@ -3697,6 +3697,36 @@ def rooms_start_at_the_header(r):
     r.expect(not bad, "; ".join(bad))
 
 
+@check("white-ending-by-play", "2026-11-18 (never played before: 'the White page reached by play' stood under Not covered in three handoffs): with the poem whole, Alba Complete's photograph is pocketed and put away, Traveller, wake! leads through Dawn Approach White to the White page, and PLUS. ULTRA. to the Dawn, with no error, no blank view and no scroll")
+def white_ending_by_play(r):
+    scratch_passage(r, "T-white", '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")(set: $crossedThreshold to true)(set: $sawThirdPillar to true)(set: $keyLighter to "spent")(set: $dreamKey to "")(set: $worldsVisited to (a: "himalayas"))(set: $mantraComplete to true)(set: $alba to $alba + (a: $alba2, $alba3))(set: $sawJeffrey to true)(set: $lacklandRead to true)(set: $hasTrishaMatchbook to true)(set: $hasMatches to true)(set: $metShana to true)(set: $hadChippy to true)(set: $tookLily1 to true)(set: $lilyCount to 5)(set: $drinksTonight to 10)(set: $confidence to 48)(set: $sobriety to 40)(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)(set: $returns to 17)(go-to: "Alba Complete")')
+    r.go("T-white", wait=9000)
+    PHOTO = "() => { var p = document.getElementById('dss-photo-pop'); if (!p || !p.getClientRects().length || getComputedStyle(p).visibility === 'hidden' || +getComputedStyle(p).opacity < 0.05) return null; var h = p.querySelector('.dss-photo-pop-hint'); if (!h) return null; var b = h.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }"
+    seen, bad, taken = [], [], set()
+    for step in range(12):
+        r.clear_lore(); r.clear_slips()
+        pn = r.pn()
+        if pn not in seen:
+            seen.append(pn)
+            for b in blank_canvases(r): bad.append("%s: %s" % (pn, b))
+        over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
+        if over > 4: bad.append("%s: scrolls %d px" % (pn, over))
+        if pn == "Dawn": break
+        fresh, waited = [], 0
+        while waited < 25 and r.pn() == pn:
+            at = r.js(PHOTO)
+            if at: r.page.mouse.click(at[0], at[1]); r.page.wait_for_timeout(1800); continue   # the photograph: pocket it, then put it away, as its own line says
+            fresh = [o for o in r.js(CLICKABLES) if (pn, o["t"]) not in taken and not re.search(r"NOTEBOOK|^NOTE$|skip|testing", o["t"], re.I)]
+            if fresh: break
+            r.page.wait_for_timeout(2000); waited += 1
+        if r.pn() != pn: continue
+        if not fresh: bad.append("%s: no way on in %d s" % (pn, waited * 2)); break
+        taken.add((pn, fresh[0]["t"])); r.page.mouse.click(fresh[0]["x"], fresh[0]["y"]); r.page.wait_for_timeout(4000)
+    r.info = "walked: " + " > ".join(seen)
+    r.expect(not bad, "; ".join(dict.fromkeys(bad)))
+    r.expect(seen == ["Alba Complete", "Dawn Approach White", "White page", "Dawn"], "the White ending went %s" % " > ".join(seen))
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

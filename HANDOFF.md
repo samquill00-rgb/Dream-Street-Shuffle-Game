@@ -1,3 +1,5 @@
+# QUEUED FOR AFTER THE FULL REGRESSION (18 Nov, the cellar session): see HANDOFF-after-regression-2026-11-18.md (3D smoothness pass, the silent doorway, the cellar as one room, the cellar commit)
+
 # START HERE (18 Nov, small hours: the leftovers fixed, thirteen calls ruled, three looks changed)
 Commits, none pushed: a1dead7 (game pages fit from the page turn), 06a6c87 and 1796143 (both "x": see the warning), 42768e3 (the Climb + six rulings), 9b8e1eb (pub, whirlwind, French bar, strip).
 - WARNING, a parallel session is live on the same checkout (the cellar sofa: a dog model, jewelled boots, handcuffs, a picture; files under dog-model-preview/, models/, tools/, artwork/personal/). Its "x" commits swept this session's uncommitted work in, and 9b8e1eb swept its in-progress twee edits in under this session's message. Nothing was lost (every marker checked), but the twee is shared: Edit tool only, never a whole-file rewrite, and `git diff` before staging.

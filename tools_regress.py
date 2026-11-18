@@ -1608,8 +1608,9 @@ def _(r):
     r.expect(res["sepia"], "the beret cat is not graded sepia")
 
 
-@check("great-work-slips", "2026-11-11 notes 3 and 7: the night's first haunt brings THE GREAT WORK on the paper slips (not the big typed card), each new game")
+@check("great-work-card", "2026-11-11 note 7 and 2026-11-18 note 22 (Sam, The Empty Glass: the Great Work \"should be [a] popup modal\", not slips): the night's first haunt brings THE GREAT WORK as one modal card with the wheel, each new game")
 def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     r.go("O'Flatterly's quest", wait=6000)
     r.clear_slips(); r.clear_lore()
     r.page.locator(".dss-room-veil tw-link", has_text="Not tonight.").first.click()
@@ -1620,8 +1621,11 @@ def _(r):
         if got["slip"] or got["card"]: break
         r.page.wait_for_timeout(500)
     r.info = "%s" % got
-    r.expect(not got["card"], "THE GREAT WORK opened as the big lore card")
-    r.expect(got["slip"], "THE GREAT WORK never came on a slip after the first haunt (on %s)" % got["pn"])
+    r.expect(not got["slip"], "THE GREAT WORK came on the paper slips again (the 11 Nov way, reversed 18 Nov)")
+    r.expect(got["card"], "THE GREAT WORK never opened as its card after the first haunt (on %s)" % got["pn"])
+    m = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-gw-card'); return { wheel: !!o.querySelector('.dss-gw-fig .nb-wheel-svg'), on: !!o.querySelector('.dss-lore-on'), words: (o.querySelector('.editors-note') || {}).textContent.length || 0 }; }")
+    r.info += "; %s" % m
+    r.expect(m["wheel"] and m["on"] and m["words"] > 200, "the Great Work card is missing its wheel, its Go on or its words: %s" % m)
 
 
 @check("map-walk-pace", "2026-11-11 (Sam, playtest note 2: the walking had become really slow): with the CPU slowed 6x, holding an arrow still walks at full pace")
@@ -1899,8 +1903,8 @@ def _(r):
     r.page.locator(".dss-room-veil tw-link", has_text="Not tonight.").first.click()
     r.wait_for("() => { var b = document.querySelector('.haunt-box:not(.dss-ghost .haunt-box)'); return b && getComputedStyle(b).display !== 'none'; }", 2500, "THE FEEDING to show on the click")
     r.expect(r.pn() == "O'Flatterly's quest", "the choice left before THE FEEDING was shown")
-    r.wait_for("() => !!window.__dssGreatWorkSlips", 8000, "THE GREAT WORK slips (the night's first haunt)")
-    r.page.wait_for_timeout(1500); r.clear_slips(rounds=10)   # 2026-11-11: the held choice goes once they are read (their click guard once swallowed it)
+    r.wait_for("() => !!window.__dssGreatWorkCard", 8000, "THE GREAT WORK card (the night's first haunt)")
+    r.page.wait_for_timeout(1500); r.clear_lore(); r.clear_slips(rounds=10)   # 2026-11-18: the card, not slips (note 22); the held choice goes once it is read
     r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 25000, "the choice to go through once the box had shown")
 
 
@@ -2916,6 +2920,22 @@ def cecil_cow_at_once(r):
     r.expect(early < 0.2, "ENTER CECIL COURT is already showing 4.5 s in (opacity %.2f); it should wait for the cow" % early)
     r.wait_for("(function(){ var f = %s; return f() > 0.8; })" % OP, 9000, "ENTER CECIL COURT to fade in after the cow")
     r.page.unroute("**/*")
+
+
+@check("ham-asks-america", "2026-11-18 note 23 (Sam: \"Still doesn't say 'Have you tried America' like it should\"): the Great Ham's verdict is in the reading again, so the reply \"America, you think of new-found-land.\" answers a question he has asked")
+def ham_asks_america(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The critic's judgement", wait=3000)
+    seen = []
+    for _ in range(60):
+        t = r.js("() => ((document.getElementById('critBookNarrate') || {}).textContent || '').trim()")
+        if t and t not in seen: seen.append(t)
+        if "America" in t: break
+        r.page.wait_for_timeout(250)
+    r.info = " / ".join(seen)
+    r.expect(any("Have you tried America?" in t for t in seen), "the reading never asks 'Have you tried America?' (it said: %s)" % r.info)
+    t = _built()
+    r.expect("he sneers, empathetically. \\u2018Have you tried America?\\u2019\";" in t, "the drunk reading lost his America line")
 
 
 @check("critic-knows-this-run-only", "2026-11-05 note 32 (Sam: 'I know this one' on a first visit): THE GREAT HAM knows the book only from an earlier night of THIS run; a refusal left in the browser by an earlier run counts for nothing")

@@ -3725,6 +3725,22 @@ def chippy_light_budget(r):
     r.expect(m["glows"] == 3 and m["inScene"] == 3, "the stand-in glows for the lights that went are missing (%d made, %d in the scene: the brothel window, the lantern's wall and pavement)" % (m["glows"], m["inScene"]))
 
 
+@check("ronnies-room-cost", "2026-11-19 (Sam: \"Ronnie Scott's\"): the room cost 10.4 to 10.6 ms a frame headless; the stage spot's shadow (it drew only a sliver on one lamp shade) and the near right table's light went, and its still meshes are joined except every clickable object, the mirror and the stage cone")
+def ronnies_room_cost(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Ronnie Scott's"); r.room_ready("ri")
+    m = r.js("""() => { var R = window._dssThreeRegistry && window._dssThreeRegistry['ri-wrap']; if (!R) return null; var pts = 0, sh = 0;
+      R.scene.traverse(function (o) { if (!o.visible || !o.isLight) return; if (o.isPointLight) pts++; if (o.castShadow) sh++; });
+      R.renderer.render(R.scene, R.camera); return { pts: pts, shadows: sh, batch: window._dssRiBatch || null, calls: R.renderer.info.render.calls, names: window.__dssRooms.ri.names() }; }""")
+    r.expect(m, "Ronnie's room (ri-wrap) did not come up")
+    r.info = "%d point lights, %d shadowed; %s still meshes joined into %s; %d draw calls" % (m["pts"], m["shadows"], (m["batch"] or {}).get("joined"), (m["batch"] or {}).get("meshes"), m["calls"])
+    r.expect(m["shadows"] == 0, "a light in Ronnie's casts a shadow again (%d); the stage spot's drew nothing you could see and cost about 2.5 ms a frame" % m["shadows"])
+    r.expect(m["pts"] <= 11, "Ronnie's has %d point lights; eleven since the near right table's went" % m["pts"])
+    r.expect(m["batch"] and m["batch"]["joined"] >= 300, "Ronnie's still meshes are not joined: %s" % m["batch"])
+    r.expect(m["calls"] <= 560, "Ronnie's draws %d objects a frame (681 unjoined, about 500 joined)" % m["calls"])
+    r.expect("The Stage" in m["names"] and "A door" in m["names"], "the joining took a clickable object with it: %s" % m["names"])
+
+
 @check("lackland-light-budget", "2026-11-19 (Sam: \"Lackland's approach\"): Lackland's street carried 14 point lights and five shadowed lights (11 to 14 ms a frame headless, against 4.4 to 6 after); the buzzer's, the two second-floor windows' and the fanlight's lights went, and the far lamp and the faint moon stopped casting shadows, none of which showed")
 def lackland_light_budget(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

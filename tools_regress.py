@@ -2449,13 +2449,17 @@ def shelley_bust(r):
     r.expect(got and got[2] >= 3, "the bust did not load its three parts with their pictures (%r)" % (got,))
     home = got[0]
     # 2026-11-14 (Sam: "make the halo/sprite under the bust brighter so it matches the others"): its resting glow is as strong as the brightest in the room
-    GL = "() => { var g = null; window.__dssRooms['oi'].scene.traverse(function (o) { if (o.name === 'restGlow') g = o; }); var out = []; for (var i = 0; i < 10; i++) { var c = g.children[i * 2]; out.push(c && c.visible ? c.material.opacity : 0); } return out; }"
-    peak = [0.0] * 10
+    # the glows are made in HOTSPOTS order (one sprite and one core each), the same order as names(); the bust is found by its name, not a fixed place (2026-11-19: the shop went from ten objects to six)
+    spots = r.js("() => window.__dssRooms['oi'].names()")
+    bi = spots.index("A bust of Percy Bysshe Shelley") if "A bust of Percy Bysshe Shelley" in spots else -1
+    r.expect(bi >= 0, "the bust is not among the shop's objects (%r)" % (spots,))
+    GL = "([n]) => { var g = null; window.__dssRooms['oi'].scene.traverse(function (o) { if (o.name === 'restGlow') g = o; }); var out = []; for (var i = 0; i < n; i++) { var c = g.children[i * 2]; out.push(c && c.visible ? c.material.opacity : 0); } return out; }"
+    peak = [0.0] * len(spots)
     for _ in range(14):
-        cur = r.js(GL); peak = [max(a_, b_) for a_, b_ in zip(peak, cur)]; r.page.wait_for_timeout(250)
-    others = max(peak[:9])
-    r.expect(peak[9] > 0 and peak[9] >= others * 0.55,   # the glows breathe out of step (down to 0.68 of full); a used-up one sits at 0.38
-              "the bust's resting glow is dimmer than the room's others (%.2f against %.2f; all %r)" % (peak[9], others, [round(x, 2) for x in peak]))
+        cur = r.js(GL, [len(spots)]); peak = [max(a_, b_) for a_, b_ in zip(peak, cur)]; r.page.wait_for_timeout(250)
+    others = max([x for i_, x in enumerate(peak) if i_ != bi] or [0])
+    r.expect(peak[bi] > 0 and peak[bi] >= others * 0.55,   # the glows breathe out of step (down to 0.68 of full); a used-up one sits at 0.38
+              "the bust's resting glow is dimmer than the room's others (%.2f against %.2f; all %r)" % (peak[bi], others, [round(x, 2) for x in peak]))
     r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-room.png"))
     r.click_object("oi", "A bust of Percy Bysshe Shelley")
     r.page.screenshot(path=os.path.join(SHOTS, "shelley-bust-close.png"))
@@ -3754,7 +3758,33 @@ def cellar_closeups_framed(r):
     r.expect(tone <= 0.85, "the dog's coat is back at %.2f of its colours; its white was the brightest thing in the cellar" % tone)
 
 
-@check("ronnies-room-cost", "2026-11-19 (Sam: \"Ronnie Scott's\"): the room cost 10.4 to 10.6 ms a frame headless; the stage spot's shadow (it drew only a sliver on one lamp shade) and the near right table's light went, and its still meshes are joined except every clickable object, the mirror and the stage cone")
+@check("tarot-gpt-deck", "2026-11-19 (Sam: \"Put the new tarot cards into the game\", then \"more like el greco\", \"more visible brushwork\"): SHANA's cards draw his GPT deck, treated by tools_tarot_treat.py into tarot/*.jpg, faces and back, with no hand-drawn SVG left")
+def tarot_gpt_deck(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    faces = len(re.findall(r"tarot-art2(?:&#39;|&#x27;|')\s+src=(?:&#39;|&#x27;|')tarot/[a-z-]+\.jpg", html))
+    old = len(re.findall(r"tarot-art2(?:&#39;|&#x27;|') aria-hidden", html))
+    names = ["the-fool", "the-magician", "the-high-priestess", "the-empress", "the-hierophant", "the-lovers", "the-chariot", "strength", "the-hermit", "wheel-of-fortune", "justice", "the-hanged-man", "death", "temperance", "the-devil", "the-tower", "the-star", "the-moon", "the-sun", "judgement", "the-world", "back"]
+    missing = [n for n in names if not os.path.exists(os.path.join(ROOT, "tarot", n + ".jpg"))]
+    r.go("Shana Reads", wait=6000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => document.querySelectorAll('#tarot-spread .card-front-face img.tarot-art2').length === 3", 10000, "three cards in SHANA's spread")
+    r.wait_for("() => [].every.call(document.querySelectorAll('#tarot-spread img'), function (i) { return i.complete; })", 10000, "the card pictures to load")
+    m = r.js("""() => { var f = [].map.call(document.querySelectorAll('#tarot-spread .card-front-face img.tarot-art2'), function (i) { return i.naturalWidth + ' ' + i.getAttribute('src'); }),
+        b = [].map.call(document.querySelectorAll('#tarot-spread .card-back-face img.tarot-back-img'), function (i) { return i.naturalWidth; }),
+        svg = document.querySelectorAll('#tarot-spread .card-front-face svg, #tarot-spread .card-back-face svg').length,
+        c = document.querySelector('#tc-1'), w = c ? c.getBoundingClientRect().width : 0; return { f: f, b: b, svg: svg, w: w }; }""")
+    r.page.locator("#tc-1").click(); r.page.wait_for_timeout(1500)
+    shown = r.js("() => { var c = document.querySelector('#tc-1'), i = c && c.querySelector('.card-front-face img'), q = i && i.getBoundingClientRect(); return { flipped: c && c.classList.contains('flipped'), w: q ? Math.round(q.width) : 0 }; }")
+    r.info = "%d face entries in the html (%d old SVG); spread %s; backs %s; card %d px wide, flipped face %s" % (faces, old, m["f"], m["b"], m["w"], shown)
+    r.expect(not missing, "tarot/ is missing %s" % missing)
+    r.expect(faces >= 42 and old == 0, "the two art maps (Shana Reads, Shana Looks Again) hold %d picture faces and %d old SVG faces; 21 pictures each, no SVG" % (faces, old))
+    r.expect(all(s.split(" ")[0] == "330" for s in m["f"]), "a face in SHANA's spread did not load: %s" % m["f"])
+    r.expect(len(m["b"]) == 3 and all(w == 330 for w in m["b"]), "a card back in SHANA's spread did not load: %s" % m["b"])
+    r.expect(m["svg"] == 0, "SHANA's spread still draws %d SVG card faces or backs" % m["svg"])
+    r.expect(shown["flipped"] and shown["w"] >= 60, "the first card's picture did not show once turned: %s" % shown)
+
+
+@check("ronnies-room-cost","2026-11-19 (Sam: \"Ronnie Scott's\"): the room cost 10.4 to 10.6 ms a frame headless; the stage spot's shadow (it drew only a sliver on one lamp shade) and the near right table's light went, and its still meshes are joined except every clickable object, the mirror and the stage cone")
 def ronnies_room_cost(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("Ronnie Scott's"); r.room_ready("ri")

@@ -3657,7 +3657,7 @@ def climb_bonus_on_slips(r):
     r.expect(m["win"] and not m["lose"], "a summit with %d slips and %d prints did not win the bonus" % (m["slips"], m["prints"]))
 
 
-@check("airport-pub-drawn-together", "2026-11-18 (Sam, the Airport Pub at 44 fps: \"Yes, cut them\"): the pub drew 1,449 separate objects a frame and carried twelve point lights; its still furniture is joined into a few meshes (dssBatchStatic) and the two troffer lights are gone, their wash kept as a faint glow on the concourse floor")
+@check("airport-pub-drawn-together", "2026-11-18 (Sam, the Airport Pub at 44 fps: \"Yes, cut them\"): the pub drew 1,449 separate objects a frame and carried twelve point lights; its still furniture is joined into a few meshes (dssBatchStatic) and the two troffer lights are gone, their wash kept as a faint glow on the concourse floor. 2026-11-19 (Sam: \"Airport Pub\"): five more lights went (the three track spots, the back-bar spot, the shelf strip), 10 to 13 ms a frame headless down to about 5.5; spots cost the most")
 def airport_pub_drawn_together(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("Airport Pub", wait=12000)
@@ -3670,7 +3670,8 @@ def airport_pub_drawn_together(r):
     r.info = "%s still meshes joined into %s; %d draw calls a frame; %d point lights, %d spots (%d shadowed); %d fps here" % ((m["batch"] or {}).get("joined"), (m["batch"] or {}).get("meshes"), m["calls"], m["pts"], m["spots"], m["shadows"], m["fps"])
     r.expect(m["batch"] and m["batch"]["joined"] >= 800, "the pub's still furniture is not joined: %s" % m["batch"])
     r.expect(m["calls"] <= 800, "the pub draws %d objects a frame (it was 1,449 unjoined, about 620 joined)" % m["calls"])
-    r.expect(m["pts"] <= 10, "the pub has %d point lights; ten is where a frame fits in its time" % m["pts"])
+    r.expect(m["pts"] <= 9, "the pub has %d point lights; nine since the shelf strip went" % m["pts"])
+    r.expect(m["spots"] <= 3, "the pub has %d spot lights; the three threshold downlights are enough, and every spot over them cost about a millisecond a frame" % m["spots"])
     r.expect(m["shadows"] == 2, "the threshold's two shadowed downlights are %d now (both stay: dropping one gained nothing)" % m["shadows"])
     r.expect(m["glow"] > 0, "the concourse floor has lost the glow that stands in for the troffer lights")
     r.expect(r.js("() => typeof window.__apOpenBookLore === 'function'"), "the booth's book went with the joining")

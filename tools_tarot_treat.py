@@ -1,5 +1,10 @@
 """Cut the GPT tarot sheet into game cards and treat them to the game's look.
-  ~/.dss-regress/imgvenv/bin/python tools_tarot_treat.py generated_images/<sheet>.png tarot   (names after the outdir redo just those)"""
+  ~/.dss-regress/imgvenv/bin/python tools_tarot_treat.py generated_images/<sheet>.png tarot   (names after the outdir redo just those)
+  Redrawn single cards (2026-11-19, GPT via Codex, Sam's picks):
+  CARD=1 ...python tools_tarot_treat.py generated_images/the-star-adult-gpt-2026-11-19.png tarot "The Star"
+  CARD=1 NOBLOOM=1 WIN=0.035,0.045,0.80,0.75 KR=2 SOFT=0.6 BLURMIX=0.2 STROKE=0.05 ...python tools_tarot_treat.py generated_images/the-sun-akhenaten-gpt-2026-11-19.png tarot "The Sun"
+  CARD=1 WIN=0.05,0.045,0.95,0.86 ...python tools_tarot_treat.py generated_images/the-magician-crowley-gpt-2026-11-19.png tarot "The Magician"
+  (the Sun lighter so Akhenaten's face and crown survive the brush)"""
 import json, sys, os
 import numpy as np
 from PIL import Image, ImageFilter
@@ -17,17 +22,27 @@ W, H = 330, 540               # 3x the card's 110 x 180
 # faces to bloom away (fractions of the cut card): x, y, radius, strength
 BLOOM = {"The Sun": (0.5, 0.165, 0.36, 1.0), "The Moon": (0.5, 0.16, 0.34, 0.95)}
 
+SINGLE = os.environ.get("CARD") == "1"   # SRC is one redrawn card, not the sheet (2026-11-19: the Star, redrawn with an adult figure)
+SINGLE_WIN = (0.07, 0.075, 0.93, 0.95)    # its art window inside the cream border, its arched corners and the numeral tab, as fractions of the image
+if os.environ.get("WIN"): SINGLE_WIN = tuple(float(v) for v in os.environ["WIN"].split(","))   # a redraw with a title panel at the foot (the Sun) needs its own window
+SINGLE_SAT = 0.68                         # GPT's redraw is more saturated than the sheet; bring it to the sheet's watercolour before the treatment
+
 def cut(n):
     i = NAMES.index(n); r, c = divmod(i, 6)
     x0, x1 = XS[c]; y0, y1 = ROWS[r]
-    if n == "back": x0, x1, y0, y1 = 582, 724, 1092, 1428      # inside the back's own cream frame
+    if SINGLE: x0, y0, x1, y1 = (SINGLE_WIN[0] * sheet.width, SINGLE_WIN[1] * sheet.height, SINGLE_WIN[2] * sheet.width, SINGLE_WIN[3] * sheet.height)
+    elif n == "back": x0, x1, y0, y1 = 582, 724, 1092, 1428      # inside the back's own cream frame
     else: y0 += TAB
     w = x1 - x0; want = w * 180 / 110 / (1 if n == "back" else ELONG)
     if y1 - y0 > want:
         extra = (y1 - y0) - want; tb = TOPBIAS.get(n, 0.04); y0 += extra * tb; y1 -= extra * (1 - tb)   # keep the heads
     else:
         need = want - (y1 - y0); x_cut = w - (y1 - y0) * 110 / 180; x0 += x_cut / 2; x1 -= x_cut / 2
-    return sheet.crop((int(round(x0)), int(round(y0)), int(round(x1)), int(round(y1)))).resize((W, H), Image.LANCZOS)
+    im = sheet.crop((int(round(x0)), int(round(y0)), int(round(x1)), int(round(y1)))).resize((W, H), Image.LANCZOS)
+    if SINGLE:
+        a = np.asarray(im).astype(np.float32) / 255; l = (a @ np.array([0.2126, 0.7152, 0.0722], np.float32))[..., None]
+        im = Image.fromarray((np.clip(l + (a - l) * SINGLE_SAT, 0, 1) * 255).astype(np.uint8))
+    return im
 
 PRINT = os.environ.get("PRINT", "0") == "1"
 GRECO = os.environ.get("GRECO", "1") == "1"
@@ -134,7 +149,7 @@ def treat(im, n):
     if GRECO and n != "back": im = greco(im, n)
     a = np.asarray(im).astype(np.float32) / 255
     lum = a @ np.array([0.2126, 0.7152, 0.0722], np.float32)
-    if n in BLOOM:   # a soft light over the face, so it reads as glow, not a portrait
+    if n in BLOOM and os.environ.get("NOBLOOM") != "1":   # NOBLOOM=1: a redraw whose sun has no face to soften (the Aten)   # a soft light over the face, so it reads as glow, not a portrait
         bx, by, br, bs = BLOOM[n]; yy, xx = np.mgrid[0:H, 0:W]
         d = np.sqrt(((xx - bx * W) / W) ** 2 + ((yy - by * H) / W) ** 2) / br
         g = np.clip((1 - d) / 0.45, 0, 1) ** 1.3 * bs   # a flat plateau over the face, then a soft fall
@@ -161,7 +176,8 @@ def treat(im, n):
     return out.filter(ImageFilter.UnsharpMask(radius=1.2, percent=(25 if GRECO else 60), threshold=2))
 
 os.makedirs(OUT, exist_ok=True)
-for n in (ONLY or NAMES):
+REDRAWN = {"The Star", "The Sun", "The Magician"}   # come from their own redraws (see the top); a whole-sheet run leaves them alone
+for n in (ONLY or [x for x in NAMES if SINGLE or x not in REDRAWN]):
     raw = cut(n); raw.save(os.path.join(OUT, "untreated-%s.png" % n.lower().replace(" ", "-")))
     treat(raw, n).save(os.path.join(OUT, "%s.jpg" % n.lower().replace(" ", "-")), quality=88)
 print("ok")

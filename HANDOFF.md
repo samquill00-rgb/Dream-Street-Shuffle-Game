@@ -1,3 +1,6 @@
+# START HERE (19 Nov: playtest finished, tarot redraws, leftovers fixed)
+See HANDOFF-night-2026-11-19.md. Open: full regression; licensing for the GPT tarot art, rug credit, book cover.
+
 # QUEUED FOR AFTER THE FULL REGRESSION (18 Nov, the cellar session): see HANDOFF-after-regression-2026-11-18.md (3D smoothness pass, the silent doorway, the cellar as one room, the cellar commit)
 
 # START HERE (18 Nov, small hours: the leftovers fixed, thirteen calls ruled, three looks changed)

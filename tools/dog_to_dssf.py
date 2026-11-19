@@ -42,7 +42,8 @@ FUR = [('head', 0.36, 2.6), ('lid', 0.7, 1.6), ('ear', 0.45, 2.2), ('tail', 0.38
 # little in length. Then the skin of the front of the face (not the eyes or their lids) is smoothed hard, which takes out the drum's ridges; the nose, the lips,
 # the whiskers and each strand of fur go with the skin nearest them.
 import json as _json
-SN = dict(za=0.105, z0=0.12, z1=0.212, base_lo=1.15, base_hi=0.7, tip=0.58, pw=0.9, tip_y=0.55, yc0=0.03, yc1=0.022, length=0.03, lam=0.5, rep=320, top=0.098)
+# 2026-11-19 (Sam: "make the cheeks a little less bulbous"): base_lo, the widening under the eyes, 1.15 to 1.0.
+SN = dict(za=0.105, z0=0.12, z1=0.212, base_lo=1.0, base_hi=0.7, tip=0.58, pw=0.9, tip_y=0.55, yc0=0.03, yc1=0.022, length=0.03, lam=0.5, rep=320, top=0.098)
 if len(argv) > 3: SN.update(_json.loads(argv[3]))
 def _ss(a, b, v): t = np.clip((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t)
 def snout(p):

@@ -1090,11 +1090,13 @@ def cellar_dog_by_ashton(r):
     r.expect(g["ashton"], "no ASHTON GRANGER in the cellar to lie beside")
     ax, az = g["ashton"][0], g["ashton"][2]
     r.expect(-0.03 < g["min"][1] < 0.05 and g["max"][1] < 0.7, "the dog is not lying on the floor (it runs from %.2f to %.2f m up)" % (g["min"][1], g["max"][1]))
+    dlen = max(g["max"][0] - g["min"][0], g["max"][2] - g["min"][2])
+    r.expect(dlen < 1.06, "the dog's box is %.2f m along the floor; Sam had it made smaller on 19 Nov (\"a bit smaller and a bit fluffier\"): 1.13 m before, 1.00 m after, fur and all" % dlen)
     gap = math.hypot(max(g["min"][0] - ax, 0, ax - g["max"][0]), max(g["min"][2] - az, 0, az - g["max"][2]))
     r.expect(gap < 0.6, "the dog is %.2f m from ASHTON's chair, not by her feet" % gap)
     r.expect(ax < g["c"][0] and abs(g["c"][0]) < abs(ax) + 0.05, "the dog is not on the room's side of her chair (its middle is at x %.2f, her chair at %.2f, the room's middle at 0)" % (g["c"][0], ax))
     r.expect(g["onScreen"] >= 7 and g["seen"] >= 5, "the dog is not in view from the room (%d of 9 points on screen, %d not hidden)" % (g["onScreen"], g["seen"]))
-    r.expect(not any("dog" in n.lower() for n in g["names"]), "the dog has become a thing to click, with no card written for it")
+    r.expect("A dog" in g["names"], "the dog is not a thing to click (Sam, 19 Nov: \"can she have a clickable PRIME voice that says 'Look in thy heart, and write.'\"); names: %r" % g["names"])
     # 2026-11-18 (Sam: "can you put it under the dog"): his prayer rug lies flat on the floor, under the middle of the dog
     rug = r.js("() => { var T = window.THREE, g = window._dssCellarRug, m = null; if (!g) return null; g.traverse(function (o) { if (o.isMesh) m = o; }); if (!m || !m.material.map || !m.material.map.image) return { loaded: false }; var b = new T.Box3().setFromObject(g); return { loaded: true, min: b.min.toArray(), max: b.max.toArray() }; }")
     r.expect(rug and rug["loaded"], "the prayer rug (models/prayer-rug.jpg) is not in the cellar")
@@ -1103,7 +1105,19 @@ def cellar_dog_by_ashton(r):
     c = r.js(DOG_SEEN)
     r.expect(c["onScreen"] >= 5 and c["seen"] >= 5, "the dog is not in view from ASHTON's close-up (%d of 9 points on screen, %d not hidden)" % (c["onScreen"], c["seen"]))
     r.expect(not c["underCard"], "in ASHTON's close-up the dog lies under her card (its middle at %r)" % c["at"])
-    r.info = "%.2f m from her chair, middle at x %.2f (chair %.2f); room view %d/9 in view, her close-up %d/9" % (gap, g["c"][0], ax, g["seen"], c["seen"])
+    r.back_click("cu"); r.page.wait_for_timeout(2500)
+    r.click_object("cu", "A dog")
+    LINE = "() => [].some.call(document.querySelectorAll('.dss-voice-text'), function (e) { if (!/Look in thy heart, and write/.test(e.textContent) || !e.getClientRects().length) return false; var op = 1; for (var p = e; p && p.nodeType === 1; p = p.parentElement) op *= +getComputedStyle(p).opacity; return op > 0.5; })"   # the voices' box sits beside the card; shown, not just there
+    SLIP = "() => [].some.call(document.querySelectorAll('.dss-hint-slip.dss-hint-voices.typed'), function (e) { return getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length; })"
+    r.wait_for("() => (%s)() || (%s)()" % (LINE, SLIP), 30000, "THE PRIME's line, or the VOICES slip that teaches the first voice of a night")
+    if not r.js(LINE):   # a fresh night: the dog is the first voice heard, so the VOICES slip teaches the voices on this look; her line is there on the next
+        r.back_click("cu"); r.wait_for("() => window.__dssRooms.cu.mode() === 'idle'", 8000, "the camera back from the dog")
+        r.clear_lore(); r.clear_slips(); r.clear_lore()
+        r.click_object("cu", "A dog")
+    r.wait_for(LINE, 12000, "THE PRIME's line in the dog's voice box")
+    d = r.js(DOG_SEEN)
+    r.expect(d["onScreen"] >= 7 and d["seen"] >= 5 and not d["underCard"], "the dog is not clear in her own close-up (%d of 9 on screen, %d not hidden, under the card: %r)" % (d["onScreen"], d["seen"], d["underCard"]))
+    r.info = "%.2f m from her chair, middle at x %.2f (chair %.2f); room view %d/9 in view, her close-up %d/9, her own close-up %d/9 with THE PRIME's line" % (gap, g["c"][0], ax, g["seen"], c["seen"], d["seen"])
 
 
 @check("rules-card-holds-keys", "2026-11-16 playtest (Broken 1): with a rules card up, a click off it and an arrow or Space started the Pyramid Run, the Climb or the Reclamation unseen under the card")
@@ -3418,6 +3432,8 @@ def oi_globe_bar(r):
     r.click_object("oi", "A globe"); r.page.wait_for_timeout(1200)
     g1 = r.js(G)
     r.expect(g1["open"] > 0.95 and g1["rx"] < -1.8, "looking at the globe did not open its lid (%r)" % g1)
+    LIDS = "() => window.__dssGlobeLids || 0"
+    r.expect(r.js(LIDS) == 1, "the lid opened with %d plays of Sam's lid sound, not one (2026-11-19, \"Bar opening\")" % r.js(LIDS))
     r.expect("Pour a dram" in r.card_buttons(), "the globe's card has no 'Pour a dram' (buttons: %r)" % r.card_buttons())
     before = r.js(STATS)
     r.page.locator(".fi-action:visible", has_text="Pour a dram").first.click()
@@ -3433,7 +3449,8 @@ def oi_globe_bar(r):
     r.back_click("oi"); r.page.wait_for_timeout(2500)
     g2 = r.js(G)
     r.expect(g2["open"] < 0.05, "stepping back did not close the lid (%r)" % g2)
-    r.info = "lid opened to %.2f rad on the look; a dram took sobriety %d to %d; none offered after; the lid closed" % (g1["rx"], before[1], after[1])
+    r.expect(r.js(LIDS) == 2, "the lid sound played %d times over two openings and a closing (once per opening, never on closing)" % r.js(LIDS))
+    r.info = "lid opened to %.2f rad on the look, with Sam's lid sound once per opening; a dram took sobriety %d to %d; none offered after; the lid closed" % (g1["rx"], before[1], after[1])
 
 
 @check("portal-button-wait", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Middle way\"): the Third Pillar Portal shows nothing to press for about 10 s; the first crossing of a run keeps that, a later crossing in the same run shows its button after about 3 s")
@@ -3657,6 +3674,52 @@ def airport_pub_drawn_together(r):
     r.expect(m["shadows"] == 2, "the threshold's two shadowed downlights are %d now (both stay: dropping one gained nothing)" % m["shadows"])
     r.expect(m["glow"] > 0, "the concourse floor has lost the glow that stands in for the troffer lights")
     r.expect(r.js("() => typeof window.__apOpenBookLore === 'function'"), "the booth's book went with the joining")
+
+
+# 2026-11-19 (Sam: "Carry on with the 3D pass"): four approaches joined their still meshes with dssBatchStatic, as the Airport Pub did.
+# Measured headless at 1440x900, render + readPixels, unjoined then joined, the pictures the same bar grain and per-load randomness:
+# the French 14.1 to 6.3 ms (924 to 271 draws), Centre Point 12.6 to 3.6 ms (2,478 to 307), Ronnie's 7.2 to 6.0 ms (597 to 404),
+# the chippy 14.8 to 14.2 ms (819 to 359; it is bound by its 17 point lights, not its draws). Each check fails if the joining stops.
+BATCHED = [
+    ("french", "Approach The French", "fh-wrap", "_dssFhBatch", 700, 500, "the flags, the sign, the walker, the reflection and the breathing window glass are left out"),
+    ("chippy", "Approach Chinese Fish and Chips", "fc-wrap", "_dssFcBatch", 600, 550, "the sign, the woman in the window, the strip lights, the neon, the fly-killer, the crate and the queue are left out"),
+    ("centre-point", "Approach Centre Point", "cp-wrap", "_dssCpBatch", 2200, 700, "the tower's window cells, three boxes each; the neon ladder, its rails and the aviation light are left out"),
+    ("ronnies", "Approach Ronnie Scott's", "rs-wrap", "_dssRsBatch", 350, 500, "the heavens, the moons, the puddles, the Cosmogramma sign and every lit window are left out"),
+    # then (Sam: "Now do the Coach approach"): 11.1 to 8.4 ms (497 to 249 draws); on the burning night 13.9 to 8.1 ms
+    ("coach", "Approach The Coach", "ch-wrap", "_dssChBatch", 230, 380, "the silhouettes in the windows are left out, and on the burning night each fading pane"),
+]
+
+
+def _batched_check(slug, passage, wrap, key, joined_min, calls_max, what):
+    def run(r):
+        if SWAPS: scratch_passage(r, "T-nothing", "")
+        r.go(passage, wait=12000)
+        r.clear_lore(); r.clear_slips()
+        m = r.js("""([wrap, key]) => { var R = window._dssThreeRegistry && window._dssThreeRegistry[wrap]; if (!R) return null;
+          R.renderer.info.autoReset = true; R.renderer.render(R.scene, R.camera);
+          return { batch: window[key] || null, calls: R.renderer.info.render.calls }; }""", [wrap, key])
+        r.expect(m, "%s's 3D scene (%s) did not come up" % (passage, wrap))
+        b = m["batch"] or {}
+        r.info = "%s still meshes joined into %s; %d draw calls a frame" % (b.get("joined"), b.get("meshes"), m["calls"])
+        r.expect(b.get("joined", 0) >= joined_min, "%s's still meshes are not joined (%r; %s)" % (passage, m["batch"], what))
+        r.expect(m["calls"] <= calls_max, "%s draws %d objects a frame (about %d joined)" % (passage, m["calls"], calls_max * 2 // 3))
+    check("drawn-together-" + slug, "2026-11-19 (Sam: \"Carry on with the 3D pass\"): %s joins its still meshes (dssBatchStatic); %s" % (passage, what))(run)
+
+
+for _b in BATCHED: _batched_check(*_b)
+
+
+@check("drawn-together-coach-burns", "2026-11-19 (Sam: \"Now do the Coach approach\"): on the night the Coach burns, its still meshes are joined too, but each window pane stays its own mesh in the scene, so the panes still fail one by one")
+def coach_burns_drawn_together(r):
+    scratch_passage(r, "T-burn", '(set: $coachBurnt to true)(go-to: "The Coach Burns")')
+    r.go("T-burn", wait=7000)
+    m = r.js("""() => { var R = window._dssThreeRegistry && window._dssThreeRegistry['ch-wrap']; if (!R) return null; var panes = window._dssChFirePanes || [];
+      var inScene = panes.filter(function (o) { for (var p = o; p; p = p.parent) if (p === R.scene) return true; return false; }).length;
+      return { batch: window._dssChBatch || null, panes: panes.length, inScene: inScene, lit: panes.filter(function (o) { return o.material.emissive && o.material.emissive.getHex() === 0xa47852; }).length }; }""")
+    r.expect(m, "the burning Coach's 3D scene (ch-wrap) did not come up")
+    r.info = "%s still meshes joined into %s; %d fire panes, %d still in the scene" % ((m["batch"] or {}).get("joined"), (m["batch"] or {}).get("meshes"), m["panes"], m["inScene"])
+    r.expect((m["batch"] or {}).get("joined", 0) >= 220, "the burning Coach's still meshes are not joined (%r)" % m["batch"])
+    r.expect(m["panes"] >= 5 and m["inScene"] == m["panes"] and m["lit"] == m["panes"], "the burning night's window panes were joined away or lost their fire glow (%d panes, %d in the scene, %d lit)" % (m["panes"], m["inScene"], m["lit"]))
 
 
 @check("climb-whirl-is-snow", "2026-11-18 (Sam, the Climb's whirlwind drawn as large glossy white balls: \"Redraw\"): the rescue's whirlwind is blown snow, hundreds of soft flecks that fade in and out, not 44 shaded spheres")

@@ -1,7 +1,8 @@
 """What each 3D scene costs a frame, worst first (2026-11-18, queued for after the full regression).
 
 Opens every page that holds a 3D scene in the same muted headless browser as tools_regress.py, lets it settle,
-then for four seconds counts frames, frame gaps and the WebGL draw calls the page makes (a hook on
+then times each live registry scene's render + one-pixel readPixels (40 frames, best of three; "cost", the
+number to rank by, since frame gaps sit at the 60 fps cap) and for four seconds counts frames, frame gaps and the WebGL draw calls the page makes (a hook on
 drawElements/drawArrays, so the ten rooms count as well as the _dssThreeRegistry scenes). Lights are read
 from _dssThreeRegistry where a scene is registered there.
 
@@ -50,8 +51,17 @@ MEASURE = r"""() => new Promise(function (res) {
     try { var reg = window._dssThreeRegistry || {}; Object.keys(reg).forEach(function (k) { var R = reg[k];
       if (!R || !R.renderer || !R.renderer.domElement || !R.renderer.domElement.isConnected) return; scenes.push(k);
       R.scene.traverse(function (o) { if (!o.visible) return; if (o.isPointLight) pts++; if (o.isSpotLight) spots++; if (o.isLight && o.castShadow) shadows++; }); }); } catch (e) {}
-    res({ fps: Math.round((n - 1) / ((now - t0) / 1000)), med: +gaps[Math.floor(gaps.length / 2)].toFixed(1),
-          p95: +gaps[Math.floor(gaps.length * 0.95)].toFixed(1), calls: Math.round((C.calls - c0) / Math.max(1, n - 1)),
+    /* the true cost: render + read one pixel back (which waits for the GPU), 40 frames, best of three rounds; rAF gaps sit at the 60 fps cap whatever a scene costs */
+    var cost = 0, cpu = 0, c1 = C.calls;
+    try { var reg2 = window._dssThreeRegistry || {}; Object.keys(reg2).forEach(function (k) { var R = reg2[k];
+      if (!R || !R.renderer || !R.camera || !R.renderer.domElement || !R.renderer.domElement.isConnected) return;
+      var gl = R.renderer.getContext(), px = new Uint8Array(4), best = 1e9, bestCpu = 1e9;
+      for (var round = 0; round < 3; round++) { var a = performance.now(), c = 0;
+        for (var i = 0; i < 40; i++) { var b = performance.now(); R.renderer.render(R.scene, R.camera); c += performance.now() - b; gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); }
+        best = Math.min(best, (performance.now() - a) / 40); bestCpu = Math.min(bestCpu, c / 40); }
+      cost += best; cpu += bestCpu; }); } catch (e) {}
+    res({ cost: +cost.toFixed(2), cpu: +cpu.toFixed(2), fps: Math.round((n - 1) / ((now - t0) / 1000)), med: +gaps[Math.floor(gaps.length / 2)].toFixed(1),
+          p95: +gaps[Math.floor(gaps.length * 0.95)].toFixed(1), calls: Math.round((c1 - c0) / Math.max(1, n - 1)),
           canvases: document.querySelectorAll('canvas').length, scenes: scenes, pts: pts, spots: spots, shadows: shadows,
           pn: ((document.getElementById('dss-pn') || {}).textContent || '').trim() }); })(); })"""
 
@@ -80,16 +90,16 @@ def main(argv):
                 row["error"] = str(e)[:160]
             row["pageerrors"] = r.errors[:3]
             rows.append(row)
-            print("%-36s %s" % (name, row.get("error") or "%3d fps  med %5.1f ms  p95 %5.1f ms  %5d draws  %d pt / %d spot / %d shadow  %s" % (
-                row["fps"], row["med"], row["p95"], row["calls"], row["pts"], row["spots"], row["shadows"], ",".join(row["scenes"]) or "(room)")), flush=True)
+            print("%-36s %s" % (name, row.get("error") or "cost %6.2f ms (cpu %5.2f)  %3d fps  p95 %5.1f ms  %5d draws  %d pt / %d spot / %d shadow  %s" % (
+                row["cost"], row["cpu"], row["fps"], row["p95"], row["calls"], row["pts"], row["spots"], row["shadows"], ",".join(row["scenes"]) or "(room)")), flush=True)
             try: r.ctx.close()
             except Exception: pass
         browser.close()
     srv.shutdown()
     ok = [x for x in rows if "fps" in x]
-    print("\nworst first (p95 frame gap, then draws):")
-    for x in sorted(ok, key=lambda x: (-x["p95"], -x["calls"])):
-        print("  %-36s p95 %5.1f ms  %3d fps  %5d draws  %d point lights" % (x["passage"], x["p95"], x["fps"], x["calls"], x["pts"]))
+    print("\nworst first (render + readPixels per frame, then draws):")
+    for x in sorted(ok, key=lambda x: (-x["cost"], -x["calls"])):
+        print("  %-36s cost %6.2f ms  cpu %5.2f ms  %5d draws  %d point lights" % (x["passage"], x["cost"], x["cpu"], x["calls"], x["pts"]))
     if out:
         with open(out, "w") as f: json.dump(rows, f, indent=1)
 

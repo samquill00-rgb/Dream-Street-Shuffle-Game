@@ -730,6 +730,44 @@ def _(r):
     r.expect(end["over"] <= 0, "Name Your Book still runs %d px past the window at 1440x900" % end["over"])
 
 
+@check("book-title-box-steady", "2026-11-19 note 2 (Sam): on Name Your Book the page changed size as you typed; the title box keeps its height while the letters shrink")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Name Your Book", wait=7000)
+    r.clear_lore(); r.clear_slips()
+    SIZE = "() => { var ta = [].filter.call(document.querySelectorAll('textarea, input[type=text]'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; })[0]; if (!ta) return null; var p = ta.closest('tw-passage') || document.body; return [Math.round(ta.getBoundingClientRect().height * 10) / 10, Math.round(p.getBoundingClientRect().height), getComputedStyle(ta).fontSize]; }"
+    first = r.js(SIZE)
+    r.expect(first is not None, "no title box on Name Your Book")
+    if first is None:
+        return
+    r.page.locator("textarea:visible, input[type=text]:visible").first.click()
+    seen = [first]
+    for ch in "The Unbearable Weight of Being Very Slightly Late":
+        r.page.keyboard.type(ch)
+        seen.append(r.js(SIZE))
+    hs = sorted(set(s[0] for s in seen)); ps = sorted(set(s[1] for s in seen)); fs = sorted(set(s[2] for s in seen))
+    r.info = "box %r, page %r, fonts %r" % (hs, ps, fs)
+    r.expect(len(fs) >= 3, "the letters did not shrink as the title grew (%r)" % fs)
+    r.expect(hs[-1] - hs[0] <= 1, "the title box changed height as you typed (%r)" % hs)
+    r.expect(ps[-1] - ps[0] <= 1, "the page changed size as you typed (%r)" % ps)
+
+
+@check("page93-skip-says-game", "2026-11-19 note 6 (Sam, on a fresh game: \"Why does this show: 'Hand him page 93 (found on an earlier night)'. I haven't played an earlier night\"): page 93 handed back in an earlier game says so")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    LBL = "() => { var e = [].filter.call(document.querySelectorAll('.dss-skip93'), function (x) { return !x.closest('.dss-ghost'); }).pop(); return e ? [e.hidden, e.textContent.trim()] : null; }"
+    r.go("O'Flatterly's quest", wait=5000)
+    r.js("() => { localStorage.setItem('dssPage93Done', '1'); localStorage.setItem('dssPage93Run', 'an-older-game'); }")
+    r.go("O'Flatterly's quest", wait=6000)
+    got = r.js(LBL)
+    r.expect(got and not got[0] and "found in an earlier game" in got[1], "an earlier game's page 93 is labelled %r" % (got,))
+    r.js("() => { localStorage.setItem('dssRunFirst', '7'); localStorage.setItem('dssPage93Run', '7'); }")
+    r.go("O'Flatterly's quest", wait=6000)
+    got2 = r.js(LBL)
+    r.info = repr((got, got2))
+    r.expect(got2 and "found on an earlier night" in got2[1], "this game's page 93 (an earlier night of the same game) is labelled %r" % (got2,))
+
+
 @check("trail-badge-not-before-trails", "2026-11-10 (Sam): the EZEKIEL TRAIL badge showed on the opening page (The Night Ahead), before Dean Street, from steps looked at on an earlier night")
 def _(r):
     r.go("The Night Ahead", wait=3000)
@@ -776,6 +814,30 @@ def _(r):
     txt = r.js("() => document.body.innerText")
     r.expect("Four more lie in Soho" in txt and "three clues" in txt, "the MORE KEYS slip does not say four keys and three clues")
     r.page.unroute("**/*")
+
+
+@check("benito-nail-pull", "2026-11-19 note 5 (Sam): pulling BENITO's nail had no visuals; his fingertip is drawn in gold hairline and the splint tugs free, the split glazes red, then the page turns")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    for w, h in ((1440, 900), (1280, 800)):
+        r.page.set_viewport_size({"width": w, "height": h})
+        r.go("BENITO\u2019s nail", wait=7000)
+        r.clear_lore(); r.clear_slips()
+        r.page.wait_for_timeout(800)
+        over = r.js("() => document.scrollingElement.scrollHeight - innerHeight")
+        fig = r.js("() => { var s = [].filter.call(document.querySelectorAll('#bn-svg'), function (e) { return !e.closest('.dss-ghost'); })[0]; if (!s) return null; var b = s.getBoundingClientRect(); return { w: Math.round(b.width), top: Math.round(b.top), bottom: Math.round(b.bottom) }; }")
+        r.info = repr((w, over, fig))
+        r.expect(fig and fig["w"] >= 200 and fig["top"] >= 0 and fig["bottom"] <= h, "BENITO's fingertip is missing or off screen at %dx%d (%r)" % (w, h, fig))
+        r.expect(over <= 0, "BENITO's nail page scrolls %d px at %dx%d" % (over, w, h))
+    r.page.set_viewport_size({"width": 1440, "height": 900})
+    r.page.locator("tw-link", has_text="Pull the nail.").first.click()
+    r.page.wait_for_timeout(700)
+    mid = r.js("() => { var s = document.querySelector('#bn-splint'); var b = document.querySelector('#bn-blood'); return { tf: s ? getComputedStyle(s).transform : '', blood: b ? +getComputedStyle(b).opacity : -1, text: document.body.innerText.indexOf('Give me that napkin') >= 0 }; }")
+    r.expect(mid["tf"] not in ("", "none") and not mid["text"], "the splint does not move before the page turns (%r)" % mid)
+    r.page.wait_for_timeout(700)
+    blood = r.js("() => { var b = document.querySelector('#bn-blood'); return b ? +getComputedStyle(b).opacity : -1; }")
+    r.expect(blood > 0.3, "the split does not glaze red during the pull (opacity %r)" % blood)
+    r.wait_for("() => document.body.innerText.indexOf('Give me that napkin') >= 0", ms=6000, what="BENITO's drawing after the pull")
 
 
 @check("napkin-page-fits", "2026-11-10 playthrough: the napkin sketch page (BENITO) ran 3 to 5 px past the screen; the game-canvas fit now acts on any overflow and sizes the tilted napkin by its layout width")
@@ -3087,23 +3149,134 @@ def soho_square_any_gate(r):
     r.expect(len(went) >= 2, "fewer than two gates could be tried (%s)" % went)
 
 
-@check("soho-square-things-glow", "2026-11-16 playtest (Friction 7): Soho Square's hut door, statue and gate rested at 0.055, too faint to read as things to press on a still night-one scene; their resting light breathes between 0.06 and 0.18")
+@check("soho-square-things-glow", "2026-11-16 playtest (Friction 7), then 2026-11-19 (Sam: \"The clickable things should have halos like they do elsewhere\"; \"because there are no halos directing I am now stuck here\"): the hut door, the statue and the gate wear the rooms' resting lights, bright enough to find, breathing; the hut door goes dark once it has nothing left (the worm game played)")
 def soho_square_things_glow(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
-    r.go("Soho Square: the hut", wait=9000)
-    r.clear_lore(); r.clear_slips()
-    r.wait_for("() => !!(window._dssThreeRegistry && window._dssThreeRegistry['sq-wrap'] && window._dssThreeRegistry['sq-wrap'].scene)", 15000, "the 3D square")
-    r.page.mouse.move(5, 5)   # nothing hovered
-    r.js("""() => { var sc = window._dssThreeRegistry['sq-wrap'].scene, ms = []; sc.traverse(function (o) { var m = o.material; if (m && m.color && m.color.getHex() === 0xc3bcab && m.transparent) ms.push(m); });
-      window.__glow = { n: ms.length, lo: ms.map(function () { return 9; }), hi: ms.map(function () { return 0; }) };
-      var t0 = performance.now(); (function tick() { ms.forEach(function (m, i) { window.__glow.lo[i] = Math.min(window.__glow.lo[i], m.opacity); window.__glow.hi[i] = Math.max(window.__glow.hi[i], m.opacity); }); if (performance.now() - t0 < 6000) requestAnimationFrame(tick); })(); }""")
-    r.page.wait_for_timeout(6300)
-    g = r.js("() => window.__glow")
-    r.info = "%d resting lights; lowest %s, highest %s" % (g["n"], ["%.3f" % x for x in g["lo"]], ["%.3f" % x for x in g["hi"]])
-    r.expect(g["n"] >= 3, "found %d resting lights in the Square, expected the door, the statue and the gate" % g["n"])
-    r.expect(min(g["lo"]) >= 0.055, "a resting light drops to %.3f" % min(g["lo"]))
-    r.expect(min(g["hi"]) >= 0.15, "a resting light never rises past %.3f (they sat at 0.055)" % min(g["hi"]))
-    r.expect(max(g["hi"]) <= 0.19, "a resting light reaches %.3f, as bright as the hover's 0.23" % max(g["hi"]))
+    def lights():
+        r.wait_for("() => !!(window._dssThreeRegistry && window._dssThreeRegistry['sq-wrap'] && window._dssThreeRegistry['sq-wrap'].scene)", 15000, "the 3D square")
+        r.page.mouse.move(5, 5)   # nothing hovered
+        r.js("""() => { var sc = window._dssThreeRegistry['sq-wrap'].scene, ms = {}; sc.traverse(function (o) { if (/^sq-rest-/.test(o.name)) ms[o.name.slice(8)] = o; });
+          window.__glow = {}; Object.keys(ms).forEach(function (k) { window.__glow[k] = [9, 0, 0]; });
+          var t0 = performance.now(); (function tick() { Object.keys(ms).forEach(function (k) { var o = ms[k], g = window.__glow[k], a = o.visible ? o.material.opacity : 0; g[0] = Math.min(g[0], a); g[1] = Math.max(g[1], a); if (o.visible) g[2]++; }); if (performance.now() - t0 < 6000) requestAnimationFrame(tick); })(); }""")
+        r.page.wait_for_timeout(6300)
+        return r.js("() => window.__glow")
+    r.go("Alley: Soho Square", wait=9000); r.clear_lore(); r.clear_slips()
+    g = lights()
+    r.info = "fresh: %s" % {k: "%.2f-%.2f" % (v[0], v[1]) for k, v in g.items()}
+    r.expect(sorted(g) == ["door", "gate", "king"], "the Square's resting lights are %s, expected the door, the statue and the gate" % sorted(g))
+    r.expect(all(v[1] >= 0.40 for v in g.values()), "a resting light never rises past 0.40, too faint to find: %s" % r.info)
+    scratch_passage(r, "T-sq-played", '(set: $wormPlayed to true)(go-to: "Alley: Soho Square")')
+    r.go("T-sq-played", wait=9000); r.clear_lore(); r.clear_slips()
+    g2 = lights()
+    r.info += "; worm game played: %s" % {k: "%.2f-%.2f" % (v[0], v[1]) for k, v in g2.items()}
+    r.expect(g2.get("door", [0, 0])[1] == 0 and g2.get("king", [0, 0])[1] >= 0.40 and g2.get("gate", [0, 0])[1] >= 0.40, "after the worm game the door should be dark and the statue and gate lit: %s" % r.info)
+
+
+@check("worms-short-phallic-dong", "2026-11-19 (Sam: \"This game goes on for too long. Also the worms aren't comically phallic like they used to be. Also the noise when you clock them should be more of a bass DONG\"): the round is twenty seconds for twelve worms, each worm wears a round head wider than its shaft, and a hit strikes a 62 Hz bell")
+def worms_short_phallic_dong(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Soho Square: the gardener’s hut", wait=7000); r.clear_lore(); r.clear_slips()
+    r.js("""() => { window.__osc = []; var BAC = window.BaseAudioContext || window.AudioContext, co = BAC.prototype.createOscillator;
+      BAC.prototype.createOscillator = function () { var o = co.apply(this, arguments), sv = o.frequency.setValueAtTime.bind(o.frequency); o.frequency.setValueAtTime = function (v, t) { window.__osc.push(Math.round(v)); return sv(v, t); }; return o; }; }""")
+    card = r.js("() => document.querySelector('.worm-instructions').innerText")
+    r.js("() => { [].forEach.call(document.querySelectorAll('button'), function (e) { if (/Pick up a spade/i.test(e.textContent) && e.offsetParent) e.click(); }); }")
+    r.page.wait_for_timeout(800)
+    r.js("() => { var w = document.querySelector('.worm-start'); if (w && w.offsetParent) w.click(); }")
+    hit = False
+    for _ in range(60):
+        r.page.wait_for_timeout(150)
+        i = r.js("() => [].findIndex.call(document.querySelectorAll('#dss-worm-game .worm-hole'), function (h) { return h.classList.contains('up'); })")
+        if i >= 0:
+            r.page.locator("#dss-worm-game .worm-hole").nth(i).click(); hit = True; break
+    r.page.wait_for_timeout(500)
+    osc = r.js("() => window.__osc.slice()")
+    head = r.js("""() => { var b = document.querySelector('#dss-worm-game .worm-body'), a = getComputedStyle(b, '::after'), bw = b.getBoundingClientRect().width; return { head: parseFloat(a.height), headW: bw + 2 * Math.abs(parseFloat(a.left)), shaft: bw, band: a.top }; }""")
+    r.page.wait_for_timeout(21000)
+    st = r.js("() => document.querySelector('.worm-status').textContent")
+    r.info = "card %r; hit %s, oscillators %s; head %s; at 22 s: %r" % (card.replace("\n", " "), hit, osc[:8], head, st)
+    r.expect("Twenty seconds" in card and "Twelve" in card, "the card does not say twenty seconds and twelve worms: %s" % r.info)
+    r.expect(st.strip() != "", "the round had not ended by 22 s: %s" % r.info)
+    r.expect(head["head"] >= 30 and head["headW"] > head["shaft"], "the worms have no round head wider than the shaft: %s" % r.info)
+    r.expect(hit and 63 in osc and 126 in osc, "a hit did not strike the 62 Hz bell (struck at 63, its octave partial at 126): %s" % r.info)
+
+
+@check("flower-popup-before-step-back", "2026-11-19 (Sam, playtest at the Pillars: \"The popup should show before the camera moves back to its original position when you take a flower\"): after Always take a flower the camera holds on the close-up while A FLOWER is up, and goes back to the room as it closes")
+def flower_popup_before_step_back(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Entering The Pillars of Hercules", wait=10000)
+    r.room_ready("pi"); r.clear_slips(); r.clear_lore()
+    names = r.js("() => window.__dssRooms['pi'].names()")
+    found = None
+    for n in names:
+        if not r.js("([n]) => !!window.__dssRooms['pi'].point(n)", [n]): continue
+        r.click_object("pi", n)
+        if r.js("() => [].some.call(document.querySelectorAll('.dss-room-card .fi-action'), function (b) { return /Always take a flower/.test(b.textContent) && b.getClientRects().length; })"):
+            found = n; break
+        r.back_click("pi"); r.page.wait_for_timeout(1500); r.clear_slips()
+    r.expect(found, "no object in the Pillars offers Always take a flower (looked at %s)" % names)
+    r.page.locator(".dss-room-card .fi-action", has_text="Always take a flower").first.click()
+    r.wait_for("() => !!document.getElementById('dss-lily-overlay')", 4000, "the A FLOWER popup")
+    r.page.wait_for_timeout(1800)
+    held = r.js("() => window.__dssRooms['pi'].mode()")
+    r.page.locator(".dss-lily-close").click()
+    r.page.wait_for_timeout(3000)
+    after = r.js("() => window.__dssRooms['pi'].mode()")
+    r.info = "flower on %r; camera while the popup is up: %s; after it closes: %s" % (found, held, after)
+    r.expect(held == "inspect", "the camera left the flower before its popup closed: %s" % r.info)
+    r.expect(after == "idle", "the camera did not go back to the room once the popup closed: %s" % r.info)
+
+
+@check("fi-photographs-clear", "2026-11-19 (Sam, the French: \"'Nothing gold can stay' cuts over the image it should be commenting on\"; \"Swap the man drinking the pint image over so he is immediately to the right of the main image\"): in the Photographs close-up the voices hang below the frames, over none of the three pictures in the middle; his print hangs in frame 6, beside the main photograph")
+def fi_photographs_clear(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The French", wait=10000)
+    r.room_ready("fi"); r.clear_slips(); r.clear_lore()
+    r.click_object("fi", "Photographs"); r.page.wait_for_timeout(2500); r.clear_slips()
+    r.wait_for("() => { var v = document.querySelector('.dss-voice-box'); return v && +getComputedStyle(v).opacity > 0.9; }", 6000, "the voices beside the photographs")
+    m = r.js("""() => { var R = window.__dssRooms['fi'], cam = R.camera, pg = null; R.scene.traverse(function (o) { if (!pg && o.children && o.children.length === 8 && o.children.every(function (c) { return c.type === 'Group'; })) pg = o; });
+      var cv = R.wrap.querySelector('canvas').getBoundingClientRect(), V = cam.position.constructor;
+      function rect(g) { var b = new (window.THREE ? THREE.Box3 : null)(); return b; }
+      var out = { frames: [], maps: [] };
+      [4, 5, 6].forEach(function (i) { var g = pg.children[i], xs = [], ys = []; g.updateMatrixWorld(true); [[-0.22, -0.28], [0.22, -0.28], [-0.22, 0.28], [0.22, 0.28]].forEach(function (c) { var v = new V(c[0], c[1], 0).applyMatrix4(g.matrixWorld).project(cam); xs.push(cv.left + (v.x + 1) / 2 * cv.width); ys.push(cv.top + (1 - v.y) / 2 * cv.height); });
+        out.frames.push([i, Math.min.apply(0, xs), Math.min.apply(0, ys), Math.max.apply(0, xs), Math.max.apply(0, ys)].map(Math.round)); });
+      [6, 7].forEach(function (i) { var src = ''; pg.children[i].traverse(function (o) { if (o.material && o.material.map && o.material.map.image) { var im = o.material.map.image; src = src || (im.currentSrc || im.src || (im.toDataURL ? 'canvas' : '?')); } }); out.maps.push([i, String(src).slice(-60), +pg.children[i].scale.x.toFixed(2)]); });
+      var vb = document.querySelector('.dss-voice-box').getBoundingClientRect(); out.box = [vb.left, vb.top, vb.right, vb.bottom].map(Math.round); return out; }""")
+    r.info = str(m)
+    b = m["box"]
+    hit = [f[0] for f in m["frames"] if not (b[2] <= f[1] or b[0] >= f[3] or b[3] <= f[2] or b[1] >= f[4])]
+    r.expect(not hit, "the voices sit over frame(s) %s: %s" % (hit, r.info))
+    r.expect(m["maps"][0][2] > m["maps"][1][2], "frame 6 is not the larger frame his print hangs in: %s" % r.info)
+
+
+@check("soho-square-is-an-approach", "2026-11-19 (Sam: \"The lead into this part is really weird, it should be just like the others, the 3d render should be an 'approach scene'\"): the Square from the street has the approaches' way back at the top left and the way in as a button at the foot; the back link goes to Dean Street, the button into the hut; no way in once the worm game is played")
+def soho_square_is_an_approach(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Alley: Soho Square", wait=9000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => { var b = document.getElementById('sq-enter'); return b && +getComputedStyle(b).opacity > 0.9; }", 6000, "the way-in button")
+    m = r.js("""() => { function top(e) { var q = e.getBoundingClientRect(), t = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2); return !!t && (t === e || e.contains(t)); }
+      var en = document.getElementById('sq-enter'), bk = document.getElementById('sq-back'), qe = en.getBoundingClientRect(), qb = bk.getBoundingClientRect();
+      return { enter: en.textContent, enterTop: top(en), enterFoot: Math.round(innerHeight - qe.bottom), back: bk.textContent, backTop: top(bk), backAt: [Math.round(qb.left), Math.round(qb.top)] }; }""")
+    r.info = str(m)
+    r.expect(m["enterTop"] and m["enterFoot"] < 140 and "GARDENER" in m["enter"], "the way in is not a button at the foot: %s" % m)
+    r.expect(m["backTop"] and m["backAt"][0] < 60 and m["backAt"][1] < 60 and "Dean Street" in m["back"], "the way back is not at the top left: %s" % m)
+    def arrive(test, what):
+        # a slip or lore card that lands after the press holds the page turn until it is read, as for a player
+        for i in range(24):
+            if r.js(test):
+                r.info += " | %s after %d" % (what[-12:], i)
+                return
+            r.clear_slips(rounds=1); r.clear_lore(rounds=1)
+            r.page.wait_for_timeout(500)
+        r.wait_for(test, 2000, what)
+    r.page.click("#sq-enter")
+    arrive("() => /gardener/.test(((document.getElementById('dss-pn') || {}).textContent || ''))", "the button to go into the hut")
+    r.go("Alley: Soho Square", wait=9000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => !!document.getElementById('sq-back')", 6000, "the way back")
+    r.page.click("#sq-back")
+    arrive("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", "the way back to go to Dean Street")
+    scratch_passage(r, "T-sq-played2", '(set: $wormPlayed to true)(go-to: "Alley: Soho Square")')
+    r.go("T-sq-played2", wait=9000); r.clear_lore(); r.clear_slips()
+    r.expect(not r.js("() => !!document.getElementById('sq-enter')"), "a way-in button shows after the worm game")
 
 
 @check("stat-numbers-brief", "2026-11-16 playtest (Looks wrong 1): the +4, +5 and +30 beside the bars lingered about 5 s and rose 46 px, off the top of the window and over the word SOBRIETY; they are gone in 2.6 s within 16 px")

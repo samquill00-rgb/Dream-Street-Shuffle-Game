@@ -3724,6 +3724,20 @@ def chippy_light_budget(r):
     r.expect(m["glows"] == 3 and m["inScene"] == 3, "the stand-in glows for the lights that went are missing (%d made, %d in the scene: the brothel window, the lantern's wall and pavement)" % (m["glows"], m["inScene"]))
 
 
+@check("lackland-light-budget", "2026-11-19 (Sam: \"Lackland's approach\"): Lackland's street carried 14 point lights and five shadowed lights (11 to 14 ms a frame headless, against 4.4 to 6 after); the buzzer's, the two second-floor windows' and the fanlight's lights went, and the far lamp and the faint moon stopped casting shadows, none of which showed")
+def lackland_light_budget(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Approach Lacklands Office", wait=12000)
+    r.clear_lore(); r.clear_slips()
+    m = r.js("""() => { var R = window._dssThreeRegistry && window._dssThreeRegistry['lo-wrap']; if (!R) return null; var n = 0, sh = 0, moon = 0;
+      R.scene.traverse(function (o) { if (!o.visible || !o.isLight) return; if (o.isPointLight) n++; if (o.castShadow) sh++; if (o.isDirectionalLight && o.castShadow) moon++; });
+      return { pts: n, shadows: sh, moon: moon }; }""")
+    r.expect(m, "Lackland's 3D scene (lo-wrap) did not come up")
+    r.info = "%d point lights; %d lights casting shadows" % (m["pts"], m["shadows"])
+    r.expect(m["pts"] <= 10, "Lackland's street has %d point lights; at 10 a frame costs about half what it did at 14" % m["pts"])
+    r.expect(m["shadows"] <= 3 and m["moon"] == 0, "Lackland's street has %d lights casting shadows (the moon's among them: %s); three are enough, the far lamp's and the moon's drew nothing" % (m["shadows"], bool(m["moon"])))
+
+
 @check("drawn-together-coach-burns", "2026-11-19 (Sam: \"Now do the Coach approach\"): on the night the Coach burns, its still meshes are joined too, but each window pane stays its own mesh in the scene, so the panes still fail one by one")
 def coach_burns_drawn_together(r):
     scratch_passage(r, "T-burn", '(set: $coachBurnt to true)(go-to: "The Coach Burns")')

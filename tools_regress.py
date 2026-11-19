@@ -668,6 +668,7 @@ def _(r):
     r.go("Lackland's Back Room", wait=9000)
     r.clear_lore(); r.clear_slips()
     r.page.wait_for_timeout(3000); r.clear_slips(rounds=10)   # the night's first haunt brings THE GREAT WORK slips (2026-11-11), modal
+    r.clear_lore()   # 2026-11-18 (Sam, note 22): THE GREAT WORK is one popup card again, not slips; it sat over the gun and took the click
     r.wait_for("() => !!window.__dssBackRoomGun", 15000, "the back room gun")
     r.page.wait_for_timeout(800)
     labels = r.js("() => [].map.call(document.querySelectorAll('#pb-wrap button, #pb-wrap .dss-room-caption'), function (b) { return b.textContent; }).join(' | ') + ' | ' + document.body.innerText")
@@ -3398,7 +3399,7 @@ def doorway_press_waits(r):
     held = r.js("() => { var b = [].filter.call(document.querySelectorAll('.dss-doorway-btn'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; })[0]; return { card: !!document.getElementById('spew-popup-overlay'), btn: b ? (b.style.opacity || '1') : null, want: !!window.dssSohoMap.state.doorWant }; }")
     r.expect(not held["card"], "the doorway went in over something that was up")
     r.expect(held["want"], "E in the doorway while something was up was dropped (nothing held it)")
-    r.expect(held["btn"] == ".5", "the doorway button is %r while the press waits (wanted shown and dimmed to .5)" % held["btn"])
+    r.expect(held["btn"] is not None and abs(float(held["btn"]) - 0.5) < 0.01, "the doorway button is %r while the press waits (wanted shown and dimmed to .5)" % held["btn"])
     r.js("() => document.getElementById('dss-gate-flash').remove()")
     r.wait_for(CARD, 4000, "the doorway card once nothing was up")
     hold_card()

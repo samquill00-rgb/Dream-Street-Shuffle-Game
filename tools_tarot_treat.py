@@ -4,7 +4,9 @@
   CARD=1 ...python tools_tarot_treat.py generated_images/the-star-adult-gpt-2026-11-19.png tarot "The Star"
   CARD=1 NOBLOOM=1 WIN=0.035,0.045,0.80,0.75 KR=2 SOFT=0.6 BLURMIX=0.2 STROKE=0.05 ...python tools_tarot_treat.py generated_images/the-sun-akhenaten-gpt-2026-11-19.png tarot "The Sun"
   CARD=1 WIN=0.05,0.045,0.95,0.86 ...python tools_tarot_treat.py generated_images/the-magician-crowley-gpt-2026-11-19.png tarot "The Magician"
-  (the Sun lighter so Akhenaten's face and crown survive the brush)"""
+  CARD=1 WIN=0.05,0.068,0.95,0.88 DETAIL=0.6,0.2,0.2,0.6 ...python tools_tarot_treat.py generated_images/the-hermit-yeats-gpt-2026-11-19.png tarot "The Hermit"
+  CARD=1 WIN=0.05,0.045,0.95,0.905 DETAIL=0.5,0.80,0.17,0.8 ...python tools_tarot_treat.py generated_images/the-hanged-man-sam-gpt-2026-11-19.png tarot "The Hanged Man"
+  (the Sun lighter so Akhenaten's face and crown survive the brush; DETAIL keeps a likeness's glasses and features inside a soft circle)"""
 import json, sys, os
 import numpy as np
 from PIL import Image, ImageFilter
@@ -87,10 +89,11 @@ def strokes(a, amp, L):
     out = (out - out.mean()) / (out.std() + 1e-4)
     return np.clip(a * (1 + amp * out[..., None] * 0.5) + amp * 0.15 * out[..., None], 0, 1)
 
-def greco(im, n):
-    """After El Greco: ashen green-grey flesh, cold flickering lights drawn upward, storm-dark grounds, harder chiaroscuro."""
+def greco(im, n, brush=True):
+    """After El Greco: ashen green-grey flesh, cold flickering lights drawn upward, storm-dark grounds, harder chiaroscuro.
+    brush=False: the colours only (for a DETAIL circle, so a likeness keeps its lines but takes the same ashen flesh)."""
     sm = im
-    for k in range(2): sm = sm.filter(ImageFilter.MedianFilter(5))      # loosen the airbrushed finish
+    for k in range(2 if brush else 0): sm = sm.filter(ImageFilter.MedianFilter(5))      # loosen the airbrushed finish
     a = np.asarray(sm).astype(np.float32) / 255
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     lum = a @ np.array([0.2126, 0.7152, 0.0722], np.float32)
@@ -115,6 +118,7 @@ def greco(im, n):
     fl = np.asarray(fl).astype(np.float32) / 255
     cold = np.array([0.88, 0.93, 0.86], np.float32)
     a = 1 - (1 - a) * (1 - fl[..., None] * cold * float(os.environ.get('FLICK', '0.22')))
+    if not brush: return Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8))
     # El Greco's brush: oil-paint patches (Kuwahara), then strokes laid along the forms and lifting upward
     a = kuwahara(a, int(os.environ.get("KR", "3")))
     a = strokes(a, float(os.environ.get("STROKE", "0.07")), int(os.environ.get("SLEN", "9")))
@@ -146,7 +150,14 @@ def litho(im):
 
 def treat(im, n):
     if PRINT: im = litho(im)
-    if GRECO and n != "back": im = greco(im, n)
+    if GRECO and n != "back":
+        g = greco(im, n)
+        if os.environ.get("DETAIL"):   # a likeness (the Hanged Man's face): keep more of the drawing inside a soft circle, x, y, radius as fractions, strength
+            dx, dy, dr, ds = (float(v) for v in os.environ["DETAIL"].split(","))
+            yy, xx = np.mgrid[0:H, 0:W]; d = np.sqrt(((xx - dx * W) / W) ** 2 + ((yy - dy * H) / W) ** 2) / dr
+            m = (np.clip((1 - d) / 0.5, 0, 1) ** 1.2 * ds)[..., None]
+            g = Image.fromarray((np.asarray(g).astype(np.float32) * (1 - m) + np.asarray(greco(im, n, brush=False)).astype(np.float32) * m).clip(0, 255).astype(np.uint8))
+        im = g
     a = np.asarray(im).astype(np.float32) / 255
     lum = a @ np.array([0.2126, 0.7152, 0.0722], np.float32)
     if n in BLOOM and os.environ.get("NOBLOOM") != "1":   # NOBLOOM=1: a redraw whose sun has no face to soften (the Aten)   # a soft light over the face, so it reads as glow, not a portrait
@@ -176,7 +187,7 @@ def treat(im, n):
     return out.filter(ImageFilter.UnsharpMask(radius=1.2, percent=(25 if GRECO else 60), threshold=2))
 
 os.makedirs(OUT, exist_ok=True)
-REDRAWN = {"The Star", "The Sun", "The Magician"}   # come from their own redraws (see the top); a whole-sheet run leaves them alone
+REDRAWN = {"The Star", "The Sun", "The Magician", "The Hermit", "The Hanged Man"}   # come from their own redraws (see the top); a whole-sheet run leaves them alone
 for n in (ONLY or [x for x in NAMES if SINGLE or x not in REDRAWN]):
     raw = cut(n); raw.save(os.path.join(OUT, "untreated-%s.png" % n.lower().replace(" ", "-")))
     treat(raw, n).save(os.path.join(OUT, "%s.jpg" % n.lower().replace(" ", "-")), quality=88)

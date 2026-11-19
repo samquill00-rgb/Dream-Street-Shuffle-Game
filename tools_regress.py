@@ -2925,7 +2925,7 @@ def french_done_says_so(r):
     r.page.unroute("**/*")
 
 
-@check("cecil-cow-at-once", "2026-11-05 note 33 (Sam: \"The cow should fly over the moon straight away then cecil court loads\"): the cow's flight starts as the scene opens, and ENTER CECIL COURT waits for it, fading in at about 7 s (it was 1.5 s, with the cow at 6 s)")
+@check("cecil-cow-at-once", "2026-11-05 note 33 (Sam: \"The cow should fly over the moon straight away then cecil court loads\"): the cow's flight starts as the scene opens, and ENTER CECIL COURT waits for it, fading in at about 7 s (it was 1.5 s, with the cow at 6 s); 2026-11-19 (Sam: \"maybe delay only 4 seconds\"): it now shows at 4 s, fully in by about 5.5 s")
 def cecil_cow_at_once(r):
     cc = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cecil-court-3d-static.html"), encoding="utf-8").read()
     for a, b in SWAPS: cc = cc.replace(a, b)
@@ -2934,10 +2934,9 @@ def cecil_cow_at_once(r):
     r.go("Cecil Court Approach", wait=2500)
     OP = "() => { var b = [].filter.call(document.querySelectorAll('button'), function (x) { return /ENTER CECIL COURT/.test(x.textContent); })[0]; return b ? +getComputedStyle(b).opacity : -1; }"
     r.expect(r.js(OP) >= 0, "no ENTER CECIL COURT button on the approach")
-    r.page.wait_for_timeout(2000)
     early = r.js(OP)
-    r.expect(early < 0.2, "ENTER CECIL COURT is already showing 4.5 s in (opacity %.2f); it should wait for the cow" % early)
-    r.wait_for("(function(){ var f = %s; return f() > 0.8; })" % OP, 9000, "ENTER CECIL COURT to fade in after the cow")
+    r.expect(early < 0.2, "ENTER CECIL COURT is already showing 2.5 s in (opacity %.2f); it should wait for the cow" % early)
+    r.wait_for("(function(){ var f = %s; return f() > 0.8; })" % OP, 4500, "ENTER CECIL COURT to fade in by about 7 s from arriving (it should show at 4 s, not 7)")
     r.page.unroute("**/*")
 
 
@@ -3782,6 +3781,35 @@ def tarot_gpt_deck(r):
     r.expect(len(m["b"]) == 3 and all(w == 330 for w in m["b"]), "a card back in SHANA's spread did not load: %s" % m["b"])
     r.expect(m["svg"] == 0, "SHANA's spread still draws %d SVG card faces or backs" % m["svg"])
     r.expect(shown["flipped"] and shown["w"] >= 60, "the first card's picture did not show once turned: %s" % shown)
+
+
+@check("oi-shelves-lit", "2026-11-19 (Sam, playtest: O'Flatterly's Shelves close-up had a bare dark wall over its left half): the close-up comes in nearer on the cat prints and the books, and a brass picture light over the prints lights them and the side wall")
+def oi_shelves_lit(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("O'Flatterly's shop", wait=10000)
+    r.room_ready("oi"); r.clear_slips(); r.clear_lore()
+    r.click_object("oi", "Shelves"); r.page.wait_for_timeout(3500)
+    lum = r.js("""() => { var g = window._dssThreeRegistry['oi-wrap'], R = g.renderer, gl = R.getContext(); R.render(g.scene, g.camera);
+      var w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(4), out = [];
+      for (var i = 1; i < 8; i++) for (var j = 1; j < 8; j++) { gl.readPixels(Math.round(w * 0.5 * i / 8), Math.round(h * j / 8), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); out.push(0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2]); }
+      out.sort(function (a, b) { return a - b; }); return [out[Math.floor(out.length / 2)], out.reduce(function (a, b) { return a + b; }, 0) / out.length]; }""")
+    r.info = "left half of the Shelves close-up: median %.0f, mean %.0f (0-255)" % (lum[0], lum[1])
+    r.expect(lum[0] >= 40, "the Shelves close-up's left half is dark again (median %.0f of 255): %s" % (lum[0], r.info))
+
+
+@check("voices-clear-of-slip", "2026-11-19 (Sam, playtest: on a first look the VOICES slip sat over the right end of the PRIME/OLDBOY box): with a slip on screen beside it, the box goes to the object's other side")
+def voices_clear_of_slip(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("O'Flatterly's shop", wait=10000)
+    r.room_ready("oi"); r.clear_slips(); r.clear_lore()
+    r.click_object("oi", "Shelves"); r.page.wait_for_timeout(5000)
+    got = r.js("""() => { var b = document.querySelector('.dss-voice-box'), s = document.querySelector('#dss-hint-stack .dss-hint-voices'); if (!b || !s) return null;
+      var p = b.getBoundingClientRect(), q = s.getBoundingClientRect(); return {box: [p.left|0, p.top|0, p.right|0, p.bottom|0], slip: [q.left|0, q.top|0, q.right|0, q.bottom|0], op: +getComputedStyle(b).opacity}; }""")
+    r.expect(got is not None, "no PRIME/OLDBOY box and VOICES slip on the first look at the Shelves (the check needs both)")
+    b, q = got["box"], got["slip"]
+    over = max(0, min(b[2], q[2]) - max(b[0], q[0])) * max(0, min(b[3], q[3]) - max(b[1], q[1]))
+    r.info = "box %s, VOICES slip %s" % (b, q)
+    r.expect(over == 0, "the VOICES slip covers part of the PRIME/OLDBOY box (%d px square): %s" % (over, r.info))
 
 
 @check("oflatterly-room-cost", "2026-11-19 (the 3D smoothness pass, O'Flatterly's shop): the shop drew 1,477 objects a frame (8.3 ms headless), some 1,300 of them books with their own colour-shifting materials; the still books are drawn as instances (one draw for each shape, look and parent) with each book's colour still turning, and the other still meshes are joined except every clickable object, the globe, the bell and the bust (4.65 ms, 314 draws, the same picture)")

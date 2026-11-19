@@ -3709,6 +3709,21 @@ def _batched_check(slug, passage, wrap, key, joined_min, calls_max, what):
 for _b in BATCHED: _batched_check(*_b)
 
 
+@check("chippy-light-budget", "2026-11-19 (Sam: \"Yes, the chippy lights\"): the chippy's street carried 17 point lights (about 13 ms a frame headless, against about 5.5 at 13); the brothel window's red, her modelling light, the blue neon's and the lantern's went, soft glows standing in where their light showed")
+def chippy_light_budget(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Approach Chinese Fish and Chips", wait=12000)
+    r.clear_lore(); r.clear_slips()
+    m = r.js("""() => { var R = window._dssThreeRegistry && window._dssThreeRegistry['fc-wrap']; if (!R) return null; var n = 0, G = window._dssFcGlows || {}, inScene = 0;
+      R.scene.traverse(function (o) { if (o.isPointLight && o.visible) n++; });
+      Object.keys(G).forEach(function (k) { for (var p = G[k]; p; p = p.parent) if (p === R.scene) { inScene++; break; } });
+      return { pts: n, glows: Object.keys(G).length, inScene: inScene }; }""")
+    r.expect(m, "the chippy's 3D scene (fc-wrap) did not come up")
+    r.info = "%d point lights; %d stand-in glows in the scene" % (m["pts"], m["inScene"])
+    r.expect(m["pts"] <= 13, "the chippy's street has %d point lights; at 13 a frame costs less than half what it did at 17" % m["pts"])
+    r.expect(m["glows"] == 3 and m["inScene"] == 3, "the stand-in glows for the lights that went are missing (%d made, %d in the scene: the brothel window, the lantern's wall and pavement)" % (m["glows"], m["inScene"]))
+
+
 @check("drawn-together-coach-burns", "2026-11-19 (Sam: \"Now do the Coach approach\"): on the night the Coach burns, its still meshes are joined too, but each window pane stays its own mesh in the scene, so the panes still fail one by one")
 def coach_burns_drawn_together(r):
     scratch_passage(r, "T-burn", '(set: $coachBurnt to true)(go-to: "The Coach Burns")')

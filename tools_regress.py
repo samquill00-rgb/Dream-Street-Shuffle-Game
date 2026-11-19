@@ -3725,6 +3725,35 @@ def chippy_light_budget(r):
     r.expect(m["glows"] == 3 and m["inScene"] == 3, "the stand-in glows for the lights that went are missing (%d made, %d in the scene: the brothel window, the lantern's wall and pavement)" % (m["glows"], m["inScene"]))
 
 
+CU_SIGHT = r"""([name]) => { var R = window.__dssRooms.cu, cam = R.camera, s = R.spot(name), T = window.THREE, box = new T.Box3().setFromObject(s.root), c = box.getCenter(new T.Vector3()), h = box.max.y - box.min.y;
+  var own = new Set(); s.root.traverse(function (o) { own.add(o); }); var rc = new T.Raycaster(); rc.camera = cam; var clear = 0, n = 0, from = cam.getWorldPosition(new T.Vector3());
+  [0.3, 0.45, 0.6, 0.75, 0.9].forEach(function (f) { var p = new T.Vector3(c.x, box.min.y + h * f, c.z), d = p.clone().sub(from), dist = d.length(); rc.set(from, d.normalize()); n++;
+    var hit = rc.intersectObjects(R.scene.children, true).filter(function (x) { var o = x.object, m = o.material; return o.isMesh && !own.has(o) && o.visible && m && m.visible !== false && !m.transparent && (!m.opacity || m.opacity >= 1); })[0];
+    if (!hit || hit.distance > dist - 0.08) clear++; });
+  function sx(v) { return (v.clone().project(cam).x + 1) / 2 * innerWidth; }
+  return { clear: clear, n: n, x: Math.round(sx(new T.Vector3(c.x, box.min.y + h * 0.6, c.z))), post: Math.round(sx(new T.Vector3(-1.2, box.min.y + h * 0.6, 1.5))), w: innerWidth }; }"""
+
+
+@check("cellar-closeups-framed", "2026-11-19 (Sam: \"Yes, 1 to 3\"): COPPER's close-up had the steel post standing straight through him; ASHTON's showed her back behind a chair with the dog taking the frame; the dog's white coat was the brightest thing in the cellar")
+def cellar_closeups_framed(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Turn to Copper"); r.room_ready("cu")
+    r.wait_for("() => { var d = window._dssCellarDog, n = 0; if (d) d.traverse(function (m) { if (m.isMesh) n++; }); return n >= 5; }", 15000, "the dog")
+    tone = r.js("() => { var t = []; window._dssCellarDog.traverse(function (m) { if (m.isMesh && m.material && m.material.vertexColors) t.push(m.material.color.r); }); return Math.max.apply(0, t); }")
+    r.click_object("cu", "COPPER"); r.page.wait_for_timeout(600)
+    cu = r.js(CU_SIGHT, ["COPPER"])
+    r.back_click("cu"); r.page.wait_for_timeout(800); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => window.__dssRooms.cu.mode() === 'idle'", 8000, "the camera back from COPPER")
+    r.click_object("cu", "ASHTON GRANGER"); r.page.wait_for_timeout(600)
+    ash = r.js(CU_SIGHT, ["ASHTON GRANGER"])
+    r.info = "COPPER at x %d, the post at %d; ASHTON %d of %d sight lines clear, at x %d; the dog's coat at %.2f" % (cu["x"], cu["post"], ash["clear"], ash["n"], ash["x"], tone)
+    r.expect(abs(cu["x"] - cu["post"]) >= 90, "in COPPER's close-up the steel post stands %d px from him (it ran straight through him)" % abs(cu["x"] - cu["post"]))
+    r.expect(cu["clear"] >= 4, "COPPER is hidden in his close-up (%d of %d sight lines clear)" % (cu["clear"], cu["n"]))
+    r.expect(ash["clear"] >= 4, "ASHTON is hidden behind something in her close-up (%d of %d sight lines clear; it was a chair back)" % (ash["clear"], ash["n"]))
+    r.expect(ash["w"] * 0.3 <= ash["x"] <= ash["w"] * 0.7, "ASHTON is not in the middle of her close-up (x %d of %d)" % (ash["x"], ash["w"]))
+    r.expect(tone <= 0.85, "the dog's coat is back at %.2f of its colours; its white was the brightest thing in the cellar" % tone)
+
+
 @check("ronnies-room-cost", "2026-11-19 (Sam: \"Ronnie Scott's\"): the room cost 10.4 to 10.6 ms a frame headless; the stage spot's shadow (it drew only a sliver on one lamp shade) and the near right table's light went, and its still meshes are joined except every clickable object, the mirror and the stage cone")
 def ronnies_room_cost(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

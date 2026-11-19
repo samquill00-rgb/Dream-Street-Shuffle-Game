@@ -3406,6 +3406,36 @@ def doorway_press_waits(r):
     r.info = "E mid-step went in twice running; E under an overlay waited (button %s) and went in when it cleared" % held["btn"]
 
 
+@check("oi-globe-bar", "2026-11-18 (Sam: O'Flatterly's globe is a globe bar, \"so you can zoom in on it\", and \"when you open it you would be able to pour a dram of whisky\"): looking at it opens the lid; its card pours one dram a night, which costs sobriety and plays the whisky card; stepping back closes the lid (plants: k.byText(['Pour a dram'])|||k.byText(['No dram']) and globeWant = on ? 1 : 0;|||globeWant = 0;)")
+def oi_globe_bar(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("O'Flatterly's shop", wait=10000)
+    r.room_ready("oi")
+    G = "() => window._dssOiGlobe ? { open: window._dssOiGlobe.open(), rx: window._dssOiGlobe.lid.rotation.x } : null"
+    g0 = r.js(G)
+    r.expect(g0, "no globe bar in the shop (window._dssOiGlobe)")
+    r.expect(g0["open"] < 0.05, "the lid is open before anyone looks (%r)" % g0)
+    r.click_object("oi", "A globe"); r.page.wait_for_timeout(1200)
+    g1 = r.js(G)
+    r.expect(g1["open"] > 0.95 and g1["rx"] < -1.8, "looking at the globe did not open its lid (%r)" % g1)
+    r.expect("Pour a dram" in r.card_buttons(), "the globe's card has no 'Pour a dram' (buttons: %r)" % r.card_buttons())
+    before = r.js(STATS)
+    r.page.locator(".fi-action:visible", has_text="Pour a dram").first.click()
+    r.wait_for("() => /Hold to drink/.test((document.getElementById('drink-popup-overlay') || {}).innerText || '')", 15000, "the whisky card's 'Hold to drink'")
+    r.page.wait_for_timeout(3500)   # the glass fills first
+    r.page.keyboard.down("Space"); r.page.wait_for_timeout(6000); r.page.keyboard.up("Space")
+    r.wait_for("() => window._drinkPopupOpen !== true", 12000, "the whisky card to close after the drink")
+    after = r.js(STATS)
+    r.expect(after[1] < before[1], "the dram cost no sobriety (%r, then %r)" % (before, after))
+    r.room_ready("oi")
+    r.click_object("oi", "A globe"); r.page.wait_for_timeout(1200)
+    r.expect("Pour a dram" not in r.card_buttons(), "a second dram is offered the same night (buttons: %r)" % r.card_buttons())
+    r.back_click("oi"); r.page.wait_for_timeout(2500)
+    g2 = r.js(G)
+    r.expect(g2["open"] < 0.05, "stepping back did not close the lid (%r)" % g2)
+    r.info = "lid opened to %.2f rad on the look; a dram took sobriety %d to %d; none offered after; the lid closed" % (g1["rx"], before[1], after[1])
+
+
 @check("portal-button-wait", "2026-11-18 (Sam's ruling of 17-18 Nov, \"Middle way\"): the Third Pillar Portal shows nothing to press for about 10 s; the first crossing of a run keeps that, a later crossing in the same run shows its button after about 3 s")
 def portal_button_wait(r):
     BTN = "() => { var b = [].filter.call(document.querySelectorAll('div'), function (e) { return /^(MAKE YOUR OFFERING|STEP THROUGH|BACK TO THE PILLARS)$/.test(e.textContent.trim()) && e.style.position === 'fixed'; })[0]; return b ? { t: b.textContent.trim(), on: b.style.opacity === '1' } : null; }"

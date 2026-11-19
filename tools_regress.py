@@ -3784,6 +3784,33 @@ def tarot_gpt_deck(r):
     r.expect(shown["flipped"] and shown["w"] >= 60, "the first card's picture did not show once turned: %s" % shown)
 
 
+@check("oflatterly-room-cost", "2026-11-19 (the 3D smoothness pass, O'Flatterly's shop): the shop drew 1,477 objects a frame (8.3 ms headless), some 1,300 of them books with their own colour-shifting materials; the still books are drawn as instances (one draw for each shape, look and parent) with each book's colour still turning, and the other still meshes are joined except every clickable object, the globe, the bell and the bust (4.65 ms, 314 draws, the same picture)")
+def oflatterly_room_cost(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("O'Flatterly's shop"); r.room_ready("oi"); r.clear_slips(); r.clear_lore()
+    r.wait_for("() => !!window._dssOiBatch", 15000, "the shop's books and still meshes to be joined")
+    m = r.js("""() => { var R = window._dssThreeRegistry && window._dssThreeRegistry['oi-wrap']; if (!R) return null; var ims = [], left = 0;
+      R.scene.traverse(function (o) { if (o.isInstancedMesh && o.name === 'oi-books') { ims.push(o); var p = o.parent; while (p && p.parent && p.parent !== R.scene) p = p.parent; if (o.parent && o.parent.isGroup && o.parent.parent === R.scene && o.parent.rotation.y > 1.5) left += o.count; } });
+      R.renderer.render(R.scene, R.camera); return { books: window._dssOiBooks || null, batch: window._dssOiBatch, calls: R.renderer.info.render.calls, ims: ims.length, left: left, names: window.__dssRooms.oi.names() }; }""")
+    r.expect(m, "the shop (oi-wrap) did not come up")
+    r.info = "%s books in %s instanced draws (%d on the left shelves); %s still meshes joined into %s; %d draw calls" % ((m["books"] or {}).get("books"), (m["books"] or {}).get("draws"), m["left"], m["batch"].get("joined"), m["batch"].get("meshes"), m["calls"])
+    r.expect(m["books"] and not m["books"].get("error") and m["books"]["books"] >= 1000 and m["books"]["draws"] <= 80, "the shop's books are not drawn as instances: %s" % m["books"])
+    r.expect(m["left"] >= 200, "the left shelves' books are not under the shelves' own group, so a click on them would miss the Shelves (%d)" % m["left"])
+    r.expect(m["batch"]["joined"] >= 150, "the shop's still meshes are not joined: %s" % m["batch"])
+    r.expect(m["calls"] <= 400, "the shop draws %d objects a frame (1,477 before, 314 after)" % m["calls"])
+    for nm in ("INIS O’FLATTERLY", "Shelves", "A glass case", "A globe", "A door", "A bust of Percy Bysshe Shelley"):
+        r.expect(nm in m["names"], "the joining took a clickable object with it: %s missing from %s" % (nm, m["names"]))
+    # the books still change colour, each its own way: an instance's colour follows its book's own material, and moves
+    COL = """() => { var R = window._dssThreeRegistry['oi-wrap'], out = []; R.scene.traverse(function (o) { if (o.isInstancedMesh && o.name === 'oi-books' && out.length < 40) { var c = new THREE.Color(); for (var i = 0; i < o.count && out.length < 40; i += 7) { o.getColorAt(i, c); out.push([c.r, c.g, c.b]); } } }); return out; }"""
+    a_ = r.js(COL); r.page.wait_for_timeout(2500); b_ = r.js(COL)
+    moved = sum(1 for x, y in zip(a_, b_) if sum(abs(p - q) for p, q in zip(x, y)) > 0.01)
+    spread = len(set(tuple(round(v, 2) for v in x) for x in b_))
+    r.expect(moved >= len(a_) // 3, "the instanced books' colours are not turning (%d of %d moved in 2.5 s)" % (moved, len(a_)))
+    r.expect(spread >= len(b_) // 3, "the instanced books have all gone one colour (%d colours in %d books)" % (spread, len(b_)))
+    r.click_object("oi", "Shelves")
+    r.expect(r.js("([r]) => window.__dssRooms[r].mode()", ["oi"]) == "inspect", "the Shelves' close-up did not open")
+
+
 @check("ronnies-room-cost","2026-11-19 (Sam: \"Ronnie Scott's\"): the room cost 10.4 to 10.6 ms a frame headless; the stage spot's shadow (it drew only a sliver on one lamp shade) and the near right table's light went, and its still meshes are joined except every clickable object, the mirror and the stage cone")
 def ronnies_room_cost(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

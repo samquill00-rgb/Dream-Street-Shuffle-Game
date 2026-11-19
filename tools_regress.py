@@ -893,7 +893,24 @@ def _(r):
     r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip.typed'), function (e) { return e.textContent.indexOf('and then some more words') >= 0; })", 15000, "the slip to finish once the popup closed")
 
 
-@check("jeffrey-speech-in-scene", "2026-11-09 note 2: JEFFREY's Friesian speech came up in the card on the right, unlike everyone else")
+@check("slip-waits-under-modal", "2026-11-19 (night-two walk: THE GREAT HAM's slip wrote itself out unseen near Cecil Court, seen once): a slip that falls due under a top-layer card (showModal, as the photo viewer and the jukebox) waits, and writes itself out once the card closes")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Dean Street", wait=5000)
+    r.clear_slips()
+    # the card opens the moment the slip lands, before it writes itself out (the queue already holds a slip while a modal is open)
+    r.js("""() => { var mo = new MutationObserver(function () { var s = [].filter.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return !e.classList.contains('typed'); })[0]; if (!s) return; mo.disconnect();
+      var d = document.createElement('dialog'); d.id = 'reg-modal'; d.style.cssText = 'width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:rgba(0,0,0,0.7)'; document.body.appendChild(d); d.showModal(); });
+      mo.observe(document.body, { childList: true, subtree: true }); window.dssInlineHint('REGRESSION a slip raised under a modal card', { now: true }); }""")
+    r.page.wait_for_timeout(3000)
+    early = r.js("() => [].some.call(document.querySelectorAll('.dss-hint-slip.typed'), function (e) { return e.textContent.indexOf('under a modal card') >= 0; })")
+    r.js("() => { var d = document.getElementById('reg-modal'); d.close(); d.remove(); }")
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip.typed'), function (e) { return e.textContent.indexOf('under a modal card') >= 0; })", 6000, "the slip to write itself out once the card closed")
+    r.info = "typed under the modal: %s" % early
+    r.expect(not early, "the slip wrote itself out under a modal card")
+
+
+@check("jeffrey-speech-in-scene","2026-11-09 note 2: JEFFREY's Friesian speech came up in the card on the right, unlike everyone else")
 def _(r):
     r.go("Coach and Horses bar")
     r.room_ready("cb")
@@ -3783,7 +3800,31 @@ def tarot_gpt_deck(r):
     r.expect(shown["flipped"] and shown["w"] >= 60, "the first card's picture did not show once turned: %s" % shown)
 
 
-@check("oi-shelves-lit", "2026-11-19 (Sam, playtest: O'Flatterly's Shelves close-up had a bare dark wall over its left half): the close-up comes in nearer on the cat prints and the books, and a brass picture light over the prints lights them and the side wall")
+@check("shana-reads-fits", "2026-11-19 (Sam: \"just fix\" Shana Reads scrolling once all three cards turned; \"get rid of the 'where you've come from' etc from all the cards\"; on the Hanged Man \"it should say 'found' not 'find'\" and \"the text above the card is cutting into the card itself\"): at 1280x800, with the longest meaning and name on all three cards, the page does not scroll; no position line under a card; a turned card under the pointer stays below its label; the second look's link reads 'You found the Hanged Man.'")
+def shana_reads_fits(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    html = open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    found, find = html.count("You found the Hanged Man."), html.count("You find the Hanged Man.")
+    r.page.set_viewport_size({"width": 1280, "height": 800})
+    r.go("Shana Reads", wait=6000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => document.querySelectorAll('#tarot-spread .tarot-card').length === 3", 10000, "three cards in SHANA's spread")
+    for i in (1, 2, 3):
+        c = r.js("([i]) => { var q = document.getElementById('tc-' + i).getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; }", [i])
+        r.page.mouse.click(c[0], c[1]); r.page.wait_for_timeout(2300)
+    r.wait_for("() => { var c = document.getElementById('tarot-continue'); return c && c.style.display !== 'none'; }", 5000, "the way on after the third card")
+    pos = r.js("() => document.querySelectorAll('.tarot-meaning-pos').length")
+    lift = r.js("() => { var c = document.getElementById('tc-3'), l = c.parentElement.querySelector('.tarot-position'); return [Math.round(c.getBoundingClientRect().top), Math.round(l.getBoundingClientRect().bottom)]; }")
+    r.js("() => { document.querySelectorAll('.tarot-meaning-text').forEach(function (e) { e.textContent = 'Endings and their trailing beginnings; the transmutation of being; paid passage.'; }); document.querySelectorAll('#tarot-spread .tarot-card-label').forEach(function (e) { e.textContent = 'The High Priestess'; }); }")
+    r.page.mouse.move(5, 5); r.page.wait_for_timeout(2500)
+    over = r.js("() => document.scrollingElement.scrollHeight - innerHeight")
+    r.info = "1280x800 worst case: %d px past the window; position lines %d; FUTURE card top %d under the pointer, its label's foot %d; 'found' %d, 'find' %d" % (over, pos, lift[0], lift[1], found, find)
+    r.expect(over <= 0, "Shana Reads scrolls %d px at 1280x800 once the cards turn: %s" % (over, r.info))
+    r.expect(pos == 0, "a position line (Where you've come from...) is back under a card: %s" % r.info)
+    r.expect(lift[0] >= lift[1], "the turned card under the pointer rises into its FUTURE label: %s" % r.info)
+    r.expect(found >= 1 and find == 0, "the second look's link no longer reads 'You found the Hanged Man.': %s" % r.info)
+
+
+@check("oi-shelves-lit","2026-11-19 (Sam, playtest: O'Flatterly's Shelves close-up had a bare dark wall over its left half): the close-up comes in nearer on the cat prints and the books, and a brass picture light over the prints lights them and the side wall")
 def oi_shelves_lit(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("O'Flatterly's shop", wait=10000)

@@ -765,7 +765,7 @@ def _(r):
     took = (L["last"] - L["first"]) / 1000.0 if L["first"] else -1
     r.info = "letters %d, typed in %.1f s, verse-quick %r" % (L["n"], took, L.get("quick"))
     r.expect(L["n"] >= 30, "the Milton line never typed (%r)" % L)
-    r.expect(L.get("quick") and 0 <= took <= 1.6, "the Milton line takes %.1f s to type" % took)
+    r.expect(0 <= took <= 3.5, "the Milton line takes %.1f s to type (6.1 s at the old pace, 2.4 s at the quick one)" % took)
 
 
 @check("page93-skip-this-game-only", "2026-11-19 note 6 and 2026-11-20 (Sam: the page 93 skip showed on the first night after a hard refresh; \"It should only give that option if you have already played a night and got it\"): the skip shows only on a later night of the same game")

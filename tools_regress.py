@@ -4279,6 +4279,24 @@ def bateman_approach(r):
     r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 12000, "WALK ON to go back to Dean Street")
 
 
+@check("bateman-street-noises", "2026-11-20 (Sam: \"the approach should have some street noises\"): on Bateman Street the wet-street recording plays twice over (the usual street bed and the nearer kerb bed) and a car goes by on the wet road as the camera settles, well above the beds")
+def bateman_street_noises(r):
+    r.ctx.add_init_script(TAP)
+    r.ctx.add_init_script("(function(){ var S = AudioBufferSourceNode.prototype.start; window.__src = []; AudioBufferSourceNode.prototype.start = function () { try { window.__src.push([this.buffer ? +this.buffer.duration.toFixed(1) : 0, !!this.loop]); } catch (e) {} return S.apply(this, arguments); }; })();")
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Bateman Street", wait=9000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => !!document.querySelector('#bs-wrap button')", 9000, "the Bateman Street scene")
+    r.page.mouse.click(200, 500)
+    r.wait_for("() => +(document.getElementById('bs-wrap').getAttribute('data-cabs') || 0) >= 1", 20000, "the first car to go by")
+    r.page.wait_for_timeout(5000)
+    m = r.js("""() => { var lv = window.__tap.lv.map(function (x) { return x[1]; }), s = lv.slice().sort(function (a, b) { return a - b; }), loops = {};
+      window.__src.forEach(function (x) { if (x[1]) loops[x[0]] = (loops[x[0]] || 0) + 1; });
+      return { bed: +s[Math.floor(s.length / 2)].toFixed(1), peak: +Math.max.apply(null, lv.slice(-55)).toFixed(1), twice: Object.keys(loops).filter(function (k) { return loops[k] >= 2; }) }; }""")
+    r.info = str(m)
+    r.expect(len(m["twice"]) >= 1, "no recording plays twice over: the nearer wet-street bed is missing (%s)" % m)
+    r.expect(m["peak"] - m["bed"] >= 6, "no car is heard over the beds (bed %s dB, peak %s dB)" % (m["bed"], m["peak"]))
+
+
 @check("joyride-from-bateman", "2026-11-20 (Sam: \"Yes, wire it here\"): GET IN on Bateman Street opens the ride in the passenger seat (no second kerbside scene), the ride draws, a left into Frith Street and getting out at Ronnie's hands the stop back, and Walk on puts the player on Dean Street at Ronnie's door with the ride gone")
 def joyride_from_bateman(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

@@ -4258,6 +4258,26 @@ def fetch_by_play(r):
     r.expect(not bad2, "; ".join(dict.fromkeys(bad2)))
     r.expect(seen2[:2] == ["The Fetch", "Dean Street"], "the glimpse went %s" % " > ".join(seen2))
 
+@check("bateman-approach", "2026-11-20 (Sam: \"an approach scene for meeting the man on the street before i joyride\"; \"build the street dry, no sound, approach only for now\"): Bateman Street opens as a 3D approach that draws, fits the page and has no pools on the ground; its one button, WALK ON at the foot, goes back to Dean Street; the passage's own link stays hidden")
+def bateman_approach(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Bateman Street", wait=9000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => { var b = document.querySelector('#bs-wrap button'); return b && b.getClientRects().length; }", 9000, "the Bateman Street scene and its button")
+    r.page.wait_for_timeout(1500)
+    blank = blank_canvases(r)
+    r.expect(not blank, "; ".join(blank))
+    m = r.js("""() => { var w = document.getElementById('bs-wrap'), b = w.querySelector('button'), q = b.getBoundingClientRect(), t = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
+      var links = [].filter.call(document.querySelectorAll('tw-story > tw-passage:not(.dss-ghost) tw-link'), function (l) { return l.getClientRects().length; }).length;
+      return { label: b.textContent, top: !!t && (t === b || b.contains(t)), foot: Math.round(innerHeight - q.bottom), pools: w.getAttribute('data-pools'), links: links, over: document.scrollingElement.scrollHeight - innerHeight }; }""")
+    r.info = str(m)
+    r.expect(m["pools"] is None, "the street has %s pools on the ground; Sam asked for it dry" % m["pools"])
+    r.expect(m["label"] == "WALK ON" and m["top"] and m["foot"] < 140, "WALK ON is not the button at the foot: %s" % m)
+    r.expect(m["links"] == 0, "%d passage links show beside the scene" % m["links"])
+    r.expect(m["over"] <= 2, "the page scrolls by %d px" % m["over"])
+    r.page.click("#bs-wrap button")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 12000, "WALK ON to go back to Dean Street")
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

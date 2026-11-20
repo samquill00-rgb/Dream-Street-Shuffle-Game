@@ -4266,7 +4266,7 @@ def bateman_approach(r):
     r.page.wait_for_timeout(1500)
     blank = blank_canvases(r)
     r.expect(not blank, "; ".join(blank))
-    m = r.js("""() => { var w = document.getElementById('bs-wrap'), b = w.querySelector('button'), q = b.getBoundingClientRect(), t = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
+    m = r.js("""() => { var w = document.getElementById('bs-wrap'), b = [].filter.call(w.querySelectorAll('button'), function (x) { return x.textContent === 'WALK ON'; })[0] || w.querySelector('button'), q = b.getBoundingClientRect(), t = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
       var links = [].filter.call(document.querySelectorAll('tw-story > tw-passage:not(.dss-ghost) tw-link'), function (l) { return l.getClientRects().length; }).length;
       return { label: b.textContent, top: !!t && (t === b || b.contains(t)), foot: Math.round(innerHeight - q.bottom), pools: w.getAttribute('data-pools'), links: links, over: document.scrollingElement.scrollHeight - innerHeight }; }""")
     r.info = str(m)
@@ -4274,8 +4274,55 @@ def bateman_approach(r):
     r.expect(m["label"] == "WALK ON" and m["top"] and m["foot"] < 140, "WALK ON is not the button at the foot: %s" % m)
     r.expect(m["links"] == 0, "%d passage links show beside the scene" % m["links"])
     r.expect(m["over"] <= 2, "the page scrolls by %d px" % m["over"])
-    r.page.click("#bs-wrap button")
+    r.page.click("#bs-wrap button:has-text('WALK ON')")
     r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 12000, "WALK ON to go back to Dean Street")
+
+
+@check("joyride-from-bateman", "2026-11-20 (Sam: \"Yes, wire it here\"): GET IN on Bateman Street opens the ride in the passenger seat (no second kerbside scene), the ride draws, a left into Frith Street and getting out at Ronnie's hands the stop back, and Walk on puts the player on Dean Street at Ronnie's door with the ride gone")
+def joyride_from_bateman(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Bateman Street", wait=9000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => [].some.call(document.querySelectorAll('#bs-wrap button'), function (b) { return b.textContent === 'GET IN' && b.getClientRects().length; })", 9000, "a GET IN button on Bateman Street")
+    r.page.click("#bs-wrap button:has-text('GET IN')")
+    r.wait_for("() => !!document.getElementById('jr-frame')", 15000, "the ride's frame")
+    def ride():
+        return next((f for f in r.page.frames if "soho-joyride" in f.url), None)
+    t0 = time.time(); fr = None
+    while time.time() - t0 < 40:
+        fr = ride()
+        if fr and fr.evaluate("() => !!window.__joyride"): break
+        r.page.wait_for_timeout(400)
+    r.expect(fr is not None, "the ride page did not load in its frame")
+    st = fr.evaluate("() => window.__joyride.state()")
+    r.expect(st["mode"] == "inside", "the ride did not open in the passenger seat (mode %s, choices %s)" % (st["mode"], st["choices"]))
+    r.expect(r.pn() == "Soho Joyride", "the page under the ride is %r" % r.pn())
+    r.page.wait_for_timeout(2500)
+    blank = blank_canvases(r)
+    seen = fr.evaluate("() => { var c = document.getElementById('view'); return c ? [c.width, c.height] : null; }")
+    r.expect(seen and seen[0] > 300, "the ride has no view (%s)" % seen)
+    import io
+    from PIL import Image, ImageStat
+    sd = ImageStat.Stat(Image.open(io.BytesIO(r.page.screenshot())).convert("L")).stddev[0]
+    r.expect(sd > 6, "the ride's view is flat (spread %.1f)" % sd)
+    trail = []
+    t0 = time.time()
+    while time.time() - t0 < 120:
+        st = fr.evaluate("() => window.__joyride.state()"); ch = st["choices"]
+        if ch:
+            if "Walk on" in ch: break
+            want = next((i for i, c in enumerate(ch) if c.startswith("Left into Frith") or c.startswith("Get out at Ronnie")), None)
+            if want is None:
+                # on the move the only offer is to pull over early: sit tight until he reaches the stop
+                r.expect(ch == ["Ask him to pull over"], "no way to Ronnie's among %s" % ch)
+            else:
+                trail.append(ch[want]); fr.evaluate("(i) => window.__joyride.choose(i)", want)
+        r.page.wait_for_timeout(1500)
+    r.info = " > ".join(trail)
+    r.expect("Walk on" in fr.evaluate("() => window.__joyride.state().choices"), "the ride never offered Walk on (%s)" % r.info)
+    r.expect(r.js("() => document.getElementById('jr-frame').getAttribute('data-exit')") == "ronnies", "the game did not hear the stop")
+    fr.click("#actions button")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street' && !document.getElementById('jr-frame')", 15000, "Walk on to go back to Dean Street and the ride to go")
+    r.expect(r.js("() => sessionStorage.getItem('dssMapLast')") == "ronnies", "the player is not at Ronnie's door")
 
 
 def main(argv):

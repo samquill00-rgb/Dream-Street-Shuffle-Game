@@ -3088,6 +3088,23 @@ def critic_knows_this_run_only(r):
     if SWAPS: r.page.unroute("**/*")
 
 
+@check("watkins-names-wait", "2026-11-20 playtest note 8 (Sam: \"The Blavatsky and Beast popups show before the actual word links do. They just kind of appear. They should only appear when the links do and you hover on the link\"): with the pointer resting where the Beast's name will be written, no window opens until the name has arrived; then a hover opens it")
+def watkins_names_wait(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Watkins", wait=2500)
+    r.clear_lore(); r.clear_slips()
+    HIM = "() => { var w = [].filter.call(document.querySelectorAll('.wk-him.wk-bio-link'), function (x) { return !x.closest('.dss-ghost') && x.getClientRects().length; })[0]; if (!w) return null; var b = w.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, here: w.classList.contains('wk-in'), op: +getComputedStyle(w).opacity }; }"
+    h = r.js(HIM)
+    r.expect(h and not h["here"], "the Beast's name is already written at the start, so the test proves nothing (%s)" % h)
+    r.page.mouse.move(h["x"] - 60, h["y"]); r.page.mouse.move(h["x"], h["y"], steps=4); r.page.wait_for_timeout(700)
+    r.js("() => { var w = document.querySelector('.wk-him.wk-bio-link'); if (w) w.dispatchEvent(new FocusEvent('focus')); }"); r.page.wait_for_timeout(300)
+    r.expect(not r.js("() => !!document.querySelector('.wk-bio')"), "a window opened over a name that is not on the page yet")
+    r.wait_for("(function(){ var f = %s; var h = f(); return h && h.here && h.op > 0.8; })" % HIM, 45000, "the Beast's name to be written on the page")
+    h = r.js(HIM)
+    r.page.mouse.move(h["x"] - 80, h["y"] - 60); r.page.mouse.move(h["x"], h["y"], steps=5); r.page.wait_for_timeout(600)
+    r.expect(r.js("() => { var t = document.querySelector('.wk-bio'); return !!t && t.dataset.k === 'him'; }"), "hovering the Beast's name, once written, opened no window")
+
+
 @check("beast-window-stays", "2026-11-05 note 34 (Sam: \"I can't click the 'on' for the beast without the popup disappearing\"): the Beast's window in Watkins waits 350 ms after the pointer leaves his name, stays while the pointer is on it, and a click on it pins it and turns to part 2")
 def beast_window_stays(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

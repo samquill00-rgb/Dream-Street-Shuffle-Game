@@ -1597,7 +1597,7 @@ function placeCar() {
   const p = pathAt(car.path, car.s); car.x = p.x; car.z = p.z; car.hx = p.hx; car.hz = p.hz; car.k = p.k;
 }
 function stepCar(dt) {
-  if (!car.path || car.halted) { car.acc = lerp(car.acc, 0, Math.min(1, dt * 4)); return; }
+  if (!car.path || car.halted || (stereo.phase > 0 && stereo.phase < 2.1)) { car.acc = lerp(car.acc, 0, Math.min(1, dt * 4)); return; }   /* he does not pull away before the engine is running */
   const dStop = car.stopS - car.s;
   let vT = 7.4;
   for (let a = 0; a <= 11; a += 1.5) { const q = pathAt(car.path, Math.min(car.stopS, car.s + a)); if (Math.abs(q.k) > 0.01) { vT = Math.min(vT, 3.3 + a * 0.36); } }
@@ -1625,23 +1625,53 @@ function turnWord(nodeId, toId) {   /* the word for the turn, from the way the c
    THE CAR STEREO: Sam's "Roger that!", put on by the driver a moment after you get in
    ============================================================ */
 const stereo = { el: null, reach: 0, phase: 0, on: false, vol: 0, want: 0, muted: qs.get("mute") === "1" };
+/* 2026-11-20 (Sam: "A car door shutting, a key/engine starting. then a rumbling engine. Can you add them in that order before the music starts?"): his three files, unaltered, beside this page. The door and the start are one-shots; the engine is looped from its first to its last sounding sample (an mp3 carries a little silence at each end) and runs under the music, a touch higher as he picks up speed. */
+const sfx = { ctx: null, out: null, bufs: {}, ready: false, waited: 0, eng: null, engG: null, engWant: 0, engVol: 0, log: [], FILES: { door: "joyride-door.wav", start: "joyride-start.wav", engine: "joyride-engine.mp3" }, VOL: { door: 0.7, start: 0.35, engine: 0.2 } };
+function sfxInit() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  if (!sfx.ctx) {
+    sfx.ctx = new AC(); sfx.out = sfx.ctx.createGain(); sfx.out.gain.value = stereo.muted ? 0 : 1; sfx.out.connect(sfx.ctx.destination);
+    let left = 3;
+    for (const k in sfx.FILES) fetch(sfx.FILES[k]).then(function (r) { return r.arrayBuffer(); }).then(function (ab) { return new Promise(function (ok, no) { sfx.ctx.decodeAudioData(ab, ok, no); }); }).then(function (b) { sfx.bufs[k] = b; }).catch(function () {}).then(function () { if (--left === 0) sfx.ready = true; });
+  }
+  if (sfx.ctx.state === "suspended") { const pr = sfx.ctx.resume(); if (pr && pr.catch) pr.catch(function () {}); }
+}
+function sfxShot(k) {
+  sfx.log.push([k, +stereo.phase.toFixed(2)]);
+  if (!sfx.ctx || !sfx.bufs[k]) return;
+  const src = sfx.ctx.createBufferSource(), g = sfx.ctx.createGain(); src.buffer = sfx.bufs[k]; g.gain.value = sfx.VOL[k]; src.connect(g); g.connect(sfx.out); if (sfx.tapIn) g.connect(sfx.tapIn); src.start();
+}
+function sfxEngine() {
+  sfx.log.push(["engine", +stereo.phase.toFixed(2)]); sfx.engWant = sfx.VOL.engine;
+  const b = sfx.bufs.engine; if (!sfx.ctx || !b || sfx.eng) return;
+  const d = b.getChannelData(0); let i0 = 0, i1 = d.length - 1; while (i0 < i1 && Math.abs(d[i0]) < 0.02) i0++; while (i1 > i0 && Math.abs(d[i1]) < 0.02) i1--;
+  const src = sfx.ctx.createBufferSource(), g = sfx.ctx.createGain(); src.buffer = b; src.loop = true; src.loopStart = i0 / b.sampleRate; src.loopEnd = (i1 + 1) / b.sampleRate; g.gain.value = 0; src.connect(g); g.connect(sfx.out); if (sfx.tapIn) g.connect(sfx.tapIn); src.start(0, src.loopStart);
+  sfx.eng = src; sfx.engG = g; sfx.engVol = 0;
+}
+function sfxStop() { sfx.engWant = 0; sfx.engVol = 0; sfx.waited = 0; sfx.log.length = 0; if (sfx.eng) { try { sfx.eng.stop(); } catch (e) {} sfx.eng = null; sfx.engG = null; } }
 function stereoStart() {
+  sfxInit();
   if (!stereo.el) { stereo.el = new Audio("roger-that.mp3"); stereo.el.loop = true; stereo.el.preload = "auto"; }
   stereo.el.pause(); try { stereo.el.currentTime = 0; } catch (e) {}
   stereo.el.volume = 0; stereo.el.muted = stereo.muted; stereo.on = false; stereo.vol = 0; stereo.want = 0; stereo.phase = 0.001; stereo.reach = 0;
   /* primed inside the Get in press, so the browser lets it sound when his hand reaches the dial */
   const pr = stereo.el.play(); if (pr && pr.catch) pr.catch(function () {});
 }
-function stereoFade(to) { stereo.want = to; }
-function stereoStop() { stereo.want = 0; stereo.phase = 0; stereo.reach = 0; stereo.on = false; if (stereo.el) { stereo.el.pause(); stereo.el.volume = 0; } stereo.vol = 0; if (cabinFx.radio) cabinFx.radio.color.setHex(0x707070); }
+function stereoFade(to) { stereo.want = to; if (to === 0) sfx.engWant = 0; }
+function stereoStop() { sfxStop(); stereo.want = 0; stereo.phase = 0; stereo.reach = 0; stereo.on = false; if (stereo.el) { stereo.el.pause(); stereo.el.volume = 0; } stereo.vol = 0; if (cabinFx.radio) cabinFx.radio.color.setHex(0x707070); }
 function stepStereo(dt) {
-  if (stereo.phase > 0 && stereo.phase < 4.7) {   /* 2026-11-20 (Sam: "make the music take a second or so longer to begin and animate a ghostly arm/hand appearing to switch it on"): 2.2 s after the door shuts a ghost's arm comes out of the dark to the wireless, turns it on at 3.15 s (it was 1.95), and goes back */
-    stereo.phase += dt;
+  if (stereo.phase > 0 && stereo.phase < 0.01 && sfx.ctx && !sfx.ready && sfx.waited < 2) { sfx.waited += dt; }   /* the clock waits (2 s at most) for his three sounds to load */
+  else if (stereo.phase > 0 && stereo.phase < 5.5) {   /* 2026-11-20 (Sam: "make the music take a second or so longer to begin and animate a ghostly arm/hand appearing to switch it on"; then the door, the start and the engine "in that order before the music starts"): the door shuts at 0.15 s, the engine is started at 1.0 s and is running from 1.45 s, he pulls away at 2.1 s, a ghost's arm comes out of the dark to the wireless from 3.0 s, turns it on at 3.95 s, and goes back */
+    const tp = stereo.phase; stereo.phase += dt;
     const t = stereo.phase;
-    stereo.reach = t < 2.2 ? 0 : (t < 3.1 ? (t - 2.2) / 0.9 : (t < 3.6 ? 1 : Math.max(0, 1 - (t - 3.6) / 1.0)));
-    if (t >= 3.15 && !stereo.on) { stereo.on = true; stereo.want = 0.85; if (stereo.el) { try { stereo.el.currentTime = 0; } catch (e) {} } if (cabinFx.radio) cabinFx.radio.color.setHex(0xffffff); }
+    if (tp < 0.15 && t >= 0.15) sfxShot("door");
+    if (tp < 1.0 && t >= 1.0) sfxShot("start");
+    if (tp < 1.45 && t >= 1.45) sfxEngine();
+    stereo.reach = t < 3.0 ? 0 : (t < 3.9 ? (t - 3.0) / 0.9 : (t < 4.4 ? 1 : Math.max(0, 1 - (t - 4.4) / 1.0)));
+    if (t >= 3.95 && !stereo.on) { stereo.on = true; stereo.want = 0.85; if (stereo.el) { try { stereo.el.currentTime = 0; } catch (e) {} } if (cabinFx.radio) cabinFx.radio.color.setHex(0xffffff); }
   }
   if (stereo.el) { stereo.vol += clamp(stereo.want - stereo.vol, -dt * 0.4, dt * 1.6); stereo.el.volume = clamp(stereo.vol, 0, 1); }
+  if (sfx.engG) { sfx.engVol += clamp(sfx.engWant - sfx.engVol, -dt * 0.07, dt * 0.45); sfx.engG.gain.value = Math.max(0, sfx.engVol); sfx.eng.playbackRate.value = 0.88 + Math.min(car.v, 7.4) / 7.4 * 0.2; }
 }
 
 /* ============================================================
@@ -1920,7 +1950,13 @@ window.__joyride = {
   },
   path: function () { return car.path ? car.path.pts.filter((q, i) => i % 12 === 0).map(q => [+(q.x / S).toFixed(2), +(q.z / S).toFixed(2)]) : null; },
   lights: function () { return lights.map(l => [l.color.getHexString(), +l.intensity.toFixed(2), +(l.position.x / S).toFixed(1), +(l.position.z / S).toFixed(1)]); },
-  stereo: function () { return { on: stereo.on, vol: +stereo.vol.toFixed(2), reach: +stereo.reach.toFixed(2), phase: +stereo.phase.toFixed(2), arm: drv.armShown || 0, paused: stereo.el ? stereo.el.paused : null, t: stereo.el ? +stereo.el.currentTime.toFixed(1) : null, ready: stereo.el ? stereo.el.readyState : null, muted: stereo.muted }; },
+  sfxLevel: function () {   /* for the checks: the effects' level in dB after their gains, before the mute */
+    if (!sfx.ctx) return null;
+    if (!sfx.an) { sfx.an = sfx.ctx.createAnalyser(); sfx.an.fftSize = 2048; sfx.tapIn = sfx.ctx.createGain(); sfx.tapIn.connect(sfx.an); sfx.anBuf = new Float32Array(2048); sfx.tapped = []; }
+    sfx.an.getFloatTimeDomainData(sfx.anBuf); let q = 0; for (let i = 0; i < 2048; i++) q += sfx.anBuf[i] * sfx.anBuf[i];
+    return Math.round(10 * Math.log10(q / 2048 + 1e-12));
+  },
+  stereo: function () { return { on: stereo.on, vol: +stereo.vol.toFixed(2), reach: +stereo.reach.toFixed(2), phase: +stereo.phase.toFixed(2), sfx: sfx.log.slice(), sfxReady: Object.keys(sfx.bufs).length, ctx: sfx.ctx ? sfx.ctx.state : null, eng: +sfx.engVol.toFixed(2), arm: drv.armShown || 0, paused: stereo.el ? stereo.el.paused : null, t: stereo.el ? +stereo.el.currentTime.toFixed(1) : null, ready: stereo.el ? stereo.el.readyState : null, muted: stereo.muted }; },
   info: function () { return { rt: composer ? [composer.renderTarget1.width, composer.renderTarget1.height, composer.renderTarget1.samples || 0] : null, cv: [canvas.width, canvas.height], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, sources: sources.length, halos: halos.length, env: !!scene.environment, cars: CARKINDS, carLen: Object.keys(CARS).map(k => +(CARS[k].L1 - CARS[k].L0).toFixed(2)) }; }
 };
 try {

@@ -4319,17 +4319,22 @@ def joyride_from_bateman(r):
     r.expect(r.pn() == "Soho Joyride", "the page under the ride is %r" % r.pn())
     # 2026-11-20 (Sam: "make the music take a second or so longer to begin and animate a ghostly arm/hand appearing to switch it on")
     early = []; arm = 0.0; on = False; t1 = time.time()
-    while time.time() - t1 < 8:
+    while time.time() - t1 < 11:
         sv = fr.evaluate("() => window.__joyride.stereo()")
-        if sv["on"] and sv["phase"] < 3.0: early.append(sv["phase"])
+        if sv["on"] and sv["phase"] < 3.8: early.append(sv["phase"])
         if not sv["on"]: arm = max(arm, sv["arm"])
         on = on or sv["on"]
-        if sv["phase"] > 4.6: break
+        if sv["phase"] > 5.4: break
         r.page.wait_for_timeout(80)
-    r.expect(not early, "the wireless came on %.2f s after the door shut; it should wait until past 3 s (it was 1.95 s)" % (early[0] if early else 0))
+    r.expect(not early, "the wireless came on %.2f s after the door shut; it should wait until past 3.8 s, after the door, the start and the engine (it was 1.95 s)" % (early[0] if early else 0))
+    # 2026-11-20 (Sam: "A car door shutting, a key/engine starting. then a rumbling engine. Can you add them in that order before the music starts?")
+    order = [x[0] for x in sv["sfx"]]
+    r.expect(order == ["door", "start", "engine"] and sv["sfx"][2][1] < 3.8, "the ride's sounds before the music are %s; they should be door, start, engine, all before 3.8 s" % sv["sfx"])
+    r.expect(sv["sfxReady"] == 3, "only %d of the ride's three sound files loaded" % sv["sfxReady"])
+    r.expect(sv["eng"] > 0.1, "the engine is not running under the music (level %.2f)" % sv["eng"])
     r.expect(on, "the wireless never came on")
     r.expect(arm >= 0.5, "no ghost arm showed on its way to the wireless before it came on (most it showed: %.2f)" % arm)
-    armnote = "wireless on after 3 s, ghost arm at %.2f before it" % arm
+    armnote = "%s, then the wireless; ghost arm at %.2f before it; audio context %s" % (sv["sfx"], arm, sv["ctx"])
     blank = blank_canvases(r)
     seen = fr.evaluate("() => { var c = document.getElementById('view'); return c ? [c.width, c.height] : null; }")
     r.expect(seen and seen[0] > 300, "the ride has no view (%s)" % seen)

@@ -4353,10 +4353,18 @@ def joyride_from_bateman(r):
     r.expect(sd > 6, "the ride's view is flat (spread %.1f)" % sd)
     trail = []
     t0 = time.time()
+    # 2026-11-20 (Sam, on the ride's own Ronnie's against the game's approach: "Yes, cut it"): getting out shows no view from outside the car and asks for no Walk on; the picture goes to black and the game puts you on the street
+    outside = []; walk_on = False; exits = None
     while time.time() - t0 < 120:
-        st = fr.evaluate("() => window.__joyride.state()"); ch = st["choices"]
+        if r.pn() == "Dean Street": break
+        try:
+            st = fr.evaluate("() => window.__joyride.state()"); exits = fr.evaluate("() => window.__joyride.info().exits")
+        except Exception:
+            r.page.wait_for_timeout(500); continue
+        ch = st["choices"]
+        if st["mode"] == "outside": outside.append(st["street"])
         if ch:
-            if "Walk on" in ch: break
+            if "Walk on" in ch: walk_on = True; break
             want = next((i for i, c in enumerate(ch) if c.startswith("Left into Frith") or c.startswith("Get out at Ronnie")), None)
             if want is None:
                 # on the move the only offer is to pull over early: sit tight until he reaches the stop
@@ -4365,10 +4373,8 @@ def joyride_from_bateman(r):
                 trail.append(ch[want]); fr.evaluate("(i) => window.__joyride.choose(i)", want)
         r.page.wait_for_timeout(1500)
     r.info = armnote + "; " + " > ".join(trail)
-    r.expect("Walk on" in fr.evaluate("() => window.__joyride.state().choices"), "the ride never offered Walk on (%s)" % r.info)
-    r.expect(r.js("() => document.getElementById('jr-frame').getAttribute('data-exit')") == "ronnies", "the game did not hear the stop")
-    fr.click("#actions button")
-    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street' && !document.getElementById('jr-frame')", 15000, "Walk on to go back to Dean Street and the ride to go")
+    r.expect(not walk_on and not outside and exits and exits["cut"] == 1 and exits["outside"] == 0, "getting out at Ronnie's still shows the ride from outside the car or asks for Walk on (outside view on %s, Walk on %s, exits %s)" % (outside, walk_on, exits))
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street' && !document.getElementById('jr-frame')", 25000, "the game to put the player back on Dean Street and the ride to go")
     r.expect(r.js("() => sessionStorage.getItem('dssMapLast')") == "ronnies", "the player is not at Ronnie's door")
 
 

@@ -1,3 +1,10 @@
+# THE MAN BY HIS CAR IS IN THE GAME (20 Nov, small hours; Sam: "I want him to just be there whenever you return to soho after completing the page 93 errand")
+- Hub link `A man by his car` (in the alley dock, so also behind `$metRed`) on `$returnedPage is true`; map door `joyride` at c36 r17 (south pavement of Bateman Street), a stranger figure that is never used up, his red car drawn beside him in `buildBase`. Walk onto the tile for the Bateman Street approach; GET IN is the ride.
+- `Bateman Street` is tagged `map-return-joyride` and sets `$alleyReturn`, so neither walking on nor a ride counts as a lap. That is my call, not Sam's ruling: say if a ride should cost a lap.
+- Check `joyride-man-after-page93` (plant-proved; saves `joyride-man-map.png`). Ran with it: hub-*, bateman-approach, joyride-from-bateman. The FULL regression has not been run since.
+- The source edits were swept into the other session's 62b0f32; my own commit after it holds the built html.
+- The ride's driver and the man at the kerb are the game's ghost figures (`dssGhostTex` copied into soho-joyride.html).
+
 # SOHO JOYRIDE: WIRED TO THE BATEMAN STREET APPROACH (20 Nov, later; Sam: "Yes, wire it here")
 - The game's approach is the passage `Bateman Street` (arrival('bs') in the FIVE SMALL ARRIVALS block): dry street, red Cadillac from Sam's three references, the man a ghost on the far pavement, an opening camera swing, buttons GET IN and WALK ON. Not on the map or the hub: open with `?start=Bateman%20Street`. When he turns up is Sam's to rule.
 - GET IN goes to the passage `Soho Joyride`; the SOHO JOYRIDE HOST script (after the arrivals block) lays `soho-joyride.html?embed=1` over the page in a frame. Embedded, the ride opens in the passenger seat (its own kerbside view is skipped), hides its preview aids, and on getting out offers Walk on: `dss:joyride-exit` then `dss:joyride-leave` set `window.dssSohoArrival` and `dssMapLast` and turn the page to Dean Street.

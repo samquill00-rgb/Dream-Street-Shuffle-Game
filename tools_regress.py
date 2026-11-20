@@ -4387,20 +4387,22 @@ def main(argv):
 
 
 
-@check("joyride-man-after-page93", "2026-11-20 (Sam: \"I want him to just be there whenever you return to soho after completing the page 93 errand\"): before page 93 is back with INIS the hub has no man by his car and the map's tile is shut; once it is, 'A man by his car' is on the hub with a door on the map, walking onto his tile on Bateman Street opens the approach, and after WALK ON he is still there and you stand at his car")
-def joyride_man_after_page93(r):
-    scratch_passage(r, "T-page93", '(set: $returns to 3)(set: $metRed to true)(link: "Errand done")[(set: $returnedPage to true)(go-to: "Dean Street")] (link: "Errand open")[(set: $returnedPage to false)(go-to: "Dean Street")]')
+@check("joyride-man-first-night", "2026-11-20 (Sam: \"Put him on the map, first night\"; earlier the same night he was gated on the page 93 errand): on the first night, page 93 not yet heard of, 'A man by his car' is on Dean Street once its other doors open (the second visit) with a door on the map; walking onto his tile on Bateman Street opens the approach, and after WALK ON he is still there and you stand at his car")
+def joyride_man_first_night(r):
+    scratch_passage(r, "T-night1", '(set: $returns to 1)(set: $metRed to true)(set: $returnedPage to false)[[Walk on|Dean Street]]')   # the first night's second Dean Street: the poet met, nothing else
     MAN = "() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'joyride'; })[0]; return !!d; }"
-    def hub(which):
-        r.go("T-page93", wait=6000)
-        r.page.click("tw-link:has-text('%s')" % which)
-        r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 15000, "the Soho map")
-        r.clear_lore(); r.clear_slips(); r.clear_lore()
-        return [t for t in r.js(HUB_LINKS)]
-    before = hub("Errand open")
-    r.expect("A man by his car" not in before, "he is on the hub before page 93 is back (%s)" % before)
-    after = hub("Errand done")
-    r.expect("A man by his car" in after, "page 93 is back with INIS and he is not on the hub (%s)" % after)
+    r.go("T-night1", wait=6000)
+    r.page.click("tw-link:has-text('Walk on')")
+    r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 15000, "the Soho map")
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    # the second Dean Street hands you the Donkey coin: toss it, then pocket it, as a player does (it holds the walk until then)
+    for sel in ("#coin-toss-btn", "#coin-keep-btn"):
+        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
+        r.page.click(sel); r.page.wait_for_timeout(2500)
+    r.wait_for("() => !document.querySelector('#coin-overlay') || getComputedStyle(document.querySelector('#coin-overlay')).display === 'none' || !document.querySelector('#coin-overlay').offsetParent", 8000, "the coin card to close")
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    first = [t for t in r.js(HUB_LINKS)]
+    r.expect("A man by his car" in first, "he is not on Dean Street on the first night (%s)" % first)
     r.expect(r.js(MAN), "the map has no joyride tile")
     bad, links = hub_problems(r, "Dean Street with the man by his car")
     r.expect(not bad, "; ".join(bad))

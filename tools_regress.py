@@ -2047,7 +2047,7 @@ def _(r):
     r.wait_for("() => [].some.call(document.querySelectorAll('tw-passage tw-link, .dss-room-veil tw-link'), function (l) { return l.textContent.trim() === 'Go on'; })", 5000, "a Go on link on the Interval")
 
 
-@check("polaroid-close", "2026-11-08 note 20: the stairs' polaroid has a cross on its corner and a line saying how to put it away; 2026-11-14 note 17: the first press pockets it and it stays up to read, the second puts it away")
+@check("polaroid-close", "2026-11-08 note 20: the stairs' polaroid has a cross on its corner and a line saying how to put it away; 2026-11-14 note 17: the first press pockets it and it stays up to read, the second puts it away; 2026-11-20 note 14 reverses that: one press pockets it and it puts itself away")
 def _(r):
     r.go("The Interval: the stairs", wait=5000)
     r.clear_slips()
@@ -2058,15 +2058,13 @@ def _(r):
     r.expect(box, "the polaroid screen has no frame, cross or hint")
     r.expect(box["near"], "the cross is not on the polaroid's corner")
     r.expect(box["hint"] == "Pocket the polaroid", "the line under the polaroid reads %r" % box["hint"])
-    # 2026-11-14 note 17 (Sam: "'Pocket the polaroid' shouldn't close it immediately, that should need a second click so you can still read it")
+    # 2026-11-20 note 14 (Sam: "once it is pocketed you shouldn't have to click again to put it away, it should go to the notebook"), which reverses 2026-11-14 note 17
     r.page.wait_for_timeout(800)
     r.page.mouse.click(60, 840)
-    r.page.wait_for_timeout(900)
-    st = r.js("() => { var o = document.querySelector('#dss-photo-pop'), h = document.querySelector('.dss-photo-pop-hint'); return o ? [o.classList.contains('pocketed'), o.classList.contains('out'), h ? h.textContent : ''] : null; }")
-    r.expect(st is not None and not st[1], "the first press put the polaroid away at once")
-    r.expect(st[0] and "pocket" in st[2].lower() and st[2] != "Pocket the polaroid", "the first press did not pocket it and say so (%r)" % (st,))
-    r.page.mouse.click(60, 840)
-    r.wait_for("() => !document.querySelector('#dss-photo-pop')", 3000, "the second press to put the polaroid away")
+    r.page.wait_for_timeout(350)
+    st = r.js("() => { var o = document.querySelector('#dss-photo-pop'), h = document.querySelector('.dss-photo-pop-hint'); return o ? [o.classList.contains('pocketed'), h ? h.textContent : ''] : null; }")
+    r.expect(st is not None and st[0] and "notebook" in st[1].lower(), "the press did not pocket it and say where it went (%r)" % (st,))
+    r.wait_for("() => !document.querySelector('#dss-photo-pop')", 4000, "the polaroid to put itself away after one press")
 
 
 @check("barber-choice-after-scene", "2026-11-08 notes 27-28: at the barber's the choices wait under the 3D scene until its button is pressed; 2026-11-13 notes 25-26: the button says TO THE BARBER'S, the shop bell rings on it (not on the map step), the runner goes at 3.4 m/s in all three scenes")
@@ -3101,6 +3099,19 @@ def airport_pub_second_visit(r):
     r.wait_for("() => !!document.getElementById('ap-enter')", 15000, "the lounge a second time")
     r.page.click("#ap-enter"); r.page.wait_for_timeout(2600)
     r.expect("stood at this bar" in r.js("() => document.body.innerText"), "a second arrival has no line of its own")
+
+
+@check("typing-quicker", "2026-11-20 playtest notes 13 and 15 (Sam: \"All of these minor quotations should appear more quickly in the typewriter effect\"; INIS on the third pillar \"should appear more quickly and at more varied rates too\"): a quotation types at half its old time, and INIS's paragraphs each take a rate of their own")
+def typing_quicker(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The Interval: the stairs", wait=6000)
+    pace = r.js("() => { var v = [].filter.call(document.querySelectorAll('.verse'), function (x) { return !x.closest('.dss-ghost') && x.getAttribute('data-pace'); })[0]; return v ? +v.getAttribute('data-pace') : null; }")
+    r.expect(pace is not None and pace <= 0.5, "the Yeats on the stairs types at pace %r (0.5 or under wanted; it was 1)" % pace)
+    r.go("O'Flatterly's Third Pillar", wait=14000)
+    rates = r.js("() => { var v = [].filter.call(document.querySelectorAll('.dss-speech-quick'), function (x) { return !x.closest('.dss-ghost'); })[0]; return v ? (v.getAttribute('data-rates') || '') : null; }")
+    got = [float(x) for x in (rates or "").split(",") if x]
+    r.expect(len(got) >= 2 and max(got) - min(got) > 0.02, "INIS's paragraphs do not type at rates of their own (%r)" % rates)
+    r.info = "verse pace %s; INIS's paragraph rates %s" % (pace, rates)
 
 
 @check("watkins-names-wait", "2026-11-20 playtest note 8 (Sam: \"The Blavatsky and Beast popups show before the actual word links do. They just kind of appear. They should only appear when the links do and you hover on the link\"): with the pointer resting where the Beast's name will be written, no window opens until the name has arrived; then a hover opens it")

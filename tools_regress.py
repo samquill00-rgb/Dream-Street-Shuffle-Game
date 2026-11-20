@@ -4266,6 +4266,8 @@ def bateman_approach(r):
     r.page.wait_for_timeout(1500)
     blank = blank_canvases(r)
     r.expect(not blank, "; ".join(blank))
+    ce = r.js("() => document.getElementById('bs-wrap').getAttribute('data-car-env')")
+    r.expect(ce == "street", "2026-11-20 (Sam: \"Match the approach's Cadillac to the ride's shine\"): the approach's Cadillac does not reflect the ride's night street (data-car-env %r)" % ce)
     m = r.js("""() => { var w = document.getElementById('bs-wrap'), b = [].filter.call(w.querySelectorAll('button'), function (x) { return x.textContent === 'WALK ON'; })[0] || w.querySelector('button'), q = b.getBoundingClientRect(), t = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
       var links = [].filter.call(document.querySelectorAll('tw-story > tw-passage:not(.dss-ghost) tw-link'), function (l) { return l.getClientRects().length; }).length;
       return { label: b.textContent, top: !!t && (t === b || b.contains(t)), foot: Math.round(innerHeight - q.bottom), pools: w.getAttribute('data-pools'), links: links, over: document.scrollingElement.scrollHeight - innerHeight }; }""")
@@ -4319,6 +4321,8 @@ def joyride_from_bateman(r):
     blank = blank_canvases(r)
     seen = fr.evaluate("() => { var c = document.getElementById('view'); return c ? [c.width, c.height] : null; }")
     r.expect(seen and seen[0] > 300, "the ride has no view (%s)" % seen)
+    ci = fr.evaluate("() => window.__joyride.info()")
+    r.expect(all(ci["cars"].get(k2, 0) > 0 for k2 in ("mini", "small", "big", "cab", "van")) and min(ci["carLen"]) < 3.2 and max(ci["carLen"]) < 4.6, "2026-11-20 (Sam: \"make the parked cars look more british, they look very american. Only the cadillac should be american\"): the parked cars are not the British mix (kinds %s, lengths %s)" % (ci["cars"], ci["carLen"]))
     r.expect(fr.evaluate("() => window.__joyride.info().env") is True, "2026-11-20 graphics pass: the ride has no night environment, so its wet road, glass and paint reflect nothing")
     import io
     from PIL import Image, ImageStat

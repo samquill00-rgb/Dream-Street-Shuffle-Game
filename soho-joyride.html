@@ -913,39 +913,69 @@ const carTf = function (x, z, hx, hz) {   /* a car's own space: -z forward, +x i
   const rx = -hz, rz = hx;
   return { p: (lx, ly, lz) => [x + rx * lx - hx * lz, ly, z + rz * lx - hz * lz], n: (nx, ny, nz) => [rx * nx - hx * nz, ny, rz * nx - hz * nz] };
 };
+/* 2026-11-20 (Sam: "make the parked cars look more british, they look very american. Only the cadillac should be american"). The old parked car was one long, low three-box, 4.45 m with a tall barred grille. These are the street's own: a Mini, a small saloon (Escort, 1100), a family saloon (Cortina, Marina), a black cab and a short-nosed Transit, on British plates (white in front, yellow behind; black and silver on the older ones), with round headlamps, a low grille and thin bumpers. */
+const CARS = {
+  mini:  { L0: -1.52, L1: 1.52, bw: 0.70, belt: 0.80, roof: 1.33, wr: 0.25, sf: 0.72, st: 1.12, rt: 0.42, rb: 0.10, hl: 0.085, gx: 0.30, strip: false },
+  small: { L0: -1.98, L1: 1.98, bw: 0.78, belt: 0.84, roof: 1.36, wr: 0.29, sf: 1.20, st: 1.62, rt: 1.05, rb: 0.62, hl: 0.085, gx: 0.36, strip: true },
+  big:   { L0: -2.14, L1: 2.14, bw: 0.83, belt: 0.86, roof: 1.38, wr: 0.30, sf: 1.30, st: 1.75, rt: 1.20, rb: 0.72, hl: 0.08, gx: 0.40, strip: true, twin: true },
+  cab:   { L0: -2.28, L1: 2.28, bw: 0.87, belt: 0.98, roof: 1.74, wr: 0.33, sf: 1.25, st: 1.42, rt: 0.75, rb: 0.45, hl: 0.09, gx: 0.26, strip: false, tall: true },
+  van:   { L0: -2.20, L1: 2.30, bw: 0.92, belt: 0.98, roof: 1.95, wr: 0.33, sf: 0.70, st: 1.02, rt: 0.05, rb: 0.02, hl: 0.09, gx: 0.42, strip: false, van: true }
+};
 function buildSaloon(b, tf, o) {
   o = o || {};
-  const paint = o.paint || C(0x2a2f38), z0 = o.z0 != null ? o.z0 : -2.25, z1 = o.z1 != null ? o.z1 : 2.2, zc = o.zc != null ? o.zc : 0.2, K = o.key || "gloss";
-  const chrome = [0.62, 0.6, 0.56], glass = C(0x0a0d12), van = !!o.van, roofY = van ? 1.95 : 1.38, bw = 0.84;
-  b.boxT(K, tf, -bw, bw, 0.3, 0.86, z0, z1, paint);
-  const wb = 0.74, wt = van ? 0.72 : 0.62, sf = zc - 1.0, st = van ? zc - 0.85 : zc - 0.5, rt = van ? z1 - 0.05 : zc + 0.9, rb = van ? z1 - 0.02 : zc + 1.3;
+  const kind = o.kind && CARS[o.kind] ? o.kind : (o.van ? "van" : "big"), c = CARS[kind], van = !!c.van, K = o.key || "gloss";
+  const paint = kind === "cab" ? C(0x08080a) : (o.paint || C(0x2a2f38)), z0 = c.L0, z1 = c.L1, bw = c.bw, belt = c.belt, roofY = c.roof, sill = 0.26;
+  const chrome = [0.62, 0.6, 0.56], glass = C(0x0a0d12);
+  b.boxT(K, tf, -bw, bw, sill, belt, z0, z1, paint);
+  const wb = bw - 0.1, wt = bw - (van ? 0.14 : 0.2), sf = z0 + c.sf, st = z0 + c.st, rt = z1 - c.rt, rb = z1 - c.rb;
   const P = (x, y, z) => tf.p(x, y, z), N = (x, y, z) => tf.n(x, y, z);
   b.quad(K, [P(-wt, roofY, st), P(wt, roofY, st), P(wt, roofY, rt), P(-wt, roofY, rt)], N(0, 1, 0), mul(paint, 0.9));
-  b.quad("glass", [P(-wb, 0.86, sf), P(wb, 0.86, sf), P(wt, roofY, st), P(-wt, roofY, st)], N(0, 0.6, -1), glass);
-  b.quad(van ? K : "glass", [P(-wb, 0.86, rb), P(wb, 0.86, rb), P(wt, roofY, rt), P(-wt, roofY, rt)], N(0, 0.6, 1), van ? paint : glass);
+  b.quad("glass", [P(-wb, belt, sf), P(wb, belt, sf), P(wt, roofY, st), P(-wt, roofY, st)], N(0, 0.6, -1), glass);
+  b.quad(van ? K : "glass", [P(-wb, belt, rb), P(wb, belt, rb), P(wt, roofY, rt), P(-wt, roofY, rt)], N(0, 0.6, 1), van ? paint : glass);
+  if (van) for (const s of [-1, 1]) b.quad("glass", [P(s * 0.1, 1.2, z1 + 0.004), P(s * 0.62, 1.2, z1 + 0.004), P(s * 0.6, 1.62, z1 + 0.004), P(s * 0.1, 1.62, z1 + 0.004)], N(0, 0, 1), glass);   /* the two back-door windows */
+  const disc = function (key, x, y, z, r, nz, col) {   /* a round lamp, facing along the car */
+    const ring = []; for (let q = 0; q < 8; q++) { const a = q * Math.PI / 4 + Math.PI / 8; ring.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
+    for (let q = 0; q < 8; q += 2) b.quad(key, [P(x, y, z), P(ring[q][0], ring[q][1], z), P(ring[q + 1][0], ring[q + 1][1], z), P(ring[(q + 2) % 8][0], ring[(q + 2) % 8][1], z)], N(0, 0, nz), col);
+  };
+  const lit = !!o.lit, wr = c.wr;
   for (const s of [-1, 1]) {
-    b.quad(van ? K : "glass", [P(s * wb, 0.86, sf), P(s * wb, 0.86, rb), P(s * wt, roofY, rt), P(s * wt, roofY, st)], N(s, 0.2, 0), van ? paint : glass);
-    if (van) b.quad("glass", [P(s * (wb + 0.004), 0.95, sf + 0.1), P(s * (wb + 0.004), 0.95, sf + 1.0), P(s * (wt + 0.004), 1.6, sf + 1.05), P(s * (wt + 0.004), 1.6, sf + 0.3)], N(s, 0.1, 0), glass);
-    else for (const zz of [sf + 0.02, zc + 0.15, rb - 0.1]) { const t0 = (zz - sf) / (rb - sf), zt = st + (rt - st) * t0; b.quad(K, [P(s * (wb + 0.004), 0.86, zz - 0.045), P(s * (wb + 0.004), 0.86, zz + 0.045), P(s * (wt + 0.004), roofY, zt + 0.04), P(s * (wt + 0.004), roofY, zt - 0.04)], N(s, 0.2, 0), paint); }
-    b.quad("paint", [P(s * (bw + 0.004), 0.8, z0 + 0.1), P(s * (bw + 0.004), 0.8, z1 - 0.1), P(s * (bw + 0.004), 0.83, z1 - 0.1), P(s * (bw + 0.004), 0.83, z0 + 0.1)], N(s, 0, 0), chrome);
-    for (const az of [z0 + 0.82, z1 - 0.9]) {
+    b.quad(van ? K : "glass", [P(s * wb, belt, sf), P(s * wb, belt, rb), P(s * wt, roofY, rt), P(s * wt, roofY, st)], N(s, 0.2, 0), van ? paint : glass);
+    if (van) b.quad("glass", [P(s * (wb + 0.004), belt + 0.06, sf + 0.1), P(s * (wb + 0.004), belt + 0.06, sf + 1.0), P(s * (wt + 0.004), 1.6, sf + 1.05), P(s * (wt + 0.004), 1.6, sf + 0.4)], N(s, 0.1, 0), glass);
+    else for (const zz of [sf + 0.02, (sf + rb) / 2 + 0.1, rb - 0.1]) { const t0 = (zz - sf) / (rb - sf), zt = st + (rt - st) * t0; b.quad(K, [P(s * (wb + 0.004), belt, zz - 0.04), P(s * (wb + 0.004), belt, zz + 0.04), P(s * (wt + 0.004), roofY, zt + 0.035), P(s * (wt + 0.004), roofY, zt - 0.035)], N(s, 0.2, 0), paint); }
+    if (c.strip) b.quad("paint", [P(s * (bw + 0.004), belt - 0.14, z0 + 0.1), P(s * (bw + 0.004), belt - 0.14, z1 - 0.1), P(s * (bw + 0.004), belt - 0.125, z1 - 0.1), P(s * (bw + 0.004), belt - 0.125, z0 + 0.1)], N(s, 0, 0), chrome);
+    for (const az of [z0 + wr + 0.3, z1 - wr - 0.34]) {
       const xo = s * (bw + 0.012), xi = s * (bw - 0.2), ring = [];
-      for (let q = 0; q < 8; q++) { const a = q * Math.PI / 4 + Math.PI / 8; ring.push([0.31 + Math.sin(a) * 0.31, az + Math.cos(a) * 0.31]); }
-      for (let q = 0; q < 8; q++) { const p0 = ring[q], p1 = ring[(q + 1) % 8]; b.quad("paint", [P(xi, p0[0], p0[1]), P(xo, p0[0], p0[1]), P(xo, p1[0], p1[1]), P(xi, p1[0], p1[1])], N(0, p0[0] + p1[0] - 0.62, p0[1] + p1[1] - 2 * az), C(0x0b0b0c)); }
-      for (let q = 0; q < 8; q += 2) b.quad("paint", [P(xo, 0.31, az), P(xo, ring[q][0], ring[q][1]), P(xo, ring[q + 1][0], ring[q + 1][1]), P(xo, ring[(q + 2) % 8][0], ring[(q + 2) % 8][1])], N(s, 0, 0), C(0x0d0d0e));
-      for (let q = 0; q < 8; q += 2) { const hc = k => [0.31 + (ring[k % 8][0] - 0.31) * 0.52, az + (ring[k % 8][1] - az) * 0.52]; const h0 = hc(q), h1 = hc(q + 1), h2 = hc(q + 2); b.quad("gloss", [P(xo + s * 0.006, 0.31, az), P(xo + s * 0.006, h0[0], h0[1]), P(xo + s * 0.006, h1[0], h1[1]), P(xo + s * 0.006, h2[0], h2[1])], N(s, 0, 0), mul(chrome, 0.55)); }
+      for (let q = 0; q < 8; q++) { const a = q * Math.PI / 4 + Math.PI / 8; ring.push([wr + Math.sin(a) * wr, az + Math.cos(a) * wr]); }
+      for (let q = 0; q < 8; q++) { const p0 = ring[q], p1 = ring[(q + 1) % 8]; b.quad("paint", [P(xi, p0[0], p0[1]), P(xo, p0[0], p0[1]), P(xo, p1[0], p1[1]), P(xi, p1[0], p1[1])], N(0, p0[0] + p1[0] - 2 * wr, p0[1] + p1[1] - 2 * az), C(0x0b0b0c)); }
+      for (let q = 0; q < 8; q += 2) b.quad("paint", [P(xo, wr, az), P(xo, ring[q][0], ring[q][1]), P(xo, ring[q + 1][0], ring[q + 1][1]), P(xo, ring[(q + 2) % 8][0], ring[(q + 2) % 8][1])], N(s, 0, 0), C(0x0d0d0e));
+      for (let q = 0; q < 8; q += 2) { const hc = k => [wr + (ring[k % 8][0] - wr) * 0.5, az + (ring[k % 8][1] - az) * 0.5]; const h0 = hc(q), h1 = hc(q + 1), h2 = hc(q + 2); b.quad("gloss", [P(xo + s * 0.006, wr, az), P(xo + s * 0.006, h0[0], h0[1]), P(xo + s * 0.006, h1[0], h1[1]), P(xo + s * 0.006, h2[0], h2[1])], N(s, 0, 0), mul(chrome, 0.55)); }
     }
-    const lit = !!o.lit;
-    b.quad(lit ? "glow" : "paint", [P(s * 0.6 - 0.11, 0.56, z0 - 0.006), P(s * 0.6 + 0.11, 0.56, z0 - 0.006), P(s * 0.6 + 0.11, 0.76, z0 - 0.006), P(s * 0.6 - 0.11, 0.76, z0 - 0.006)], N(0, 0, -1), lit ? [1, 0.92, 0.7] : [0.5, 0.5, 0.46]);
-    b.quad(lit ? "glow" : "paint", [P(s * 0.66 - 0.1, 0.58, z1 + 0.006), P(s * 0.66 + 0.1, 0.58, z1 + 0.006), P(s * 0.66 + 0.1, 0.76, z1 + 0.006), P(s * 0.66 - 0.1, 0.76, z1 + 0.006)], N(0, 0, 1), lit ? [1, 0.12, 0.08] : [0.3, 0.05, 0.04]);
+    /* round headlamps (two a side on the family saloon), small upright tail lamps at the corners */
+    const hy = c.tall ? belt - 0.2 : belt - 0.17, hx = bw - 0.15;
+    disc(lit ? "glow" : "paint", s * hx, hy, z0 - 0.008, c.hl, -1, lit ? [1, 0.92, 0.7] : [0.5, 0.5, 0.46]);
+    if (c.twin) disc(lit ? "glow" : "paint", s * (hx - 0.2), hy, z0 - 0.008, c.hl, -1, lit ? [1, 0.92, 0.7] : [0.5, 0.5, 0.46]);
+    const tx = s * (bw - 0.1), ty = van ? 0.62 : belt - 0.24;
+    b.quad(lit ? "glow" : "paint", [P(tx - 0.045, ty, z1 + 0.006), P(tx + 0.045, ty, z1 + 0.006), P(tx + 0.045, ty + 0.17, z1 + 0.006), P(tx - 0.045, ty + 0.17, z1 + 0.006)], N(0, 0, 1), lit ? [1, 0.12, 0.08] : [0.3, 0.05, 0.04]);
+    b.quad("paint", [P(tx - 0.045, ty + 0.17, z1 + 0.006), P(tx + 0.045, ty + 0.17, z1 + 0.006), P(tx + 0.045, ty + 0.23, z1 + 0.006), P(tx - 0.045, ty + 0.23, z1 + 0.006)], N(0, 0, 1), [0.42, 0.2, 0.04]);   /* the amber flasher over it */
   }
-  b.boxT("paint", tf, -bw - 0.02, bw + 0.02, 0.36, 0.47, z0 - 0.07, z0 + 0.02, chrome); b.boxT("paint", tf, -bw - 0.02, bw + 0.02, 0.36, 0.47, z1 - 0.02, z1 + 0.07, chrome);
-  b.quad("paint", [P(-0.38, 0.5, z0 - 0.004), P(0.38, 0.5, z0 - 0.004), P(0.38, 0.78, z0 - 0.004), P(-0.38, 0.78, z0 - 0.004)], N(0, 0, -1), C(0x15151a));
-  for (let k = -3; k <= 3; k++) b.quad("paint", [P(k * 0.1 - 0.012, 0.51, z0 - 0.008), P(k * 0.1 + 0.012, 0.51, z0 - 0.008), P(k * 0.1 + 0.012, 0.77, z0 - 0.008), P(k * 0.1 - 0.012, 0.77, z0 - 0.008)], N(0, 0, -1), chrome);
-  b.quad("paint", [P(-0.26, 0.5, z1 + 0.004), P(0.26, 0.5, z1 + 0.004), P(0.26, 0.62, z1 + 0.004), P(-0.26, 0.62, z1 + 0.004)], N(0, 0, 1), C(0x0c0c0c));
-  if (o.shadow !== false) { const a = tf.p(-1.2, 0.02, z0 - 0.5), c = tf.p(1.2, 0.02, z0 - 0.5), d = tf.p(1.2, 0.02, z1 + 0.5), e = tf.p(-1.2, 0.02, z1 + 0.5); b.quad("shadow", [a, c, d, e], [0, 1, 0], [1, 1, 1]); }
+  /* thin chrome bumpers, a low grille with horizontal bars between the lamps */
+  const by = wr + 0.08;
+  b.boxT("paint", tf, -bw - 0.015, bw + 0.015, by, by + 0.06, z0 - 0.05, z0 + 0.02, chrome); b.boxT("paint", tf, -bw - 0.015, bw + 0.015, by, by + 0.06, z1 - 0.02, z1 + 0.05, chrome);
+  const gx = c.gx, g0 = c.tall ? belt - 0.42 : belt - 0.28, g1 = c.tall ? belt - 0.02 : belt - 0.08;
+  b.quad("paint", [P(-gx, g0, z0 - 0.004), P(gx, g0, z0 - 0.004), P(gx, g1, z0 - 0.004), P(-gx, g1, z0 - 0.004)], N(0, 0, -1), C(0x121214));
+  const bars = c.tall ? 6 : 3; for (let k = 0; k < bars; k++) { const y = g0 + (g1 - g0) * (k + 0.5) / bars; b.quad("paint", [P(-gx, y - 0.01, z0 - 0.008), P(gx, y - 0.01, z0 - 0.008), P(gx, y + 0.01, z0 - 0.008), P(-gx, y + 0.01, z0 - 0.008)], N(0, 0, -1), chrome); }
+  /* British plates: white in front and yellow behind, black with silver letters on the older cars; the dashes stand for the letters */
+  const old = !!o.oldPlate, pf = old ? [0.03, 0.03, 0.03] : [0.72, 0.72, 0.68], pr = old ? [0.03, 0.03, 0.03] : [0.74, 0.56, 0.06], ink = old ? [0.6, 0.6, 0.58] : [0.04, 0.04, 0.04];
+  const plate = function (z, nz, y, col) {
+    b.quad("paint", [P(-0.26, y, z), P(0.26, y, z), P(0.26, y + 0.115, z), P(-0.26, y + 0.115, z)], N(0, 0, nz), col);
+    for (let k = 0; k < 7; k++) { if (k === 3) continue; const x = -0.21 + k * 0.07; b.quad("paint", [P(x - 0.022, y + 0.028, z + nz * 0.003), P(x + 0.022, y + 0.028, z + nz * 0.003), P(x + 0.022, y + 0.087, z + nz * 0.003), P(x - 0.022, y + 0.087, z + nz * 0.003)], N(0, 0, nz), ink); }
+  };
+  plate(z0 - 0.056, -1, by - 0.03, pf); plate(z1 + 0.056, 1, by + 0.09, pr);
+  if (kind === "cab") { b.boxT("paint", tf, -0.15, 0.15, roofY, roofY + 0.09, st + 0.06, st + 0.16, [0.3, 0.22, 0.06]); }   /* the FOR HIRE light, out */
+  if (o.shadow !== false) { const a = tf.p(-bw - 0.36, 0.02, z0 - 0.5), cc = tf.p(bw + 0.36, 0.02, z0 - 0.5), d = tf.p(bw + 0.36, 0.02, z1 + 0.5), e = tf.p(-bw - 0.36, 0.02, z1 + 0.5); b.quad("shadow", [a, cc, d, e], [0, 1, 0], [1, 1, 1]); }
 }
 
+const CARKINDS = {};
 function buildCity() {
   rnd = mulberry(1974);
   const XS = [-6, 5.5, 17.5, 29.5, 41.5, 49.5, 62], XST = [null, "wardour", "dean", "frith", "greek", "charing", null];
@@ -1057,7 +1087,7 @@ function buildCity() {
     if (s.road > 3.4) for (let p = s.a * S + 6; p < s.b * S - 6; p += 6) { if (crossing(sk, p + 1)) continue; if (s.ax === "z") bt.flat("decal", c - 0.05, c + 0.05, p, p + 2, 0.012, wht); else bt.flat("decal", p, p + 2, c - 0.05, c + 0.05, 0.012, wht); }
   }
   /* parked cars, never in his lane, never across the two doors that matter */
-  const paints = [0x3a2422, 0x2a3038, 0x3c3a30, 0x1c2a24, 0x4a4438, 0x202024, 0x4a2a1c, 0x2c3440, 0x5a5648];
+  const paints = [0x3a2422, 0x2a3038, 0x3c3a30, 0x15301c, 0x4a4438, 0x202024, 0x5a2c10, 0x24364e, 0x5a5648, 0x5e4a14];   /* maroon, slate, drab, racing green, beige, black, russet, blue, old white, harvest gold */
   const park = function (sk, from, to, sides, keep) {
     const s = STREET[sk], c = s.at * S;
     for (const side of sides) for (let p = from * S + 7 + rnd() * 5; p < to * S - 9; p += 5.4 + rnd() * 7) {
@@ -1066,7 +1096,10 @@ function buildCity() {
       if (rnd() < 0.22) continue;
       const off = c + side * (s.road - 0.95), dir = rnd() < 0.5 ? 1 : -1, van = rnd() < 0.14;
       const tf = s.ax === "z" ? carTf(off, p, 0, dir) : carTf(p, off, dir, 0);
-      buildSaloon(bt, tf, { paint: mul(C(pick(paints)), 0.68 + rnd() * 0.36), van: van, z1: van ? 2.3 : 2.2 });
+      /* which car: from where it stands, not from the dice, so the street's layout is as it was */
+      const hh = Math.abs(Math.sin(p * 12.9898 + off * 78.233) * 43758.5453) % 1, kind = van ? "van" : hh < 0.34 ? "mini" : hh < 0.68 ? "small" : hh < 0.82 ? "cab" : "big";
+      buildSaloon(bt, tf, { paint: mul(C(pick(paints)), 0.68 + rnd() * 0.36), kind: kind, oldPlate: (hh * 7) % 1 < 0.35 });
+      CARKINDS[kind] = (CARKINDS[kind] || 0) + 1;
       OBST.cars.push(s.ax === "z" ? [off - 0.86, off + 0.86, p - 2.35, p + 2.4] : [p - 2.4, p + 2.4, off - 0.86, off + 0.86]);
     }
   };
@@ -1868,7 +1901,7 @@ window.__joyride = {
   path: function () { return car.path ? car.path.pts.filter((q, i) => i % 12 === 0).map(q => [+(q.x / S).toFixed(2), +(q.z / S).toFixed(2)]) : null; },
   lights: function () { return lights.map(l => [l.color.getHexString(), +l.intensity.toFixed(2), +(l.position.x / S).toFixed(1), +(l.position.z / S).toFixed(1)]); },
   stereo: function () { return { on: stereo.on, vol: +stereo.vol.toFixed(2), reach: +stereo.reach.toFixed(2), paused: stereo.el ? stereo.el.paused : null, t: stereo.el ? +stereo.el.currentTime.toFixed(1) : null, ready: stereo.el ? stereo.el.readyState : null, muted: stereo.muted }; },
-  info: function () { return { rt: composer ? [composer.renderTarget1.width, composer.renderTarget1.height, composer.renderTarget1.samples || 0] : null, cv: [canvas.width, canvas.height], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, sources: sources.length, halos: halos.length, env: !!scene.environment }; }
+  info: function () { return { rt: composer ? [composer.renderTarget1.width, composer.renderTarget1.height, composer.renderTarget1.samples || 0] : null, cv: [canvas.width, canvas.height], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, sources: sources.length, halos: halos.length, env: !!scene.environment, cars: CARKINDS, carLen: Object.keys(CARS).map(k => +(CARS[k].L1 - CARS[k].L0).toFixed(2)) }; }
 };
 try {
   assemble(); resize(); setMode("outside");

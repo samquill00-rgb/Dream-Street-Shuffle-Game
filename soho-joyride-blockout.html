@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soho Joyride — Dream Street Shuffle blockout</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #121316; color: #ece3d3; font: 16px Georgia, serif; }
+  main { width: min(100% - 32px, 1080px); margin: 26px auto; }
+  h1 { font-weight: normal; letter-spacing: .035em; margin: 0 0 14px; }
+  canvas { display: block; width: 100%; height: auto; background: #252830; border: 1px solid #48454a; }
+  #actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { padding: 10px 15px; font: inherit; color: inherit; background: #282831; border: 1px solid #71685f; cursor: pointer; }
+  button:focus-visible { outline: 2px solid #e4b577; outline-offset: 2px; }
+  #status { min-height: 1.5em; }
+  details { margin-top: 22px; color: #c8c0b4; line-height: 1.5; }
+  summary { cursor: pointer; }
+</style>
+<main>
+  <h1>Soho Joyride</h1>
+  <canvas id="view" width="960" height="480" role="img" aria-label="View of Soho from the front passenger seat"></canvas>
+  <p id="status" role="status"></p>
+  <div id="actions"></div>
+  <details>
+    <summary>Handoff notes</summary>
+    <p>The route follows the game’s compressed map. At Frith Street and Old Compton Street the player chooses which road the driver takes. The frontages and cabin are stylised reference geometry for the art pass. Use the game’s visual references for the venue façades and material palette. </p>
+    <p>In the script, <code>junctions</code>, <code>blocks</code> and <code>venues</code> hold the layout. <code>drawStreet</code> and <code>drawCabin</code> are independent render passes. <code>SOHO_VENUE</code> marks the only venue signs in the blockout. The entry point is a placeholder kerbside encounter on Bateman Street. Side-street directions are prototype UI labels.</p>
+    <p>For integration, start the ride from a hub encounter link. Carry over <code>lookAt</code> and the arrival payload from <code>stops</code>. In the game's page lifecycle, cancel the animation when leaving the ride. On exit set <code>window.dssSohoArrival</code> before returning to Dean Street. The demo emits <code>dss:joyride-exit</code> with that payload. Check the Bateman test position against the live map if the tiles change. Keep story prose and dialogue for Sam.</p>
+  </details>
+</main>
+<script>
+"use strict";
+const canvas = document.querySelector("#view");
+const ctx = canvas.getContext("2d");
+const status = document.querySelector("#status");
+const actions = document.querySelector("#actions");
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const W = canvas.width, H = canvas.height;
+
+// x follows game-map columns, z follows rows. Street centres are between tiles.
+const junctions = {
+  pickup: [37, 15.5],
+  batemanDean: [17.5, 15.5],
+  comptonDean: [17.5, 27.5],
+  romillyDean: [17.5, 35.5],
+  romillyFrith: [29.5, 35.5],
+  comptonFrith: [29.5, 27.5],
+  batemanFrith: [29.5, 15.5]
+};
+
+const stops = {
+  pickup: { label: "Bateman Street", arrival: { c: 38, r: 14, facing: "left" } },
+  french: { label: "The French", arrival: { c: 19, r: 30, facing: "right", door: "french" } },
+  ronnies: { label: "Ronnie Scott’s", arrival: { c: 28, r: 23, facing: "left", door: "ronnies" } }
+};
+
+const blocks = [];
+const xEdges = [-6, 5.5, 17.5, 29.5, 41.5, 49.5, 62];
+const zEdges = [-8, 1.5, 15.5, 27.5, 35.5, 41.5, 54];
+const palette = ["#745952", "#5d5157", "#69706d", "#805f4e", "#594e4c"];
+for (let row = 0; row < zEdges.length - 1; row++) {
+  for (let col = 0; col < xEdges.length - 1; col++) {
+    const x = xEdges[col] + 1.6, z = zEdges[row] + 1.6;
+    const right = xEdges[col + 1] - 1.6, far = zEdges[row + 1] - 1.6;
+    for (let n = 0; n < 3; n++) {
+      const step = (right - x) / 3;
+      blocks.push({
+        x: x + n * step, z, right: x + (n + 1) * step - 0.05, far,
+        height: 2.2 + ((row + 2 * col + n * 3) % 5) * 0.31,
+        colour: palette[(row + col * 3 + n) % palette.length]
+      });
+    }
+  }
+}
+
+const venues = [
+  { text: "THE FRENCH", x: 19.08, z: 30.1, colour: "#d39269" },
+  { text: "RONNIE SCOTT’S", x: 27.92, z: 23.5, colour: "#bf9cd5" }
+];
+
+let camera, frame = 0, lastTime = 0;
+let targetIndex = 0, path = [], onArrival;
+const eye = 0.93;
+
+function lookAt(position, yaw) {
+  camera = { position: position.slice(), yaw };
+}
+
+function yawTo(from, to) {
+  return Math.atan2(to[0] - from[0], to[1] - from[1]);
+}
+
+function toCamera([x, y, z]) {
+  const dx = x - camera.position[0], dz = z - camera.position[1];
+  const s = Math.sin(camera.yaw), c = Math.cos(camera.yaw);
+  return [c * dx - s * dz, y - eye, s * dx + c * dz];
+}
+
+function project([x, y, z]) {
+  return [W * 0.45 + 445 * x / z, H * 0.44 - 445 * y / z];
+}
+
+function polygon(points, colour, outline) {
+  ctx.beginPath();
+  points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  ctx.closePath();
+  ctx.fillStyle = colour;
+  ctx.fill();
+  if (outline) {
+    ctx.strokeStyle = outline;
+    ctx.stroke();
+  }
+}
+
+function worldFace(points, colour, outline) {
+  const near = 0.25;
+  const vertices = points.map(toCamera);
+  const visible = [];
+  for (let i = 0; i < vertices.length; i++) {
+    const a = vertices[i], b = vertices[(i + 1) % vertices.length];
+    const aIn = a[2] >= near, bIn = b[2] >= near;
+    if (aIn) visible.push(a);
+    if (aIn !== bIn) {
+      const t = (near - a[2]) / (b[2] - a[2]);
+      visible.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, near]);
+    }
+  }
+  if (visible.length >= 3) polygon(visible.map(project), colour, outline);
+}
+
+function drawWall(a, b, building, shaded) {
+  const point = (t, h) => [a[0] + (b[0] - a[0]) * t, h, a[1] + (b[1] - a[1]) * t];
+  const quad = (l, low, r, high, colour, outline) =>
+    worldFace([point(l, low), point(r, low), point(r, high), point(l, high)], colour, outline);
+  quad(0, 0, 1, building.height, building.colour, "#3a3131");
+  if (shaded) quad(0, 0, 1, building.height, "#20203055");
+  const brick = shaded ? "#281f2488" : "#392b2980";
+  const depth = toCamera(point(.5, 0))[2];
+  for (let h = 0.64; depth < 13 && h < building.height - 0.09; h += 0.12) {
+    quad(0, h, 1, h + 0.007, brick);
+    for (let joint = (Math.round(h / .12) % 2 ? .03 : .09); depth < 7 && joint < .98; joint += .14) {
+      quad(joint, h, joint + .004, h + .12, brick);
+    }
+  }
+  quad(0, 0.01, 1, 0.59, "#252326");
+  quad(0, 0.49, 1, 0.56, "#65453a");
+  quad(0, 0.04, 1, 0.07, "#575054");
+  const bays = Math.max(2, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / 1.8));
+  for (let i = 0; i < bays; i++) {
+    const l = (i + 0.2) / bays, r = (i + 0.78) / bays;
+    const centre = (l + r) / 2;
+    const lit = (Math.round(building.x * 2 + building.z) + i) % 4;
+    quad(l, 0.09, r, 0.46, lit ? "#594739" : "#a2734e", "#19191e");
+    quad(l, 0.39, r, 0.46, "#c3a37755");
+    quad(l, 0.27, r, 0.281, "#242125");
+    quad(centre - .008, 0.10, centre + .008, 0.46, "#241d20");
+    if (lit === 2) {
+      const left = point(l - .025, .49), right = point(r + .025, .49);
+      const awayX = Math.sign(camera.position[0] - left[0]) * (a[0] === b[0] ? .33 : 0);
+      const awayZ = Math.sign(camera.position[1] - left[2]) * (a[1] === b[1] ? .33 : 0);
+      worldFace([left, right, [right[0] + awayX, .41, right[2] + awayZ], [left[0] + awayX, .41, left[2] + awayZ]], "#795049", "#4a3232");
+    }
+    for (let y = 0.83; y + 0.34 < building.height; y += 0.6) {
+      quad(l - .018, y - .014, r + .018, y + .35, "#a68b7855");
+      quad(l, y, r, y + .32, (i + Math.round(y * 5 + building.x)) % 3 ? "#343845" : "#af8959", "#272630");
+      quad(l, y + .15, r, y + .17, "#28232a");
+      quad(centre - .006, y, centre + .006, y + .32, "#28232a");
+      quad(l - .018, y - .018, r + .018, y + .016, "#90796c");
+    }
+  }
+  quad(0, building.height - .11, 1, building.height, "#332c32");
+  quad(0, building.height - .055, 1, building.height - .034, "#97837a77");
+  quad(0, .67, 1, .694, "#a3867377");
+}
+
+
+// Use fixed world positions so the pavement and reflections track the camera.
+const streetlights = [
+  [35.8, 14.2], [31.7, 16.8], [24.1, 16.8], [19, 18], [16, 22.7],
+  [19, 29.4], [28.1, 23.1], [31, 26.2], [22.5, 26.2], [27, 34.2],
+  [39, 14.2], [30.8, 18.3], [28.1, 31.8]
+];
+const parkedCars = [
+  [33.8, 16.15, false, "#633f3d"], [23, 14.84, false, "#625649"],
+  [16.77, 24, true, "#344855"], [30.22, 20.7, true, "#4c5147"],
+  [24.4, 28.22, false, "#494b60"], [17, 32.3, true, "#544452"],
+  [30.2, 31.4, true, "#63513a"]
+];
+
+function ground(x, z, w, d, colour) {
+  worldFace([[x, .006, z], [x+w, .006, z], [x+w, .006, z+d], [x, .006, z+d]], colour);
+}
+
+function drawRoadDetails() {
+  streetlights.forEach(([x,z], index) => {
+    for (let i = 0; i < 18; i++) {
+      const jitter = Math.sin((i + index * 21) * 53) * .5;
+      const base = 1 - i / 19;
+      ground(x - .2 + jitter, z - 1.15 + i * .13, .12 + base * .36, .033, "rgba(197,134,79," + base * .22 + ")");
+    }
+  });
+  for (let x = 19.2; x < 40; x += 1.12) {
+    if (Math.abs(x - 29.5) > 1.65) ground(x, 15.5, .32, .024, "#bfab9877");
+  }
+  for (let z = 17.2; z < 35; z += 1.12) {
+    if (Math.abs(z - 27.5) > 1.65) ground(17.5, z, .024, .32, "#bfab9877");
+  }
+}
+
+function drawStreetProps() {
+  for (const [x, z] of streetlights) {
+    const foot = toCamera([x, .02, z]), head = toCamera([x, 2.36, z]);
+    if (head[2] < 1 || head[2] > 16) continue;
+    const [px,py] = project(foot), [hx,hy] = project(head);
+    const scale = 445 / head[2], glow = Math.min(48, scale * .35);
+    const halo = ctx.createRadialGradient(hx, hy, 0, hx, hy, glow);
+    halo.addColorStop(0, "#e5a36e70");
+    halo.addColorStop(1, "#e5a36e00");
+    ctx.fillStyle = halo;
+    ctx.fillRect(hx - glow, hy - glow, glow * 2, glow * 2);
+    ctx.strokeStyle = "#29242a";
+    ctx.lineWidth = Math.max(1, scale * .03);
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.fillStyle = "#f5c38f";
+    ctx.fillRect(hx - scale * .043, hy - 1, scale * .086, Math.max(2, scale * .038));
+  }
+  const [cx, cz] = camera.position;
+  const cars = parkedCars.slice().sort((a, b) => Math.hypot(b[0] - cx, b[1] - cz) - Math.hypot(a[0] - cx, a[1] - cz));
+  for (const [x, z, north, paint] of cars) {
+    const point = (u, y, v) => north ? [x + u, y, z + v] : [x + v, y, z + u];
+    const depth = toCamera(point(0, 0, 0))[2];
+    if (depth < .5 || depth > 14) continue;
+    const face = (vertices, colour) => worldFace(vertices.map(p => point(...p)), colour, "#251f26");
+    face([[-.25,.34,-.6],[.25,.34,-.6],[.25,.34,.6],[-.25,.34,.6]], paint);
+    for (const side of [-.25, .25]) {
+      face([[side,.09,-.6],[side,.09,.6],[side,.34,.6],[side,.34,-.6]], paint);
+      face([[side,.34,-.34],[side,.34,.32],[side*.82,.53,.15],[side*.82,.53,-.19]], "#4c5361");
+      face([[side,.32,-.56],[side,.32,.56],[side,.34,.56],[side,.34,-.56]], "#9e8c7d");
+      for (const wheel of [-.39,.39]) {
+        face([[side,.05,wheel-.093],[side,.05,wheel+.093],[side,.20,wheel+.093],[side,.20,wheel-.093]], "#211e25");
+      }
+    }
+    for (const end of [-.6,.6]) {
+      face([[-.25,.11,end],[.25,.11,end],[.25,.33,end],[-.25,.33,end]], "#53484b");
+      for (const lamp of [-.19,.19]) {
+        face([[lamp-.04,.23,end],[lamp+.04,.23,end],[lamp+.04,.29,end],[lamp-.04,.29,end]], end < 0 ? "#a34e47" : "#d0b998");
+      }
+    }
+    face([[-.205,.53,-.19],[.205,.53,-.19],[.205,.53,.15],[-.205,.53,.15]], paint);
+  }
+}
+
+function drawStreet() {
+  const sky = ctx.createLinearGradient(0, 0, 0, 245);
+  sky.addColorStop(0, "#21232e");
+  sky.addColorStop(1, "#54505b");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#38363d";
+  ctx.fillRect(0, H * 0.44, W, H);
+  for (let row = 0; row < zEdges.length - 1; row++) {
+    for (let col = 0; col < xEdges.length - 1; col++) {
+      const x = xEdges[col] + 1, z = zEdges[row] + 1;
+      const right = xEdges[col + 1] - 1, far = zEdges[row + 1] - 1;
+      worldFace([[x, 0, z], [right, 0, z], [right, 0, far], [x, 0, far]], "#5a5355");
+    }
+  }
+  drawRoadDetails();
+  const [cx, cz] = camera.position;
+  const distance = b => Math.hypot((b.x + b.right) / 2 - cx, (b.z + b.far) / 2 - cz);
+  const visibleBlocks = blocks.filter(b => distance(b) < 41).sort((a, b) => distance(b) - distance(a));
+  for (const b of visibleBlocks) {
+    if (cz < b.z) drawWall([b.x, b.z], [b.right, b.z], b, false);
+    if (cz > b.far) drawWall([b.x, b.far], [b.right, b.far], b, false);
+    if (cx < b.x) drawWall([b.x, b.z], [b.x, b.far], b, true);
+    if (cx > b.right) drawWall([b.right, b.z], [b.right, b.far], b, true);
+  }
+  drawStreetProps();
+  for (const sign of venues) { // SOHO_VENUE
+    if (sign === venues[0] ? cx > sign.x : cx < sign.x) continue;
+    const p = toCamera([sign.x, 0.62, sign.z]);
+    if (p[2] < 1.05 || p[2] > 11) continue;
+    const [x, y] = project(p);
+    ctx.font = Math.min(20, 35 / p[2]) + "px Georgia";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#292328";
+    const width = ctx.measureText(sign.text).width + 10;
+    const signHeight = Math.min(25, 45 / p[2]);
+    ctx.fillRect(x - width / 2 - 1, y - signHeight, width + 2, signHeight + 4);
+    ctx.strokeStyle = sign.colour + "77";
+    ctx.strokeRect(x - width / 2, y - signHeight + 1, width, signHeight + 1);
+    ctx.fillStyle = sign.colour;
+    ctx.fillText(sign.text, x, y);
+  }
+}
+
+function drawCabin(now) {
+  // Droplets live on the glass, independent of the street projection.
+  const sweep = reduceMotion ? 0 : Math.max(0, Math.sin((now % 2500) / 2500 * Math.PI * 2));
+  for (let i = 0; i < 242; i++) {
+    const x = 115 + (i * 151.17) % 744;
+    const y = 42 + ((i * 93.11 + (reduceMotion ? 0 : now * (.008 + i % 3 * .005))) % 319);
+    if (sweep > .15 && x > 209 && x < 402 && y > 349 - (x - 210) * sweep) continue;
+    ctx.strokeStyle = i % 4 ? "#b6b8c33a" : "#d3af935c";
+    ctx.beginPath();
+    ctx.moveTo(x, y); ctx.lineTo(x - 1.4, y + 2.5 + i % 5); ctx.stroke();
+  }
+  polygon([[0,0],[960,0],[960,63],[820,49],[171,52],[0,85]], "#19181d");
+  polygon([[0,24],[115,44],[187,341],[0,410]], "#242126");
+  polygon([[838,40],[960,30],[960,417],[810,360]], "#28242a");
+  polygon([[0,372],[190,351],[582,348],[815,358],[960,380],[960,480],[0,480]], "#302723");
+  const wood = ctx.createLinearGradient(0, 362, 0, 418);
+  wood.addColorStop(0, "#84604a");
+  wood.addColorStop(.44, "#583c32");
+  wood.addColorStop(1, "#2f2729");
+  polygon([[0,383],[192,364],[580,361],[960,392],[960,407],[0,412]], wood);
+  for (let i = 0; i < 15; i++) {
+    ctx.strokeStyle = i % 2 ? "#d3946c22" : "#281b2377";
+    ctx.beginPath();
+    ctx.moveTo(0, 385 + i * 1.38);
+    ctx.bezierCurveTo(190, 362 + i * 2, 570, 361 + i * 1.23, 960, 391 + i);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#1d1c21";
+  ctx.fillRect(414, 379, 159, 46);
+  ctx.strokeStyle = "#8b7769";
+  ctx.strokeRect(415, 380, 157, 44);
+  ctx.fillStyle = "#524d40";
+  ctx.fillRect(442, 387, 103, 15);
+  ctx.fillStyle = "#baa974";
+  ctx.font = "10px Georgia";
+  ctx.textAlign = "center";
+  ctx.fillText("54     60     80     100    160", 493, 398);
+  ctx.fillStyle = "#deae79";
+  ctx.fillRect(502, 388, 1, 12);
+  for (const x of [431,556]) {
+    ctx.fillStyle = "#79716c";
+    ctx.beginPath(); ctx.arc(x, 404, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#302b2d";
+    ctx.beginPath(); ctx.arc(x, 404, 5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = "#211e23";
+  ctx.fillRect(426, 58, 129, 34);
+  ctx.fillStyle = "#524750";
+  ctx.fillRect(434, 63, 113, 22);
+  ctx.fillStyle = "#262127";
+  ctx.beginPath();
+  ctx.ellipse(892, 277, 63, 79, -0.13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(906, 403, 115, 72, 0.05, 0, Math.PI * 2);
+  ctx.fill();
+  polygon([[826,246],[833,238],[854,255],[866,280],[851,298],[825,293],[809,280],[817,269],[810,265],[821,257]], "#55403c");
+  polygon([[824,259],[835,261],[827,268],[815,268]], "#292429");
+  polygon([[893,391],[836,378],[798,359],[782,367],[807,393],[867,428]], "#45404b");
+  ctx.strokeStyle = "#171519";
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.ellipse(744, 372, 63, 31, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  polygon([[786,350],[799,352],[807,359],[800,370],[786,368],[779,360]], "#7b594b", "#30272a");
+  ctx.strokeStyle = "#8a7770";
+  ctx.beginPath(); ctx.moveTo(705, 365); ctx.lineTo(746, 375); ctx.lineTo(778,368); ctx.stroke();
+  if (!reduceMotion) {
+    ctx.strokeStyle = "#252328";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(357, 359);
+    ctx.lineTo(214 + sweep * 188, 344 - sweep * 177);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+}
+
+function draw(now = 0) {
+  drawStreet();
+  drawCabin(now);
+}
+
+function show(message, choices) {
+  status.textContent = message;
+  actions.replaceChildren();
+  for (const [label, fn] of choices) {
+    const button = document.createElement("button");
+    button.textContent = label;
+    button.addEventListener("click", fn);
+    actions.append(button);
+  }
+  if (document.activeElement === document.body) actions.firstElementChild?.focus({preventScroll: true});
+}
+
+function drive(points, callback) {
+  path = points.map(p => typeof p === "string" ? junctions[p] : p);
+  targetIndex = 0;
+  onArrival = callback;
+  lastTime = 0;
+  if (reduceMotion) {
+    const end = path.at(-1);
+    const before = path.at(-2) || camera.position;
+    lookAt(end, yawTo(before, end));
+    draw();
+    arrive();
+  } else {
+    frame = requestAnimationFrame(tick);
+  }
+}
+
+function arrive() {
+  onArrival();
+}
+
+function tick(now) {
+  const dt = Math.min(0.045, (now - (lastTime || now)) / 1000);
+  lastTime = now;
+  const target = path[targetIndex];
+  const [x, z] = camera.position;
+  const dx = target[0] - x, dz = target[1] - z;
+  const remaining = Math.hypot(dx, dz);
+  const step = Math.min(remaining, dt * 5.7);
+  if (remaining > 0.001) {
+    const wanted = yawTo(camera.position, target);
+    const delta = Math.atan2(Math.sin(wanted - camera.yaw), Math.cos(wanted - camera.yaw));
+    camera.yaw += delta * Math.min(1, dt * 9);
+    camera.position = [x + dx / remaining * step, z + dz / remaining * step];
+  }
+  if (remaining <= step + 0.001) targetIndex++;
+  draw(now);
+  if (targetIndex < path.length) frame = requestAnimationFrame(tick);
+  else arrive();
+}
+
+function route(points, callback, nextStop) {
+  show("On the move · " + stops[nextStop].label, [["Ask him to pull over", () => {
+    show("Pulling over at the next stop…", []);
+    onArrival = () => exit(nextStop);
+  }]]);
+  drive(points, callback);
+}
+
+function exit(id) {
+  cancelAnimationFrame(frame);
+  const stop = stops[id];
+  document.dispatchEvent(new CustomEvent("dss:joyride-exit", { detail: { ...stop.arrival } }));
+  show("Back on foot · " + stop.label, [["Restart preview", reset]]);
+}
+
+function atBatemanFrith() {
+  show("Bateman Street at Frith Street · Which way?", [
+    ["Left into Frith Street", () => route([[29.5, 23.5]], atRonniesFromNorth, "ronnies")],
+    ["Straight on towards Dean Street", () => junction(["batemanDean", "comptonDean"], atDeanCompton)]
+  ]);
+}
+
+function atDeanCompton() {
+  show("Dean Street at Old Compton Street · Which way?", [
+    ["Left into Old Compton Street", () => route(["comptonFrith", [29.5, 23.5]], atRonnies, "ronnies")],
+    ["Straight on past the French", () => route([[17.5, 30.1]], atFrench, "french")]
+  ]);
+}
+
+function junction(points, next) {
+  show("On the move…", []);
+  drive(points, next);
+}
+
+function atRonniesFromNorth() {
+  show("Frith Street · Ronnie Scott’s", [
+    ["Get out at Ronnie’s", () => exit("ronnies")],
+    ["Continue to Old Compton Street", () => junction(["comptonFrith"], atFrithCompton)]
+  ]);
+}
+
+function atFrithCompton() {
+  show("Frith Street at Old Compton Street · Which way?", [
+    ["Right into Old Compton Street", () => route(["comptonDean", [17.5, 30.1]], atFrench, "french")],
+    ["Straight on and round by Romilly Street", () => route(["romillyFrith", "romillyDean", [17.5, 30.1]], atFrench, "french")]
+  ]);
+}
+
+function atFrench() {
+  show("Dean Street · The French", [
+    ["Get out at the French", () => exit("french")],
+    ["Go round by Ronnie’s", () => route(["romillyDean", "romillyFrith", "comptonFrith", [29.5, 23.5]], atRonnies, "ronnies")]
+  ]);
+}
+
+function atRonnies() {
+  show("Frith Street · Ronnie Scott’s", [
+    ["Get out at Ronnie’s", () => exit("ronnies")],
+    ["Back to Bateman Street", () => route(["batemanFrith", "pickup"], () => exit("pickup"), "pickup")]
+  ]);
+}
+
+function reset() {
+  cancelAnimationFrame(frame);
+  lookAt(junctions.pickup, yawTo(junctions.pickup, junctions.batemanFrith));
+  draw();
+  show("Bateman Street · Passenger seat available", [
+    ["Get in", () => junction(["batemanFrith"], atBatemanFrith)],
+    ["Walk on", () => exit("pickup")]
+  ]);
+}
+
+reset();
+</script>
+</html>

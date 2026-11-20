@@ -4215,6 +4215,48 @@ def white_ending_by_play(r):
     r.expect(seen == ["Alba Complete", "Dawn Approach White", "White page", "Dawn"], "the White ending went %s" % " > ".join(seen))
 
 
+
+def walk_by_play(r, start, stop, pages=12, skip=r"NOTEBOOK|^NOTE$|skip|testing|LORE"):
+    """Press the first untaken way on, page by page, as a player would, until the page named stop; returns (pages seen, problems)."""
+    seen, bad, taken = [], [], set()
+    for step in range(pages):
+        r.clear_lore(); r.clear_slips()
+        pn = r.pn()
+        if pn not in seen:
+            seen.append(pn)
+            for b in blank_canvases(r): bad.append("%s: %s" % (pn, b))
+        over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
+        if over > 4: bad.append("%s: scrolls %d px" % (pn, over))
+        if pn == stop: break
+        fresh, waited = [], 0
+        while waited < 25 and r.pn() == pn:
+            fresh = [o for o in r.js(CLICKABLES) if (pn, o["t"]) not in taken and not re.search(skip, o["t"], re.I)]
+            if fresh: break
+            r.page.wait_for_timeout(2000); waited += 1
+        if r.pn() != pn: continue
+        if not fresh: bad.append("%s: no way on in %d s" % (pn, waited * 2)); break
+        taken.add((pn, fresh[0]["t"])); r.page.mouse.click(fresh[0]["x"], fresh[0]["y"]); r.page.wait_for_timeout(4000)
+    return seen, bad
+
+
+@check("fetch-by-play", "2026-11-20 (never played before: 'The Fetch reached by play' stood under Not covered): with the poem whole, LINE 3's Soho! goes to Things turn up, The dawn is coming to the Fetch, and Follow him to Approach Centre Point; with the night not yet lived he is a glimpse whose Not yet goes back to Dean Street; no error, no blank view, no scroll")
+def fetch_by_play(r):
+    BASE = '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")(set: $sawJeffrey to true)(set: $lacklandRead to true)(set: $metShana to true)(set: $hadChippy to true)(set: $drinksTonight to 8)(set: $confidence to 55)(set: $sobriety to 45)(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)(set: $returns to 12)'
+    scratch_passage(r, "T-fetch", BASE + '(set: $alba to $alba + (a: $alba2))(set: $tookLily1 to true)(set: $lilyCount to 3)(go-to: "LINE 3")')
+    r.go("T-fetch", wait=9000)
+    seen, bad = walk_by_play(r, "LINE 3", "Approach Centre Point")
+    r.info = "walked: " + " > ".join(seen)
+    r.expect(not bad, "; ".join(dict.fromkeys(bad)))
+    r.expect(seen[:4] == ["LINE 3", "Things turn up", "The Fetch", "Approach Centre Point"], "the road to the Fetch went %s" % " > ".join(seen))
+    scratch_passage(r, "T-fetch-glimpse", BASE + '(set: $lilyCount to 0)(set: $fetchGlimpsed to false)(go-to: "The Fetch")')
+    r.go("T-fetch-glimpse", wait=9000)
+    glimpse = r.js("() => [!!document.querySelector('tw-passage .fetch-owed'), [].some.call(document.querySelectorAll('tw-link'), function (l) { return /Follow him/.test(l.textContent); })]")
+    r.expect(glimpse[0] and not glimpse[1], "with no flowers he is not a glimpse (owed tally %r, Follow him %r)" % tuple(glimpse))
+    seen2, bad2 = walk_by_play(r, "The Fetch", "Dean Street", pages=4)
+    r.info += " | glimpse: " + " > ".join(seen2)
+    r.expect(not bad2, "; ".join(dict.fromkeys(bad2)))
+    r.expect(seen2[:2] == ["The Fetch", "Dean Street"], "the glimpse went %s" % " > ".join(seen2))
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

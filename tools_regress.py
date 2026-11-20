@@ -4457,9 +4457,9 @@ def main(argv):
 
 
 
-@check("joyride-man-first-night", "2026-11-20 (Sam: \"Put him on the map, first night\"; earlier the same night he was gated on the page 93 errand): on the first night, page 93 not yet heard of, 'A man by his car' is on Dean Street once its other doors open (the second visit) with a door on the map; walking onto his tile on Bateman Street opens the approach, and after WALK ON he is still there and you stand at his car")
+@check("joyride-man-after-first-quest", "2026-11-20 playtest note 6 (Sam: \"This option should only appear after you have done the first dream quest\"): the man by his car is not on Dean Street before the page 93 errand is done and is there after it. History of this gate, all 2026-11-20: page 93, then (Sam: \"Put him on the map, first night\"; earlier the same night he was gated on the page 93 errand): on the first night, page 93 not yet heard of, 'A man by his car' is on Dean Street once its other doors open (the second visit) with a door on the map; walking onto his tile on Bateman Street opens the approach, and after WALK ON he is still there and you stand at his car")
 def joyride_man_first_night(r):
-    scratch_passage(r, "T-night1", '(set: $returns to 1)(set: $metRed to true)(set: $returnedPage to false)[[Walk on|Dean Street]]')   # the first night's second Dean Street: the poet met, nothing else
+    scratch_passage(r, "T-night1", '(set: $returns to 1)(set: $metRed to true)(set: $returnedPage to true)[[Walk on|Dean Street]]')   # a second Dean Street with the page 93 errand done
     MAN = "() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'joyride'; })[0]; return !!d; }"
     r.go("T-night1", wait=6000)
     r.page.click("tw-link:has-text('Walk on')")
@@ -4472,7 +4472,7 @@ def joyride_man_first_night(r):
     r.wait_for("() => !document.querySelector('#coin-overlay') || getComputedStyle(document.querySelector('#coin-overlay')).display === 'none' || !document.querySelector('#coin-overlay').offsetParent", 8000, "the coin card to close")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
     first = [t for t in r.js(HUB_LINKS)]
-    r.expect("A man by his car" in first, "he is not on Dean Street on the first night (%s)" % first)
+    r.expect("A man by his car" in first, "he is not on Dean Street after the first quest (%s)" % first)
     r.expect(r.js(MAN), "the map has no joyride tile")
     bad, links = hub_problems(r, "Dean Street with the man by his car")
     r.expect(not bad, "; ".join(bad))
@@ -4489,6 +4489,16 @@ def joyride_man_first_night(r):
     r.info = "stands at %s; hub: %s" % (at, [t for t in again if "man" in t.lower()])
     r.expect("A man by his car" in again, "he is gone after one visit (%s)" % again)
     r.expect(at == [36, 17], "after WALK ON the player stands at %s, not at his car (36, 17)" % at)
+    # and before the errand he is not there
+    scratch_passage(r, "T-early1", '(set: $returns to 1)(set: $metRed to true)(set: $returnedPage to false)[[Walk on|Dean Street]]')
+    r.go("T-early1", wait=6000)
+    r.page.click("tw-link:has-text('Walk on')")
+    r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 15000, "the Soho map before the errand")
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    early = [t for t in r.js(HUB_LINKS)]
+    r.expect("A man by his car" not in early, "he is on Dean Street before the first quest is done (%s)" % early)
+    r.expect("Soho Square" in early, "Dean Street's other doors are missing in the early state, so the test proves nothing (%s)" % early)
+
 
 
 if __name__ == "__main__":

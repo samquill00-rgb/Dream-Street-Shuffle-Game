@@ -2049,6 +2049,7 @@ def _(r):
 
 @check("polaroid-close", "2026-11-08 note 20: the stairs' polaroid has a cross on its corner and a line saying how to put it away; 2026-11-14 note 17: the first press pockets it and it stays up to read, the second puts it away; 2026-11-20 note 14 reverses that: one press pockets it and it puts itself away")
 def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     r.go("The Interval: the stairs", wait=5000)
     r.clear_slips()
     r.page.locator(".dss-room-veil tw-link, tw-passage tw-link", has_text="Turn and follow her").first.click()

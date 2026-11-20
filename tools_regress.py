@@ -4404,6 +4404,8 @@ def joyride_man_after_page93(r):
     r.expect(r.js(MAN), "the map has no joyride tile")
     bad, links = hub_problems(r, "Dean Street with the man by his car")
     r.expect(not bad, "; ".join(bad))
+    r.js("() => window.__dssSohoTeleport(33, 17)"); r.page.wait_for_timeout(900)
+    r.page.locator("#soho-map-container").screenshot(path=os.path.join(SHOTS, "joyride-man-map.png"))   # for the eye: the man and his red car on Bateman Street
     got = walk_into(r, "joyride")
     r.expect(got == "Bateman Street", "walking onto his tile on Bateman Street led to %r" % got)
     r.wait_for("() => [].some.call(document.querySelectorAll('#bs-wrap button'), function (b) { return b.textContent === 'WALK ON' && b.getClientRects().length; })", 12000, "WALK ON on Bateman Street")

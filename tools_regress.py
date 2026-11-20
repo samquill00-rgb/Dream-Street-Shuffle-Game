@@ -2612,6 +2612,36 @@ def shelley_bust(r):
     r.expect(abs(back - home) < 0.02, "the bust did not swing home after the close-up (%.2f, home %.2f)" % (back, home))
 
 
+@check("shop-cat", "2026-11-20 (Sam: \"add a black cat to Inis's shop\", \"Just needs to be smoother and black\", \"Her legs aren't attatched to the body\", \"Yes, wire her in\"): the scanned black cat sleeps on O'FLATTERLY's counter in front of his open book: she loads, is black, rests on the counter top, is the first thing seen at her middle from INIS's close-up, breathes, and her ear flicks")
+def shop_cat(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("O'Flatterly's shop")
+    r.room_ready("oi"); r.clear_slips(); r.clear_lore()
+    CAT = "(function () { var c = null; window.__dssRooms['oi'].scene.traverse(function (o) { if (o.name === 'shop-cat') c = o; }); return c; })()"
+    r.wait_for("() => !!" + CAT, 15000, "the cat's model")
+    got = r.js("() => { var c = %s, b = new THREE.Box3().setFromObject(c), col = c.material.color; return { minY: b.min.y, maxY: b.max.y, lum: col.r + col.g + col.b, attrs: !!(c.geometry.getAttribute('aBreath') && c.geometry.getAttribute('aEar')) }; }" % CAT)
+    r.expect(abs(got["minY"] - 1.025) < 0.01, "the cat does not rest on the counter top (her lowest point at %.3f, the top at 1.025)" % got["minY"])
+    r.expect(0.08 < got["maxY"] - got["minY"] < 0.16, "the cat is the wrong size for a curled cat (%.3f m tall)" % (got["maxY"] - got["minY"]))
+    r.expect(got["lum"] < 0.1, "the cat is not black (colour sum %.3f; she is 0x080706, 0.082)" % got["lum"])
+    r.expect(got["attrs"], "the cat's breathing and ear weights are missing")
+    # she breathes: her rise moves through most of its 3.2 mm over three seconds
+    br = []
+    for _ in range(12):
+        br.append(r.js("() => %s.userData.cat.uni.uBreath.value" % CAT)); r.page.wait_for_timeout(250)
+    r.expect(max(br) - min(br) > 0.002, "the cat does not breathe (rise %r)" % [round(x, 4) for x in br])
+    # her ear flicks: the next flick is brought forward, it rises and settles again
+    r.js("() => { var e = %s.userData.cat.ear; e.t0 = -1; e.next = 0; }" % CAT)
+    r.wait_for("() => %s.userData.cat.uni.uEar.value > 0.2" % CAT, 4000, "the cat's ear to flick")
+    r.wait_for("() => { var d = %s.userData.cat; return d.ear.t0 < 0 && d.uni.uEar.value === 0; }" % CAT, 4000, "the cat's ear to settle")
+    # seen from INIS's close-up: the first solid thing on the line to her middle is her
+    r.click_object("oi", "INIS O’FLATTERLY")
+    r.wait_for("() => window.__dssRooms['oi'].mode() !== 'idle'", 4000, "INIS's close-up")
+    r.page.wait_for_timeout(2500)
+    first = r.js("() => { var R = window.__dssRooms['oi'], c = %s, b = new THREE.Box3().setFromObject(c), m = b.getCenter(new THREE.Vector3()); m.y = b.max.y - 0.03; var o = R.camera.position.clone(), ray = new THREE.Raycaster(o, m.clone().sub(o).normalize()); ray.camera = R.camera; var hits = ray.intersectObjects(R.scene.children, true).filter(function (h) { var x = h.object, mt = x.material; if (!x.isMesh || !mt || mt.visible === false || (mt.transparent && mt.opacity < 0.5)) return false; for (var p = x; p; p = p.parent) if (!p.visible) return false; return true; }); return hits.length ? hits[0].object.name || hits[0].object.type : 'nothing'; }" % CAT)
+    r.page.screenshot(path=os.path.join(SHOTS, "shop-cat-close.png"))
+    r.expect(first == "shop-cat", "from INIS's close-up the line to the cat first meets %r" % first)
+
+
 @check("revo-shout", "2026-11-14 (Sam: \"I also just recorded audio 'Revo!' ... trigger when the naked man runs across the screen, when he is about a third of the way across\"): the runner shouts once on his run, a little over a third of the way along it, and the recording is linked")
 def revo_shout(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

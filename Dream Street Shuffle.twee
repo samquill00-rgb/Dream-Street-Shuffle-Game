@@ -37569,8 +37569,28 @@ actions: function() { return k.byText(['Pour a dram']); }, onLook: function(on) 
 actions: function() { return window.dssStreetExit(); } }, /* 2026-10-20: the shop's door is its way out (it was only looked at) */
 { root: bustHit, name: 'A bust of Percy Bysshe Shelley', pos: [BUST_X - 0.09, BUST_Y + 0.16, BUST_Z + 0.285], tgt: [BUST_X, BUST_Y + 0.104, BUST_Z], haloAt: [BUST_X - 0.03, BUST_Y - 0.035, BUST_Z + 0.2], haloSc: 0.45, keepGlow: true, /* 2026-11-14 (Sam: "put the halo-sprite at the top on the plinth not in his face") */ keepProse: true, prose: function() { return 'Drag to turn and admire it.'; }, onLook: function(on) { bustLooking = on; bustDrag = null; bustVel = 0; try { var A = window.dssAudio; if (A) { if (on) { A.startBed('shelley-bust'); A.soloBed('shelley-bust', true); } else { A.fadeBed('shelley-bust', 700); A.soloBed('shelley-bust', false); } } } catch (e) {} } } /* 2026-11-14 (Sam): the label and the line are his ("the label should say 'A bust of Percy Bysshe Shelley' and 'drag to turn and admire it'") */
 ];
+/* 2026-11-20 (Sam: "add a black cat to Inis's shop. A slinky girl cat", then of the free scan "Just needs to be smoother and black", "Make her smoother", "Her legs aren't attatched to the body", "Yes, wire her in"): she sleeps on the counter in front of his open book. models/shop-cat.bin is "Sleeping Cat Scan 3d" by mustafasahinfb (Sketchfab, CC-BY, credited in SOUND-SOURCES.md): the blanket it was scanned on cut away, rebuilt as one solid down to the counter so her legs join her body, smoothed to a short coat; metres, head and paws toward -x, base at y 0. Black with a faint warm sheen. She breathes (her back rises about 3 mm every 2.8 s) and now and then her ear flicks, sometimes twice; the vertex shader bends her in place, nothing is rebuilt per frame. The scan has no tail, so nothing twitches there. */
+var catUni = { uBreath: { value: 0 }, uEar: { value: 0 } }, catEar = { next: 3 + Math.random() * 4, t0: -1, amp: 0, twice: false }, catMesh = null;
+if (window.dssDSSM) window.dssDSSM(THREE, 'models/shop-cat.bin?v=1', function(gs) { if (!gs || !gs.length || !k.renderer.domElement.isConnected) return;
+var g = gs[0], pa = g.getAttribute('position'), n = pa.count, br = new Float32Array(n), ea = new Float32Array(n), V = function(a) { return new THREE.Vector3(a[0], a[1], a[2]); };
+var H = V([-0.055, 0.03, 0.095]), tip = V([-0.06, 0.064, 0.14]), up = new THREE.Vector3(0, 1, 0), q = new THREE.Vector3();
+var piv = tip.clone().lerp(H, 0.6), ax = new THREE.Vector3().subVectors(tip, H).cross(up).normalize(); /* her ear on top of her head; the other lies against the counter side of her head, and bending there moved her cheek */
+function sm(a, b, x) { x = Math.max(0, Math.min(1, (x - a) / (b - a))); return x * x * (3 - 2 * x); }
+for (var i = 0; i < n; i++) { q.fromBufferAttribute(pa, i); br[i] = sm(0.03, 0.1, q.y) * sm(-0.03, 0.03, q.x); ea[i] = (1 - sm(0.008, 0.032, q.distanceTo(tip))) * sm(tip.y - 0.032, tip.y - 0.012, q.y); }
+g.setAttribute('aBreath', new THREE.BufferAttribute(br, 1)); g.setAttribute('aEar', new THREE.BufferAttribute(ea, 1)); g.computeBoundingSphere();
+var gl = function(v) { return 'vec3(' + v.x.toFixed(4) + ', ' + v.y.toFixed(4) + ', ' + v.z.toFixed(4) + ')'; };
+var mat = new THREE.MeshPhysicalMaterial({ color: 0x080706, roughness: 0.42, metalness: 0, envMap: k.roomEnv, envMapIntensity: 1.1, clearcoat: 0.25, clearcoatRoughness: 0.5 }); if (mat.sheen !== undefined) mat.sheen = new THREE.Color(0x4a4038);
+mat.onBeforeCompile = function(sh) { sh.uniforms.uBreath = catUni.uBreath; sh.uniforms.uEar = catUni.uEar;
+sh.vertexShader = 'attribute float aBreath;\nattribute float aEar;\nuniform float uBreath;\nuniform float uEar;\nvec3 catRot(vec3 v, vec3 a, float t) { return v * cos(t) + cross(a, v) * sin(t) + a * dot(a, v) * (1.0 - cos(t)); }\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += objectNormal * aBreath * uBreath;\ntransformed = ' + gl(piv) + ' + catRot(transformed - ' + gl(piv) + ', ' + gl(ax) + ', uEar * aEar);'); };
+catMesh = new THREE.Mesh(g, mat); catMesh.name = 'shop-cat'; catMesh.castShadow = true; catMesh.receiveShadow = true; catMesh.position.set(0.06, 1.025, 0.16); catMesh.rotation.y = 1.3; catMesh.scale.setScalar(0.86); catMesh.userData.cat = { uni: catUni, ear: catEar }; /* read by the shop-cat check */ counterG.add(catMesh); });
+function catFrame(t, still) { if (!catMesh) return; if (still) { catUni.uBreath.value = 0; catUni.uEar.value = 0; return; }
+catUni.uBreath.value = 0.0032 * (0.5 - 0.5 * Math.cos(t * 6.2832 / 2.8));
+var E = catEar, a = 0; if (E.t0 < 0 && t >= E.next) { E.t0 = t; E.amp = 0.45 + Math.random() * 0.25; E.twice = Math.random() < 0.35; }
+if (E.t0 >= 0) { var u = (t - E.t0) / 0.3; if (u < 1) a = E.amp * Math.sin(Math.PI * u); else if (E.twice && u > 1.2 && u < 2.2) a = E.amp * 0.6 * Math.sin(Math.PI * (u - 1.2)); else if (u >= (E.twice ? 2.2 : 1)) { E.t0 = -1; E.next = t + 5 + Math.random() * 9; } }
+catUni.uEar.value = a; }
 return { hotspots: hotspots, frame: function(t, dt, still) {
 bustFrame();
+catFrame(t, still);
 oiBookMagic.frame(t, still);
 oiBookInst.frame(still);
 oiBookSwaps.frame(t, still);

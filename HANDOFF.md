@@ -1,3 +1,17 @@
+# PLAYTEST NOTES OF 20 NOV, EVENING (26 notes; worked through 20-21 Nov)
+
+Done, each with a check proved by a plant unless said: 26 (map can no longer stay black after a door fails; cause not reproduced), 6 (man by his car gated on $returnedPage again), 4 ("He calls you back once more."), 8 (Watkins windows wait for their names), 23 (Airport Pub second-visit line, pink), 13 and 15 (typing quicker and more varied), 14 (polaroid pockets and closes on one press; reverses his 14 Nov note 17), 11 (compass slip), 18 (barber and Jimmy slips offer directions), 21 (barber's lines in a Lichtenstein panel), 5 (four coloured rings on the call card; computed style checked, not seen on a live call).
+
+Answered, no change: 19 ("And the tears and the tears and the tears." belongs to the dual ring's closing card, After the dual ring; the single LILY call ends on Sonnet 66. Nothing deleted).
+
+Not reproduced, need a detail from Sam: 1 (Name Your Book holds steady while typing at 1440x900, 1280x800, 1280x720, 1440x780, 1512x860, 1100x700 in Chrome: which browser?), 10 (Shelves shows "Their names are Bual and Fuji." on a fresh visit: which object, which words?), 20 (which figure at the French: I tried the novelist seated and backed it out), 22 (nothing in the Airport Pub's lounge goes in but its button; the portal needs a click: which page moved on?), 24 and 25 (no doubled words on a first or repeat visit; a watcher for doubled text now runs in every world walk).
+
+Not started: 3 (central exit popup at the French, less in the bottom-left corner), 12 (Carthage approach: camera zooming out from the planets), 16 (Coach approach: sign wall set back and rounded, sign wrapped).
+
+To talk through with him: 7 (which key came before Cecil Court: the seeds all wait for $inisToldOfPillars except Davy's note, which hands over the ticket; and whether Benito's favour should wait for the first quest), 9 (O'Flatterly seen behind the door in the approach but to the right inside), 17 (reaching the Coach before the drains).
+
+REMIND HIM (note 2): the whole-tone music on Approach The French needs work and he wants to write it himself.
+
 # OVERNIGHT, 20 Nov (Sam: "Run the full regression then do a graphics improvement pass on the joyride")
 
 - Full regression: 199 of 199 passed (1 h 46 min, muted, alone). Nothing needed fixing.

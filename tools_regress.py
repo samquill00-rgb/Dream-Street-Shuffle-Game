@@ -1389,6 +1389,14 @@ def blank_canvases(r):
     return bad
 
 
+DOUBLED = """() => { var vis = function (e) { if (!e.getClientRects().length) return false; for (var c = e; c && c.nodeType === 1; c = c.parentElement) { var cs = getComputedStyle(c); if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity < 0.05) return false; } var b = e.getBoundingClientRect(); return b.width > 2 && b.height > 2 && b.bottom > 0 && b.top < innerHeight; };
+  var seen = {}, out = [], w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), n;
+  while ((n = w.nextNode())) { var t = n.nodeValue.replace(/\\s+/g, ' ').trim(), e = n.parentElement; if (t.length < 12 || !e || e.closest('script, style, tw-storydata, .stat-bars, #stat-bars-lifted, tw-header, .dss-ghost, [aria-hidden="true"]') || !vis(e)) continue;
+    var chain = []; for (var c = e; c && chain.length < 5; c = c.parentElement) chain.push(c.tagName.toLowerCase() + (c.id ? '#' + c.id : '') + (typeof c.className === 'string' && c.className ? '.' + c.className.split(' ')[0] : ''));
+    if (seen[t]) out.push({ t: t.slice(0, 70), where: seen[t] + ' AND ' + chain.join('<') }); else seen[t] = chain.join('<'); }
+  return out; }"""
+
+
 def world_check(world):
     def fn(r):
         r.go(world, wait=10000)
@@ -1404,6 +1412,9 @@ def world_check(world):
             over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
             if over > 4:
                 bad.append("%s: scrolls %d px on a 1440x900 screen" % (pn, over))
+            # 2026-11-20 playtest notes 24 and 25 (Sam: "Into the foothills appears twice"; "the mess section seems to be repeated text"): nothing a player can read is on the page twice
+            for d in r.js(DOUBLED):
+                bad.append("%s: shown twice: %r (%s)" % (pn, d["t"], d["where"]))
             opts = r.js(CLICKABLES)
             fresh = [o for o in opts if (pn, o["t"]) not in taken]
             # 2026-11-15: a way on that fades in slowly (Centre Point's CLIMB IT is not a fifth visible until about 5 s in, and whole by 9) was
@@ -1433,6 +1444,9 @@ def world_check(world):
             over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
             if over > 4:   # the page grew while it was played (a game's way on appearing below the fold)
                 bad.append("%s: scrolls %d px on a 1440x900 screen" % (pn, over))
+            for d in r.js(DOUBLED):   # again once the page has settled, just before the press
+                msg = "%s: shown twice: %r (%s)" % (pn, d["t"], d["where"])
+                if msg not in bad: bad.append(msg)
             r.page.mouse.click(o["x"], o["y"])
             r.page.wait_for_timeout(3500)
         r.info = "walked: " + " > ".join(dict.fromkeys(path))

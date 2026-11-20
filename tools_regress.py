@@ -440,6 +440,12 @@ def _(r):
     typed = lambda: r.js("() => [].map.call(document.querySelectorAll('.dss-hint-type, .dss-hint-slip'), function (e) { return e.textContent; }).join(' | ')")
     r.wait_for("() => document.body.innerText.indexOf('barbershop on Meard Street') >= 0 || [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.indexOf('barbershop') >= 0; })", 20000, "the barbershop slip on Dean Street at night phase 1")
     r.expect("Mister Jimmy" not in typed(), "Mister Jimmy's slip showed at night phase 1")
+    # 2026-11-20 playtest note 18 (Sam: "you should be able to click to get directions to the barber shop when this slip shows")
+    r.page.wait_for_timeout(2500)
+    go = r.js("() => { var b = [].filter.call(document.querySelectorAll('.dss-hint-slip button, .dss-hint-slip a, .dss-hint-slip [role=button], .dss-hint-go'), function (x) { return x.getClientRects().length && /direction/i.test(x.textContent); })[0]; if (!b) return null; b.click(); return b.textContent.trim(); }")
+    r.expect(go, "the barbershop slip offers no directions")
+    r.page.wait_for_timeout(600)
+    r.expect("barber" in (r.js("() => window.dssDirections ? window.dssDirections.get() : ''") or ""), "the slip's directions did not light the way to the barber's (%r)" % r.js("() => window.dssDirections && window.dssDirections.get()"))
     r.clear_slips()
     scratch_passage(r, "T-phase2", '(set: $nightPhase to 2)(set: $returns to 4)(set: $barberSlipShown to true)[[Walk on|Dean Street]]')
     r.go("T-phase2", wait=4000)
@@ -3113,6 +3119,23 @@ def typing_quicker(r):
     got = [float(x) for x in (rates or "").split(",") if x]
     r.expect(len(got) >= 2 and max(got) - min(got) > 0.02, "INIS's paragraphs do not type at rates of their own (%r)" % rates)
     r.info = "verse pace %s; INIS's paragraph rates %s" % (pace, rates)
+
+
+@check("compass-slip", "2026-11-20 playtest note 11 (Sam: \"When the compass appears (as now) in the top right there should be a slip that explains what it is and that you should follow it\"): the first time the compass is put up, a slip says what it is")
+def compass_slip(r):
+    scratch_passage(r, "T-comp", '(set: $returns to 1)(set: $metRed to true)(set: $knowsAboutPage to true)(set: $hasMissingPage to false)(set: $returnedPage to false)[[Walk on|Dean Street]]')   # the page 93 errand taken on: the compass points to the Pillars
+    r.go("T-comp", wait=4000)
+    r.page.click("tw-link:has-text('Walk on')")
+    r.wait_for("() => !!document.querySelector('.dss-trail-badge')", 20000, "the compass, with the errand on")
+    for sel in ("#coin-toss-btn", "#coin-keep-btn"):   # the second Dean Street's coin card holds every slip until it is pocketed
+        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
+        r.page.click(sel); r.page.wait_for_timeout(2500)
+    seen = False
+    for _ in range(60):
+        if r.js("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /compass/i.test(e.textContent); })"): seen = True; break
+        r.js("() => { [].forEach.call(document.querySelectorAll('.dss-hint-slip:not(.out)'), function (e) { if (!/compass/i.test(e.textContent)) e.click(); }); }")
+        r.page.wait_for_timeout(500)
+    r.expect(seen, "no slip explained the compass when it first appeared (raised %s; slips: %s)" % (r.js("() => window.__dssCompassSlip || 0"), r.js("() => [].map.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.slice(0, 50); })")))
 
 
 @check("watkins-names-wait", "2026-11-20 playtest note 8 (Sam: \"The Blavatsky and Beast popups show before the actual word links do. They just kind of appear. They should only appear when the links do and you hover on the link\"): with the pointer resting where the Beast's name will be written, no window opens until the name has arrived; then a hover opens it")

@@ -1,3 +1,15 @@
+# OVERNIGHT, 20 Nov (Sam: "Run the full regression then do a graphics improvement pass on the joyride")
+
+- Full regression: 199 of 199 passed (1 h 46 min, muted, alone). Nothing needed fixing.
+- Ride graphics pass, commit ef1dfdb, not pushed. Before and after: scratchpad/joyride-pass/joyride-before-after.png (left before, right after).
+  - A painted night environment (sky, roof haze, lamps and lit windows round the horizon) so the wet road, flags, parked cars, glass and the Cadillac reflect something. `?env=0` turns it off.
+  - The bonnet is clearcoated: a tight lamp highlight in place of half the bonnet burning white.
+  - Parked-car paint is darker, so cars in the headlamps stop reading as white boxes.
+- Check: joyride-from-bateman now fails without the environment (proved by switching it off once). The four ride and approach checks pass after the change.
+- Judged from stills only, on the Bateman > Dean > Old Compton > Ronnie's branch at 1440x900; 60 fps headless. Not seen: the French branch, the ride in motion, a phone.
+- Left alone, his to rule: the cabin framing (the roof takes the top third), the pale windscreen wiper arcs, parked cars as plain boxes (a model, not a lighting, job), the approach's Cadillac in the twee (unchanged, so the two copies now differ slightly in shine).
+- The regression does not cover: how any of this looks (it checks the ride loads, draws, and has its environment), sound levels by ear, the French exit of the ride, phones.
+
 # THE MAN BY HIS CAR IS IN THE GAME (20 Nov, small hours; Sam: "I want him to just be there whenever you return to soho after completing the page 93 errand")
 - Hub link `A man by his car` (in the alley dock, so also behind `$metRed`) on `$returnedPage is true`; map door `joyride` at c36 r17 (south pavement of Bateman Street), a stranger figure that is never used up, his red car drawn beside him in `buildBase`. Walk onto the tile for the Bateman Street approach; GET IN is the ride.
 - `Bateman Street` is tagged `map-return-joyride` and sets `$alleyReturn`, so neither walking on nor a ride counts as a lap. That is my call, not Sam's ruling: say if a ride should cost a lap.

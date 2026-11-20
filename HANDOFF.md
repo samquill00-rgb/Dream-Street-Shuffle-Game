@@ -26,7 +26,7 @@ REMIND HIM (note 2): the whole-tone music on Approach The French needs work and 
 
 # THE MAN BY HIS CAR IS IN THE GAME (20 Nov, small hours; Sam: "I want him to just be there whenever you return to soho after completing the page 93 errand")
 - Hub link `A man by his car` (in the alley dock, so also behind `$metRed`) on `$returnedPage is true`; map door `joyride` at c36 r17 (south pavement of Bateman Street), a stranger figure that is never used up, his red car drawn beside him in `buildBase`. Walk onto the tile for the Bateman Street approach; GET IN is the ride.
-- `Bateman Street` is tagged `map-return-joyride` and sets `$alleyReturn`, so neither walking on nor a ride counts as a lap. That is my call, not Sam's ruling: say if a ride should cost a lap.
+- `Bateman Street` is tagged `map-return-joyride` and sets `$alleyReturn`, so neither walking on nor a ride counts as a lap. Ruled by Sam the same night: "Keep it free".
 - Check `joyride-man-after-page93` (plant-proved; saves `joyride-man-map.png`). Ran with it: hub-*, bateman-approach, joyride-from-bateman. The FULL regression has not been run since.
 - The source edits were swept into the other session's 62b0f32; my own commit after it holds the built html.
 - The ride's driver and the man at the kerb are the game's ghost figures (`dssGhostTex` copied into soho-joyride.html).

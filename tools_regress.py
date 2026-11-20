@@ -4266,6 +4266,8 @@ def bateman_approach(r):
     r.page.wait_for_timeout(1500)
     blank = blank_canvases(r)
     r.expect(not blank, "; ".join(blank))
+    gm = r.js("() => { var w = document.getElementById('bs-wrap'), c = w.querySelector('canvas'), l = w.querySelector('.bs-lens'); return { scraps: +w.getAttribute('data-grime') || 0, filter: c ? c.style.filter : '', lens: l ? Math.round(l.getBoundingClientRect().width) : 0 }; }")
+    r.expect(gm["scraps"] > 50 and "sepia" in gm["filter"] and gm["lens"] > 600, "2026-11-20 (Sam: \"Match the approach to the ride's grime\"): the approach has lost its grime (litter, soot, dirty lens): %s" % gm)
     ce = r.js("() => document.getElementById('bs-wrap').getAttribute('data-car-env')")
     r.expect(ce == "street", "2026-11-20 (Sam: \"Match the approach's Cadillac to the ride's shine\"): the approach's Cadillac does not reflect the ride's night street (data-car-env %r)" % ce)
     m = r.js("""() => { var w = document.getElementById('bs-wrap'), b = [].filter.call(w.querySelectorAll('button'), function (x) { return x.textContent === 'WALK ON'; })[0] || w.querySelector('button'), q = b.getBoundingClientRect(), t = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);

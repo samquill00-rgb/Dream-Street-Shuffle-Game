@@ -752,20 +752,24 @@ def _(r):
     r.expect(ps[-1] - ps[0] <= 1, "the page changed size as you typed (%r)" % ps)
 
 
-@check("page93-skip-says-game", "2026-11-19 note 6 (Sam, on a fresh game: \"Why does this show: 'Hand him page 93 (found on an earlier night)'. I haven't played an earlier night\"): page 93 handed back in an earlier game says so")
+@check("page93-skip-this-game-only", "2026-11-19 note 6 and 2026-11-20 (Sam: the page 93 skip showed on the first night after a hard refresh; \"It should only give that option if you have already played a night and got it\"): the skip shows only on a later night of the same game")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
-    LBL = "() => { var e = [].filter.call(document.querySelectorAll('.dss-skip93'), function (x) { return !x.closest('.dss-ghost'); }).pop(); return e ? [e.hidden, e.textContent.trim()] : null; }"
-    r.go("O'Flatterly's quest", wait=5000)
-    r.js("() => { localStorage.setItem('dssPage93Done', '1'); localStorage.setItem('dssPage93Run', 'an-older-game'); }")
-    r.go("O'Flatterly's quest", wait=6000)
-    got = r.js(LBL)
-    r.expect(got and not got[0] and "found in an earlier game" in got[1], "an earlier game's page 93 is labelled %r" % (got,))
-    r.js("() => { localStorage.setItem('dssRunFirst', '7'); localStorage.setItem('dssPage93Run', '7'); }")
-    r.go("O'Flatterly's quest", wait=6000)
-    got2 = r.js(LBL)
-    r.info = repr((got, got2))
-    r.expect(got2 and "found on an earlier night" in got2[1], "this game's page 93 (an earlier night of the same game) is labelled %r" % (got2,))
+    SHOWN = "() => { var e = [].filter.call(document.querySelectorAll('.dss-skip93'), function (x) { return !x.closest('.dss-ghost'); }).pop(); return e ? [!e.hidden, e.textContent.trim()] : null; }"
+    seen = []
+    for label, run, was, wasN, nowN, want in [("an earlier game", "7", "3", "4", "9", False),
+                                                ("this game, the same night", "7", "7", "9", "9", False),
+                                                ("this game, an earlier night", "7", "7", "8", "9", True),
+                                                ("from before the night was kept", "7", "7", "", "9", False)]:
+        r.go("O'Flatterly's quest", wait=1500)
+        r.js("(a) => { localStorage.setItem('dssPage93Done', '1'); localStorage.setItem('dssRunFirst', a[0]); localStorage.setItem('dssPage93Run', a[1]); localStorage.setItem('dssPage93Night', a[2]); localStorage.setItem('dssNightNo', a[3]); }", [run, was, wasN, nowN])
+        r.go("O'Flatterly's quest", wait=6000)
+        got = r.js(SHOWN)
+        seen.append((label, got))
+        r.expect(got is not None and got[0] == want, "page 93 handed back in %s: the skip is %s (%r)" % (label, "hidden" if want else "offered", got))
+        if want and got:
+            r.expect("found on an earlier night" in got[1], "the skip reads %r" % got[1])
+    r.info = repr(seen)
 
 
 @check("trail-badge-not-before-trails", "2026-11-10 (Sam): the EZEKIEL TRAIL badge showed on the opening page (The Night Ahead), before Dean Street, from steps looked at on an earlier night")

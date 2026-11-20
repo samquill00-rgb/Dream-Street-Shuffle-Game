@@ -3,7 +3,8 @@
 - GET IN goes to the passage `Soho Joyride`; the SOHO JOYRIDE HOST script (after the arrivals block) lays `soho-joyride.html?embed=1` over the page in a frame. Embedded, the ride opens in the passenger seat (its own kerbside view is skipped), hides its preview aids, and on getting out offers Walk on: `dss:joyride-exit` then `dss:joyride-leave` set `window.dssSohoArrival` and `dssMapLast` and turn the page to Dean Street.
 - The ride's car is the same Cadillac: `buildCadillac()` in soho-joyride.html is a second copy of the model in the twee. Change both.
 - Checks bateman-approach and joyride-from-bateman, each proved by plants. Not covered: the other five ride branches from inside the game, the stereo by ear, phones.
-- For Sam's eye: the ride's Bateman Street (wet road, yellow lines, its own shop signs) does not match the approach's (dry, Dog and Duck / Lorelei / Carlisle Arms).
+- The street is WET, after rain, in both (Sam, later the same night: "Make the street wet, after rain"; it was built dry at his first word, and the ride was dried for an hour to match). Approach: pools, glossy flags and tarmac, light lying on the road; ride: `DRY = false`. No rain falls anywhere. Commit ddc64e1's message says the ride is dry: its content is already wet.
+- Both Bateman Streets carry the Carlisle Arms, the Lorelei and the Dog and Duck in the same order. The ride also keeps its own set-dressing signs (Records, Trimmings) and yellow lines; the approach has neither.
 
 # SOHO JOYRIDE PROTOTYPE (20 Nov, earlier: the notes of the session that built the ride)
 `soho-joyride.html` is the art pass (three.js, vendor/three) over the 2D blockout, which is kept as `soho-joyride-blockout.html`. Open it at http://localhost:8732/soho-joyride.html (preview config dss-game). Sam said: preview first, then decide where the encounter belongs; driver's identity and dialogue are his; do not commit or push it.

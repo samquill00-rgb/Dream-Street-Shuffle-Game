@@ -3138,6 +3138,26 @@ def compass_slip(r):
     r.expect(seen, "no slip explained the compass when it first appeared (raised %s; slips: %s)" % (r.js("() => window.__dssCompassSlip || 0"), r.js("() => [].map.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.slice(0, 50); })")))
 
 
+@check("barber-comic-panel", "2026-11-20 playtest note 21 (Sam: \"This should have some sort of comic book popup saying the 'Sharp' lines ... remove them from there and put them in a lichenstein popup\"): a haircut's line opens in a comic panel, is not set in the page's text, and the panel can be put away; the shave's does the same")
+def barber_comic_panel(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The Barbershop", wait=4500)
+    r.clear_lore(); r.clear_slips()
+    r.page.get_by_text("TO THE BARBER’S").click(); r.page.wait_for_timeout(1500)
+    PAGE = "() => [].filter.call(document.querySelectorAll('tw-story > tw-passage:not(.dss-ghost), .dss-room-veil'), function (e) { return true; }).map(function (e) { return e.innerText; }).join(' ')"
+    for link, words in (("A haircut", "everything’s sharp"), ("A shave", "Attaboy")):
+        r.page.locator("tw-link", has_text=link).first.click()
+        r.wait_for("() => { var o = document.getElementById('dss-comic-pop'); return !!o && +getComputedStyle(o).opacity > 0.9; }", 6000, "the comic panel after %s" % link)
+        got = r.js("() => { var o = document.getElementById('dss-comic-pop'), t = o.querySelector('.dss-comic-words'), b = o.firstChild.getBoundingClientRect(); return { words: t.textContent, fits: t.scrollHeight <= t.clientHeight + 2 && t.scrollWidth <= t.clientWidth + 2, on: b.left >= 0 && b.right <= innerWidth && b.top >= 0 && b.bottom <= innerHeight }; }")
+        r.expect(words in got["words"], "the panel after %s reads %r" % (link, got["words"]))
+        r.expect(got["fits"] and got["on"], "the panel's words do not fit it, or it runs off the page (%s)" % got)
+        r.expect(words not in r.js(PAGE), "the line is still set in the page's own text after %s" % link)
+        r.page.screenshot(path=os.path.join(SHOTS, "barber-comic-%s.png" % link.split()[-1]))
+        r.page.wait_for_timeout(500); r.page.mouse.click(80, 820)
+        r.wait_for("() => !document.getElementById('dss-comic-pop')", 4000, "the comic panel to be put away")
+    r.expect("MORALE +6" in r.js(PAGE), "the morale note went with the line")
+
+
 @check("watkins-names-wait", "2026-11-20 playtest note 8 (Sam: \"The Blavatsky and Beast popups show before the actual word links do. They just kind of appear. They should only appear when the links do and you hover on the link\"): with the pointer resting where the Beast's name will be written, no window opens until the name has arrived; then a hover opens it")
 def watkins_names_wait(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

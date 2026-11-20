@@ -4258,7 +4258,7 @@ def fetch_by_play(r):
     r.expect(not bad2, "; ".join(dict.fromkeys(bad2)))
     r.expect(seen2[:2] == ["The Fetch", "Dean Street"], "the glimpse went %s" % " > ".join(seen2))
 
-@check("bateman-approach", "2026-11-20 (Sam: \"an approach scene for meeting the man on the street before i joyride\"; \"build the street dry, no sound, approach only for now\"): Bateman Street opens as a 3D approach that draws, fits the page and has no pools on the ground; its one button, WALK ON at the foot, goes back to Dean Street; the passage's own link stays hidden")
+@check("bateman-approach", "2026-11-20 (Sam: \"an approach scene for meeting the man on the street before i joyride\"; \"build the street dry, no sound, approach only for now\"): Bateman Street opens as a 3D approach that draws, fits the page and (\"Make the street wet, after rain\", the same night) has its pools on the ground; its one button, WALK ON at the foot, goes back to Dean Street; the passage's own link stays hidden")
 def bateman_approach(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("Bateman Street", wait=9000); r.clear_lore(); r.clear_slips()
@@ -4270,7 +4270,8 @@ def bateman_approach(r):
       var links = [].filter.call(document.querySelectorAll('tw-story > tw-passage:not(.dss-ghost) tw-link'), function (l) { return l.getClientRects().length; }).length;
       return { label: b.textContent, top: !!t && (t === b || b.contains(t)), foot: Math.round(innerHeight - q.bottom), pools: w.getAttribute('data-pools'), links: links, over: document.scrollingElement.scrollHeight - innerHeight }; }""")
     r.info = str(m)
-    r.expect(m["pools"] is None, "the street has %s pools on the ground; Sam asked for it dry" % m["pools"])
+    # dry at first ("build the street dry"), then Sam the same night: "Make the street wet, after rain"
+    r.expect(m["pools"] == "6", "the street has %s pools on the ground; Sam asked for it wet, after rain" % m["pools"])
     r.expect(m["label"] == "WALK ON" and m["top"] and m["foot"] < 140, "WALK ON is not the button at the foot: %s" % m)
     r.expect(m["links"] == 0, "%d passage links show beside the scene" % m["links"])
     r.expect(m["over"] <= 2, "the page scrolls by %d px" % m["over"])

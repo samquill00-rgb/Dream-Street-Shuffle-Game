@@ -1,3 +1,20 @@
+# SOHO JOYRIDE: WIRED TO THE BATEMAN STREET APPROACH (20 Nov, later; Sam: "Yes, wire it here")
+- The game's approach is the passage `Bateman Street` (arrival('bs') in the FIVE SMALL ARRIVALS block): dry street, red Cadillac from Sam's three references, the man a ghost on the far pavement, an opening camera swing, buttons GET IN and WALK ON. Not on the map or the hub: open with `?start=Bateman%20Street`. When he turns up is Sam's to rule.
+- GET IN goes to the passage `Soho Joyride`; the SOHO JOYRIDE HOST script (after the arrivals block) lays `soho-joyride.html?embed=1` over the page in a frame. Embedded, the ride opens in the passenger seat (its own kerbside view is skipped), hides its preview aids, and on getting out offers Walk on: `dss:joyride-exit` then `dss:joyride-leave` set `window.dssSohoArrival` and `dssMapLast` and turn the page to Dean Street.
+- The ride's car is the same Cadillac: `buildCadillac()` in soho-joyride.html is a second copy of the model in the twee. Change both.
+- Checks bateman-approach and joyride-from-bateman, each proved by plants. Not covered: the other five ride branches from inside the game, the stereo by ear, phones.
+- For Sam's eye: the ride's Bateman Street (wet road, yellow lines, its own shop signs) does not match the approach's (dry, Dog and Duck / Lorelei / Carlisle Arms).
+
+# SOHO JOYRIDE PROTOTYPE (20 Nov, earlier: the notes of the session that built the ride)
+`soho-joyride.html` is the art pass (three.js, vendor/three) over the 2D blockout, which is kept as `soho-joyride-blockout.html`. Open it at http://localhost:8732/soho-joyride.html (preview config dss-game). Sam said: preview first, then decide where the encounter belongs; driver's identity and dialogue are his; do not commit or push it.
+- The blockout drew Soho mirror-imaged (left turns swung right on screen). Fixed: turn words come from the car's heading (`turnWord`), `window.__joyride.log` records each real turn.
+- Six branches were played headless on 20 Nov and passed (turn words, streets, exit payloads); one branch was also played with real clicks in the preview pane. The test scripts were in a session scratchpad and are gone: `window.__joyride` (state, choose, log, cam, look) is the hook to rebuild them on.
+- Kept to the house rules: no rain on the glass or in the air (wet road only), nothing shows the player, the driver is a faceless dark shape. Shop signs other than the French and Ronnie's are set dressing of mine.
+- Sam, 20 Nov, after seeing it: LEFT-hand drive (done: `LHD`, the cabin is mirrored), dry windscreen (kept), and the driver puts Sam's own "Roger that!" on the car stereo a moment after you get in (done: `roger-that.mp3` beside the page, looped, fades as the car leaves; logged in SOUND-SOURCES.md; `?mute=1` silences it).
+- Sam saw the car drive through a building and parked cars (20 Nov). Two causes, both fixed: a choice pressed before the car had finished a corner started the new path from a mid-turn position (now it waits until the car is round the last corner, `car.pending`); and after you got out the car drove 70 m dead straight (now `leaveAlongStreet` takes it to the next crossing and round to the left). `window.__joyride.hit()` reports any point of the car's outline over a kerb or inside a parked car; seven branches were replayed with it, choices pressed early and late, no hits.
+- Sam asked for one corner after Hopper's Nighthawks (20 Nov): built at the south-west corner of Bateman and Frith (`hawkN`/`hawkE` in SPECIALS), own geometry, no PHILLIES lettering, figures without faces. The painting is in copyright in the UK until 2037 (Hopper d. 1967); flagged to Sam as a thing to weigh before a commercial build.
+- Not done: pedestrians, moving traffic, any other sound, touch look-around, the Colony/Lackland fronts are plain. On exit it emits `dss:joyride-exit` with the stop's arrival; integration sets `window.dssSohoArrival` from it.
+
 # START HERE (19 Nov: playtest finished, tarot redraws, leftovers fixed)
 See HANDOFF-night-2026-11-19.md. Open: full regression; licensing for the GPT tarot art, rug credit, book cover.
 

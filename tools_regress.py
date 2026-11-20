@@ -4266,8 +4266,9 @@ def bateman_approach(r):
     r.page.wait_for_timeout(1500)
     blank = blank_canvases(r)
     r.expect(not blank, "; ".join(blank))
-    gm = r.js("() => { var w = document.getElementById('bs-wrap'), c = w.querySelector('canvas'), l = w.querySelector('.bs-lens'); return { scraps: +w.getAttribute('data-grime') || 0, filter: c ? c.style.filter : '', lens: l ? Math.round(l.getBoundingClientRect().width) : 0 }; }")
+    gm = r.js("() => { var w = document.getElementById('bs-wrap'), c = w.querySelector('canvas'), l = w.querySelector('.bs-lens'); return { dive: w.getAttribute('data-dive'), scraps: +w.getAttribute('data-grime') || 0, filter: c ? c.style.filter : '', lens: l ? Math.round(l.getBoundingClientRect().width) : 0 }; }")
     r.expect(gm["scraps"] > 50 and "sepia" in gm["filter"] and gm["lens"] > 600, "2026-11-20 (Sam: \"Match the approach to the ride's grime\"): the approach has lost its grime (litter, soot, dirty lens): %s" % gm)
+    r.expect(gm["dive"] == "1", "2026-11-20 (Sam: \"Also make it look more like a dive bar\"): the Last Chance Saloon on the approach is not dressed as a dive bar")
     ce = r.js("() => document.getElementById('bs-wrap').getAttribute('data-car-env')")
     r.expect(ce == "street", "2026-11-20 (Sam: \"Match the approach's Cadillac to the ride's shine\"): the approach's Cadillac does not reflect the ride's night street (data-car-env %r)" % ce)
     m = r.js("""() => { var w = document.getElementById('bs-wrap'), b = [].filter.call(w.querySelectorAll('button'), function (x) { return x.textContent === 'WALK ON'; })[0] || w.querySelector('button'), q = b.getBoundingClientRect(), t = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
@@ -4342,6 +4343,7 @@ def joyride_from_bateman(r):
     r.expect(seen and seen[0] > 300, "the ride has no view (%s)" % seen)
     ci = fr.evaluate("() => window.__joyride.info()")
     r.expect(all(ci["cars"].get(k2, 0) > 0 for k2 in ("mini", "small", "big", "cab", "van")) and min(ci["carLen"]) < 3.2 and max(ci["carLen"]) < 4.6, "2026-11-20 (Sam: \"make the parked cars look more british, they look very american. Only the cadillac should be american\"): the parked cars are not the British mix (kinds %s, lengths %s)" % (ci["cars"], ci["carLen"]))
+    r.expect(ci.get("dive") is True, "2026-11-20 (Sam: \"Also make it look more like a dive bar\"): the ride's Last Chance Saloon is not dressed as a dive bar")
     gr = ci.get("grime") or {}
     r.expect(gr.get("lens") is True and gr.get("scraps", 0) > 500 and gr.get("fog", 0) > 0.015, "2026-11-20 (Sam: \"can you do a sort of grime pass over the visuals. It looks clear and not like the rest of the worlds\"): the ride has lost its grime (dirty lens, litter, thick air): %s" % ci.get("grime"))
     r.expect(fr.evaluate("() => window.__joyride.info().env") is True, "2026-11-20 graphics pass: the ride has no night environment, so its wet road, glass and paint reflect nothing")

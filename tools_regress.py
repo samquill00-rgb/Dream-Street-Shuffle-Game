@@ -4378,6 +4378,42 @@ def joyride_from_bateman(r):
     r.expect(r.js("() => sessionStorage.getItem('dssMapLast')") == "ronnies", "the player is not at Ronnie's door")
 
 
+@check("square-hut-walk", "2026-11-20 playtest note 26 (Sam: \"I walked into the hut in soho square and the game has frozen so i can't move on now\"): walking onto Soho Square on the map opens the square, its doors work, and back on Dean Street the player can still walk")
+def square_hut_walk(r):
+    scratch_passage(r, "T-night1", '(set: $returns to 1)(set: $metRed to true)(set: $returnedPage to false)[[Walk on|Dean Street]]')
+    r.go("T-night1", wait=6000)
+    r.page.click("tw-link:has-text('Walk on')")
+    r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 15000, "the Soho map")
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    for sel in ("#coin-toss-btn", "#coin-keep-btn"):
+        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
+        r.page.click(sel); r.page.wait_for_timeout(2500)
+    r.clear_lore(); r.clear_slips(); r.clear_lore()
+    PRESS = """(way) => { var b = document.querySelector('[data-dir="' + way + '"]'); if (!b) return; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, isPrimary: true })); setTimeout(function () { b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, isPrimary: true })); }, 200); }"""
+    ST = "() => { var S = window.dssSohoMap && window.dssSohoMap.state; return S ? { c: S.c, r: S.r, entering: !!S.entering, unstuck: S.unstuck || 0 } : null; }"
+    # first with the door's click swallowed, as something swallowed it on his night: the map must come back and be walkable
+    r.js("() => { window.__sqBlock = function (e) { var l = e.target && e.target.closest && e.target.closest('tw-link'); if (l && l.textContent.trim() === 'Soho Square') { e.preventDefault(); e.stopImmediatePropagation(); } }; window.addEventListener('click', window.__sqBlock, true); }")
+    r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", [38, 7]); r.page.wait_for_timeout(600)
+    r.js(PRESS, "left"); r.page.wait_for_timeout(1500)
+    mid = r.js(ST)
+    r.expect(mid and mid["entering"], "walking through the east gate did not start going in (%s)" % mid)
+    r.page.wait_for_timeout(5000)
+    after = r.js(ST)
+    r.expect(r.pn() == "Dean Street" and after and not after["entering"] and after["unstuck"] == 1, "with the door's click swallowed the map stayed black (%s)" % after)
+    r.js(PRESS, "right"); r.page.wait_for_timeout(1500)
+    moved = r.js(ST)
+    r.expect(moved and moved["c"] != after["c"], "the player cannot walk after the map came back (%s then %s)" % (after, moved))
+    # then for real, from the east gate as he came
+    r.js("() => window.removeEventListener('click', window.__sqBlock, true)")
+    r.js("([c, rr]) => window.__dssSohoTeleport(c, rr)", [38, 7]); r.page.wait_for_timeout(600)
+    r.js(PRESS, "left")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Alley: Soho Square'", 12000, "the east gate to open Soho Square")
+    r.wait_for("() => { var b = [].filter.call(document.querySelectorAll('#sq-wrap button'), function (x) { return x.getClientRects().length; }); return b.length > 0; }", 15000, "the square's 3D scene and its buttons")
+    blank = blank_canvases(r)
+    r.expect(not blank, "; ".join(blank))
+    r.info = "blocked: back at %s and walking; then in by the east gate" % ([after["c"], after["r"]],)
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

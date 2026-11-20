@@ -3158,6 +3158,18 @@ def barber_comic_panel(r):
     r.expect("MORALE +6" in r.js(PAGE), "the morale note went with the line")
 
 
+@check("call-mat-rings", "2026-11-20 playtest note 5 (Sam: \"The beer mat style popups for the calls should have more colours in the borders\"): a ringing-phone card has four coloured rings round it, oxblood, cream, bottle green and brass")
+def call_mat_rings(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The Ham calls you back", wait=5000)
+    sh = r.js("() => { var d = document.createElement('div'); d.className = 'phone-ringing'; d.textContent = 'Behind the bar a phone rings.'; (document.querySelector('tw-story > tw-passage:not(.dss-ghost)') || document.body).appendChild(d); var v = getComputedStyle(d).boxShadow; window.__ringCard = d; return v; }")
+    for name, rgb in (("oxblood", "rgb(122, 32, 24)"), ("cream", "rgb(224, 207, 162)"), ("bottle green", "rgb(31, 77, 60)"), ("brass", "rgb(201, 162, 78)")):
+        r.expect(rgb in (sh or ""), "the call card has no %s ring (%s)" % (name, (sh or "")[:120]))
+    r.page.wait_for_timeout(700)
+    r.page.screenshot(path=os.path.join(SHOTS, "call-mat-rings.png"))
+    r.js("() => window.__ringCard && window.__ringCard.remove()")
+
+
 @check("watkins-names-wait", "2026-11-20 playtest note 8 (Sam: \"The Blavatsky and Beast popups show before the actual word links do. They just kind of appear. They should only appear when the links do and you hover on the link\"): with the pointer resting where the Beast's name will be written, no window opens until the name has arrived; then a hover opens it")
 def watkins_names_wait(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

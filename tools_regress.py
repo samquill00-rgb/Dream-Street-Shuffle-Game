@@ -4319,6 +4319,7 @@ def joyride_from_bateman(r):
     blank = blank_canvases(r)
     seen = fr.evaluate("() => { var c = document.getElementById('view'); return c ? [c.width, c.height] : null; }")
     r.expect(seen and seen[0] > 300, "the ride has no view (%s)" % seen)
+    r.expect(fr.evaluate("() => window.__joyride.info().env") is True, "2026-11-20 graphics pass: the ride has no night environment, so its wet road, glass and paint reflect nothing")
     import io
     from PIL import Image, ImageStat
     sd = ImageStat.Stat(Image.open(io.BytesIO(r.page.screenshot())).convert("L")).stddev[0]

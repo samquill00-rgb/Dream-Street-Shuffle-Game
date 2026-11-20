@@ -1066,7 +1066,7 @@ function buildCity() {
       if (rnd() < 0.22) continue;
       const off = c + side * (s.road - 0.95), dir = rnd() < 0.5 ? 1 : -1, van = rnd() < 0.14;
       const tf = s.ax === "z" ? carTf(off, p, 0, dir) : carTf(p, off, dir, 0);
-      buildSaloon(bt, tf, { paint: mul(C(pick(paints)), 0.9 + rnd() * 0.5), van: van, z1: van ? 2.3 : 2.2 });
+      buildSaloon(bt, tf, { paint: mul(C(pick(paints)), 0.68 + rnd() * 0.36), van: van, z1: van ? 2.3 : 2.2 });
       OBST.cars.push(s.ax === "z" ? [off - 0.86, off + 0.86, p - 2.35, p + 2.4] : [p - 2.4, p + 2.4, off - 0.86, off + 0.86]);
     }
   };
@@ -1250,7 +1250,7 @@ const cabinFx = {};
 function buildCar() {
   const std = (hex, r, m) => new THREE.MeshStandardMaterial({ color: hex, roughness: r, metalness: m || 0 });
   const mVinyl = std(0x070605, 0.5), mDark = std(0x040404, 0.9), mChrome = std(0x5e5a52, 0.25, 0.6), mLeather = std(0x0e0605, 0.45), mHead = std(0x0b0a08, 0.9);
-  const mBody = std(0x3a070b, 0.4, 0.35);   /* the bonnet seen over the dash: the Cadillac's red, was the saloon's green */
+  const mBody = new THREE.MeshPhysicalMaterial({ color: 0x3a070b, roughness: 0.55, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.07 }); cabinFx.bonnet = mBody;   /* the bonnet seen over the dash: the Cadillac's red, was the saloon's green */
   const mRubber = std(0x0c0b0b, 0.4), mCoat = std(0x060505, 0.8), mHair = std(0x030303, 0.55), mSkin = std(0x150f0c, 0.75);
   const woodTex = makeTex(512, 128, function (cx, w, h) {
     const g = cx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#7a4a26"); g.addColorStop(0.5, "#5a3218"); g.addColorStop(1, "#3a1e0e"); cx.fillStyle = g; cx.fillRect(0, 0, w, h);
@@ -1438,6 +1438,32 @@ function assemble() {
   const moon = new THREE.DirectionalLight(0x5a6890, 0.24); moon.position.set(-0.4, 1, 0.3); scene.add(moon);
   for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xffb264, 0, 27, 2); scene.add(l); lights.push(l); }
   buildCar();
+  /* 2026-11-20 graphics pass: a night street for the shiny things to reflect (wet road and flags, parked cars, glass, the Cadillac's paint and chrome). Before this nothing had an environment, so gloss read as flat paint. Painted, not captured: sky, a haze over the roofs, lamps and lit windows round the horizon, their smears in the wet below. */
+  if (qs.get("env") !== "0" && typeof THREE.PMREMGenerator === "function") {
+    const er = mulberry(77), E = (a, b) => a + (b - a) * er();
+    const envTex = makeTex(1024, 512, function (cx, w, h) {
+      const g = cx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#04050b"); g.addColorStop(0.36, "#0b0b16"); g.addColorStop(0.47, "#2c1c12"); g.addColorStop(0.5, "#3a2616"); g.addColorStop(0.52, "#0c0a0a"); g.addColorStop(1, "#050506"); cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+      for (let x = 0; x < w;) {   /* the terraces, dark against the haze, some windows lit */
+        const bw = E(24, 70), top = h * E(0.3, 0.44); cx.fillStyle = "rgb(" + Math.floor(E(10, 22)) + "," + Math.floor(E(8, 16)) + "," + Math.floor(E(8, 14)) + ")"; cx.fillRect(x, top, bw + 1, h * 0.5 - top);
+        for (let wy = top + 6; wy < h * 0.47; wy += 11) for (let wx = x + 5; wx < x + bw - 6; wx += 11) if (er() < 0.2) { cx.fillStyle = er() < 0.8 ? "rgba(255,196,120," + E(0.5, 1).toFixed(2) + ")" : "rgba(170,200,255,0.7)"; cx.fillRect(wx, wy, 5, 7); }
+        cx.fillStyle = "rgba(255,190,120," + E(0.25, 0.7).toFixed(2) + ")"; if (er() < 0.6) cx.fillRect(x + 3, h * 0.475, bw - 6, h * 0.02);   /* a shopfront */
+        x += bw;
+      }
+      for (let k = 0; k < 26; k++) {   /* lamps, a little neon, and what the wet does with them */
+        const x = E(0, w), y = h * E(0.44, 0.475), neon = er() < 0.15, col = neon ? "255,70,50" : "255,200,140", r = neon ? E(8, 14) : E(9, 20);
+        let q = cx.createRadialGradient(x, y, 0, x, y, r); q.addColorStop(0, "rgba(" + col + ",1)"); q.addColorStop(0.35, "rgba(" + col + ",0.6)"); q.addColorStop(1, "rgba(" + col + ",0)"); cx.fillStyle = q; cx.fillRect(x - r, y - r, r * 2, r * 2);
+        q = cx.createLinearGradient(0, h * 0.52, 0, h * 0.74); q.addColorStop(0, "rgba(" + col + ",0.3)"); q.addColorStop(1, "rgba(" + col + ",0)"); cx.fillStyle = q; cx.fillRect(x - r * 0.35, h * 0.52, r * 0.7, h * 0.22);
+      }
+    });
+    envTex.mapping = THREE.EquirectangularReflectionMapping; envTex.encoding = renderer.outputEncoding;
+    const pm = new THREE.PMREMGenerator(renderer), env = pm.fromEquirectangular(envTex).texture; pm.dispose();
+    scene.environment = env;
+    const EI = { brick: 0.1, stucco: 0.1, paint: 0.25, decal: 0.1, flag: 0.1, signP: 0.1, shutter: 0.5, pave: 0.7, gloss: 1.5, glass: 2.2 };
+    for (const k in EI) if (M[k]) { M[k].envMapIntensity = EI[k]; M[k].needsUpdate = true; }
+    road.material.envMapIntensity = 0.45;
+    carRoot.traverse(function (o) { const ma = o.material; if (!ma || !ma.isMeshStandardMaterial) return; ma.envMapIntensity = ma.metalness >= 0.5 ? 2.4 : ma.clearcoat ? 1.6 : ma.roughness <= 0.45 ? 0.8 : 0.2; });
+    if (cabinFx.bonnet) cabinFx.bonnet.envMapIntensity = 0.4;   /* seen at a grazing angle from the seat, where a clearcoat mirrors nearly everything */
+  }
 }
 
 /* ============================================================
@@ -1842,7 +1868,7 @@ window.__joyride = {
   path: function () { return car.path ? car.path.pts.filter((q, i) => i % 12 === 0).map(q => [+(q.x / S).toFixed(2), +(q.z / S).toFixed(2)]) : null; },
   lights: function () { return lights.map(l => [l.color.getHexString(), +l.intensity.toFixed(2), +(l.position.x / S).toFixed(1), +(l.position.z / S).toFixed(1)]); },
   stereo: function () { return { on: stereo.on, vol: +stereo.vol.toFixed(2), reach: +stereo.reach.toFixed(2), paused: stereo.el ? stereo.el.paused : null, t: stereo.el ? +stereo.el.currentTime.toFixed(1) : null, ready: stereo.el ? stereo.el.readyState : null, muted: stereo.muted }; },
-  info: function () { return { rt: composer ? [composer.renderTarget1.width, composer.renderTarget1.height, composer.renderTarget1.samples || 0] : null, cv: [canvas.width, canvas.height], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, sources: sources.length, halos: halos.length }; }
+  info: function () { return { rt: composer ? [composer.renderTarget1.width, composer.renderTarget1.height, composer.renderTarget1.samples || 0] : null, cv: [canvas.width, canvas.height], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, sources: sources.length, halos: halos.length, env: !!scene.environment }; }
 };
 try {
   assemble(); resize(); setMode("outside");

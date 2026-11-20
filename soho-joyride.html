@@ -217,10 +217,12 @@ const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.95;
+/* 2026-11-20 (Sam: "can you do a sort of grime pass over the visuals. It looks clear and not like the rest of the worlds"): soot and stains worked into every surface, litter and a black gutter along the kerbs, duller glass, thicker and browner air, and a dirty lens over the lot (grain, a nicotine cast, lifted blacks, darker corners). ?grime=0 turns all of it off. */
+const GRIME = qs.get("grime") !== "0";
 const scene = new THREE.Scene();
 const NIGHT = 0x0d0b0d;
 scene.background = new THREE.Color(NIGHT);
-scene.fog = new THREE.FogExp2(NIGHT, 0.0135);
+scene.fog = new THREE.FogExp2(GRIME ? 0x100c0a : NIGHT, GRIME ? 0.019 : 0.0135);
 const camera = new THREE.PerspectiveCamera(62, 1.6, 0.07, 420);
 const MAXANI = renderer.capabilities.getMaxAnisotropy();
 
@@ -234,6 +236,26 @@ if (qs.get("post") !== "0" && typeof THREE.EffectComposer === "function" && type
   composer = new THREE.EffectComposer(renderer, rt);
   composer.addPass(new THREE.RenderPass(scene, camera));
   composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(2, 2), 0.42, 0.6, 0.8));
+  if (GRIME && typeof THREE.ShaderPass === "function") {
+    const lens = new THREE.ShaderPass({
+      uniforms: { tDiffuse: { value: null }, time: { value: 0 } },
+      vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+      fragmentShader: [
+        "uniform sampler2D tDiffuse; uniform float time; varying vec2 vUv;",
+        "float hh(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + time) * 43758.5453); }",
+        "void main() {",
+        "  vec4 c = texture2D(tDiffuse, vUv); vec3 col = c.rgb; float l = dot(col, vec3(0.299, 0.587, 0.114));",
+        "  col = mix(col, vec3(l), 0.24);",                                  /* colour drained */
+        "  col *= vec3(1.05, 0.97, 0.82);",                                  /* a nicotine cast */
+        "  col = col * 0.88 + vec3(0.032, 0.023, 0.014);",                   /* whites dulled, blacks lifted to a dirty brown */
+        "  float sm = sin(vUv.x * 7.0 + 1.3) * sin(vUv.y * 5.0 + 0.7) * sin((vUv.x + vUv.y) * 11.0); col *= 1.0 - 0.07 * sm;",   /* smears on the lens */
+        "  vec2 d = (vUv - 0.5) * vec2(1.0, 0.85); col *= 1.0 - 0.24 * smoothstep(0.3, 0.8, length(d));",
+        "  col += (hh(floor(vUv * vec2(1100.0, 690.0))) - 0.5) * 0.07 * (1.0 - l * 0.6);",   /* coarse grain, heaviest in the dark */
+        "  gl_FragColor = vec4(col, c.a);",
+        "}"].join("\n")
+    });
+    composer.addPass(lens); composer.lens = lens;
+  }
 }
 function resize() {
   const w = window.innerWidth, h = window.innerHeight; if (!w || !h) return;
@@ -252,6 +274,16 @@ window.addEventListener("resize", resize);
    TEXTURES. The brick, stucco, tarmac and slab recipes are the game's own
    (window.dssScene), repainted here so the file stands alone.
    ============================================================ */
+function soil(tex, k, o) {   /* dirt worked into a finished texture: blotches, runs from above, a dark foot, specks, a yellowed film */
+  o = o || {}; const c = tex.image, cx = c.getContext("2d"), w = c.width, h = c.height, Q = (a, b) => a + Math.random() * (b - a);
+  cx.globalCompositeOperation = "source-atop";
+  for (let p = 0; p < (o.blots == null ? 14 : o.blots); p++) { const x = Q(0, w), y = Q(0, h), r = Q(w * 0.06, w * 0.22), g = cx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, "rgba(14,10,6," + (Q(0.14, 0.34) * k).toFixed(3) + ")"); g.addColorStop(1, "rgba(14,10,6,0)"); cx.fillStyle = g; cx.fillRect(x - r, y - r, r * 2, r * 2); }
+  for (let q = 0; q < (o.drips == null ? 10 : o.drips); q++) { const x = Q(0, w), sw = Q(3, w * 0.03), y0 = Q(0, h * 0.5), len = Q(h * 0.2, h * 0.6), g = cx.createLinearGradient(0, y0, 0, y0 + len); g.addColorStop(0, "rgba(10,8,5," + (0.42 * k).toFixed(3) + ")"); g.addColorStop(1, "rgba(10,8,5,0)"); cx.fillStyle = g; cx.fillRect(x - sw / 2, y0, sw, len); }
+  if (o.foot) { const g = cx.createLinearGradient(0, h * (1 - o.foot), 0, h); g.addColorStop(0, "rgba(10,8,6,0)"); g.addColorStop(1, "rgba(10,8,6," + (0.6 * k).toFixed(3) + ")"); cx.fillStyle = g; cx.fillRect(0, h * (1 - o.foot), w, h * o.foot); }
+  for (let p = 0; p < (o.specks == null ? 900 : o.specks); p++) { cx.fillStyle = "rgba(8,6,4," + (Q(0.1, 0.42) * k).toFixed(3) + ")"; cx.fillRect(Q(0, w), Q(0, h), Q(1, 3), Q(1, 3)); }
+  if (o.film) { cx.fillStyle = "rgba(52,40,22," + o.film + ")"; cx.fillRect(0, 0, w, h); }
+  cx.globalCompositeOperation = "source-over"; tex.needsUpdate = true;
+}
 function makeTex(w, h, draw, o) {
   o = o || {};
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -975,7 +1007,7 @@ function buildSaloon(b, tf, o) {
   if (o.shadow !== false) { const a = tf.p(-bw - 0.36, 0.02, z0 - 0.5), cc = tf.p(bw + 0.36, 0.02, z0 - 0.5), d = tf.p(bw + 0.36, 0.02, z1 + 0.5), e = tf.p(-bw - 0.36, 0.02, z1 + 0.5); b.quad("shadow", [a, cc, d, e], [0, 1, 0], [1, 1, 1]); }
 }
 
-const CARKINDS = {};
+const CARKINDS = {}, GRIMED = { scraps: 0 }, pick2 = (a, f) => a[Math.floor(f() * a.length) % a.length];
 function buildCity() {
   rnd = mulberry(1974);
   const XS = [-6, 5.5, 17.5, 29.5, 41.5, 49.5, 62], XST = [null, "wardour", "dean", "frith", "greek", "charing", null];
@@ -1107,6 +1139,23 @@ function buildCity() {
   park("frith", 15.5, 41.5, [-1, 1], [[-1, 23.5, 7.5]]);
   park("compton", 17.5, 29.5, [-1, 1], null);
   park("bateman", 17.5, 29.5, [-1], null);
+  if (GRIME) {   /* a black wet gutter along each kerb, and what the night has dropped in it and against the walls; its own dice, so nothing else moves */
+    const lr = mulberry(531), L = (a, b) => a + (b - a) * lr(), scraps = [[0.44, 0.42, 0.36], [0.3, 0.27, 0.2], [0.22, 0.16, 0.1], [0.36, 0.34, 0.3], [0.3, 0.12, 0.1], [0.16, 0.2, 0.26]];
+    for (const sk of ["bateman", "dean", "frith", "compton", "romilly"]) {
+      const s = STREET[sk], c = s.at * S;
+      for (const side of [-1, 1]) for (let p = s.a * S + 1; p < s.b * S - 1; p += 2) {
+        if (crossing(sk, p) || crossing(sk, p + 2)) continue;
+        const g0 = c + side * (s.road - 0.2), g1 = c + side * s.road, ga = Math.min(g0, g1), gb = Math.max(g0, g1);
+        if (s.ax === "z") bt.flat("decal", ga, gb, p, p + 2, 0.011, [0.035, 0.032, 0.03]); else bt.flat("decal", p, p + 2, ga, gb, 0.011, [0.035, 0.032, 0.03]);
+        for (let n = 0; n < 3; n++) {
+          if (lr() < 0.35) continue;
+          const wall = lr() < 0.4, off = wall ? c + side * (s.road + s.pave - L(0.08, 0.5)) : c + side * (s.road - L(0.04, 0.42)), y = wall ? PY + 0.013 : 0.0135, q = p + L(0, 2), big = lr() < 0.12, a = big ? L(0.14, 0.2) : L(0.03, 0.09), b = big ? L(0.1, 0.15) : L(0.03, 0.07), col = mul(pick2(scraps, lr), L(0.5, 1));
+          if (s.ax === "z") bt.flat("decal", off - a, off + a, q - b, q + b, y, col); else bt.flat("decal", q - b, q + b, off - a, off + a, y, col);
+          GRIMED.scraps++;
+        }
+      }
+    }
+  }
   park("dean", 1.5, 15.5, [-1, 1], null); park("frith", 1.5, 15.5, [-1, 1], null); park("compton", 29.5, 49.5, [-1, 1], null); park("compton", 5.5, 17.5, [-1, 1], null);
 }
 
@@ -1454,7 +1503,15 @@ const world = new THREE.Group(); scene.add(world); scene.add(carRoot);
 const lights = [];
 function assemble() {
   M.flag = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, emissive: 0x221c18, side: THREE.FrontSide });
+  if (GRIME) {
+    soil(brickTex, 1.0, { drips: 9, foot: 0.3 }); soil(stuccoTex, 1.15, { drips: 14, blots: 18, foot: 0.3 }); soil(grimeTex, 0.9, { drips: 6, specks: 400 });
+    soil(paveTex, 1.0, { drips: 0, blots: 12, specks: 1600 }); soil(shutterTex, 0.8, { drips: 3, blots: 5, specks: 200, foot: 0.25 });
+    soil(shopTex, 0.75, { drips: 22, blots: 26, specks: 2600, film: 0.16 }); soil(winTex, 0.7, { drips: 12, blots: 16, specks: 900, film: 0.14 });
+    M.gloss.roughness = 0.42; M.glass.roughness = 0.2;   /* the parked cars have not been washed */
+    document.querySelector("#grain").style.opacity = 0.1;
+  }
   buildCity();
+  if (GRIME) soil({ image: SG.cv }, 0.5, { drips: 0, blots: 30, specks: 2400 });
   signTex.needsUpdate = true;
   const meshes = bt.build(M, world);
   /* 2026-11-20: DRY turns the wet road off (no mirror under the tarmac, no smears under the lamps, matt tarmac). It was on for an hour to match the approach while that was dry; Sam, the same night: "Make the street wet, after rain", so both are wet and DRY is false. */
@@ -1661,14 +1718,14 @@ function stereoFade(to) { stereo.want = to; if (to === 0) sfx.engWant = 0; }
 function stereoStop() { sfxStop(); stereo.want = 0; stereo.phase = 0; stereo.reach = 0; stereo.on = false; if (stereo.el) { stereo.el.pause(); stereo.el.volume = 0; } stereo.vol = 0; if (cabinFx.radio) cabinFx.radio.color.setHex(0x707070); }
 function stepStereo(dt) {
   if (stereo.phase > 0 && stereo.phase < 0.01 && sfx.ctx && !sfx.ready && sfx.waited < 2) { sfx.waited += dt; }   /* the clock waits (2 s at most) for his three sounds to load */
-  else if (stereo.phase > 0 && stereo.phase < 5.5) {   /* 2026-11-20 (Sam: "make the music take a second or so longer to begin and animate a ghostly arm/hand appearing to switch it on"; then the door, the start and the engine "in that order before the music starts"): the door shuts at 0.15 s, the engine is started at 1.0 s and is running from 1.45 s, he pulls away at 2.1 s, a ghost's arm comes out of the dark to the wireless from 3.0 s, turns it on at 3.95 s, and goes back */
+  else if (stereo.phase > 0 && stereo.phase < 6.4) {   /* 2026-11-20 (Sam: "make the music take a second or so longer to begin and animate a ghostly arm/hand appearing to switch it on"; then the door, the start and the engine "in that order before the music starts"): the door shuts at 0.15 s, the engine is started at 1.0 s and is running from 1.45 s, he pulls away at 2.1 s, a ghost's arm comes out of the dark to the wireless from 3.9 s, turns it on at 4.85 s, and goes back (Sam, later the same day: "a slightly longer pause please before the music is turned on"; it was 3.95 s) */
     const tp = stereo.phase; stereo.phase += dt;
     const t = stereo.phase;
     if (tp < 0.15 && t >= 0.15) sfxShot("door");
     if (tp < 1.0 && t >= 1.0) sfxShot("start");
     if (tp < 1.45 && t >= 1.45) sfxEngine();
-    stereo.reach = t < 3.0 ? 0 : (t < 3.9 ? (t - 3.0) / 0.9 : (t < 4.4 ? 1 : Math.max(0, 1 - (t - 4.4) / 1.0)));
-    if (t >= 3.95 && !stereo.on) { stereo.on = true; stereo.want = 0.85; if (stereo.el) { try { stereo.el.currentTime = 0; } catch (e) {} } if (cabinFx.radio) cabinFx.radio.color.setHex(0xffffff); }
+    stereo.reach = t < 3.9 ? 0 : (t < 4.8 ? (t - 3.9) / 0.9 : (t < 5.3 ? 1 : Math.max(0, 1 - (t - 5.3) / 1.0)));
+    if (t >= 4.85 && !stereo.on) { stereo.on = true; stereo.want = 0.85; if (stereo.el) { try { stereo.el.currentTime = 0; } catch (e) {} } if (cabinFx.radio) cabinFx.radio.color.setHex(0xffffff); }
   }
   if (stereo.el) { stereo.vol += clamp(stereo.want - stereo.vol, -dt * 0.4, dt * 1.6); stereo.el.volume = clamp(stereo.vol, 0, 1); }
   if (sfx.engG) { sfx.engVol += clamp(sfx.engWant - sfx.engVol, -dt * 0.07, dt * 0.45); sfx.engG.gain.value = Math.max(0, sfx.engVol); sfx.eng.playbackRate.value = 0.88 + Math.min(car.v, 7.4) / 7.4 * 0.2; }
@@ -1760,7 +1817,7 @@ function update(dt) {
   strapEl.textContent = (STREET[streetAt(mode === "inside" ? car.x : camera.position.x, mode === "inside" ? car.z : camera.position.z)] || {}).name || "";
   drawMap();
 }
-function render() { if (composer) composer.render(); else renderer.render(scene, camera); }
+function render() { if (composer) { if (composer.lens) composer.lens.uniforms.time.value = reduceMotion ? 0 : (clock * 24 | 0) * 0.37; composer.render(); } else renderer.render(scene, camera); }
 function frame(now) {
   frameId = requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - (lastT || now)) / 1000) * TIME; lastT = now;
@@ -1957,7 +2014,7 @@ window.__joyride = {
     return Math.round(10 * Math.log10(q / 2048 + 1e-12));
   },
   stereo: function () { return { on: stereo.on, vol: +stereo.vol.toFixed(2), reach: +stereo.reach.toFixed(2), phase: +stereo.phase.toFixed(2), sfx: sfx.log.slice(), sfxReady: Object.keys(sfx.bufs).length, ctx: sfx.ctx ? sfx.ctx.state : null, eng: +sfx.engVol.toFixed(2), arm: drv.armShown || 0, paused: stereo.el ? stereo.el.paused : null, t: stereo.el ? +stereo.el.currentTime.toFixed(1) : null, ready: stereo.el ? stereo.el.readyState : null, muted: stereo.muted }; },
-  info: function () { return { rt: composer ? [composer.renderTarget1.width, composer.renderTarget1.height, composer.renderTarget1.samples || 0] : null, cv: [canvas.width, canvas.height], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, sources: sources.length, halos: halos.length, env: !!scene.environment, cars: CARKINDS, carLen: Object.keys(CARS).map(k => +(CARS[k].L1 - CARS[k].L0).toFixed(2)) }; }
+  info: function () { return { rt: composer ? [composer.renderTarget1.width, composer.renderTarget1.height, composer.renderTarget1.samples || 0] : null, cv: [canvas.width, canvas.height], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, sources: sources.length, halos: halos.length, env: !!scene.environment, grime: GRIME ? { lens: !!(composer && composer.lens), scraps: GRIMED.scraps, fog: scene.fog.density } : null, cars: CARKINDS, carLen: Object.keys(CARS).map(k => +(CARS[k].L1 - CARS[k].L0).toFixed(2)) }; }
 };
 try {
   assemble(); resize(); setMode("outside");

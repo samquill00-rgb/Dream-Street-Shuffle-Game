@@ -4319,14 +4319,14 @@ def joyride_from_bateman(r):
     r.expect(r.pn() == "Soho Joyride", "the page under the ride is %r" % r.pn())
     # 2026-11-20 (Sam: "make the music take a second or so longer to begin and animate a ghostly arm/hand appearing to switch it on")
     early = []; arm = 0.0; on = False; t1 = time.time()
-    while time.time() - t1 < 11:
+    while time.time() - t1 < 12:
         sv = fr.evaluate("() => window.__joyride.stereo()")
-        if sv["on"] and sv["phase"] < 3.8: early.append(sv["phase"])
+        if sv["on"] and sv["phase"] < 4.5: early.append(sv["phase"])
         if not sv["on"]: arm = max(arm, sv["arm"])
         on = on or sv["on"]
-        if sv["phase"] > 5.4: break
+        if sv["phase"] > 6.3: break
         r.page.wait_for_timeout(80)
-    r.expect(not early, "the wireless came on %.2f s after the door shut; it should wait until past 3.8 s, after the door, the start and the engine (it was 1.95 s)" % (early[0] if early else 0))
+    r.expect(not early, "the wireless came on %.2f s after the door shut; it should wait until past 4.5 s, after the door, the start and the engine (Sam: \"a slightly longer pause please before the music is turned on\"; it was 1.95 s, then 3.15 s, then 3.95 s)" % (early[0] if early else 0))
     # 2026-11-20 (Sam: "A car door shutting, a key/engine starting. then a rumbling engine. Can you add them in that order before the music starts?")
     order = [x[0] for x in sv["sfx"]]
     r.expect(order == ["door", "start", "engine"] and sv["sfx"][2][1] < 3.8, "the ride's sounds before the music are %s; they should be door, start, engine, all before 3.8 s" % sv["sfx"])
@@ -4340,6 +4340,8 @@ def joyride_from_bateman(r):
     r.expect(seen and seen[0] > 300, "the ride has no view (%s)" % seen)
     ci = fr.evaluate("() => window.__joyride.info()")
     r.expect(all(ci["cars"].get(k2, 0) > 0 for k2 in ("mini", "small", "big", "cab", "van")) and min(ci["carLen"]) < 3.2 and max(ci["carLen"]) < 4.6, "2026-11-20 (Sam: \"make the parked cars look more british, they look very american. Only the cadillac should be american\"): the parked cars are not the British mix (kinds %s, lengths %s)" % (ci["cars"], ci["carLen"]))
+    gr = ci.get("grime") or {}
+    r.expect(gr.get("lens") is True and gr.get("scraps", 0) > 500 and gr.get("fog", 0) > 0.015, "2026-11-20 (Sam: \"can you do a sort of grime pass over the visuals. It looks clear and not like the rest of the worlds\"): the ride has lost its grime (dirty lens, litter, thick air): %s" % ci.get("grime"))
     r.expect(fr.evaluate("() => window.__joyride.info().env") is True, "2026-11-20 graphics pass: the ride has no night environment, so its wet road, glass and paint reflect nothing")
     import io
     from PIL import Image, ImageStat

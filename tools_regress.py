@@ -4386,5 +4386,36 @@ def main(argv):
     os._exit(1 if failed else 0)
 
 
+
+@check("joyride-man-after-page93", "2026-11-20 (Sam: \"I want him to just be there whenever you return to soho after completing the page 93 errand\"): before page 93 is back with INIS the hub has no man by his car and the map's tile is shut; once it is, 'A man by his car' is on the hub with a door on the map, walking onto his tile on Bateman Street opens the approach, and after WALK ON he is still there and you stand at his car")
+def joyride_man_after_page93(r):
+    scratch_passage(r, "T-page93", '(set: $returns to 3)(set: $metRed to true)(link: "Errand done")[(set: $returnedPage to true)(go-to: "Dean Street")] (link: "Errand open")[(set: $returnedPage to false)(go-to: "Dean Street")]')
+    MAN = "() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'joyride'; })[0]; return !!d; }"
+    def hub(which):
+        r.go("T-page93", wait=6000)
+        r.page.click("tw-link:has-text('%s')" % which)
+        r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 15000, "the Soho map")
+        r.clear_lore(); r.clear_slips(); r.clear_lore()
+        return [t for t in r.js(HUB_LINKS)]
+    before = hub("Errand open")
+    r.expect("A man by his car" not in before, "he is on the hub before page 93 is back (%s)" % before)
+    after = hub("Errand done")
+    r.expect("A man by his car" in after, "page 93 is back with INIS and he is not on the hub (%s)" % after)
+    r.expect(r.js(MAN), "the map has no joyride tile")
+    bad, links = hub_problems(r, "Dean Street with the man by his car")
+    r.expect(not bad, "; ".join(bad))
+    got = walk_into(r, "joyride")
+    r.expect(got == "Bateman Street", "walking onto his tile on Bateman Street led to %r" % got)
+    r.wait_for("() => [].some.call(document.querySelectorAll('#bs-wrap button'), function (b) { return b.textContent === 'WALK ON' && b.getClientRects().length; })", 12000, "WALK ON on Bateman Street")
+    r.page.click("#bs-wrap button:has-text('WALK ON')")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street' && !!(window.dssSohoMap && window.dssSohoMap.state)", 15000, "WALK ON to go back to Dean Street")
+    r.clear_lore(); r.clear_slips()
+    again = [t for t in r.js(HUB_LINKS)]
+    at = r.js("() => { var s = window.dssSohoMap.state; return [s.c, s.r]; }")
+    r.info = "stands at %s; hub: %s" % (at, [t for t in again if "man" in t.lower()])
+    r.expect("A man by his car" in again, "he is gone after one visit (%s)" % again)
+    r.expect(at == [36, 17], "after WALK ON the player stands at %s, not at his car (36, 17)" % at)
+
+
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

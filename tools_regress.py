@@ -2640,6 +2640,18 @@ def shop_cat(r):
     first = r.js("() => { var R = window.__dssRooms['oi'], c = %s, b = new THREE.Box3().setFromObject(c), m = b.getCenter(new THREE.Vector3()); m.y = b.max.y - 0.03; var o = R.camera.position.clone(), ray = new THREE.Raycaster(o, m.clone().sub(o).normalize()); ray.camera = R.camera; var hits = ray.intersectObjects(R.scene.children, true).filter(function (h) { var x = h.object, mt = x.material; if (!x.isMesh || !mt || mt.visible === false || (mt.transparent && mt.opacity < 0.5)) return false; for (var p = x; p; p = p.parent) if (!p.visible) return false; return true; }); return hits.length ? hits[0].object.name || hits[0].object.type : 'nothing'; }" % CAT)
     r.page.screenshot(path=os.path.join(SHOTS, "shop-cat-close.png"))
     r.expect(first == "shop-cat", "from INIS's close-up the line to the cat first meets %r" % first)
+    # 2026-11-20 (Sam: "make the sound trigger when you click the ca[t]. And when you click here it shoudl just say 'The is Minimum'", ruled "This is Minimum."): she is a close-up of her own; it says only that, and his miaow plays as it opens
+    r.back_click("oi")
+    r.wait_for("() => window.__dssRooms['oi'].mode() === 'idle'", 8000, "the camera back in the room")
+    r.clear_slips(); r.clear_lore()
+    r.expect("minimum-miaow.m4a" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read(), "the cat's miaow is not linked in the html")
+    before = r.js("() => window.__dssMinimumMiaows || 0")
+    r.click_object("oi", "A black cat")
+    r.page.screenshot(path=os.path.join(SHOTS, "shop-cat-minimum.png"))
+    card = r.js("() => (document.querySelector('.dss-room-card') || {}).innerText || ''")
+    lines = [l.strip() for l in card.splitlines() if l.strip()]
+    r.expect("This is Minimum." in lines, "the cat's card does not say 'This is Minimum.' (%r)" % lines[:6])
+    r.wait_for("() => (window.__dssMinimumMiaows || 0) > %d" % before, 3000, "the cat's miaow as her close-up opens")
 
 
 @check("revo-shout", "2026-11-14 (Sam: \"I also just recorded audio 'Revo!' ... trigger when the naked man runs across the screen, when he is about a third of the way across\"): the runner shouts once on his run, a little over a third of the way along it, and the recording is linked")

@@ -752,6 +752,22 @@ def _(r):
     r.expect(ps[-1] - ps[0] <= 1, "the page changed size as you typed (%r)" % ps)
 
 
+@check("pillars-milton-quick", "2026-11-20 (Sam, playtest at the Pillars: \"Quicker typewriter on the milton here\"): the Milton line on entering the Pillars types at the quick verse pace")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Entering The Pillars of Hercules", wait=0)
+    r.js("""() => { var L = window.__vt = { first: 0, last: 0, n: 0 }, t0 = performance.now(); (function tick() {
+      var v = [].filter.call(document.querySelectorAll('.verse'), function (e) { return !e.closest('.dss-ghost') && /Hobson/.test(e.textContent); })[0];
+      if (v) { var cs = v.querySelectorAll('.vt-in'); if (cs.length && !L.first) L.first = performance.now(); if (cs.length > L.n) { L.n = cs.length; L.last = performance.now(); } L.quick = v.classList.contains('verse-quick'); }
+      if (performance.now() - t0 < 25000) requestAnimationFrame(tick); })(); }""")
+    r.page.wait_for_timeout(20000)
+    L = r.js("() => window.__vt")
+    took = (L["last"] - L["first"]) / 1000.0 if L["first"] else -1
+    r.info = "letters %d, typed in %.1f s, verse-quick %r" % (L["n"], took, L.get("quick"))
+    r.expect(L["n"] >= 30, "the Milton line never typed (%r)" % L)
+    r.expect(L.get("quick") and 0 <= took <= 1.6, "the Milton line takes %.1f s to type" % took)
+
+
 @check("page93-skip-this-game-only", "2026-11-19 note 6 and 2026-11-20 (Sam: the page 93 skip showed on the first night after a hard refresh; \"It should only give that option if you have already played a night and got it\"): the skip shows only on a later night of the same game")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

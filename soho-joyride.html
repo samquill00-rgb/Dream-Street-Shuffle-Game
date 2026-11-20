@@ -1336,7 +1336,7 @@ function buildCar() {
   const radioTex = makeTex(256, 64, function (cx) { cx.fillStyle = "#0a0806"; cx.fillRect(0, 0, 256, 64); cx.fillStyle = "#3a2c14"; cx.fillRect(34, 10, 188, 26); cx.fillStyle = "#e8c070"; cx.font = "11px " + SANS; cx.textAlign = "center"; ["LW", "150", "200", "MW", "250", "350", "500"].forEach((t, k) => cx.fillText(t, 50 + k * 26, 27)); cx.fillStyle = "#ff7a30"; cx.fillRect(148, 10, 2, 26); cx.fillStyle = "#1c1c1c"; for (let k = 0; k < 5; k++) cx.fillRect(48 + k * 34, 44, 26, 14); });
   cabinFx.lettered.push(radioTex);
   const radio = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.05), new THREE.MeshBasicMaterial({ map: radioTex, color: 0x707070 })); cabinFx.radio = radio.material; radio.position.set(0, 0.79, -0.5925); cabin.add(radio);
-  for (const x of [-0.115, 0.115]) { const k = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.02, 12), mChrome); k.rotation.x = Math.PI / 2; k.position.set(x, 0.79, -0.585); cabin.add(k); }
+  for (const x of [-0.115, 0.115]) { const k = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.02, 12), mChrome); k.rotation.x = Math.PI / 2; k.position.set(x, 0.79, -0.585); cabin.add(k); if (x > 0) { const nick = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.022, 0.012), mDark); nick.position.set(0, 0, 0.008); k.add(nick); cabinFx.knob = k; } }
   for (let k = 0; k < 5; k++) bx(mDark, -0.07 + k * 0.035, 0.835, -0.588, 0.012, 0.02, 0.014);
   /* steering column and wheel */
   const hub = new THREE.Vector3(0.36, 0.905, -0.33), axis = new THREE.Vector3(0, 0.16, 0.27).normalize();
@@ -1400,6 +1400,17 @@ function buildCar() {
   const skull = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), mSkin); skull.scale.set(0.9, 1.12, 1.04); skull.position.set(0, 0.125, -0.012); headG.add(skull);
   const hair = new THREE.Mesh(new THREE.SphereGeometry(0.104, 16, 12), mHair); hair.scale.set(0.97, 1.08, 1.1); hair.position.set(0, 0.152, 0.022); headG.add(hair);
   const limbGeo = new THREE.CylinderGeometry(0.046, 0.04, 1, 8);
+  (function () {   /* the ghost's arm: pale, see-through, brightest at the hand and thinning to nothing at the shoulder */
+    const col = 0xffeccc, mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), upMat = mat.clone();
+    const group = new THREE.Group(); group.visible = false; cabin.add(group);
+    const up = new THREE.Mesh(limbGeo, upMat), fore = new THREE.Mesh(limbGeo, mat), hand = new THREE.Group();
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 8), mat); palm.scale.set(1, 1.25, 0.55); palm.position.y = 0.03; hand.add(palm);
+    for (let f = 0; f < 4; f++) { const fg = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.0095, 0.075, 6), mat); fg.position.set(-0.027 + f * 0.018, 0.098 - Math.abs(f - 1.5) * 0.006, 0); fg.rotation.z = (1.5 - f) * 0.07; hand.add(fg); }
+    const th = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.011, 0.055, 6), mat); th.position.set(0.045, 0.045, 0); th.rotation.z = -0.7; hand.add(th);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, color: col, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 })); glow.scale.set(0.3, 0.3, 1);
+    for (const o of [up, fore, hand, glow]) { o.renderOrder = 7; group.add(o); }
+    drv.ghostArm = { group: group, up: up, fore: fore, hand: hand, glow: glow, mat: mat, upMat: upMat };
+  })();
   drv.arms = [-1, 1].map(function (s) {
     const up = new THREE.Mesh(limbGeo, mCoat), fore = new THREE.Mesh(limbGeo, mCoat), hand = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 8), mSkin), cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.043, 0.043, 0.02, 8), std(0x5a564c, 0.8));
     man.add(up); man.add(fore); man.add(hand); man.add(cuff);
@@ -1624,11 +1635,11 @@ function stereoStart() {
 function stereoFade(to) { stereo.want = to; }
 function stereoStop() { stereo.want = 0; stereo.phase = 0; stereo.reach = 0; stereo.on = false; if (stereo.el) { stereo.el.pause(); stereo.el.volume = 0; } stereo.vol = 0; if (cabinFx.radio) cabinFx.radio.color.setHex(0x707070); }
 function stepStereo(dt) {
-  if (stereo.phase > 0 && stereo.phase < 3.2) {   /* 1.2 s after the door shuts he reaches over, turns it on, and takes the wheel again */
+  if (stereo.phase > 0 && stereo.phase < 4.7) {   /* 2026-11-20 (Sam: "make the music take a second or so longer to begin and animate a ghostly arm/hand appearing to switch it on"): 2.2 s after the door shuts a ghost's arm comes out of the dark to the wireless, turns it on at 3.15 s (it was 1.95), and goes back */
     stereo.phase += dt;
     const t = stereo.phase;
-    stereo.reach = t < 1.2 ? 0 : (t < 1.9 ? (t - 1.2) / 0.7 : (t < 2.3 ? 1 : Math.max(0, 1 - (t - 2.3) / 0.8)));
-    if (t >= 1.95 && !stereo.on) { stereo.on = true; stereo.want = 0.85; if (stereo.el) { try { stereo.el.currentTime = 0; } catch (e) {} } if (cabinFx.radio) cabinFx.radio.color.setHex(0xffffff); }
+    stereo.reach = t < 2.2 ? 0 : (t < 3.1 ? (t - 2.2) / 0.9 : (t < 3.6 ? 1 : Math.max(0, 1 - (t - 3.6) / 1.0)));
+    if (t >= 3.15 && !stereo.on) { stereo.on = true; stereo.want = 0.85; if (stereo.el) { try { stereo.el.currentTime = 0; } catch (e) {} } if (cabinFx.radio) cabinFx.radio.color.setHex(0xffffff); }
   }
   if (stereo.el) { stereo.vol += clamp(stereo.want - stereo.vol, -dt * 0.4, dt * 1.6); stereo.el.volume = clamp(stereo.vol, 0, 1); }
 }
@@ -1659,12 +1670,21 @@ function updateDriver(dt) {
   for (const a of drv.arms) {
     const ang = a.phi + (LHD ? -drv.steer : drv.steer);
     tmpV.copy(drv.hub).addScaledVector(drv.e1, Math.cos(ang) * 0.195).addScaledVector(drv.e2, Math.sin(ang) * 0.195).add(tmpV2.set(0, 0.012, 0.016));
-    if (a.s < 0 && stereo.reach > 0) tmpV.lerp(tmpV2.set(0.07, 0.8, -0.56), smooth(stereo.reach));   /* his near hand, to the wireless */
+    if (a.s < 0 && stereo.reach > 0) tmpV.lerp(tmpV2.set(0.108, 0.8, -0.545), smooth(stereo.reach));   /* his near hand, to the wireless's knob */
     a.hand.position.copy(tmpV); a.hand.scale.set(1, 0.72, 1.15);
     const sh = a.shoulder, d = tmpV2.copy(tmpV).sub(sh), L = d.length(), U = 0.31, Fo = 0.3, x = clamp((U * U - Fo * Fo + L * L) / (2 * L), 0, U), hgt = Math.sqrt(Math.max(0, U * U - x * x));
     const elbow = tmpV3.copy(sh).addScaledVector(d.normalize(), x); elbow.y -= hgt * 0.8; elbow.x += a.s * hgt * 0.55;
     drv.setLimb(a.up, sh, elbow); drv.setLimb(a.fore, elbow, tmpV);
     a.cuff.position.copy(elbow).lerp(tmpV, 0.86); a.cuff.quaternion.copy(a.fore.quaternion);
+    if (a.s < 0 && drv.ghostArm) {   /* the arm the passenger sees: the same reach, drawn as the ghosts are, there only while it reaches */
+      const ga = drv.ghostArm, w = smooth(clamp(stereo.reach * 2.2, 0, 1)), flick = reduceMotion ? 1 : 0.88 + 0.12 * Math.sin(clock * 7.3);
+      ga.up.position.copy(a.up.position); ga.up.quaternion.copy(a.up.quaternion); ga.up.scale.copy(a.up.scale);
+      ga.fore.position.copy(a.fore.position); ga.fore.quaternion.copy(a.fore.quaternion); ga.fore.scale.copy(a.fore.scale); ga.fore.scale.x *= 0.72; ga.fore.scale.z *= 0.72; ga.up.scale.x *= 0.8; ga.up.scale.z *= 0.8;
+      ga.hand.position.copy(tmpV); ga.hand.quaternion.copy(a.fore.quaternion);
+      ga.glow.position.copy(tmpV);
+      ga.mat.opacity = 0.34 * w * flick; ga.upMat.opacity = 0.12 * w * flick; ga.glow.material.opacity = 0.3 * w * flick; ga.group.visible = w > 0.004; drv.armShown = +(w * flick).toFixed(2);
+      if (cabinFx.knob) cabinFx.knob.rotation.y = stereo.on ? lerp(cabinFx.knob.rotation.y, 1.9, Math.min(1, dt * 6)) : 0;
+    }
   }
   drv.head.rotation.y = lerp(drv.head.rotation.y, clamp(car.k * 2.2, -0.35, 0.35) * (LHD ? -1 : 1), Math.min(1, dt * 2));
 }
@@ -1900,7 +1920,7 @@ window.__joyride = {
   },
   path: function () { return car.path ? car.path.pts.filter((q, i) => i % 12 === 0).map(q => [+(q.x / S).toFixed(2), +(q.z / S).toFixed(2)]) : null; },
   lights: function () { return lights.map(l => [l.color.getHexString(), +l.intensity.toFixed(2), +(l.position.x / S).toFixed(1), +(l.position.z / S).toFixed(1)]); },
-  stereo: function () { return { on: stereo.on, vol: +stereo.vol.toFixed(2), reach: +stereo.reach.toFixed(2), paused: stereo.el ? stereo.el.paused : null, t: stereo.el ? +stereo.el.currentTime.toFixed(1) : null, ready: stereo.el ? stereo.el.readyState : null, muted: stereo.muted }; },
+  stereo: function () { return { on: stereo.on, vol: +stereo.vol.toFixed(2), reach: +stereo.reach.toFixed(2), phase: +stereo.phase.toFixed(2), arm: drv.armShown || 0, paused: stereo.el ? stereo.el.paused : null, t: stereo.el ? +stereo.el.currentTime.toFixed(1) : null, ready: stereo.el ? stereo.el.readyState : null, muted: stereo.muted }; },
   info: function () { return { rt: composer ? [composer.renderTarget1.width, composer.renderTarget1.height, composer.renderTarget1.samples || 0] : null, cv: [canvas.width, canvas.height], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, sources: sources.length, halos: halos.length, env: !!scene.environment, cars: CARKINDS, carLen: Object.keys(CARS).map(k => +(CARS[k].L1 - CARS[k].L0).toFixed(2)) }; }
 };
 try {

@@ -4317,7 +4317,19 @@ def joyride_from_bateman(r):
     st = fr.evaluate("() => window.__joyride.state()")
     r.expect(st["mode"] == "inside", "the ride did not open in the passenger seat (mode %s, choices %s)" % (st["mode"], st["choices"]))
     r.expect(r.pn() == "Soho Joyride", "the page under the ride is %r" % r.pn())
-    r.page.wait_for_timeout(2500)
+    # 2026-11-20 (Sam: "make the music take a second or so longer to begin and animate a ghostly arm/hand appearing to switch it on")
+    early = []; arm = 0.0; on = False; t1 = time.time()
+    while time.time() - t1 < 8:
+        sv = fr.evaluate("() => window.__joyride.stereo()")
+        if sv["on"] and sv["phase"] < 3.0: early.append(sv["phase"])
+        if not sv["on"]: arm = max(arm, sv["arm"])
+        on = on or sv["on"]
+        if sv["phase"] > 4.6: break
+        r.page.wait_for_timeout(80)
+    r.expect(not early, "the wireless came on %.2f s after the door shut; it should wait until past 3 s (it was 1.95 s)" % (early[0] if early else 0))
+    r.expect(on, "the wireless never came on")
+    r.expect(arm >= 0.5, "no ghost arm showed on its way to the wireless before it came on (most it showed: %.2f)" % arm)
+    armnote = "wireless on after 3 s, ghost arm at %.2f before it" % arm
     blank = blank_canvases(r)
     seen = fr.evaluate("() => { var c = document.getElementById('view'); return c ? [c.width, c.height] : null; }")
     r.expect(seen and seen[0] > 300, "the ride has no view (%s)" % seen)
@@ -4341,7 +4353,7 @@ def joyride_from_bateman(r):
             else:
                 trail.append(ch[want]); fr.evaluate("(i) => window.__joyride.choose(i)", want)
         r.page.wait_for_timeout(1500)
-    r.info = " > ".join(trail)
+    r.info = armnote + "; " + " > ".join(trail)
     r.expect("Walk on" in fr.evaluate("() => window.__joyride.state().choices"), "the ride never offered Walk on (%s)" % r.info)
     r.expect(r.js("() => document.getElementById('jr-frame').getAttribute('data-exit')") == "ronnies", "the game did not hear the stop")
     fr.click("#actions button")

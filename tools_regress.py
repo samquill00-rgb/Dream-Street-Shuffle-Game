@@ -3088,6 +3088,21 @@ def critic_knows_this_run_only(r):
     if SWAPS: r.page.unroute("**/*")
 
 
+@check("airport-pub-second-visit", "2026-11-20 playtest note 23 (Sam: \"This should acknowledge that it's the second time you are seeing it\"): a second arrival at the Airport Pub, half the mantra already held, has a first line of its own; a first arrival does not")
+def airport_pub_second_visit(r):
+    scratch_passage(r, "T-ap2", '(set: $returns to 1)(set: $mantraHalf1 to true)[[Fly|Airport Pub]]')
+    r.go("Airport Pub", wait=7000)
+    r.clear_lore(); r.clear_slips()
+    r.wait_for("() => !!document.getElementById('ap-enter')", 15000, "the lounge and its button")
+    r.page.click("#ap-enter"); r.page.wait_for_timeout(2600)
+    r.expect(not r.js("() => !!document.getElementById('ap-wrap')"), "ENTER THE ENLIGHTENMENT did not go in")
+    r.expect("stood at this bar" not in r.js("() => document.body.innerText"), "a first arrival is told it has been here before")
+    r.go("T-ap2", wait=5000); r.page.click("tw-link:has-text('Fly')")
+    r.wait_for("() => !!document.getElementById('ap-enter')", 15000, "the lounge a second time")
+    r.page.click("#ap-enter"); r.page.wait_for_timeout(2600)
+    r.expect("stood at this bar" in r.js("() => document.body.innerText"), "a second arrival has no line of its own")
+
+
 @check("watkins-names-wait", "2026-11-20 playtest note 8 (Sam: \"The Blavatsky and Beast popups show before the actual word links do. They just kind of appear. They should only appear when the links do and you hover on the link\"): with the pointer resting where the Beast's name will be written, no window opens until the name has arrived; then a hover opens it")
 def watkins_names_wait(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

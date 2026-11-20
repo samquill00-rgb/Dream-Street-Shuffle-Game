@@ -4218,8 +4218,8 @@ def white_ending_by_play(r):
 
 def walk_by_play(r, start, stop, pages=12, skip=r"NOTEBOOK|^NOTE$|skip|testing|LORE"):
     """Press the first untaken way on, page by page, as a player would, until the page named stop; returns (pages seen, problems)."""
-    seen, bad, taken = [], [], set()
-    for step in range(pages):
+    seen, bad, tries = [], [], {}
+    for step in range(pages * 3):
         r.clear_lore(); r.clear_slips()
         pn = r.pn()
         if pn not in seen:
@@ -4230,12 +4230,13 @@ def walk_by_play(r, start, stop, pages=12, skip=r"NOTEBOOK|^NOTE$|skip|testing|L
         if pn == stop: break
         fresh, waited = [], 0
         while waited < 25 and r.pn() == pn:
-            fresh = [o for o in r.js(CLICKABLES) if (pn, o["t"]) not in taken and not re.search(skip, o["t"], re.I)]
+            fresh = [o for o in r.js(CLICKABLES) if tries.get((pn, o["t"]), 0) < 3 and not re.search(skip, o["t"], re.I)]
             if fresh: break
             r.page.wait_for_timeout(2000); waited += 1
         if r.pn() != pn: continue
         if not fresh: bad.append("%s: no way on in %d s" % (pn, waited * 2)); break
-        taken.add((pn, fresh[0]["t"])); r.page.mouse.click(fresh[0]["x"], fresh[0]["y"]); r.page.wait_for_timeout(4000)
+        # a press while a page is still typing only sets the words down, so a link that did not turn the page gets up to three presses
+        k = (pn, fresh[0]["t"]); tries[k] = tries.get(k, 0) + 1; r.page.mouse.click(fresh[0]["x"], fresh[0]["y"]); r.page.wait_for_timeout(4000)
     return seen, bad
 
 
@@ -4250,7 +4251,7 @@ def fetch_by_play(r):
     r.expect(seen[:4] == ["LINE 3", "Things turn up", "The Fetch", "Approach Centre Point"], "the road to the Fetch went %s" % " > ".join(seen))
     scratch_passage(r, "T-fetch-glimpse", BASE + '(set: $lilyCount to 0)(set: $fetchGlimpsed to false)(go-to: "The Fetch")')
     r.go("T-fetch-glimpse", wait=9000)
-    glimpse = r.js("() => [!!document.querySelector('tw-passage .fetch-owed'), [].some.call(document.querySelectorAll('tw-link'), function (l) { return /Follow him/.test(l.textContent); })]")
+    glimpse = r.js("() => [[].some.call(document.querySelectorAll('.fetch-owed'), function (e) { return !e.closest('.dss-ghost'); }), [].some.call(document.querySelectorAll('tw-link'), function (l) { return /Follow him/.test(l.textContent); })]")
     r.expect(glimpse[0] and not glimpse[1], "with no flowers he is not a glimpse (owed tally %r, Follow him %r)" % tuple(glimpse))
     seen2, bad2 = walk_by_play(r, "The Fetch", "Dean Street", pages=4)
     r.info += " | glimpse: " + " > ".join(seen2)

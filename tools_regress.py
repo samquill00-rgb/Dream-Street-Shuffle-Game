@@ -2880,6 +2880,18 @@ def centre_point_dawn_sky(r):
     r.expect(st["casters"] > 50, "only %d meshes cast shadows" % st["casters"])
 
 
+@check("centre-point-black-cab","2026-11-21 (Sam: \"Do you think you can find an animation of a london black cab to have driving down the road?\", then \"Build one yourself\"): a black cab, built in the scene, drives up Oxford Street toward Centre Point in the north lane with its lamps lit")
+def centre_point_black_cab(r):
+    r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
+    r.page.wait_for_function("() => window.__cab && clock.getElapsedTime() > 1", timeout=90000)
+    a = r.js("() => { var p = window.__cab.group.position; return [p.x, p.z, window.__cab.group.children.length]; }")
+    r.page.wait_for_timeout(2500)
+    b = r.js("() => { var p = window.__cab.group.position; var c = streetLocalToWorld(150, 0); return [p.x, p.z, CAB_LANE]; }")
+    r.expect(a[2] >= 20, "the black cab has only %d parts" % a[2])
+    r.expect(b[1] > a[1] + 5, "the black cab is not coming up the street toward Centre Point: z %r then %r" % (a[1], b[1]))
+    r.expect(b[2] > 0, "the black cab is not in the north lane, driving on the left toward us (lane %r)" % b[2])
+
+
 @check("centre-point-road-depth","2026-11-21 (Sam: \"the zebra crossing closest to the camera looks wonky\", then \"the crossing is still at a weird angle\"): the road, pavement and ground of the view from Centre Point are drawn with enough depth precision that they do not break into flat bands, which made the square crossing look crooked (near plane at least 1, a 24-bit depth target for the composer)")
 def centre_point_road_depth(r):
     r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)

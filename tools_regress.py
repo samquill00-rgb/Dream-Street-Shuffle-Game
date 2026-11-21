@@ -2775,7 +2775,27 @@ def nazca_race_ticket(r):
     r.info = "%d ticket buttons" % len(st)
 
 
-@check("easter-notes-1121", "2026-11-21 (Sam, playtest on Easter Island: \"FIGHT should be bigger and more obvious\"; the Reclamation \"shakes around a bit, it needs to be steady\"; at the Glyph \"there should be no 'Down to the boat' options. None after you play the game\"; \"you just shouldn't be able to play the game then quit before the end\"; \"make Subcomandante in the minigame a ghost\")")
+@check("pyramid-notes-1121", "2026-11-21 (Sam, playtest on the Pyramid Run: \"some labels which look plain\"; \"make the turtles more interesting looking and give a bit of life back if you bounce on one\"; on the proportion page: \"after the minigame is done there should be no 'back the way you came'. Until now when you actually need to go back\")")
+def pyramid_notes_1121(r):
+    import html as _h
+    t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)
+    r.expect("A SCARAB UNDERFOOT TAKES BACK A STUMBLE." in t, "a stomped scarab no longer takes back a stumble")
+    r.expect("a jewelled Khepri scarab" in t, "the scarabs are back to the plain ellipse")
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Pyramid Run", wait=9000)
+    st = r.js("() => Array.from(document.querySelectorAll('.pr-stage .pr-toolbar button')).map(b => [b.textContent, getComputedStyle(b).fontFamily, getComputedStyle(b).backgroundColor])")
+    for name, font, bg in st:
+        r.expect("Playfair" in font and bg == "rgb(232, 214, 166)", "the Pyramid Run button %r is plain (%s, %s)" % (name, font, bg))
+    tap = "(t) => { var l = Array.from(document.querySelectorAll('tw-link')).find(e => e.textContent.trim() === t); if (l) l.click(); return !!l; }"
+    links = lambda: r.js("() => Array.from(document.querySelectorAll('tw-link')).map(l => l.textContent.trim())")
+    r.go("The King's Chamber: the proportion", wait=6000)
+    r.expect("Back the way you came" not in links(), "the proportion page offers the way back before the silence is listened to")
+    r.expect(r.js(tap, "Keep listening to the silence"), "no Keep listening to the silence"); r.page.wait_for_timeout(2500)
+    r.expect("Back the way you came" in links(), "no way back after listening to the silence")
+
+
+@check("easter-notes-1121","2026-11-21 (Sam, playtest on Easter Island: \"FIGHT should be bigger and more obvious\"; the Reclamation \"shakes around a bit, it needs to be steady\"; at the Glyph \"there should be no 'Down to the boat' options. None after you play the game\"; \"you just shouldn't be able to play the game then quit before the end\"; \"make Subcomandante in the minigame a ghost\")")
 def easter_notes_1121(r):
     import html as _h
     t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())

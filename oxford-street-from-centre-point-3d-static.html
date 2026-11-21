@@ -619,10 +619,10 @@ var paveMat = new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.9 });
 
 // BT Tower concrete — mid-grey, slightly warmer than Centre Point
 var btConcreteTex = makeCanvasTexture(256, 256, function(cx, w, h) {
-  cx.fillStyle = '#a8a49c';
+  cx.fillStyle = '#7f817d';   /* 2026-11-21: was #a8a49c, read white in the gold light */
   cx.fillRect(0, 0, w, h);
   for (var i = 0; i < 2000; i++) {
-    var tone = 140 + Math.random() * 50;
+    var tone = 110 + Math.random() * 40;
     cx.fillStyle = 'rgba(' + tone + ',' + tone + ',' + (tone-8) + ',0.3)';
     cx.fillRect(Math.random()*w, Math.random()*h, 1 + Math.random()*1.5, 1 + Math.random()*1.5);
   }
@@ -638,6 +638,26 @@ var btConcreteTex = makeCanvasTexture(256, 256, function(cx, w, h) {
   }
 });
 var btConcreteMat = new THREE.MeshStandardMaterial({ map: btConcreteTex, roughness: 0.78 });
+/* 2026-11-21 (Sam, with a photograph of the tower: "The BT/Post Office tower on the right of the screen is white, it should look more like this"): the shaft is a grey-green glass curtain wall in tight horizontal bands, not pale concrete, and the concrete above and below is a mid grey. The gold dawn had been turning the old cream concrete white. */
+var btGlassTex = makeCanvasTexture(256, 512, function(cx, w, h) {
+  cx.fillStyle = '#4f5c58';
+  cx.fillRect(0, 0, w, h);
+  for (var gy = 0; gy < h; gy += 8) {
+    var tone = 70 + Math.random() * 22;
+    cx.fillStyle = 'rgba(' + (tone - 6) + ',' + (tone + 8) + ',' + (tone + 4) + ',0.55)';
+    cx.fillRect(0, gy + 2, w, 5);
+    cx.fillStyle = 'rgba(24,30,30,0.75)';
+    cx.fillRect(0, gy, w, 2);
+  }
+  for (var gx = 0; gx < w; gx += 16) {
+    cx.fillStyle = 'rgba(30,38,38,0.35)';
+    cx.fillRect(gx, 0, 1, h);
+  }
+});
+btGlassTex.wrapS = THREE.RepeatWrapping; btGlassTex.wrapT = THREE.RepeatWrapping;
+btGlassTex.repeat.set(6, 0.42);   /* about 27 bands up the shaft, a few pixels each from the roof, so they read */
+btGlassTex.generateMipmaps = true; btGlassTex.minFilter = THREE.LinearMipmapLinearFilter;
+var btGlassMat = new THREE.MeshStandardMaterial({ map: btGlassTex, color: 0x9cc0c4, roughness: 0.35, metalness: 0.2 });   /* tinted cool so the gold dawn leaves it grey-green, not bronze */
 
 // BT Tower window band — the restaurant and observation deck
 var btWindowTex = makeCanvasTexture(512, 32, function(cx, w, h) {
@@ -2265,7 +2285,7 @@ var latticeMat = new THREE.MeshStandardMaterial({
   color: 0x7a7670, roughness: 0.6, metalness: 0.35
 });
 var dishMat = new THREE.MeshStandardMaterial({
-  color: 0xb8b0a4, roughness: 0.4, metalness: 0.2
+  color: 0x8e908c, roughness: 0.4, metalness: 0.2
 });
 // Darker concrete for the upper sign-panel section
 var darkPanelMat = new THREE.MeshStandardMaterial({
@@ -2283,7 +2303,7 @@ btTower.add(btPodium);
 // Slightly tapered lower cylinder — the "base expansion"
 var btBase = new THREE.Mesh(
   new THREE.CylinderGeometry(2.6, 3.2, 5, 24),
-  btConcreteMat
+  btGlassMat
 );
 btBase.position.set(0, 5.5, 0);
 btTower.add(btBase);
@@ -2294,7 +2314,7 @@ var SHAFT_H      = 37;                // ~75% of total height (shortened slightl
                                       // to suit the further-away placement)
 var shaft = new THREE.Mesh(
   new THREE.CylinderGeometry(1.6, 1.8, SHAFT_H, 32),
-  btConcreteMat
+  btGlassMat
 );
 shaft.position.set(0, SHAFT_BASE_Y + SHAFT_H/2, 0);
 btTower.add(shaft);
@@ -2495,6 +2515,22 @@ btTower.add(btAvPointLight);
 
 btTower.position.set(BT_X, 0, BT_Z);
 scene.add(btTower);
+/* 2026-11-21 (Sam, with the photograph): the tower stands about 210 out, where the dawn haze took some 70 per cent of its colour and left it a pale beige; it is the one landmark the eye goes to, so it takes the haze at a little under half strength, keeping its grey-green glass and bands, like the photograph. Its materials are cloned so nothing else changes. */
+(function() {
+  var seen = new Map();
+  function halfHaze(m) {
+    if (seen.has(m)) return seen.get(m);
+    var c = m.clone();
+    c.onBeforeCompile = function(sh) {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>',
+        '#ifdef USE_FOG\n float fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepth * fogDepth );\n gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor * 0.45 );\n#endif');
+    };
+    c.customProgramCacheKey = function() { return 'dss-half-haze'; };
+    seen.set(m, c);
+    return c;
+  }
+  btTower.traverse(function(o) { if (o.isMesh && o.material && !Array.isArray(o.material)) o.material = halfHaze(o.material); });
+})();
 
 // ============================================================
 // DISTANT LANDMARKS — one real 1973 landmark, kept subtle

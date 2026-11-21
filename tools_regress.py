@@ -2892,6 +2892,15 @@ def centre_point_black_cab(r):
     r.expect(b[2] > 0, "the black cab is not in the north lane, driving on the left toward us (lane %r)" % b[2])
 
 
+@check("centre-point-post-office-tower","2026-11-21 (Sam, with a photograph: \"The BT/Post Office tower on the right of the screen is white, it should look more like this\"): the tower's shaft is grey-green banded glass, its concrete mid grey, and it takes the dawn haze at under half strength so it keeps its colour")
+def centre_point_post_office_tower(r):
+    r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
+    r.page.wait_for_function("() => window.__cpCaster", timeout=90000)
+    st = r.js("() => { var n = 0, half = 0, total = 0; btTower.traverse(function(o){ if (!o.isMesh) return; total++; if (o.material.map && o.material.map.image === btGlassTex.image) n++; if (o.material.customProgramCacheKey && o.material.customProgramCacheKey() === 'dss-half-haze') half++; }); return { glass: n, half: half, total: total }; }")
+    r.expect(st["glass"] >= 2, "the Post Office Tower's shaft is not glass (%r)" % st)
+    r.expect(st["half"] == st["total"], "the Post Office Tower takes the full dawn haze again and goes pale (%r)" % st)
+
+
 @check("centre-point-road-depth","2026-11-21 (Sam: \"the zebra crossing closest to the camera looks wonky\", then \"the crossing is still at a weird angle\"): the road, pavement and ground of the view from Centre Point are drawn with enough depth precision that they do not break into flat bands, which made the square crossing look crooked (near plane at least 1, a 24-bit depth target for the composer)")
 def centre_point_road_depth(r):
     r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)

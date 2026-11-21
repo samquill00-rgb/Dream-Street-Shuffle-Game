@@ -2859,6 +2859,16 @@ def preview_joyride_link(r):
     r.expect("A man by his car" in links, "the man by his car is not on Dean Street from the joyride link")
 
 
+@check("centre-point-view-moves","2026-11-21 (Sam: \"Can the camera move in the view from centre point\"): the Oxford Street view shown on Dawn Approach cranes up, forward and right over its 16 s, and the camera at 1 s and 15 s is in a different place")
+def centre_point_view_moves(r):
+    r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
+    r.page.wait_for_function("() => typeof camera !== 'undefined' && camera.position.y > 0", timeout=60000)
+    a = r.js("() => [camera.position.x, camera.position.y, camera.position.z]")
+    r.page.wait_for_timeout(12000)
+    b = r.js("() => [camera.position.x, camera.position.y, camera.position.z]")
+    r.expect(b[1] > a[1] + 1 and b[2] < a[2] - 4, "the view from Centre Point did not crane up and forward: %r then %r" % (a, b))
+
+
 @check("pub-calls","2026-11-14 (Sam: \"The rest of the sounds, non tony can just be part of the general hubbub\"): his odd shouts come now and then in a pub, never in the gents, and the recording is linked; the Tony Adams chant is gone from the coin toss (Sam, later: \"get rid of the stadium chant from the game too\")")
 def pub_calls(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

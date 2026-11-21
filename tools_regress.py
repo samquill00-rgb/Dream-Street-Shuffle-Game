@@ -2863,10 +2863,21 @@ def preview_joyride_link(r):
 def centre_point_view_moves(r):
     r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
     r.page.wait_for_function("() => typeof camera !== 'undefined' && camera.position.y > 0", timeout=60000)
-    a = r.js("() => [camera.position.x, camera.position.y, camera.position.z]")
-    r.page.wait_for_timeout(12000)
+    r.page.wait_for_function("() => clock.getElapsedTime() > 15", timeout=60000)
     b = r.js("() => [camera.position.x, camera.position.y, camera.position.z]")
-    r.expect(b[1] > a[1] + 1 and b[2] < a[2] - 4, "the view from Centre Point did not crane up and forward: %r then %r" % (a, b))
+    r.expect(b[1] > 36 and b[2] < -5, "the view from Centre Point did not crane up and forward from (0, 34, 6): %r at 15 s" % (b,))
+
+
+@check("centre-point-dawn-sky","2026-11-21 (Sam: \"Can i give you a sky asset thing to use?\", chose kloppenheim_07; then \"light the buildings as if they are being lit by golden dawn light from behind the camera in the east and add shadows, including the long shadow from Centre Point\"): the view from Centre Point wears the photographed sky, the low gold sun comes from the east behind the camera and casts shadows, and an unseen Centre Point casts one too")
+def centre_point_dawn_sky(r):
+    r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
+    r.page.wait_for_function("() => window.__oxSky === 1 && window.__cpCaster", timeout=90000)
+    st = r.js("() => ({ map: !!(sky.material.map && sky.material.map.image && /oxford-sky-dawn/.test(sky.material.map.image.src || '')), shadows: renderer.shadowMap.enabled, sunShadow: dawnLight.castShadow, sunZ: dawnLight.position.z - dawnLight.target.position.z, cp: window.__cpCaster.castShadow, cpSeen: window.__cpCaster.material.colorWrite, casters: (function(){ var n = 0; scene.traverse(function(o){ if (o.isMesh && o.castShadow) n++; }); return n; })() })")
+    r.expect(st["map"], "the view from Centre Point is not wearing oxford-sky-dawn.jpg")
+    r.expect(st["shadows"] and st["sunShadow"], "the dawn sun casts no shadows")
+    r.expect(st["sunZ"] > 0, "the dawn sun is not behind the camera in the east (+Z): %r" % st["sunZ"])
+    r.expect(st["cp"] and not st["cpSeen"], "Centre Point's unseen shadow caster is missing or visible")
+    r.expect(st["casters"] > 50, "only %d meshes cast shadows" % st["casters"])
 
 
 @check("pub-calls","2026-11-14 (Sam: \"The rest of the sounds, non tony can just be part of the general hubbub\"): his odd shouts come now and then in a pub, never in the gents, and the recording is linked; the Tony Adams chant is gone from the coin toss (Sam, later: \"get rid of the stadium chant from the game too\")")

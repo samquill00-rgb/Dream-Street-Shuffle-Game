@@ -876,7 +876,7 @@ ZEBRA_CROSSINGS.forEach(function(a) {
 // In 1973 these ran all the way down Oxford Street at ~25m spacing.
 var lampMat = new THREE.MeshStandardMaterial({ color: 0x2a2824, roughness: 0.85 });
 var lampBulbMat = new THREE.MeshStandardMaterial({
-  color: 0x3a2a10, emissive: 0xffc060, emissiveIntensity: 3.4, fog: true
+  color: 0x3a1a06, emissive: 0xff5a00, emissiveIntensity: 1.6, fog: true   /* 2026-11-21 (Sam: "Make the streetlights more orange"): low-pressure sodium orange; was 0xffc060 */
 });
 function addStreetLamp(along, side) {
   var cosA = Math.cos(STREET_ANGLE), sinA = Math.sin(STREET_ANGLE);
@@ -916,11 +916,13 @@ function addStreetLamp(along, side) {
   bulb.position.set(baseX + cosA * armDir * 0.9, 2.8, baseZ - sinA * armDir * 0.9);
   scene.add(bulb);
   // Sodium halo — a soft warm glow around the bulb. Reads strongly in fog.
-  var halo = new THREE.Sprite(haloMat);
+  var halo = new THREE.Sprite(sodiumHaloMat);
   halo.position.set(baseX + cosA * armDir * 0.9, 2.8, baseZ - sinA * armDir * 0.9);
   halo.scale.set(5.2, 5.2, 1);
   scene.add(halo);
+  lampPools.push([baseX + cosA * armDir * 0.9, baseZ - sinA * armDir * 0.9]);
 }
+var lampPools = [];
 
 // Sodium halo sprite — used by street lamps and shop fronts in fog.
 var haloTex = makeCanvasTexture(128, 128, function(cx, w, h) {
@@ -934,11 +936,43 @@ var haloTex = makeCanvasTexture(128, 128, function(cx, w, h) {
   cx.fillRect(0, 0, w, h);
 });
 var haloMat = new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, fog: true });
+/* 2026-11-21 (Sam, as above): the street lamps' own halo, sodium orange all through instead of a near-white core; the shop fronts keep the warm haloMat. */
+var sodiumHaloTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+  var g = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  g.addColorStop(0,    'rgba(255, 140, 40, 0.92)');
+  g.addColorStop(0.15, 'rgba(250, 110, 20, 0.70)');
+  g.addColorStop(0.35, 'rgba(230, 90, 12, 0.42)');
+  g.addColorStop(0.65, 'rgba(190, 65, 8, 0.18)');
+  g.addColorStop(1,    'rgba(140, 50, 10, 0)');
+  cx.fillStyle = g;
+  cx.fillRect(0, 0, w, h);
+});
+var sodiumHaloMat = new THREE.SpriteMaterial({ map: sodiumHaloTex, transparent: true, depthWrite: false, fog: true });
 
 for (var lp = 30; lp < STREET_LEN - 20; lp += 22) {
   addStreetLamp(lp, STREET_WIDTH/2 + 1);
   addStreetLamp(lp + 11, -(STREET_WIDTH/2 + 1));
 }
+/* 2026-11-21 (Sam: "add pools of light under the streetlamps where they are shining, just faint ones cause it is the dawn"): a faint sodium pool on the ground under each lamp head, over the kerb, pavement and gutter. Glow decals added onto the ground, not lights (the scene's light budget is spent), all in one instanced mesh. */
+(function() {
+  var poolTex = makeCanvasTexture(128, 128, function(cx, w, h) {
+    var g = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+    g.addColorStop(0,   'rgba(255, 120, 30, 1)');
+    g.addColorStop(0.35,'rgba(230, 95, 20, 0.55)');
+    g.addColorStop(0.7, 'rgba(180, 70, 12, 0.16)');
+    g.addColorStop(1,   'rgba(120, 40, 5, 0)');
+    cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+  });
+  var poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: true, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
+  var poolGeo = new THREE.PlaneGeometry(1, 1); poolGeo.rotateX(-Math.PI / 2);
+  var pools = new THREE.InstancedMesh(poolGeo, poolMat, lampPools.length);
+  var m = new THREE.Matrix4();
+  lampPools.forEach(function(p, i) { m.makeScale(6.5, 1, 6.5); m.setPosition(p[0], 0.12, p[1]); pools.setMatrixAt(i, m); });
+  pools.instanceMatrix.needsUpdate = true;
+  pools.renderOrder = 2;
+  scene.add(pools);
+  window.__lampPools = lampPools.length;
+})();
 
 // Shop fronts — warm ground-floor windows down both pavements. 1973
 // Oxford Street was a near-continuous line of lit shop displays, cafes

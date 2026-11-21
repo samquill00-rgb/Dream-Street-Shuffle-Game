@@ -2910,6 +2910,17 @@ def centre_point_side_terraces(r):
     r.expect(n > 1500, "the side quarters hold only %d terraces" % n)
 
 
+@check("centre-point-sodium-lamps","2026-11-21 (Sam: \"Make the streetlights more orange\", then \"add pools of light under the streetlamps where they are shining, just faint ones cause it is the dawn\"): the street lamps in the view from Centre Point glow sodium orange, and each casts a faint pool of light on the pavement")
+def centre_point_sodium_lamps(r):
+    r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
+    r.page.wait_for_function("() => window.__cpCaster", timeout=90000)
+    d = r.js("() => ({pools: window.__lampPools || 0, e: (typeof lampBulbMat !== 'undefined') ? [lampBulbMat.emissive.r, lampBulbMat.emissive.g, lampBulbMat.emissive.b] : null})")
+    r.info = "%d pools, bulb emissive %s" % (d["pools"], d["e"])
+    r.expect(d["pools"] > 40, "only %d lamp pools" % d["pools"])
+    e = d["e"]
+    r.expect(e is not None and e[0] > 0.9 and e[1] < 0.5 * e[0] and e[2] < 0.1, "the lamp bulbs are not sodium orange: %s" % e)
+
+
 @check("centre-point-road-depth","2026-11-21 (Sam: \"the zebra crossing closest to the camera looks wonky\", then \"the crossing is still at a weird angle\"): the road, pavement and ground of the view from Centre Point are drawn with enough depth precision that they do not break into flat bands, which made the square crossing look crooked (near plane at least 1, a 24-bit depth target for the composer)")
 def centre_point_road_depth(r):
     r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)

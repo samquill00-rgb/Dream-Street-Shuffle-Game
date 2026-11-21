@@ -2884,7 +2884,9 @@ def centre_point_dawn_sky(r):
 def centre_point_road_depth(r):
     r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
     r.page.wait_for_function("() => window.__cpCaster", timeout=90000)
-    st = r.js("() => ({ near: camera.near, stencil: !composer || !!composer.renderTarget1.stencilBuffer })")
+    st = r.js("() => ({ near: camera.near, stencil: !composer || !!composer.renderTarget1.stencilBuffer, skew: (typeof ZEBRA_SKEW === 'object') ? ZEBRA_SKEW[80] : 0 })")
+    # Sam, then: "The crossing clearly is not square". Square in the world reads 17 degrees off from the roof, so each crossing is cut to look square from the camera
+    r.expect(st["skew"] < -3, "the near zebra crossing is no longer cut to look square from the roof (ZEBRA_SKEW[80] = %r)" % st["skew"])
     r.expect(st["near"] >= 1, "the camera's near plane is %r; under 1 the road bands" % st["near"])
     r.expect(st["stencil"], "the composer's target has no stencil, so its depth falls to 16-bit and the road bands")
 

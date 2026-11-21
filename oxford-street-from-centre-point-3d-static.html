@@ -1480,6 +1480,47 @@ for (var gx = -140; gx <= 140; gx += 5.2) {
 // (Removed far-distance silhouette ring — the detailed grid now extends
 // deep enough that the horizon dissolves naturally into fog.)
 
+/* 2026-11-21 (Sam: "can we now fill in the blank space at the side with other buildings?"): the detailed grid stops at x 140 either side, and from about 130 out the view is wider than that, so the city ended in bare ground at both edges of the frame. These side quarters are filled with plain terraces, drawn as two instanced meshes (bodies and pitched slate roofs, two draw calls in all): stock brick mostly, some red and sooty, 2 to 4 storeys, out to the sky's edge. They use their own seeded random numbers, so the rest of the scene's layout is unchanged. */
+(function() {
+  var s = 917;
+  function r() { s |= 0; s = s + 0x6D2B79F5 | 0; var t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+  var cells = [];
+  for (var gz = -126; gz >= -470; gz -= 5.4) {
+    var reach = Math.sqrt(Math.max(0, 470 * 470 - gz * gz));
+    for (var side = -1; side <= 1; side += 2) {
+      for (var ax = 140; ax <= reach; ax += 5.4) {
+        if (r() < 0.3) continue;
+        var w = 3.4 + r() * 3.6, d = 3.0 + r() * 2.6;
+        var hr = r(), h = hr < 0.6 ? 3.2 + r() * 2.6 : (hr < 0.9 ? 5 + r() * 2.6 : 7 + r() * 2.5);
+        cells.push({ x: side * ax + (r() - 0.5) * 3, z: gz + (r() - 0.5) * 3, w: w, d: d, h: h, pitch: r() < 0.75, tone: r(), along: r() < 0.5 });
+      }
+    }
+  }
+  var bodyGeo = new THREE.BoxGeometry(1, 1, 1); bodyGeo.translate(0, 0.5, 0);
+  var bodyMat = new THREE.MeshStandardMaterial({ map: brickYellow.map, roughness: 0.95 });
+  var bodies = new THREE.InstancedMesh(bodyGeo, bodyMat, cells.length);
+  var roofGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 3, 1); roofGeo.rotateZ(Math.PI / 2); roofGeo.rotateY(Math.PI / 2); roofGeo.translate(0, 0.25, 0);
+  var pitched = cells.filter(function(c) { return c.pitch; });
+  var roofs = new THREE.InstancedMesh(roofGeo, slateMat, pitched.length);
+  var m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+  var tints = [[1, 1, 1], [1, 1, 1], [1, 1, 1], [0.95, 0.9, 0.82], [1.1, 0.72, 0.6], [0.62, 0.58, 0.54]];
+  var ri = 0;
+  cells.forEach(function(c, i) {
+    q.setFromAxisAngle(up, c.along ? 0 : Math.PI / 2);
+    m.compose(new THREE.Vector3(c.x, 0, c.z), q, new THREE.Vector3(c.w, c.h, c.d));
+    bodies.setMatrixAt(i, m);
+    var t = tints[Math.floor(c.tone * tints.length)]; col.setRGB(t[0], t[1], t[2]); bodies.setColorAt(i, col);
+    if (c.pitch) {
+      m.compose(new THREE.Vector3(c.x, c.h, c.z), q, new THREE.Vector3(c.w * 1.04, Math.min(c.w, c.d) * 0.55, c.d * 1.04));
+      roofs.setMatrixAt(ri++, m);
+    }
+  });
+  bodies.instanceMatrix.needsUpdate = true; if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
+  roofs.instanceMatrix.needsUpdate = true;
+  scene.add(bodies); scene.add(roofs);
+  window.__sideTerraces = cells.length;
+})();
+
 // ============================================================
 // OXFORD STREET DEPARTMENT STORES — built as street-aligned units
 // ============================================================

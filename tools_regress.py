@@ -2901,6 +2901,15 @@ def centre_point_post_office_tower(r):
     r.expect(st["half"] == st["total"], "the Post Office Tower takes the full dawn haze again and goes pale (%r)" % st)
 
 
+@check("centre-point-side-terraces","2026-11-21 (Sam: \"can we now fill in the blank space at the side with other buildings?\"): the side quarters of the view from Centre Point, beyond the detailed grid, are filled with instanced terraces out to the sky's edge, so the city does not end in bare ground at either edge of the frame")
+def centre_point_side_terraces(r):
+    r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
+    r.page.wait_for_function("() => window.__cpCaster", timeout=90000)
+    n = r.js("() => window.__sideTerraces || 0")
+    r.info = "%d side terraces" % n
+    r.expect(n > 1500, "the side quarters hold only %d terraces" % n)
+
+
 @check("centre-point-road-depth","2026-11-21 (Sam: \"the zebra crossing closest to the camera looks wonky\", then \"the crossing is still at a weird angle\"): the road, pavement and ground of the view from Centre Point are drawn with enough depth precision that they do not break into flat bands, which made the square crossing look crooked (near plane at least 1, a 24-bit depth target for the composer)")
 def centre_point_road_depth(r):
     r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)

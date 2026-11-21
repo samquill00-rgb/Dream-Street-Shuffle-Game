@@ -4775,6 +4775,19 @@ def square_hut_walk(r):
     r.info = "blocked: back at %s and walking; then in by the east gate" % ([after["c"], after["r"]],)
 
 
+
+@check("fi-door-card-centred", "2026-11-21 (Sam, playtest note 3, the French: \"Here there should be a more central pop up to exit the bar. I want as little in the left bottom corner as possible\"): the blue door's card, the way out, comes up centred under the room, not in the bottom-left corner beside its voices")
+def _(r):
+    r.go("The French", wait=9000); r.room_ready("fi"); r.clear_slips(); r.clear_lore()
+    r.click_object("fi", "A blue door"); r.page.wait_for_timeout(3000)
+    m = r.js("""() => { var c = document.querySelector('.dss-room-card[aria-hidden="false"]'); if (!c) return null; var b = c.getBoundingClientRect(), v = document.querySelector('.dss-voice-box');
+      return { mid: Math.round(b.left + b.width / 2), w: innerWidth, left: Math.round(b.left), out: !!c.querySelector('.fi-action'), voices: !!(v && +getComputedStyle(v).opacity > 0) }; }""")
+    r.expect(m, "the blue door opened no card")
+    r.info = "card centre %d of %d (left edge %d); way out offered %s; voices beside the door %s" % (m["mid"], m["w"], m["left"], m["out"], m["voices"])
+    r.expect(m["out"], "the blue door's card offers no way out")
+    r.expect(abs(m["mid"] - m["w"] / 2) < m["w"] * 0.05, "the door's card is not centred (its middle at %d of %d)" % (m["mid"], m["w"]))
+    r.expect(m["left"] > m["w"] * 0.2, "the door's card reaches into the bottom-left corner (left edge %d)" % m["left"])
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:
@@ -4864,3 +4877,4 @@ def joyride_man_first_night(r):
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
+

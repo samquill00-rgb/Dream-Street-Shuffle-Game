@@ -2744,7 +2744,49 @@ def nazca_no_steps(r):
     r.go("Dean Street", wait=1500)
 
 
-@check("pub-calls", "2026-11-14 (Sam: \"The rest of the sounds, non tony can just be part of the general hubbub\"): his odd shouts come now and then in a pub, never in the gents, and the recording is linked; the Tony Adams chant is gone from the coin toss (Sam, later: \"get rid of the stadium chant from the game too\")")
+@check("nazca-ship-hover", "2026-11-21 (Sam, playtest on the Nazca Approach: \"The spaceship in the backgound should flash its light more slowly and seem like it is hovering more\"): the ship's lights run at 0.4 of their pace and it rides a deeper swell with a pitch and roll")
+def nazca_ship_hover(r):
+    import html as _h
+    t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)
+    m = re.search(r"if \(nzShip\) \{[^\n]*?nzShip\.frame\(([^,]*),", t)
+    r.expect(m is not None, "the Nazca approach no longer drives the ship")
+    r.expect(m.group(1).replace(" ", "") == "t*0.4", "the ship's lights flash at their old pace again (frame(%s))" % m.group(1))
+    r.expect("Math.sin(t * 0.42) * 1.9" in m.group(0) and "rotation.z" in m.group(0), "the ship has lost its hover swell or its roll")
+    r.go("nazca", wait=9000)
+    r.expect(r.pn() == "Nazca Approach", "the nazca preview opened %r" % r.pn())
+
+
+@check("nazca-race-ticket", "2026-11-21 (Sam, playtest on the Nazca Race: \"Some of the buttons here are totally bland and not in the theme at all. Also the car should be more sluggish\"; \"make the track wider too\"): the race's buttons are cut from the NAZCAR race-day ticket, the car is heavier, and the road is 125 wide")
+def nazca_race_ticket(r):
+    import html as _h
+    t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)
+    r.expect(re.search(r"var TRACK_WIDTH = 125;", t), "the race track is no longer 125 wide")
+    r.expect(re.search(r"var steerBuildup = 0\.0052;", t) and re.search(r"var accelRate = 0\.030,", t), "the race car is as quick to steer or pick up as before")
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Nazca Race", wait=9000)
+    st = r.js("""() => Array.from(document.querySelectorAll('.nazca-race-stage .nz-toolbar button')).map(b => { var s = getComputedStyle(b); return [b.textContent, s.fontFamily, s.backgroundColor, s.color]; })""")
+    r.expect(len(st) >= 3, "the race toolbar has %d buttons" % len(st))
+    for name, font, bg, col in st:
+        r.expect("Playfair" in font and bg == "rgb(233, 201, 143)" and col == "rgb(138, 45, 18)", "the race button %r is not on the ticket (%s, %s, %s)" % (name, font, bg, col))
+    over = r.js("() => (document.scrollingElement || document.documentElement).scrollHeight - innerHeight")
+    r.expect(over <= 0, "the race page scrolls %d px at 1440x900" % over)
+    r.info = "%d ticket buttons" % len(st)
+
+
+@check("preview-joyride-link", "2026-11-21 (Sam: \"Can you give me the page where I can start testing from later in the game?\" then \"Yes add one\"): the preview launcher has a link onto Dean Street with the man by his car there")
+def preview_joyride_link(r):
+    page = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "preview.html"), encoding="utf-8").read()
+    m = re.search(r'id="joyride-man" href="Dream%20Street%20Shuffle\.html\?start=([^&"]+)', page)
+    r.expect(m is not None, "preview.html has no joyride link")
+    r.go(m.group(1), wait=12000)
+    r.expect(r.pn() == "Dean Street", "the joyride link opened %r" % r.pn())
+    links = r.js("() => Array.from(document.querySelectorAll('tw-link')).map(l => l.textContent.trim())")
+    r.expect("A man by his car" in links, "the man by his car is not on Dean Street from the joyride link")
+
+
+@check("pub-calls","2026-11-14 (Sam: \"The rest of the sounds, non tony can just be part of the general hubbub\"): his odd shouts come now and then in a pub, never in the gents, and the recording is linked; the Tony Adams chant is gone from the coin toss (Sam, later: \"get rid of the stadium chant from the game too\")")
 def pub_calls(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read()

@@ -4788,6 +4788,25 @@ def _(r):
     r.expect(abs(m["mid"] - m["w"] / 2) < m["w"] * 0.05, "the door's card is not centred (its middle at %d of %d)" % (m["mid"], m["w"]))
     r.expect(m["left"] > m["w"] * 0.2, "the door's card reaches into the bottom-left corner (left edge %d)" % m["left"])
 
+
+@check("carthage-pulls-from-planet", "2026-11-21 (Sam, playtest note 12: \"This 3d approach should have a moving camera that zooms out from the planets in the top left to the full screen\"): the coast of Carthage opens close on the ringed planet, a long lens, and pulls out to the whole coast")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The coast of Carthage", wait=500)
+    PROBE = """() => { var R = window._dssThreeRegistry && window._dssThreeRegistry['ca-wrap']; if (!R || window._dssCaPull == null) return null; var T = window.THREE, cam = R.camera, p = null;
+      R.scene.traverse(function (o) { if (o.isSprite && o.material && o.material.map && Math.abs(o.position.x + 52) < 0.01 && Math.abs(o.position.y - 20) < 0.01) p = o.position.clone().project(cam); });
+      return { fov: Math.round(cam.fov * 10) / 10, k: window._dssCaPull, px: p ? Math.round(p.x * 100) / 100 : null, py: p ? Math.round(p.y * 100) / 100 : null }; }"""
+    r.wait_for("() => !!(" + PROBE + ")()", 20000, "the Carthage scene")
+    a = r.js(PROBE)
+    r.wait_for("() => window._dssCaPull >= 1", 20000, "the pull out to finish")
+    r.page.wait_for_timeout(400)
+    b = r.js(PROBE)
+    r.info = "opening: lens %s deg, planet at (%s, %s); settled: lens %s deg, planet at (%s, %s)" % (a["fov"], a["px"], a["py"], b["fov"], b["px"], b["py"])
+    r.expect(a["fov"] < 20, "the coast opens on a %s degree lens, not close on the planet" % a["fov"])
+    r.expect(a["px"] is not None and abs(a["px"]) < 0.35 and abs(a["py"]) < 0.35, "the planet is not in the middle of the opening view (%s, %s)" % (a["px"], a["py"]))
+    r.expect(abs(b["fov"] - 62) < 0.5, "the pull ends on a %s degree lens, not the coast's 62" % b["fov"])
+    r.expect(b["px"] is not None and b["px"] < -0.3 and b["py"] > 0.4, "once settled the planet is not up in the top left (%s, %s)" % (b["px"], b["py"]))
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

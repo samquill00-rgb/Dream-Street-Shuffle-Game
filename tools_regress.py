@@ -2775,7 +2775,29 @@ def nazca_race_ticket(r):
     r.info = "%d ticket buttons" % len(st)
 
 
-@check("preview-joyride-link", "2026-11-21 (Sam: \"Can you give me the page where I can start testing from later in the game?\" then \"Yes add one\"): the preview launcher has a link onto Dean Street with the man by his car there")
+@check("easter-notes-1121", "2026-11-21 (Sam, playtest on Easter Island: \"FIGHT should be bigger and more obvious\"; the Reclamation \"shakes around a bit, it needs to be steady\"; at the Glyph \"there should be no 'Down to the boat' options. None after you play the game\"; \"you just shouldn't be able to play the game then quit before the end\"; \"make Subcomandante in the minigame a ghost\")")
+def easter_notes_1121(r):
+    import html as _h
+    t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)
+    r.expect("var swayAmp=0," in t and "camera.position.set(0,3,0);camera.rotation.set(pitch,yaw,0,'YXZ');" in t, "the Reclamation's view sways, bobs or kicks again")
+    r.expect("noMove: homeLoss" in t, "a lost fight on the way home offers a way off the island again")
+    r.expect(re.search(r"fort\.add\(fortFlash\);[^\n]{0,300}dssGhostTex", t), "SUBCOMANDANTE FORTUNA in the Reclamation is no longer a ghost")
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Among the Moai", wait=7000)
+    fs = r.js("() => { var l = document.querySelector('.reclamation-invite tw-link'); return l ? parseFloat(getComputedStyle(l).fontSize) : 0; }")
+    r.expect(fs >= 30, "FIGHT is %.0f px, not big" % fs)
+    scratch_passage(r, "T-glyph", '(set: $easterViaDavy to true)(set: $easterReclaim to false)[[Walk on|The Glyph]]')
+    tap = "(t) => { var l = Array.from(document.querySelectorAll('tw-link')).find(e => e.textContent.trim() === t); if (l) l.click(); return !!l; }"
+    r.go("T-glyph", wait=5000)
+    r.expect(r.js(tap, "Walk on"), "no Walk on in the scratch passage"); r.page.wait_for_timeout(5000)
+    r.expect(r.js(tap, "Fix it in you"), "no Fix it in you on %s" % r.pn()); r.page.wait_for_timeout(2500)
+    links = r.js("() => Array.from(document.querySelectorAll('tw-link')).map(l => l.textContent.trim())")
+    r.expect("Help with A Judith Butlerian Jihad" in links, "the Glyph does not offer the jihad (links %r)" % links)
+    r.expect("Down to the boat" not in links, "the Glyph offers Down to the boat while the jihad is still to fight")
+
+
+@check("preview-joyride-link","2026-11-21 (Sam: \"Can you give me the page where I can start testing from later in the game?\" then \"Yes add one\"): the preview launcher has a link onto Dean Street with the man by his car there")
 def preview_joyride_link(r):
     page = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "preview.html"), encoding="utf-8").read()
     m = re.search(r'id="joyride-man" href="Dream%20Street%20Shuffle\.html\?start=([^&"]+)', page)

@@ -2775,7 +2775,23 @@ def nazca_race_ticket(r):
     r.info = "%d ticket buttons" % len(st)
 
 
-@check("chebar-centre-1121", "2026-11-21 (Sam, playtest: the Plain of Chebar \"repeats the same prose twice before and after the click\"; at Centre Point \"Every man etc. is cutting across the visuals. It needs to be seen\")")
+@check("fetch-follow-one-press", "2026-11-21 (Sam, playtest: \"Follow him needs two clicks here, it should only need one\"; ruled \"Lore before the press\"): the Fetch's lore opens on its own as his links come up, then one press on Follow him goes on")
+def fetch_follow_one_press(r):
+    scratch_passage(r, "T-fetch", '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")(set: $lilyCount to 5)(set: $returns to 12)[[Walk on|The Fetch]]')
+    r.js("() => { try { localStorage.removeItem('dssLoreAuto'); } catch (e) {} }")
+    r.go("T-fetch", wait=5000)
+    r.js("() => Array.from(document.querySelectorAll('tw-link')).find(l => l.textContent.trim() === 'Walk on').click()")
+    r.page.wait_for_timeout(25000)
+    btn = r.js("() => { var b = Array.from(document.querySelectorAll('#dss-lore-overlay button')).find(e => e.offsetParent); if (!b) return null; var q = b.getBoundingClientRect(); return {x: q.x + q.width / 2, y: q.y + q.height / 2}; }")
+    r.expect(btn, "the Fetch's lore did not open before the press")
+    r.page.mouse.click(btn["x"], btn["y"]); r.page.wait_for_timeout(2000)
+    f = r.js("() => { var l = Array.from(document.querySelectorAll('tw-link')).find(e => e.textContent.trim() === 'Follow him'); if (!l) return null; var q = l.getBoundingClientRect(); return {x: q.x + q.width / 2, y: q.y + q.height / 2}; }")
+    r.expect(f, "no Follow him on %s" % r.pn())
+    r.page.mouse.click(f["x"], f["y"]); r.page.wait_for_timeout(3500)
+    r.expect(r.pn() == "Approach Centre Point", "one press on Follow him left you on %s" % r.pn())
+
+
+@check("chebar-centre-1121","2026-11-21 (Sam, playtest: the Plain of Chebar \"repeats the same prose twice before and after the click\"; at Centre Point \"Every man etc. is cutting across the visuals. It needs to be seen\")")
 def chebar_centre_1121(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("ezekiel", wait=1500)

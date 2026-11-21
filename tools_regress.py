@@ -4266,6 +4266,24 @@ def _batched_check(slug, passage, wrap, key, joined_min, calls_max, what):
 for _b in BATCHED: _batched_check(*_b)
 
 
+@check("coach-corner-rounded", "2026-11-21 (Sam, playtest note 16: \"The wall with the sign on it sticks out too far here, take it back a few feets so it rounds the corner. Strictly speaking it should be round anyway, are you able to make it rounded off and make the sign wrap it?\"): the Coach's corner is a quarter-round flush with Greek and Romilly Streets, not a square block turned 45 degrees standing nearly 2 m proud, and the tall sign is curved round it")
+def coach_corner_rounded(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Approach The Coach", wait=12000)
+    r.clear_lore(); r.clear_slips()
+    m = r.js("""() => { var R = window._dssThreeRegistry && window._dssThreeRegistry['ch-wrap'], T = window.THREE, b = window._dssChBanner; if (!R || !b) return null;
+      var rc = new T.Raycaster(), out = {}; rc.camera = R.camera;
+      [[6, 'sign'], [11, 'wall']].forEach(function (p) { var from = new T.Vector3(4, p[0], 4); rc.set(from, new T.Vector3(-1, 0, -1).normalize());
+        var hit = rc.intersectObjects(R.scene.children, true).filter(function (x) { var o = x.object, mt = o.material; return o.isMesh && o.visible && mt && !mt.transparent; })[0];
+        out[p[1]] = hit ? Math.round((hit.point.x + hit.point.z) * 100) / 100 : null; });
+      out.curved = b.geometry.type; return out; }""")
+    r.expect(m, "the Coach's 3D scene (ch-wrap) or its sign did not come up")
+    r.info = "along the corner's diagonal (x+z of the first surface): the sign %s, the wall above it %s; the sign is a %s" % (m["sign"], m["wall"], m["curved"])
+    r.expect(m["curved"] == "CylinderGeometry", "the tall sign is a %s, not curved round the corner" % m["curved"])
+    r.expect(m["wall"] is not None and m["wall"] < 0.2, "the corner wall stands out to x+z %s (rounded it is about -0.6; the turned square block reached 1.7)" % m["wall"])
+    r.expect(m["sign"] is not None and m["sign"] < 0.6, "the sign stands out to x+z %s (wrapped it is about -0.2; the flat board was at 3.2)" % m["sign"])
+
+
 @check("chippy-light-budget", "2026-11-19 (Sam: \"Yes, the chippy lights\"): the chippy's street carried 17 point lights (about 13 ms a frame headless, against about 5.5 at 13); the brothel window's red, her modelling light, the blue neon's and the lantern's went, soft glows standing in where their light showed")
 def chippy_light_budget(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

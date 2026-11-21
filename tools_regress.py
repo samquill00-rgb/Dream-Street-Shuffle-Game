@@ -2775,7 +2775,22 @@ def nazca_race_ticket(r):
     r.info = "%d ticket buttons" % len(st)
 
 
-@check("pyramid-notes-1121", "2026-11-21 (Sam, playtest on the Pyramid Run: \"some labels which look plain\"; \"make the turtles more interesting looking and give a bit of life back if you bounce on one\"; on the proportion page: \"after the minigame is done there should be no 'back the way you came'. Until now when you actually need to go back\")")
+@check("chebar-centre-1121", "2026-11-21 (Sam, playtest: the Plain of Chebar \"repeats the same prose twice before and after the click\"; at Centre Point \"Every man etc. is cutting across the visuals. It needs to be seen\")")
+def chebar_centre_1121(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("ezekiel", wait=1500)
+    vis = "() => { var p = document.querySelector('tw-passage'); return p ? getComputedStyle(p).visibility : 'none'; }"
+    r.expect(r.js(vis) == "hidden", "the Chebar prose shows before the plain's scene covers it (%s)" % r.js(vis))
+    r.page.wait_for_timeout(9000)
+    r.js("() => Array.from(document.querySelectorAll('div')).find(e => !e.children.length && /WALK OUT ONTO THE PLAIN/.test(e.textContent)).click()")
+    r.page.wait_for_timeout(3000)
+    r.expect(r.js(vis) == "visible", "the Chebar prose is not shown after walking out")
+    r.go("Approach Centre Point", wait=12000)
+    top = r.js("() => { var c = document.querySelector('.dss-room-caption'), m = document.getElementById('dss-astral-modal'); if (!c) return 'no caption'; if (c.parentElement !== document.body) return 'inside ' + (c.parentElement.id || c.parentElement.tagName); return m ? (+getComputedStyle(c).zIndex > +getComputedStyle(m).zIndex ? 'ok' : 'under the stars') : 'ok'; }")
+    r.expect(top == "ok", "Centre Point's line is not above the star graph: %s" % top)
+
+
+@check("pyramid-notes-1121","2026-11-21 (Sam, playtest on the Pyramid Run: \"some labels which look plain\"; \"make the turtles more interesting looking and give a bit of life back if you bounce on one\"; on the proportion page: \"after the minigame is done there should be no 'back the way you came'. Until now when you actually need to go back\")")
 def pyramid_notes_1121(r):
     import html as _h
     t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())

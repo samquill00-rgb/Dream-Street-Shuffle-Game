@@ -2880,6 +2880,15 @@ def centre_point_dawn_sky(r):
     r.expect(st["casters"] > 50, "only %d meshes cast shadows" % st["casters"])
 
 
+@check("centre-point-road-depth","2026-11-21 (Sam: \"the zebra crossing closest to the camera looks wonky\", then \"the crossing is still at a weird angle\"): the road, pavement and ground of the view from Centre Point are drawn with enough depth precision that they do not break into flat bands, which made the square crossing look crooked (near plane at least 1, a 24-bit depth target for the composer)")
+def centre_point_road_depth(r):
+    r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)
+    r.page.wait_for_function("() => window.__cpCaster", timeout=90000)
+    st = r.js("() => ({ near: camera.near, stencil: !composer || !!composer.renderTarget1.stencilBuffer })")
+    r.expect(st["near"] >= 1, "the camera's near plane is %r; under 1 the road bands" % st["near"])
+    r.expect(st["stencil"], "the composer's target has no stencil, so its depth falls to 16-bit and the road bands")
+
+
 @check("pub-calls","2026-11-14 (Sam: \"The rest of the sounds, non tony can just be part of the general hubbub\"): his odd shouts come now and then in a pub, never in the gents, and the recording is linked; the Tony Adams chant is gone from the coin toss (Sam, later: \"get rid of the stadium chant from the game too\")")
 def pub_calls(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

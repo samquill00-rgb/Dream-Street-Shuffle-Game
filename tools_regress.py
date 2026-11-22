@@ -487,6 +487,23 @@ def _(r):
     r.page.screenshot(path=os.path.join(SHOTS, "critic-beermats.png"))
 
 
+@check("hub-doors-awnings", "2026-11-22 playtest note 6 (Sam, Dean Street: \"Look at these doors also, they make no sense. It's not clear where the entrance is. Remodel the doors\"): every venue door on the Soho map has a doorway cut in its wall and a striped awning in the venue's colour over the step on the pavement")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Dean Street", wait=6000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => !!window.__dssMapBase && !!window.dssSohoMap", 20000, "the Soho map")
+    res = r.js("""() => { var cv = window.__dssMapBase, g = cv.getContext("2d"), T = Math.round(cv.width / window.dssSohoMap.cols), out = [];
+      window.dssSohoMap.doors.forEach(function (d) { if (d.spot || d.quiet || d.id === 'cecil') return;
+        var px = g.getImageData(d.fc * T, d.fr * T, T, T).data, want = [1, 0.62, 0.4].map(function (k) { return d.col.map(function (v) { return Math.round(v * k); }); }), n = 0, cream = 0;
+        for (var i = 0; i < px.length; i += 4) { if (want.some(function (w) { return Math.abs(px[i] - w[0]) <= 2 && Math.abs(px[i + 1] - w[1]) <= 2 && Math.abs(px[i + 2] - w[2]) <= 2; })) n++; if ((Math.abs(px[i] - 239) <= 2 && Math.abs(px[i + 1] - 228) <= 2) || (Math.abs(px[i] - 138) <= 2 && Math.abs(px[i + 1] - 130) <= 2) || (Math.abs(px[i] - 85) <= 2 && Math.abs(px[i + 1] - 80) <= 2)) cream++; }
+        out.push([d.id, n, cream]); });
+      return out; }""")
+    r.info = "%r" % res
+    bare = [d for d, n, c in res if n < 20 or c < 12]
+    r.expect(len(res) >= 8, "too few venue doors found on the map (%r)" % res)
+    r.expect(not bare, "no striped awning over the step of %s" % bare)
+
+
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
 def _(r):
     scratch_passage(r, "T-phase1", '(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')

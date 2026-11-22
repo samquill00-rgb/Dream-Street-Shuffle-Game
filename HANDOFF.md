@@ -1,3 +1,7 @@
+# PYRAMID NOTES OF 22 NOV, 22:54
+P1. Pyramid Mouth: get rid of the dashes and put commas around 'what they say'.
+P2. Pyramid Run: the scarab-stomp text becomes 'A scarab underfoot is worth two in the hand.'; make scarabs easier to jump on.
+
 # PLAYTEST NOTES OF 22 NOV, NIGHT (16 notes; Sam: "Work through one by one", after the parked cars are modelled in Blender)
 1. The Night Ahead: make these first person, not second. (His prose: ask before changing.)
 2. Approach The Ginger Light: graffiti on the wall, to discuss. 3. It should say "WELCOME TO HELL" in faded white letters.

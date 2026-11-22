@@ -472,6 +472,21 @@ def _(r):
     r.expect(not eat, "Eat. is offered again straight after the meal")
 
 
+@check("critic-beermats", "2026-11-22 playtest note 10 (Sam, at the critic: \"Change these two links so they are next to each other or beermat style backgrounds\"): the two replies sit side by side, each on a beermat, and the page still fits a laptop")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Talk to the critic", wait=9000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => [].filter.call(document.querySelectorAll('.critic-replies tw-link'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; }).length === 2", 30000, "the critic's two replies")
+    r.page.wait_for_timeout(1500)
+    g = r.js("() => { var ls = [].filter.call(document.querySelectorAll('.critic-replies tw-link'), function (e) { return !e.closest('.dss-ghost'); }); return { boxes: ls.map(function (l) { var b = l.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]; }), bg: getComputedStyle(ls[0]).backgroundImage, sh: getComputedStyle(ls[0]).boxShadow.slice(0, 120), scroll: document.documentElement.scrollHeight - innerHeight }; }")
+    r.info = "%r" % g
+    a, b = g["boxes"]
+    r.expect(abs((a[1] + a[3] / 2) - (b[1] + b[3] / 2)) < 30 and b[0] > a[0] + a[2] - 10, "the replies are not side by side (%r)" % g["boxes"])
+    r.expect("239, 227, 200" in g["bg"] and "155, 42, 32" in g["sh"], "the replies are not on beermats (%r / %r)" % (g["bg"][-80:], g["sh"]))
+    r.expect(g["scroll"] <= 2, "the critic's page scrolls by %s px at 1440x900" % g["scroll"])
+    r.page.screenshot(path=os.path.join(SHOTS, "critic-beermats.png"))
+
+
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
 def _(r):
     scratch_passage(r, "T-phase1", '(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')

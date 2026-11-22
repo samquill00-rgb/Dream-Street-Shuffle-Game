@@ -5090,41 +5090,26 @@ window.dssAudio = (function() {
       sh.start(now + 0.18); sh.stop(now + 1.0);
     });
   }
+  /* 2026-11-22 (Sam, playtest note 8 at the French: "I want to change the noise for 'take a flower'", then "A softer chime"): a small bell touched with a felt mallet, not the swelling sine with vibrato it was. E5 with its two quiet upper partials, a rounded 25 ms attack, a long soft ring, the top filtered away, and a breath of B5 a moment later; the peak is about half the old swell's */
   function lilyChime() {
     _play(function(ac) {
-      var now = ac.currentTime;
-      var dur = 2.4;
-      // Main tone — sine, harmonic-like
-      var o = ac.createOscillator(); o.type = 'sine';
-      o.frequency.value = 659; // E5 — warm, ringing (was 1318 / E6)
-      // Subtle vibrato (~5 Hz, very small depth) — kicks in mid-swell
-      var vib = ac.createOscillator(); vib.type = 'sine';
-      vib.frequency.value = 5;
-      var vibG = ac.createGain(); vibG.gain.value = 2.0;
-      vib.connect(vibG); vibG.connect(o.frequency);
-      vib.start(now + 0.4); vib.stop(now + dur);
-      // Slow swell + slow fade
-      var g = ac.createGain();
-      g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(0.07, now + 0.5);   // slow swell
-      g.gain.linearRampToValueAtTime(0.06, now + 1.0);   // brief hold
-      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
-      o.connect(g); g.connect(ac.destination);
-      o.start(now); o.stop(now + dur + 0.05);
-      // A faint shimmer one octave up of the new fundamental, softer
-      var o2 = ac.createOscillator(); o2.type = 'sine';
-      o2.frequency.value = 988; // ~B5 (was 1976 / B6)
-      var g2 = ac.createGain();
-      g2.gain.setValueAtTime(0, now);
-      g2.gain.linearRampToValueAtTime(0.025, now + 0.6);
-      g2.gain.exponentialRampToValueAtTime(0.001, now + dur);
-      o2.connect(g2); g2.connect(ac.destination);
-      o2.start(now + 0.1); o2.stop(now + dur + 0.05);
+      var now = ac.currentTime, dur = 2.6;
+      var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 0.4; lp.connect(ac.destination);
+      function bell(t0, f, amp, len) {
+        [[1, 1], [2.01, 0.22], [3.02, 0.06]].forEach(function(pt) {
+          var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f * pt[0];
+          var g = ac.createGain(), a = amp * pt[1], l = len / pt[0] * 1.4;
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.linearRampToValueAtTime(a, t0 + 0.025);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + Math.min(len, l));
+          o.connect(g); g.connect(lp);
+          o.start(t0); o.stop(t0 + len + 0.05);
+        });
+      }
+      bell(now, 659.25, 0.034, dur);           /* E5 */
+      bell(now + 0.11, 987.77, 0.012, dur - 0.4); /* B5, a breath over it */
     });
   }
-  // Low, dull "block" thunk — feedback for poking a flower that's already
-  // been gathered. Pitched well below lilyChime, short and damped, with no
-  // shimmer, so it reads as a soft refusal rather than a collection cue.
   function lilyBlock() {
     _play(function(ac) {
       var now = ac.currentTime;
@@ -62237,13 +62222,13 @@ window._dssDisposeWrap('py-wrap');
             '#include <map_fragment>',
             'float fold = vUv.x + 0.06 * sin(vUv.y * 7.5 + auroraTime * 0.43);',
             'float drift = sin(fold * 16.0 - auroraTime * 0.36);',
-            'float cool = smoothstep(0.06, 0.82, drift + 0.23 * sin(auroraTime * 0.71));',
-            'float green = smoothstep(-0.42, 0.55, sin(fold * 21.0 + vUv.y * 8.0 + auroraTime * 0.54));',
-            'vec3 coolLight = mix(vec3(0.026, 0.19, 0.83), vec3(0.025, 0.69, 0.22), green);',
+            'float cool = smoothstep(-0.02, 0.59, drift + 0.23 * sin(auroraTime * 0.71));',
+            'float green = smoothstep(-0.23, 0.29, sin(fold * 21.0 + vUv.y * 8.0 + auroraTime * 0.54));',
+            'vec3 coolLight = mix(vec3(0.021, 0.22, 1.35), vec3(0.019, 1.16, 0.19), green);',
             'float light = max(diffuseColor.r - 0.5 * diffuseColor.g, 0.0);',
             'float flutter = sin(fold * 91.0 - auroraTime * 3.2) * sin(fold * 36.0 + auroraTime * 1.9);',
             'float glimmer = 0.92 + 0.08 * sin(fold * 29.0 - auroraTime * 1.35) + 0.09 * flutter;',
-            'diffuseColor.rgb = mix(diffuseColor.rgb, light * coolLight, cool * 0.96) * glimmer;'
+            'diffuseColor.rgb = mix(diffuseColor.rgb, light * coolLight, cool) * glimmer;'
           ].join('\n')
         );
       };
@@ -62555,9 +62540,99 @@ window._dssDisposeWrap('py-wrap');
     /* and those between it and the camera, so nothing stands in front of it */
     function segDist(px, pz) { var ax = camera.position.x, az = camera.position.z, dx = FX - ax, dz = FZ - az, u = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz))); return Math.hypot(px - ax - u * dx, pz - az - u * dz); }
     scene.children.forEach(function(ch) { if (ch.isMesh && ch.geometry && ch.geometry.type === 'BoxGeometry' && ch.position.y < 3 && (Math.hypot(ch.position.x - FX, ch.position.z - FZ) < 8 || segDist(ch.position.x, ch.position.z) < 5.5)) ch.visible = false; });
+    function inlayToenails(foot) {
+      var lapisTex = canvasTex(128, 128, function(ctx, w, h) {
+        var grain = ctx.createLinearGradient(0, h, w, 0);
+        grain.addColorStop(0, '#102153');
+        grain.addColorStop(0.42, '#152f88');
+        grain.addColorStop(0.76, '#244caa');
+        grain.addColorStop(1, '#163b83');
+        ctx.fillStyle = grain;
+        ctx.fillRect(0, 0, w, h);
+        for (var i = 0; i < 170; i++) {
+          ctx.fillStyle = i % 4 ? 'rgba(56,107,209,0.13)' : 'rgba(8,15,60,0.24)';
+          ctx.beginPath();
+          ctx.ellipse(rand(0, w), rand(0, h), rand(1, 12), rand(1, 7), rand(0, 3), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(139,167,204,0.33)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, h * 0.73);
+        ctx.bezierCurveTo(w * 0.33, h * 0.20, w * 0.49, h * 0.86, w, h * 0.31);
+        ctx.stroke();
+        for (var i = 0; i < 27; i++) {
+          var x = rand(5, w - 5), y = rand(5, h - 5), size = rand(0.8, 3);
+          ctx.fillStyle = i % 3 ? '#ad884b' : '#e0c484';
+          ctx.beginPath();
+          ctx.moveTo(x - size, y);
+          ctx.lineTo(x, y - size * 0.6);
+          ctx.lineTo(x + size, y + size * 0.16);
+          ctx.lineTo(x + size * 0.25, y + size * 0.64);
+          ctx.closePath();
+          ctx.fill();
+        }
+      });
+      var lapis = new THREE.MeshPhysicalMaterial({
+        map: lapisTex, roughness: 0.32, clearcoat: 0.48, clearcoatRoughness: 0.22,
+        emissiveMap: lapisTex, emissive: 0x7cb6ff, emissiveIntensity: 0.29,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1
+      });
+
+      // Each inlay is projected onto its toe on the untransformed foot mesh.
+      var ray = new THREE.Raycaster();
+      var down = new THREE.Vector3(0, -1, 0), origin = new THREE.Vector3();
+      var segments = 24, rings = 5;
+      var nails = new THREE.Group();
+      nails.name = 'Lapis toenails';
+      [
+        [-0.170, 0.552, 0.036, 0.028],
+        [-0.052, 0.565, 0.025, 0.029],
+        [0.031, 0.518, 0.017, 0.024],
+        [0.102, 0.477, 0.019, 0.025],
+        [0.176, 0.373, 0.017, 0.024]
+      ].forEach(function(toe, index) {
+        var positions = [], uvs = [], indices = [];
+        function project(u, v, radius) {
+          ray.set(origin.set(toe[0] + u * toe[2], 2, toe[1] + v * toe[3]), down);
+          var hit = ray.intersectObject(foot)[0];
+          if (!hit) return false;
+          positions.push(hit.point.x, hit.point.y + 0.003 + (1 - radius * radius) * 0.006, hit.point.z);
+          uvs.push(0.5 + u * 0.44, 0.5 + v * 0.48);
+          return true;
+        }
+        if (!project(0, 0, 0)) return;
+        for (var r = 1; r <= rings; r++) {
+          var radius = r / rings;
+          for (var i = 0; i < segments; i++) {
+            var angle = i * Math.PI * 2 / segments;
+            var u = Math.cos(angle), v = Math.sin(angle);
+            // Rounded sides with a slightly broader free edge.
+            u *= 1 + v * 0.12;
+            if (!project(u * radius, v * radius, radius)) return;
+            var here = 1 + (r - 1) * segments + i;
+            var next = 1 + (r - 1) * segments + (i + 1) % segments;
+            if (r === 1) indices.push(0, next, here);
+            else indices.push(here - segments, next, here, here - segments, next - segments, next);
+          }
+        }
+        var geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+        var nail = new THREE.Mesh(geometry, lapis);
+        nail.name = 'Lapis nail ' + (index + 1);
+        nail.receiveShadow = true;
+        nails.add(nail);
+      });
+      foot.add(nails);
+    }
     if (window.dssDSSM) window.dssDSSM(THREE, 'models/foot.bin', function(gs) {
       if (!gs || !gs.length) return;
-      var foot = new THREE.Mesh(gs[0], stoneMat); foot.scale.setScalar(FH); foot.position.set(FX, -SINK, FZ); foot.rotation.set(0.04, FROT, -0.05);
+      var foot = new THREE.Mesh(gs[0], stoneMat);
+      inlayToenails(foot);
+      foot.scale.setScalar(FH); foot.position.set(FX, -SINK, FZ); foot.rotation.set(0.04, FROT, -0.05);
       foot.castShadow = true; foot.receiveShadow = true; scene.add(foot);
       var footSky = new THREE.PointLight(0x9a8cc0, 0.9, 22, 2); footSky.position.set(FX - 6, 9, FZ + 7); scene.add(footSky); /* the last of the sky on it, so it parts from the dark face behind */
     });

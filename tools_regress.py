@@ -517,17 +517,22 @@ def _(r):
     r.expect(amps and max(amps) <= 0.04, "the flower's bell is struck at %r, louder than the soft chime's 0.034" % amps)
 
 
-@check("pillars-dismiss-gold-flash", "2026-11-22 playtest note 9 (Sam, Entering The Pillars of Hercules: \"When the little hints first appear there should be a golden flash behind them\", then \"the badge that you click in order to trigger the glowing dots\"): the room card's way-in line (TO THE BAR) flashes gold behind it the first time it shows")
+@check("pillars-badge-gold-flash", "2026-11-22 playtest note 9 (Sam, Entering The Pillars of Hercules: \"When the little hints first appear there should be a golden flash behind them\", then \"the badge that says 'there is something to collect' or similar\"): the room's badge for something to take flares gold behind it when it first comes up; the way-in line does not")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("Entering The Pillars of Hercules", wait=0)
-    r.js("() => { window.__flashSeen = null; (function tick() { var d = [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return !e.closest('.dss-ghost'); })[0]; if (d && d.classList.contains('dss-dismiss-flash') && !window.__flashSeen) { var cs = getComputedStyle(d); window.__flashSeen = { anim: cs.animationName, text: d.textContent }; } if (!window.__flashSeen) requestAnimationFrame(tick); })(); }")
-    r.wait_for("() => !!window.__flashSeen", 40000, "the gold flash behind the way-in line")
-    r.page.wait_for_timeout(250)
-    r.page.screenshot(path=os.path.join(SHOTS, "pillars-dismiss-gold-flash.png"))
-    f = r.js("() => window.__flashSeen")
+    r.js("() => { window.__burst = null; window.__dismissAnim = ''; (function tick() { var b = document.querySelector('.dss-gold-burst'); var d = document.querySelector('.dss-room-dismiss'); if (d && getComputedStyle(d).animationName.indexOf('Flash') >= 0) window.__dismissAnim = getComputedStyle(d).animationName; if (b && !window.__burst) { var h = [].filter.call(document.querySelectorAll('[data-keep]'), function (e) { return e.getClientRects().length; })[0], br = b.getBoundingClientRect(), hr = h ? h.getBoundingClientRect() : null; window.__burst = { anim: getComputedStyle(b).animationName, badge: h ? h.textContent.replace(/\\s+/g, ' ').slice(0, 60) : '', behind: !!(hr && Math.abs((br.left + br.width / 2) - (hr.left + hr.width / 2)) < 6 && Math.abs((br.top + br.height / 2) - (hr.top + hr.height / 2)) < 6) }; } if (!window.__burst) requestAnimationFrame(tick); })(); }")
+    r.wait_for("() => [].some.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return e.getClientRects().length; })", 30000, "the way-in line")
+    r.page.wait_for_timeout(3000); r.clear_lore(); r.clear_slips()
+    r.js("() => { var d = [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return e.getClientRects().length; })[0]; if (d) d.click(); }")
+    r.wait_for("() => !!window.__burst", 30000, "the gold flash behind the something-to-take badge (holds: %s)" % r.js("() => [].map.call(document.querySelectorAll('[data-keep]'), function (e) { return e.textContent + ' op ' + getComputedStyle(e).opacity; })"))
+    r.page.wait_for_timeout(200)
+    r.page.screenshot(path=os.path.join(SHOTS, "pillars-badge-gold-flash.png"))
+    f = r.js("() => window.__burst")
     r.info = "%r" % f
-    r.expect(f and f["anim"] == "dssDismissFlash", "the way-in line did not flash gold (%r)" % f)
+    r.expect(f["anim"] == "dssGoldBurst" and f["badge"], "no gold burst behind a something-to-take badge (%r)" % f)
+    r.expect(f["behind"], "the gold burst is not centred on the badge (%r)" % f)
+    r.expect(not r.js("() => window.__dismissAnim"), "the way-in line still flashes gold (Sam: not that one)")
 
 
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")

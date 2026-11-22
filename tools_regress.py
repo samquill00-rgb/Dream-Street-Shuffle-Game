@@ -5051,6 +5051,28 @@ def main(argv):
 
 
 
+@check("joyride-parked-cars-modelled", "2026-11-22 (Sam: \"I think the cars could still do with some work\", \"very London 60s/70s\", then \"Yes, model them\"): the ride's parked cars are the five Blender-modelled kinds from models/joyride-cars.js (a Mini, a small saloon, a big saloon, the FX4 cab, a van), not the old boxes")
+def joyride_parked_cars_modelled(r):
+    # its own plant: --plant=joyride-cars.js||| serves the model file as missing, as if the script tag were lost
+    if any("joyride-cars.js" in a for a, b in SWAPS):
+        r.page.route("**/models/joyride-cars.js*", lambda rt: rt.fulfill(status=404, body=""))
+    r.go("Bateman Street", wait=9000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => [].some.call(document.querySelectorAll('#bs-wrap button'), function (b) { return b.textContent === 'GET IN' && b.getClientRects().length; })", 9000, "a GET IN button on Bateman Street")
+    r.page.click("#bs-wrap button:has-text('GET IN')")
+    t0 = time.time(); fr = None
+    while time.time() - t0 < 40:
+        fr = next((f for f in r.page.frames if "soho-joyride" in f.url), None)
+        if fr and fr.evaluate("() => !!window.__joyride"): break
+        r.page.wait_for_timeout(400)
+    r.expect(fr is not None, "the ride page did not load in its frame")
+    c = fr.evaluate("() => window.__joyride.cars()")
+    r.info = "parked: %s; models: %s" % (c["kinds"], c["models"])
+    r.expect(c["modelled"], "the parked cars are the old boxes: the modelled cars did not load")
+    for k in ("mini", "small", "big", "cab", "van"):
+        r.expect(k in c["models"], "no model for the %s" % k)
+        r.expect(c["kinds"].get(k, 0) >= 1, "no %s parked on the streets" % k)
+
+
 @check("joyride-man-after-first-quest", "2026-11-20 playtest note 6 (Sam: \"This option should only appear after you have done the first dream quest\"): the man by his car is not on Dean Street before the page 93 errand is done and is there after it. History of this gate, all 2026-11-20: page 93, then (Sam: \"Put him on the map, first night\"; earlier the same night he was gated on the page 93 errand): on the first night, page 93 not yet heard of, 'A man by his car' is on Dean Street once its other doors open (the second visit) with a door on the map; walking onto his tile on Bateman Street opens the approach, and after WALK ON he is still there and you stand at his car")
 def joyride_man_first_night(r):
     scratch_passage(r, "T-night1", '(set: $returns to 1)(set: $metRed to true)(set: $returnedPage to true)[[Walk on|Dean Street]]')   # a second Dean Street with the page 93 errand done

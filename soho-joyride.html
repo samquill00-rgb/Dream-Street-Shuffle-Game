@@ -66,6 +66,7 @@
 <script src="vendor/three/postprocessing/RenderPass.js"></script>
 <script src="vendor/three/postprocessing/ShaderPass.js"></script>
 <script src="vendor/three/postprocessing/UnrealBloomPass.js"></script>
+<script src="models/joyride-cars.js?v=20261122"></script>
 <script>
 "use strict";
 (function () {
@@ -146,6 +147,15 @@ Frame.prototype.sub = function (u) { return new Frame(this.ax + this.tx * u, thi
 
 function Batch() { this.b = {}; }
 Batch.prototype.buf = function (k) { return this.b[k] || (this.b[k] = { p: [], n: [], u: [], c: [], i: [] }); };
+/* 2026-11-22: a modelled part (flat triangle positions and normals in the car's own axes) laid down through a car's transform; col(i) colours triangle i */
+Batch.prototype.tris = function (key, tf, P, Nn, col) {
+  const b = this.buf(key), base = b.p.length / 3, nv = P.length / 3;
+  for (let v = 0; v < nv; v++) {
+    const q = tf.p(P[3 * v], P[3 * v + 1], P[3 * v + 2]), n = tf.n(Nn[3 * v], Nn[3 * v + 1], Nn[3 * v + 2]), c = col(v / 3 | 0);
+    b.p.push(q[0], q[1], q[2]); b.n.push(n[0], n[1], n[2]); b.c.push(c[0], c[1], c[2]); b.u.push(0, 0);
+  }
+  for (let v = 0; v < nv; v++) b.i.push(base + v);
+};
 Batch.prototype.quad = function (key, P, N, col, uv) {
   const b = this.buf(key), base = b.p.length / 3;
   const ax = P[1][0] - P[0][0], ay = P[1][1] - P[0][1], az = P[1][2] - P[0][2];
@@ -973,6 +983,33 @@ function buildSaloon(b, tf, o) {
   const kind = o.kind && CARS[o.kind] ? o.kind : (o.van ? "van" : "big"), c = CARS[kind], van = !!c.van, K = o.key || "gloss";
   const paint = kind === "cab" ? C(0x08080a) : (o.paint || C(0x2a2f38)), z0 = c.L0, z1 = c.L1, bw = c.bw, belt = c.belt, roofY = c.roof, sill = 0.26;
   const chrome = [0.62, 0.6, 0.56], glass = C(0x0a0d12);
+  /* 2026-11-22 (Sam: "very London 60s/70s"; after three rounds of GPT reshaping these boxes did not land, "Yes, model them"): the five kinds are
+     modelled in Blender by tools_model_cars.py into models/joyride-cars.js (a Mini, an Anglia-manner small saloon with its reverse-raked rear window,
+     a Cortina/Jaguar-manner saloon, the FX4 cab with its wings and TAXI sign, a Bedford-manner van). The boxes below stay as the fallback (?boxcars=1). */
+  const MD = !qs.has("boxcars") && window.JOYRIDE_CARS && window.JOYRIDE_CARS[kind];
+  if (MD) {
+    const lit = !!o.lit, old = !!o.oldPlate;
+    const roofCol = kind === "mini" && old ? [0.78, 0.76, 0.7] : mul(paint, 0.94);
+    const look = {
+      paint: [K, () => paint], roof: [K, () => roofCol], glass: ["glass", () => glass], chrome: ["gloss", () => chrome], hub: ["gloss", () => [0.34, 0.34, 0.32]], dark: ["paint", () => C(0x0b0b0c)],
+      lamp: lit ? ["glow", () => [1, 0.92, 0.7]] : ["paint", () => [0.5, 0.5, 0.46]],
+      tail: lit ? ["glow", () => [1, 0.12, 0.08]] : ["paint", () => [0.3, 0.05, 0.04]],
+      flash: ["paint", () => [0.42, 0.2, 0.04]],
+      sign: lit ? ["glow", () => [1, 0.72, 0.2]] : ["paint", () => [0.55, 0.4, 0.08]],
+      plate: null
+    };
+    for (const part in MD) {
+      const d = MD[part];
+      if (part === "plate") {   /* British plates: white in front, yellow behind; black on the older cars */
+        b.tris("paint", tf, d.p, d.n, i => old ? [0.03, 0.03, 0.03] : (d.p[9 * i + 2] < 0 ? [0.72, 0.72, 0.68] : [0.74, 0.56, 0.06]));
+        continue;
+      }
+      const L = look[part]; if (!L) continue;
+      b.tris(L[0], tf, d.p, d.n, L[1]);
+    }
+    if (o.shadow !== false) { const a = tf.p(-bw - 0.36, 0.02, z0 - 0.5), cc = tf.p(bw + 0.36, 0.02, z0 - 0.5), d = tf.p(bw + 0.36, 0.02, z1 + 0.5), e = tf.p(-bw - 0.36, 0.02, z1 + 0.5); b.quad("shadow", [a, cc, d, e], [0, 1, 0], [1, 1, 1]); }
+    return;
+  }
   b.boxT(K, tf, -bw, bw, sill, belt, z0, z1, paint);
   const wb = bw - 0.1, wt = bw - (van ? 0.14 : 0.2), sf = z0 + c.sf, st = z0 + c.st, rt = z1 - c.rt, rb = z1 - c.rb;
   const P = (x, y, z) => tf.p(x, y, z), N = (x, y, z) => tf.n(x, y, z);
@@ -2019,6 +2056,7 @@ window.__joyride = {
   look: function (yaw, pitch) { look.tYaw = yaw; look.tPitch = pitch || 0; },
   cam: function (x, y, z, tx, ty, tz, fov) { setMode("outside"); shell.visible = false; ext.leave = false; ext.follow = false; ext.pos.set(x, y, z); ext.from.set(tx, ty, tz); ext.to.set(tx, ty, tz); ext.t = 1; car.x = tx; car.z = tz; camera.fov = fov || 52; camera.updateProjectionMatrix(); },
   venueDoor: venueDoor,
+  cars: function () { return { modelled: !qs.has("boxcars") && !!window.JOYRIDE_CARS, kinds: Object.assign({}, CARKINDS), models: window.JOYRIDE_CARS ? Object.keys(window.JOYRIDE_CARS) : [] }; },   /* 2026-11-22: for the checks, the parked cars by kind and whether they are the modelled ones */
   screen: function (x, y, z) { const v = new THREE.Vector3(x, y, z).project(camera); return [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)]; },
   stop: function () { cancelAnimationFrame(frameId); stereoStop(); },
   hit: function () {   /* is any point of the car's outline over a kerb or inside a parked car? */

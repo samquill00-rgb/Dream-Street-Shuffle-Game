@@ -3593,9 +3593,60 @@ window.dssAudio = (function() {
   var _SC_IN = [], _SC_OUT = [];
   for (var _sci = 0; _sci <= 32; _sci++) { _SC_IN.push(Math.sin(Math.PI / 2 * _sci / 32)); _SC_OUT.push(Math.cos(Math.PI / 2 * _sci / 32)); }
   _SC_IN = new Float32Array(_SC_IN); _SC_OUT = new Float32Array(_SC_OUT);
+  // Giza's opening cue keeps the dry performance under two slowly detuning,
+  // stereo reflections. Filter the reflections so they don't double the bass.
+  function _scGizaEcho(ac, destination, start) {
+    var input = ac.createGain(), dry = ac.createGain();
+    dry.gain.value = 0.84;
+    input.connect(dry);
+    dry.connect(destination);
+
+    var high = ac.createBiquadFilter(), low = ac.createBiquadFilter();
+    high.type = 'highpass';
+    high.frequency.value = 185;
+    low.type = 'lowpass';
+    low.frequency.value = 2900;
+    input.connect(high);
+    high.connect(low);
+
+    var drift = ac.createOscillator();
+    drift.frequency.value = 0.19;
+    var nodes = [input, dry, high, low, drift];
+    [
+      { delay: 0.27, depth: 0.024, pan: -0.78, level: 0.27 },
+      { delay: 0.46, depth: -0.033, pan: 0.78, level: 0.23 }
+    ].forEach(function(voice) {
+      var echo = ac.createDelay(0.75), feedback = ac.createGain();
+      var wet = ac.createGain(), pan = ac.createStereoPanner(), depth = ac.createGain();
+      echo.delayTime.value = voice.delay;
+      feedback.gain.value = 0.32;
+      wet.gain.value = voice.level;
+      pan.pan.value = voice.pan;
+      depth.gain.value = voice.depth;
+      drift.connect(depth);
+      depth.connect(echo.delayTime);
+      low.connect(echo);
+      echo.connect(feedback);
+      feedback.connect(echo);
+      echo.connect(wet);
+      wet.connect(pan);
+      pan.connect(destination);
+      nodes.push(echo, feedback, wet, pan, depth);
+    });
+    drift.start(start);
+    return {
+      input: input,
+      release: function(end) {
+        drift.stop(end);
+        setTimeout(function() {
+          nodes.forEach(function(node) { node.disconnect(); });
+        }, Math.max(0, (end - ac.currentTime + 0.08) * 1000));
+      }
+    };
+  }
   function _scIter(bed, v, off, when, fadeIn, xfIn, endAt) {
     var ac = getCtx(), src = ac.createBufferSource(), g = ac.createGain(), h = ac.createGain();
-    src.buffer = bed.buffer; src.connect(g); g.connect(h); h.connect(bed.gain);
+    src.buffer = bed.buffer; src.connect(g); g.connect(h); h.connect(v.echo ? v.echo.input : bed.gain);
     g.gain.value = xfIn ? 0 : 1;
     if (xfIn) g.gain.setValueCurveAtTime(_SC_IN, when, xfIn);
     h.gain.value = fadeIn > 0 ? 0 : 1;
@@ -3624,6 +3675,7 @@ window.dssAudio = (function() {
     if (!v || v.dead) return;
     v.dead = true; clearTimeout(v.timer);
     var ac = getCtx();
+    if (v.echo) v.echo.release(t + dur + 1.4);
     v.its.forEach(function(it) {
       try {
         var lvl = it.fadeIn > 0 ? Math.max(0, Math.min(1, (t - it.t0) / it.fadeIn)) : 1;
@@ -3656,6 +3708,7 @@ window.dssAudio = (function() {
         _scRelease(old, tb - 0.1, 1.8);
       }
       var nv = { cue: cue, def: def, its: [], dead: false, timer: null };
+      if (def.gizaEcho) nv.echo = _scGizaEcho(ac2, bed.gain, tb - pre);
       _scSt.voice = nv; bed.started = true;
       var endAt = def.loop ? 0 : (tb - pre + (bed.buffer.duration - entry));
       var it = _scIter(bed, nv, entry - pre, tb - pre, fadeIn, 0, endAt);
@@ -4017,7 +4070,7 @@ window.dssAudio = (function() {
     duckVolume: 0.10,
     score: {
       bar: 2, xf: 1.5,
-      sections: { hum: { from: 0, loop: [6, 24] }, chamber: { from: 24, resume: 32, loop: [32, 48] }, resolve: { from: 60 } },
+      sections: { hum: { from: 0, loop: [6, 24], gizaEcho: true }, chamber: { from: 24, resume: 32, loop: [32, 48] }, resolve: { from: 60 } },
       cues: { 'pyramid-hum': 'hum', 'pyramid-chamber': 'chamber', 'pyramid-resolve': 'resolve', 'pyramid-keep': 'keep' }
     }
   });

@@ -504,6 +504,19 @@ def _(r):
     r.expect(not bare, "no striped awning over the step of %s" % bare)
 
 
+@check("lily-chime-soft", "2026-11-22 playtest note 8 (Sam, at the French: \"I want to change the noise for 'take a flower'\", then \"A softer chime\"): taking a flower rings a small felt-mallet bell, filtered, with no vibrato, its loudest partial at most 0.04 (the old swell reached 0.07); the sound audit measured it at -27 dB peak")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The French", wait=4000)
+    src = r.js("() => window.dssAudio && window.dssAudio.lilyChime ? window.dssAudio.lilyChime.toString() : ''")
+    import re as _re
+    amps = [float(a) for a in _re.findall(r"bell\(now[^,]*, [0-9.]+, ([0-9.]+)", src)]
+    r.info = "bell strikes at %r" % amps
+    r.expect(src, "no lilyChime in the game's sounds")
+    r.expect("vib" not in src and "lowpass" in src and amps, "the flower's sound is not the soft bell (vibrato or no filter)")
+    r.expect(amps and max(amps) <= 0.04, "the flower's bell is struck at %r, louder than the soft chime's 0.034" % amps)
+
+
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
 def _(r):
     scratch_passage(r, "T-phase1", '(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')

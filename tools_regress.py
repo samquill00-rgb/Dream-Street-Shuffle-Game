@@ -894,10 +894,10 @@ def _(r):
     r.go("Approach The Coach", wait=5000); r.clear_slips()
     r.expect(r.js(click, "\u00b7"), "no front door on the Coach's approach")
     r.page.wait_for_timeout(2500)
-    down = r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf('Follow the cat down') >= 0; })")
+    down = r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf('Be liquid') >= 0; })")
     r.expect(down, "the Coach's front door does not send you down the drain on a first visit")
     if down:
-        r.js(click, "Follow the cat down"); r.page.wait_for_timeout(3000)
+        r.js(click, "Be liquid"); r.page.wait_for_timeout(3000)
         t1 = r.js(tags)
         intro = r.js("() => !!document.querySelector('.coach-plumbing-intro:not(.dss-ghost *)')")
         r.expect("venue-gents" in t1 and intro, "the way down the drain does not come into the gents with the drain travel (%r, intro %r)" % (t1, intro))
@@ -3080,6 +3080,38 @@ def harp_alley_theme(r):
     r.info = "page turns: " + ", ".join(waits)
 
 
+@check("french-whole-tone", "2026-11-22 (Sam, playtest note 2 of 20 Nov: \"The whole tone scale music here needs work (remind me to write it myself)\", then \"It's in claude work as 'whole tone'\", \"loop it\"): his own whole-tone piece is the French approach's bed, looping without a gap, in place of the plucked fairy figure, and it stops on Dean Street")
+def french_whole_tone(r):
+    import html as _h
+    root = os.path.dirname(os.path.abspath(__file__))
+    t = _h.unescape(open(os.path.join(root, "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)
+    r.expect(os.path.exists(os.path.join(root, "whole-tone-french.m4a")), "whole-tone-french.m4a is not beside the html")
+    r.expect(re.search(r"label: 'french-approach-music', dataUri: 'whole-tone-french\.m4a'[^\n]*?'map-return-french': 1", t) is not None, "the whole-tone piece is not registered on the French approach's tag with its file")
+    PLAYING = "() => window.dssAudio.bedPlaying('french-approach-music')"
+    HAND = "() => window.dssAudio.updateAmbientBedsForPassage(document.querySelector('tw-story > tw-passage'))"
+    r.go("Dean Street", wait=3000)
+    r.js(HAND)
+    r.page.wait_for_timeout(1200)
+    r.expect(not r.js(PLAYING), "the whole-tone piece plays on Dean Street")
+    r.js("() => { window.__fairy = 0; var f = window.dssAudio.fairyTwinkle; window.dssAudio.fairyTwinkle = function () { window.__fairy++; return f.apply(this, arguments); }; }")
+    r.go("Approach The French", wait=4000)
+    r.js(HAND)
+    r.wait_for(PLAYING, 8000, "the whole-tone piece to start on the French approach")
+    r.page.wait_for_timeout(2500)
+    lvl = r.js("() => window.dssAudio.bedLevel('french-approach-music')")
+    fairy = r.js("() => window.__fairy || 0")
+    dec = r.js("async () => { var b = await (await fetch('whole-tone-french.m4a')).arrayBuffer(); var c = new OfflineAudioContext(2, 48000, 48000); var d = await c.decodeAudioData(b); return [d.length, d.sampleRate]; }")
+    r.info = "level %.3f, fairy calls %d, decoded %s samples at %s Hz" % (lvl or 0, fairy, dec[0], dec[1])
+    r.expect((lvl or 0) > 0.05, "the whole-tone piece is all but silent on the approach")
+    r.expect(fairy == 0, "the fairy's plucked figure still plays on the approach")
+    r.expect(dec[1] == 48000 and dec[0] % 1024 == 0, "the piece decodes to %s samples, not a whole number of 1024-sample frames, so its loop seam drops out" % dec[0])
+    r.go("Dean Street", wait=5000)
+    r.js(HAND)
+    r.page.wait_for_timeout(4000)
+    r.expect(not r.js(PLAYING), "the whole-tone piece is still playing on Dean Street after the approach")
+
+
 STEP_SPY = r"""(function () { window.__spy = { real: [], synth: 0 }; var S = AudioBufferSourceNode.prototype.start;
   AudioBufferSourceNode.prototype.start = function (w, off, dur) { try { var d = this.buffer ? this.buffer.duration : 0;
       if (d > 6.5 && d < 7.2) window.__spy.real.push([off || 0, dur || 0]);   /* Sam's footsteps clip, 6.87 s */
@@ -3192,6 +3224,14 @@ N14_BASE = '(display: "Night Resets")(display: "Key Guards")(display: "Test Star
 N14_ERRAND = N14_BASE + '(set: $metGreenSeaFriend to false)(set: $inisToldOfPillars to false)(set: $keyLighter to "seed")(set: $dreamKey to "")(set: $returnedPage to false)'
 N14_CLICK = "(t) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf(t) >= 0 && !x.closest('.dss-ghost'); })[0]; if (!l) return false; l.click(); return true; }"
 N14_PRESS = "(t) => { var e = [].filter.call(document.querySelectorAll('button, .fi-action, tw-link, [role=button]'), function (x) { return x.getClientRects().length && !x.closest('.dss-ghost') && new RegExp(t, 'i').test(x.textContent.trim()); })[0]; if (!e) return false; e.click(); return true; }"
+
+
+@check("joyride-roof-and-wipers", "2026-11-22 (Sam: \"3 yes, 4 yes\"): in the ride the roof took the top third of the view and the windscreen carried pale wiper arcs; the roof, its header, mirror, visors and the tops of the pillars and windscreen stand 8 cm higher, the arcs are faint soft smears, and the game frames the new file")
+def joyride_roof_and_wipers(r):
+    j = open(os.path.join(ROOT, "soho-joyride.html"), encoding="utf-8").read()
+    r.expect("const RF = 0.08;" in j and "g2 = [0.6, 1.365 + RF, -0.52]" in j and "bx(mHead, 0, 1.39 + RF, 0.3" in j, "the ride's roof line is back down")
+    r.expect('cx.filter = "blur(5px)"; cx.strokeStyle = "rgba(210,195,170,0.022)"' in j and 'cx.strokeStyle = "rgba(210,195,170,0.05)"; cx.lineWidth = 3;' not in j, "the ride's wiper arcs are drawn as pale lines again")
+    r.expect("soho-joyride.html?embed=1&v=20261122" in _built(), "the game frames the ride without this version's mark, so a browser may keep the old file")
 
 
 @check("notes-1114-source", "2026-11-14 notes 1, 3, 5, 8, 12, 13, 19 (Sam): the comma before 'either' is cut; the Ginger Light's cat is out of its scene; the French's whole-tone figure is plucked; the beret cat print is matt; stat changes are numbers only; the bronze hand shines; INIS's third-pillar speech types faster")
@@ -3415,11 +3455,11 @@ def airport_pub_second_visit(r):
     r.wait_for("() => !!document.getElementById('ap-enter')", 15000, "the lounge and its button")
     r.page.click("#ap-enter"); r.page.wait_for_timeout(2600)
     r.expect(not r.js("() => !!document.getElementById('ap-wrap')"), "ENTER THE ENLIGHTENMENT did not go in")
-    r.expect("stood at this bar" not in r.js("() => document.body.innerText"), "a first arrival is told it has been here before")
+    r.expect("same airport pub twice" not in r.js("() => document.body.innerText"), "a first arrival is told it has been here before")
     r.go("T-ap2", wait=5000); r.page.click("tw-link:has-text('Fly')")
     r.wait_for("() => !!document.getElementById('ap-enter')", 15000, "the lounge a second time")
     r.page.click("#ap-enter"); r.page.wait_for_timeout(2600)
-    r.expect("stood at this bar" in r.js("() => document.body.innerText"), "a second arrival has no line of its own")
+    r.expect("same airport pub twice" in r.js("() => document.body.innerText"), "a second arrival has no line of its own")
 
 
 @check("typing-quicker", "2026-11-20 playtest notes 13 and 15 (Sam: \"All of these minor quotations should appear more quickly in the typewriter effect\"; INIS on the third pillar \"should appear more quickly and at more varied rates too\"): a quotation types at half its old time, and INIS's paragraphs each take a rate of their own")
@@ -4169,6 +4209,25 @@ def climb_settle(r):
     if m["slips"] >= 3 or m["fin"]: climb_start(r)
 
 
+@check("climb-wind-gives-ten-seconds", "2026-11-22 (Sam: \"2 yes\"): since a step off the side became a fall at once (18 Nov), a climber standing still in the wind was blown off after a median 6.7 s (12.1 before); the sideways push is two-thirds of what it was, for about 10 s")
+def climb_wind_gives_ten_seconds(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    climb_start(r)
+    times = []
+    for trial in range(9):
+        climb_settle(r)
+        r.js("() => window._hcDev.warp(27)"); r.page.wait_for_timeout(100)
+        m0 = r.js(CLIMB); t0 = time.time()
+        while time.time() - t0 < 40:
+            r.page.wait_for_timeout(100)
+            m = r.js(CLIMB)
+            if m["slips"] > m0["slips"] or m["whirl"]: break
+        times.append(round(time.time() - t0, 1))
+    times.sort(); med = times[len(times) // 2]
+    r.info = "standing still at s 27 till blown off: median %.1f s of %r" % (med, times)
+    r.expect(med >= 8.5, "a climber standing still is blown off after a median %.1f s, not about 10" % med)
+
+
 @check("climb-lost-on-slips", "2026-11-16 playtest (Friction 1 and 2, Looks wrong 2): a climber stuck on the mountain never saw TRY AGAIN / MOVE ON, because the climb was judged only at the summit; a held up-arrow stood still after 'SAFE AT THE FLAGS'; and 'THE WIND KEEPS YOU' showed on a fall in calm air")
 def climb_lost_on_slips(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
@@ -4871,6 +4930,25 @@ def _(r):
     r.expect(m["out"], "the blue door's card offers no way out")
     r.expect(abs(m["mid"] - m["w"] / 2) < m["w"] * 0.05, "the door's card is not centred (its middle at %d of %d)" % (m["mid"], m["w"]))
     r.expect(m["left"] > m["w"] * 0.2, "the door's card reaches into the bottom-left corner (left edge %d)" % m["left"])
+
+
+@check("rooms-way-out-centred", "2026-11-22 (Sam: \"1 yes\", after note 3 of 20 Nov: \"I want as little in the left bottom corner as possible\"): every room's way out, not only the French's blue door, brings its card up centred under the room")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    OUTS = ["A blue door", "The way out", "A threshold", "A door", "Stairs"]
+    got, bad = [], []
+    for room, passage in ROOMS:
+        r.go(passage, wait=200); r.room_ready(room); r.clear_slips(); r.clear_lore()
+        names = r.js("(room) => window.__dssRooms[room].names()", room)
+        name = next((n for n in OUTS if n in names), None)
+        if not name: continue
+        r.click_object(room, name); r.page.wait_for_timeout(2500)
+        m = r.js("""() => { var c = [].filter.call(document.querySelectorAll('.dss-room-card[aria-hidden="false"]'), function (x) { return !x.closest('.dss-ghost'); })[0]; if (!c) return null; var b = c.getBoundingClientRect(); return { mid: Math.round(b.left + b.width / 2), left: Math.round(b.left), w: innerWidth }; }""")
+        got.append((room, name, m and m["mid"]))
+        if not m or abs(m["mid"] - m["w"] / 2) > m["w"] * 0.05 or m["left"] < m["w"] * 0.2: bad.append((room, name, m))
+    r.info = "way-out cards (room, object, centre px): %r" % got
+    r.expect(len(got) >= 8, "only %d rooms have a way out to try (%r)" % (len(got), got))
+    r.expect(not bad, "way-out cards off centre or in the left corner: %r" % bad)
 
 
 @check("carthage-pulls-from-planet", "2026-11-21 (Sam, playtest note 12: \"This 3d approach should have a moving camera that zooms out from the planets in the top left to the full screen\"): the coast of Carthage opens close on the ringed planet, a long lens, and pulls out to the whole coast")

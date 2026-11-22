@@ -1,3 +1,6 @@
+# RETURN LATER (Sam, 22 Nov)
+- The run of endings (GPT note, 7 Nov): Sanctum, Fetch, Centre Point, Traveller wake, the knot, EXPLICIT each ask for terminal attention in turn. Sam: "Leave it (but keep a note to return later)". Revisit after he has played a full night through again.
+
 # PLAYTEST NOTES OF 20 NOV, EVENING (26 notes; worked through 20-21 Nov)
 
 Done, each with a check proved by a plant unless said: 26 (map can no longer stay black after a door fails; cause not reproduced), 6 (man by his car gated on $returnedPage again), 4 ("He calls you back once more."), 8 (Watkins windows wait for their names), 23 (Airport Pub second-visit line, pink), 13 and 15 (typing quicker and more varied), 14 (polaroid pockets and closes on one press; reverses his 14 Nov note 17), 11 (compass slip), 18 (barber and Jimmy slips offer directions), 21 (barber's lines in a Lichtenstein panel), 5 (four coloured rings on the call card; computed style checked, not seen on a live call).

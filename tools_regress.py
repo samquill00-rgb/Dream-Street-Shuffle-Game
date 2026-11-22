@@ -5034,10 +5034,14 @@ def _(r):
       return { fov: Math.round(cam.fov * 10) / 10, k: window._dssCaPull, px: p ? Math.round(p.x * 100) / 100 : null, py: p ? Math.round(p.y * 100) / 100 : null }; }"""
     r.wait_for("() => !!(" + PROBE + ")()", 20000, "the Carthage scene")
     a = r.js(PROBE)
+    r.js("() => { window.__caT = { start: 0, end: 0 }; (function tick() { var k = window._dssCaPull; if (k > 0 && !window.__caT.start) window.__caT.start = performance.now(); if (k >= 1 && !window.__caT.end) { window.__caT.end = performance.now(); return; } requestAnimationFrame(tick); })(); }")
     r.wait_for("() => window._dssCaPull >= 1", 20000, "the pull out to finish")
     r.page.wait_for_timeout(400)
     b = r.js(PROBE)
-    r.info = "opening: lens %s deg, planet at (%s, %s); settled: lens %s deg, planet at (%s, %s)" % (a["fov"], a["px"], a["py"], b["fov"], b["px"], b["py"])
+    ct = r.js("() => window.__caT"); took = (ct["end"] - ct["start"]) / 1000.0 if ct["start"] and ct["end"] else -1
+    # 2026-11-22 (Sam, playtest note 16: the zoom out from the planet should be faster): about 5 s, was 9
+    r.expect(0 < took <= 6.0, "the pull out takes %.1f s, not about 5 (it was 9)" % took)
+    r.info = "opening: lens %s deg, planet at (%s, %s); settled: lens %s deg, planet at (%s, %s); pulled out in %.1f s" % (a["fov"], a["px"], a["py"], b["fov"], b["px"], b["py"], took)
     r.expect(a["fov"] < 20, "the coast opens on a %s degree lens, not close on the planet" % a["fov"])
     r.expect(a["px"] is not None and abs(a["px"]) < 0.35 and abs(a["py"]) < 0.35, "the planet is not in the middle of the opening view (%s, %s)" % (a["px"], a["py"]))
     r.expect(abs(b["fov"] - 62) < 0.5, "the pull ends on a %s degree lens, not the coast's 62" % b["fov"])

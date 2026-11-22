@@ -843,6 +843,89 @@ def _(r):
     r.page.unroute("**/*")
 
 
+@check("benito-waits-for-pillars", "2026-11-20 playtest note 7 (Sam: \"I don't think benito should beopen until you have done the first quest\"): BENITO's nail, whose drawing helps in a dream world, was offered at the French on the first haunt alone; like the five keys it now waits until INIS has told you of the Pillars")
+def _(r):
+    seen = {}
+    for told in ("false", "true"):
+        r.page.unroute("**/*")
+        scratch_passage(r, "T-b7", '(set: $haunts to (a: $haunt1))(set: $inisToldOfPillars to %s)[[Go in|The French]]' % told)
+        r.go("T-b7", wait=3500); r.clear_slips()
+        r.expect(r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf('Go in') >= 0 && !x.closest('.dss-ghost'); })[0]; if (l) { l.click(); return true; } return false; }"), "no way into the French on the scratch page")
+        r.page.wait_for_timeout(8000)
+        seen[told] = r.js("() => [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && e.textContent.indexOf('Help BENITO with his nail') >= 0; }).length")
+    r.page.unroute("**/*")
+    r.info = "nail links before the Pillars %d, after %d" % (seen["false"], seen["true"])
+    r.expect(seen["false"] == 0, "BENITO's nail is offered before INIS has told you of the Pillars")
+    r.expect(seen["true"] >= 1, "BENITO's nail is not offered once INIS has told you of the Pillars")
+
+
+@check("of-dealer-in-window", "2026-11-20 playtest note 9 (Sam: \"In this 3d appreach you can see him sitting behind the door when in reality he is off to the right\"): O'FLATTERLY sat behind the door's amber glass; he is now seen through the right-hand pane of the window, as inside the shop")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Approach O'Flatterly", wait=9000)
+    d = r.js("() => { var g = window._dssOfDealer, R = (window._dssThreeRegistry || {})['of-wrap']; if (!g || !R) return null; g.updateMatrixWorld(true); var v = new THREE.Vector3(0, 1.4, 0).applyMatrix4(g.matrixWorld).project(R.camera); return { x: +v.x.toFixed(2), y: +v.y.toFixed(2), wx: +g.position.x.toFixed(2) }; }")
+    r.info = "the dealer on screen at %r" % (d,)
+    r.expect(d is not None, "no dealer in the O'Flatterly approach")
+    r.expect(d["wx"] > 1.18 and d["wx"] < 2.06, "the dealer is not behind the window's right-hand pane (x %r; the door is at -1.62)" % d["wx"])
+    r.expect(d["x"] > 0.2 and abs(d["y"]) < 0.9, "the dealer is not right of centre on screen (%r)" % (d,))
+
+
+@check("airport-pub-needs-the-button", "2026-11-20 playtest note 22 (Sam: \"That moved to the enlightenment far too quickly. I had no time to read to see the lore. It shoudl require an extra click at least\"): the ENTER button could be pressed for 2.2 s before it came up, where the portal's Offer button had just been; it now takes presses only once showing, and the Gates sign no longer goes in either")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Airport Pub", wait=200)
+    r.wait_for("() => !!document.getElementById('ap-enter')", 20000, "the lounge and its button")
+    r.page.wait_for_timeout(1000)
+    r.page.mouse.click(720, 900 - 60 - 20); r.page.wait_for_timeout(300)   # where the button sits, a second after it is made and a second before it comes up
+    early = r.js("() => { var w = document.getElementById('ap-wrap'); return !!w && w.style.opacity !== '0'; }")
+    r.page.wait_for_timeout(3500)
+    if early: r.page.click("#ap-enter"); r.page.wait_for_timeout(2400)
+    after = r.js("() => !document.getElementById('ap-wrap') || document.getElementById('ap-wrap').style.opacity === '0'")
+    r.info = "lounge kept after an early press %r; the button goes in %r" % (early, after)
+    r.expect(early, "a press where the ENTER button sits, before it has come up, went into the pub (the portal's Offer button sits there, so a second click fell through)")
+    r.expect(after, "the ENTER button no longer goes into the pub")
+
+
+@check("coach-through-the-drains-first", "2026-11-20 playtest note 17 (Sam: \"I worry about being able to turn up here before you reach it through the drains. Is there a way to make it so you can go through the drains without having to black out?\"): until you have come through the drains once, the Coach's front door sends you down them sober, behind the cat, into the gents with the drain travel; after that it opens on the bar")
+def _(r):
+    click = "(t) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.trim() === t && !x.closest('.dss-ghost'); })[0]; if (l) { l.click(); return true; } return false; }"
+    tags = "() => document.querySelector('tw-story').getAttribute('tags') || ''"
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Approach The Coach", wait=5000); r.clear_slips()
+    r.expect(r.js(click, "\u00b7"), "no front door on the Coach's approach")
+    r.page.wait_for_timeout(2500)
+    down = r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf('Follow the cat down') >= 0; })")
+    r.expect(down, "the Coach's front door does not send you down the drain on a first visit")
+    if down:
+        r.js(click, "Follow the cat down"); r.page.wait_for_timeout(3000)
+        t1 = r.js(tags)
+        intro = r.js("() => !!document.querySelector('.coach-plumbing-intro:not(.dss-ghost *)')")
+        r.expect("venue-gents" in t1 and intro, "the way down the drain does not come into the gents with the drain travel (%r, intro %r)" % (t1, intro))
+        r.page.wait_for_timeout(9000); r.clear_slips()
+        on = r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf('You gather your limbs to the bar.') >= 0 && !x.closest('.dss-ghost'); })")
+        r.expect(on, "no way from the gents to the bar after a sober drain walk")
+    r.page.unroute("**/*")
+    scratch_passage(r, "T-c17", '(set: $drainsDone to true)[[Walk on|Approach The Coach]]')
+    r.go("T-c17", wait=3000)
+    r.js(click, "Walk on"); r.page.wait_for_timeout(5000); r.clear_slips()
+    r.expect(r.js(click, "\u00b7"), "no front door on the Coach's approach after the drains")
+    r.page.wait_for_timeout(3000)
+    t2 = r.js(tags)
+    r.page.unroute("**/*")
+    r.info = "first: down the drain into %s; after: %s" % ("the gents" if down else "?", t2)
+    r.expect("venue-coach" in t2 and "venue-gents" not in t2, "once through the drains the front door does not open on the bar (%r)" % t2)
+
+
+@check("french-novelist-seated", "2026-11-20 playtest note 20 (Sam: \"It says he is sitting down but he is clearly standing\", then \"Yes the novelist\"): the novelist at the end of the French's bar was a standing figure; he sits on a stool, drawn as the seated artists are")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("The French", wait=200); r.room_ready("fi")
+    d = r.js("() => { var R = (window._dssThreeRegistry || {})['fi-wrap'], sp = R && R.scene.getObjectByName('french-novelist-seated'); if (!sp) return null; var n = 0; R.scene.traverse(function (o) { if (o.isMesh && o.geometry && o.geometry.type === 'SphereGeometry' && Math.abs(o.scale.x - 0.19) < 0.001 && o.parent && Math.hypot(o.parent.position.x - sp.position.x, o.parent.position.z - sp.position.z) < 0.05) n++; }); return { y: +sp.position.y.toFixed(2), sx: +sp.scale.x.toFixed(2), stool: n }; }")
+    r.info = "novelist %r" % (d,)
+    r.expect(d is not None, "the novelist is not drawn seated")
+    r.expect(d and d["stool"] >= 1, "the seated novelist has no stool under him (%r)" % (d,))
+
+
 @check("benito-nail-pull", "2026-11-19 note 5 (Sam): pulling BENITO's nail had no visuals; his fingertip is drawn in gold hairline and the splint tugs free, the split glazes red, then the page turns")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

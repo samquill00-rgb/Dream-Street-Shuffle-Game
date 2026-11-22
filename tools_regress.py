@@ -465,7 +465,8 @@ def _(r):
         want = max(22, min(74, 1550.0 / q["n"]))
         r.expect(abs(q["med"] - want) <= 30, "a paragraph of %d letters types at %d ms a letter, not The Night Ahead's %d" % (q["n"], q["med"], want))
     breaths = [b["start"] - a["end"] for a, b in zip(d, d[1:])]
-    r.expect(min(breaths) >= 280, "no breath between INIS's paragraphs (%r ms)" % breaths)
+    # 2026-11-20 note 15: the third pillar's speech is .dss-speech-quick, half the time with a rate of its own per paragraph (0.55 to 1.45, words 0.7 to 1.3), so its shortest breath is 850 x 0.5 x 0.55 x 0.7, about 164 ms; without the breath a paragraph's end is only its full stop, under 100 ms
+    r.expect(min(breaths) >= 150, "no breath between INIS's paragraphs (%r ms)" % breaths)
 
 
 @check("endgame-1109", "2026-11-09 notes 34-40: LINE 3's gold bloom, THE WAY OUT slip, every typewriter page stained, the Dawn's route caption, THE END before ANOTHER NIGHT")
@@ -3122,7 +3123,7 @@ def notes_1114_source(r):
     for a, b in SWAPS: cc = cc.replace(a, b)
     r.expect("emissive: 0x8a5a26, emissiveIntensity: 0.5" in cc and "PointLight(0xffb070, 2.6, 7.5, 2)" in cc, "note 13: the bronze hand in Cecil Court has lost its own light or its lamp")
     r.expect("cecil-court-3d-static.html?v=20261114a" in t, "note 13: the game still loads the older Cecil Court scene")
-    r.expect('class="dss-speech dss-speech-quick" data-speaker="INIS' in t and "classList.contains('dss-speech-quick') ? 0.7 : 1" in t, "note 19: INIS's third-pillar speech is back at the slow pace")
+    r.expect('class="dss-speech dss-speech-quick" data-speaker="INIS' in t and "classList.contains('dss-speech-quick') ? 0.5 : 1" in t, "note 19: INIS's third-pillar speech is back at the slow pace (half the time since 2026-11-20 note 15)")
     r.go("Dean Street", wait=1500)
 
 

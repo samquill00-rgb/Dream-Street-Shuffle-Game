@@ -1,3 +1,19 @@
+# PLAYTEST NOTES OF 22 NOV, NIGHT (16 notes; Sam: "Work through one by one", after the parked cars are modelled in Blender)
+1. The Night Ahead: make these first person, not second. (His prose: ask before changing.)
+2. Approach The Ginger Light: graffiti on the wall, to discuss. 3. It should say "WELCOME TO HELL" in faded white letters.
+4. Dean Street: in Brave the page still changed size while typing the title.
+5. Dean Street: the coin feels from an older part of the game; discover it later?
+6. Dean Street: the doors make no sense, the entrance is unclear; remodel the doors.
+7. The French: the text about the book should have a flaring orange glow round its box.
+8. The French: change the sound for "take a flower".
+9. Entering The Pillars of Hercules: a golden flash behind the little hints when they first appear.
+10. Talk to the critic: the two links side by side, or beermat-style backgrounds.
+11. After Aoife: more literary interludes later in the game, throughout (they are all used early).
+12 and 14. Dean Street: BENITO flashes for the suggestion; INIS (find page 93) should flash instead.
+13. Night Ahead Part Two: the compass indicator should stay longer and sit near the compass.
+15. Dean Street / chippy: after eating the fish and chips go back to the room, not out of the shop.
+16. The coast of Carthage: the zoom out from the planet should be faster.
+
 # RETURN LATER (Sam, 22 Nov)
 - The run of endings (GPT note, 7 Nov): Sanctum, Fetch, Centre Point, Traveller wake, the knot, EXPLICIT each ask for terminal attention in turn. Sam: "Leave it (but keep a note to return later)". Revisit after he has played a full night through again.
 

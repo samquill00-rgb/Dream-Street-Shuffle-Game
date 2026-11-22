@@ -447,6 +447,25 @@ def _(r):
     r.expect(not any(s[1] for s in st if s[0] == "who"), "Who's next? (BENITO and the readers) shimmers instead of the errand")
 
 
+@check("chippy-eat-stays", "2026-11-22 playtest note 15 (Sam: \"When you eat the fish and chips you should go back to the room not leave\"): after the meal you are back at the chippy's counter, not on Dean Street, and Eat. is gone for the rest of the lap")
+def _(r):
+    scratch_passage(r, "T-chips", '(set: $returns to 3)(set: $tookLily1 to true)(set: $hadChippy to false)(set: $nightAheadPart2Shown to true)[[Walk in|Chinese Fish and Chips]]')
+    r.go("T-chips", wait=4000)
+    r.page.locator("tw-link:has-text('Walk in')").first.click()
+    r.page.wait_for_timeout(5000); r.clear_lore(); r.clear_slips()
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && e.textContent.trim() === 'Eat.'; })[0]; if (l) l.click(); }")
+    r.wait_for("() => !!document.querySelector('#eat-overlay canvas')", 10000, "the eating card")
+    box = r.page.locator("#eat-overlay canvas").first.bounding_box()
+    r.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2); r.page.mouse.down()
+    r.wait_for("() => !document.querySelector('#eat-overlay')", 60000, "the meal to finish")
+    r.page.mouse.up(); r.page.wait_for_timeout(3500)
+    pn = r.js("() => (document.getElementById('dss-pn') || {}).textContent")
+    eat = r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length && e.textContent.trim() === 'Eat.'; })")
+    r.info = "after the meal: %r, Eat. offered %r" % (pn, eat)
+    r.expect(pn == "Chinese Fish and Chips", "after the meal you are on %r, not back in the chippy" % pn)
+    r.expect(not eat, "Eat. is offered again straight after the meal")
+
+
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
 def _(r):
     scratch_passage(r, "T-phase1", '(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')

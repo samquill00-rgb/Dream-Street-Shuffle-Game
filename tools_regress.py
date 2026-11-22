@@ -281,13 +281,19 @@ def _(r):
     r.expect(r.pn() == "The Stranger at the French", "Approach went to %r, not The Stranger at the French" % r.pn())
 
 
-@check("french-paperback-lore-and-slip", "2026-11-07 notes 3 and 4: the lore belongs to the paperback; a slip under a lore card waits, silent")
+@check("french-paperback-lore-and-slip", "2026-11-07 notes 3 and 4: the lore belongs to the paperback; a slip under a lore card waits, silent; since 2026-11-22 note 7 the card flares orange")
 def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("The French")
     r.room_ready("fi")
     r.click_object("fi", "An orange paperback")
     r.wait_for("() => !!document.querySelector('#dss-lore-overlay')", 8000, "the Chariots lore card (it opens by itself since 2026-11-11 note 5)")
     r.expect("Chariots" in r.js("() => document.querySelector('#dss-lore-overlay').textContent"), "the lore card is not Chariots of the Gods?")
+    # 2026-11-22 playtest note 7 (Sam: "Wherever it shows this text about the book it should have a flaring orange glow around the box")
+    r.page.wait_for_timeout(700)
+    fl = r.js("() => { var c = document.querySelector('#dss-lore-overlay .dss-lore-card'), cs = c && getComputedStyle(c); return cs ? [cs.animationName, cs.boxShadow.slice(0, 60)] : null; }")
+    r.info = "the paperback's card: %r" % (fl,)
+    r.expect(fl and "dssLoreFlare" in fl[0] and "rgba(255" in fl[1], "the paperback's lore card has no flaring orange glow (%r)" % (fl,))
     r.js("() => window.dssInlineHint('REGRESSION TEST SLIP, TYPED AFTER THE LORE CARD CLOSES', { now: true })")
     r.page.wait_for_timeout(3000)
     typed = r.js("() => [].map.call(document.querySelectorAll('.dss-hint-type'), function (e) { return e.textContent; }).join('|')")

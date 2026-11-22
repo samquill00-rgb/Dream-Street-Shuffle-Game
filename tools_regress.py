@@ -517,6 +517,19 @@ def _(r):
     r.expect(amps and max(amps) <= 0.04, "the flower's bell is struck at %r, louder than the soft chime's 0.034" % amps)
 
 
+@check("pillars-dismiss-gold-flash", "2026-11-22 playtest note 9 (Sam, Entering The Pillars of Hercules: \"When the little hints first appear there should be a golden flash behind them\", then \"the badge that you click in order to trigger the glowing dots\"): the room card's way-in line (TO THE BAR) flashes gold behind it the first time it shows")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Entering The Pillars of Hercules", wait=0)
+    r.js("() => { window.__flashSeen = null; (function tick() { var d = [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return !e.closest('.dss-ghost'); })[0]; if (d && d.classList.contains('dss-dismiss-flash') && !window.__flashSeen) { var cs = getComputedStyle(d); window.__flashSeen = { anim: cs.animationName, text: d.textContent }; } if (!window.__flashSeen) requestAnimationFrame(tick); })(); }")
+    r.wait_for("() => !!window.__flashSeen", 40000, "the gold flash behind the way-in line")
+    r.page.wait_for_timeout(250)
+    r.page.screenshot(path=os.path.join(SHOTS, "pillars-dismiss-gold-flash.png"))
+    f = r.js("() => window.__flashSeen")
+    r.info = "%r" % f
+    r.expect(f and f["anim"] == "dssDismissFlash", "the way-in line did not flash gold (%r)" % f)
+
+
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
 def _(r):
     scratch_passage(r, "T-phase1", '(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')

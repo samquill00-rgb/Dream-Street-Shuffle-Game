@@ -431,6 +431,22 @@ def scratch_passage(r, name, body):
     r.page.route("**/" + HTML + "*", handle)
 
 
+@check("hub-errand-shimmers", "2026-11-22 playtest notes 12 and 14 (Sam: \"Benito flashes here for the suggestion. It should be the other way round, Inis should be the one that flashes\", \"Again, benito flashes when find page 93 should\"): with an errand standing, Dean Street's Where next? box (Find page 93.) shimmers, not the readers in Who's next?")
+def _(r):
+    scratch_passage(r, "T-p93", '(set: $returns to 2)(set: $nightAheadPart2Shown to true)(set: $metCritic to true)(set: $knowsCecilCourt to true)(set: $knowsAboutPage to true)(set: $hasMissingPage to false)(set: $returnedPage to false)(set: $metRed to true)(set: $bookAt to "")(set: $haunts to (a: $haunt4))[[Walk on|Dean Street]]')
+    r.go("T-p93", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(2500); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => [].some.call(document.querySelectorAll('.book-pitch.pitch-shine'), function (b) { return !b.closest('.dss-ghost'); })", 30000, "any box shimmering on Dean Street")
+    st = r.js("() => [].filter.call(document.querySelectorAll('.book-pitch'), function (b) { return !b.closest('.dss-ghost'); }).map(function (b) { return [b.classList.contains('where-next') ? 'where' : 'who', b.classList.contains('pitch-shine'), b.textContent.replace(/\\s+/g, ' ').slice(0, 60)]; })")
+    r.info = "%r" % st
+    where = [s for s in st if s[0] == "where"]
+    r.expect(where and "page 93" in where[0][2], "no Where next? box offering page 93 (%r)" % st)
+    r.expect(where and where[0][1], "the Where next? box (Find page 93.) does not shimmer")
+    r.expect(any(s[0] == "who" for s in st), "no Who's next? box beside it, so nothing is proved (%r)" % st)
+    r.expect(not any(s[1] for s in st if s[0] == "who"), "Who's next? (BENITO and the readers) shimmers instead of the errand")
+
+
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
 def _(r):
     scratch_passage(r, "T-phase1", '(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')
@@ -5014,7 +5030,7 @@ def main(argv):
         if a.startswith("--plant="): SWAPS.append(tuple(a[8:].split("|||", 1)))
     want = [a.lower() for a in argv[1:] if not a.startswith("--plant=")]
     todo = [c for c in CHECKS if not want or any(w in c[0] for w in want)]
-    exe = chrome_path()
+    exe = os.environ.get("DSS_BROWSER") or chrome_path()   # DSS_BROWSER=/Applications/Brave\ Browser.app/Contents/MacOS/Brave\ Browser plays the checks in Brave
     if not exe:
         print("No Chrome for Testing in ~/Library/Caches/ms-playwright. Run: ~/.dss-regress/venv/bin/playwright install chromium")
         return 2

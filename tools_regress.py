@@ -2962,8 +2962,10 @@ def pyramid_notes_1121(r):
     import html as _h
     t = _h.unescape(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dream Street Shuffle.html"), encoding="utf-8").read())
     for a, b in SWAPS: t = t.replace(a, b)
-    r.expect("A SCARAB UNDERFOOT TAKES BACK A STUMBLE." in t, "a stomped scarab no longer takes back a stumble")
+    r.expect("A SCARAB UNDERFOOT IS WORTH TWO IN THE HAND." in t and "if (stumbles > 0) stumbles--; say('A SCARAB UNDERFOOT IS WORTH TWO IN THE HAND.'" in t, "a stomped scarab no longer says his line and takes back a stumble (2026-11-22: \"A scarab underfoot is worth two in the hand.\")")
+    r.expect("Math.abs(s.x - px) < 34 && py > previousY && previousY <= sfl - 9 && py >= sfl - 28" in t, "the scarab stomp window is back to the narrow one (2026-11-22, Sam: \"make it easier to jump on a scarab\")")
     r.expect("a jewelled Khepri scarab" in t, "the scarabs are back to the plain ellipse")
+    r.expect("It is true, what they say, that you know the pyramids before you see them." in t, "Pyramid Mouth's line has its dashes back (2026-11-22, Sam: \"Get rid of the dashes and put commas around 'what they say'\")")
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("Pyramid Run", wait=9000)
     st = r.js("() => Array.from(document.querySelectorAll('.pr-stage .pr-toolbar button')).map(b => [b.textContent, getComputedStyle(b).fontFamily, getComputedStyle(b).backgroundColor])")

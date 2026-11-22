@@ -5051,6 +5051,25 @@ def main(argv):
 
 
 
+@check("ginger-welcome-to-hell", "2026-11-22 playtest notes 2 and 3 (Sam: \"On this wall a bit of graffiti\", \"I want it to say 'WELCOME TO HELL' in faded white letters\"): the Ginger Light's approach has WELCOME TO HELL painted on the lamp-lit wall, the whole of it in view from the approach's camera, nothing solid in front of it (27 points across it), and drawn before any haze sprite that writes depth (one sorted first cut the E out of WELCOME); bigger since \"Make welcome to hell bigger\": two lines on a 2.5 by 1.25 m patch")
+def ginger_welcome_to_hell(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Approach The Ginger Light", wait=12000); r.clear_lore(); r.clear_slips()
+    res = r.js("""() => { var reg = window._dssThreeRegistry, e = null; var ok = function (v) { return v && v.camera && v.scene && v.scene.getObjectByName('welcome-to-hell'); }; if (reg instanceof Map) reg.forEach(function (v) { if (ok(v)) e = v; }); else for (var k in reg) if (ok(reg[k])) e = reg[k];
+      if (!e) return null; var m = e.scene.getObjectByName('welcome-to-hell'), cam = e.camera, rc = new THREE.Raycaster(), w = m.geometry.parameters.width, out = [];
+      m.updateMatrixWorld(); cam.updateMatrixWorld();
+      var ht = m.geometry.parameters.height; for (var i = 0; i <= 26; i++) { var p = new THREE.Vector3(w * (-0.46 + 0.92 * (i % 9) / 8), ht * 0.3 * ((i / 9 | 0) - 1), 0).applyMatrix4(m.matrixWorld), s = p.clone().project(cam), d = p.clone().sub(cam.position);
+        rc.set(cam.position, d.clone().normalize()); rc.camera = cam; var hits = rc.intersectObjects(e.scene.children, true).filter(function (h) { return ((h.object.type === 'Mesh' || h.object.type === 'Sprite') && h.object.material && h.object.material.transparent && h.object.material.depthWrite !== false && h.object.renderOrder <= m.renderOrder && h.object !== m && h.distance < d.length()) || h.object.type === 'Mesh' && !(h.object.material && h.object.material.transparent && h.object !== m); });
+        out.push({ on: Math.abs(s.x) < 1 && Math.abs(s.y) < 1, first: hits.length ? (hits[0].object.name || (hits[0].object.geometry.type + JSON.stringify(hits[0].object.geometry.parameters || {}).slice(0, 50) + '@' + hits[0].object.position.toArray().map(function (q) { return q.toFixed(2); }).join(','))) : '', near: hits.length ? +(d.length() - hits[0].distance).toFixed(2) : -1 }); }
+      return { text: m.material.map && m.material.map.image ? 1 : 0, pts: out }; }""")
+    r.expect(res is not None, "no WELCOME TO HELL on the Ginger Light's approach")
+    r.info = "%s" % [(p["on"], p["first"], p["near"]) for p in res["pts"]]
+    off = [i for i, p in enumerate(res["pts"]) if not p["on"]]
+    hid = [i for i, p in enumerate(res["pts"]) if p["first"] != "welcome-to-hell"]
+    r.expect(not off, "points %s of the lettering are off the screen" % off)
+    r.expect(not hid, "points %s of the lettering are behind something solid" % hid)
+
+
 @check("joyride-parked-cars-modelled", "2026-11-22 (Sam: \"I think the cars could still do with some work\", \"very London 60s/70s\", then \"Yes, model them\"): the ride's parked cars are the five Blender-modelled kinds from models/joyride-cars.js (a Mini, a small saloon, a big saloon, the FX4 cab, a van), not the old boxes")
 def joyride_parked_cars_modelled(r):
     # its own plant: --plant=joyride-cars.js||| serves the model file as missing, as if the script tag were lost

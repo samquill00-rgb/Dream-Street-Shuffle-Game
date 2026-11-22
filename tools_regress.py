@@ -425,6 +425,16 @@ def _(r):
 SWAPS = []   # (old, new) pairs applied to the served html: only for proving a check fails with an old bug planted (see --plant)
 
 
+def pocket_coin(r, wait=5000):
+    """Toss and pocket the Donkey if its card is on the page (it holds every slip until pocketed); since 2026-11-22 it no longer comes on the second lap."""
+    if not r.js("() => new Promise(function (res) { var t0 = Date.now(); (function k() { var b = document.querySelector('#coin-toss-btn'); if (b && getComputedStyle(b).visibility !== 'hidden') return res(true); if (Date.now() - t0 > %d) return res(false); setTimeout(k, 200); })(); })" % wait):
+        return False
+    for sel in ("#coin-toss-btn", "#coin-keep-btn"):
+        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
+        r.page.click(sel); r.page.wait_for_timeout(2500)
+    return True
+
+
 def scratch_passage(r, name, body):
     """Serve the built html with one extra passage, for states a ?start= jump cannot set (e.g. a later night phase)."""
     import html as _h
@@ -533,6 +543,24 @@ def _(r):
     r.expect(f["anim"] == "dssGoldBurst" and f["badge"], "no gold burst behind a something-to-take badge (%r)" % f)
     r.expect(f["behind"], "the gold burst is not centred on the badge (%r)" % f)
     r.expect(not r.js("() => window.__dismissAnim"), "the way-in line still flashes gold (Sam: not that one)")
+
+
+@check("donkey-coin-later", "2026-11-22 playtest note 5 (Sam: \"The coin is nice joke but let's look at it again, it feels like it's from an older part of the game. Can you discover it later, perhaps?\", then \"You pick a spot\"): the Donkey no longer turns up on the second lap; it is found on the first Dean Street after AOIFE's ring is left unanswered (or the book is at Foyles), and by the fifth lap at the latest")
+def _(r):
+    seen = {}
+    for name, body in (("T-coin2", "(set: $returns to 1)(set: $metRed to true)(set: $nightAheadPart2Shown to true)(set: $refusedCalls to 0)"),
+                       ("T-coinref", "(set: $returns to 1)(set: $metRed to true)(set: $nightAheadPart2Shown to true)(set: $refusedCalls to 1)"),
+                       ("T-coin5", "(set: $returns to 4)(set: $metRed to true)(set: $nightAheadPart2Shown to true)(set: $refusedCalls to 0)")):
+        r.page.unroute("**/*")
+        scratch_passage(r, name, body + "[[Walk on|Dean Street]]")
+        r.go(name, wait=4000)
+        r.page.locator("tw-link:has-text('Walk on')").first.click()
+        r.page.wait_for_timeout(3000)
+        seen[name] = bool(r.js("() => new Promise(function (res) { var t0 = Date.now(); (function k() { var b = document.querySelector('#coin-toss-btn'); if (b && b.getClientRects().length) return res(true); if (Date.now() - t0 > 6000) return res(false); setTimeout(k, 200); })(); })"))
+    r.info = "coin card on lap 2 with no call refused: %(T-coin2)r; after a refused call: %(T-coinref)r; on lap 5: %(T-coin5)r" % seen
+    r.expect(not seen["T-coin2"], "the Donkey still turns up on the second lap")
+    r.expect(seen["T-coinref"], "no Donkey on the Dean Street after AOIFE's ring was left unanswered")
+    r.expect(seen["T-coin5"], "no Donkey by the fifth lap")
 
 
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
@@ -2215,9 +2243,7 @@ def _(r):
     r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
     # the second Dean Street hands you the Donkey coin: toss it, then pocket it, as a player does
-    for sel in ("#coin-toss-btn", "#coin-keep-btn"):
-        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
-        r.page.click(sel); r.page.wait_for_timeout(2500)
+    pocket_coin(r)   # since 2026-11-22 (note 5) the Donkey comes later in the night; a coin card that is up is tossed and pocketed
     r.wait_for("() => !document.querySelector('#coin-overlay') || getComputedStyle(document.querySelector('#coin-overlay')).display === 'none' || !document.querySelector('#coin-overlay').offsetParent", 8000, "the coin card to close")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
     bad, links = hub_problems(r, "the second Dean Street")
@@ -3624,9 +3650,7 @@ def compass_slip(r):
     r.go("T-comp", wait=4000)
     r.page.click("tw-link:has-text('Walk on')")
     r.wait_for("() => !!document.querySelector('.dss-trail-badge')", 20000, "the compass, with the errand on")
-    for sel in ("#coin-toss-btn", "#coin-keep-btn"):   # the second Dean Street's coin card holds every slip until it is pocketed
-        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
-        r.page.click(sel); r.page.wait_for_timeout(2500)
+    pocket_coin(r)   # since 2026-11-22 (note 5) the Donkey comes later in the night; a coin card that is up is tossed and pocketed
     seen = False
     for _ in range(60):
         if r.js("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /compass/i.test(e.textContent); })"): seen = True; break
@@ -5046,9 +5070,7 @@ def square_hut_walk(r):
     r.page.click("tw-link:has-text('Walk on')")
     r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 15000, "the Soho map")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
-    for sel in ("#coin-toss-btn", "#coin-keep-btn"):
-        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
-        r.page.click(sel); r.page.wait_for_timeout(2500)
+    pocket_coin(r)   # since 2026-11-22 (note 5) the Donkey comes later in the night; a coin card that is up is tossed and pocketed
     r.clear_lore(); r.clear_slips(); r.clear_lore()
     PRESS = """(way) => { var b = document.querySelector('[data-dir="' + way + '"]'); if (!b) return; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, isPrimary: true })); setTimeout(function () { b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, isPrimary: true })); }, 200); }"""
     ST = "() => { var S = window.dssSohoMap && window.dssSohoMap.state; return S ? { c: S.c, r: S.r, entering: !!S.entering, unstuck: S.unstuck || 0 } : null; }"
@@ -5223,9 +5245,7 @@ def joyride_man_first_night(r):
     r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 15000, "the Soho map")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
     # the second Dean Street hands you the Donkey coin: toss it, then pocket it, as a player does (it holds the walk until then)
-    for sel in ("#coin-toss-btn", "#coin-keep-btn"):
-        r.wait_for("() => { var b = document.querySelector('%s'); return !!b && getComputedStyle(b).visibility !== 'hidden'; }" % sel, 15000, sel)
-        r.page.click(sel); r.page.wait_for_timeout(2500)
+    pocket_coin(r)   # since 2026-11-22 (note 5) the Donkey comes later in the night; a coin card that is up is tossed and pocketed
     r.wait_for("() => !document.querySelector('#coin-overlay') || getComputedStyle(document.querySelector('#coin-overlay')).display === 'none' || !document.querySelector('#coin-overlay').offsetParent", 8000, "the coin card to close")
     r.clear_lore(); r.clear_slips(); r.clear_lore()
     first = [t for t in r.js(HUB_LINKS)]

@@ -70534,7 +70534,6 @@ window._dssDisposeWrap('py-wrap');
   var pyramid = new THREE.Group();
   var courseHeight = 2.4;
   var mouthHeight = 3.2;
-  var southLedges = [];
   var stoneTextureSpan = 58; // metres covered by one strip of roughly fourteen stones
   function courseBlock(left, right, back, front, bottom, top, material, stagger) {
     var x = (left + right) / 2, z = (back + front) / 2;
@@ -70554,7 +70553,6 @@ window._dssDisposeWrap('py-wrap');
       var bottom = start + (end - start) * i / count;
       var top = start + (end - start) * (i + 1) / count;
       var halfWidth = B * (1 - (bottom + top) / (2 * H));
-      southLedges.push({ bottom: bottom, top: top, front: halfWidth });
       var weathering = 1 - THREE.MathUtils.smoothstep((bottom + top) / 2, 1, 32);
       var grade = Math.round(weathering * wearGrades);
       var material = courseStones[grade][row % 7 === 3 ? 1 : 0];
@@ -70811,7 +70809,6 @@ window._dssDisposeWrap('py-wrap');
   // The green glass eye from LACKLAND's dish, brought forward of the apex
   // so its lower edge sits on the peak in silhouette.
   var pyEye = null;
-  var pyTears = null;
   (function() {
     var radius = 4.4;
     var eye = new THREE.Group();
@@ -70904,114 +70901,7 @@ window._dssDisposeWrap('py-wrap');
     };
     pyEye(0);
     window.__pyEye = eye;
-    pyTears = buildPyramidTears(eye.position, towardCamera, radius);
   })();
-  function buildPyramidTears(eyeCenter, towardCamera, eyeRadius) {
-    var flowTime = { value: 0 };
-    var liquid = new THREE.MeshPhysicalMaterial({
-      color: 0xa7cf8d, emissive: 0x466b34, emissiveIntensity: 0.61,
-      roughness: 0.26, clearcoat: 0.88, clearcoatRoughness: 0.13
-    });
-    liquid.onBeforeCompile = function(shader) {
-      shader.uniforms.tearTime = flowTime;
-      shader.vertexShader = 'uniform float tearTime;\nvarying vec2 vTearUv;\n' + shader.vertexShader.replace(
-        '#include <begin_vertex>', [
-          '#include <begin_vertex>',
-          'vTearUv = uv;',
-          'float swell = 0.5 + 0.5 * sin(uv.x * 39.0 - tearTime * 1.6);',
-          'transformed += normal * (0.045 * swell);'
-        ].join('\n')
-      );
-      shader.fragmentShader = 'uniform float tearTime;\nvarying vec2 vTearUv;\n' + shader.fragmentShader.replace(
-        '#include <emissivemap_fragment>', [
-          '#include <emissivemap_fragment>',
-          'float current = pow(0.5 + 0.5 * sin(vTearUv.x * 39.0 - tearTime * 1.6), 8.0);',
-          'float shine = pow(0.5 + 0.5 * cos((vTearUv.y - 0.23 + 0.06 * sin(vTearUv.x * 31.0)) * 6.283), 12.0);',
-          'totalEmissiveRadiance += vec3(0.30, 0.42, 0.21) * (current * 0.43 + shine * 0.23);'
-        ].join('\n')
-      );
-    };
-    var tears = new THREE.Group();
-    tears.name = 'Pyramid tears';
-    scene.add(tears);
-    var source = eyeCenter.clone().addScaledVector(towardCamera, eyeRadius * 0.40);
-    source.y -= eyeRadius * 0.75;
-    var landingZ = source.z + 0.65;
-    var landing = southLedges.length - 1;
-    while (southLedges[landing].front < landingZ) landing--;
-    var landingY = southLedges[landing].top;
-    var landingPoint = new THREE.Vector3(source.x + 0.22, landingY + 0.22, landingZ);
-    function strand(points, size, tapered) {
-      var curve = new THREE.CatmullRomCurve3(points);
-      var segments = Math.max(24, points.length * 6);
-      var geometry = new THREE.TubeGeometry(curve, segments, size, 8, false);
-      var vertices = geometry.attributes.position;
-      var center = new THREE.Vector3(), point = new THREE.Vector3();
-      if (tapered) {
-        for (var i = 0; i <= segments; i++) {
-          var u = i / segments;
-          curve.getPointAt(u, center);
-          var width = Math.min(1, (1 - u) * 13 + 0.12);
-          width *= 0.86 + 0.14 * Math.cos(u * 24);
-          for (var j = 0; j <= 8; j++) {
-            var index = i * 9 + j;
-            point.fromBufferAttribute(vertices, index).lerp(center, 1 - width);
-            vertices.setXYZ(index, point.x, point.y, point.z);
-          }
-        }
-        geometry.computeVertexNormals();
-      }
-      tears.add(new THREE.Mesh(geometry, liquid));
-      return curve;
-    }
-    var falling = strand([
-      source, source.clone().add(new THREE.Vector3(0.04, -0.75, 0.10)),
-      source.clone().lerp(landingPoint, 0.56), landingPoint
-    ], 0.15, false);
-    // Carry the stream across each tread, then over its lip and down its face.
-    function runoff(first, last, inlet, radius, wander) {
-      var points = [inlet], x = inlet.x, pad = radius + 0.10;
-      for (var i = first; i >= last; i--) {
-        var step = southLedges[i];
-        x += Math.sin(i * 1.52) * wander + wander * 0.23;
-        points.push(new THREE.Vector3(x, step.top + pad, step.front - pad));
-        points.push(new THREE.Vector3(x + wander * 0.12, step.top + pad * 0.35, step.front + pad));
-        points.push(new THREE.Vector3(x + wander * 0.22, step.bottom + pad, step.front + pad));
-      }
-      return strand(points, radius, true);
-    }
-    // The main thread pulls clear of the faces between ledges, with a
-    // thinner runnel that separates from it and follows the stone.
-    var mainPoints = [landingPoint];
-    var branchStart;
-    for (var i = landing; i >= 4; i--) {
-      var step = southLedges[i];
-      var descent = landing - i + 1;
-      var y = (step.bottom + step.top) / 2;
-      var x = landingPoint.x + Math.sin(descent * 0.43) * 1.3 + Math.sin(descent * 1.8) * 0.24;
-      var z = step.front + 2.48 + 0.45 * Math.sin(descent * 0.82);
-      var knot = new THREE.Vector3(x, y, z);
-      mainPoints.push(knot);
-      if (i === landing - 7) branchStart = knot;
-    }
-    strand(mainPoints, 0.29, true);
-    runoff(landing - 8, 9, branchStart, 0.12, 0.82);
-    var beadGeometry = new THREE.SphereGeometry(1, 14, 10);
-    var beads = [0, 1].map(function() {
-      var bead = new THREE.Mesh(beadGeometry, liquid);
-      tears.add(bead);
-      return bead;
-    });
-    return function(t) {
-      flowTime.value = t;
-      beads.forEach(function(bead, i) {
-        var travel = (t * 0.37 + i * 0.51) % 1;
-        falling.getPointAt(travel * travel, bead.position);
-        var size = 0.12 + Math.sin(Math.PI * travel) * 0.13;
-        bead.scale.set(size, size * (1.18 + travel * 1.5), size * 0.92);
-      });
-    };
-  }
   // Cairo, far off to the left: a low band of warm lights under the dust
   (function() {
     for (var i = 0; i < 40; i++) {
@@ -71067,7 +70957,6 @@ window._dssDisposeWrap('py-wrap');
     sunGlow.material.opacity = 0.46 + Math.sin(t * 0.13) * 0.05;
     sunRake.intensity = 1.05 + Math.sin(t * 0.1) * 0.08;
     if (pyEye) pyEye(t);
-    if (pyTears) pyTears(t);
     raycaster.setFromCamera(mouseNDC, camera);
     var hits = mouseMoved ? raycaster.intersectObjects(clickableObjects) : [];
     var hv = hits.length ? venueData.get(hits[0].object) : null;
@@ -71964,6 +71853,7 @@ window.dssFilm = function(on) { document.documentElement.classList.toggle('dss-n
 (set: $metDavy to false)\
 (set: $completedSetlist to false)\
 (set: $hasCoin to false)\
+(set: $coinFound to false)\
 (set: $hasDrawing to false)\
 (set: $metShana to false)\
 (set: $hasTrishaMatchbook to false)(set: $matchbookFrom to &quot;&quot;)\
@@ -74213,7 +74103,7 @@ Better not tomorrow.
      and opens its north-edge door with it, so the only way out is to walk to the
      top of the map. Towards Dawn does the warning before you commit. --&gt;\
 &lt;div class=&quot;soho-hub-dock&quot; aria-hidden=&quot;true&quot; style=&quot;position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none&quot;&gt;&lt;!-- 2026-09-16, Sam: hide the dawn door until the first venue has been visited. $enteredVenue is set by the header the first time a passage tagged venue-* (or one of the three untagged interiors) renders, so approaching a door and turning back does not count; with no link and no greyed span the Centre Point tile draws shut. --&gt;&lt;!-- 2026-10-11 (Sam): after the second blackout the dawn door is open whether or not the third pillar has been crossed, as the gents line promises. --&gt;&lt;!-- 2026-10-12 (the wanderer playthrough): when &quot;Give up on the night&quot; is on offer (morale 5 or under) it has the north door; the dawn link used to take it first, so a player who couldn&#x27;t yet finish could never give up --&gt;(set: _givingUp to ($coachUrgent is false and $confidence &lt;= 5))&lt;!-- 2026-11-08 (Sam, playtest note 34: &quot;best just not to have centre point open until you have all three lines, at least&quot;): the third pillar crossed AND the three lines caught; the second blackout still opens it, as the gents line promises --&gt;(set: _threeLines to (($alba contains $alba1) and ($alba contains $alba2) and ($alba contains $alba3)))(if: $enteredVenue is true and ((($crossedThreshold is true) and _threeLines) or ($blackouts &gt;= 2 and $hutBurnt is false)) and not _givingUp)[[[Head towards dawn|Towards Dawn]]]&lt;!-- 2026-11-09 ship rebuild: the box rings once the date has turned (midnight itself is parked, so $dateTurned stands in for it) and you have met COPPER, until you answer or ignore it; walking past leaves it ringing --&gt;(if: ((($afterMidnight is true) or ($dateTurned is true)) and ($metSalvu is true) and ($shipResolved is false) and ((a: &quot;pending&quot;, &quot;offered&quot;) contains $shipCall)))[(if: $shipCall is &quot;pending&quot;)[(set: $shipCall to &quot;offered&quot;)][[The phone box|The Phone Box Rings]]](else-if: $refusedCalls &gt; 0 or ($hasCoin is false and $returns &gt;= 3))[&lt;!-- 2026-10-10 (Sam): the box stands on the map all night but only opens once a call has been refused (or the coin has been spent in it); before that it is drawn unlit and cannot be entered. 2026-10-11 structure pass 3: returns &gt;= 3, not 2: the Donkey is handed over on the second lap&#x27;s hub just below this dock, so on that one screen $hasCoin was still false and the box lit up before you had a coin, then went dark again. --&gt;[[The phone box|The Phone Box]]](if: $mantraComplete is true and $goochMet is false)[[[Sholto Gooch|Sholto Gooch]]](if: $nazcaTracing is true and $truzeMet is false)[[[Devon Truze|Devon Truze]]]&lt;!-- 2026-10-24 (Sam, Q5: &quot;stagger them&quot;): the phone box rings on the first lap back from the cellar; the Woman comes on the lap after. $cellarHubLap is the first hub after the cellar; alleys and the box do not count as laps --&gt;&lt;!-- 2026-10-25 sweep (played live, night 2): the Woman showed on the first hub after the cellar beside the phone box. An unset $cellarHubLap reads as 0 in Harlowe, which &quot;is a number&quot;, so the stamp never fired and the gate compared against 0. The lap is 0 until stamped (reset each night in StoryInit/Start) and the gate wants a stamped lap. --&gt;(unless: $cellarHubLap &gt; 0)[(if: (history:) contains &quot;Turn to Copper&quot;)[(set: $cellarHubLap to $returns)]]&lt;!-- 2026-11-09 ship rebuild: the Woman brings the ending, so she waits for the call to be done (answered or ignored), comes a lap after it ($shipCallLap), and not once the fate is known --&gt;(if: ((($afterMidnight is true) or ($dateTurned is true)) and ($lineWomanMet is false) and ($shipResolved is false) and ((a: &quot;given&quot;, &quot;kept&quot;, &quot;other-told&quot;, &quot;other-kept&quot;, &quot;warned&quot;, &quot;refused&quot;) contains $shipCall) and ($returns &gt; $shipCallLap)))[[[A Woman from the Crowd|The Woman from the Line]]](if: $easterGlyph is true and $longshanksMet is false)[[[Tom Longshanks|Tom Longshanks]]](if: $pyramidNumber is true and $songstrongMet is false)[[[Deirdre Furlong|Deirdre Furlong]]]&lt;/div&gt;\
-(if: $returns is 2 and $hasCoin is false)[(set: $hasCoin to true)&lt;div id=&quot;coin-overlay&quot;&gt;&lt;div class=&quot;coin-overlay-box&quot; role=&quot;dialog&quot; aria-modal=&quot;true&quot; aria-label=&quot;A coin on the pavement&quot;&gt;&lt;div class=&quot;coin-overlay-stage&quot;&gt;&lt;div class=&quot;coin-overlay-disc&quot; id=&quot;coin-overlay-disc&quot;&gt;&lt;div class=&quot;cp-face cp-heads&quot;&gt;&lt;/div&gt;&lt;div class=&quot;cp-face cp-tails&quot;&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;p class=&quot;coin-overlay-text&quot;&gt;You found a coin on the pavement, a rare one, called a ‘Donkey’. There’s only one. Toss it and pocket it. You’ll want it later.&lt;/p&gt;&lt;span class=&quot;inventory-note&quot;&gt;COIN ACQUIRED&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn&quot; id=&quot;coin-toss-btn&quot;&gt;Toss it&lt;/button&gt;&lt;span class=&quot;coin-overlay-result&quot; id=&quot;coin-overlay-result&quot;&gt;&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn coin-overlay-dismiss&quot; id=&quot;coin-keep-btn&quot; style=&quot;visibility:hidden&quot;&gt;Pocket it&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&lt;script&gt;(function(){var tossCount=0,maxToss=1,stage=document.querySelector(&quot;.coin-overlay-stage&quot;);var sequence=[false];var pocketed=false;function sparks(){for(var i=0;12&gt;i;i++){var s=document.createElement(&quot;div&quot;);s.className=&quot;cp-spark&quot;;var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty(&quot;--sx&quot;,(Math.cos(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.setProperty(&quot;--sy&quot;,(Math.sin(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.animationDelay=(Math.random()*0.3)+&quot;s&quot;;s.style.animationDuration=(0.5+Math.random()*0.5)+&quot;s&quot;;stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById(&quot;coin-toss-btn&quot;).addEventListener(&quot;click&quot;,function(){var d=document.getElementById(&quot;coin-overlay-disc&quot;),r=document.getElementById(&quot;coin-overlay-result&quot;),b=this,o=document.getElementById(&quot;coin-overlay&quot;);if(pocketed)return;if(d.classList.contains(&quot;cp-flipping&quot;))return;if(window.dssAudio)(window.dssAudio.coinDrop||window.dssAudio.coinFlip)();/* 2026-11-05: Sam&#x27;s coin drop recording in place of the synthesised toss */var heads=sequence[tossCount];tossCount++;var endDeg=heads?&quot;1440deg&quot;:&quot;1620deg&quot;;var restDeg=heads?&quot;0deg&quot;:&quot;180deg&quot;;d.style.setProperty(&quot;--cp-end&quot;,endDeg);d.classList.remove(&quot;cp-flipping&quot;);void d.offsetWidth;d.classList.add(&quot;cp-flipping&quot;);sparks();r.textContent=&quot;&quot;;b.classList.add(&quot;coin-btn-hidden&quot;);setTimeout(function(){if(pocketed)return;r.textContent=heads?&quot;Heads.&quot;:&quot;Tails.&quot;;d.style.transform=&quot;rotateX(&quot;+restDeg+&quot;)&quot;;d.classList.remove(&quot;cp-flipping&quot;);if(tossCount&gt;=maxToss){setTimeout(function(){if(pocketed)return;var kb=document.getElementById(&quot;coin-keep-btn&quot;),tb0=document.getElementById(&quot;coin-toss-btn&quot;);if(kb){if(tb0&amp;&amp;tb0.parentNode){tb0.parentNode.insertBefore(kb,tb0);tb0.style.display=&quot;none&quot;;}kb.style.visibility=&quot;visible&quot;;kb.classList.remove(&quot;coin-overlay-dismiss&quot;);}},1000);}},2000);});var keepBtn=document.getElementById(&quot;coin-keep-btn&quot;);if(keepBtn){keepBtn.addEventListener(&quot;click&quot;,function(){if(pocketed)return;pocketed=true;if(window.dssAudio&amp;&amp;window.dssAudio.coinPocket){try{window.dssAudio.coinPocket();}catch(e){}}var o=document.getElementById(&quot;coin-overlay&quot;);var box=o&amp;&amp;o.querySelector(&quot;.coin-overlay-box&quot;);if(!o||!box)return;var tb=document.getElementById(&quot;coin-toss-btn&quot;);if(tb){tb.classList.add(&quot;coin-btn-hidden&quot;);tb.style.pointerEvents=&quot;none&quot;;}if(window.dssSpawnMotes){window.dssSpawnMotes(box,&quot;item-mote&quot;,12,{noScroll:true});}else{for(var k=1;k&lt;=12;k++){var m=document.createElement(&quot;span&quot;);m.className=&quot;item-mote item-mote-&quot;+k;box.appendChild(m);}}/* 2026-11-08 (note 11): the coin too */this.style.display=&quot;none&quot;;setTimeout(function(){o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById(&quot;coin-overlay&quot;);if(ov){ov.addEventListener(&quot;click&quot;,function(e){if(e.target===ov&amp;&amp;tossCount&gt;0){ov.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){ov.remove();},800);}});}})();&lt;/script&gt;]\
+&lt;!-- 2026-11-22 (Sam, playtest note 5: &quot;The coin is nice joke but let&#x27;s look at it again, it feels like it&#x27;s from an older part of the game. Can you discover it later, perhaps?&quot;, then &quot;You pick a spot&quot;): the Donkey turns up on the pavement later, when it is first wanted: the first Dean Street after AOIFE&#x27;s ring has been left unanswered (the phone box takes a coin), or after the book has gone to the pile at Foyles (it buys it back), and at the latest on the fifth lap; once a night ($coinFound). Was the second lap, every night. His words on the card unchanged. --&gt;(unless: $coinFound is a boolean)[(set: $coinFound to false)](unless: $refusedCalls is a num)[(set: $refusedCalls to 0)](if: ($coinFound is false) and ($hasCoin is false) and ($returns &gt;= 2) and (($refusedCalls &gt; 0) or ($bookAt is &quot;foyles&quot;) or ($returns &gt;= 5)))[(set: $coinFound to true)(set: $hasCoin to true)&lt;div id=&quot;coin-overlay&quot;&gt;&lt;div class=&quot;coin-overlay-box&quot; role=&quot;dialog&quot; aria-modal=&quot;true&quot; aria-label=&quot;A coin on the pavement&quot;&gt;&lt;div class=&quot;coin-overlay-stage&quot;&gt;&lt;div class=&quot;coin-overlay-disc&quot; id=&quot;coin-overlay-disc&quot;&gt;&lt;div class=&quot;cp-face cp-heads&quot;&gt;&lt;/div&gt;&lt;div class=&quot;cp-face cp-tails&quot;&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;p class=&quot;coin-overlay-text&quot;&gt;You found a coin on the pavement, a rare one, called a ‘Donkey’. There’s only one. Toss it and pocket it. You’ll want it later.&lt;/p&gt;&lt;span class=&quot;inventory-note&quot;&gt;COIN ACQUIRED&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn&quot; id=&quot;coin-toss-btn&quot;&gt;Toss it&lt;/button&gt;&lt;span class=&quot;coin-overlay-result&quot; id=&quot;coin-overlay-result&quot;&gt;&lt;/span&gt;&lt;button class=&quot;coin-overlay-btn coin-overlay-dismiss&quot; id=&quot;coin-keep-btn&quot; style=&quot;visibility:hidden&quot;&gt;Pocket it&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&lt;script&gt;(function(){var tossCount=0,maxToss=1,stage=document.querySelector(&quot;.coin-overlay-stage&quot;);var sequence=[false];var pocketed=false;function sparks(){for(var i=0;12&gt;i;i++){var s=document.createElement(&quot;div&quot;);s.className=&quot;cp-spark&quot;;var a=Math.random()*360,dist=60+Math.random()*40;s.style.setProperty(&quot;--sx&quot;,(Math.cos(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.setProperty(&quot;--sy&quot;,(Math.sin(a*Math.PI/180)*dist)+&quot;px&quot;);s.style.animationDelay=(Math.random()*0.3)+&quot;s&quot;;s.style.animationDuration=(0.5+Math.random()*0.5)+&quot;s&quot;;stage.appendChild(s);setTimeout(function(el){el.remove();},(1200),s);}}document.getElementById(&quot;coin-toss-btn&quot;).addEventListener(&quot;click&quot;,function(){var d=document.getElementById(&quot;coin-overlay-disc&quot;),r=document.getElementById(&quot;coin-overlay-result&quot;),b=this,o=document.getElementById(&quot;coin-overlay&quot;);if(pocketed)return;if(d.classList.contains(&quot;cp-flipping&quot;))return;if(window.dssAudio)(window.dssAudio.coinDrop||window.dssAudio.coinFlip)();/* 2026-11-05: Sam&#x27;s coin drop recording in place of the synthesised toss */var heads=sequence[tossCount];tossCount++;var endDeg=heads?&quot;1440deg&quot;:&quot;1620deg&quot;;var restDeg=heads?&quot;0deg&quot;:&quot;180deg&quot;;d.style.setProperty(&quot;--cp-end&quot;,endDeg);d.classList.remove(&quot;cp-flipping&quot;);void d.offsetWidth;d.classList.add(&quot;cp-flipping&quot;);sparks();r.textContent=&quot;&quot;;b.classList.add(&quot;coin-btn-hidden&quot;);setTimeout(function(){if(pocketed)return;r.textContent=heads?&quot;Heads.&quot;:&quot;Tails.&quot;;d.style.transform=&quot;rotateX(&quot;+restDeg+&quot;)&quot;;d.classList.remove(&quot;cp-flipping&quot;);if(tossCount&gt;=maxToss){setTimeout(function(){if(pocketed)return;var kb=document.getElementById(&quot;coin-keep-btn&quot;),tb0=document.getElementById(&quot;coin-toss-btn&quot;);if(kb){if(tb0&amp;&amp;tb0.parentNode){tb0.parentNode.insertBefore(kb,tb0);tb0.style.display=&quot;none&quot;;}kb.style.visibility=&quot;visible&quot;;kb.classList.remove(&quot;coin-overlay-dismiss&quot;);}},1000);}},2000);});var keepBtn=document.getElementById(&quot;coin-keep-btn&quot;);if(keepBtn){keepBtn.addEventListener(&quot;click&quot;,function(){if(pocketed)return;pocketed=true;if(window.dssAudio&amp;&amp;window.dssAudio.coinPocket){try{window.dssAudio.coinPocket();}catch(e){}}var o=document.getElementById(&quot;coin-overlay&quot;);var box=o&amp;&amp;o.querySelector(&quot;.coin-overlay-box&quot;);if(!o||!box)return;var tb=document.getElementById(&quot;coin-toss-btn&quot;);if(tb){tb.classList.add(&quot;coin-btn-hidden&quot;);tb.style.pointerEvents=&quot;none&quot;;}if(window.dssSpawnMotes){window.dssSpawnMotes(box,&quot;item-mote&quot;,12,{noScroll:true});}else{for(var k=1;k&lt;=12;k++){var m=document.createElement(&quot;span&quot;);m.className=&quot;item-mote item-mote-&quot;+k;box.appendChild(m);}}/* 2026-11-08 (note 11): the coin too */this.style.display=&quot;none&quot;;setTimeout(function(){o.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){o.remove();},800);},1600);});}var ov=document.getElementById(&quot;coin-overlay&quot;);if(ov){ov.addEventListener(&quot;click&quot;,function(e){if(e.target===ov&amp;&amp;tossCount&gt;0){ov.classList.add(&quot;coin-overlay-fade&quot;);setTimeout(function(){ov.remove();},800);}});}})();&lt;/script&gt;]\
 &lt;!-- OPEN NIGHT: one explanation for fresh games and migrated saves. --&gt;\
 &lt;!-- 2026-10-13 (Sam, the slip review 4 of 14): the open-night slip cut. It said &quot;The night is yours to explore. Walking and returning to Dean Street cost nothing. Its mood changes as you discover things, but there is no deadline. Games, drinks and encounters still affect your morale and sobriety.&quot; $shownOpenNightTip is still set, for anything that reads it. --&gt;(if: $returns &gt;= 2 and $shownOpenNightTip is not true)[(set: $shownOpenNightTip to true)]\
 &lt;!-- LEDGER teaching — the filled/hollow rule behind every glyph family on
@@ -77904,6 +77794,7 @@ For a moment you think he might let you off. Then his eyes melt again in his rag
 (set: $notebook to &quot;held&quot;)\
 (set: $worldsVisited to (a:))\
 (set: $hasCoin to false)\
+(set: $coinFound to false)\
 (set: $hasDrawing to false)\
 (set: $metShana to false)\
 (set: $hasTrishaMatchbook to false)(set: $matchbookFrom to &quot;&quot;)\
@@ -87410,6 +87301,8 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
 
 
 

@@ -3547,7 +3547,7 @@ def typing_quicker(r):
     r.info = "verse pace %s; INIS's paragraph rates %s" % (pace, rates)
 
 
-@check("compass-slip", "2026-11-20 playtest note 11 (Sam: \"When the compass appears (as now) in the top right there should be a slip that explains what it is and that you should follow it\"): the first time the compass is put up, a slip says what it is")
+@check("compass-slip", "2026-11-20 playtest note 11 (Sam: \"When the compass appears (as now) in the top right there should be a slip that explains what it is and that you should follow it\"): the first time the compass is put up, a slip says what it is; since 22 Nov (note 13) it sits just under the compass and stays through a change of page until it is clicked")
 def compass_slip(r):
     scratch_passage(r, "T-comp", '(set: $returns to 1)(set: $metRed to true)(set: $knowsAboutPage to true)(set: $hasMissingPage to false)(set: $returnedPage to false)[[Walk on|Dean Street]]')   # the page 93 errand taken on: the compass points to the Pillars
     r.go("T-comp", wait=4000)
@@ -3559,9 +3559,21 @@ def compass_slip(r):
     seen = False
     for _ in range(60):
         if r.js("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /compass/i.test(e.textContent); })"): seen = True; break
-        r.js("() => { [].forEach.call(document.querySelectorAll('.dss-hint-slip:not(.out)'), function (e) { if (!/compass/i.test(e.textContent)) e.click(); }); }")
+        r.js("() => { [].forEach.call(document.querySelectorAll('.dss-hint-slip:not(.out)'), function (e) { if (!/compass/i.test(e.textContent) && Date.now() - (e.__dssBorn || 0) > 1500) e.click(); }); }")   # a slip still typing its first words is left alone
         r.page.wait_for_timeout(500)
     r.expect(seen, "no slip explained the compass when it first appeared (raised %s; slips: %s)" % (r.js("() => window.__dssCompassSlip || 0"), r.js("() => [].map.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.slice(0, 50); })")))
+    # 2026-11-22 playtest note 13 (Sam, Night Ahead Part Two: "The indicator about the compass needs to stay longer and be near the compass")
+    if seen:
+        GEO = "() => { var s = [].filter.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /compass/i.test(e.textContent) && !e.__dssGoing; })[0], b = document.querySelector('.dss-trail-badge'); if (!s) return null; var a = s.getBoundingClientRect(), c = b ? b.getBoundingClientRect() : null; return { top: a.top, right: a.right, bt: c && c.bottom, br: c && c.right, vis: getComputedStyle(s).visibility }; }"
+        g = r.js(GEO)
+        r.expect(g and g["bt"] is not None and 0 <= g["top"] - g["bt"] <= 40 and abs(g["right"] - g["br"]) <= 24, "the compass slip is not just under the compass (%r)" % g)
+        r.page.wait_for_timeout(6000)
+        r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-passage:not(.dss-ghost) tw-link'), function (e) { return !e.closest('.book-pitch') && /Ronnie|French|Colony|Pillars|Approach/i.test(e.textContent); })[0] || [].filter.call(document.querySelectorAll('tw-passage:not(.dss-ghost) tw-link'), function (e) { return e.getClientRects().length; })[0]; window.__compassLeft = l ? l.textContent : ''; if (l) l.click(); }")
+        r.page.wait_for_timeout(13000)
+        g2 = r.js(GEO); pn = r.js("() => (document.getElementById('dss-pn') || {}).textContent")
+        r.info = "under the compass at %r; after %r, on %r: %r" % (g, r.js("() => window.__compassLeft"), pn, g2)
+        r.expect(pn and pn != "Dean Street", "the check never left Dean Street, so the page change is untested (%r)" % pn)
+        r.expect(g2 is not None, "the compass slip went when the page changed (now on %r), before it was clicked" % pn)
 
 
 @check("barber-comic-panel", "2026-11-20 playtest note 21 (Sam: \"This should have some sort of comic book popup saying the 'Sharp' lines ... remove them from there and put them in a lichenstein popup\"): a haircut's line opens in a comic panel, is not set in the page's text, and the panel can be put away; the shave's does the same")

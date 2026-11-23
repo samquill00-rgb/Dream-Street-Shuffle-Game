@@ -377,8 +377,13 @@ def _(r):
 def _(r):
     r.go("Dean Street", wait=5000)
     r.expect(not r.js("() => !!document.querySelector('.dss-trail-badge')"), "a trail badge shows before any trail is begun")
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
-    r.page.wait_for_timeout(1500)
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
+    # 2026-11-23 playtest note 20 (Sam: a trail "should only show in the corner AFTER you have done the first errand (page 93)")
+    r.js("() => { window.__p93 = 'false'; }")
+    r.page.wait_for_timeout(1800)
+    r.expect(not r.js("() => !!document.querySelector('.dss-trail-badge')"), "a trail takes the corner before page 93 is back with INIS")
+    r.js("() => { window.__p93 = 'true'; }")
+    r.page.wait_for_timeout(1800)
     t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); if (!t) return ''; var b = t.getBoundingClientRect(); return (b.right <= innerWidth && b.right > innerWidth - 420 && b.top > 60 && b.top < 320 ? 'in ' : 'out ') + t.textContent; }")
     r.expect(t.startswith("in ") and "THE HIMALAYAS TRAIL" in t and "Pillars of Hercules" in t, "the trail badge is missing, wrong or off its corner (%r)" % t)
 
@@ -386,7 +391,7 @@ def _(r):
 @check("trail-compass", "2026-11-11 note 9: the trail badge is a compass whose hand points across the Soho map to the next step's door")
 def _(r):
     r.go("Dean Street", wait=5000)
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
     r.page.wait_for_timeout(1500)
     r.expect(r.js("() => !!document.querySelector('.dss-trail-badge .dss-compass-hand')"), "the trail badge has no compass")
     door = r.js("() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'pillars'; })[0]; return [d.fc, d.fr]; }")
@@ -408,7 +413,7 @@ def _(r):
 @check("trail-picks-up-part-way", "2026-11-09 Sam: a trail can be picked up at any step (the cellar starts two of them)")
 def _(r):
     r.go("Dean Street", wait=5000)
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['pi/A lattice window'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'pi/A lattice window': true} })); }")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['pi/A lattice window'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'pi/A lattice window': true} })); }")
     r.page.wait_for_timeout(1500)
     t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); return t ? t.textContent : ''; }")
     r.expect("THE HIMALAYAS TRAIL" in t and "French" in t, "seeing only the trail's middle step lit no badge for its last (%r)" % t)
@@ -416,7 +421,7 @@ def _(r):
 
 @check("trishas-trail-door", "2026-11-09 Sam: the Nazca trail needs a way past Trisha's bouncers without the matchbook")
 def _(r):
-    r.page.add_init_script("(function () { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { if (x.getAttribute('data-trails') !== 'true') x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-lying') !== 'lighter cocaine ticket slip eye') x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; new MutationObserver(f).observe(document, { subtree: true, childList: true, attributes: true }); })();")
+    r.page.add_init_script("(function () { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { if (x.getAttribute('data-trails') !== 'true') x.setAttribute('data-trails', 'true'); x.setAttribute('data-p93', window.__p93 || 'true'); if (x.getAttribute('data-lying') !== 'lighter cocaine ticket slip eye') x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; new MutationObserver(f).observe(document, { subtree: true, childList: true, attributes: true }); })();")
     r.go("Dean Street", wait=3000)
     r.js("() => { localStorage.setItem('dssVoicesSeen', JSON.stringify([])); localStorage.removeItem('dssTrailTonight'); }")
     r.go("Failure: Trisha's", wait=4000)
@@ -659,7 +664,6 @@ def _(r):
             body = '(set: $shipCall to "%s")(set: $shipFate to "%s")(set: $shipCallDrunk to %s)(set: $shipSetup to %s)(set: $shipResolved to %s)(set: $metSalvu to true)(set: $harpMet to true)(set: $holdsAshtonName to true)(go-to: "%s")' % (call, fate, drunk, setup, resolved, page)
             r.page.unroute("**/*")
             scratch_passage(r, "T-ship", body)
-            print("  ship", call, fate, drunk, resolved, page, round(time.time()), flush=True)
             r.go("T-ship", wait=2200)
             e = r.js("() => [].map.call(document.querySelectorAll('tw-error, tw-story tw-expression[type=error]'), function (x) { return x.textContent.slice(0, 120); }).join(' | ')")
             if e: bad.append("%s/%s/%s/%s %s: %s" % (call, fate, drunk, resolved, page, e))

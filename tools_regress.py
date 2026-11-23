@@ -3275,6 +3275,33 @@ def harp_alley_theme(r):
     r.info = "page turns: " + ", ".join(waits)
 
 
+@check("name-book-no-bar", "2026-11-23 (Sam, playtest: \"In the name your book screen it said 'open of the bar' there is no bar, cut that\"): the lead line reads \"Your manuscript is open at its blank title page.\"")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Name Your Book", wait=4000)
+    lead = r.js("() => { var e = document.querySelector('.nb-lead'); return e ? e.textContent.trim() : null; }")
+    r.expect(lead is not None, "no lead line on Name Your Book")
+    r.expect("bar" not in (lead or ""), "Name Your Book's lead still mentions a bar: %r" % lead)
+    r.expect("Your manuscript is open at its blank title page." in (lead or ""), "the lead line reads %r" % lead)
+    r.info = lead
+
+
+@check("french-fairy-in-view", "2026-11-23 (Sam, playtest at Approach The French: \"The green fairy and the lamp have disappeared. Get them back\"): a reframing put the camera inside the centre lamp with the fairy above it")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Approach The French", wait=1500)
+    r.wait_for("() => !!((window._dssThreeRegistry || {})['fh-wrap'])", 15000, "the French approach scene")
+    r.page.wait_for_timeout(4000)
+    for _i in range(4):
+        p = r.js("""() => { var r = window._dssThreeRegistry['fh-wrap'], f = null; r.scene.traverse(function (o) { if (o.isSprite && o.scale.x < 0.25) f = o; });
+          if (!f) return null; var v = f.position.clone().project(r.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight, front: v.z < 1, d: f.position.distanceTo(r.camera.position), w: innerWidth, h: innerHeight }; }""")
+        r.expect(p is not None, "no green fairy in the French approach")
+        r.expect(p["front"] and 0.1 * p["w"] < p["x"] < 0.9 * p["w"] and 0.1 * p["h"] < p["y"] < 0.75 * p["h"], "the green fairy is out of the view (at %d,%d)" % (p["x"], p["y"]))
+        r.expect(p["d"] > 2.5, "the camera stands %.1f m from the fairy and its lamp" % p["d"])
+        r.page.wait_for_timeout(1500)
+    r.info = "fairy at %d,%d, %.1f m from the camera" % (p["x"], p["y"], p["d"])
+
+
 @check("french-whole-tone", "2026-11-22 (Sam, playtest note 2 of 20 Nov: \"The whole tone scale music here needs work (remind me to write it myself)\", then \"It's in claude work as 'whole tone'\", \"loop it\"): his own whole-tone piece is the French approach's bed, looping without a gap, in place of the plucked fairy figure, and it stops on Dean Street")
 def french_whole_tone(r):
     import html as _h
@@ -3298,6 +3325,7 @@ def french_whole_tone(r):
     r.expect(r.pn() == "Approach The French", "the walk led to %r" % r.pn())
     r.wait_for(PLAYING, 8000, "the whole-tone piece to start on the French approach")
     r.page.wait_for_timeout(2500)
+    r.expect(not r.js("() => window.dssAudio.bedPlaying('pub-french')"), "the French's pub recording plays under the whole-tone piece on the approach (2026-11-23, Sam: \"just have the whole tone music here, not the other music under it\")")
     lvl = r.js("() => window.dssAudio.bedLevel('french-approach-music')")
     fairy = r.js("() => window.__fairy || 0")
     dec = r.js("async () => { var b = await (await fetch('whole-tone-french.m4a')).arrayBuffer(); var c = new OfflineAudioContext(2, 48000, 48000); var d = await c.decodeAudioData(b); return [d.length, d.sampleRate]; }")

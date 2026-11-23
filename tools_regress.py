@@ -3275,9 +3275,9 @@ def harp_alley_theme(r):
     r.info = "page turns: " + ", ".join(waits)
 
 
-@check("late-interludes", "2026-11-23 (Sam, playtest note 11: \"more literary interludes later in the game, throughout (they are all used early)\", then \"Do laps 10 and 13 plus Towards Dawn\"): a typewriter page on the street at lap 10 and at lap 13, and one between Towards Dawn and the Fetch once the night has reached the dawn; their placeholders stay pink")
+@check("late-interludes", "2026-11-23 (Sam, playtest note 11: \"more literary interludes later in the game, throughout (they are all used early)\", then \"Do laps 10 and 13 plus Towards Dawn\"): a typewriter page on the street at lap 10 and at lap 13, each in Sam's own words; and, Sam on the dawn page: \"Nothing here needed\", Go towards dawn goes straight to the Fetch")
 def _(r):
-    PINK = "() => { var e = document.querySelector('.typewriter-page .claude-draft'); return e ? getComputedStyle(e).color : null; }"
+    WORDS = "() => { var e = document.querySelector('.typewriter-page'); return e ? e.textContent.replace(/\\s+/g, ' ') : ''; }"
     def walk(name, body, link):
         scratch_passage(r, name, body)
         r.go(name, wait=2500)
@@ -3290,18 +3290,19 @@ def _(r):
     r.expect(pn == "Dean Street", "lap 8 went to %r, before the late interludes are due" % pn)
     pn = walk("T-li10", BASE + '(set: $returns to 10)[[go up the street|Dean Street]]', "go up the street")
     r.expect(pn == "Late interlude 1", "lap 10 went to %r, not the first late interlude" % pn)
-    r.expect(r.js(PINK) == "rgb(255, 58, 168)", "the lap 10 placeholder is not pink (%s)" % r.js(PINK))
+    r.wait_for("() => /what life was, entire\\./.test(document.querySelector('.typewriter-page').textContent)", 60000, "the lap 10 page to finish typing")
+    r.expect("Martyr's Memorial" in r.js(WORDS) and "what life was, entire." in r.js(WORDS), "the lap 10 page is not Sam's words: %r" % r.js(WORDS)[:120])
     pn = walk("T-li13", BASE + '(set: $returns to 13)(set: $sawLateInterlude1 to true)[[go up the street|Dean Street]]', "go up the street")
     r.expect(pn == "Late interlude 2", "lap 13 went to %r, not the second late interlude" % pn)
+    r.wait_for("() => /her mother/.test(document.querySelector('.typewriter-page').textContent)", 60000, "the lap 13 page to finish typing")
+    r.expect("you kiss her forehead and her mother's." in r.js(WORDS), "the lap 13 page is not Sam's words: %r" % r.js(WORDS)[:120])
     pn = walk("T-dawn-early", BASE + '[[walk north|Towards Dawn]]', "walk north")
     r.clear_slips(); r.page.locator("tw-link:has-text('Go towards dawn'):visible").first.click(); r.page.wait_for_timeout(3000)
     r.expect(r.pn() == "The Fetch", "before the dawn, Go towards dawn went to %r" % r.pn())
     pn = walk("T-dawn", BASE + '(set: $alba to (a: $alba1, $alba2, $alba3))(set: $albaWholeSlipShown to true)[[walk north|Towards Dawn]]', "walk north")
     r.clear_slips(); r.page.locator("tw-link:has-text('Go towards dawn'):visible").first.click(); r.page.wait_for_timeout(3000)
-    r.expect(r.pn() == "Dawn interlude", "at the dawn, Go towards dawn went to %r, not the dawn interlude" % r.pn())
-    r.clear_slips(); r.page.locator("tw-link:has-text('Towards dawn.'):visible").first.click(); r.page.wait_for_timeout(3000)
-    r.expect(r.pn() == "The Fetch", "the dawn interlude led to %r" % r.pn())
-    r.info = "lap 8 street, lap 10 and 13 interludes, the dawn interlude before the Fetch"
+    r.expect(r.pn() == "The Fetch", "at the dawn, Go towards dawn went to %r, not straight to the Fetch" % r.pn())
+    r.info = "lap 8 street, lap 10 and 13 interludes in Sam's words, Go towards dawn straight to the Fetch"
 
 
 @check("name-book-no-bar", "2026-11-23 (Sam, playtest: \"In the name your book screen it said 'open of the bar' there is no bar, cut that\"): the lead line reads \"Your manuscript is open at its blank title page.\"")
@@ -4962,15 +4963,13 @@ def rooms_start_at_the_header(r):
 def white_ending_by_play(r):
     scratch_passage(r, "T-white", '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")(set: $crossedThreshold to true)(set: $sawThirdPillar to true)(set: $keyLighter to "spent")(set: $dreamKey to "")(set: $worldsVisited to (a: "himalayas"))(set: $mantraComplete to true)(set: $alba to $alba + (a: $alba2, $alba3))(set: $sawJeffrey to true)(set: $lacklandRead to true)(set: $hasTrishaMatchbook to true)(set: $hasMatches to true)(set: $metShana to true)(set: $hadChippy to true)(set: $tookLily1 to true)(set: $lilyCount to 5)(set: $drinksTonight to 10)(set: $confidence to 48)(set: $sobriety to 40)(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)(set: $returns to 17)(go-to: "Alba Complete")')
     r.go("T-white", wait=9000)
+    # every page the walk passes, logged by the page itself: Dawn Approach White moves on by its own 16 s timer while the Oxford Street view is built, so a look between presses can miss it
+    r.js("() => { window.__dssWalked = []; var log = function () { var n = ((document.getElementById('dss-pn') || {}).textContent || '').trim(); if (n && window.__dssWalked[window.__dssWalked.length - 1] !== n) window.__dssWalked.push(n); }; log(); new MutationObserver(log).observe(document.body, {subtree: true, childList: true, characterData: true}); }")
     PHOTO = "() => { var p = document.getElementById('dss-photo-pop'); if (!p || !p.getClientRects().length || getComputedStyle(p).visibility === 'hidden' || +getComputedStyle(p).opacity < 0.05) return null; var h = p.querySelector('.dss-photo-pop-hint'); if (!h) return null; var b = h.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }"
-    seen, bad, taken = [], [], set(); TRACE = []
+    seen, bad, taken = [], [], set()
     for step in range(12):
-        _pp = []
-        for _i in range(6):
-            _q = time.time(); _pn = r.js("() => 1") and r.pn(); _pp.append("%.1f:%s" % (time.time() - _q, _pn[:6]))
-        TRACE.append("ping " + ",".join(_pp))
-        _t0 = time.time(); _p0 = r.pn(); TRACE.append("seen-on %s: lore=%s slips=%s" % (_p0, r.js("() => { var o = document.querySelector('#dss-lore-overlay'); return o ? o.innerText.slice(0, 120) : ''; }"), r.js("() => [].map.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (c) { return c.innerText.slice(0, 80); }).join(' / ')"))); r.clear_lore(); _t1 = time.time(); r.clear_slips(); _t2 = time.time()
-        pn = r.pn(); TRACE.append("top %s: lore %.1fs slips %.1fs -> %s" % (_p0, _t1 - _t0, _t2 - _t1, pn))
+        r.clear_lore(); r.clear_slips()
+        pn = r.pn()
         if pn not in seen:
             seen.append(pn)
             for b in blank_canvases(r): bad.append("%s: %s" % (pn, b))
@@ -4986,10 +4985,11 @@ def white_ending_by_play(r):
             r.page.wait_for_timeout(2000); waited += 1
         if r.pn() != pn: continue
         if not fresh: bad.append("%s: no way on in %d s" % (pn, waited * 2)); break
-        taken.add((pn, fresh[0]["t"])); r.js("() => { window.__pl = []; var t0 = Date.now(); (function tick() { window.__pl.push(((document.getElementById('dss-pn')||{}).textContent||'').trim() + '@' + (Date.now()-t0)); if (Date.now() - t0 < 4000) setTimeout(tick, 300); })(); }"); r.page.mouse.click(fresh[0]["x"], fresh[0]["y"]); r.page.wait_for_timeout(4000)
-        TRACE.append("%s [%s] -> %s" % (pn, fresh[0]["t"], sorted(set(x.split('@')[0] for x in r.js("() => window.__pl")))))
-    r.info = "walked: " + " > ".join(seen) + " TRACE " + " || ".join(TRACE)
+        taken.add((pn, fresh[0]["t"])); r.page.mouse.click(fresh[0]["x"], fresh[0]["y"]); r.page.wait_for_timeout(4000)
+    walked = list(dict.fromkeys(r.js("() => window.__dssWalked") or []))
+    r.info = "walked: " + " > ".join(walked) + " (looked at: " + " > ".join(seen) + ")"
     r.expect(not bad, "; ".join(dict.fromkeys(bad)))
+    seen = walked
     r.expect(seen == ["Alba Complete", "Dawn Approach White", "White page", "Dawn"], "the White ending went %s" % " > ".join(seen))
 
 

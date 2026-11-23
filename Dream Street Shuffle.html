@@ -42055,6 +42055,256 @@ var spoutPath=new THREE.CatmullRomCurve3([new THREE.Vector3(-0.12,1.3,z0),new TH
 mesh(new THREE.TubeGeometry(spoutPath,12,0.008,8,false),brass,0,0,0,barG);
 mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.08, 6), brass, -0.12, 1.32, z0, barG);
 }
+// Manet's barmaid. All dimensions are metres; the figure faces local +Z.
+function makeFrenchBarmaid(T) {
+  const root = new T.Group(), surfaces = new Map();
+  const p = (x,y,z) => new T.Vector3(x,y,z);
+  const tau = 2*Math.PI;
+  const cloth = 0x192330, lace = 0xd4c6aa, laceShadow = 0x8e9391;
+  const skin = 0xf3ded6, hair = 0x89816a, gold = 0xc59a4d;
+  function part(geo, colour, pos, scale, rotation) {
+    let entry = surfaces.get(colour);
+    if (!entry) { entry = {pos:[],normal:[],index:[]}; surfaces.set(colour,entry); }
+    const obj = new T.Object3D();
+    if(pos) obj.position.copy(pos);
+    if(scale) obj.scale.copy(scale);
+    if(rotation) obj.rotation.set(...rotation);
+    obj.updateMatrix(); geo.applyMatrix4(obj.matrix);
+    const start = entry.pos.length/3;
+    entry.pos.push(...geo.attributes.position.array);
+    entry.normal.push(...geo.attributes.normal.array);
+    for(let i=0;i<(geo.index ? geo.index.count : geo.attributes.position.count);i++) entry.index.push(start+(geo.index?geo.index.getX(i):i));
+    geo.dispose();
+  }
+  function oval(c,x,y,z,w,h,d,tilt=0) {
+    part(new T.SphereGeometry(1,18,12),c,p(x,y,z),p(w,h,d),[0,0,tilt]);
+  }
+  function wire(c,pts,r){
+    part(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(v=>p(...v))),Math.max(6,pts.length*2),r,5,false),c);
+  }
+  function patch(c,nu,nv,fn) {
+    const a=[],idx=[];
+    for(let j=0;j<=nv;j++) for(let i=0;i<=nu;i++){let pt=fn(i/nu,j/nv);a.push(...pt);}
+    for(let j=0;j<nv;j++)for(let i=0;i<nu;i++){let n=i+j*(nu+1);idx.push(n,n+1,n+nu+1,n+1,n+nu+2,n+nu+1);}
+    const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(a,3));g.setIndex(idx);g.computeVertexNormals();part(g,c);
+  }
+  // Horizontal sections run from hem to crown, front at angle zero.
+  function section(rows,v){
+    let f=v*(rows.length-1),i=Math.min(rows.length-2,Math.floor(f)),t=f-i;
+    const a=rows[i],b=rows[i+1],prev=rows[Math.max(0,i-1)],next=rows[Math.min(rows.length-1,i+2)];
+    // Shape-preserving cubic interpolation keeps cloth and limbs rounded between sections.
+    return a.map((n,k)=>{
+      const d=b[k]-n,left=i?n-prev[k]:d,right=i+2<rows.length?next[k]-b[k]:d;
+      const m0=left*d>0?2*left*d/(left+d):0,m1=right*d>0?2*right*d/(right+d):0;
+      return n+(3*t*t-2*t*t*t)*d+t*(1-t)*((1-t)*m0-t*m1);
+    });
+  }
+  function dress(c,rows,pleats=0){
+    patch(c,72,(rows.length-1)*4,(u,v)=>{
+      let a=tau*u,[y,w,d,z]=section(rows,v),q=1+pleats*Math.cos(14*a+.8*v);
+      return [w*Math.sin(a)*q,y,z+d*Math.cos(a)*q];
+    });
+  }
+  dress(0x535664,[[.03,.31,.22,-.04],[.25,.30,.21,-.04],[.60,.245,.18,-.025],[.93,.16,.12,0]],.055);
+  const jacket=[[.69,.222,.148,-.02],[.78,.229,.153,-.018],[.92,.173,.126,-.01],[1.06,.131,.104,0],[1.18,.143,.112,.01],[1.30,.190,.143,.024],[1.38,.192,.129,.026],[1.452,.188,.100,.022],[1.486,.153,.074,.022],[1.518,.060,.053,.025]];
+  dress(cloth,jacket,.014);
+  // A plastron follows the bodice, framed by scalloped lace revers.
+  function bib(u,v){
+    const side=2*u-1;
+    const level=4.75+v*4.25+.47*(1-v)*side*side;
+    const [y,w,d,z]=section(jacket,level/9);
+    const a=side*(.94-.32*v),gather=.0016*Math.cos(13*a+1.3*v)*(1-v);
+    const radius=1+.014*Math.cos(14*a+.8*level/9);
+    return [(w*radius+.0025)*Math.sin(a),y,z+(d*radius+.0038+gather)*Math.cos(a)];
+  }
+  patch(0xe0d2ba,30,28,(u,v)=>bib(.20+.60*u,v));
+  for(const s of [-1,1]){
+    // A scalloped lace edge stands clear of the velvet, leaving daylight between threads.
+    function lacePoint(width,v){
+      const ripple=.5+.5*Math.cos(tau*13*v);
+      const spread=.225+.025*ripple;
+      const u=s<0?.21-width*spread:.79+width*spread;
+      const pt=bib(u,v);
+      pt[0]+=s*.007*width*ripple;pt[2]+=.003+.006*width*ripple;
+      return pt;
+    }
+    for(const edge of [0,1]) wire(lace,Array.from({length:79},(_,i)=>lacePoint(edge,i/78)),.00105);
+    for(let j=0;j<13;j++){
+      for(const direction of [-1,1]){
+        const vine=Array.from({length:11},(_,k)=>lacePoint(.5+direction*.45*Math.cos(Math.PI*k/10),(j+k/10)/13));
+        wire(lace,vine,.00078);
+      }
+      const petal=Array.from({length:15},(_,k)=>lacePoint(.52+.22*Math.sin(tau*k/14), (j+.50+.25*Math.cos(tau*k/14))/13));
+      wire(0xf0e8d7,petal,.00078);
+    }
+  }
+  for(let i=0;i<6;i++){let v=(2.0+.52*i)/9;let [y,w,d,z]=section(jacket,v);oval(0x59606a,0,y,z+d+.002,.0048,.005,.003);}
+  // Sleeves, exposed forearms and hands resting parallel to the counter.
+  function limb(c,rows,s){
+    patch(c,40,(rows.length-1)*5,(u,v)=>{let [y,x,z,w,d]=section(rows,v),a=tau*u;let fold=c===cloth?1+.046*Math.sin(6*a+2*v)*Math.sin(Math.PI*v)+.038*Math.sin(30*v+3*a)*Math.exp(-((v-.33)**2)/.035):1;return [s*x+w*fold*Math.sin(a),y,z+d*fold*Math.cos(a)];});
+  }
+  for(const s of [-1,1]){
+    limb(cloth,[[1.226,.275,.157,.043,.047],[1.245,.272,.144,.050,.054],[1.305,.253,.091,.048,.056],[1.38,.221,.055,.048,.055],[1.436,.207,.042,.052,.060],[1.463,.192,.037,.053,.055],[1.478,.177,.031,.048,.049],[1.486,.157,.027,.038,.041],[1.489,.145,.025,.014,.021]],s);
+    const cuff=[[1.211,.280,.177,.047,.048],[1.233,.275,.154,.052,.054],[1.260,.268,.137,.053,.057]];
+    function cuffPoint(angle,v){
+      const [y,x,z,w,d]=section(cuff,v),wave=.5+.5*Math.cos(14*angle);
+      return [s*x+(w+.002*wave)*Math.sin(angle),y-.005*(1-v)*wave,z+(d+.002*wave)*Math.cos(angle)];
+    }
+    for(const v of [0,.93,1]) wire(lace,Array.from({length:85},(_,i)=>cuffPoint(tau*i/84,v)),.00115);
+    for(let n=0;n<14;n++){
+      for(const sign of [-1,1]){
+        const thread=Array.from({length:13},(_,k)=>cuffPoint(tau*(n+.5+sign*.47*Math.cos(Math.PI*k/12))/14,k/12));
+        wire(lace,thread,.00095);
+      }
+    }
+    limb(skin,[[1.15,.31,.26,.027,.032],[1.174,.307,.238,.032,.037],[1.20,.295,.201,.041,.042],[1.233,.277,.159,.044,.046]],s);
+    // Loft the palm along the counter into a row of tapered, relaxed fingers.
+    const palm=[[.236,.308,1.167,.022,.017],[.254,.311,1.164,.023,.016],[.278,.315,1.160,.028,.014],[.297,.318,1.157,.031,.012],[.310,.319,1.154,.027,.009]];
+    function hand(rows){
+      patch(skin,28,(rows.length-1)*5,(u,v)=>{
+        const [z,x,y,w,h]=section(rows,v),a=tau*u;
+        return [s*x+w*Math.cos(a),y+h*Math.sin(a),z];
+      });
+    }
+    hand(palm);
+    for(let k=0;k<4;k++){
+      const base=.298+.0138*k,spread=[-.006,-.001,.003,.007][k],tip=base+spread;
+      const length=[.050,.055,.051,.040][k],end=.304+length;
+      const width=[.0072,.0075,.0069,.0058][k],lift=[.001,.002,.0005,.0025][k];
+      hand([[.296,base,1.156,width*1.15,.0080],[.309,base,1.154,width,.0072],
+        [.321,base+spread*.28,1.152+lift,width*.95,.0068],[end-.014,tip,1.148+lift,width*.80,.0054],
+        [end-.006,tip,1.1458,width*.70,.0054],[end-.002,tip,1.1454,width*.49,.0041],[end,tip,1.1454,.001,.001]]);
+      oval(0xe9ccd0,s*tip,1.1505,end-.007,width*.57,.00095,.0048);
+    }
+    hand([[.255,.295,1.163,.0105,.010],[.270,.285,1.158,.0095,.0087],
+      [.285,.277,1.152,.0084,.0070],[.303,.272,1.1468,.0064,.0058],[.311,.271,1.1458,.0016,.0023]]);
+    if(s<0)limb(gold,[[1.179,.305,.232,.034,.038],[1.189,.300,.221,.038,.041]],s);
+  }
+  dress(skin,[[1.47,.084,.060,.017],[1.508,.061,.049,.023],[1.55,.046,.044,.032],[1.578,.045,.044,.036],[1.61,.050,.050,.037],[1.63,.060,.056,.042]]);
+  dress(0x201b1c,[[1.522,.056,.054,.032],[1.536,.054,.054,.032]]);
+  oval(gold,0,1.493,.111,.014,.019,.005);
+  oval(0xa5aea1,0,1.493,.116,.008,.012,.003);
+  const face=[[1.581,.018,.036,.056],[1.587,.032,.046,.052],[1.598,.046,.055,.049],[1.614,.061,.065,.046],[1.641,.077,.076,.043],[1.674,.088,.082,.041],[1.70,.092,.084,.039],[1.737,.089,.080,.036],[1.764,.074,.070,.034],[1.786,.042,.047,.029],[1.794,.002,.005,.029]];
+  function dims(y){
+    let i=0;while(i<face.length-2&&face[i+1][0]<y)i++;
+    const a=face[i],b=face[i+1],before=face[Math.max(0,i-1)],after=face[Math.min(face.length-1,i+2)];
+    const span=b[0]-a[0],t=(y-a[0])/span;
+    return a.map((value,k)=>{
+      const m0=span*(b[k]-before[k])/(b[0]-before[0]),m1=span*(after[k]-a[k])/(after[0]-a[0]);
+      return (1-t)*(1-t)*((1+2*t)*value+t*m0)+t*t*((3-2*t)*b[k]+(t-1)*m1);
+    });
+  }
+  const gauss=(x,y,cx,cy,w,h)=>Math.exp(-(((x-cx)/w)**2)-((y-cy)/h)**2);
+  function relief(x,y){
+    return .0035*gauss(x,y,0,1.607,.033,.015)-.0015*gauss(x,y,0,1.621,.026,.008)+.006*gauss(Math.abs(x),y,.010,1.654,.006,.006)+.004*gauss(Math.abs(x),y,.031,1.700,.024,.008)+.024*gauss(x,y,0,1.658,.014,.015)+.016*gauss(x,y,0,1.678,.012,.033)+.008*gauss(Math.abs(x),y,.042,1.658,.026,.017)-.007*gauss(Math.abs(x),y,.036,1.69,.023,.010)+.004*gauss(x,y,0,1.633,.03,.016);
+  }
+  function front(x,y){let [,w,d,z]=dims(y);return z+d*Math.sqrt(Math.max(0,1-(x/w)**2))+Math.sqrt(Math.max(0,1-(x/w)**2))*relief(x,y);}
+  patch(skin,96,68,(u,v)=>{let y=1.581+.213*v,[,w,d,z]=dims(y),a=tau*u,x=w*Math.sin(a);return [x,y+.012*(1-Math.max(0,Math.cos(a))**2)*Math.exp(-((y-1.591)**2)/.00075),z+d*Math.cos(a)+Math.max(0,Math.cos(a))*relief(x,y)];});
+  // Almond-shaped eyes and lids are laid onto the cheek and brow planes.
+  for(let s of [-1,1]){
+    function eye(u,top){
+      const x=s*(.014+.041*u), arch=Math.sin(Math.PI*u);
+      return [x,1.6825+.0012*u+(top?.0054:-.0045)*arch];
+    }
+    function eyePoint(u,v,offset=0){
+      const [x,low]=eye(u,false), high=eye(u,true)[1], y=low+(high-low)*v;
+      return [x,y,front(x,y)+.0015+.0012*Math.sin(Math.PI*u)*Math.sin(Math.PI*v)+offset];
+    }
+    patch(0xcfc0b2,28,8,eyePoint);
+    // Both irises share a downward, viewer-left offset. Clip their discs to the lids.
+    const irisX=s*.0345-.005,irisY=1.6817;
+    function iris(radius,colour,offset){
+      patch(colour,28,7,(u,v)=>{
+        const x=irisX+(u*2-1)*radius,at=(s*x-.014)/.041;
+        const low=eye(at,false)[1],high=eye(at,true)[1];
+        const h=radius*Math.sqrt(Math.max(0,1-(u*2-1)**2));
+        const bottom=Math.max(low,irisY-h),top=Math.min(high,irisY+h);
+        return eyePoint(at,(bottom+(top-bottom)*v-low)/(high-low),offset);
+      });
+    }
+    iris(.0059,0x614f3d,.0005);iris(.0028,0x332b29,.0009);
+    for(const upper of [true,false]){
+      patch(upper?0xd8b8b2:0xe6cbc4,28,6,(u,v)=>{
+        let [x,y]=eye(u,upper);y+=(upper?.006:-.0036)*Math.sin(Math.PI*u)*v;
+        return [x,y,front(x,y)+.0013+.0021*Math.sin(Math.PI*u)*Math.sin(Math.PI*v)];
+      });
+    }
+    wire(0x77574a,Array.from({length:13},(_,i)=>eyePoint(i/12,1,.0006)),.00085);
+    patch(0x795a46,28,4,(u,v)=>{
+      let x=s*(.014+.045*u),y=1.698+.0055*(1-u)**2+.0025*Math.sin(Math.PI*u)-.002*u;
+      y+=.0038*(1-.8*u)*Math.sin(Math.PI*(.08+.88*u))*v;return [x,y,front(x,y)+.0012];
+    });
+    oval(skin,s*.086,1.666,.035,.011,.020,.012);
+    oval(0xccaaa2,s*.096,1.668,.035,.0018,.009,.006);
+    let helix=[];for(let k=0;k<=16;k++){let a=Math.PI*1.75*k/16-.6;helix.push([s*.096,1.668+.014*Math.cos(a),.035+.008*Math.sin(a)]);}
+    wire(skin,helix,.0018);oval(gold,s*.091,1.648,.041,.0034,.0045,.003);
+    let x,y;
+    x=s*.008;y=1.653;oval(0xac8079,x,y,front(x,y)+.0005,.0034,.0017,.0015);
+  }
+  for(let upper of [true,false])patch(upper?0xab6a60:0xc28374,28,4,(u,v)=>{let x=(u-.5)*.042,a=Math.sin(Math.PI*u),y=1.629+.0033*a+.0007*u+v*(upper?( .0035+.002*Math.sin(2*Math.PI*u)**2):-.005)*a;return [x,y,front(x,y)+.0016+.0025*Math.sin(Math.PI*v)*a];});
+  // Swept-back crown and an irregular eyebrow-length fringe.
+  oval(hair,0,1.695,-.032,.087,.099,.063);oval(0x6d6757,0,1.680,-.082,.061,.065,.047);
+  function cap(a,v,lift=0){
+    let c=Math.cos(a), fringe=Math.pow(Math.max(0,c),.32);
+    let end=2.27-.91*fringe+.037*Math.sin(12*a)+.03*Math.cos(21*a);
+    let t=.006+v*end,r=1+lift+.009*v*Math.sin(19*a+2*v)+.005*v*Math.cos(33*a-3*v);
+    return [.100*Math.sin(t)*Math.sin(a)*r,1.698+.111*Math.cos(t)*r,.032+.102*Math.sin(t)*c*r];
+  }
+  patch(hair,88,30,(u,v)=>cap(tau*(1-u),v));
+  for(let j=0;j<68;j++){
+    let a=tau*j/68;let pts=[];for(let k=0;k<12;k++){let v=.11+.885*k/11;pts.push(cap(a+.42*(1-v)+.053*Math.sin(3*v+j)+.012*Math.sin(17*j),v,.004));}
+    wire([0x9e957b,0xa69d82,0x776f5e,0x948b74][j%4],pts,.00048+j%3*.00015);
+  }
+  // Swept hair converges above the nape and coils into the pinned bun.
+  for(let j=0;j<25;j++){
+    let angle=tau*j/25,pts=[];
+    for(let k=0;k<=14;k++){
+      let t=.10+2.84*k/14,a=angle+.9*t;
+      pts.push([.0615*Math.sin(t)*Math.sin(a),1.680+.0655*Math.cos(t),-.082-.048*Math.sin(t)*Math.cos(a)]);
+    }
+    wire(j%3===0?0x908872:0x756e5d,pts,.0010);
+  }
+  for(let j=0;j<8;j++){
+    let x=.018*Math.sin(j*2.4),y=1.287+.007*j,z=.175-.001*j;
+    wire(0x56603d,[[.004,1.266,.156],[x*.5,1.284,.168],[x,y,z]],.0018);
+    for(let k=0;k<5;k++){let a=tau*k/5+j;oval([0xb95e47,0xe0b57d,0xc7866d][j%3],x+.005*Math.cos(a),y+.006*Math.sin(a),z,.005,.007,.003,a);}
+  }
+  for(let [colour,data] of surfaces){
+    // Incline the head about the upper neck, carrying lids, jewellery and hair together.
+    for(let i=0;i<data.pos.length;i+=3){
+      const y=data.pos[i+1],z=data.pos[i+2],weight=Math.max(0,Math.min(1,(y-1.54)/.04));
+      if(!weight)continue;
+      const angle=.095*weight,c=Math.cos(angle),sn=Math.sin(angle),dy=y-1.565,dz=z-.033;
+      data.pos[i+1]=1.565+dy*c-dz*sn;data.pos[i+2]=.033+dy*sn+dz*c+.005*weight;
+      const ny=data.normal[i+1],nz=data.normal[i+2];data.normal[i+1]=ny*c-nz*sn;data.normal[i+2]=ny*sn+nz*c;
+    }
+    let geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(data.pos,3));geo.setAttribute('normal',new T.Float32BufferAttribute(data.normal,3));geo.setIndex(data.index);
+    let mat=new T.MeshStandardMaterial({color:colour,side:T.DoubleSide,roughness:colour===gold?.22:colour===cloth?.33:colour===skin?.62:colour===lace?.44:.58,metalness:colour===gold?.45:0});
+    if(colour===cloth){
+      mat=new T.MeshPhysicalMaterial({color:cloth,side:T.DoubleSide,roughness:.34,clearcoat:.30,clearcoatRoughness:.48});
+    }
+    if(colour===skin){
+      const tones=[];
+      for(let i=0;i<data.pos.length;i+=3){
+        let x=Math.abs(data.pos[i]),y=data.pos[i+1],z=data.pos[i+2];
+        let cheek=gauss(x,y,.054,1.650,.036,.020),socket=gauss(x,y,.035,1.670,.025,.007);
+        let warm=Math.min(1,Math.max(0,(z-.042)/.043))*(cheek+.26*socket);
+        tones.push(1,.997-.28*warm,.995-.16*warm);
+      }
+      geo.setAttribute('color',new T.Float32BufferAttribute(tones,3));mat.vertexColors=true;
+    }
+    let m=new T.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;root.add(m);
+  }
+  root.name='French House barmaid';return root;
+}
+var barmaid = makeFrenchBarmaid(THREE);
+barmaid.children.forEach(function(part){
+  part.material.envMap=roomEnv;
+  part.material.envMapIntensity=part.material.isMeshPhysicalMaterial ? .66:.22;
+});
+barmaid.position.set(-.54,0,-1.48);
+barmaid.rotation.y = 1.56;
+barG.add(barmaid);
 // ---------- THE BACK BAR along the left wall ----------
 var bbX = -W / 2;
 mesh(new THREE.BoxGeometry(0.42, 1.2, 6.2), darkWood, bbX + 0.21, 0.6, 0.5).receiveShadow = true;
@@ -87503,6 +87753,17 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
+
+
+
+
+
+
+
+
 
 
 

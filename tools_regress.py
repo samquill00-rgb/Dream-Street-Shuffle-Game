@@ -637,6 +637,49 @@ def _(r):
         r.expect(done <= 4.8, "%s takes %.1f s to type its quotations (done mark included)" % (pg, done))
 
 
+@check("sound-notes-23nov", "2026-11-23 playtest notes 4, 18 and the Green Sea (Sam): the whole tone fades as you enter the French; Dido's lament is ready before the pyre; no guitar piece on Green Sea Approach")
+def _(r):
+    import html as _h
+    root = os.path.dirname(os.path.abspath(__file__))
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    t = _h.unescape(open(os.path.join(root, "Dream Street Shuffle.html"), encoding="utf-8").read())
+    for a, b in SWAPS: t = t.replace(a, b)
+    r.expect(re.search(r"label: 'french-approach-music'[^\n]*?leaveS: 4\.5", t) is not None and "bed.leaveS || (" in t, "the whole-tone piece no longer has its own 4.5 s fade as you go into the French")
+    HAND = "() => window.dssAudio.updateAmbientBedsForPassage(document.querySelector('tw-story > tw-passage'))"
+    r.go("Green Sea Approach", wait=5000)
+    r.js(HAND); r.page.wait_for_timeout(2500)
+    r.expect(not r.js("() => window.dssAudio.bedPlaying('green-sea-music')"), "the Green Sea guitar piece plays on Green Sea Approach (Sam: \"should be cut\")")
+    scratch_passage(r, "T-shore", "(set: $hasMissingPage to false)(set: $returnedPage to false)[[Walk on|Carthage shore]]")
+    r.go("T-shore", wait=3000)
+    r.js("() => { window.__warm = []; var f = window.dssAudio.prewarmBed; window.dssAudio.prewarmBed = function (l) { window.__warm.push(l); return f.apply(this, arguments); }; }")
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(5000)
+    warm = r.js("() => window.__warm")
+    r.info = "prewarmed on the shore: %s" % warm
+    r.expect("didos-lament" in (warm or []), "the Carthage shore does not fetch Dido's lament ahead of the pyre")
+    r.page.wait_for_timeout(6000)
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /Approach the pyre/.test(x.textContent); })[0]; if (l) l.click(); }")
+    r.wait_for("() => window.dssAudio.bedPlaying('didos-lament')", 2500, "Dido's lament to start within 2.5 s of the pyre")
+
+
+@check("drink-click-second-chance", "2026-11-23 playtest note 5 (Sam, The Empty Glass): a single click on the glass does not end the drink; 'Hold to drink' flashes and the next hold drinks")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.go("Dean Street", wait=4000)
+    r.clear_slips()
+    r.js("() => window.showDrinkPopup('whisky')")
+    r.wait_for("() => /Hold to drink/.test((document.getElementById('drink-popup-overlay') || {}).innerText || '')", 10000, "the drink card's 'Hold to drink'")
+    r.page.wait_for_timeout(3500)   # the glass fills first
+    box = r.page.locator("#drink-popup-overlay canvas").first.bounding_box()
+    r.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    r.page.mouse.down(); r.page.wait_for_timeout(120); r.page.mouse.up()
+    r.page.wait_for_timeout(2000)
+    r.expect(r.js("() => window._drinkPopupOpen === true && !!document.getElementById('drink-popup-overlay')"), "a single click on the glass ended the drink")
+    r.expect(r.js("() => /Hold to drink/.test(document.getElementById('drink-popup-overlay').innerText)"), "after the click the card does not say Hold to drink")
+    r.page.mouse.down(); r.page.wait_for_timeout(2500); r.page.mouse.up()
+    r.wait_for("() => window._drinkPopupOpen !== true", 10000, "the drink card to close after a real hold")
+
+
 @check("inis-speech-types-by-paragraph", "2026-11-09 (earlier note 28): INIS's speech should type like The Night Ahead, each paragraph in about the same time")
 def _(r):
     r.go("O'Flatterly's Third Pillar", wait=200)
@@ -4460,9 +4503,14 @@ def oi_globe_bar(r):
     LIDS = "() => window.__dssGlobeLids || 0"
     r.expect(r.js(LIDS) == 1, "the lid opened with %d plays of Sam's lid sound, not one (2026-11-19, \"Bar opening\")" % r.js(LIDS))
     r.expect("Pour a dram" in r.card_buttons(), "the globe's card has no 'Pour a dram' (buttons: %r)" % r.card_buttons())
+    # 2026-11-23 playtest note 12 (Sam: the Back to the room button "should also say '(Or click anywhere)'")
+    r.expect(r.js("() => [].some.call(document.querySelectorAll('.dss-room-back-any'), function (e) { return e.getClientRects().length && /\\(Or click anywhere\\)/.test(e.textContent); })"), "the Back to the room button does not say (Or click anywhere)")
     before = r.js(STATS)
+    gen0 = r.js("() => window._passageGen")
     r.page.locator(".fi-action:visible", has_text="Pour a dram").first.click()
     r.wait_for("() => /Hold to drink/.test((document.getElementById('drink-popup-overlay') || {}).innerText || '')", 15000, "the whisky card's 'Hold to drink'")
+    # 2026-11-23 playtest note 13 (Sam: "the pour option should be a clean popup, not a reload of the whole screen")
+    r.expect(r.js("() => window._passageGen") == gen0, "pouring the dram reloaded the shop (page %r, then %r)" % (gen0, r.js("() => window._passageGen")))
     r.page.wait_for_timeout(3500)   # the glass fills first
     r.page.keyboard.down("Space"); r.page.wait_for_timeout(6000); r.page.keyboard.up("Space")
     r.wait_for("() => window._drinkPopupOpen !== true", 12000, "the whisky card to close after the drink")

@@ -5,7 +5,7 @@ P2. Pyramid Run: the scarab-stomp text becomes 'A scarab underfoot is worth two 
 # PLAYTEST NOTES OF 22 NOV, NIGHT (16 notes; Sam: "Work through one by one", after the parked cars are modelled in Blender)
 1. The Night Ahead: make these first person, not second. (His prose: ask before changing.)
 2. Approach The Ginger Light: graffiti on the wall, to discuss. 3. It should say "WELCOME TO HELL" in faded white letters.
-4. Dean Street: in Brave the page still changed size while typing the title.
+4. Dean Street: in Brave the page still changed size while typing the title. CLOSED 23 Nov: held steady in a real Brave window; Sam: "None, it's fine".
 5. Dean Street: the coin feels from an older part of the game; discover it later?
 6. Dean Street: the doors make no sense, the entrance is unclear; remodel the doors.
 7. The French: the text about the book should have a flaring orange glow round its box.
@@ -27,7 +27,7 @@ Done, each with a check proved by a plant unless said: 26 (map can no longer sta
 
 Answered, no change: 19 ("And the tears and the tears and the tears." belongs to the dual ring's closing card, After the dual ring; the single LILY call ends on Sonnet 66. Nothing deleted).
 
-Not reproduced, need a detail from Sam: 1 (Name Your Book holds steady while typing at 1440x900, 1280x800, 1280x720, 1440x780, 1512x860, 1100x700 in Chrome: which browser?), 10 (Shelves shows "Their names are Bual and Fuji." on a fresh visit: which object, which words?), 20 (which figure at the French: I tried the novelist seated and backed it out), 22 (nothing in the Airport Pub's lounge goes in but its button; the portal needs a click: which page moved on?), 24 and 25 (no doubled words on a first or repeat visit; a watcher for doubled text now runs in every world walk).
+CLOSED 23 Nov, Sam "None, it's fine" after shots: 1 (Name Your Book in Brave) and 10 (O'Flatterly's Shelves show Bual and Fuji on both looks). Not reproduced, need a detail from Sam: 1 (Name Your Book holds steady while typing at 1440x900, 1280x800, 1280x720, 1440x780, 1512x860, 1100x700 in Chrome: which browser?), 10 (Shelves shows "Their names are Bual and Fuji." on a fresh visit: which object, which words?), 20 (which figure at the French: I tried the novelist seated and backed it out), 22 (nothing in the Airport Pub's lounge goes in but its button; the portal needs a click: which page moved on?), 24 and 25 (no doubled words on a first or repeat visit; a watcher for doubled text now runs in every world walk).
 
 Not started: 3 (central exit popup at the French, less in the bottom-left corner), 12 (Carthage approach: camera zooming out from the planets), 16 (Coach approach: sign wall set back and rounded, sign wrapped).
 

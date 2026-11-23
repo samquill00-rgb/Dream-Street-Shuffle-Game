@@ -621,6 +621,22 @@ def _(r):
     r.expect(not r.js(slip), "the slip to find INIS stayed after the way to Cecil Court was lit")
 
 
+@check("quotes-type-quick", "2026-11-23 playtest notes 6, 17, 19 (Sam): the typewriter quotations on the Pillars (Hobson), the Carthage shore and the Interval stairs type quicker")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    out = {}
+    for pg in ("Entering The Pillars of Hercules", "Carthage shore", "The Interval: the stairs"):
+        r.go(pg, wait=500)
+        t = r.js("""() => new Promise(function (res) { var t0 = Date.now(), first = 0; (function k() { var vs = [].filter.call(document.querySelectorAll('.verse'), function (v) { return v.getClientRects().length && !v.closest('.dss-ghost, [hidden], #dss-lore-overlay'); }); var started = vs.filter(function (v) { return v.classList.contains('vt-on'); }); if (started.length && !first) first = Date.now(); if (vs.length && vs.every(function (v) { return v.classList.contains('vt-done') || (v._dssTyped && !v.classList.contains('vt-on')); })) return res([vs.length, first ? (first - t0) / 1000 : -1, (Date.now() - t0) / 1000]); if (Date.now() - t0 > 40000) return res([vs.length, first ? (first - t0) / 1000 : -1, 99]); setTimeout(k, 100); })(); })""")
+        out[pg] = t
+    r.info = "verses, start s, done s: %s" % out
+    pace = r.js("() => [].map.call(document.querySelectorAll('.verse[data-pace]'), function (v) { return +v.getAttribute('data-pace'); })")
+    r.expect(pace and max(pace) <= 0.25, "the stairs' quotation types at pace %s (0.25 or quicker since 23 Nov)" % pace)
+    for pg, (n, st, done) in out.items():
+        r.expect(n > 0, "%s shows no quotation" % pg)
+        r.expect(done <= 4.8, "%s takes %.1f s to type its quotations (done mark included)" % (pg, done))
+
+
 @check("inis-speech-types-by-paragraph", "2026-11-09 (earlier note 28): INIS's speech should type like The Night Ahead, each paragraph in about the same time")
 def _(r):
     r.go("O'Flatterly's Third Pillar", wait=200)

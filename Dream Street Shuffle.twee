@@ -902,6 +902,7 @@ window.dssAudio = (function() {
       if (typeof _ambientBeds !== 'undefined' && _ambientBeds) {
         for (var bi = 0; bi < _ambientBeds.length; bi++) {
           var _b = _ambientBeds[bi];
+          if (_muted && _b.doorwayTail) { try { _b.doorwayTail.stop(); } catch(e) {} _b.doorwayTail = null; }
           if (!_b.gain) continue;
           try {
             _b.gain.gain.cancelScheduledValues(ac.currentTime);
@@ -2638,7 +2639,7 @@ window.dssAudio = (function() {
   // own gain is free at once for a restart.
   var LEAVE_S = 1.2; /* 2026-11-05 (Sam, playtest note 2: "There is still a slight clip between passages in the music"): was 0.5; the hub theme lets go over 1.2 s now */
   var BED_LEAVE_S = 1.8; /* and a bed a page drops (the street recording under the corner, say) fades over 1.8 s, not 0.45 s, which cut like a clip */
-  function _letGo(src, fromGain, secs) {
+  function _letGo(src, fromGain, secs, filter) {
     secs = secs || LEAVE_S;
     var ac = getCtx();
     if (!ac || !src) { try { src.stop(); } catch(e) {} return; }
@@ -2648,9 +2649,16 @@ window.dssAudio = (function() {
       fg.gain.setValueAtTime(v, t);
       fg.gain.linearRampToValueAtTime(0.0001, t + secs * 0.9);
       fg.connect(ac.destination);
-      src.connect(fg);
-      src.onended = function() { try { fg.disconnect(); } catch(e) {} };
+      if (filter) {
+        filter.disconnect();
+        src.connect(filter);
+        filter.connect(fg);
+      } else {
+        src.connect(fg);
+      }
+      src.onended = function() { try { if (filter) filter.disconnect(); fg.disconnect(); } catch(e) {} };
       src.stop(t + secs);
+      return src;
     } catch(e) { try { src.stop(); } catch(e2) {} }
   }
   function stopMusic() {
@@ -2764,7 +2772,7 @@ window.dssAudio = (function() {
       // canvas hand-off — where the current passage's tags don't match
       // the bed's tags by design).
       if (bed.started) return;
-      if (!bed._forced && !bed._fallback && !_bedShouldPlay(bed)) return; /* _fallback: the Soho default, 2026-11-05 evening */
+      if (!bed._forced && !bed._fallback && !(bed.doorway ? bed.doorwayWanted : _bedShouldPlay(bed))) return; /* _fallback: the Soho default, 2026-11-05 evening */
       var ac2 = getCtx(); if (!ac2) return;
       if (bed.source) { try { bed.source.stop(); } catch(e) {} bed.source = null; }
       var targetGain = _muted ? 0 : bed.volume;
@@ -2801,7 +2809,14 @@ window.dssAudio = (function() {
         if (bed.loopStart && bed.source.loop) { bed.source.loopStart = bed.loopStart; bed.source.loopEnd = bed.loopEnd || buf.duration; }
         var passGain = null; /* 2026-11-09: an xfadeAt bed gives each pass its own gain under bed.gain, so one pass fades out under the next while ducking still rides bed.gain */
         if (bed.xfadeAt) { passGain = ac3.createGain(); passGain.gain.value = skipIntro ? 1 : 0; passGain.connect(bed.gain); bed.source.connect(passGain); if (!skipIntro) { passGain.gain.setValueAtTime(0, ac3.currentTime); passGain.gain.linearRampToValueAtTime(1, ac3.currentTime + 1.5); } }
-        else bed.source.connect(bed.gain);
+        else if (bed.doorway) {
+          var filter = bed.doorwayFilter = ac3.createBiquadFilter();
+          filter.type = 'lowpass';
+          filter.Q.value = 0;
+          filter.frequency.value = bed.doorwayMuffled ? bed.doorway.cutoff : ac3.sampleRate / 2;
+          bed.source.connect(filter);
+          filter.connect(bed.gain);
+        } else bed.source.connect(bed.gain);
         // Skip the first 200ms only on the very first iteration — past
         // the MP3 priming garbage and the loud opening transient. Later
         // restarts after the silent gap can use the clean buffer head.
@@ -2863,6 +2878,7 @@ window.dssAudio = (function() {
   function _stopBed(bed) {
     if (bed.score) { _scGo(bed, 'off', 0.4); return; }
     bed._forced = false; // clear manual-start flag on any stop
+    if (bed.doorway) bed.doorwayWanted = false;
     bed._finishing = false;
     // Clear pending gap-restart so a stop while waiting in the silent
     // gap doesn't relaunch a new iteration after the pause.
@@ -2881,7 +2897,13 @@ window.dssAudio = (function() {
     }
     if (bed.source) {
       bed.source.onended = null; // a gapMs bed must not reschedule from the fading source
-      _letGo(bed.source, bed.gain ? bed.gain.gain.value : 0, /^The Night Ahead$/.test(((document.getElementById('dss-pn') || {}).textContent || '').trim()) ? 12 : (bed.tags && Object.keys(bed.tags).some(function(k) { return /^venue-/.test(k); }) ? 2.8 : BED_LEAVE_S)); /* 2026-11-09 (Sam, playtest note 8): venue crowds fade a little more slowly as you leave */ /* 2026-11-08 (Sam, playtest note 1: "Longer fadeout"): 6 s became 12 s. 2026-11-07 (Sam, playtest note 1: "Fade the music out more slowly into this page"): the Title's street music lets go over 6 s into The Night Ahead */
+      if (bed.doorwayFilter) {
+        // Keep the EQ on the departing source and let the existing gain serve a quick revisit.
+        if (bed.doorwayTail) { try { bed.doorwayTail.stop(); } catch(e) {} }
+        bed.doorwayTail = _letGo(bed.source, bed.gain.gain.value, bed.doorwayApproach ? 0.8 : 2.8, bed.doorwayFilter);
+        bed.doorwayFilter = null;
+      }
+      else _letGo(bed.source, bed.gain ? bed.gain.gain.value : 0, /^The Night Ahead$/.test(((document.getElementById('dss-pn') || {}).textContent || '').trim()) ? 12 : (bed.tags && Object.keys(bed.tags).some(function(k) { return /^venue-/.test(k); }) ? 2.8 : BED_LEAVE_S)); /* 2026-11-09 (Sam, playtest note 8): venue crowds fade a little more slowly as you leave */ /* 2026-11-08 (Sam, playtest note 1: "Longer fadeout"): 6 s became 12 s. 2026-11-07 (Sam, playtest note 1: "Fade the music out more slowly into this page"): the Title's street music lets go over 6 s into The Night Ahead */
       bed.source = null;
     }
     bed.started = false;
@@ -3761,7 +3783,33 @@ window.dssAudio = (function() {
       if (soho && _sohoFallbackOK(passageNode)) { soho._fallback = true; _startBed(soho); }
     } catch (e) {}
   }
+  // One recording follows the player through the French's door. The approach
+  // only changes the gain and EQ, so voices and glass carry across continuously.
+  function setDoorwayMix(bed, muffled) {
+    if (bed.doorwayMuffled === muffled) return;
+    bed.doorwayMuffled = muffled;
+    var spec = bed.doorway;
+    bed.volume = muffled ? spec.volume : spec.insideVolume;
+    bed.duckVolume = muffled ? spec.duckVolume : spec.insideDuckVolume;
+    if (!bed.started || !bed.doorwayFilter) return;
+    var ac = getCtx(), now = ac.currentTime, duration = muffled ? 0.36 : 0.78;
+    var freq = bed.doorwayFilter.frequency;
+    freq.cancelScheduledValues(now);
+    freq.setValueAtTime(freq.value, now);
+    freq.exponentialRampToValueAtTime(muffled ? spec.cutoff : ac.sampleRate / 2, now + duration);
+    if (_muted) return;
+    if (bed.duckTimer) { clearTimeout(bed.duckTimer); bed.duckTimer = null; }
+    var gain = bed.gain.gain;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(gain.value, now);
+    gain.linearRampToValueAtTime(bed.volume, now + duration);
+  }
+  function openFrenchDoorAudio() {
+    var bed = findBedByLabel('pub-french');
+    if (bed && bed.doorwayWanted && bed.doorwayApproach) setDoorwayMix(bed, false);
+  }
   function updateAmbientBedsForPassage(passageNode) {
+    if (!passageNode) passageNode = document.querySelector('tw-passage');
     try { _transitionForPassage(passageNode); } catch(e) {}
     try { _scoreForPassage(passageNode); } catch(e) { if (window.console) console.error('[dssAudio] score', e); }
     /* 2026-11-05 nightwork (Sam: "fill in all the gaps"): an UNTAGGED story page (LINE 1, Name Your Book, the Fetch, the tarot
@@ -3770,7 +3818,12 @@ window.dssAudio = (function() {
     if (window.dssBedsHoldOnUntagged !== false && passageNode && !_isTypewriterPage(passageNode)) { /* 2026-11-05 afternoon: a typewriter page never holds a bed (Sam: no music there, only the sounds) */
       var _ht = (passageNode.getAttribute('tags') || '').split(/\s+/).filter(Boolean);
       var _pn = (document.getElementById('dss-pn') || {}).textContent || '';
-      if (!_ht.length && _pn.trim() !== 'Title' && _pn.trim() !== 'Start') { _sohoFallbackHold(passageNode); return; }
+      if (!_ht.length && _pn.trim() !== 'Title' && _pn.trim() !== 'Start') {
+        var frenchBed = findBedByLabel('pub-french');
+        if (frenchBed && frenchBed.doorwayApproach) _stopBed(frenchBed);
+        _sohoFallbackHold(passageNode);
+        return;
+      }
     }
     var _plays = [], _anyMusic = false, _sohoIx = -1;
     for (var pi = 0; pi < _ambientBeds.length; pi++) {
@@ -3786,6 +3839,12 @@ window.dssAudio = (function() {
       var bed = _ambientBeds[i];
       if (bed.score) continue;
       if (_plays[i]) {
+        if (bed.doorway) {
+          bed.doorwayWanted = true;
+          var tags = (passageNode.getAttribute('tags') || '').split(/\s+/);
+          bed.doorwayApproach = tags.indexOf(bed.doorway.tag) >= 0;
+          setDoorwayMix(bed, bed.doorwayApproach);
+        }
         if (bed.volumeByTag) { /* 2026-11-05 afternoon: one wall bed at each venue's own level */
           var _vt = null, _vtags = (passageNode.getAttribute('tags') || '').split(/\s+/);
           for (var vi = 0; vi < _vtags.length; vi++) if (bed.volumeByTag[_vtags[vi]] != null) _vt = bed.volumeByTag[_vtags[vi]];
@@ -3806,17 +3865,22 @@ window.dssAudio = (function() {
     bed.duckTimer = null;
     if (typeof bed.volume !== 'number') bed.volume = 0.18;
     if (typeof bed.duckVolume !== 'number') bed.duckVolume = bed.volume * 0.35;
+    if (bed.doorway) {
+      bed.doorway.insideVolume = bed.volume;
+      bed.doorway.insideDuckVolume = bed.duckVolume;
+    }
     _ambientBeds.push(bed);
   }
   // ----- Registered beds ---------------------------------------------------
-  // The French — pub field recording, plays on every venue-french passage.
+  // The French — pub field recording, heard through the door on the approach.
   // 2026-10-17: the file is now Sam's own recordings made inside the French, layered into a seamless loop (the-french-pub-layered.m4a; raw and tools in french-live-originals/), levelled to the old bed's loudness.
   registerAmbientBed({
     label: 'pub-french',
     dataUri: '__DSS_PUB_DATA_URI__',
-    tags: { 'venue-french': 1 },
+    tags: { 'venue-french': 1, 'map-return-french': 1 },
     volume: 0.16,
-    duckVolume: 0.05
+    duckVolume: 0.05,
+    doorway: { tag: 'map-return-french', cutoff: 1300, volume: 0.10, duckVolume: 0.034 }
   });
   // The Pillars of Hercules — London-pub field recording, plays on every
   // venue-pillars passage (the in-pub interior scenes).
@@ -5597,6 +5661,7 @@ window.dssAudio = (function() {
     // Venue ambient beds
     registerAmbientBed: registerAmbientBed,
     updateAmbientBedsForPassage: updateAmbientBedsForPassage,
+    openFrenchDoorAudio: openFrenchDoorAudio,
     mapFootstep: mapFootstep, transitionDistance: transitionDistance, mapCab: mapCab, pubPass: pubPass, pillarsShanty: pillarsShanty, mapPigeons: mapPigeons, mapMatch: mapMatch, cardTurn: cardTurn, tabTick: tabTick, coinPocket: coinPocket, pongTock: pongTock, pongWall: pongWall, pongPoint: pongPoint, startTagTicks: startTagTicks, tagTickCount: function(){ return _tickTimers.length; },
     scoreCue: scoreCue, _scoreState: function(){ var v=_scSt.voice; return { cue:_scSt.cue, voice: v ? { cue:v.cue, dead:v.dead, its:v.its.map(function(i){ return [i.off0, i.t0, +i.g.gain.value.toFixed(2), +i.h.gain.value.toFixed(2)]; }) } : null, bed: (function(b){ return b && b.gain ? +b.gain.gain.value.toFixed(2) : null; })(findBedByLabel('pyramid-music')), now: getCtx().currentTime }; },
     startBed: startBedByLabel, soloBed: soloBedByLabel, bedLevel: function(label) { var b = findBedByLabel(label); return b ? b.volume : null; }, bedPlaying: function(label) { var b = findBedByLabel(label); return !!(b && b.started); }, ctxState: function() { return ctx ? ctx.state : 'none'; } /* 2026-11-14: read-only, for the regression player (is the sound unlocked?) */ /* 2026-11-14: read-only, for the regression player */, stopBed: stopBedByLabel, fadeBed: fadeBedByLabel, letBedFinish: letBedFinishByLabel,
@@ -28592,6 +28657,7 @@ this.style.borderColor = 'rgba(200,170,100,0.3)';
 });
 
 fhBtn.addEventListener('click', function() {
+if (window.dssAudio && window.dssAudio.openFrenchDoorAudio) window.dssAudio.openFrenchDoorAudio();
 fhWrap.style.transition = 'opacity 1.2s ease';
 fhWrap.style.opacity = '0';
 setTimeout(function() {

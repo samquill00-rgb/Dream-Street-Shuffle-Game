@@ -730,6 +730,28 @@ def _(r):
     r.expect(r.pn() == "The Blackout", "with the object spent, the blackout went to %r" % r.pn())
 
 
+@check("waltz-count-in-clear", "2026-11-23 playtest note 11 (Sam: the count-in out of time on the first try): from Watkins the count-in runs 1, 2, 3 a beat apart, and the how-to note over the canvas has gone before it starts")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    HOOK = "() => { window.__ct = []; var f = CanvasRenderingContext2D.prototype.fillText; CanvasRenderingContext2D.prototype.fillText = function (t, x, y) { if (/^[123]$/.test(String(t)) && this.canvas && this.canvas.id === 'waltz-canvas') { var h = document.querySelector('.waltz-howto'); window.__ct.push([String(t), performance.now(), !!(h && !h.classList.contains('waltz-howto-out'))]); } return f.apply(this, arguments); }; }"
+    r.go("Watkins", wait=1000); r.clear_slips(); r.clear_lore()
+    r.js(HOOK)
+    r.page.wait_for_timeout(6000)
+    ok = r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.trim() === 'Waltz on to the light'; })[0]; if (!l) return false; l.click(); return true; }")
+    r.expect(ok, "no Waltz on to the light on the Watkins page")
+    r.page.wait_for_timeout(11000)
+    ct = r.js("() => window.__ct || []")
+    seq, firsts = [], {}
+    for n, t, cov in ct:
+        if not seq or seq[-1] != n: seq.append(n)
+        firsts.setdefault(n, (t, cov))
+    r.info = "count-in %s; at each first draw (ms, how-to still up): %s" % (seq, firsts)
+    r.expect(seq == ["1", "2", "3"], "the count-in drew %s, not 1, 2, 3" % seq)
+    if seq == ["1", "2", "3"]:
+        r.expect(560 < firsts["2"][0] - firsts["1"][0] < 780 and 560 < firsts["3"][0] - firsts["2"][0] < 780, "the count-in is not a beat apart (%s)" % firsts)
+    r.expect(not any(c for _, _, c in ct), "the how-to note is still over the canvas during the count-in")
+
+
 @check("inis-speech-types-by-paragraph", "2026-11-09 (earlier note 28): INIS's speech should type like The Night Ahead, each paragraph in about the same time")
 def _(r):
     r.go("O'Flatterly's Third Pillar", wait=200)

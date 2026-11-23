@@ -3294,7 +3294,7 @@ def _(r):
     r.expect("Martyr's Memorial" in r.js(WORDS) and "what life was, entire." in r.js(WORDS), "the lap 10 page is not Sam's words: %r" % r.js(WORDS)[:120])
     pn = walk("T-li13", BASE + '(set: $returns to 13)(set: $sawLateInterlude1 to true)[[go up the street|Dean Street]]', "go up the street")
     r.expect(pn == "Late interlude 2", "lap 13 went to %r, not the second late interlude" % pn)
-    r.wait_for("() => /her mother/.test(document.querySelector('.typewriter-page').textContent)", 60000, "the lap 13 page to finish typing")
+    r.wait_for("() => /her mother.s\\./.test(document.querySelector('.typewriter-page').textContent)", 60000, "the lap 13 page to finish typing")
     r.expect("you kiss her forehead and her mother's." in r.js(WORDS), "the lap 13 page is not Sam's words: %r" % r.js(WORDS)[:120])
     pn = walk("T-dawn-early", BASE + '[[walk north|Towards Dawn]]', "walk north")
     r.clear_slips(); r.page.locator("tw-link:has-text('Go towards dawn'):visible").first.click(); r.page.wait_for_timeout(3000)

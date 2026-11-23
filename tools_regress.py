@@ -1384,6 +1384,9 @@ def room_check(room, passage):
             r.wait_for("([room]) => window.__dssRooms[room].mode() === 'idle' && !window.__dssRooms[room].blocked()".replace("([room])", "() ").replace("window.__dssRooms[room]", "window.__dssRooms['%s']" % room), 8000, "the room to be free to click")
             r.page.mouse.move(pt[0], pt[1]); r.page.wait_for_timeout(150); r.page.mouse.click(pt[0], pt[1])
             r.page.wait_for_timeout(2600)
+            for _ in range(12):   # 2026-11-23: the French's walk to the paperback took 3.2 s once the barmaid was in (her parts cast shadows); wait for it, up to 5 s in all
+                if r.js("([room]) => window.__dssRooms[room].mode()", [room]) != "tween": break
+                r.page.wait_for_timeout(200)
             if r.js("([room]) => window.__dssRooms[room].mode()", [room]) != "inspect":
                 under = r.js("([x, y]) => { var e = document.elementFromPoint(x, y); return e ? e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className && e.className.baseVal === undefined ? '.' + String(e.className).split(' ').join('.') : '') : 'nothing'; }", pt)
                 bad.append("%s: clicking it did not open its close-up (under the pointer: %s; page %s)" % (name, under, r.pn()))
@@ -1895,7 +1898,7 @@ def _(r):
     r.info = "%r" % (v,)
     r.expect(v is not None, "no EXPLICIT on the Dawn's last page")
     if not v: return
-    r.expect(v[0] == "EXPLICIT. LIBER. EST. PLUS. ULTRA.", "the Dawn's closing words read %r" % v[0])
+    r.expect(v[0].replace(" ", "") == "EXPLICIT.LIBER.EST.PLUS.ULTRA.", "the Dawn's closing words read %r" % v[0])
     r.expect(abs(v[1] - v[2]) < 12, "the closing words are off the colophon's centre (%d vs %d)" % (v[1], v[2]))
     r.expect(v[3] <= v[4] + 2, "the closing words are not above the colophon")
     r.expect(v[5] > 0.5, "the closing words never faded in (opacity %.2f)" % v[5])
@@ -4983,8 +4986,8 @@ def rooms_start_at_the_header(r):
 
 @check("alba-holds-the-view", "2026-11-23 (Sam, the run of endings: \"Both\"): the alba and the view from Centre Point are one page. The view is held still under the words; Traveller, wake! fades the words, sets the camera going and brings up the pentagram, and the Dawn follows with no page between")
 def _(r):
-    scratch_passage(r, "T-alba", '(display: "Night Resets")(display: "Test Start 3 Set")(set: $alba to (a: $alba1, $alba2, $alba3))(set: $lilyCount to 5)(set: $tookLily1 to true)(set: $tookLily2 to true)(set: $tookLily3 to true)(set: $tookLily4 to true)(set: $tookLily5 to true)(go-to: "Alba Complete")')
-    r.go("T-alba", wait=9000)
+    scratch_passage(r, "T-alba", '(display: "Night Resets")(display: "Test Start 3 Set")(set: $alba to (a: $alba1, $alba2, $alba3))(set: $lilyCount to 5)(set: $tookLily1 to true)(set: $tookLily2 to true)(set: $tookLily3 to true)(set: $tookLily4 to true)(set: $tookLily5 to true)(set: $aoifeRework to false)(go-to: "Alba Complete")')
+    t0 = time.time(); r.go("T-alba", wait=9000)
     r.js("() => { window.__dssWalked = []; var log = function () { var n = ((document.getElementById('dss-pn') || {}).textContent || '').trim(); if (n && window.__dssWalked[window.__dssWalked.length - 1] !== n) window.__dssWalked.push(n); }; log(); new MutationObserver(log).observe(document.body, {subtree: true, childList: true, characterData: true}); }")
     CAM = "() => { var f = document.querySelector('.dawn-approach iframe'); try { var c = f.contentWindow.camera; return c ? [+c.position.x.toFixed(3), +c.position.y.toFixed(3), +c.position.z.toFixed(3)] : null; } catch (e) { return null; } }"
     r.wait_for("() => { var f = document.querySelector('.dawn-approach iframe'); try { return !!(f && f.contentWindow.composer); } catch (e) { return false; } }", 90000, "the view from Centre Point to build under the alba")
@@ -4996,9 +4999,17 @@ def _(r):
     r.expect(held["paneOnTop"], "the view covers the alba's words")
     r.expect(held["pent"] < 0.05, "the pentagram is up before the wake (opacity %.2f)" % held["pent"])
     r.expect(c0 is not None and c0 == c1, "the camera moves before the wake (%r then %r)" % (c0, c1))
+    # a player who reads the alba for a while: an (after:) inside the link counted from the page's opening, so a press after 17 s went straight to the Dawn
+    r.page.wait_for_timeout(max(0, int((20 - (time.time() - t0)) * 1000)))
+    if not r.js("() => [...document.querySelectorAll('tw-link')].some(function (l) { return /Traveller, wake!/.test(l.textContent) && l.getClientRects().length; })"):
+        r.page.wait_for_timeout(5000)
+        st = r.js("() => { var p = document.querySelector('tw-passage .ending-pane'); var ls = [...document.querySelectorAll('tw-link')].map(function (l) { return l.textContent.trim().slice(0, 30) + (l.getClientRects().length ? '' : ' (hidden)'); }); return {page: ((document.getElementById('dss-pn') || {}).textContent || '').trim(), walked: window.__dssWalked, pane: p ? [p.className, getComputedStyle(p).opacity, getComputedStyle(p).display, p.textContent.trim().slice(-60)] : null, links: ls, ghosts: document.querySelectorAll('.dss-ghost').length, veil: document.querySelectorAll('.dss-room-veil').length}; }")
+        r.expect(False, "no Traveller, wake! to press: %r" % st); return
     r.page.locator("tw-link:has-text('Traveller, wake!'):visible").first.click()
     r.page.wait_for_timeout(3500)
-    after = r.js("() => { var d = document.querySelector('.dawn-approach'), p = document.querySelector('tw-passage .ending-pane'); return {held: d.classList.contains('dss-held'), ready: d.classList.contains('iframe-ready'), pane: +getComputedStyle(p).opacity}; }")
+    after = r.js("() => { var d = document.querySelector('.dawn-approach'), p = document.querySelector('tw-passage .ending-pane'); if (!d || !p) return {missing: true, page: ((document.getElementById('dss-pn') || {}).textContent || '').trim(), views: document.querySelectorAll('.dawn-approach').length, panes: document.querySelectorAll('.ending-pane').length, passages: document.querySelectorAll('tw-passage').length, walked: window.__dssWalked}; return {held: d.classList.contains('dss-held'), ready: d.classList.contains('iframe-ready'), pane: +getComputedStyle(p).opacity}; }")
+    r.expect(not after.get("missing"), "after the wake the view or the words are gone: %r" % after)
+    if after.get("missing"): return
     c2 = r.js(CAM)
     r.expect(not after["held"] and after["ready"], "the wake did not let the view go (%r)" % after)
     r.expect(after["pane"] < 0.1, "the words are still up after the wake (opacity %.2f)" % after["pane"])

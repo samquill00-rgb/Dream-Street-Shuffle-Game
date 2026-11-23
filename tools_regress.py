@@ -1598,12 +1598,12 @@ def _(r):
 # way on not yet taken, up to 30 pages or back to Dean Street. On every page: no errors (the watchers), any 3D view
 # is not blank, and the page fits a 1440x900 laptop screen without scrolling.
 WORLD_GAMES = {"The Climb": "hc-win", "Nazca Race": "nz-race-win", "The Reclamation": "rc-win", "Pyramid Run": "pyr-run-win"}   # each game's hidden way on for a win, taken by the world walks
-WORLD_ENDS = {"Night Ahead Part Two": 1, "The Fetch": 1, "Black page": 1, "White page": 1}   # 2026-11-15: the two last pages of the game have no way on by design; a walk that goes on past the Fetch ends there
+WORLD_ENDS = {"Night Ahead Part Two": 1, "The Fetch": 1, "Black page": 1, "White page": 1, "Dawn": 1}   # 2026-11-15: the two last pages of the game have no way on by design; a walk that goes on past the Fetch ends there
 WORLDS = ["himalayas", "nazca", "easter", "pyramid", "ezekiel"]
 # 2026-11-18: pages that go on by themselves, with nothing to press (the Dawn Approach is a view held for 16 s, then the last page comes). The walker
 # gave every page 8 s to show a way on, which with its other waits came to about 16 s: a full run on 16 Nov lost that race once on Dawn Approach Black
 # and called the page a dead end. These are waited on for up to 40 s (in 2 s looks) before the walk says it has stopped.
-WORLD_SLOW = {"Dawn Approach Black": 20, "Dawn Approach White": 20}
+WORLD_SLOW = {"Dawn Approach Black": 20, "Dawn Approach White": 20, "Alba Complete": 20, "Alba Incomplete": 20}   # 2026-11-23: the alba holds the view and goes on 17 s after its wake link
 
 CLICKABLES = """() => { var out = [], seen = new Set();
   [].forEach.call(document.querySelectorAll('body *'), function (e) {
@@ -1882,12 +1882,23 @@ def _(r):
         r.expect(max(bars) == 0, "%s showed a scrollbar while its room built (%r)" % (n, bars))
 
 
-@check("ending-words-centred", "2026-11-11 polish run: EXPLICIT. LIBER. EST. sat flush left under the centred row of signals on the white and black ending pages")
+@check("ending-words-centred", "2026-11-11 polish run, moved 2026-11-23 (Sam, the run of endings: \"Both\"): EXPLICIT. LIBER. EST. and PLUS. ULTRA. close the Dawn, centred above its colophon (the White and Black pages are folded in)")
 def _(r):
-    for n in ("White page", "Black page"):
-        r.go(n, wait=8500)
-        v = r.js("() => { var tp = document.querySelector('tw-story > tw-passage:not(.dss-ghost)'), sw = tp.querySelector('.ending-switchboard'), w = document.createTreeWalker(tp, NodeFilter.SHOW_TEXT), t; while ((t = w.nextNode())) if (/EXPLICIT/.test(t.textContent)) break; if (!t || !sw) return null; var rg = document.createRange(); rg.selectNodeContents(t); var a = rg.getBoundingClientRect(), b = sw.getBoundingClientRect(); return [Math.round(a.left + a.width / 2), Math.round(b.left + b.width / 2)]; }")
-        r.expect(v and abs(v[0] - v[1]) < 24, "%s: the closing words are off the signals' centre line (%r)" % (n, v))
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Dawn", wait=6000)
+    for _ in range(6):
+        on = r.page.locator(".dawn-on:visible")
+        if not on.count(): break
+        on.first.click(); r.page.wait_for_timeout(1500)
+    r.page.wait_for_timeout(9000)
+    v = r.js("() => { var e = document.querySelector('.dawn-explicit'), c = document.querySelector('.dawn-colophon'); if (!e || !c || !e.getClientRects().length) return null; var a = e.getBoundingClientRect(), b = c.getBoundingClientRect(); return [e.innerText.replace(/\\s+/g, ' ').trim(), Math.round(a.left + a.width / 2), Math.round(b.left + b.width / 2), Math.round(a.bottom), Math.round(b.top), +getComputedStyle(e).opacity]; }")
+    r.info = "%r" % (v,)
+    r.expect(v is not None, "no EXPLICIT on the Dawn's last page")
+    if not v: return
+    r.expect(v[0] == "EXPLICIT. LIBER. EST. PLUS. ULTRA.", "the Dawn's closing words read %r" % v[0])
+    r.expect(abs(v[1] - v[2]) < 12, "the closing words are off the colophon's centre (%d vs %d)" % (v[1], v[2]))
+    r.expect(v[3] <= v[4] + 2, "the closing words are not above the colophon")
+    r.expect(v[5] > 0.5, "the closing words never faded in (opacity %.2f)" % v[5])
 
 
 @check("mute-button-on-white", "2026-11-11 polish run: the mute button's dark glass showed as a flat grey block on the white pages")
@@ -4970,6 +4981,34 @@ def rooms_start_at_the_header(r):
     r.expect(not bad, "; ".join(bad))
 
 
+@check("alba-holds-the-view", "2026-11-23 (Sam, the run of endings: \"Both\"): the alba and the view from Centre Point are one page. The view is held still under the words; Traveller, wake! fades the words, sets the camera going and brings up the pentagram, and the Dawn follows with no page between")
+def _(r):
+    scratch_passage(r, "T-alba", '(display: "Night Resets")(display: "Test Start 3 Set")(set: $alba to (a: $alba1, $alba2, $alba3))(set: $lilyCount to 5)(set: $tookLily1 to true)(set: $tookLily2 to true)(set: $tookLily3 to true)(set: $tookLily4 to true)(set: $tookLily5 to true)(go-to: "Alba Complete")')
+    r.go("T-alba", wait=9000)
+    r.js("() => { window.__dssWalked = []; var log = function () { var n = ((document.getElementById('dss-pn') || {}).textContent || '').trim(); if (n && window.__dssWalked[window.__dssWalked.length - 1] !== n) window.__dssWalked.push(n); }; log(); new MutationObserver(log).observe(document.body, {subtree: true, childList: true, characterData: true}); }")
+    CAM = "() => { var f = document.querySelector('.dawn-approach iframe'); try { var c = f.contentWindow.camera; return c ? [+c.position.x.toFixed(3), +c.position.y.toFixed(3), +c.position.z.toFixed(3)] : null; } catch (e) { return null; } }"
+    r.wait_for("() => { var f = document.querySelector('.dawn-approach iframe'); try { return !!(f && f.contentWindow.composer); } catch (e) { return false; } }", 90000, "the view from Centre Point to build under the alba")
+    held = r.js("() => { var d = document.querySelector('.dawn-approach'), p = document.querySelector('tw-passage .ending-pane'); if (!d || !p) return null; var b = p.getBoundingClientRect(), top = document.elementFromPoint(b.left + b.width / 2, b.top + 30); return {held: d.classList.contains('dss-held'), ready: d.classList.contains('iframe-ready'), paneOnTop: !!(top && top.closest('.ending-pane')), pent: +getComputedStyle(d.querySelector('.centre-pent-overlay')).opacity}; }")
+    c0 = r.js(CAM); r.page.wait_for_timeout(2500); c1 = r.js(CAM)
+    r.expect(held is not None, "no view or no words on Alba Complete")
+    if not held: return
+    r.expect(held["held"] and not held["ready"], "the view is not held under the words (%r)" % held)
+    r.expect(held["paneOnTop"], "the view covers the alba's words")
+    r.expect(held["pent"] < 0.05, "the pentagram is up before the wake (opacity %.2f)" % held["pent"])
+    r.expect(c0 is not None and c0 == c1, "the camera moves before the wake (%r then %r)" % (c0, c1))
+    r.page.locator("tw-link:has-text('Traveller, wake!'):visible").first.click()
+    r.page.wait_for_timeout(3500)
+    after = r.js("() => { var d = document.querySelector('.dawn-approach'), p = document.querySelector('tw-passage .ending-pane'); return {held: d.classList.contains('dss-held'), ready: d.classList.contains('iframe-ready'), pane: +getComputedStyle(p).opacity}; }")
+    c2 = r.js(CAM)
+    r.expect(not after["held"] and after["ready"], "the wake did not let the view go (%r)" % after)
+    r.expect(after["pane"] < 0.1, "the words are still up after the wake (opacity %.2f)" % after["pane"])
+    r.expect(c2 is not None and c2 != c1, "the camera did not move after the wake (%r)" % c2)
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dawn'", 30000, "the Dawn after the wake")
+    walked = list(dict.fromkeys(r.js("() => window.__dssWalked") or []))
+    r.info = "walked %s; held %r; camera %r then %r" % (" > ".join(walked), held, c1, c2)
+    r.expect(walked == ["Alba Complete", "Dawn"], "the alba went %s" % " > ".join(walked))
+
+
 @check("white-ending-by-play", "2026-11-18 (never played before: 'the White page reached by play' stood under Not covered in three handoffs): with the poem whole, Alba Complete's photograph is pocketed and put away, Traveller, wake! leads through Dawn Approach White to the White page, and PLUS. ULTRA. to the Dawn, with no error, no blank view and no scroll")
 def white_ending_by_play(r):
     scratch_passage(r, "T-white", '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")(set: $crossedThreshold to true)(set: $sawThirdPillar to true)(set: $keyLighter to "spent")(set: $dreamKey to "")(set: $worldsVisited to (a: "himalayas"))(set: $mantraComplete to true)(set: $alba to $alba + (a: $alba2, $alba3))(set: $sawJeffrey to true)(set: $lacklandRead to true)(set: $hasTrishaMatchbook to true)(set: $hasMatches to true)(set: $metShana to true)(set: $hadChippy to true)(set: $tookLily1 to true)(set: $lilyCount to 5)(set: $drinksTonight to 10)(set: $confidence to 48)(set: $sobriety to 40)(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)(set: $returns to 17)(go-to: "Alba Complete")')
@@ -5001,7 +5040,7 @@ def white_ending_by_play(r):
     r.info = "walked: " + " > ".join(walked) + " (looked at: " + " > ".join(seen) + ")"
     r.expect(not bad, "; ".join(dict.fromkeys(bad)))
     seen = walked
-    r.expect(seen == ["Alba Complete", "Dawn Approach White", "White page", "Dawn"], "the White ending went %s" % " > ".join(seen))
+    r.expect(seen == ["Alba Complete", "Dawn"], "the White ending went %s (since 2026-11-23 the alba holds the view and goes straight on to the Dawn)" % " > ".join(seen))
 
 
 

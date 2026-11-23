@@ -714,7 +714,7 @@ def _(r):
     r.page.locator("tw-link:has-text('In')").first.click()
     r.page.wait_for_timeout(4000)
     r.expect(r.pn() == "LINE 2", "did not reach the Green Sea bar (%s)" % r.pn())
-    r.expect(r.js("() => /keep you standing through one blackout/.test(document.body.innerText)"), "the Green Sea gives no object")
+    r.expect(r.js("() => /he palms you a baggie/.test(document.body.innerText)"), "the Green Sea gives no object")
     scratch_passage(r, "T-bo", '(set: $greenSeaCharm to "held")(set: $sobriety to 8)(set: $blackouts to 0)[[Fall|The Blackout]]')
     r.go("T-bo", wait=3000)
     r.clear_slips()

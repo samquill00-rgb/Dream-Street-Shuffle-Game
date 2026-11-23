@@ -2855,6 +2855,84 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 })();
 
 // ============================================================
+// ONE DRAW PER LOOK (2026-11-23). The rooftop city is about 85,000 separate meshes, and drawing them one by one (twice, with the
+// shadow pass) took about 3 s a frame, so the page froze for about 13 s and Dawn Approach White's 16 s were mostly gone before it
+// moved. The still, solid meshes that share one material are joined into one mesh each, in world space, before the first frame:
+// the picture is the same and a frame takes about 10 ms. Left as they are: the cab (it drives), the two blinking tower lights,
+// the unseen Centre Point shadow slab, and everything see-through, unlit or sprite. The join is the game's dssBatchStatic,
+// with a faster copy loop.
+// ============================================================
+var dssBatchStatic = function(scene, skip) {
+  var made = 0, joined = 0;
+  try {
+    var skipSet = new Set();
+    (skip || []).forEach(function(o) { if (o && o.traverse) o.traverse(function(c) { skipSet.add(c); }); });
+    scene.updateMatrixWorld(true);
+    var MAPS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'alphaMap', 'aoMap', 'bumpMap', 'envMap', 'lightMap', 'displacementMap', 'specularMap'];
+    var NUMS = ['roughness', 'metalness', 'emissiveIntensity', 'opacity', 'side', 'blending', 'alphaTest', 'envMapIntensity', 'bumpScale', 'shininess', 'aoMapIntensity', 'lightMapIntensity', 'polygonOffsetFactor', 'polygonOffsetUnits', 'refractionRatio', 'reflectivity'];
+    var FLAGS = ['flatShading', 'wireframe', 'fog', 'depthWrite', 'depthTest', 'polygonOffset', 'colorWrite', 'toneMapped', 'dithering', 'vertexColors', 'premultipliedAlpha'];
+    var keyOf = function(m) {
+      var k = [m.type, m.color ? m.color.getHex() : '', m.emissive ? m.emissive.getHex() : '', m.specular ? m.specular.getHex() : '', m.normalScale ? m.normalScale.x + ',' + m.normalScale.y : ''];
+      NUMS.forEach(function(n) { k.push(m[n] === undefined ? '' : m[n]); });
+      FLAGS.forEach(function(n) { k.push(m[n] ? 1 : 0); });
+      MAPS.forEach(function(n) { k.push(m[n] ? m[n].uuid : ''); });
+      return k.join('|');
+    };
+    var mapped = function(m) { return MAPS.some(function(n) { return !!m[n]; }); };
+    var groups = {}, order = [];
+    scene.traverse(function(o) {
+      if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || skipSet.has(o) || o.children.length || o.renderOrder !== 0 || (o.userData && o.userData.dssNoBatch)) return;
+      for (var p = o; p; p = p.parent) if (!p.visible) return;
+      var m = o.material, g = o.geometry;
+      if (!m || Array.isArray(m) || !g || !g.isBufferGeometry || !g.attributes.position) return;
+      if (!(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial)) return;
+      if (m.transparent || m.opacity < 1 || m.vertexColors || m.visible === false || Object.prototype.hasOwnProperty.call(m, 'onBeforeCompile')) return;
+      if (g.morphAttributes && Object.keys(g.morphAttributes).length) return;
+      if (mapped(m) && !g.attributes.uv) return;
+      if (o.matrixWorld.determinant() < 0) return;
+      var key = keyOf(m) + '#' + (o.castShadow ? 1 : 0) + (o.receiveShadow ? 1 : 0) + (o.layers ? o.layers.mask : 0);
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(o);
+    });
+    var v = new THREE.Vector3(), nm = new THREE.Matrix3();
+    order.forEach(function(key) {
+      var list = groups[key]; if (list.length < 2) return;
+      var first = list[0], useUv = mapped(first.material), parts = [], total = 0;
+      list.forEach(function(o) {
+        var g = o.geometry;
+        if (!g.attributes.normal) { g = g.clone(); g.computeVertexNormals(); }
+        parts.push({ o: o, g: g }); total += g.index ? g.index.count : g.attributes.position.count;
+      });
+      var pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = useUv ? new Float32Array(total * 2) : null, at = 0;
+      parts.forEach(function(pt) {
+        var P = pt.g.attributes.position, N = pt.g.attributes.normal, U = pt.g.attributes.uv, I = pt.g.index;
+        var e = pt.o.matrixWorld.elements, q = nm.getNormalMatrix(pt.o.matrixWorld).elements;
+        var pa = P.array, na = N.array, ua = U ? U.array : null, ia = I ? I.array : null, cnt = I ? I.count : P.count;
+        if (P.isInterleavedBufferAttribute || N.isInterleavedBufferAttribute || (U && U.isInterleavedBufferAttribute)) throw new Error('interleaved');
+        for (var j = 0; j < cnt; j++, at++) {
+          var i = ia ? ia[j] : j, x = pa[i * 3], y = pa[i * 3 + 1], z = pa[i * 3 + 2];
+          pos[at * 3] = e[0] * x + e[4] * y + e[8] * z + e[12]; pos[at * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13]; pos[at * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+          x = na[i * 3]; y = na[i * 3 + 1]; z = na[i * 3 + 2];
+          var nx = q[0] * x + q[3] * y + q[6] * z, ny = q[1] * x + q[4] * y + q[7] * z, nz = q[2] * x + q[5] * y + q[8] * z, l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+          nor[at * 3] = nx / l; nor[at * 3 + 1] = ny / l; nor[at * 3 + 2] = nz / l;
+          if (uv) { uv[at * 2] = ua[i * 2]; uv[at * 2 + 1] = ua[i * 2 + 1]; }
+        }
+      });
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      if (uv) geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      var mesh = new THREE.Mesh(geo, first.material);
+      mesh.castShadow = first.castShadow; mesh.receiveShadow = first.receiveShadow; mesh.layers.mask = first.layers.mask;
+      mesh.matrixAutoUpdate = false; mesh.userData.dssBatched = list.length; mesh.name = 'dss-batch';
+      scene.add(mesh); made++; joined += list.length;
+      list.forEach(function(o) { if (o.parent) o.parent.remove(o); });
+    });
+  } catch (e) { if (window.console) console.warn('dssBatchStatic', e); }
+  return { meshes: made, joined: joined };
+};
+window.__oxBatch = dssBatchStatic(scene, [cab.group, btAvLight1, btAvLight2, window.__cpCaster]);
+
+// ============================================================
 // ANIMATION
 // ============================================================
 var clock = new THREE.Clock();

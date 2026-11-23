@@ -3200,6 +3200,17 @@ def centre_point_sodium_lamps(r):
     r.expect(e is not None and e[0] > 0.9 and e[1] < 0.5 * e[0] and e[2] < 0.1, "the lamp bulbs are not sodium orange: %s" % e)
 
 
+@check("centre-point-one-draw-per-look","2026-11-23 (found by white-ending-by-play): the view from Centre Point was about 85,000 separate meshes, about 3 s a frame, so Dawn Approach White froze for about 13 s of its 16; its still meshes are joined by look before the first frame, so a frame is a few hundred draw calls")
+def centre_point_one_draw_per_look(r):
+    r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=180000)
+    r.page.wait_for_function("() => window.__cpCaster && window.composer", timeout=180000)
+    d = r.js("() => { var c = 0; scene.traverse(function (o) { if (o.isMesh) c++; }); var R = composer.renderer; R.info.autoReset = false; R.info.reset(); scene.updateMatrixWorld(true); R.shadowMap.needsUpdate = true; composer.render(); var calls = R.info.render.calls; R.info.autoReset = true; return {meshes: c, calls: calls, batch: window.__oxBatch || null}; }")
+    r.info = "%d meshes, %d draw calls a frame, joined %s" % (d["meshes"], d["calls"], d["batch"])
+    r.expect(d["meshes"] < 2000, "the view from Centre Point has %d separate meshes" % d["meshes"])
+    r.expect(d["calls"] < 2000, "a frame of the view from Centre Point makes %d draw calls" % d["calls"])
+    r.expect(r.js("() => !!window.__cab && !!window.__cab.group.parent && !!btAvLight1.parent && !!btAvLight2.parent"), "the cab or a tower light was joined into the still city and can no longer move")
+
+
 @check("centre-point-road-depth","2026-11-21 (Sam: \"the zebra crossing closest to the camera looks wonky\", then \"the crossing is still at a weird angle\"): the road, pavement and ground of the view from Centre Point are drawn with enough depth precision that they do not break into flat bands, which made the square crossing look crooked (near plane at least 1, a 24-bit depth target for the composer)")
 def centre_point_road_depth(r):
     r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)

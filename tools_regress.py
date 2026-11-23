@@ -2354,6 +2354,37 @@ KIPLING_PROBE = """() => {
 }"""
 
 
+BANES_PROBE = """() => {
+  var r = (window._dssThreeRegistry || {})['jd-wrap']; if (!r || !r.scene) return null;
+  var T = window.THREE, sc = r.scene, cam = r.camera, f = sc.getObjectByName('banes-front'); if (!f) return { front: false };
+  var cv = r.renderer.domElement, w = cv.clientWidth, h = cv.clientHeight;
+  function px(v) { v = v.clone().project(cam); return [Math.round((v.x + 1) / 2 * w), Math.round((1 - v.y) / 2 * h)]; }
+  function corners(o) { o.updateMatrixWorld(true); var g = o.geometry.parameters, out = []; [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (c) { out.push(px(new T.Vector3(c[0] * g.width / 2, c[1] * g.height / 2, 0).applyMatrix4(o.matrixWorld))); }); return out; }
+  var jimmy = sc.getObjectByName('jimmy-green-cross');
+  return { front: true, signs: f.userData.signs || [], fascia: corners(f.getObjectByName('banes-fascia')), riser: corners(f.getObjectByName('banes-stall-riser')),
+    cross: jimmy ? px(jimmy.getWorldPosition(new T.Vector3())) : null, w: w, h: h, slab: !!f.getObjectByName('banes-slab'), lamp: !!f.getObjectByName('banes-lamp') };
+}"""
+
+
+@check("banes-front-left-of-jimmy", "2026-11-23 (Sam): Dr. Banes\u2019 Banhus, a closed front in the bay to the left of Mister Jimmy's as you face the shops, dressed to Mr. Kipling's brief, selling nothing you can name; his four signs exactly as he spelt them (\"Banes\", not \"Baines\"; the name board \"Dr. Banes\u2019 Banhus\")")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Mister Jimmy’s Drug Store", wait=1500)
+    r.wait_for("() => !!((window._dssThreeRegistry || {})['jd-wrap'])", 15000, "the Drug Store approach scene")
+    r.page.wait_for_timeout(5500)
+    for _i in range(8):
+        p = r.js(BANES_PROBE)
+        r.expect(p and p["front"], "no Dr. Banes front in the Drug Store approach")
+        r.expect(sorted(p["signs"]) == sorted(["Dr. Banes\u2019 Banhus", "Get you Banes here.", "Fresh Banes.", "Oldest Banesmonger in London"]), "the Banes signs read %r" % p["signs"])
+        for name in ("fascia", "riser"):
+            for x, y in p[name]:
+                r.expect(0 <= x <= p["w"] and 0 <= y <= p["h"], "Dr. Banes's %s runs off the screen (a corner at %d,%d of %dx%d)" % (name, x, y, p["w"], p["h"]))
+        r.expect(p["cross"] and max(c[0] for c in p["fascia"]) < p["cross"][0], "Dr. Banes is not to the left of Mister Jimmy's green cross")
+        r.page.wait_for_timeout(3000)
+    r.expect(p["slab"] and p["lamp"], "the Banes window has lost its slab or its lamp")
+    r.info = "fascia %s, riser %s" % (p["fascia"], p["riser"])
+
+
 @check("kipling-front-in-drug-store", "2026-11-09 (Sam): Mr. Kipling's Mammoth Resurrection Emporium, a decorative front in the bay to the right of Mister Jimmy's; Jimmy's stays the middle of the frame")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted

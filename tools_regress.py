@@ -719,8 +719,15 @@ def _(r):
     r.go("T-bo", wait=3000)
     r.clear_slips()
     r.page.locator("tw-link:has-text('Fall')").first.click()
-    r.page.wait_for_timeout(4000)
-    r.expect(r.pn() == "The Charm Holds", "a blackout with the Green Sea object held went to %r, not The Charm Holds" % r.pn())
+    # 2026-11-23 (Sam: "hit the blackout, go about 2 seconds into the hole then get the option to take some of the W-Dog")
+    WD = "() => [].some.call(document.querySelectorAll('tw-link'), function (l) { return /Take some of the W-Dog/.test(l.textContent) && getComputedStyle(l.closest('.dss-blackout-on')).visibility === 'visible'; })"
+    r.page.wait_for_timeout(1200)
+    r.expect(r.pn() == "The Blackout", "a blackout with the baggie held did not open The Blackout first (%r)" % r.pn())
+    r.expect(not r.js(WD), "the W-Dog is offered before the blackout has begun")
+    r.wait_for(WD, 8000, "the W-Dog offered a moment into the blackout")
+    r.page.locator("tw-link", has_text="Take some of the W-Dog").first.click()
+    r.page.wait_for_timeout(3000)
+    r.expect(r.pn() == "The Charm Holds", "taking the W-Dog went to %r, not The Charm Holds" % r.pn())
     r.expect(r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (l) { return /Walk it off/.test(l.textContent); })"), "no way on from The Charm Holds")
     scratch_passage(r, "T-bo2", '(set: $greenSeaCharm to "spent")(set: $sobriety to 8)(set: $blackouts to 0)[[Fall|The Blackout]]')
     r.go("T-bo2", wait=3000)
@@ -728,6 +735,8 @@ def _(r):
     r.page.locator("tw-link:has-text('Fall')").first.click()
     r.page.wait_for_timeout(4000)
     r.expect(r.pn() == "The Blackout", "with the object spent, the blackout went to %r" % r.pn())
+    r.page.wait_for_timeout(5000)
+    r.expect(not r.js("() => /W-Dog/.test(document.body.innerText)"), "the W-Dog is offered with the baggie spent")
 
 
 @check("waltz-count-in-clear", "2026-11-23 playtest note 11 (Sam: the count-in out of time on the first try): from Watkins the count-in runs 1, 2, 3 a beat apart, and the how-to note over the canvas has gone before it starts")

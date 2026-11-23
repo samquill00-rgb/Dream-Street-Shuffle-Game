@@ -385,6 +385,9 @@ def _(r):
     r.expect(not r.js("() => !!document.querySelector('.dss-trail-badge')"), "a trail takes the corner before page 93 is back with INIS")
     r.js("() => { window.__p93 = 'true'; }")
     r.page.wait_for_timeout(1800)
+    # 2026-11-23 playtest note 21 (Sam: "make the compass much bigger")
+    cw = r.js("() => { var c = document.querySelector('.dss-trail-badge .dss-compass'); return c ? c.getBoundingClientRect().width : 0; }")
+    r.expect(cw >= 100, "the trail badge's compass is %dpx across (116 since 23 Nov)" % cw)
     t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); if (!t) return ''; var b = t.getBoundingClientRect(); return (b.right <= innerWidth && b.right > innerWidth - 420 && b.top > 60 && b.top < 320 ? 'in ' : 'out ') + t.textContent; }")
     r.expect(t.startswith("in ") and "THE HIMALAYAS TRAIL" in t and "Pillars of Hercules" in t, "the trail badge is missing, wrong or off its corner (%r)" % t)
 
@@ -656,7 +659,8 @@ def _(r):
     r.page.wait_for_timeout(5000)
     warm = r.js("() => window.__warm")
     r.info = "prewarmed on the shore: %s" % warm
-    r.expect("didos-lament" in (warm or []), "the Carthage shore does not fetch Dido's lament ahead of the pyre")
+    if "didos-lament" not in (warm or []):
+        raise Fail("the Carthage shore does not fetch Dido's lament ahead of the pyre")
     r.page.wait_for_timeout(6000)
     r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return /Approach the pyre/.test(x.textContent); })[0]; if (l) l.click(); }")
     r.wait_for("() => window.dssAudio.bedPlaying('didos-lament')", 2500, "Dido's lament to start within 2.5 s of the pyre")
@@ -678,6 +682,27 @@ def _(r):
     r.expect(r.js("() => /Hold to drink/.test(document.getElementById('drink-popup-overlay').innerText)"), "after the click the card does not say Hold to drink")
     r.page.mouse.down(); r.page.wait_for_timeout(2500); r.page.mouse.up()
     r.wait_for("() => window._drinkPopupOpen !== true", 10000, "the drink card to close after a real hold")
+
+
+@check("cecil-hand-darker", "2026-11-23 playtest note 10 (Sam, Cecil Court Approach): the bronze hand a little darker (its own light 0.3, reflections 1.7) and the game loads the new scene")
+def _(r):
+    root = os.path.dirname(os.path.abspath(__file__))
+    t = open(os.path.join(root, "cecil-court-3d-static.html"), encoding="utf-8").read()
+    for a, b in SWAPS: t = t.replace(a, b)
+    r.expect("envMapIntensity: 1.7, emissive: 0x8a5a26, emissiveIntensity: 0.3 })" in t, "the bronze hand is back at its brighter 14 Nov finish")
+    h = open(os.path.join(root, "Dream Street Shuffle.html"), encoding="utf-8").read()
+    r.expect("cecil-court-3d-static.html?v=20261123a" in h, "the game still loads the cached Cecil Court scene (version not bumped)")
+
+
+@check("waltz-shuts-bio", "2026-11-23 playtest note 11 (Sam): the Beast window left open in Cecil Court closes when the waltz game starts")
+def _(r):
+    scratch_passage(r, "T-waltz", "[[Dance|Cecil Court Waltz]]")
+    r.go("T-waltz", wait=3000)
+    r.js("() => { var d = document.createElement('div'); d.className = 'wk-bio'; d.dataset.pin = '1'; d.textContent = 'THE BEAST'; document.body.appendChild(d); }")
+    r.page.locator("tw-link:has-text('Dance')").first.click()
+    r.page.wait_for_timeout(2500)
+    r.expect(r.pn() == "Cecil Court Waltz", "did not reach the waltz (%s)" % r.pn())
+    r.expect(not r.js("() => !!document.querySelector('.wk-bio')"), "the Beast window still hangs over the waltz")
 
 
 @check("inis-speech-types-by-paragraph", "2026-11-09 (earlier note 28): INIS's speech should type like The Night Ahead, each paragraph in about the same time")

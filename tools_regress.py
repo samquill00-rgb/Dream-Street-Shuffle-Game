@@ -2410,7 +2410,7 @@ def _(r):
     sizes = sorted(t[3] for t in p["tusks"])
     r.expect(sizes[0] < 0.4 and sizes[-1] > 1.4, "the tusks are not of several sizes (heights %.2f to %.2f)" % (sizes[0], sizes[-1]))
     for x0, x1, zmax, _h in p["tusks"]:
-        r.expect(zmax < -0.25 and x0 > 2.1 and x1 < 3.12, "a tusk pokes out of the display (x %.2f to %.2f, front at z %.2f)" % (x0, x1, zmax))
+        r.expect(zmax < -0.25 and x0 > 2.1 and x1 < 3.41, "a tusk pokes out of the display (x %.2f to %.2f, front at z %.2f)" % (x0, x1, zmax))   # 2026-11-23 (Sam: "a bit wider"): the right lining moved from 3.135 to 3.435
     r.expect(0 < p["lamp"] < 2, "the display lamp is off or not dim (intensity %.2f)" % p["lamp"])
     r.expect(p["lights"] <= 12, "%d point lights in the Drug Store approach (the budget is 12)" % p["lights"])
     r.expect(r.js("() => !!document.querySelector('tw-passage') && [].some.call(document.querySelectorAll('button'), function (b) { return b.textContent.trim() === 'GO TO THE COUNTER'; })"), "the Drug Store's own button is gone")

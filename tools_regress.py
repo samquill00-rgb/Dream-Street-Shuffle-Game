@@ -705,6 +705,31 @@ def _(r):
     r.expect(not r.js("() => !!document.querySelector('.wk-bio')"), "the Beast window still hangs over the waltz")
 
 
+@check("green-sea-charm", "2026-11-23 (Sam): the Green Sea gives a special object that saves you from one blackout; the next blackout spends it and you walk it off on Dean Street")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    scratch_passage(r, "T-gs", '(set: $greenSeaCharm to "")[[In|LINE 2]]')
+    r.go("T-gs", wait=3000)
+    r.clear_slips()
+    r.page.locator("tw-link:has-text('In')").first.click()
+    r.page.wait_for_timeout(4000)
+    r.expect(r.pn() == "LINE 2", "did not reach the Green Sea bar (%s)" % r.pn())
+    r.expect(r.js("() => /keep you standing through one blackout/.test(document.body.innerText)"), "the Green Sea gives no object")
+    scratch_passage(r, "T-bo", '(set: $greenSeaCharm to "held")(set: $sobriety to 8)(set: $blackouts to 0)[[Fall|The Blackout]]')
+    r.go("T-bo", wait=3000)
+    r.clear_slips()
+    r.page.locator("tw-link:has-text('Fall')").first.click()
+    r.page.wait_for_timeout(4000)
+    r.expect(r.pn() == "The Charm Holds", "a blackout with the Green Sea object held went to %r, not The Charm Holds" % r.pn())
+    r.expect(r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (l) { return /Walk it off/.test(l.textContent); })"), "no way on from The Charm Holds")
+    scratch_passage(r, "T-bo2", '(set: $greenSeaCharm to "spent")(set: $sobriety to 8)(set: $blackouts to 0)[[Fall|The Blackout]]')
+    r.go("T-bo2", wait=3000)
+    r.clear_slips()
+    r.page.locator("tw-link:has-text('Fall')").first.click()
+    r.page.wait_for_timeout(4000)
+    r.expect(r.pn() == "The Blackout", "with the object spent, the blackout went to %r" % r.pn())
+
+
 @check("inis-speech-types-by-paragraph", "2026-11-09 (earlier note 28): INIS's speech should type like The Night Ahead, each paragraph in about the same time")
 def _(r):
     r.go("O'Flatterly's Third Pillar", wait=200)

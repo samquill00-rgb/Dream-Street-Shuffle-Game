@@ -652,6 +652,13 @@ def _(r):
     r.go("Green Sea Approach", wait=5000)
     r.js(HAND); r.page.wait_for_timeout(2500)
     r.expect(not r.js("() => window.dssAudio.bedPlaying('green-sea-music')"), "the Green Sea guitar piece plays on Green Sea Approach (Sam: \"should be cut\")")
+    r.wait_for("() => window.dssAudio.bedPlaying('carthage-melody')", 6000, "the Carthage melody on Green Sea Approach")
+    # 2026-11-23 (Sam: "Cut the Green Sea music in the bar too")
+    for pg in ("LINE 2", "LINE 2 Oxford"):
+        r.go(pg, wait=4000)
+        r.js(HAND); r.page.wait_for_timeout(2500)
+        r.expect(not r.js("() => window.dssAudio.bedPlaying('green-sea-music')"), "the Green Sea guitar piece plays on %s" % pg)
+        r.expect(r.js("() => window.dssAudio.bedPlaying('carthage-melody')"), "the Carthage melody does not play on %s (Sam: \"Just go back to the Carthage music\")" % pg)
     scratch_passage(r, "T-shore", "(set: $hasMissingPage to false)(set: $returnedPage to false)[[Walk on|Carthage shore]]")
     r.go("T-shore", wait=3000)
     r.js("() => { window.__warm = []; var f = window.dssAudio.prewarmBed; window.dssAudio.prewarmBed = function (l) { window.__warm.push(l); return f.apply(this, arguments); }; }")

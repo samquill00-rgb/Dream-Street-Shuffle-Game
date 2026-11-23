@@ -243,7 +243,12 @@ class Run:
         b.first.click()
 
     def finish(self, failed):
-        viol = self.js("() => (window.__reg || {}).viol || []")
+        viol = []
+        for _try in range(3):   # a page still moving on (a timer's go-to) can pull the context out from under the read
+            try:
+                viol = self.js("() => (window.__reg || {}).viol || []"); break
+            except Exception:
+                self.page.wait_for_timeout(1500)
         problems = list(viol) + ["page error: " + e for e in self.errors]
         if failed or problems:
             os.makedirs(SHOTS, exist_ok=True)
@@ -355,14 +360,15 @@ def _(r):
     r.page.wait_for_timeout(9000)
     r.page.mouse.click(720, 450); r.page.wait_for_timeout(500)
     bad += [note_opens(r, "key", "the Nazca world"), note_opens(r, "button", "the Nazca world")]
-    r.go("Dawn Approach White", wait=12000)
-    fr = r.js("() => { var f = document.querySelector('iframe'); if (!f) return null; var q = f.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; }")
+    r.go("Alba Complete", wait=12000)   # since 2026-11-23 the view from Centre Point is under the alba; the wake lets it go and leaves it to be clicked
+    r.js("() => { if (window.dssAlbaWake) window.dssAlbaWake(); }"); r.page.wait_for_timeout(1500)
+    fr = r.js("() => { var f = document.querySelector('.dawn-approach iframe'); if (!f) return null; var q = f.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; }")
     if fr:
         r.page.mouse.click(fr[0], fr[1]); r.page.wait_for_timeout(800)
         inside = r.js("() => document.activeElement && document.activeElement.tagName")
         bad.append(note_opens(r, "key", "the dawn approach (focus in %s)" % inside))
     else:
-        bad.append("no frame on Dawn Approach White to click into")
+        bad.append("no frame on Alba Complete to click into")
     bad = [b for b in bad if b]
     r.expect(not bad, "; ".join(bad))
 
@@ -653,6 +659,7 @@ def _(r):
             body = '(set: $shipCall to "%s")(set: $shipFate to "%s")(set: $shipCallDrunk to %s)(set: $shipSetup to %s)(set: $shipResolved to %s)(set: $metSalvu to true)(set: $harpMet to true)(set: $holdsAshtonName to true)(go-to: "%s")' % (call, fate, drunk, setup, resolved, page)
             r.page.unroute("**/*")
             scratch_passage(r, "T-ship", body)
+            print("  ship", call, fate, drunk, resolved, page, round(time.time()), flush=True)
             r.go("T-ship", wait=2200)
             e = r.js("() => [].map.call(document.querySelectorAll('tw-error, tw-story tw-expression[type=error]'), function (x) { return x.textContent.slice(0, 120); }).join(' | ')")
             if e: bad.append("%s/%s/%s/%s %s: %s" % (call, fate, drunk, resolved, page, e))

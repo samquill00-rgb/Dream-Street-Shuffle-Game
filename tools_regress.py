@@ -375,6 +375,7 @@ def _(r):
 
 @check("trail-badge-shows", "2026-11-09 earlier note 34: no sign in the bottom left of which trail you were on")
 def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     r.go("Dean Street", wait=5000)
     r.expect(not r.js("() => !!document.querySelector('.dss-trail-badge')"), "a trail badge shows before any trail is begun")
     r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
@@ -949,7 +950,7 @@ def _(r):
 
 @check("trail-badge-tonight-only", "2026-11-10 (Sam: \"this night only\"): the trail badge counts only steps looked at tonight, not on earlier nights")
 def _(r):
-    scratch_passage(r, "T-trail", '(set: $visitedCarthage to true)[[Walk on|Dean Street]]')
+    scratch_passage(r, "T-trail", '(set: $visitedCarthage to true)(set: $returnedPage to true)[[Walk on|Dean Street]]')
     r.go("T-trail", wait=3000)
     r.clear_slips()
     r.js("() => { var t = window.DSS_VOICES.trails, k = Object.keys(t).filter(function (x) { return x !== 'eye'; })[0]; window.__tk = t[k].steps[0].at; localStorage.setItem('dssVoicesSeen', JSON.stringify([window.__tk])); localStorage.removeItem('dssTrailTonight'); }")
@@ -1813,7 +1814,7 @@ def _(r):
 
 @check("interval-no-trail-badge", "2026-11-11 note 11: the key trail badge does not show in the Interval (it does on Dean Street)")
 def _(r):
-    STUB = "() => { window.dssVoices = window.dssVoices || {}; window.dssVoices.activeTrail = function () { return { key: 'cocaine', world: 'himalayas', step: 0, of: 3, room: 'the French' }; }; }"
+    STUB = "() => { window.dssVoices = window.dssVoices || {}; window.dssVoices.activeTrail = function () { return { key: 'cocaine', world: 'himalayas', step: 0, of: 3, room: 'the French' }; }; clearInterval(window.__p93i); window.__p93i = setInterval(function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-p93', 'true'); }); }, 200); }"
     seen = {}
     for pg in ("Dean Street", "The Interval"):
         r.go(pg, wait=6000)

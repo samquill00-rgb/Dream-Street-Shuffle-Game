@@ -29,7 +29,7 @@ Answered, no change: 19 ("And the tears and the tears and the tears." belongs to
 
 CLOSED 23 Nov, Sam "None, it's fine" after shots: 1 (Name Your Book in Brave) and 10 (O'Flatterly's Shelves show Bual and Fuji on both looks). Not reproduced, need a detail from Sam: 1 (Name Your Book holds steady while typing at 1440x900, 1280x800, 1280x720, 1440x780, 1512x860, 1100x700 in Chrome: which browser?), 10 (Shelves shows "Their names are Bual and Fuji." on a fresh visit: which object, which words?), 20 (which figure at the French: I tried the novelist seated and backed it out), 22 (nothing in the Airport Pub's lounge goes in but its button; the portal needs a click: which page moved on?), 24 and 25 (no doubled words on a first or repeat visit; a watcher for doubled text now runs in every world walk).
 
-Not started: 3 (central exit popup at the French, less in the bottom-left corner), 12 (Carthage approach: camera zooming out from the planets), 16 (Coach approach: sign wall set back and rounded, sign wrapped).
+DONE since, by the other session (checked 23 Nov against the log): 3 (93b1b3d, 21 Nov), 12 (70a6db4, 21 Nov; quickened 22 Nov), 16 (508b92e, 21 Nov); and 7, 9, 17, 20, 22 (9d14f29, 22 Nov). Of the 20 Nov notes only 24 and 25 (words shown twice in the Himalayas, not reproduced) and the note 2 reminder are still open.
 
 To talk through with him: 7 (which key came before Cecil Court: the seeds all wait for $inisToldOfPillars except Davy's note, which hands over the ticket; and whether Benito's favour should wait for the first quest), 9 (O'Flatterly seen behind the door in the approach but to the right inside), 17 (reaching the Coach before the drains).
 

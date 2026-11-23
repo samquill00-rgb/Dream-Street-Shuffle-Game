@@ -577,7 +577,7 @@ def _(r):
 
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
 def _(r):
-    scratch_passage(r, "T-phase1", '(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')
+    scratch_passage(r, "T-phase1", '(set: $coinFound to true)(set: $hasCoin to true)(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')
     r.go("T-phase1", wait=4000)
     r.page.locator("tw-link:has-text('Walk on')").first.click()
     r.page.wait_for_timeout(3000)
@@ -590,11 +590,35 @@ def _(r):
     r.expect(go, "the barbershop slip offers no directions")
     r.page.wait_for_timeout(600)
     r.expect("barber" in (r.js("() => window.dssDirections ? window.dssDirections.get() : ''") or ""), "the slip's directions did not light the way to the barber's (%r)" % r.js("() => window.dssDirections && window.dssDirections.get()"))
+    # 2026-11-23 playtest notes 8 and 15 (Sam: the slips "fade once 'Get directions' selected")
+    r.page.wait_for_timeout(2500)
+    r.expect(not r.js("() => [].some.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (e) { return e.textContent.indexOf('barbershop') >= 0; })"), "the barbershop slip stayed up after its directions were lit")
     r.clear_slips()
-    scratch_passage(r, "T-phase2", '(set: $nightPhase to 2)(set: $returns to 4)(set: $barberSlipShown to true)[[Walk on|Dean Street]]')
+    scratch_passage(r, "T-phase2", '(set: $coinFound to true)(set: $hasCoin to true)(set: $nightPhase to 2)(set: $returns to 4)(set: $barberSlipShown to true)[[Walk on|Dean Street]]')
     r.go("T-phase2", wait=4000)
     r.page.locator("tw-link:has-text('Walk on')").first.click()
     r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.indexOf('Mister Jimmy') >= 0; })", 20000, "Mister Jimmy's slip on Dean Street at night phase 2")
+
+
+@check("inis-slip-stays-till-lit", "2026-11-23 playtest note 9 (Sam): the slip to find INIS stays until a way to Cecil Court is lit, then goes")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    scratch_passage(r, "T-inis", '(set: $coinFound to true)(set: $hasCoin to true)(set: $returns to 2)(set: $knowsCecilCourt to true)(set: $metCritic to true)(set: $knowsAboutPage to false)(set: $streetTipLap to 0)(set: $cecilTipShown to false)[[Walk on|Dean Street]]')
+    r.go("T-inis", wait=4000)
+    r.js("() => { try { window.dssDirections.set(''); } catch (e) {} }")
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    slip = "() => [].some.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (e) { return e.textContent.indexOf('INIS') >= 0; })"
+    r.wait_for(slip, 25000, "the slip to find INIS on Dean Street")
+    r.page.wait_for_timeout(3000)
+    went = r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-passage tw-link'), function (x) { return /^See who/.test(x.textContent.trim()); })[0]; if (!l) return [].map.call(document.querySelectorAll('tw-passage tw-link'), function (x) { return x.textContent.trim(); }).join(' | '); l.click(); return 'went:' + l.textContent; }")
+    r.expect(went and went.startswith("went:"), "no Dean Street link to walk on through (%s)" % went)
+    r.page.wait_for_timeout(13000)   # a slip from the page just left lingers until it has been up ten seconds
+    r.info = "walked to %r (%s)" % (went, r.pn())
+    r.expect(r.pn() != "Dean Street", "the walk on did not change the page")
+    r.expect(r.js(slip), "the slip to find INIS went with the page change before any way was lit")
+    r.js("() => window.dssDirections.set('cecil')")
+    r.page.wait_for_timeout(3000)
+    r.expect(not r.js(slip), "the slip to find INIS stayed after the way to Cecil Court was lit")
 
 
 @check("inis-speech-types-by-paragraph", "2026-11-09 (earlier note 28): INIS's speech should type like The Night Ahead, each paragraph in about the same time")

@@ -4963,10 +4963,14 @@ def white_ending_by_play(r):
     scratch_passage(r, "T-white", '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")(set: $crossedThreshold to true)(set: $sawThirdPillar to true)(set: $keyLighter to "spent")(set: $dreamKey to "")(set: $worldsVisited to (a: "himalayas"))(set: $mantraComplete to true)(set: $alba to $alba + (a: $alba2, $alba3))(set: $sawJeffrey to true)(set: $lacklandRead to true)(set: $hasTrishaMatchbook to true)(set: $hasMatches to true)(set: $metShana to true)(set: $hadChippy to true)(set: $tookLily1 to true)(set: $lilyCount to 5)(set: $drinksTonight to 10)(set: $confidence to 48)(set: $sobriety to 40)(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)(set: $returns to 17)(go-to: "Alba Complete")')
     r.go("T-white", wait=9000)
     PHOTO = "() => { var p = document.getElementById('dss-photo-pop'); if (!p || !p.getClientRects().length || getComputedStyle(p).visibility === 'hidden' || +getComputedStyle(p).opacity < 0.05) return null; var h = p.querySelector('.dss-photo-pop-hint'); if (!h) return null; var b = h.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }"
-    seen, bad, taken = [], [], set()
+    seen, bad, taken = [], [], set(); TRACE = []
     for step in range(12):
-        r.clear_lore(); r.clear_slips()
-        pn = r.pn()
+        _pp = []
+        for _i in range(6):
+            _q = time.time(); _pn = r.js("() => 1") and r.pn(); _pp.append("%.1f:%s" % (time.time() - _q, _pn[:6]))
+        TRACE.append("ping " + ",".join(_pp))
+        _t0 = time.time(); _p0 = r.pn(); TRACE.append("seen-on %s: lore=%s slips=%s" % (_p0, r.js("() => { var o = document.querySelector('#dss-lore-overlay'); return o ? o.innerText.slice(0, 120) : ''; }"), r.js("() => [].map.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (c) { return c.innerText.slice(0, 80); }).join(' / ')"))); r.clear_lore(); _t1 = time.time(); r.clear_slips(); _t2 = time.time()
+        pn = r.pn(); TRACE.append("top %s: lore %.1fs slips %.1fs -> %s" % (_p0, _t1 - _t0, _t2 - _t1, pn))
         if pn not in seen:
             seen.append(pn)
             for b in blank_canvases(r): bad.append("%s: %s" % (pn, b))
@@ -4982,8 +4986,9 @@ def white_ending_by_play(r):
             r.page.wait_for_timeout(2000); waited += 1
         if r.pn() != pn: continue
         if not fresh: bad.append("%s: no way on in %d s" % (pn, waited * 2)); break
-        taken.add((pn, fresh[0]["t"])); r.page.mouse.click(fresh[0]["x"], fresh[0]["y"]); r.page.wait_for_timeout(4000)
-    r.info = "walked: " + " > ".join(seen)
+        taken.add((pn, fresh[0]["t"])); r.js("() => { window.__pl = []; var t0 = Date.now(); (function tick() { window.__pl.push(((document.getElementById('dss-pn')||{}).textContent||'').trim() + '@' + (Date.now()-t0)); if (Date.now() - t0 < 4000) setTimeout(tick, 300); })(); }"); r.page.mouse.click(fresh[0]["x"], fresh[0]["y"]); r.page.wait_for_timeout(4000)
+        TRACE.append("%s [%s] -> %s" % (pn, fresh[0]["t"], sorted(set(x.split('@')[0] for x in r.js("() => window.__pl")))))
+    r.info = "walked: " + " > ".join(seen) + " TRACE " + " || ".join(TRACE)
     r.expect(not bad, "; ".join(dict.fromkeys(bad)))
     r.expect(seen == ["Alba Complete", "Dawn Approach White", "White page", "Dawn"], "the White ending went %s" % " > ".join(seen))
 

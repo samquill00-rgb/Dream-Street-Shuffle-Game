@@ -3275,6 +3275,35 @@ def harp_alley_theme(r):
     r.info = "page turns: " + ", ".join(waits)
 
 
+@check("late-interludes", "2026-11-23 (Sam, playtest note 11: \"more literary interludes later in the game, throughout (they are all used early)\", then \"Do laps 10 and 13 plus Towards Dawn\"): a typewriter page on the street at lap 10 and at lap 13, and one between Towards Dawn and the Fetch once the night has reached the dawn; their placeholders stay pink")
+def _(r):
+    PINK = "() => { var e = document.querySelector('.typewriter-page .claude-draft'); return e ? getComputedStyle(e).color : null; }"
+    def walk(name, body, link):
+        scratch_passage(r, name, body)
+        r.go(name, wait=2500)
+        r.clear_slips()
+        r.page.locator("tw-link:has-text('%s')" % link).first.click()
+        r.page.wait_for_timeout(3500)
+        return r.pn()
+    BASE = '(display: "Night Resets")(set: $alleyReturn to false)'
+    pn = walk("T-li8", BASE + '(set: $returns to 8)[[go up the street|Dean Street]]', "go up the street")
+    r.expect(pn == "Dean Street", "lap 8 went to %r, before the late interludes are due" % pn)
+    pn = walk("T-li10", BASE + '(set: $returns to 10)[[go up the street|Dean Street]]', "go up the street")
+    r.expect(pn == "Late interlude 1", "lap 10 went to %r, not the first late interlude" % pn)
+    r.expect(r.js(PINK) == "rgb(255, 58, 168)", "the lap 10 placeholder is not pink (%s)" % r.js(PINK))
+    pn = walk("T-li13", BASE + '(set: $returns to 13)(set: $sawLateInterlude1 to true)[[go up the street|Dean Street]]', "go up the street")
+    r.expect(pn == "Late interlude 2", "lap 13 went to %r, not the second late interlude" % pn)
+    pn = walk("T-dawn-early", BASE + '[[walk north|Towards Dawn]]', "walk north")
+    r.clear_slips(); r.page.locator("tw-link:has-text('Go towards dawn'):visible").first.click(); r.page.wait_for_timeout(3000)
+    r.expect(r.pn() == "The Fetch", "before the dawn, Go towards dawn went to %r" % r.pn())
+    pn = walk("T-dawn", BASE + '(set: $alba to (a: $alba1, $alba2, $alba3))(set: $albaWholeSlipShown to true)[[walk north|Towards Dawn]]', "walk north")
+    r.clear_slips(); r.page.locator("tw-link:has-text('Go towards dawn'):visible").first.click(); r.page.wait_for_timeout(3000)
+    r.expect(r.pn() == "Dawn interlude", "at the dawn, Go towards dawn went to %r, not the dawn interlude" % r.pn())
+    r.clear_slips(); r.page.locator("tw-link:has-text('Towards dawn.'):visible").first.click(); r.page.wait_for_timeout(3000)
+    r.expect(r.pn() == "The Fetch", "the dawn interlude led to %r" % r.pn())
+    r.info = "lap 8 street, lap 10 and 13 interludes, the dawn interlude before the Fetch"
+
+
 @check("name-book-no-bar", "2026-11-23 (Sam, playtest: \"In the name your book screen it said 'open of the bar' there is no bar, cut that\"): the lead line reads \"Your manuscript is open at its blank title page.\"")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

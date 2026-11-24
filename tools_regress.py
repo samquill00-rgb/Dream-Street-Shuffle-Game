@@ -414,6 +414,29 @@ def _(r):
     r.page.locator(".dss-trail-badge").screenshot(path=os.path.join(SHOTS, "trail-compass.png"))
 
 
+@check("compass-spins-near", "2026-11-24 note 4 (Sam: \"When you arer really close to where the compass is directing you it shoudl srat to spin fast\"): far from the door the hand points and does not spin; within three steps of it the hand spins fast")
+def compass_spins_near(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Dean Street", wait=5000)
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
+    r.page.wait_for_timeout(1500)
+    door = r.js("() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'pillars'; })[0]; return [d.fc, d.fr]; }")
+    SPIN = "() => { var s = document.querySelector('.dss-trail-badge .dss-compass-sway'); if (!s) return null; var cs = getComputedStyle(s); return [cs.animationName, parseFloat(cs.animationDuration)]; }"
+    far = r.js("([c, r0]) => { for (var dc = 0; dc < 4; dc++) for (var s = -1; s <= 1; s += 2) if (window.__dssSohoTeleport(c + dc * s, r0)) return [c + dc * s, r0]; return null; }", [19, 30])
+    r.page.wait_for_timeout(1400)
+    a_far = r.js(SPIN)
+    near = None
+    for dc, dr in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (2, 0), (-2, 0)):
+        if r.js("([c, r0]) => window.__dssSohoTeleport(c, r0)", [door[0] + dc, door[1] + dr]):
+            near = [door[0] + dc, door[1] + dr]; break
+    r.page.wait_for_timeout(1400)
+    a_near = r.js(SPIN)
+    r.info = "far %s %r; near %s %r" % (far, a_far, near, a_near)
+    r.expect(far and a_far and a_far[0] != "dssCompassSpin", "the hand spins far from the door (%r)" % a_far)
+    r.expect(near, "could not stand by the Pillars door")
+    r.expect(a_near and a_near[0] == "dssCompassSpin" and a_near[1] <= 0.8, "the hand does not spin fast by the door (%r)" % a_near)
+
+
 @check("trail-picks-up-part-way", "2026-11-09 Sam: a trail can be picked up at any step (the cellar starts two of them)")
 def _(r):
     r.go("Dean Street", wait=5000)
@@ -603,6 +626,60 @@ def _(r):
     r.wait_for("() => [].some.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return e.textContent.indexOf('Mister Jimmy') >= 0; })", 20000, "Mister Jimmy's slip on Dean Street at night phase 2")
 
 
+@check("slip-places-in-where-next", "2026-11-24 note 7 (Sam, Dean Street: \"The barbershop should be an option in the main list too. This is the case for all of the slip options\"): the barbershop and Mister Jimmy's, the two places a slip points to, are in Where next? while open and unused tonight, and choosing one marks it")
+def slip_places_in_where_next(r):
+    WN = "() => [].filter.call(document.querySelectorAll('.book-pitch.where-next'), function (b) { return !b.closest('.dss-ghost'); }).map(function (b) { return b.textContent.replace(/\\s+/g, ' '); }).join(' / ')"
+    scratch_passage(r, "T-wn", '(set: $coinFound to true)(set: $hasCoin to true)(set: $nightPhase to 2)(set: $returns to 4)(set: $barberSlipShown to true)(set: $jimmySlipShown to true)(set: $metCritic to true)(link: "Fresh")[(go-to: "Dean Street")] (link: "Shaved")[(set: $barberShave to true)(set: $jimmyPills to true)(go-to: "Dean Street")]')
+    r.go("T-wn", wait=4000)
+    r.page.locator("tw-link:has-text('Fresh')").first.click()
+    r.page.wait_for_timeout(3500); r.clear_slips(); r.clear_lore()
+    w1 = r.js(WN)
+    r.expect("The barbershop is open." in w1 and "Mister Jimmy’s is open." in w1, "Where next? lacks the barbershop or Mister Jimmy's (%r)" % w1)
+    r.page.locator(".book-pitch.where-next tw-link:has-text('The barbershop is open.')").first.click()
+    r.page.wait_for_timeout(1200)
+    on = r.js("() => [].map.call(document.querySelectorAll('.book-pitch.where-next .book-pitch-on'), function (e) { return e.textContent; }).join('|')")
+    r.expect("barbershop" in on, "choosing the barbershop in Where next? did not mark it (%r)" % on)
+    r.go("T-wn", wait=4000)
+    r.page.locator("tw-link:has-text('Shaved')").first.click()
+    r.page.wait_for_timeout(3500)
+    w2 = r.js(WN)
+    r.info = "%r / used: %r" % (w1, w2)
+    r.expect("barbershop" not in w2 and "Jimmy" not in w2, "Where next? still offers places already used tonight (%r)" % w2)
+
+
+@check("barber-comic-dots-faint", "2026-11-24 note 8 (Sam, the Barbershop's comic popup: \"This is hard to read, make the dots fainter\"): the blue dots behind the words are drawn at under a third of their strength and smaller")
+def barber_comic_dots_faint(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The Barbershop", wait=5000)
+    r.js("() => { var d = document.createElement('div'); d.className = 'bd-comic'; d.textContent = 'Sharp.'; document.querySelector('tw-passage').appendChild(d); }")
+    r.wait_for("() => !!document.getElementById('dss-comic-pop')", 6000, "the comic popup")
+    c = r.js("() => { var c = document.querySelector('#dss-comic-pop #bdDotsB circle'); return c ? [+c.getAttribute('r'), +(c.getAttribute('fill-opacity') || 1)] : null; }")
+    r.info = "%r" % c
+    r.expect(c and c[1] <= 0.35 and c[0] <= 0.45, "the dots behind the comic's words are as strong as before (%r)" % c)
+    r.page.wait_for_timeout(600)
+    r.page.screenshot(path=os.path.join(SHOTS, "barber-comic-dots-faint.png"))
+
+
+@check("room-cards-centred", "2026-11-24 (Sam: \"Yes move them all to the middle\", after note 3 \"I don't want these bottom left hand things\"): in every room an ordinary object's card sits in the middle under the room, as the ways out do, not in the bottom left")
+def room_cards_centred(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    got = []
+    for room, passage in ROOMS:
+        r.go(passage, wait=9000)
+        try:
+            r.room_ready(room)
+        except Fail as e:
+            got.append("%s: %s" % (room, e)); continue
+        name = r.js("([rm]) => { var R = window.__dssRooms[rm]; return R.names().filter(function (n) { var s = R.spot(n); return s && !s.centreCard; })[0] || null; }", [room])
+        if not name:
+            got.append("%s: no ordinary object" % room); continue
+        r.click_object(room, name)
+        m = r.js("([rm]) => { var w = window.__dssRooms[rm].wrap.getBoundingClientRect(), c = [].filter.call(w ? document.querySelectorAll('.dss-room-card') : [], function (x) { return +getComputedStyle(x).opacity > 0.5 && x.getClientRects().length; })[0]; if (!c) return null; var b = c.getBoundingClientRect(); return Math.round((b.left + b.right) / 2 - (w.left + w.right) / 2); }", [room])
+        got.append("%s/%s: %r" % (room, name, m))
+        r.expect(m is not None and abs(m) < 40, "in %s the card for %r sits %r px off the middle" % (room, name, m))
+    r.info = "; ".join(got)
+
+
 @check("inis-slip-stays-till-lit", "2026-11-23 playtest note 9 (Sam): the slip to find INIS stays until a way to Cecil Court is lit, then goes")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
@@ -782,6 +859,41 @@ def _(r):
     breaths = [b["start"] - a["end"] for a, b in zip(d, d[1:])]
     # 2026-11-20 note 15: the third pillar's speech is .dss-speech-quick, half the time with a rate of its own per paragraph (0.55 to 1.45, words 0.7 to 1.3), so its shortest breath is 850 x 0.5 x 0.55 x 0.7, about 164 ms; without the breath a paragraph's end is only its full stop, under 100 ms
     r.expect(min(breaths) >= 150, "no breath between INIS's paragraphs (%r ms)" % breaths)
+
+
+@check("inis-types-faster", "2026-11-24 note 5 (Sam, O'Flatterly's Third Pillar: \"This typewriteer should be sped up\"): INIS's speech types its letters at six tenths of the 20 Nov pace (the breaths between paragraphs unchanged), so its median letter comes in under 12 ms")
+def inis_types_faster(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("O'Flatterly's Third Pillar", wait=200)
+    r.js("""() => { window.__gaps = []; var last = 0, seen = new Set(); var iv = setInterval(function () { var v = document.querySelector('.dss-speech.vt-on:not(.dss-ghost .dss-speech)'); if (!v) return; var now = performance.now(); v.querySelectorAll('.vt-c.vt-in').forEach(function (c) { if (!seen.has(c)) { seen.add(c); if (/[a-z]/i.test(c.textContent)) { if (last) window.__gaps.push(now - last); last = now; } } }); if (window.__gaps.length > 400) clearInterval(iv); }, 4); }""")
+    r.page.wait_for_timeout(9000)
+    g = sorted(r.js("() => window.__gaps"))
+    r.expect(len(g) > 60, "too few letters typed to measure (%d)" % len(g))
+    if len(g) <= 60: return
+    med = g[len(g) // 2]
+    r.info = "median letter gap %.1f ms over %d letters" % (med, len(g))
+    r.expect(med < 12, "INIS's letters come %.1f ms apart (the 20 Nov pace was about 16 to 20)" % med)
+
+
+@check("gents-lock-howto", "2026-11-24 note 6 (Sam, Coach and Horses lock: \"The instruction are confused here, you have no way to solve it without 'just solve it'\"): the door says how to play (click a letter, then another, to swap; gold when right), two clicks on its letters really swap them, and the how-to goes once the door reads true")
+def gents_lock_howto(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Coach and Horses lock", wait=14000)
+    r.wait_for("() => !!window._dssGentsDoor", 15000, "the gents door")
+    hw = r.js("() => { var h = document.querySelector('.gents-howto'); if (!h) return null; var b = h.getBoundingClientRect(); return [h.textContent, b.top > 0 && b.bottom < innerHeight && +getComputedStyle(h).opacity > 0.5]; }")
+    r.expect(hw and "swap" in hw[0] and "gold" in hw[0] and hw[1], "no how-to on the gents door, or it is off screen (%r)" % hw)
+    before = r.js("() => window._dssGentsDoor.letters()")
+    i, j = next((a, b) for a in range(len(before)) for b in range(a + 1, len(before)) if before[a] != before[b] and before[a] != " " and before[b] != " ")
+    for k in (i, j):
+        p = r.js("(k) => window._dssGentsDoor.point(k)", k)
+        r.page.mouse.click(p[0], p[1]); r.page.wait_for_timeout(300)
+    after = r.js("() => window._dssGentsDoor.letters()")
+    r.info = "%r -> %r" % (before, after)
+    r.expect(after[i] == before[j] and after[j] == before[i], "two clicks on the door's letters did not swap them")
+    r.page.locator(".gents-just-solve").click()
+    r.wait_for("() => window._dssGentsDoor.solved()", 8000, "the door to read true")
+    r.page.wait_for_timeout(500)
+    r.expect(not r.js("() => !!document.querySelector('.gents-howto')"), "the how-to stays after the door is solved")
 
 
 @check("endgame-1109", "2026-11-09 notes 34-40: LINE 3's gold bloom, THE WAY OUT slip, every typewriter page stained, the Dawn's route caption, THE END before ANOTHER NIGHT")
@@ -1935,6 +2047,44 @@ def play_on(r, until, steps=60):
         r.page.mouse.click(opts[0]["x"], opts[0]["y"])
         r.page.wait_for_timeout(3500)
     raise Fail("did not get there in %d pages" % steps)
+
+
+@check("fi-book-halo-on-book", "2026-11-24 note 1 (Sam, the French: \"The halo for the book here is not exactly on the book. Fix that\"): the orange paperback's halo sits over the book, within 6 cm of its middle along the bar")
+def fi_book_halo_on_book(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The French", wait=10000)
+    r.room_ready("fi")
+    d = r.js("() => { var R = window.__dssRooms.fi, h = R.spot('An orange paperback'); if (!h || !h.haloAt) return null; var THREE = window.THREE, b = new THREE.Box3().setFromObject(h.root), c = new THREE.Vector3(); b.getCenter(c); return { dx: h.haloAt[0] - c.x, dz: h.haloAt[2] - c.z, c: [c.x, c.y, c.z], at: h.haloAt }; }")
+    r.info = "%r" % d
+    r.expect(d is not None, "no halo on the orange paperback")
+    r.expect((d["dx"] ** 2 + d["dz"] ** 2) ** 0.5 < 0.06, "the paperback's halo is %.2f m off the book" % ((d["dx"] ** 2 + d["dz"] ** 2) ** 0.5))
+
+
+@check("fi-door-voices-at-once", "2026-11-24 note 2 (Sam: \"The speech fro the old boy and the prime when you click to door fo the french should show straight away\"): clicking the French's blue door brings up THE PRIME and THE OLDBOY together within 1.2 s, while the camera is still moving in")
+def fi_door_voices_at_once(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The French", wait=10000)
+    r.room_ready("fi")
+    VIS = "() => { var out = []; document.querySelectorAll('.dss-voice-text').forEach(function (n) { var t = n.textContent.trim(); if (!t) return; var o = 1, e = n; while (e && e.nodeType === 1) { o *= +getComputedStyle(e).opacity; e = e.parentElement; } if (o > 0.5) out.push(t); }); return out; }"
+    pt = r.js("() => window.__dssRooms.fi.point('A blue door')")
+    r.expect(pt, "no blue door in the French")
+    r.page.mouse.move(pt[0], pt[1]); r.page.wait_for_timeout(150); r.page.mouse.click(pt[0], pt[1])
+    r.page.wait_for_timeout(1200)
+    v = r.js(VIS)
+    r.info = "%r at 1.2 s, camera %s" % (v, r.js("() => window.__dssRooms.fi.mode()"))
+    r.expect(len(v) >= 2, "the door's voices were not both up 1.2 s after the click (%r)" % v)
+
+
+@check("oi-dram-central", "2026-11-24 note 3 (Sam, O'Flatterly's: \"Please put 'pour a dram' central liek the others, I don't want these bottom left hand things\"): the globe's card, with Pour a dram, sits in the middle of the room view, as the ways out do")
+def oi_dram_central(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("O'Flatterly's shop", wait=10000)
+    r.room_ready("oi")
+    r.click_object("oi", "A globe")
+    r.expect("Pour a dram" in r.card_buttons(), "the globe's card has no 'Pour a dram' (buttons: %r)" % r.card_buttons())
+    g = r.js("() => { var b = [].filter.call(document.querySelectorAll('.fi-action'), function (x) { return x.getClientRects().length && /Pour a dram/.test(x.textContent); })[0], w = window.__dssRooms.oi.wrap.getBoundingClientRect(), c = b.closest('.dss-room-card') || b.parentElement, cr = c.getBoundingClientRect(); return { mid: (cr.left + cr.right) / 2 - (w.left + w.right) / 2, w: w.width, isMid: c.classList.contains('dss-card-mid') }; }")
+    r.info = "%r" % g
+    r.expect(abs(g["mid"]) < 40, "the globe's card sits %d px off the middle of the room view" % g["mid"])
 
 
 @check("paperback-lore-again", "2026-11-11 notes 5 (twice): looking at the French's orange paperback opens its LORE by itself, on the first look and again after it has been read")

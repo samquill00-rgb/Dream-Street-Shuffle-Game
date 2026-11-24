@@ -3335,6 +3335,21 @@ def preview_joyride_link(r):
     r.expect("A man by his car" in links, "the man by his car is not on Dean Street from the joyride link")
 
 
+@check("joyride-after-a-world","2026-11-23 (Sam: \"the joy ride should be an option till you have done one dream world. But once you have it should show a little glow on the walkable map to encourage you there\"): with page 93 returned but no dream world yet, Dean Street has no man by his car; after one world he is there and his corner of the Soho map breathes a glow")
+def joyride_after_a_world(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    seen = {}
+    for start in ("test3", "test4"):   # test3: page 93 back with INIS, no dream world yet; test4: the Himalayas done
+        r.go(start, wait=12000, extra="&dev=1")
+        r.expect(r.pn() == "Dean Street", "%s landed on %r" % (start, r.pn()))
+        links = r.js("() => Array.from(document.querySelectorAll('tw-link')).filter(l => !l.closest('.dss-ghost')).map(l => l.textContent.trim())")
+        seen[start] = ("A man by his car" in links, r.js("() => window.__dssJoyGlow || 0"))
+    r.info = "%r" % seen
+    r.expect(not seen["test3"][0], "the man by his car is offered before any dream world")
+    r.expect(seen["test4"][0], "the man by his car is not offered after one dream world")
+    r.expect(seen["test4"][1] > 0.1, "no glow drawn at his corner of the map after one dream world")
+
+
 @check("centre-point-view-moves","2026-11-21 (Sam: \"Can the camera move in the view from centre point\"): the Oxford Street view shown on Dawn Approach cranes up, forward and right over its 16 s, and the camera at 1 s and 15 s is in a different place")
 def centre_point_view_moves(r):
     r.page.goto("http://127.0.0.1:%d/oxford-street-from-centre-point-3d-static.html" % r.port, timeout=90000)

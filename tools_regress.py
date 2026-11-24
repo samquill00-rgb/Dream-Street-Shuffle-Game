@@ -4591,6 +4591,37 @@ def doorway_press_waits(r):
     r.info = "E mid-step went in twice running; E under an overlay waited (button %s) and went in when it cleared" % held["btn"]
 
 
+@check("oi-cats-names-every-night", "2026-11-24 (Sam, on the shop's cat pictures on a later night: \"it faded too soon but this time it said 'riverrun… etc.' not their names\"; ruled \"Names every night\" and about 11 s for a short line): with the Shelves used up on an earlier night, looking again still gives Bual and Fuji, not the shop's déjà vu line, and the names are still up 9.5 s after the look")
+def oi_cats_names_every_night(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("O'Flatterly's shop", wait=6000)
+    r.js("() => { var n = +localStorage.getItem('dssNightNo') || 0; var sp = JSON.parse(localStorage.getItem('dssVoicesSpoken') || '{}'); sp['oi/Shelves'] = ['Their names are Bual and Fuji.', 'Call them his trouble and strife.']; localStorage.setItem('dssVoicesSpoken', JSON.stringify(sp)); var d = JSON.parse(localStorage.getItem('dssVoicesDeja') || '{}'); for (var k in d) if (k.indexOf('oi/') === 0) delete d[k]; d['oi/Shelves'] = { at: n - 1 }; localStorage.setItem('dssVoicesDeja', JSON.stringify(d)); }")
+    r.go("O'Flatterly's shop", wait=10000)
+    r.room_ready("oi")
+    r.click_object("oi", "Shelves")
+    VIS = "() => { var out = []; document.querySelectorAll('.dss-voice-text, .dss-deja').forEach(function (n) { var t = n.textContent.trim(); if (!t) return; var o = 1, e = n; while (e && e.nodeType === 1) { o *= +getComputedStyle(e).opacity; e = e.parentElement; } if (o > 0.5) out.push(t); }); return out; }"
+    r.page.wait_for_timeout(2500)
+    early = r.js(VIS)
+    r.page.wait_for_timeout(7000)
+    late = r.js(VIS)
+    r.info = "2.5 s %r / 9.5 s %r" % (early, late)
+    r.expect(not any("riverrun" in t for t in early + late), "the cats spoke the shop's riverrun line")
+    r.expect(any("Bual and Fuji" in t for t in early), "the cats did not give their names on a later night")
+    r.expect(any("Bual and Fuji" in t for t in late), "the names were gone 9.5 s after the look")
+    # the short one-line case that faded early: the shop's riverrun line, now said through the glass case
+    r.js("() => { var n = +localStorage.getItem('dssNightNo') || 0, o = window.DSS_VOICES.objects.oi['A glass case'], w = []; ['now', 'then', 'id'].forEach(function (k) { if (o[k]) w.push(o[k]); }); var sp = JSON.parse(localStorage.getItem('dssVoicesSpoken') || '{}'); sp['oi/A glass case'] = w; localStorage.setItem('dssVoicesSpoken', JSON.stringify(sp)); var d = JSON.parse(localStorage.getItem('dssVoicesDeja') || '{}'); for (var k in d) if (k.indexOf('oi/') === 0) delete d[k]; d['oi/A glass case'] = { at: n - 1 }; localStorage.setItem('dssVoicesDeja', JSON.stringify(d)); }")
+    r.go("O'Flatterly's shop", wait=10000)
+    r.room_ready("oi")
+    r.click_object("oi", "A glass case")
+    r.page.wait_for_timeout(2500)
+    e2 = r.js(VIS)
+    r.page.wait_for_timeout(7000)
+    l2 = r.js(VIS)
+    r.info += "; glass case 2.5 s %r / 9.5 s %r" % (e2, l2)
+    r.expect(any("riverrun" in t for t in e2), "the shop's déjà vu line did not speak through another used-up object")
+    r.expect(any("riverrun" in t for t in l2), "a one-line déjà vu was gone 9.5 s after the look")
+
+
 @check("oi-globe-bar", "2026-11-18 (Sam: O'Flatterly's globe is a globe bar, \"so you can zoom in on it\", and \"when you open it you would be able to pour a dram of whisky\"): looking at it opens the lid; its card pours one dram a night, which costs sobriety and plays the whisky card; stepping back closes the lid (plants: k.byText(['Pour a dram'])|||k.byText(['No dram']) and globeWant = on ? 1 : 0;|||globeWant = 0;)")
 def oi_globe_bar(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

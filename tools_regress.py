@@ -680,6 +680,121 @@ def room_cards_centred(r):
     r.info = "; ".join(got)
 
 
+@check("slip-directions-click", "2026-11-24 note 5 (Sam, Dean Street: \"When tyou get directions from the slip it should make the same noise as when you get them from the main menu\"): the slip's Get Directions strikes the same typewriter key, at the same level, as a Where next? pick")
+def slip_directions_click(r):
+    scratch_passage(r, "T-wn", '(set: $coinFound to true)(set: $hasCoin to true)(set: $nightPhase to 1)(set: $returns to 4)(set: $barberSlipShown to false)(set: $metCritic to true)[[Walk on|Dean Street]]')
+    r.go("T-wn", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(4000)
+    HOOK = "() => { window.__ticks = []; var A = window.dssAudio, f = A.typewriterTick; A.typewriterTick = function (v) { window.__ticks.push(v); return f.apply(this, arguments); }; }"
+    r.js(HOOK)
+    r.wait_for("() => !!document.querySelector('.dss-hint-go')", 20000, "the barbershop slip's Get Directions")
+    r.page.wait_for_timeout(2500); r.js("() => { window.__ticks = []; }")
+    r.page.locator(".dss-hint-go").first.click(); r.page.wait_for_timeout(600)
+    slip = r.js("() => window.__ticks.slice()")
+    r.clear_slips(); r.js("() => { window.__ticks = []; }")
+    r.page.locator(".book-pitch.where-next tw-link").first.click(); r.page.wait_for_timeout(600)
+    menu = r.js("() => window.__ticks.slice()")
+    r.info = "slip %r / menu %r" % (slip, menu)
+    r.expect(menu and slip and slip[0] == menu[0], "Get Directions on the slip does not strike the menu's key (%r vs %r)" % (slip, menu))
+
+
+@check("carthage-no-quest-star", "2026-11-24 note 6 (Sam, Carthage shore: \"The little star beside the pyre. I don't thin these arer needed anymore\"): no quest star beside Approach the pyre, before or after page 93 is found")
+def carthage_no_quest_star(r):
+    for st in ("(set: $knowsAboutPage to true)(set: $hasMissingPage to false)(set: $returnedPage to false)(set: $visitedPyre to false)", "(set: $knowsAboutPage to true)(set: $hasMissingPage to true)(set: $returnedPage to false)(set: $visitedPyre to false)"):
+        scratch_passage(r, "T-cs", st + "[[Walk on|Carthage shore]]")
+        r.go("T-cs", wait=3000)
+        r.page.locator("tw-link:has-text('Walk on')").first.click()
+        r.page.wait_for_timeout(4000)
+        n = r.js("() => [].filter.call(document.querySelectorAll('span.qp'), function (e) { return !e.closest('.dss-ghost'); }).length")
+        r.expect(n == 0, "a quest star still shows on the Carthage shore (%d) with %s" % (n, st))
+
+
+@check("compass-recognises-pick", "2026-11-24 note 8 (Sam, Dean Street: \"When you click the limnk in the main menu boxes that matches the compass one the compasss should pulse gold in recognition\"): picking Find page 93. in Where next?, the compass's own door, sets the compass pulsing gold; picking another door does not")
+def compass_recognises_pick(r):
+    scratch_passage(r, "T-p93", '(set: $returns to 4)(set: $nightPhase to 1)(set: $coinFound to true)(set: $hasCoin to true)(set: $barberSlipShown to true)(set: $nightAheadPart2Shown to true)(set: $metCritic to true)(set: $knowsCecilCourt to true)(set: $knowsAboutPage to true)(set: $hasMissingPage to false)(set: $returnedPage to false)(set: $metRed to true)(set: $bookAt to "")[[Walk on|Dean Street]]')
+    r.go("T-p93", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(3000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => { var t = document.querySelector('.dss-trail-badge'); return t && t._door; }", 15000, "the compass with a door")
+    door = r.js("() => document.querySelector('.dss-trail-badge')._door")
+    r.page.locator(".book-pitch.where-next tw-link:has-text('The barbershop is open.')").first.click()
+    r.page.wait_for_timeout(900)
+    other = r.js("() => window.__dssCompassRecogs || 0")
+    r.page.locator(".book-pitch.where-next tw-link:has-text('Find page 93.')").first.click()
+    r.page.wait_for_timeout(500)
+    st = r.js("() => { var t = document.querySelector('.dss-trail-badge'); var c = t && t.querySelector('.dss-compass'); return [window.__dssCompassRecogs || 0, !!(t && t.classList.contains('dss-compass-recog')), c ? getComputedStyle(c).animationName : '']; }")
+    r.info = "compass door %r; after barber %r; after page 93 %r" % (door, other, st)
+    r.expect(other == 0, "the compass pulsed for a pick that is not its door")
+    r.expect(st[0] == 1 and st[1] and st[2] == "dssCompassRecog", "picking the compass's own door did not set it pulsing gold (%r)" % st)
+
+
+@check("pillars-side-door", "2026-11-24 notes 12-14 (Sam, Dean Street after the Pillars: \"Green Sea is in the list but not clickable\", \"Where next only toggles highlights\", then \"Can you be thrown out of the pillars from the other door (on the side)\"): leaving the Pillars puts you on Manette Street by the side door, not on its front step, and the chosen Green Sea line can be pressed to light its way again")
+def pillars_side_door(r):
+    scratch_passage(r, "T-gs", '(set: $returns to 5)(set: $nightPhase to 1)(set: $coinFound to true)(set: $hasCoin to true)(set: $barberSlipShown to true)(set: $metCritic to true)(set: $returnedPage to true)(set: $visitedPyre to true)(set: $metGreenSeaFriend to false)(set: $whereNext to "pillars")[[Walk on|Dean Street]]')
+    r.go("T-gs", wait=4000)
+    r.js("() => { sessionStorage.setItem('dssMapLast', 'pillars'); try { window.dssDirections.set(''); } catch (e) {} }")
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(3000); r.clear_lore(); r.clear_slips()
+    r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
+    at = r.js("() => { var s = window.dssSohoMap.state; return [s.c, s.r]; }")
+    on = r.page.locator(".book-pitch.where-next .book-pitch-on:has-text('The Green Sea is open now.')")
+    r.expect(on.count() == 1, "the Green Sea line is not the chosen line in Where next?")
+    r.js("() => window.dssDirections.set('')")
+    on.first.click()
+    r.page.wait_for_timeout(600)
+    d = r.js("() => window.dssDirections.get()")
+    r.info = "spawn %r; directions after pressing the chosen line %r" % (at, d)
+    r.expect(at != [43, 11] and at[1] <= 10, "leaving the Pillars still puts you on its front step (%r)" % (at,))
+    r.expect(d == "pillars", "pressing the chosen Green Sea line did not light the way (%r)" % d)
+
+
+@check("key-slip-once-with-directions", "2026-11-24 note 9 (Sam, Approach The Pillars: \"The slip about the third pillar appears twice, once wehen it is ment to (though it should offer directions) then again when you enter the approach to the pillars, it shouldn't be there\"): the pocket key's slip shows on Dean Street with Get Directions, and not again on Approach The Pillars")
+def key_slip_once_with_directions(r):
+    scratch_passage(r, "T-key", '(set: $returns to 6)(set: $nightPhase to 1)(set: $coinFound to true)(set: $hasCoin to true)(set: $barberSlipShown to true)(set: $metCritic to true)(set: $inisToldOfPillars to true)(set: $keyLighter to "held")(set: $dreamKey to "lighter")(set: $pocketSlipLap to 0)[[Walk on|Dean Street]]')
+    r.go("T-key", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    SLIP = "() => [].filter.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip'), function (e) { return /third pillar is open/i.test(e.textContent); }).map(function (e) { return [!!e.querySelector('.dss-hint-go'), e.classList.contains('out')]; })"
+    r.wait_for("() => [].some.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip'), function (e) { return /third pillar is open/i.test(e.textContent); })", 20000, "the pocket key's slip on Dean Street")
+    a = r.js(SLIP)
+    r.expect(a and a[0][0], "the pocket key's slip on Dean Street offers no directions (%r)" % a)
+    r.clear_slips()
+    scratch_passage(r, "T-key2", '(set: $returns to 6)(set: $nightPhase to 1)(set: $coinFound to true)(set: $hasCoin to true)(set: $metCritic to true)(set: $inisToldOfPillars to true)(set: $keyLighter to "held")(set: $dreamKey to "lighter")(set: $pocketSlipLap to 0)[[Walk on|Approach The Pillars]]')
+    r.go("T-key2", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    b = []
+    for _ in range(14):
+        r.page.wait_for_timeout(500)
+        b = b + r.js(SLIP)
+    pn = r.pn()
+    r.info = "Dean Street %r; %s %r" % (a, pn, b)
+    r.expect("Pillars" in pn, "could not walk on to the Pillars' approach (%r)" % pn)
+    r.expect(not b, "the pocket key's slip shows on %s" % pn)
+
+
+@check("airport-book-halo", "2026-11-24 note 10 (Sam, Airport Pub: \"The orange book should have a halo like the other clickable things and liek it does ib the French\"): the book carries the rooms' breathing marker, drawn and on screen")
+def airport_book_halo(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Airport Pub", wait=12000)
+    m = r.js("() => { var s = window.__apBookMarker; if (!s) return null; return [s.material.opacity, s.scale.x, !!s.parent]; }")
+    r.info = "%r" % m
+    r.expect(m and m[0] > 0.3 and m[1] > 0 and m[2], "the Airport Pub's orange book has no resting marker (%r)" % m)
+    r.page.screenshot(path=os.path.join(SHOTS, "airport-book-halo.png"))
+
+
+@check("cave-mantra-whole", "2026-11-24 note 11 (Sam, The Cave: \"So here you can say the whole matnta but on one part of it it is incomplete. What's that about?\"): after Say the mantra, the syllable row under MANTRA COMPLETED has every syllable lit and none dotted, with two haunts held")
+def cave_mantra_whole(r):
+    scratch_passage(r, "T-cave", '(set: $haunts to (a: $haunt1, $haunt2))[[Walk on|The Cave]]')
+    r.go("T-cave", wait=3000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(4000); r.clear_lore(); r.clear_slips()
+    r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.trim() === 'Say the mantra' && !x.closest('.dss-ghost'); })[0]; if (l) l.click(); }")
+    r.page.wait_for_timeout(3000)
+    row = r.js("() => { var rw = [].filter.call(document.querySelectorAll('.nb-mantra-row'), function (x) { return !x.closest('.dss-ghost') && !x.closest('#notebook, .nb-page, tw-dialog'); })[0]; if (!rw) return null; return [rw.querySelectorAll('.nb-mantra-syl.heard').length, rw.querySelectorAll('.nb-mantra-syl.silent').length]; }")
+    r.info = "heard, dotted: %r" % row
+    r.expect(row and row[0] == 6 and row[1] == 0, "the Cave's mantra row is not whole after saying it (%r)" % row)
+
+
 @check("inis-slip-stays-till-lit", "2026-11-23 playtest note 9 (Sam): the slip to find INIS stays until a way to Cecil Court is lit, then goes")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
@@ -715,6 +830,34 @@ def _(r):
     for pg, (n, st, done) in out.items():
         r.expect(n > 0, "%s shows no quotation" % pg)
         r.expect(done <= 4.8, "%s takes %.1f s to type its quotations (done mark included)" % (pg, done))
+
+
+@check("french-approach-alone", "2026-11-24 note 3 (Sam, Approach The French: \"The whole tone music shoudl run alone here, get rid of the background\"): on the approach the whole-tone piece is the only bed playing")
+def french_approach_alone(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    LABELS = ['street-wet', 'street-wet-kerb', 'harp-alley-theme', 'french-approach-music', 'world-himalaya', 'world-nazca', 'world-easter', 'world-pyramid', 'world-ezekiel', 'soho-street', 'soho-rain', 'soho-wall', 'gap-cecil', 'green-sea-music', 'chippy', 'bookshop', 'carthage-melody']
+    r.go("Approach The French", wait=5000)
+    r.js("() => window.dssAudio.updateAmbientBedsForPassage(document.querySelector('tw-story > tw-passage'))")
+    r.page.wait_for_timeout(3000)
+    on = r.js("(ls) => ls.filter(function (l) { try { return window.dssAudio.bedPlaying(l); } catch (e) { return false; } })", LABELS)
+    r.info = "playing: %r" % on
+    r.expect(on == ["french-approach-music"], "on Approach The French the beds playing are %r, not the whole-tone piece alone" % on)
+
+
+@check("password-box-sounds", "2026-11-24 note 4 (Sam, The Ham calls you back: \"Add noises for the password appearing. A sound effect. Add it to all of them\"): each PASSWORD LEARNED box plays its sound once as it comes into view")
+def password_box_sounds(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    got = []
+    for pg in ("The Ham calls you back", "Davy Merkin's tip"):
+        r.go(pg, wait=200)
+        r.wait_for("() => [].some.call(document.querySelectorAll('.item-box .item-header'), function (h) { return /PASSWORD LEARNED/.test(h.textContent) && !h.closest('.dss-ghost'); })", 15000, "the password box on %s" % pg)
+        try: r.wait_for("() => (window.__dssPwLearnedSounds || 0) >= 1", 20000, "the password sound on %s" % pg)
+        except Fail: pass
+        r.page.wait_for_timeout(1500)
+        n = r.js("() => window.__dssPwLearnedSounds || 0")
+        got.append("%s: %d" % (pg, n))
+        r.expect(n == 1, "the password box on %s sounded %d times, not once" % (pg, n))
+    r.info = "; ".join(got)
 
 
 @check("sound-notes-23nov", "2026-11-23 playtest notes 4, 18 and the Green Sea (Sam): the whole tone fades as you enter the French; Dido's lament is ready before the pyre; no guitar piece on Green Sea Approach")
@@ -861,18 +1004,18 @@ def _(r):
     r.expect(min(breaths) >= 150, "no breath between INIS's paragraphs (%r ms)" % breaths)
 
 
-@check("inis-types-faster", "2026-11-24 note 5 (Sam, O'Flatterly's Third Pillar: \"This typewriteer should be sped up\"): INIS's speech types its letters at six tenths of the 20 Nov pace (the breaths between paragraphs unchanged), so its median letter comes in under 12 ms")
+@check("inis-types-faster", "2026-11-24 note 5 (Sam, O'Flatterly's Third Pillar: \"This typewriteer should be sped up\"): INIS's speech types its letters at six tenths of the 20 Nov pace (the breaths between paragraphs unchanged), so its median letter comes in under 12 ms; later that night (note 7, \"Make the typewriter text appear faster\") 0.35, under 7 ms")
 def inis_types_faster(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("O'Flatterly's Third Pillar", wait=200)
-    r.js("""() => { window.__gaps = []; var last = 0, seen = new Set(); var iv = setInterval(function () { var v = document.querySelector('.dss-speech.vt-on:not(.dss-ghost .dss-speech)'); if (!v) return; var now = performance.now(); v.querySelectorAll('.vt-c.vt-in').forEach(function (c) { if (!seen.has(c)) { seen.add(c); if (/[a-z]/i.test(c.textContent)) { if (last) window.__gaps.push(now - last); last = now; } } }); if (window.__gaps.length > 400) clearInterval(iv); }, 4); }""")
+    r.js("""() => { window.__ts = []; var seen = new Set(); var iv = setInterval(function () { var v = document.querySelector('.dss-speech.vt-on:not(.dss-ghost .dss-speech)'); if (!v) return; var now = performance.now(); v.querySelectorAll('.vt-c.vt-in').forEach(function (c) { if (!seen.has(c)) { seen.add(c); window.__ts.push(now); } }); if (window.__ts.length > 200) clearInterval(iv); }, 4); }""")
     r.page.wait_for_timeout(9000)
-    g = sorted(r.js("() => window.__gaps"))
-    r.expect(len(g) > 60, "too few letters typed to measure (%d)" % len(g))
-    if len(g) <= 60: return
-    med = g[len(g) // 2]
-    r.info = "median letter gap %.1f ms over %d letters" % (med, len(g))
-    r.expect(med < 12, "INIS's letters come %.1f ms apart (the 20 Nov pace was about 16 to 20)" % med)
+    ts = r.js("() => window.__ts")
+    r.expect(len(ts) > 150, "too few letters typed to measure (%d)" % len(ts))
+    if len(ts) <= 150: return
+    span = ts[150] - ts[0]
+    r.info = "first 150 letters in %.0f ms" % span
+    r.expect(span < 1000, "INIS's first 150 letters take %.0f ms (about 1300 to 1500 at the first 24 Nov pace; about 600 since note 7)" % span)
 
 
 @check("gents-lock-howto", "2026-11-24 note 6 (Sam, Coach and Horses lock: \"The instruction are confused here, you have no way to solve it without 'just solve it'\"): the door says how to play (click a letter, then another, to swap; gold when right), two clicks on its letters really swap them, and the how-to goes once the door reads true")

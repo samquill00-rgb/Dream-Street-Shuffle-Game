@@ -1,3 +1,9 @@
+# STATE AT 25 NOV, 00:05 (read first)
+- Committed, NOT pushed (Sam pushes): 84d481f room cards centred; 76938d4 the 14 notes of 24 Nov 01:43-02:10 (all done, each with a proved @check, incl. pillars-side-door: leaving the Pillars spawns on Manette Street by the side door via DOORS `out:`, and the chosen Where next line is pressable); 36e3874 regression-player fix (data-p93 hooks fed their own MutationObserver; the 24 Nov full run hung 21 h on trishas-trail-door).
+- A full regression was started at 00:00 on 25 Nov in the old session (log: that session's scratchpad full-regress-1125.log). If unsure it finished, run it again: `~/.dss-regress/venv/bin/python -u tools_regress.py` in the background, alone. Rerun any failure alone before calling it real.
+- Still open: 20 Nov notes 24 and 25; Dido and waltz checks not yet proved by planting; one parked note from an earlier batch.
+- Sam is starting a new playthrough; his new notes come to the new session.
+
 # PYRAMID NOTES OF 22 NOV, 22:54
 P1. Pyramid Mouth: get rid of the dashes and put commas around 'what they say'.
 P2. Pyramid Run: the scarab-stomp text becomes 'A scarab underfoot is worth two in the hand.'; make scarabs easier to jump on.

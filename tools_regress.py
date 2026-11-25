@@ -1822,6 +1822,27 @@ def _(r):
     r.expect(not g[1], "the pink placeholder is still on You give him John")
 
 
+@check("n25-red-asked-first", "2026-11-25 (Sam: \"Yes, do the same for Red\"): giving RED's name stops at a question first, as JOHN's does, with the same two answers, 'Yes, fuck him.' and 'No, reconsider.'")
+def _(r):
+    scratch_passage(r, "T-red-ask", '(set: $metRed to true)(set: $alba to (a: $alba1))(set: $crossed to "")[[Go down|Give him Red?]]')
+    def to_question():
+        r.go("T-red-ask", wait=4000); r.clear_slips()
+        r.page.locator("tw-link:has-text('Go down')").first.click()
+        r.page.wait_for_timeout(5000); r.clear_lore(); r.clear_slips()
+    to_question()
+    q = r.js("() => { var p = [].filter.call(document.querySelectorAll('.cellar-scene'), function (e) { return !e.closest('.dss-ghost'); })[0]; if (!p) return { said: 0, links: [] }; var c = p.cloneNode(true); [].forEach.call(c.querySelectorAll('tw-link'), function (l) { l.remove(); }); return { said: c.innerText.trim().length, links: [].map.call(p.querySelectorAll('tw-link'), function (l) { return l.textContent.trim(); }) }; }")
+    r.info = repr(q)
+    r.expect(r.pn() == "Give him Red?" and q["said"] >= 12, "no question is asked before RED's name is given (%s, %r)" % (r.pn(), q))
+    said = r.js("() => { var p = [].filter.call(document.querySelectorAll('.cellar-scene'), function (e) { return !e.closest('.dss-ghost'); })[0]; return [p.innerText.indexOf('Do you want to betray him for the woman who left you?') >= 0, !!p.querySelector('.claude-draft')]; }")
+    r.expect(said[0] and not said[1], "RED's question is not Sam's line, or a pink placeholder is left (%r)" % said)
+    r.expect(q["links"] == ["Yes, fuck him.", "No, reconsider."], "the question's two answers are %r" % q["links"])
+    r.page.locator(".cellar-scene tw-link", has_text="No, reconsider.").first.click(); r.page.wait_for_timeout(6000)
+    r.expect(r.pn() == "Turn to Copper", "No, reconsider. led to %s" % r.pn())
+    to_question()
+    r.page.locator(".cellar-scene tw-link", has_text="Yes, fuck him.").first.click(); r.page.wait_for_timeout(5000)
+    r.expect(r.pn() == "You give him Red", "going through with it led to %s" % r.pn())
+
+
 @check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
 def _(r):
     r.go("Dean Street", wait=4000)

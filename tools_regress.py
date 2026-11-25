@@ -6367,14 +6367,14 @@ def n25_eating_has_a_sound(r):
     said = [n for n, line in dj if line]
     r.expect(said, "nothing in the chippy speaks its deja vu line in this state, so nothing is proved (%r)" % dj)
     r.expect(lily[0] not in said, "the thing that holds the flower (%r) speaks the room's deja vu line (%r)" % (lily[0], dict(dj).get(lily[0])))
-    r.js("() => { window.__dssEatBites = 0; window.showEatPopup('chips', function () {}); }"); r.page.wait_for_timeout(1500)
+    r.js("() => { window.__dssEatPlays = 0; window.showEatPopup('chips', function () {}); }"); r.page.wait_for_timeout(1500)
     box = r.page.locator("#eat-overlay canvas").first.bounding_box()
     r.expect(box, "no eating card")
     r.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2); r.page.mouse.down(); r.page.wait_for_timeout(1600); r.page.mouse.up()
-    bites = r.js("() => window.__dssEatBites")
-    r.info = "the flower is on %r; %d bites in 1.6 s of eating" % (lily[0], bites)
-    r.expect(3 <= bites <= 7, "eating for 1.6 s made %d bites, expected about five" % bites)
-    r.expect(r.js("() => typeof window.dssAudio.eatCrunch === 'function'"), "there is no bite sound")
+    plays = r.js("() => window.__dssEatPlays || 0")
+    r.info = "the flower is on %r; the eating recording started %d time(s) in one hold" % (lily[0], plays)
+    r.expect(plays == 1, "one hold of the eating card started his eating recording %d times, expected once" % plays)
+    r.expect("eating-chips.m4a" in n25_built(), "his eating recording is not linked in the build")
 
 
 @check("n25-airport-halo-beside-the-book", "2026-11-25 note 8 (Sam, Airport Pub: \"Make the halo slightly to the side of the orage book otherwise they clash\"): the marker stands beside the book, not on it")

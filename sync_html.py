@@ -102,6 +102,7 @@ AUDIO_EMBEDS = [
     ("__DSS_DOORWAY_DROPS_DATA_URI__", "doorway-piss.m4a",                             "audio/mp4"),   # Sam's recording (2026-11-02): one 30 s stream, each doorway starts at its own point; was doorway-drops.m4a ("Water Drops", CeoxBlackj)
     ("__DSS_VOMIT_DATA_URI__",       "vomit-sickness.m4a",                             "audio/mp4"),   # "Sick Noises" by frosty ham: the retch hold
     ("__DSS_REVO_DATA_URI__",        "revo-shout.m4a",                                 "audio/mp4"),   # 2026-11-14: Sam's own shout "Revo!" for the naked runner (revo-originals/), trimmed and turned down
+    ("__DSS_EATING_DATA_URI__",      "eating-chips.m4a",                               "audio/mp4"),   # 2026-11-25: Sam's own recording of eating (eating-originals/New Recording 169.m4a), the silent second at each end cut, rumble under 90 Hz off, evened and brought up
     ("__DSS_REVO_ONE_DATA_URI__",    "revo-shout-one.m4a",                             "audio/mp4"),   # 2026-11-14: the first shout alone, for the two shorter runs
     ("__DSS_MINIMUM_DATA_URI__",     "minimum-miaow.m4a",                              "audio/mp4"),   # 2026-11-20: Sam's own miaow for MINIMUM, the shop cat (minimum-originals/), 3 semitones up, warmed, a small room's reverb
     ("__DSS_PUB_CALLS_DATA_URI__",   "pub-calls.m4a",                                  "audio/mp4"),   # 2026-11-14: four of Sam's own odd shouts in one sheet, 4.5 s a slot, for the pubs' hubbub

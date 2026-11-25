@@ -6510,6 +6510,10 @@ def n25_worm_tune_and_bag_count(r):
     r.js("() => { var w = document.querySelector('.worm-start'); if (w && !w.hidden) w.click(); }"); r.page.wait_for_timeout(2500)
     tunes = r.js("() => window.__dssWormTunes")
     r.expect(tunes == 1, "starting a round started the worm tune %s times" % tunes)
+    # 2026-11-25 (Sam: "make it turn down the street's music"): held under while the tune plays, let back up when the round ends
+    r.expect(r.js("() => window.__dssHeldUnder === true"), "the street's music and beds are not held under the worm tune")
+    r.page.wait_for_timeout(21000)
+    r.expect(r.js("() => window.__dssHeldUnder === false"), "the street's music and beds were not let back up when the round ended")
     r.page.unroute("**/*")
     COUNT = "() => [].filter.call(document.querySelectorAll('.bag-count'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; }).map(function (e) { return e.textContent.replace(/\\s+/g, ' ').trim(); }).join('')"
     out = {}

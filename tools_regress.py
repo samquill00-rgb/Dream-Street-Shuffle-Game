@@ -6409,5 +6409,36 @@ def n25_slip_directions_light(r):
         r.page.unroute("**/*")
 
 
+@check("n25-soho-gate", "2026-11-25 notes 26, 49 and 58 (Sam: \"I've focussed too much on getting people to the dream worlds at the expense of getting them to explore the soho world\"; ruled: gate each new dream world behind a Soho beat, any one of a pitch, a haunt or a flower, and \"The pillar stays shut\"): with a key held and a dream world just walked, Where next? says the pillar will not rise, the Pillars' door does not reach the third pillar, and the corner pillar is dark; one Soho beat later the pillar is open again; and before any world it is never shut. WRITTEN 25 Nov AND NOT YET RUN.")
+def n25_soho_gate(r):
+    BOX = "() => { var b = [].filter.call(document.querySelectorAll('.where-next'), function (x) { return !x.closest('.dss-ghost'); })[0]; return b ? b.innerText : ''; }"
+    PIL = "() => { var p = document.querySelector('body > .dss-pillar-badge'); return p ? p.classList.contains('dss-pillar-shut') : null; }"
+    def street(name, sets):
+        scratch_passage(r, name, T25 + '(set: $returns to 12)' + sets + '(go-to: "Dean Street")')
+        r.go(name, wait=8000); r.clear_lore()
+        e = r.js("() => [].map.call(document.querySelectorAll('tw-error'), function (x) { return x.textContent.slice(0, 120); }).join(' | ')")
+        r.expect(not e, "%s: Harlowe errors: %s" % (name, e))
+        out = [r.js(BOX), r.js(PIL)]
+        return out
+    shut = street("T-gate1", '(set: $worldsVisited to (a: "himalayas"))(set: $gateWorlds to 0)(set: $gateMark to 0)(set: $pillarsNoAuto to false)(set: $sobriety to 60)')
+    r.expect("The third pillar will not rise again yet." in shut[0] and "The third pillar is open." not in shut[0], "straight after a dream world, key in pocket, Where next? reads %r" % shut[0])
+    r.expect(shut[1] is True, "the corner pillar is not dark while the pillar is shut (%r)" % shut[1])
+    r.clear_slips()
+    r.expect(r.js(N25_CLICK, "The Pillars"), "no Pillars door on this Dean Street")
+    seen = set()
+    for _ in range(14):
+        r.page.wait_for_timeout(1000); seen.add(r.pn())
+    r.expect("Third Pillar Portal" not in seen, "while shut, the Pillars door still reached the third pillar (%s)" % sorted(seen))
+    r.page.unroute("**/*")
+    opened = street("T-gate2", '(set: $worldsVisited to (a: "himalayas"))(set: $gateWorlds to 1)(set: $gateMark to 0)')
+    r.page.unroute("**/*")
+    r.expect("The third pillar is open." in opened[0] and "will not rise" not in opened[0], "with a Soho beat since the last world, Where next? reads %r" % opened[0])
+    r.expect(opened[1] is False, "the corner pillar is dark although the pillar is open (%r)" % opened[1])
+    fresh = street("T-gate3", '(set: $worldsVisited to (a:))(set: $gateWorlds to 0)(set: $gateMark to 0)')
+    r.page.unroute("**/*")
+    r.expect("The third pillar is open." in fresh[0], "before any dream world the pillar is shut (%r)" % fresh[0])
+    r.info = "shut: pillar dark, the Pillars door went through %s; after a beat: open; before any world: open" % sorted(seen)
+
+
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

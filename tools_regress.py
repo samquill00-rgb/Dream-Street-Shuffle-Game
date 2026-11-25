@@ -6577,5 +6577,22 @@ def n25_soho_gate_by_play(r):
     r.page.unroute("**/*")
 
 
+@check("n25-room-through-the-wheel", "2026-11-25 (found testing the Coach; Sam: \"Do all your picks\"): in a room where a haunt is caught on arrival, the objects answer the pointer while the haunt's gold wheel is still fading; they were deaf for the seconds it took")
+def n25_room_through_the_wheel(r):
+    n25_walk(r, "T-w25", T25 + '(set: $sawJeffrey to false)(set: $jeffWaiting to false)(set: $hadLilyCall1 to true)(set: $hadDualRing to true)(set: $hauntsEnoughSaid to true)(set: $haunts to (a: $haunt1, $haunt2))', "Coach and Horses bar", wait=1500)
+    r.wait_for("() => !!(window.__dssRooms && window.__dssRooms.cb)", 20000, "the Coach bar room")
+    r.room_ready("cb")
+    pt = r.js("() => window.__dssRooms.cb.point('JEFFREY BERNARD')")
+    log = []
+    for i in range(10):
+        r.page.mouse.move(pt[0] + (i % 2), pt[1]); r.page.wait_for_timeout(250)
+        log.append(((r.js("() => document.querySelector('#cb-wrap canvas').style.cursor") or "-")[0], r.js("() => !!document.getElementById('dss-gate-flash')")))
+    under = [c for c, f in log if f]
+    r.info = "pointer over JEFFREY each 250 ms (cursor, wheel up): %r" % log
+    r.expect(under, "the gold wheel was never up, so nothing is proved")
+    r.expect(all(c == "p" for c in under[1:]), "with the gold wheel still up the room's objects do not answer the pointer (%r)" % log)
+    r.page.unroute("**/*")
+
+
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

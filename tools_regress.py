@@ -378,7 +378,7 @@ def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     r.go("Dean Street", wait=5000)
     r.expect(not r.js("() => !!document.querySelector('.dss-trail-badge')"), "a trail badge shows before any trail is begun")
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); x.setAttribute('data-keys', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
     # 2026-11-23 playtest note 20 (Sam: a trail "should only show in the corner AFTER you have done the first errand (page 93)")
     r.js("() => { window.__p93 = 'false'; }")
     r.page.wait_for_timeout(1800)
@@ -389,18 +389,18 @@ def _(r):
     cw = r.js("() => { var c = document.querySelector('.dss-trail-badge .dss-compass'); return c ? c.getBoundingClientRect().width : 0; }")
     r.expect(cw >= 100, "the trail badge's compass is %dpx across (116 since 23 Nov)" % cw)
     t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); if (!t) return ''; var b = t.getBoundingClientRect(); return (b.right <= innerWidth && b.right > innerWidth - 420 && b.top > 60 && b.top < 320 ? 'in ' : 'out ') + t.textContent; }")
-    r.expect(t.startswith("in ") and "THE HIMALAYAS TRAIL" in t and "Pillars of Hercules" in t, "the trail badge is missing, wrong or off its corner (%r)" % t)
+    r.expect(t.startswith("in ") and "THE HIMALAYAS TRAIL" in t and "French" in t, "the trail badge is missing, wrong or off its corner (%r)" % t)
 
 
 @check("trail-compass", "2026-11-11 note 9: the trail badge is a compass whose hand points across the Soho map to the next step's door")
 def _(r):
     r.go("Dean Street", wait=5000)
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); x.setAttribute('data-keys', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
     r.page.wait_for_timeout(1500)
     r.expect(r.js("() => !!document.querySelector('.dss-trail-badge .dss-compass-hand')"), "the trail badge has no compass")
-    door = r.js("() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'pillars'; })[0]; return [d.fc, d.fr]; }")
+    door = r.js("() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'french'; })[0]; return [d.fc, d.fr]; }")
     got = []
-    for spot in ([19, 30], [43, 30], [30, 11]):
+    for spot in ([19, 12], [43, 30], [30, 11]):   # none of them by the French's door, where the hand spins instead of pointing
         ok = r.js("([c, r0]) => { for (var dc = 0; dc < 4; dc++) for (var s = -1; s <= 1; s += 2) if (window.__dssSohoTeleport(c + dc * s, r0)) return [c + dc * s, r0]; return null; }", spot)
         r.expect(ok, "could not stand at %s" % spot)
         if not ok: return
@@ -409,7 +409,7 @@ def _(r):
         want = math.degrees(math.atan2(door[0] - ok[0], -(door[1] - ok[1])))
         off = abs(((ang - want) + 540) % 360 - 180)
         got.append("%s: %.0f (want %.0f)" % (ok, ang, want))
-        r.expect(off < 12, "the compass points %.0f degrees off the Pillars door from %s" % (off, ok))
+        r.expect(off < 12, "the compass points %.0f degrees off the French's door (the key's own door since 2026-11-25) from %s" % (off, ok))
     r.info = "; ".join(got)
     r.page.locator(".dss-trail-badge").screenshot(path=os.path.join(SHOTS, "trail-compass.png"))
 
@@ -418,11 +418,11 @@ def _(r):
 def compass_spins_near(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("Dean Street", wait=5000)
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); x.setAttribute('data-keys', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['ci/A piano'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'ci/A piano': true} })); }")
     r.page.wait_for_timeout(1500)
-    door = r.js("() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'pillars'; })[0]; return [d.fc, d.fr]; }")
+    door = r.js("() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'french'; })[0]; return [d.fc, d.fr]; }")
     SPIN = "() => { var s = document.querySelector('.dss-trail-badge .dss-compass-sway'); if (!s) return null; var cs = getComputedStyle(s); return [cs.animationName, parseFloat(cs.animationDuration)]; }"
-    far = r.js("([c, r0]) => { for (var dc = 0; dc < 4; dc++) for (var s = -1; s <= 1; s += 2) if (window.__dssSohoTeleport(c + dc * s, r0)) return [c + dc * s, r0]; return null; }", [19, 30])
+    far = r.js("([c, r0]) => { for (var dc = 0; dc < 4; dc++) for (var s = -1; s <= 1; s += 2) if (window.__dssSohoTeleport(c + dc * s, r0)) return [c + dc * s, r0]; return null; }", [43, 12])
     r.page.wait_for_timeout(1400)
     a_far = r.js(SPIN)
     near = None
@@ -433,14 +433,14 @@ def compass_spins_near(r):
     a_near = r.js(SPIN)
     r.info = "far %s %r; near %s %r" % (far, a_far, near, a_near)
     r.expect(far and a_far and a_far[0] != "dssCompassSpin", "the hand spins far from the door (%r)" % a_far)
-    r.expect(near, "could not stand by the Pillars door")
+    r.expect(near, "could not stand by the French's door")
     r.expect(a_near and a_near[0] == "dssCompassSpin" and a_near[1] <= 0.8, "the hand does not spin fast by the door (%r)" % a_near)
 
 
 @check("trail-picks-up-part-way", "2026-11-09 Sam: a trail can be picked up at any step (the cellar starts two of them)")
 def _(r):
     r.go("Dean Street", wait=5000)
-    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['pi/A lattice window'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'pi/A lattice window': true} })); }")
+    r.js("() => { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); x.setAttribute('data-keys', 'lighter cocaine ticket slip eye'); }); }; f(); setInterval(f, 100); localStorage.setItem('dssVoicesSeen', JSON.stringify(['pi/A lattice window'])); localStorage.setItem('dssTrailTonight', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, seen: {'pi/A lattice window': true} })); }")
     r.page.wait_for_timeout(1500)
     t = r.js("() => { var t = document.querySelector('.dss-trail-badge'); return t ? t.textContent : ''; }")
     r.expect("THE HIMALAYAS TRAIL" in t and "French" in t, "seeing only the trail's middle step lit no badge for its last (%r)" % t)
@@ -448,7 +448,7 @@ def _(r):
 
 @check("trishas-trail-door", "2026-11-09 Sam: the Nazca trail needs a way past Trisha's bouncers without the matchbook")
 def _(r):
-    r.page.add_init_script("(function () { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { if (x.getAttribute('data-trails') !== 'true') x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); if (x.getAttribute('data-lying') !== 'lighter cocaine ticket slip eye') x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); }); }; new MutationObserver(f).observe(document, { subtree: true, childList: true, attributes: true }); })();")
+    r.page.add_init_script("(function () { var f = function () { document.querySelectorAll('#dss-voice-state').forEach(function (x) { if (x.getAttribute('data-trails') !== 'true') x.setAttribute('data-trails', 'true'); if (x.getAttribute('data-p93') !== (window.__p93 || 'true')) x.setAttribute('data-p93', window.__p93 || 'true'); if (x.getAttribute('data-lying') !== 'lighter cocaine ticket slip eye') x.setAttribute('data-lying', 'lighter cocaine ticket slip eye'); if (x.getAttribute('data-keys') !== 'lighter cocaine ticket slip eye') x.setAttribute('data-keys', 'lighter cocaine ticket slip eye'); }); }; new MutationObserver(f).observe(document, { subtree: true, childList: true, attributes: true }); })();")
     r.go("Dean Street", wait=3000)
     r.js("() => { localStorage.setItem('dssVoicesSeen', JSON.stringify([])); localStorage.removeItem('dssTrailTonight'); }")
     r.go("Failure: Trisha's", wait=4000)
@@ -603,7 +603,7 @@ def _(r):
 
 @check("barber-jimmy-slips", "2026-11-09 note 14: a slip telling you the barbershop, then Mister Jimmy's, has opened")
 def _(r):
-    scratch_passage(r, "T-phase1", '(set: $coinFound to true)(set: $hasCoin to true)(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')
+    scratch_passage(r, "T-phase1", '(set: $coinFound to true)(set: $hasCoin to true)(set: $metRed to true)(set: $nightPhase to 1)(set: $returns to 3)[[Walk on|Dean Street]]')   # RED met, so the street's alleys and shops are on it: since 2026-11-25 a slip offers directions only to a door the street has
     r.go("T-phase1", wait=4000)
     r.page.locator("tw-link:has-text('Walk on')").first.click()
     r.page.wait_for_timeout(3000)
@@ -682,7 +682,7 @@ def room_cards_centred(r):
 
 @check("slip-directions-click", "2026-11-24 note 5 (Sam, Dean Street: \"When tyou get directions from the slip it should make the same noise as when you get them from the main menu\"): the slip's Get Directions strikes the same typewriter key, at the same level, as a Where next? pick")
 def slip_directions_click(r):
-    scratch_passage(r, "T-wn", '(set: $coinFound to true)(set: $hasCoin to true)(set: $nightPhase to 1)(set: $returns to 4)(set: $barberSlipShown to false)(set: $metCritic to true)[[Walk on|Dean Street]]')
+    scratch_passage(r, "T-wn", '(set: $coinFound to true)(set: $hasCoin to true)(set: $metRed to true)(set: $nightPhase to 1)(set: $returns to 4)(set: $barberSlipShown to false)(set: $metCritic to true)[[Walk on|Dean Street]]')
     r.go("T-wn", wait=4000)
     r.page.locator("tw-link:has-text('Walk on')").first.click()
     r.page.wait_for_timeout(4000)
@@ -731,7 +731,7 @@ def compass_recognises_pick(r):
 
 @check("pillars-side-door", "2026-11-24 notes 12-14 (Sam, Dean Street after the Pillars: \"Green Sea is in the list but not clickable\", \"Where next only toggles highlights\", then \"Can you be thrown out of the pillars from the other door (on the side)\"): leaving the Pillars puts you on Manette Street by the side door, not on its front step, and the chosen Green Sea line can be pressed to light its way again")
 def pillars_side_door(r):
-    scratch_passage(r, "T-gs", '(set: $returns to 5)(set: $nightPhase to 1)(set: $coinFound to true)(set: $hasCoin to true)(set: $barberSlipShown to true)(set: $metCritic to true)(set: $returnedPage to true)(set: $visitedPyre to true)(set: $metGreenSeaFriend to false)(set: $whereNext to "pillars")[[Walk on|Dean Street]]')
+    scratch_passage(r, "T-gs", '(set: $returns to 5)(set: $nightPhase to 1)(set: $coinFound to true)(set: $hasCoin to true)(set: $barberSlipShown to true)(set: $metCritic to true)(set: $returnedPage to true)(set: $visitedPyre to true)(set: $metGreenSeaFriend to false)(set: $whereNext to "The Green Sea is open now.")[[Walk on|Dean Street]]')
     r.go("T-gs", wait=4000)
     r.js("() => { sessionStorage.setItem('dssMapLast', 'pillars'); try { window.dssDirections.set(''); } catch (e) {} }")
     r.page.locator("tw-link:has-text('Walk on')").first.click()
@@ -1376,7 +1376,7 @@ def _(r):
 
 @check("trail-badge-tonight-only", "2026-11-10 (Sam: \"this night only\"): the trail badge counts only steps looked at tonight, not on earlier nights")
 def _(r):
-    scratch_passage(r, "T-trail", '(set: $visitedCarthage to true)(set: $returnedPage to true)[[Walk on|Dean Street]]')
+    scratch_passage(r, "T-trail", '(set: $visitedCarthage to true)(set: $returnedPage to true)(set: $inisToldOfPillars to true)[[Walk on|Dean Street]]')   # INIS has spoken: since 2026-11-25 the badge points at the key itself, which is only there once he has
     r.go("T-trail", wait=3000)
     r.clear_slips()
     r.js("() => { var t = window.DSS_VOICES.trails, k = Object.keys(t).filter(function (x) { return x !== 'eye'; })[0]; window.__tk = t[k].steps[0].at; localStorage.setItem('dssVoicesSeen', JSON.stringify([window.__tk])); localStorage.removeItem('dssTrailTonight'); }")
@@ -3587,9 +3587,9 @@ def pyramid_notes_1121(r):
     tap = "(t) => { var l = Array.from(document.querySelectorAll('tw-link')).find(e => e.textContent.trim() === t); if (l) l.click(); return !!l; }"
     links = lambda: r.js("() => Array.from(document.querySelectorAll('tw-link')).map(l => l.textContent.trim())")
     r.go("The King's Chamber: the proportion", wait=6000)
-    r.expect("Back the way you came" not in links(), "the proportion page offers the way back before the silence is listened to")
+    r.expect("Back where you came from" not in links(), "the proportion page offers the way back before the silence is listened to")
     r.expect(r.js(tap, "Keep listening to the silence"), "no Keep listening to the silence"); r.page.wait_for_timeout(2500)
-    r.expect("Back the way you came" in links(), "no way back after listening to the silence")
+    r.expect("Back where you came from" in links(), "no way back after listening to the silence (the link reads 'Back where you came from' since 2026-11-25 note 19)")
 
 
 @check("easter-notes-1121","2026-11-21 (Sam, playtest on Easter Island: \"FIGHT should be bigger and more obvious\"; the Reclamation \"shakes around a bit, it needs to be steady\"; at the Glyph \"there should be no 'Down to the boat' options. None after you play the game\"; \"you just shouldn't be able to play the game then quit before the end\"; \"make Subcomandante in the minigame a ghost\")")
@@ -3801,17 +3801,19 @@ def _(r):
     BASE = '(display: "Night Resets")(set: $alleyReturn to false)'
     pn = walk("T-li8", BASE + '(set: $returns to 8)[[go up the street|Dean Street]]', "go up the street")
     r.expect(pn == "Dean Street", "lap 8 went to %r, before the late interludes are due" % pn)
-    pn = walk("T-li10", BASE + '(set: $returns to 10)[[go up the street|Dean Street]]', "go up the street")
-    r.expect(pn == "Late interlude 1", "lap 10 went to %r, not the first late interlude" % pn)
+    pn = walk("T-li12", BASE + '(set: $returns to 12)[[go up the street|Dean Street]]', "go up the street")
+    r.expect(pn == "Dean Street", "lap 12 went to %r; the first late interlude waits for lap 14 since 2026-11-25" % pn)
+    pn = walk("T-li10", BASE + '(set: $returns to 14)[[go up the street|Dean Street]]', "go up the street")
+    r.expect(pn == "Late interlude 1", "lap 14 went to %r, not the first late interlude (laps 14 and 18 since 2026-11-25 note 46; 10 and 13 before)" % pn)
     r.wait_for("() => /what life was, entire\\./.test(document.querySelector('.typewriter-page').textContent)", 60000, "the lap 10 page to finish typing")
     r.expect("Martyr's Memorial" in r.js(WORDS) and "what life was, entire." in r.js(WORDS), "the lap 10 page is not Sam's words: %r" % r.js(WORDS)[:120])
-    pn = walk("T-li13", BASE + '(set: $returns to 13)(set: $sawLateInterlude1 to true)[[go up the street|Dean Street]]', "go up the street")
-    r.expect(pn == "Late interlude 2", "lap 13 went to %r, not the second late interlude" % pn)
+    pn = walk("T-li13", BASE + '(set: $returns to 18)(set: $sawLateInterlude1 to true)[[go up the street|Dean Street]]', "go up the street")
+    r.expect(pn == "Late interlude 2", "lap 18 went to %r, not the second late interlude" % pn)
     r.wait_for("() => /her mother.s\\./.test(document.querySelector('.typewriter-page').textContent)", 60000, "the lap 13 page to finish typing")
     r.expect("you kiss her forehead and her mother's." in r.js(WORDS), "the lap 13 page is not Sam's words: %r" % r.js(WORDS)[:120])
     pn = walk("T-dawn-early", BASE + '[[walk north|Towards Dawn]]', "walk north")
     r.clear_slips(); r.page.locator("tw-link:has-text('Go towards dawn'):visible").first.click(); r.page.wait_for_timeout(3000)
-    r.expect(r.pn() == "The Fetch", "before the dawn, Go towards dawn went to %r" % r.pn())
+    r.expect(r.pn() == "Dean Street", "before the night is lived, Go towards dawn went to %r (since 2026-11-25 note 45 such a night is turned back to Dean Street before the Fetch)" % r.pn())
     pn = walk("T-dawn", BASE + '(set: $alba to (a: $alba1, $alba2, $alba3))(set: $albaWholeSlipShown to true)[[walk north|Towards Dawn]]', "walk north")
     r.clear_slips(); r.page.locator("tw-link:has-text('Go towards dawn'):visible").first.click(); r.page.wait_for_timeout(3000)
     r.expect(r.pn() == "The Fetch", "at the dawn, Go towards dawn went to %r, not straight to the Fetch" % r.pn())
@@ -4016,7 +4018,7 @@ def notes_1114_source(r):
     cc = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cecil-court-3d-static.html"), encoding="utf-8").read()
     for a, b in SWAPS: cc = cc.replace(a, b)
     r.expect("emissive: 0x8a5a26, emissiveIntensity: 0.3" in cc and "PointLight(0xffb070, 2.6, 7.5, 2)" in cc, "note 13: the bronze hand in Cecil Court has lost its own light or its lamp (its light is 0.3 since 2026-11-23 note 10, \"hand statue a little darker\"; was 0.5)")
-    r.expect("cecil-court-3d-static.html?v=20261114a" in t, "note 13: the game still loads the older Cecil Court scene")
+    r.expect("cecil-court-3d-static.html?v=20261123a" in t, "note 13: the game still loads the older Cecil Court scene")
     r.expect('class="dss-speech dss-speech-quick" data-speaker="INIS' in t and "classList.contains('dss-speech-quick') ? 0.5 : 1" in t, "note 19: INIS's third-pillar speech is back at the slow pace (half the time since 2026-11-20 note 15)")
     r.go("Dean Street", wait=1500)
 
@@ -5983,7 +5985,7 @@ def n25_source(r):
     r.expect("But isn’t it something to have stood" in t, "note 20: Late interlude 1 does not read 'isn't it something'")
     r.expect("{ delay: 0.8 /*" in t, "note 27: the chippy's streaker does not start a second sooner")
     r.expect("[[Go to war|The Reclamation]]" in t.replace("&#39;", "'") or "Go to war|The Reclamation" in t, "note 34: the Moai's call does not read GO TO WAR")
-    r.expect("(unless: $joyrideRode is true)[(set: $joyrideRode to true)(set: $confidence to ($statGain: $confidence, 8))]" in t.replace("&quot;", '"'), "note 37: the ride no longer lifts MORALE")
+    r.expect("(unless: $joyrideRode is true)[(set: $joyrideRode to true)(set: $confidence to ($statGain: $confidence, 8))](go-to: \"Dean Street\")" in t.replace("&quot;", '"'), "note 37: the ride no longer lifts MORALE as you get out")
     jr = open(os.path.join(ROOT, "soho-joyride.html"), encoding="utf-8").read()
     for a, b in SWAPS: jr = jr.replace(a, b)
     r.expect("if (dStop < (car.atNode ? 7 : 24)) fireApproach();" in jr, "note 38: the ride asks which way 24 m before the crossing again")
@@ -6172,8 +6174,7 @@ def n25_square_gate_and_page(r):
     card = r.js("() => { var c = document.getElementById('sq-card'); return c && c.style.display !== 'none' ? c.innerText : ''; }")
     r.expect("GATE" in card.upper() and "Back to the street" in card, "pressing the gate's light does not open the gate's card with the way back (%r)" % card)
     r.js("() => { [].forEach.call(document.querySelectorAll('#sq-card button'), function (b) { if (/Back to the street/i.test(b.textContent)) b.click(); }); }")
-    r.page.wait_for_timeout(5000)
-    r.expect(r.pn() == "Dean Street", "the gate leads to %r" % r.pn())
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dean Street'", 15000, "the gate to lead back to Dean Street (on %s)" % r.pn())
 
 
 @check("n25-worms-over-the-rim", "2026-11-25 note 24 (Sam, the gardener's hut: \"The phallic worms need to come through the holes, at the moment they don't\"): an up worm stands out above the rim of its hole, and a resting one cannot be seen")
@@ -6438,6 +6439,105 @@ def n25_soho_gate(r):
     r.page.unroute("**/*")
     r.expect("The third pillar is open." in fresh[0], "before any dream world the pillar is shut (%r)" % fresh[0])
     r.info = "shut: pillar dark, the Pillars door went through %s; after a beat: open; before any world: open" % sorted(seen)
+
+
+# ---------------------------------------------------------------- 2026-11-25, later: Sam's rulings from the walkthrough
+@check("n25-rulings-source", "2026-11-25 rulings (Sam): the flowers line is said once as LILY is named and the chippy's Eat. no longer warns of its lily (28); Shana's options carry captions (59); a pink line waits in You give him John (52); the ticket's and the lighter's clue lines lose their talk of steps and no card offers FOLLOW THIS TRAIL (29); his eating recording, his French piano piece and the worm game's comic loop are linked")
+def n25_rulings_source(r):
+    import html as _h
+    t = n25_built()
+    for a, b in SWAPS: t = t.replace(a, b)
+    u = _h.unescape(t)
+    r.expect('window.dssInlineHint("Gather flowers. There are five to find.")' in u and '(set: $lilyNamed to true)(set: $lilyHintShown to true)' in u, "note 28: the flowers line is not said as LILY is named")
+    r.expect('(set: _cfHolds to "There is a lily in this room. Gather it.")' not in u, "note 28: the chippy's Eat. warns of its own lily again")
+    r.expect(u.count('<div class="dss-opt-caption">Hear her verdict on the book.</div>') == 2 and '<div class="dss-opt-caption">A new spread of three cards.</div>' in u, "note 59: Shana's options have lost their captions")
+    r.expect("[Sam: more on betraying JOHN ST. JOHN, your old friend, goes here.]" in u or "ASHTON hears it fall, as loud as distant glass, breaking." in u, "note 52: You give him John has lost its place for his lines")
+    r.expect("then: 'Fish is good for Friday. Saturday was hell; go to Easter Island.' }" in t and "then: 'Here. The brass lighter by the till.' }" in t, "note 29: a clue line counts steps again")
+    r.expect("if (false && st && l.voice === 'then'" in t and "function followed() { return null;" in t, "note 29: the step sign or FOLLOW THIS TRAIL is back")
+    for f in ("eating-chips.m4a", "french-piano-approach.m4a", "worm-comic-theme.m4a"):
+        r.expect(f in t and os.path.exists(os.path.join(ROOT, f)), "%s is not linked in the build or not beside it" % f)
+
+
+@check("n25-tour-guide-box", "2026-11-25 note 4 (Sam, Approach O'Flatterly: \"On this second sisit there should be a dialogue box about a tourguide lying about harry potter. Let me write it\"; \"Build the box, pink line\"): a speaker's panel, A TOUR GUIDE, stands over the Cecil Court scene on the return with page 93, on top of it and inside the window")
+def n25_tour_guide_box(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Approach O'Flatterly", wait=10000); r.clear_lore(); r.clear_slips()
+    b = r.js("() => { var e = [].filter.call(document.querySelectorAll('.dss-approach-speech'), function (x) { return !x.closest('.dss-ghost'); })[0]; if (!e) return null; var q = e.getBoundingClientRect(), top = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2); return [e.getAttribute('data-speaker'), Math.round(q.left), Math.round(q.top), Math.round(q.width), Math.round(q.height), !!(top && top.closest('.dss-approach-speech')), +getComputedStyle(e).opacity, e.textContent.trim().length]; }")
+    r.info = "%r" % b
+    r.expect(b and b[0] == "A TOUR GUIDE", "no A TOUR GUIDE panel on the second O'Flatterly approach (%r)" % b)
+    r.expect(b[5] and b[6] > 0.9 and b[7] > 10, "the panel is under the scene, not yet in, or empty (%r)" % b)
+    r.expect(b[1] >= 0 and b[2] >= 0 and b[1] + b[3] <= 1440 and b[2] + b[4] <= 900 and b[3] >= 300, "the panel is off the window or too narrow (%r)" % b)
+
+
+@check("n25-slip-go-needs-door", "2026-11-25 note 3 (Sam: \"I just clicked the slip for direction to cecil court and the direction round didn't flash up\"; he confirmed the red path did not show): on a Dean Street that does not yet offer Cecil Court, the slip to find INIS carries no Get Directions, so no press can light nothing")
+def n25_slip_go_needs_door(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    scratch_passage(r, "T-s3b", '(set: $coinFound to true)(set: $hasCoin to true)(set: $returns to 2)(set: $knowsCecilCourt to true)(set: $metCritic to true)(set: $knowsAboutPage to false)(set: $streetTipLap to 0)(set: $cecilTipShown to false)[[Walk on|Dean Street]]')
+    r.go("T-s3b", wait=4000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.wait_for("() => [].some.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (e) { return e.textContent.indexOf('INIS') >= 0; })", 25000, "the slip to find INIS")
+    r.page.wait_for_timeout(1500)
+    st = r.js("() => { var c = [].filter.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (e) { return e.textContent.indexOf('INIS') >= 0; })[0]; var g = c.querySelector('.dss-hint-go'); return [!!(g && g.getClientRects().length), window.__dssGoHeld || 0]; }")
+    links = r.js(HUB_LINKS)
+    r.info = "Get Directions on the slip: %s; hub links %r" % (st[0], links)
+    r.expect(not any("Cecil Court" in t for t in links), "this Dean Street does offer Cecil Court, so nothing is proved (%r)" % links)
+    r.expect(not st[0] and st[1] >= 1, "the slip offers Get Directions to a door this Dean Street does not have (%r)" % st)
+    r.page.unroute("**/*")
+
+
+@check("n25-fetch-lamps-and-compass", "2026-11-25 note 32 (Sam, Dean Street: \"When the fetch appears there should be something more pointing him out\"; ruled \"Lamps and compass\"): while the Fetch stands on the map the map says where he is and the compass comes up and turns to him")
+def n25_fetch_lamps_and_compass(r):
+    scratch_passage(r, "T-f32", T25 + '(set: $returns to 12)(set: $fetchMet to 0)(set: $afterMidnight to true)(go-to: "Dean Street")')
+    r.go("T-f32", wait=3000)
+    r.js("() => { try { localStorage.setItem('dssFetchTest', '1'); } catch (e) {} }")
+    r.go("T-f32", wait=7000); r.clear_lore(); r.clear_slips()
+    r.js("() => window.__dssSohoTeleport(19, 20)")   # half way up Dean Street: he needs a straight length of street to stand at the end of
+    r.wait_for("() => !!(window.__dssFetchAt && Date.now() - window.__dssFetchAt.at < 900)", 40000, "the Fetch to stand on the map")
+    r.wait_for("() => (window.__dssFetchCompass || 0) >= 1 && !!document.querySelector('.dss-trail-badge')", 6000, "the compass to come up for him")
+    b = r.js("() => { var t = document.querySelector('.dss-trail-badge'); return [t.querySelector('.dss-pocket-badge-label').textContent, t._door, getComputedStyle(t.querySelector('.dss-compass-hand')).transform !== 'none']; }")
+    r.info = "%r, at %r" % (b, r.js("() => window.__dssFetchAt"))
+    r.page.locator("#soho-map-container").screenshot(path=os.path.join(SHOTS, "fetch-lamps.png"))
+    r.expect(b[1] == "fetch-fig", "the compass is not turned to the Fetch (%r)" % b)
+    r.js("() => { try { localStorage.removeItem('dssFetchTest'); } catch (e) {} }")
+    r.page.unroute("**/*")
+
+
+@check("n25-worm-tune-and-bag-count", "2026-11-25 notes 24 and 58 (Sam: \"I ask want to add music to this minigame\", a comic version of the main Soho theme; \"my manuscript has been massive forgotten\", ruled \"Yes, counts only\"): a round of the worm game starts its tune once; and Dean Street counts the night's readers under the bag line, only once someone has read it, and still fits the window")
+def n25_worm_tune_and_bag_count(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Soho Square: the gardener’s hut", wait=6000); r.clear_lore(); r.clear_slips()
+    r.js("() => { window.__dssWormTunes = 0; var b = document.querySelector('#dss-rules-overlay .dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(900)
+    r.js("() => { var w = document.querySelector('.worm-start'); if (w && !w.hidden) w.click(); }"); r.page.wait_for_timeout(2500)
+    tunes = r.js("() => window.__dssWormTunes")
+    r.expect(tunes == 1, "starting a round started the worm tune %s times" % tunes)
+    r.page.unroute("**/*")
+    COUNT = "() => [].filter.call(document.querySelectorAll('.bag-count'), function (e) { return !e.closest('.dss-ghost'); }).map(function (e) { return e.textContent.replace(/\\s+/g, ' ').trim(); }).join('')"
+    out = {}
+    for nm, sets in (("two", '(set: $pitched to (a: "jeffrey", "shana"))'), ("none", '(set: $pitched to (a:))')):
+        scratch_passage(r, "T-bag", T25 + '(set: $returns to 12)' + sets + '(go-to: "Dean Street")')
+        r.go("T-bag", wait=7000); r.clear_lore(); r.clear_slips(); r.page.wait_for_timeout(2500)
+        out[nm] = [r.js(COUNT), r.js("() => document.scrollingElement.scrollHeight - innerHeight")]
+        r.page.unroute("**/*")
+    r.info = "worm tune %s; %r" % (tunes, out)
+    r.expect(out["two"][0].startswith("Two have read it tonight."), "with two readers Dean Street's count reads %r" % out["two"][0])
+    r.expect(out["none"][0] == "", "with no reader yet Dean Street counts anyway (%r)" % out["none"][0])
+    r.expect(out["two"][1] <= 4, "Dean Street scrolls %d px with the count line" % out["two"][1])
+
+
+@check("n25-flowers-said-once", "2026-11-25 note 28 (Sam: \"we need to explain somewhere that they should collect all the flowers without giving a hint for each one\"; ruled \"Night Ahead Part Two\"; the room badge \"Only on the first time\"): as LILY is named a slip says there are five flowers; the lily badge shows in the first flower room of a run and in no other")
+def n25_flowers_said_once(r):
+    n25_walk(r, "T-l28", '(set: $lilyNamed to false)(set: $lilyHintShown to false)', "Night Ahead: LILY", wait=2000)
+    n25_slip(r, "Gather flowers. There are five to find.", 20000)
+    r.page.unroute("**/*")
+    HINT = "() => [].some.call(document.querySelectorAll('body *'), function (e) { if (e.closest('.dss-ghost, script, style, tw-storydata') || !/^There is a lily in this room/.test(e.textContent.trim()) || !e.getClientRects().length) return false; var op = 1, a = e; while (a && a.nodeType === 1) { op *= +getComputedStyle(a).opacity; a = a.parentNode; } return op > 0.2; })"
+    r.js("() => { try { localStorage.removeItem('dssLilyBadge'); } catch (e) {} }")
+    r.go("Chinese Fish and Chips", wait=1500); r.room_ready("cf"); r.page.wait_for_timeout(2500)
+    first = [r.js(HINT), r.js("() => localStorage.getItem('dssLilyBadge')")]
+    r.go("Ronnie Scott's", wait=1500); r.room_ready("ri"); r.page.wait_for_timeout(2500)
+    second = [r.js(HINT), r.js("() => localStorage.getItem('dssLilyBadge')")]
+    r.info = "first flower room: badge %s (%s); second: badge %s (%s)" % (first[0], first[1], second[0], second[1])
+    r.expect(first[0] and first[1] and first[1].endswith(":cf"), "the first flower room of the run does not show the lily badge (%r)" % first)
+    r.expect(not second[0], "a second flower room shows the lily badge too (%r)" % second)
 
 
 if __name__ == "__main__":

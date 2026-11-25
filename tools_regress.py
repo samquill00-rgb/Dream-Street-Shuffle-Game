@@ -1781,6 +1781,26 @@ def _(r):
             ctx.close()
 
 
+@check("n25-room-says-click-a-light", "2026-11-25 (Sam's tester, in the French: \"he got stuck here cause he couldn't work out that he needed to click the red halo and so gave up\"): until the first object of a game has been pressed a room says so in a pane above its name; the first press ends it, and the next room does not say it again")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    T1 = "() => { var t = [].filter.call(document.querySelectorAll('.dss-room-teach'), function (e) { return !e.closest('.dss-ghost'); })[0]; if (!t) return null; var b = t.getBoundingClientRect(); return { on: t.classList.contains('on'), op: +getComputedStyle(t).opacity, text: t.textContent, box: [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)] }; }"
+    r.go("The French", wait=9000)
+    r.wait_for("() => !!(window.__dssRooms && window.__dssRooms.fi)", 20000, "the French's room")
+    r.room_ready("fi", photos=False)
+    r.clear_lore(); r.clear_slips(); r.page.wait_for_timeout(2500)
+    g = r.js(T1)
+    r.info = repr(g)
+    r.expect(g and g["on"] and g["op"] > 0.9 and "coloured light" in g["text"], "the French does not say to click a light before anything has been pressed (%r)" % g)
+    r.expect(g["box"][0] >= 0 and g["box"][2] <= 1440 and g["box"][1] >= 100 and g["box"][3] <= 900, "the pane runs off the window (%r)" % g["box"])
+    cap = r.js("() => { var c = document.querySelector('.dss-room-caption'); if (!c) return null; var b = c.getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; }")
+    r.expect(not cap or g["box"][3] <= cap[0] + 2, "the pane sits on the room's name (%r, the name %r)" % (g["box"], cap))
+    r.click_object("fi", "Photographs"); r.page.wait_for_timeout(2500)
+    r.expect(r.js(T1) is None, "the pane is still there after the first object was pressed")
+    r.go("Coach and Horses bar", wait=9000); r.page.wait_for_timeout(3000)
+    r.expect(r.js(T1) is None, "the next room said it again")
+
+
 @check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
 def _(r):
     r.go("Dean Street", wait=4000)

@@ -6364,7 +6364,7 @@ def n25_eating_has_a_sound(r):
     lily = [n for n in names if r.js("(n) => !!(window.__dssLilyProbe && window.__dssLilyProbe.room === 'cf' && window.__dssLilyProbe(n))", n)]
     r.expect(len(lily) == 1, "the chippy's flower is held by %r (of %r), expected one thing" % (lily, names))
     # every thing in the room used up on an earlier night: one of them should speak the room's deja vu line, and never the one that holds the flower
-    dj = r.js("""() => { var V = window.dssVoices, names = window.__dssRooms.cf.names(); names.forEach(function (n) { for (var i = 0; i < 8; i++) V.look('cf', n); }); var n0 = +localStorage.getItem('dssNightNo') || 0, m = {}; names.forEach(function (n) { m['cf/' + n] = { at: n0 - 1 }; }); localStorage.setItem('dssVoicesDeja', JSON.stringify(m)); return names.map(function (n) { return [n, V.deja('cf', n)]; }); }""")
+    dj = r.js("""() => { var V = window.dssVoices, names = window.__dssRooms.cf.names(); V.see('fi/A window'); V.see('ri/An empty table'); names.forEach(function (n) { for (var i = 0; i < 8; i++) V.look('cf', n); }); var n0 = +localStorage.getItem('dssNightNo') || 0, m = {}; names.forEach(function (n) { m['cf/' + n] = { at: n0 - 1 }; }); localStorage.setItem('dssVoicesDeja', JSON.stringify(m)); return names.map(function (n) { return [n, V.deja('cf', n)]; }); }""")
     said = [n for n, line in dj if line]
     r.expect(said, "nothing in the chippy speaks its deja vu line in this state, so nothing is proved (%r)" % dj)
     r.expect(lily[0] not in said, "the thing that holds the flower (%r) speaks the room's deja vu line (%r)" % (lily[0], dict(dj).get(lily[0])))
@@ -6511,7 +6511,7 @@ def n25_worm_tune_and_bag_count(r):
     tunes = r.js("() => window.__dssWormTunes")
     r.expect(tunes == 1, "starting a round started the worm tune %s times" % tunes)
     r.page.unroute("**/*")
-    COUNT = "() => [].filter.call(document.querySelectorAll('.bag-count'), function (e) { return !e.closest('.dss-ghost'); }).map(function (e) { return e.textContent.replace(/\\s+/g, ' ').trim(); }).join('')"
+    COUNT = "() => [].filter.call(document.querySelectorAll('.bag-count'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; }).map(function (e) { return e.textContent.replace(/\\s+/g, ' ').trim(); }).join('')"
     out = {}
     for nm, sets in (("two", '(set: $pitched to (a: "jeffrey", "shana"))'), ("none", '(set: $pitched to (a:))')):
         scratch_passage(r, "T-bag", T25 + '(set: $returns to 12)' + sets + '(go-to: "Dean Street")')
@@ -6538,6 +6538,39 @@ def n25_flowers_said_once(r):
     r.info = "first flower room: badge %s (%s); second: badge %s (%s)" % (first[0], first[1], second[0], second[1])
     r.expect(first[0] and first[1] and first[1].endswith(":cf"), "the first flower room of the run does not show the lily badge (%r)" % first)
     r.expect(not second[0], "a second flower room shows the lily badge too (%r)" % second)
+
+
+@check("n25-soho-gate-by-play", "2026-11-25 (the Soho gate, played): with a dream world just walked and a key in the pocket the pillar is shut; walking into the Coach and Horses, where THE BEAST is caught on arrival, and back out to the street opens it again, with nothing set by hand in between")
+def n25_soho_gate_by_play(r):
+    BOX = "() => { var b = [].filter.call(document.querySelectorAll('.where-next'), function (x) { return !x.closest('.dss-ghost'); })[0]; return b ? b.innerText : ''; }"
+    scratch_passage(r, "T-gp", T25 + '(set: $returns to 12)(set: $worldsVisited to (a: "nazca"))(set: $gateWorlds to 0)(set: $gateMark to 0)(set: $drainsDone to true)(set: $haunts to (a: $haunt1, $haunt2))(set: $sawJeffrey to false)(set: $hadLilyCall1 to true)(set: $hadDualRing to true)(set: $hauntsEnoughSaid to true)(go-to: "Dean Street")')
+    r.go("T-gp", wait=8000); r.clear_lore(); r.clear_slips()
+    before = r.js(BOX)
+    r.expect("The third pillar will not rise again yet." in before, "the pillar is not shut at the start (%r)" % before)
+    seen = [r.pn()]
+    DOOR = "(t) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf(t) >= 0 && !x.closest('.dss-ghost, .book-pitch, tw-header'); })[0]; if (!l) return false; l.click(); return true; }"   # a door, not a line in Who's next? or Where next?
+    def step(what, texts, wait=5000):
+        ok = False
+        for t in texts:
+            if r.js(DOOR, t): ok = True; break
+        r.expect(ok, "%s: none of %r to press on %s (links %r)" % (what, texts, r.pn(), r.js("() => [].map.call(document.querySelectorAll('tw-link'), function (l) { return l.textContent.trim(); }).slice(0, 30)")))
+        r.page.wait_for_timeout(wait); r.clear_lore(); r.clear_slips()
+        if r.pn() != seen[-1]: seen.append(r.pn())
+    step("to the Coach", ["Coach and Horses"], 6000)
+    for _ in range(4):
+        if r.pn() == "Coach and Horses bar": break
+        step("into the Coach", ["·", "Enter", "Go in", "Be liquid"], 6000)
+    r.expect(r.pn() == "Coach and Horses bar", "did not reach the Coach's bar (%s)" % " > ".join(seen))
+    r.wait_for("() => [].some.call(document.querySelectorAll('.haunt-name'), function (e) { return /THE BEAST/.test(e.textContent); })", 15000, "THE BEAST to be caught in the Coach")
+    step("out of the Coach", ["Out onto the street", "Back to the street"], 7000)
+    for _ in range(3):
+        if r.pn() == "Dean Street": break
+        step("back to the street", ["Dean Street", "Back to the street", "·"], 6000)
+    r.expect(r.pn() == "Dean Street", "did not get back to Dean Street (%s)" % " > ".join(seen))
+    after = r.js(BOX)
+    r.info = " > ".join(seen) + "; Where next? after: %r" % after.replace("\n", " / ")
+    r.expect("The third pillar is open." in after and "will not rise" not in after, "after a haunt caught in Soho the pillar is still shut (%r)" % after)
+    r.page.unroute("**/*")
 
 
 if __name__ == "__main__":

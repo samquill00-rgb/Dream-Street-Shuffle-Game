@@ -1661,6 +1661,12 @@ def _(r):
             try:
                 ctx.add_init_script(INIT)
                 pg = ctx.new_page()
+                if SWAPS:   # a planted bug has to reach this context too
+                    def planted(route):
+                        resp = route.fetch(); t = resp.text()
+                        for x, y in SWAPS: t = t.replace(x, y)
+                        route.fulfill(response=resp, body=t)
+                    pg.route("**/" + HTML + "*", planted)
                 pg.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote("Dean Street")), timeout=90000)
                 pg.wait_for_timeout(11000)
                 d = pg.evaluate("() => { var p = [].filter.call(document.querySelectorAll('tw-passage'), function (e) { return !e.closest('.dss-ghost'); })[0]; var d = p && p.querySelector('.soho-dpad'); if (!d) return null; var b = d.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), document.scrollingElement.scrollHeight]; }")

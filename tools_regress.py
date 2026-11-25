@@ -1678,30 +1678,76 @@ def _(r):
         r.page.set_viewport_size({"width": 1440, "height": 900})
 
 
-@check("n25-hub-phone", "2026-11-25 (Sam: \"What about mobile phones\", \"Yes, do it\"): on an upright phone Dean Street's lamp took two fifths of the width, the opening words ran four or five to a line beside it, and the Soho map began a whole screen down; the lamp is small and stops at the date, and the map shows on the opening screen")
+@check("n25-hub-phone", "2026-11-25 (Sam: \"What about mobile phones\", \"Yes, build it\"): on an upright phone Dean Street's map began a whole screen down beside a lamp two fifths of the width. It is three states now: the words with one way on, the street (the map alone, arrows on its corner, nothing to scroll), and the question boxes over the map from one Options button")
 def _(r):
     from urllib.parse import quote
-    for w, h in ((390, 760), (360, 700)):
+    import html as _h
+    M = "() => { var se = document.scrollingElement, st = document.querySelector('tw-story'); var p = [].filter.call(document.querySelectorAll('tw-passage'), function (e) { return !e.closest('.dss-ghost'); })[0]; function R(e) { if (!e) return null; var b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)]; } var ob = p.querySelector('.dss-ph-optb'); return { words: st.classList.contains('dss-ph-words'), street: st.classList.contains('dss-ph-street'), opts: st.classList.contains('dss-ph-opts'), sh: se.scrollHeight, sw: se.scrollWidth, lamp: R(p.querySelector('#dean-lamp-svg')), map: R(p.querySelector('.soho-map-stage canvas')), dpad: R(p.querySelector('.soho-dpad')), go: R(p.querySelector('.dss-ph-go button')), bar: R(p.querySelector('.dss-ph-bar')), optb: ob && [ob.style.visibility !== 'hidden' && ob.getClientRects().length > 0, ob.classList.contains('dss-ph-new'), ob.textContent], boxes: [].map.call(p.querySelectorAll('.book-pitch'), function (b) { var q = b.getBoundingClientRect(), o = b.querySelector('.book-pitch-opt'); return [Math.round(q.top), Math.round(q.bottom), o ? o.scrollWidth - o.clientWidth : 0]; }), pn: ((document.getElementById('dss-pn') || {}).textContent || '').trim() }; }"
+    for w, h in ((390, 664), (360, 640)):
         ctx = r.ctx.browser.new_context(viewport={"width": w, "height": h}, has_touch=True, is_mobile=True)
         try:
             ctx.add_init_script(INIT)
             pg = ctx.new_page()
-            if SWAPS:   # a planted bug has to reach this context too
-                def planted(route):
-                    resp = route.fetch(); t = resp.text()
-                    for x, y in SWAPS: t = t.replace(x, y)
-                    route.fulfill(response=resp, body=t)
-                pg.route("**/" + HTML + "*", planted)
-            for lap in ("first night", "second look"):
-                pg.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote("Dean Street")), timeout=90000)
-                pg.wait_for_timeout(11000)
-                g = pg.evaluate("() => { var p = [].filter.call(document.querySelectorAll('tw-passage'), function (e) { return !e.closest('.dss-ghost'); })[0]; var l = p.querySelector('#dean-lamp-svg').getBoundingClientRect(), c = p.querySelector('.soho-map-stage canvas').getBoundingClientRect(), d = p.querySelector('.scene-date, .scene-location').getBoundingClientRect(), se = document.scrollingElement; return { lamp: [Math.round(l.width), Math.round(l.bottom)], date: Math.round(d.bottom), map: [Math.round(c.top + scrollY), Math.round(c.width)], sw: se.scrollWidth }; }")
-                r.info = "%dx%d %s: %r" % (w, h, lap, g)
-                r.expect(g["sw"] <= w + 2, "Dean Street is %d px wide on a %d px phone" % (g["sw"], w))
-                r.expect(g["lamp"][0] <= 100 and g["lamp"][1] <= g["date"] + 30, "the lamp is %d px wide and runs to %d, past the date at %d, on a %dx%d phone" % (g["lamp"][0], g["lamp"][1], g["date"], w, h))
-                r.expect(g["map"][1] >= w - 80, "the map is %d px wide on a %d px phone" % (g["map"][1], w))
-                room = h - g["map"][0]
-                r.expect(room >= (40 if lap == "first night" else 180), "on the %s only %d px of the map are on a %dx%d phone's opening screen" % (lap, room, w, h))
+            def served(route):
+                resp = route.fetch(); t = resp.text()
+                for x, y in SWAPS: t = t.replace(x, y)   # a planted bug has to reach this context too
+                tag = '<tw-passagedata pid="99999" name="T-ph-lap" tags="" position="0,0" size="100,100">%s</tw-passagedata>' % _h.escape('(set: $sobriety to 30)(set: $knowsCecilCourt to true)(set: $metCritic to true)(set: $returns to 4)[[Walk on|Dean Street]]')
+                route.fulfill(response=resp, body=t.replace("</tw-storydata>", tag + "</tw-storydata>", 1))
+            pg.route("**/" + HTML + "*", served)
+            def go(passage, wait=11000):
+                pg.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote(passage)), timeout=90000); pg.wait_for_timeout(wait)
+            def slips():
+                Q = "#dss-hint-stack .dss-hint-slip:not(.out)"
+                for _ in range(6):
+                    if not pg.evaluate("(q) => !!document.querySelector(q)", Q):
+                        pg.wait_for_timeout(1200)
+                        if not pg.evaluate("(q) => !!document.querySelector(q)", Q): return
+                    for _i in range(200):
+                        if pg.evaluate("(q) => [].every.call(document.querySelectorAll(q), function (c) { return c.classList.contains('typed'); }) && !document.querySelector('#dss-hint-stack .dss-hint-slip.dss-hint-held:not(.out)')", Q): break
+                        pg.wait_for_timeout(200)
+                    x = pg.locator(Q + " .dss-hint-x")
+                    if x.count(): x.last.tap()
+                    pg.wait_for_timeout(900)
+            def look():
+                pg.evaluate("() => { [].forEach.call(document.querySelectorAll('#dss-lore-overlay, #coin-overlay'), function (e) { e.remove(); }); }")   # the coin and a lore note are popups of their own, checked elsewhere
+                slips(); pg.wait_for_timeout(500)
+                return pg.evaluate(M)
+            def street(g, what):
+                r.expect(g["street"] and not g["words"], "%s is not the street screen on a %dx%d phone (%r)" % (what, w, h, g))
+                r.expect(g["sh"] <= h + 2 and g["sw"] <= w + 2, "%s is %dx%d px on a %dx%d phone" % (what, g["sw"], g["sh"], w, h))
+                r.expect(g["map"] and g["map"][2] - g["map"][0] >= w - 80 and g["map"][3] <= h, "%s: the map is small or runs off a %dx%d phone (%r)" % (what, w, h, g["map"]))
+                d = g["dpad"]
+                r.expect(d and d[2] - d[0] >= 90 and d[0] >= g["map"][0] and d[2] <= g["map"][2] and d[1] >= g["map"][1] and d[3] <= g["map"][3], "%s: the walking arrows are not on the map's corner (%r, the map %r)" % (what, d, g["map"]))
+                r.expect(g["bar"] and g["bar"][3] <= h and g["bar"][2] <= w - 40, "%s: the buttons under the map run off the screen or under the sound bell (%r)" % (what, g["bar"]))
+            go("Dean Street")
+            g = look()
+            r.expect(g["words"] and g["go"] and not (g["map"] and g["map"][3] > g["map"][1]), "the first night does not open on the words on a %dx%d phone (%r)" % (w, h, g))
+            r.expect(g["lamp"] and g["lamp"][2] - g["lamp"][0] <= 100 and g["sw"] <= w + 2, "the lamp is %r on a %d px phone" % (g["lamp"], w))
+            pg.locator(".dss-ph-go button").tap(); pg.wait_for_timeout(1500)
+            street(look(), "after the way on")
+            go("Dean Street")
+            g = look()
+            r.expect(g["words"], "new words on a return did not come first (%r)" % g)
+            pg.locator(".dss-ph-go button").tap(); pg.wait_for_timeout(1200)
+            go("Dean Street")
+            street(look(), "a return with the same words")
+            go("T-ph-lap", 4000); slips()
+            pg.evaluate("() => { [].filter.call(document.querySelectorAll('tw-link'), function (l) { return /Walk on/.test(l.textContent); })[0].click(); }")
+            pg.wait_for_timeout(9000)
+            g = look()
+            if g["words"]:
+                pg.locator(".dss-ph-go button").tap(); pg.wait_for_timeout(1500); g = look()
+            street(g, "a later night")
+            r.expect(g["optb"] and g["optb"][0] and g["optb"][1] and len(g["boxes"]) >= 2, "no glowing Options button with two question boxes waiting (%r, %r)" % (g["optb"], g["boxes"]))
+            pg.locator(".dss-ph-optb").tap(); pg.wait_for_timeout(900)
+            g = pg.evaluate(M)
+            r.expect(g["opts"] and g["sh"] <= h + 2, "Options did not open, or the page scrolls with it open (%r)" % g)
+            r.expect(all(b[1] > b[0] + 30 and b[0] >= g["map"][1] - 12 and b[1] <= h for b in g["boxes"]) and g["boxes"][1][0] >= g["boxes"][0][1], "the question boxes are not laid over the map (%r, the map %r)" % (g["boxes"], g["map"]))
+            r.expect(all(b[2] <= 1 for b in g["boxes"]), "a choice is cut short in the Options (%r)" % g["boxes"])
+            pg.locator(".book-pitch tw-link, .book-pitch .book-pitch-opt").first.tap(); pg.wait_for_timeout(1800)
+            g = pg.evaluate(M)
+            r.info = "%dx%d: chosen, then %r" % (w, h, {k: g[k] for k in ("street", "opts", "pn")})
+            r.expect(not g["opts"] and g["pn"] == "Dean Street", "choosing did not close the Options (%r)" % g)
         finally:
             ctx.close()
 

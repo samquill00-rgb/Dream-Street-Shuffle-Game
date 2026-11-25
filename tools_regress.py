@@ -3851,8 +3851,8 @@ def french_whole_tone(r):
     root = os.path.dirname(os.path.abspath(__file__))
     t = _h.unescape(open(os.path.join(root, "Dream Street Shuffle.html"), encoding="utf-8").read())
     for a, b in SWAPS: t = t.replace(a, b)
-    r.expect(os.path.exists(os.path.join(root, "whole-tone-french.m4a")), "whole-tone-french.m4a is not beside the html")
-    r.expect(re.search(r"label: 'french-approach-music', dataUri: 'whole-tone-french\.m4a'[^\n]*?'map-return-french': 1", t) is not None, "the whole-tone piece is not registered on the French approach's tag with its file")
+    r.expect(os.path.exists(os.path.join(root, "french-piano-approach.m4a")), "french-piano-approach.m4a is not beside the html")
+    r.expect(re.search(r"label: 'french-approach-music', dataUri: 'french-piano-approach\.m4a'[^\n]*?'map-return-french': 1", t) is not None, "the whole-tone piece is not registered on the French approach's tag with its file")
     PLAYING = "() => window.dssAudio.bedPlaying('french-approach-music')"
     HAND = "() => window.dssAudio.updateAmbientBedsForPassage(document.querySelector('tw-story > tw-passage'))"
     scratch_passage(r, "T-french-tone", "[[Walk to the French|Approach The French]]")   # walked into, not loaded, so the fairy spy below lives through the page turn
@@ -3871,7 +3871,7 @@ def french_whole_tone(r):
     r.expect(not r.js("() => window.dssAudio.bedPlaying('pub-french')"), "the French's pub recording plays under the whole-tone piece on the approach (2026-11-23, Sam: \"just have the whole tone music here, not the other music under it\")")
     lvl = r.js("() => window.dssAudio.bedLevel('french-approach-music')")
     fairy = r.js("() => window.__fairy || 0")
-    dec = r.js("async () => { var b = await (await fetch('whole-tone-french.m4a')).arrayBuffer(); var c = new OfflineAudioContext(2, 48000, 48000); var d = await c.decodeAudioData(b); return [d.length, d.sampleRate]; }")
+    dec = r.js("async () => { var b = await (await fetch('french-piano-approach.m4a')).arrayBuffer(); var c = new OfflineAudioContext(2, 48000, 48000); var d = await c.decodeAudioData(b); return [d.length, d.sampleRate]; }")
     r.info = "level %.3f, fairy calls %d, decoded %s samples at %s Hz" % (lvl or 0, fairy, dec[0], dec[1])
     r.expect((lvl or 0) > 0.05, "the whole-tone piece is all but silent on the approach")
     r.expect(fairy == 0, "the fairy's plucked figure still plays on the approach")

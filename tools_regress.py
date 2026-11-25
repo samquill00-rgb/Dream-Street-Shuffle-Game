@@ -1639,7 +1639,7 @@ def _(r):
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
     try:
-        for w, h in ((1536, 730), (1366, 650), (1280, 690), (1440, 780)):
+        for w, h in ((1536, 730), (1366, 650), (1280, 690), (1440, 780), (1440, 900), (1280, 800), (1920, 950), (1024, 700), (1180, 750)):   # three more since Sam: "Yes, everywhere", and two tablets held sideways ("Also tablets?")
             r.page.set_viewport_size({"width": w, "height": h})
             hub_ready(r)
             r.page.wait_for_timeout(2500)
@@ -1649,11 +1649,25 @@ def _(r):
             r.expect(g["c"][3] >= 380 and g["c"][2] >= 430, "the Soho map is %dx%d px in a %dx%d window" % (g["c"][2], g["c"][3], w, h))
             r.expect(g["c"][0] >= g["h1"] + 420 and abs(g["c"][1] - g["h1top"]) <= 40, "the map is not beside the words at %dx%d (%r, the title at %d,%d)" % (w, h, g["c"], g["h1"], g["h1top"]))
             r.expect(g["right"] <= w and g["bar"] <= h, "the map or its bar runs off a %dx%d window (right %d, foot %d)" % (w, h, g["right"], g["bar"]))
-            r.expect(g["words"] >= 430, "the words have only %d px beside the map at %dx%d" % (g["words"], w, h))
+            r.expect(g["words"] >= (430 if w >= 1240 else 400), "the words have only %d px beside the map at %dx%d" % (g["words"], w, h))
         r.page.set_viewport_size({"width": 1536, "height": 730})
         hub_ready(r)
         r.page.wait_for_timeout(1500)
         walk_into(r, "ginger")
+        # on touch the walking arrows must be on the screen in this layout (their old place, right of the column, is past the window's edge)
+        from urllib.parse import quote
+        for w, h in ((1024, 700), (1366, 950)):
+            ctx = r.ctx.browser.new_context(viewport={"width": w, "height": h}, has_touch=True, is_mobile=True)
+            try:
+                ctx.add_init_script(INIT)
+                pg = ctx.new_page()
+                pg.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote("Dean Street")), timeout=90000)
+                pg.wait_for_timeout(11000)
+                d = pg.evaluate("() => { var p = [].filter.call(document.querySelectorAll('tw-passage'), function (e) { return !e.closest('.dss-ghost'); })[0]; var d = p && p.querySelector('.soho-dpad'); if (!d) return null; var b = d.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), document.scrollingElement.scrollHeight]; }")
+                r.expect(d and d[2] - d[0] >= 100 and d[0] >= 0 and d[1] >= 0 and d[2] <= w and d[3] <= h, "on a %dx%d touch screen the walking arrows are missing or off the screen (%r)" % (w, h, d))
+                r.expect(d[4] <= h + 2, "on a %dx%d touch screen Dean Street is %d px tall" % (w, h, d[4]))
+            finally:
+                ctx.close()
     finally:
         r.page.set_viewport_size({"width": 1440, "height": 900})
 

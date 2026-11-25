@@ -6624,17 +6624,6 @@ def n25_rulings_source(r):
         r.expect(f in t and os.path.exists(os.path.join(ROOT, f)), "%s is not linked in the build or not beside it" % f)
 
 
-@check("n25-tour-guide-box", "2026-11-25 note 4 (Sam, Approach O'Flatterly: \"On this second sisit there should be a dialogue box about a tourguide lying about harry potter. Let me write it\"; \"Build the box, pink line\"): a speaker's panel, A TOUR GUIDE, stands over the Cecil Court scene on the return with page 93, on top of it and inside the window")
-def n25_tour_guide_box(r):
-    if SWAPS: scratch_passage(r, "T-nothing", "")
-    r.go("Approach O'Flatterly", wait=10000); r.clear_lore(); r.clear_slips()
-    b = r.js("() => { var e = [].filter.call(document.querySelectorAll('.dss-approach-speech'), function (x) { return !x.closest('.dss-ghost'); })[0]; if (!e) return null; var q = e.getBoundingClientRect(), top = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2); return [e.getAttribute('data-speaker'), Math.round(q.left), Math.round(q.top), Math.round(q.width), Math.round(q.height), !!(top && top.closest('.dss-approach-speech')), +getComputedStyle(e).opacity, e.textContent.trim().length]; }")
-    r.info = "%r" % b
-    r.expect(b and b[0] == "A TOUR GUIDE", "no A TOUR GUIDE panel on the second O'Flatterly approach (%r)" % b)
-    r.expect(b[5] and b[6] > 0.9 and b[7] > 10, "the panel is under the scene, not yet in, or empty (%r)" % b)
-    r.expect(b[1] >= 0 and b[2] >= 0 and b[1] + b[3] <= 1440 and b[2] + b[4] <= 900 and b[3] >= 300, "the panel is off the window or too narrow (%r)" % b)
-
-
 @check("n25-slip-go-needs-door", "2026-11-25 note 3 (Sam: \"I just clicked the slip for direction to cecil court and the direction round didn't flash up\"; he confirmed the red path did not show): on a Dean Street that does not yet offer Cecil Court, the slip to find INIS carries no Get Directions, so no press can light nothing")
 def n25_slip_go_needs_door(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")

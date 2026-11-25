@@ -1801,6 +1801,27 @@ def _(r):
     r.expect(r.js(T1) is None, "the next room said it again")
 
 
+@check("n25-john-asked-first", "2026-11-25 note 52 (Sam: \"it shoudl be made more of that you are betraying your old firend\"; his line \"Do you want to betray your old friend for the woman who left you?\", ruled \"Ask before it happens\"): giving JOHN's name stops at his question, with his two answers, 'Yes, fuck him.' and 'No, reconsider.'")
+def _(r):
+    scratch_passage(r, "T-john-ask", '(set: $haunts to (a: $haunt4))(set: $crossed to "")[[Go down|Give him John?]]')
+    def to_question():
+        r.go("T-john-ask", wait=4000); r.clear_slips()
+        r.page.locator("tw-link:has-text('Go down')").first.click()
+        r.page.wait_for_timeout(5000); r.clear_lore(); r.clear_slips()
+    to_question()
+    q = r.js("() => { var p = [].filter.call(document.querySelectorAll('.cellar-scene'), function (e) { return !e.closest('.dss-ghost'); })[0]; if (!p) return { text: '', links: [], draft: false }; return { text: p.innerText, links: [].map.call(p.querySelectorAll('tw-link'), function (l) { return l.textContent.trim(); }), draft: !!p.querySelector('.claude-draft') }; }")
+    r.info = repr(q["links"])
+    r.expect(r.pn() == "Give him John?" and "Do you want to betray your old friend for the woman who left you?" in q["text"], "the question is not asked (%s)" % r.pn())
+    r.expect(q["links"] == ["Yes, fuck him.", "No, reconsider."], "the question's two answers are %r" % q["links"])
+    r.page.locator(".cellar-scene tw-link", has_text="No, reconsider.").first.click(); r.page.wait_for_timeout(6000)
+    r.expect(r.pn() == "Turn to Copper", "No, reconsider. led to %s" % r.pn())
+    to_question()
+    r.page.locator(".cellar-scene tw-link", has_text="Yes, fuck him.").first.click(); r.page.wait_for_timeout(5000)
+    g = r.js("() => { var p = [].filter.call(document.querySelectorAll('.cellar-scene'), function (e) { return !e.closest('.dss-ghost'); })[0]; return p ? [p.innerText.indexOf('JOHN ST. JOHN') >= 0, !!p.querySelector('.claude-draft')] : [false, false]; }")
+    r.expect(r.pn() == "You give him John" and g[0], "going through with it led to %s" % r.pn())
+    r.expect(not g[1], "the pink placeholder is still on You give him John")
+
+
 @check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
 def _(r):
     r.go("Dean Street", wait=4000)
@@ -6617,7 +6638,7 @@ def n25_rulings_source(r):
     r.expect('window.dssInlineHint("Gather flowers. There are five to find.")' in u and '(set: $lilyNamed to true)(set: $lilyHintShown to true)' in u, "note 28: the flowers line is not said as LILY is named")
     r.expect('(set: _cfHolds to "There is a lily in this room. Gather it.")' not in u, "note 28: the chippy's Eat. warns of its own lily again")
     r.expect(u.count('<div class="dss-opt-caption">Hear her verdict on the book.</div>') == 2 and '<div class="dss-opt-caption">A new spread of three cards.</div>' in u, "note 59: Shana's options have lost their captions")
-    r.expect("[Sam: more on betraying JOHN ST. JOHN, your old friend, goes here.]" in u or "ASHTON hears it fall, as loud as distant glass, breaking." in u, "note 52: You give him John has lost its place for his lines")
+    r.expect("ASHTON hears it fall, as loud as distant glass, breaking." in u and "Do you want to betray your old friend for the woman who left you?" in u and "[[Give him John\u2019s name|Give him John?]]" in u.replace("&#39;", "'"), "note 52: giving JOHN's name no longer stops at Sam's question first")
     r.expect("then: 'Fish is good for Friday. Saturday was hell; go to Easter Island.' }" in t and "then: 'Here. The brass lighter by the till.' }" in t, "note 29: a clue line counts steps again")
     r.expect("if (false && st && l.voice === 'then'" in t and "function followed() { return null;" in t, "note 29: the step sign or FOLLOW THIS TRAIL is back")
     for f in ("eating-chips.m4a", "french-piano-approach.m4a", "worm-comic-theme.m4a"):

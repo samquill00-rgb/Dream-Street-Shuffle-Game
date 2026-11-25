@@ -1635,6 +1635,29 @@ def _(r):
     r.expect(wide <= 1282, "a later-lap Dean Street is %d px wide at 1280x800" % wide)
 
 
+@check("n25-hub-short-wide-window", "2026-11-25 (Sam's tester, Chrome on a laptop, a window about 1536x730: \"thin in the middle of the page, almost like a mobile\", \"really hard to see where to go\"): in a wide, short window the first night's words left the Soho map a 155 px strip and the street scrolled; there the map stands beside the words at the window's height")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    try:
+        for w, h in ((1536, 730), (1366, 650), (1280, 690), (1440, 780)):
+            r.page.set_viewport_size({"width": w, "height": h})
+            hub_ready(r)
+            r.page.wait_for_timeout(2500)
+            g = r.js("() => { var p = [].filter.call(document.querySelectorAll('tw-passage'), function (e) { return !e.closest('.dss-ghost'); })[0]; var c = p.querySelector('.soho-map-stage canvas').getBoundingClientRect(), bar = p.querySelector('.soho-map-bar').getBoundingClientRect(), h1 = p.querySelector('h1').getBoundingClientRect(), d = p.querySelector('.scene-location').getBoundingClientRect(); return { sh: document.scrollingElement.scrollHeight, sw: document.scrollingElement.scrollWidth, c: [Math.round(c.left), Math.round(c.top), Math.round(c.width), Math.round(c.height)], right: Math.round(c.right), bar: Math.round(bar.bottom), h1: Math.round(h1.left), h1top: Math.round(h1.top), words: Math.round(d.width) }; }")
+            r.info = "%dx%d: map %r" % (w, h, g["c"])
+            r.expect(g["sh"] <= h + 2 and g["sw"] <= w + 2, "Dean Street is %dx%d px in a %dx%d window" % (g["sw"], g["sh"], w, h))
+            r.expect(g["c"][3] >= 380 and g["c"][2] >= 430, "the Soho map is %dx%d px in a %dx%d window" % (g["c"][2], g["c"][3], w, h))
+            r.expect(g["c"][0] >= g["h1"] + 420 and abs(g["c"][1] - g["h1top"]) <= 40, "the map is not beside the words at %dx%d (%r, the title at %d,%d)" % (w, h, g["c"], g["h1"], g["h1top"]))
+            r.expect(g["right"] <= w and g["bar"] <= h, "the map or its bar runs off a %dx%d window (right %d, foot %d)" % (w, h, g["right"], g["bar"]))
+            r.expect(g["words"] >= 430, "the words have only %d px beside the map at %dx%d" % (g["words"], w, h))
+        r.page.set_viewport_size({"width": 1536, "height": 730})
+        hub_ready(r)
+        r.page.wait_for_timeout(1500)
+        walk_into(r, "ginger")
+    finally:
+        r.page.set_viewport_size({"width": 1440, "height": 900})
+
+
 @check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
 def _(r):
     r.go("Dean Street", wait=4000)

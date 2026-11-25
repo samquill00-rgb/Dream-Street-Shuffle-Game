@@ -1072,7 +1072,7 @@ def _(r):
         b = r.page.locator(".dawn-page.dawn-pg-on .dawn-on")
         if b.count():
             b.first.click(); r.page.wait_for_timeout(2500)
-    r.expect(r.js("() => [].some.call(document.querySelectorAll('.dnp-caption'), function (e) { return /Your night.s route/.test(e.textContent); })"), "the Dawn's map has no 'Your night's route' caption")
+    r.expect(not r.js("() => !!document.querySelector('#dawn-night-plan svg, .dnp-caption')"), "the Dawn draws the night's route again (taken off 2026-11-25, note 64: \"I don't need the walking tracker\"; before that this line looked for its 'Your night's route' caption)")
     r.wait_for("() => { var e = document.getElementById('dawn-play-again'); return e && e.classList.contains('dawn-petal-restart'); }", 60000, "ANOTHER NIGHT after the petals")
     op = r.js("() => { var f = document.querySelector('.dawn-petal-finis'); return f ? +getComputedStyle(f).opacity : -1; }")
     r.expect(op > 0.85, "ANOTHER NIGHT came before THE END had come in (THE END opacity %s)" % op)
@@ -1471,7 +1471,8 @@ def _(r):
         t1 = r.js(tags)
         intro = r.js("() => !!document.querySelector('.coach-plumbing-intro:not(.dss-ghost *)')")
         r.expect("venue-gents" in t1 and intro, "the way down the drain does not come into the gents with the drain travel (%r, intro %r)" % (t1, intro))
-        r.page.wait_for_timeout(9000); r.clear_slips()
+        r.wait_for("() => window.__dssComeToHeld === true", 25000, "the drain flight to hold on the cubicle (since 2026-11-25, notes 14 and 15)")
+        r.page.locator(".gents-cometo-go").click(); r.page.wait_for_timeout(4000); r.clear_slips()
         on = r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf('You gather your limbs to the bar.') >= 0 && !x.closest('.dss-ghost'); })")
         r.expect(on, "no way from the gents to the bar after a sober drain walk")
     r.page.unroute("**/*")
@@ -1680,6 +1681,9 @@ def _(r):
     r.go("Coach and Horses bar")
     r.room_ready("cb")
     r.click_object("cb", "JEFFREY BERNARD")
+    r.press("Speak to JEFFREY BERNARD"); r.page.wait_for_timeout(3500)   # since 2026-11-25 note 16 his scene, and Hear him out with it, wait on his click
+    r.room_ready("cb"); r.page.wait_for_timeout(3500)
+    r.click_object("cb", "JEFFREY BERNARD")
     r.page.wait_for_timeout(600)
     r.expect("Friesian" not in r.js("() => document.body.innerText"), "JEFFREY's speech shows in his card before 'Hear him out' is pressed")
     r.press("Hear him out")
@@ -1697,11 +1701,16 @@ def _(r):
             b.first.click(); r.page.wait_for_timeout(1500)
     b = r.page.locator("#rc-begin:visible")
     if b.count(): b.first.click()
-    r.page.wait_for_timeout(24000)
-    t = r.js("() => document.body.innerText")
+    # 2026-11-25: he fires every 5.5 to 8.5 s once a machine is within 70 m and hits two times in three, and a rig or the crawler takes more than one hit, so 24 s was sometimes too short (it failed once in the full run of 25 Nov); the wait is up to 55 s, ending as soon as one is silenced
     import re as _re
-    m = _re.search(r"SILENCED\s+(\d+)\s*/", t, _re.I)
-    r.expect(m and int(m.group(1)) >= 1, "with no shot of yours fired, nothing was silenced in 24 s (%r)" % (m.group(0) if m else t[:200]))
+    m, t0 = None, time.time()
+    while time.time() - t0 < 55:
+        r.page.wait_for_timeout(2000)
+        t = r.js("() => document.body.innerText")
+        m = _re.search(r"SILENCED\s+(\d+)\s*/", t, _re.I)
+        if m and int(m.group(1)) >= 1: break
+    r.info = "silenced %s after %.0f s" % (m.group(1) if m else "?", time.time() - t0)
+    r.expect(m and int(m.group(1)) >= 1, "with no shot of yours fired, nothing was silenced in 55 s (%r)" % (m.group(0) if m else t[:200]))
 
 
 @check("interval-pyre-art", "2026-11-09 note 26: the Interval stair image and the pyre were flat and lame; both are renders now, the pyre's fire drawn live")
@@ -1935,7 +1944,7 @@ def _(r):
     bad, notes = [], []
     for W, H in ((1440, 900), (1280, 800)):
         r.page.set_viewport_size({"width": W, "height": H})
-        for frm, link, game in (("Descending Corridor", "Into the dark", "Pyramid Run"), ("The Mountain", "Follow him", "The Climb"), ("Among the Moai", "Fight", "The Reclamation")):
+        for frm, link, game in (("Descending Corridor", "Into the dark", "Pyramid Run"), ("The Mountain", "Follow him", "The Climb"), ("Among the Moai", "Go to war", "The Reclamation")):
             r.go(frm, wait=6000, extra="&dev=0")   # as a player has it: the testing links add a row to these pages
             r.clear_lore(); r.clear_slips()
             ok = r.js("([t]) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return e.textContent.indexOf(t) >= 0 && !e.closest('.dss-ghost'); })[0]; window.__l = l; return !!l; }", [link])
@@ -2157,7 +2166,7 @@ for _w in WORLDS:
 # ---------------------------------------------------------------- Dean Street and the Soho map
 # The hub on a fresh first night: it fits the laptop screen, its map draws, every hub link has a door on the map
 # (the map is the only way a player reaches them), and every open door, walked into from its doorstep, goes in.
-HUB_LINKS = """() => [].filter.call(document.querySelectorAll('.soho-hub-dock tw-link, tw-story tw-link'), function (l) { return !l.closest('tw-header, .dss-ghost, #dss-lore-overlay, #dss-hint-stack'); })
+HUB_LINKS = """() => [].filter.call(document.querySelectorAll('.soho-hub-dock tw-link, tw-story tw-link'), function (l) { return !l.closest('tw-header, .dss-ghost, #dss-lore-overlay, #dss-hint-stack, .book-pitch.where-next'); })   /* 2026-11-25: Where next? lines light a way, they are not doors (The barbershop is open., Mister Jimmy's is open., Trisha's is open.) */
   .map(function (l) { return l.textContent.replace(/\\s+/g, ' ').trim(); }).filter(function (t, i, a) { return t && a.indexOf(t) === i; })"""
 
 
@@ -2361,23 +2370,14 @@ def _(r):
         r.expect(max(bars) == 0, "%s showed a scrollbar while its room built (%r)" % (n, bars))
 
 
-@check("ending-words-centred", "2026-11-11 polish run, moved 2026-11-23 (Sam, the run of endings: \"Both\"): EXPLICIT. LIBER. EST. and PLUS. ULTRA. close the Dawn, centred above its colophon (the White and Black pages are folded in)")
+@check("ending-words-centred", "2026-11-11 polish run; 2026-11-23 folded into the Dawn; 2026-11-25 note 64 (Sam: \"I want the cool art deco drawins of plans back and explicit liber est' etc.\"): EXPLICIT. LIBER. EST. and PLUS. ULTRA. close the White page, centred, and the Dawn does not repeat them")
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
-    r.go("Dawn", wait=6000)
-    for _ in range(6):
-        on = r.page.locator(".dawn-on:visible")
-        if not on.count(): break
-        on.first.click(); r.page.wait_for_timeout(1500)
-    r.page.wait_for_timeout(9000)
-    v = r.js("() => { var e = document.querySelector('.dawn-explicit'), c = document.querySelector('.dawn-colophon'); if (!e || !c || !e.getClientRects().length) return null; var a = e.getBoundingClientRect(), b = c.getBoundingClientRect(); return [e.innerText.replace(/\\s+/g, ' ').trim(), Math.round(a.left + a.width / 2), Math.round(b.left + b.width / 2), Math.round(a.bottom), Math.round(b.top), +getComputedStyle(e).opacity]; }")
+    r.go("White page", wait=9000)
+    v = r.js("""() => { var tp = document.querySelector('tw-story > tw-passage:not(.dss-ghost)') || document.querySelector('tw-passage'); var mid = function (s) { var w = document.createTreeWalker(tp, NodeFilter.SHOW_TEXT), n; while ((n = w.nextNode())) { if (n.nodeValue.indexOf(s) >= 0 && n.parentNode.getClientRects().length) { var q = document.createRange(); q.selectNodeContents(n); var b = q.getBoundingClientRect(); return Math.round(b.left + b.width / 2); } } return null; }; return [mid('EXPLICIT. LIBER. EST.'), mid('PLUS. ULTRA.'), Math.round(innerWidth / 2)]; }""")
     r.info = "%r" % (v,)
-    r.expect(v is not None, "no EXPLICIT on the Dawn's last page")
-    if not v: return
-    r.expect(v[0].replace(" ", "") == "EXPLICIT.LIBER.EST.PLUS.ULTRA.", "the Dawn's closing words read %r" % v[0])
-    r.expect(abs(v[1] - v[2]) < 12, "the closing words are off the colophon's centre (%d vs %d)" % (v[1], v[2]))
-    r.expect(v[3] <= v[4] + 2, "the closing words are not above the colophon")
-    r.expect(v[5] > 0.5, "the closing words never faded in (opacity %.2f)" % v[5])
+    r.expect(v[0] is not None and v[1] is not None, "the White page has lost its closing words (%r)" % (v,))
+    r.expect(abs(v[0] - v[2]) < 14 and abs(v[1] - v[2]) < 14, "the closing words are off centre (%r)" % (v,))
 
 
 @check("mute-button-on-white", "2026-11-11 polish run: the mute button's dark glass showed as a flat grey block on the white pages")
@@ -2940,10 +2940,7 @@ def _(r):
     r.expect(slow >= fast * 0.7, "the walk slowed with the frame rate: %d rows, against %d" % (slow, fast))
 
 
-@check("fetch-box-spaced", "2026-11-08 note 39: the Fetch's tally is two rows")
-def _(r):
-    r.go("The Fetch", wait=26000)
-    r.expect(r.js("() => document.querySelectorAll('.fetch-owed .fetch-owed-row').length") == 2, "the Fetch's tally is not two rows")
+# 2026-11-25 (note 45): fetch-box-spaced (2026-11-08 note 39, the Fetch's tally in two rows) is retired; a night that is not ready no longer reaches the Fetch, so the tally is never shown (see n25-fetch-turns-back)
 
 
 @check("dawn-clean", "2026-11-08 notes 43-44: no readers' slips mid-dawn, no film grain on the Dawn, ANOTHER NIGHT waits for the petals")
@@ -4018,7 +4015,7 @@ def notes_1114_source(r):
     r.expect("className = 'stat-why'" not in t and "className='stat-why'" not in t, "note 12: a stat change names the choice behind it again")
     cc = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cecil-court-3d-static.html"), encoding="utf-8").read()
     for a, b in SWAPS: cc = cc.replace(a, b)
-    r.expect("emissive: 0x8a5a26, emissiveIntensity: 0.5" in cc and "PointLight(0xffb070, 2.6, 7.5, 2)" in cc, "note 13: the bronze hand in Cecil Court has lost its own light or its lamp")
+    r.expect("emissive: 0x8a5a26, emissiveIntensity: 0.3" in cc and "PointLight(0xffb070, 2.6, 7.5, 2)" in cc, "note 13: the bronze hand in Cecil Court has lost its own light or its lamp (its light is 0.3 since 2026-11-23 note 10, \"hand statue a little darker\"; was 0.5)")
     r.expect("cecil-court-3d-static.html?v=20261114a" in t, "note 13: the game still loads the older Cecil Court scene")
     r.expect('class="dss-speech dss-speech-quick" data-speaker="INIS' in t and "classList.contains('dss-speech-quick') ? 0.5 : 1" in t, "note 19: INIS's third-pillar speech is back at the slow pace (half the time since 2026-11-20 note 15)")
     r.go("Dean Street", wait=1500)
@@ -5541,10 +5538,10 @@ def _(r):
     r.expect(not after["held"] and after["ready"], "the wake did not let the view go (%r)" % after)
     r.expect(after["pane"] < 0.1, "the words are still up after the wake (opacity %.2f)" % after["pane"])
     r.expect(c2 is not None and c2 != c1, "the camera did not move after the wake (%r)" % c2)
-    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Dawn'", 30000, "the Dawn after the wake")
+    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'White page'", 30000, "the White page after the wake (since 2026-11-25 note 64; the Dawn came straight on before)")
     walked = list(dict.fromkeys(r.js("() => window.__dssWalked") or []))
     r.info = "walked %s; held %r; camera %r then %r" % (" > ".join(walked), held, c1, c2)
-    r.expect(walked == ["Alba Complete", "Dawn"], "the alba went %s" % " > ".join(walked))
+    r.expect(walked == ["Alba Complete", "White page"], "the alba went %s" % " > ".join(walked))
 
 
 @check("white-ending-by-play", "2026-11-18 (never played before: 'the White page reached by play' stood under Not covered in three handoffs): with the poem whole, Alba Complete's photograph is pocketed and put away, Traveller, wake! leads through Dawn Approach White to the White page, and PLUS. ULTRA. to the Dawn, with no error, no blank view and no scroll")
@@ -5578,7 +5575,7 @@ def white_ending_by_play(r):
     r.info = "walked: " + " > ".join(walked) + " (looked at: " + " > ".join(seen) + ")"
     r.expect(not bad, "; ".join(dict.fromkeys(bad)))
     seen = walked
-    r.expect(seen == ["Alba Complete", "Dawn"], "the White ending went %s (since 2026-11-23 the alba holds the view and goes straight on to the Dawn)" % " > ".join(seen))
+    r.expect(seen == ["Alba Complete", "White page", "Dawn"], "the White ending went %s (since 2026-11-25 note 64 the White page stands between the alba's view and the Dawn again)" % " > ".join(seen))
 
 
 
@@ -5606,7 +5603,7 @@ def walk_by_play(r, start, stop, pages=12, skip=r"NOTEBOOK|^NOTE$|skip|testing|L
     return seen, bad
 
 
-@check("fetch-by-play", "2026-11-20 (never played before: 'The Fetch reached by play' stood under Not covered): with the poem whole, LINE 3's Soho! goes to Things turn up, The dawn is coming to the Fetch, and Follow him to Approach Centre Point; with the night not yet lived he is a glimpse whose Not yet goes back to Dean Street; no error, no blank view, no scroll")
+@check("fetch-by-play", "2026-11-20 (never played before: 'The Fetch reached by play' stood under Not covered): with the poem whole, LINE 3's Soho! goes to Things turn up, The dawn is coming to the Fetch, and Follow him to Approach Centre Point; with the night not yet lived you are turned back to Dean Street before him (2026-11-25 note 45; he was a glimpse until then); no error, no blank view, no scroll")
 def fetch_by_play(r):
     BASE = '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")(set: $sawJeffrey to true)(set: $lacklandRead to true)(set: $metShana to true)(set: $hadChippy to true)(set: $drinksTonight to 8)(set: $confidence to 55)(set: $sobriety to 45)(set: $prevConfidence to $confidence)(set: $prevSobriety to $sobriety)(set: $returns to 12)'
     scratch_passage(r, "T-fetch", BASE + '(set: $alba to $alba + (a: $alba2))(set: $tookLily1 to true)(set: $lilyCount to 3)(go-to: "LINE 3")')
@@ -5617,12 +5614,8 @@ def fetch_by_play(r):
     r.expect(seen[:4] == ["LINE 3", "Things turn up", "The Fetch", "Approach Centre Point"], "the road to the Fetch went %s" % " > ".join(seen))
     scratch_passage(r, "T-fetch-glimpse", BASE + '(set: $lilyCount to 0)(set: $fetchGlimpsed to false)(go-to: "The Fetch")')
     r.go("T-fetch-glimpse", wait=9000)
-    glimpse = r.js("() => [[].some.call(document.querySelectorAll('.fetch-owed'), function (e) { return !e.closest('.dss-ghost'); }), [].some.call(document.querySelectorAll('tw-link'), function (l) { return /Follow him/.test(l.textContent); })]")
-    r.expect(glimpse[0] and not glimpse[1], "with no flowers he is not a glimpse (owed tally %r, Follow him %r)" % tuple(glimpse))
-    seen2, bad2 = walk_by_play(r, "The Fetch", "Dean Street", pages=4)
-    r.info += " | glimpse: " + " > ".join(seen2)
-    r.expect(not bad2, "; ".join(dict.fromkeys(bad2)))
-    r.expect(seen2[:2] == ["The Fetch", "Dean Street"], "the glimpse went %s" % " > ".join(seen2))
+    r.expect(r.pn() == "Dean Street", "with no flowers the Fetch is reached (%r); since 2026-11-25 note 45 such a night is turned back to Dean Street before him" % r.pn())
+    r.info += " | not ready: turned back to " + r.pn()
 
 @check("bateman-approach", "2026-11-20 (Sam: \"an approach scene for meeting the man on the street before i joyride\"; \"build the street dry, no sound, approach only for now\"): Bateman Street opens as a 3D approach that draws, fits the page and (\"Make the street wet, after rain\", the same night) has its pools on the ground; its one button, WALK ON at the foot, goes back to Dean Street; the passage's own link stays hidden")
 def bateman_approach(r):
@@ -5919,7 +5912,7 @@ def joyride_parked_cars_modelled(r):
 
 @check("joyride-man-after-first-quest", "2026-11-20 playtest note 6 (Sam: \"This option should only appear after you have done the first dream quest\"): the man by his car is not on Dean Street before the page 93 errand is done and is there after it. History of this gate, all 2026-11-20: page 93, then (Sam: \"Put him on the map, first night\"; earlier the same night he was gated on the page 93 errand): on the first night, page 93 not yet heard of, 'A man by his car' is on Dean Street once its other doors open (the second visit) with a door on the map; walking onto his tile on Bateman Street opens the approach, and after WALK ON he is still there and you stand at his car")
 def joyride_man_first_night(r):
-    scratch_passage(r, "T-night1", '(set: $returns to 1)(set: $metRed to true)(set: $returnedPage to true)[[Walk on|Dean Street]]')   # a second Dean Street with the page 93 errand done
+    scratch_passage(r, "T-night1", '(set: $returns to 1)(set: $metRed to true)(set: $returnedPage to true)(set: $worldsVisited to (a: "himalayas"))[[Walk on|Dean Street]]')   # a second Dean Street with the page 93 errand done and one dream world walked (since 2026-11-23, e52e50d, he waits for a dream world; this state lacked it and the check failed on 25 Nov)
     MAN = "() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'joyride'; })[0]; return !!d; }"
     r.go("T-night1", wait=6000)
     r.page.click("tw-link:has-text('Walk on')")
@@ -5958,7 +5951,463 @@ def joyride_man_first_night(r):
     r.expect("Soho Square" in early, "Dean Street's other doors are missing in the early state, so the test proves nothing (%s)" % early)
 
 
+# ---------------------------------------------------------------- 2026-11-25, Sam's 65 notes of 00:27 to 01:46
+T25 = '(display: "Night Resets")(display: "Key Guards")(display: "Test Start 3 Set")'
+N25_CLICK = "(t) => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (x) { return x.textContent.indexOf(t) >= 0 && !x.closest('.dss-ghost') ; })[0]; if (!l) return false; l.click(); return true; }"
+N25_SLIPS = "() => [].map.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (c) { return c.textContent; }).join(' || ')"
+N25_LINKS = "() => [].filter.call(document.querySelectorAll('tw-link'), function (x) { return !x.closest('.dss-ghost, tw-header') && x.getClientRects().length; }).map(function (x) { return x.textContent.trim(); })"
+
+
+def n25_walk(r, name, body, dest, wait=4500):
+    scratch_passage(r, name, body + '[[Walk on|%s]]' % dest)
+    r.go(name, wait=3000)
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(wait)
+
+
+def n25_slip(r, text, ms=20000):
+    r.wait_for("() => [].some.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip'), function (c) { return c.textContent.indexOf(%r) >= 0; })" % text, ms, "a slip saying %r" % text)
+
+
+def n25_built():
+    return open(os.path.join(ROOT, "Dream Street Shuffle.html"), encoding="utf-8").read()
+
+
+@check("n25-source", "2026-11-25 notes 1, 13, 19, 20, 27, 34, 37, 38, 41, 48, 63 (Sam): WELCOME TO HELL is paler; 'you saw her picture'; 'Back where you came from'; 'isn't it something'; the chippy's streaker a second sooner; GO TO WAR; the ride lifts MORALE once a night; the ride's turn question waits until 7 m from the line; the cow climbs evenly; the fight's blows land 1.6 times as hard; the Dawn's serpent closes in 10 s")
+def n25_source(r):
+    t = n25_built()
+    for a, b in SWAPS: t = t.replace(a, b)
+    r.expect("(0.44 + rnd() * 0.26)" in t and "(0.62 + rnd() * 0.3)" not in t, "note 1: WELCOME TO HELL is back at its old strength")
+    r.expect("you saw her picture on the wall of O’Flatterly’s" in t, "note 13: Down the drain does not say 'you saw her picture'")
+    r.expect(t.count("Back where you came from") == 2 and "Back the way you came|Pyramid Return" not in t, "note 19: the pyramid's way back does not read 'Back where you came from'")
+    r.expect("But isn’t it something to have stood" in t, "note 20: Late interlude 1 does not read 'isn't it something'")
+    r.expect("{ delay: 0.8 /*" in t, "note 27: the chippy's streaker does not start a second sooner")
+    r.expect("[[Go to war|The Reclamation]]" in t.replace("&#39;", "'") or "Go to war|The Reclamation" in t, "note 34: the Moai's call does not read GO TO WAR")
+    r.expect("(unless: $joyrideRode is true)[(set: $joyrideRode to true)(set: $confidence to ($statGain: $confidence, 8))]" in t.replace("&quot;", '"'), "note 37: the ride no longer lifts MORALE")
+    jr = open(os.path.join(ROOT, "soho-joyride.html"), encoding="utf-8").read()
+    for a, b in SWAPS: jr = jr.replace(a, b)
+    r.expect("if (dStop < (car.atNode ? 7 : 24)) fireApproach();" in jr, "note 38: the ride asks which way 24 m before the crossing again")
+    r.expect("var speeds = [2.4, 3.4, 4.4, 5.4, 6.4, 7.4, 8.4, 9.4];" in t, "note 41: the cow is back on its slow early tiers")
+    r.expect("toYou = toYou * 1.6; toHim = toHim * 1.6;" in t, "note 48: the fight's blows are back at their old weight, so four exchanges leave the bars half full")
+    r.expect("Math.min(1,(time-4)/6)" in t and "if(time>=10){" in t, "note 63: the Dawn's serpent is back to its 23 s")
+    r.expect("window.dssAudio.compassSpin()" in t and "function compassSpin()" in t, "note 5: the compass has no whirr as it starts to spin")
+    r.expect("window.dssAudio.mandalaSuck()" in t and "function mandalaSuck()" in t, "note 10: the mandala flight has no sound")
+
+
+@check("n25-cave-petal-only", "2026-11-25 note 9 (Sam, The Cave: \"Attend to the petal should be the onltyoption here\"): after Say the mantra, with the second line not yet held, the only way on is Attend to the petal; Step through the mandala comes after it")
+def n25_cave_petal_only(r):
+    n25_walk(r, "T-c9", T25 + '(set: $alba to (a: $alba1))', "The Cave")
+    r.clear_lore(); r.clear_slips()
+    r.expect(r.js(N25_CLICK, "Say the mantra"), "no Say the mantra in the Cave"); r.page.wait_for_timeout(3500)
+    a = r.js(N25_LINKS)
+    r.info = "after the mantra: %r" % a
+    r.expect("Attend to the petal" in a and "Step through the mandala" not in a, "after the mantra the Cave offers %r, not the petal alone" % a)
+    r.expect(r.js(N25_CLICK, "Attend to the petal"), "the petal cannot be attended"); r.page.wait_for_timeout(2500)
+    b = r.js(N25_LINKS)
+    r.expect("Step through the mandala" in b, "after the petal there is no way through the mandala (%r)" % b)
+
+
+@check("n25-gallery-free-after-win", "2026-11-25 note 18 (Sam, Grand Gallery: \"I lost stats after that game when it said 'the stones approve' and I had a successful run\"): a won Pyramid Run pays nothing in the Gallery; a lost one still pays SOBRIETY -4 | MORALE -5")
+def n25_gallery_free_after_win(r):
+    NOTE = "() => [].some.call(document.querySelectorAll('.inventory-note'), function (e) { return !e.closest('.dss-ghost') && /SOBRIETY -4/.test(e.textContent); })"
+    n25_walk(r, "T-g18", T25 + '(set: $pyramidRunWon to true)', "Grand Gallery")
+    won = r.js(NOTE)
+    r.page.unroute("**/*")
+    n25_walk(r, "T-g18b", T25 + '(set: $pyramidRunWon to false)', "Grand Gallery")
+    lost = r.js(NOTE)
+    r.info = "the cost shows after a won run: %s; after a lost one: %s" % (won, lost)
+    r.expect(not won, "the Grand Gallery still charges SOBRIETY -4 | MORALE -5 after a won run")
+    r.expect(lost, "the Grand Gallery no longer charges a lost run")
+    r.page.unroute("**/*")
+
+
+@check("n25-portal-paragraphs-even", "2026-11-25 notes 7, 17 and 33 (Sam, Third Pillar Portal: \"There is an extra blank line between paragraphs 2 and 3\"): the gap from the second paragraph to the third is the gap from the first to the second, measured on the page in a window tall enough that the page fitter leaves its line breaks alone")
+def n25_portal_paragraphs_even(r):
+    r.page.set_viewport_size({"width": 1440, "height": 1300})   # measured 2026-11-25: at 1440x900 the page fitter hides the stray breaks and the gaps come out even either way; in a taller window they show (64 px against 35 with the old markup)
+    n25_walk(r, "T-p7", T25 + '(set: $returns to 12)', "Third Pillar Portal", wait=7000)
+    g = r.js("""() => { var tp = document.querySelector('tw-story > tw-passage:not(.dss-ghost)') || document.querySelector('tw-passage'); var txt = function (s) { var w = document.createTreeWalker(tp, NodeFilter.SHOW_TEXT), n; while ((n = w.nextNode())) { if (n.nodeValue.indexOf(s) >= 0 && n.parentNode.getClientRects().length) { var q = document.createRange(); q.selectNodeContents(n); var b = q.getBoundingClientRect(); return [b.top, b.bottom]; } } return null; };
+      return [txt('A third pillar rises'), txt('in your pocket seems to heat'), txt('The third blue post rears')]; }""")
+    r.expect(g and all(g), "the Portal's three paragraphs are not all on the page (%r)" % g)
+    g12, g23 = g[1][0] - g[0][1], g[2][0] - g[1][1]
+    r.info = "gap 1 to 2: %.0f px; gap 2 to 3: %.0f px" % (g12, g23)
+    r.expect(abs(g23 - g12) <= 4, "the Portal's paragraphs are unevenly spaced: %s" % r.info)
+
+
+@check("n25-gents-cometo-first", "2026-11-25 notes 14 and 15 (Sam, Coach and Horses lock: \"The retch option should appear when you arrive intot he cubicle and see the toilet\"; \"this screne should happen before the interior scene in the gents. Swap them over. 'COme to' an 'retch' first\"): the drain flight holds on the cubicle with the come-to line and Retch; the gents room loads only after the press, and does not say or offer them again")
+def n25_gents_cometo_first(r):
+    n25_walk(r, "T-g14", T25 + '(set: $crashedAfterDualRing to true)(set: $blackouts to 0)(set: $sobriety to 12)', "Coach and Horses lock", wait=1500)
+    r.wait_for("() => window.__dssComeToHeld === true", 25000, "the drain flight to hold on the cubicle")
+    st = r.js("() => { var c = document.querySelector('.coach-plumbing-intro .gents-cometo-card'); return c ? [c.querySelector('.gents-cometo-line').textContent, c.querySelector('.gents-cometo-go').textContent, !!document.getElementById('gt-wrap'), +getComputedStyle(document.querySelector('.coach-plumbing-intro')).opacity] : null; }")
+    r.info = "%r" % st
+    r.expect(st and "come to in a cubicle" in st[0] and st[1] == "Retch.", "the cubicle does not carry the come-to line and Retch (%r)" % st)
+    r.expect(not st[2] and st[3] > 0.9, "the gents room is already up behind the cubicle, or the cubicle is fading (%r)" % st)
+    r.page.wait_for_timeout(3000)
+    r.expect(r.js("() => window.__dssComeToHeld === true && !!document.querySelector('.coach-plumbing-intro')"), "the cubicle let go on its own, before Retch was pressed")
+    r.page.locator(".gents-cometo-go").click()
+    r.wait_for("() => !document.querySelector('.coach-plumbing-intro')", 8000, "the cubicle to let go after Retch")
+    r.wait_for("() => !!document.getElementById('gt-wrap')", 20000, "the gents room after the cubicle")
+    after = r.js("() => [[].some.call(document.querySelectorAll('tw-link'), function (l) { return !l.closest('.dss-ghost') && /^Retch/.test(l.textContent.trim()); }), [].some.call(document.querySelectorAll('.gents-cometo'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; })]")
+    r.expect(not after[0], "Retch is offered a second time in the gents room")
+    r.expect(not after[1], "the come-to line is said a second time in the gents room")
+
+
+@check("n25-jeffrey-waits-for-his-click", "2026-11-25 note 16 (Sam, Coach and Horses bar: \"There is an extra spce between paragraphs 5 and 6. But also, this dialogue shouldn't happen until yuo click Bernard anyway. it's too soon\"): the bar opens on its first line only; JEFFREY's scene comes from his own close-up; and the gap before 'Will you please do something about this cow?' is the gap between his other paragraphs")
+def n25_jeffrey_waits(r):
+    n25_walk(r, "T-j16", T25 + '(set: $sawJeffrey to false)(set: $jeffWaiting to false)(set: $hadLilyCall1 to true)(set: $hadDualRing to true)(set: $hauntsEnoughSaid to true)(set: $officeOpensSaid to true)', "Coach and Horses bar", wait=1500)
+    r.wait_for("() => !!(window.__dssRooms && window.__dssRooms.cb)", 20000, "the Coach bar room")
+    PROSE = "() => { var b = document.querySelector('tw-story > .dss-room-fixed .dss-room-prose') || document.querySelector('tw-passage'); return b ? b.textContent : ''; }"
+    first = r.js(PROSE)
+    r.expect("The place is empty except for JEFFREY BERNARD" in first, "the bar does not open on its first line (%r)" % first[:160])
+    r.expect("You don’t look well" not in first, "JEFFREY's scene is on the page before he is clicked")
+    r.room_ready("cb"); r.page.wait_for_timeout(3500)   # measured: for about two seconds after its opening words are put away the room's things do not answer the pointer
+    r.click_object("cb", "JEFFREY BERNARD")
+    r.expect("Speak to JEFFREY BERNARD" in r.card_buttons(), "JEFFREY's card does not offer his scene (%s)" % r.card_buttons())
+    r.press("Speak to JEFFREY BERNARD"); r.page.wait_for_timeout(4500)
+    said = r.js(PROSE)
+    r.expect("You don’t look well" in said and "Will you please do something about this cow?" in said, "pressing it did not bring his scene (%r)" % said[-200:])
+    g = r.js("""() => { var box = document.querySelector('tw-story > .dss-room-fixed .dss-room-prose') || document.querySelector('tw-passage'); var txt = function (s) { var w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT), n; while ((n = w.nextNode())) { if (n.nodeValue.indexOf(s) >= 0 && n.parentNode.getClientRects().length) { var q = document.createRange(); q.selectNodeContents(n); var b = q.getBoundingClientRect(); return [b.top, b.bottom]; } } return null; };
+      return [txt('You heft your eyes'), txt('She moos.'), txt('You best find your own way out'), txt('Will you please do something about this cow')]; }""")
+    r.expect(g and all(g), "his paragraphs are not on screen to measure (%r)" % g)
+    ref, g56 = g[1][0] - g[0][1], g[3][0] - g[2][1]
+    r.info = "gap between paragraphs 3 and 4: %.0f px; between 5 and 6: %.0f px" % (ref, g56)
+    r.expect(g56 <= ref + 6, "there is an extra gap before 'Will you please do something about this cow?': %s" % r.info)
+    r.page.unroute("**/*")
+
+
+@check("n25-one-way-lit", "2026-11-25 notes 11, 12 and 61 (Sam, Dean Street: \"There are currently two paths lit, isn't that confusing?\"; \"The gree sea seems to be locked onto 'open' so you always see the path. It should need selecting\"; \"I just clicked the option for centre point and nothing changes\"): nothing is lit until a line is picked; a Where next? pick replaces the lit way; one way shows at a time, the last one chosen, whether from Where next? or Who's next?; and a pick of one Pillars line is not read as a pick of the next")
+def n25_one_way_lit(r):
+    scratch_passage(r, "T-w11", T25 + '(set: $returns to 12)(go-to: "Dean Street")')
+    r.go("T-w11", wait=8000); r.clear_lore(); r.clear_slips()
+    DIRS = "() => [window.dssDirections.get(), window.__dssWayShown || '']"
+    ON = "() => [].filter.call(document.querySelectorAll('.where-next .book-pitch-on'), function (e) { return !e.closest('.dss-ghost'); }).length"
+    d0 = r.js(DIRS)
+    r.expect(d0 == ["", ""] and r.js(ON) == 0, "a way is lit on arrival with nothing picked (%r, %d lines chosen)" % (d0, r.js(ON)))
+    def pick(t, want_dirs, want_shown):
+        r.expect(r.js(N25_CLICK, t), "no line %r to pick" % t)
+        r.wait_for("() => (window.__dssWayShown || '') === %r" % want_shown, 6000, "the way to %s to be the one shown after picking %r (shown %r)" % (want_shown, t, r.js(DIRS)))
+        d = r.js(DIRS)
+        r.expect(d[0] == want_dirs, "after picking %r the lit list is %r, not %r" % (t, d[0], want_dirs))
+        return d
+    a = pick("The barbershop is open.", "barber", "barber")
+    b = pick("The third pillar is open.", "pillars", "pillars")
+    c = pick("LACKLAND", "pillars", "lackland")
+    d = pick("The barbershop is open.", "barber", "barber")
+    r.info = "%r" % [d0, a, b, c, d]
+    r.page.unroute("**/*")
+    for old in ("Find page 93.", "pillars"):
+        scratch_passage(r, "T-w12", T25 + '(set: $metGreenSeaFriend to false)(set: $keyLighter to "seed")(set: $dreamKey to "")(set: $whereNext to "%s")(go-to: "Dean Street")' % old)
+        r.go("T-w12", wait=7000); r.clear_lore(); r.clear_slips()
+        box = r.js("() => { var b = [].filter.call(document.querySelectorAll('.where-next'), function (x) { return !x.closest('.dss-ghost'); })[0]; return b ? b.innerText : ''; }")
+        r.expect("The Green Sea is open now." in box, "this Dean Street has no Green Sea line, so nothing is proved (%r)" % box)
+        r.expect(r.js(ON) == 0 and r.js(DIRS)[0] == "", "with %r remembered from an earlier errand the Green Sea line is already chosen and its way lit (%r)" % (old, r.js(DIRS)))
+        r.page.unroute("**/*")
+
+
+@check("n25-fetch-turns-back", "2026-11-25 note 45 (Sam, The Fetch: \"this shouldn't happen if you can't make it out yet, you should return to the street before the fetch\"): a night he would not let through goes back to Dean Street with a slip, and never sees his page; a whole poem still meets him")
+def n25_fetch_turns_back(r):
+    n25_walk(r, "T-f45", T25 + '(set: $alba to (a: $alba1))(set: $lilyCount to 1)(set: $haunts to (a: $haunt1))(set: $blackouts to 0)(set: $coachBurnt to false)(set: $sanctumDone to false)', "The Fetch", wait=5000)
+    r.expect(r.pn() == "Dean Street", "an unready night at the Fetch lands on %r, not back on Dean Street" % r.pn())
+    n25_slip(r, "There are still flowers to gather in the night")
+    r.page.unroute("**/*")
+    n25_walk(r, "T-f45b", T25 + '(set: $alba to (a: $alba1, $alba2, $alba3))(set: $notebook to "")', "The Fetch", wait=5000)
+    r.expect(r.pn() == "The Fetch", "a whole poem does not reach the Fetch (%r)" % r.pn())
+    r.page.unroute("**/*")
+
+
+@check("n25-colony-doors", "2026-11-25 notes 53, 54 and 55 (Sam, the Colony's doors: \"This should have a reminded about which door leads to coppers\"; \"Why does this appear after I tried to get into the colony?\"; \"I teleported from the doors of the colony\"): once the cellar is known a slip tells the doors apart; and the wrong door's Trisha's link puts you on Dean Street with the way there lit, not at Trisha's")
+def n25_colony_doors(r):
+    n25_walk(r, "T-c53", T25 + '(set: $metSalvu to true)(set: $hasTrishaMatchbook to true)(set: $metShana to false)(set: $trishaSlipShown to true)', "The Colony Room Door", wait=3000)
+    n25_slip(r, "The left door goes down to COPPER")
+    r.clear_slips()
+    r.expect(r.js(N25_CLICK, "Left"), "no Left door"); r.page.wait_for_timeout(3500)
+    r.expect(r.pn() == "Wrong door", "the left door after the cellar leads to %r" % r.pn())
+    r.expect(r.js(N25_CLICK, "I might as well give it a try"), "the wrong door has no Trisha's line"); r.page.wait_for_timeout(5000)
+    r.expect(r.pn() == "Dean Street", "the wrong door's Trisha's line lands on %r, not Dean Street" % r.pn())
+    r.wait_for("() => /(^|,)trishas(,|$)/.test(window.dssDirections.get())", 6000, "the way to Trisha's to be lit (%r)" % r.js("() => window.dssDirections.get()"))
+    r.page.unroute("**/*")
+
+
+@check("n25-matchbook-announced", "2026-11-25 note 56 (Sam, Entering Trisha's: \"Make a bigger deal of Salvu giving you the matchbook, I don;t remember it at all\"): the cellar says Trisha's opens under the matchbook; Dean Street says it again on a slip with directions, and Where next? carries it")
+def n25_matchbook_announced(r):
+    n25_walk(r, "T-m56", T25 + '(set: $hasTrishaMatchbook to false)(set: $metShana to false)(set: $knowsCopperWord to true)(set: $gaveCopperWord to true)(set: $trishaSlipShown to false)', "Fight Victory", wait=5000)
+    opens = r.js("() => [].filter.call(document.querySelectorAll('.haunt-opens'), function (e) { return !e.closest('.dss-ghost'); }).map(function (e) { return e.textContent.trim(); })")
+    r.expect("Trisha’s opens." in opens, "the cellar does not say Trisha's opens under the matchbook (%r)" % opens)
+    r.page.unroute("**/*")
+    scratch_passage(r, "T-m56b", T25 + '(set: $hasTrishaMatchbook to true)(set: $metShana to false)(set: $trishaSlipShown to false)(set: $dreamKey to "")(set: $keyLighter to "seed")(set: $returns to 12)(go-to: "Dean Street")')
+    r.go("T-m56b", wait=6000); r.clear_lore()
+    n25_slip(r, "The matchbook in your pocket gets you into Trisha’s.")
+    box = r.js("() => { var b = [].filter.call(document.querySelectorAll('.where-next'), function (x) { return !x.closest('.dss-ghost'); })[0]; return b ? b.innerText : ''; }")
+    r.expect("Trisha’s is open." in box, "Where next? does not carry Trisha's (%r)" % box)
+    r.page.unroute("**/*")
+
+
+@check("n25-haunts-enough-slip", "2026-11-25 note 60 (Sam, After Shana: \"When you have enough haunts it shoudl tell you\"): the haunt that brings the count to the Fetch's threshold says so on a slip, with what the flowers still owe")
+def n25_haunts_enough_slip(r):
+    n25_walk(r, "T-h60", T25 + '(set: $haunts to (a: $haunt1, $haunt2, $haunt3, $haunt4, $haunt5))(set: $lilyCount to 1)(set: $hauntsEnoughSaid to false)(set: $lilyNamed to true)', "After Shana", wait=3000)
+    r.expect(r.js("() => [].some.call(document.querySelectorAll('.haunt-progress'), function (e) { return /6 of 12/.test(e.textContent); })"), "After Shana did not bring the count to six, so nothing is proved")
+    n25_slip(r, "You have caught enough haunts to leave the night. You still need 2 more of LILY’S flowers, or the whole poem.")
+    r.page.unroute("**/*")
+
+
+@check("n25-square-gate-and-page", "2026-11-25 notes 21, 22, 23 and 25 (Sam, Alley: Soho Square: \"it showed the old text screen (I thin) before it\"; \"The gate is, for some reason, attached to a dear, it should be attached to the gate (to the left of the hut in the fence)\"; \"the 'what are you looking at charlie' thing loads first\"; \"I am stuck in the square\"): the page under the scene is unseen while the scene loads and the statue's line is never on it; the gate's halo is on a gate in the left railing with no deer in front of it; and pressing it leads back to the street")
+def n25_square_gate_and_page(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Alley: Soho Square", wait=400)
+    early = r.js("() => { var tp = document.querySelector('tw-story > tw-passage:not(.dss-ghost)') || document.querySelector('tw-passage'); if (!tp) return null; var seen = [].filter.call(tp.querySelectorAll('tw-link, .sq-copy'), function (e) { return !e.closest('tw-header, tw-sidebar') && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && e.textContent.trim(); }).map(function (e) { return e.textContent.trim().slice(0, 30); }); return [!!document.getElementById('sq-wrap'), seen]; }")
+    r.expect(early is not None, "no page")
+    r.expect(early[0] or not early[1], "before the scene is up the page shows %r" % (early[1],))
+    r.wait_for("() => !!(window._dssThreeRegistry && window._dssThreeRegistry['sq-wrap'] && window._dssThreeRegistry['sq-wrap'].scene)", 20000, "the 3D square")
+    r.page.wait_for_timeout(8500); r.clear_lore(); r.clear_slips(); r.page.mouse.move(5, 5)
+    g = r.js("""() => { var e = window._dssThreeRegistry['sq-wrap'], h = null, gateBars = 0; e.scene.traverse(function (o) { if (o.name === 'sq-rest-gate') h = o; });
+      if (!h) return null; var v = h.position.clone().project(e.camera), x = (v.x + 1) / 2 * innerWidth, y = (1 - v.y) / 2 * innerHeight;
+      var rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(v.x, v.y), e.camera); var d = e.camera.position.distanceTo(h.position);
+      var before = rc.intersectObjects(e.scene.children, true).filter(function (i) { return i.object.isMesh && i.object.material && i.object.material.visible !== false && i.distance < d - 0.6; }).length;
+      return { x: Math.round(x), y: Math.round(y), pos: h.position.toArray().map(function (n) { return +n.toFixed(2); }), before: before, vis: h.visible, op: +h.material.opacity.toFixed(2) }; }""")
+    r.info = "%r" % g
+    r.expect(g and g["vis"] and g["op"] > 0.3, "the gate has no resting light (%r)" % g)
+    r.expect(abs(g["pos"][0] + 11.8) < 0.3 and abs(g["pos"][2] - 2.375) < 0.3, "the gate's light is at %r, not on the gate in the left railing" % g["pos"])
+    r.expect(0 < g["x"] < 520 and 0 < g["y"] < 900, "the gate's light is not on the left of the opening view (%r)" % g)
+    r.expect(g["before"] == 0, "%d things stand between the opening view and the gate's light (a deer?)" % g["before"])
+    r.page.mouse.click(g["x"], g["y"]); r.page.wait_for_timeout(2500)
+    card = r.js("() => { var c = document.getElementById('sq-card'); return c && c.style.display !== 'none' ? c.innerText : ''; }")
+    r.expect("GATE" in card.upper() and "Back to the street" in card, "pressing the gate's light does not open the gate's card with the way back (%r)" % card)
+    r.js("() => { [].forEach.call(document.querySelectorAll('#sq-card button'), function (b) { if (/Back to the street/i.test(b.textContent)) b.click(); }); }")
+    r.page.wait_for_timeout(5000)
+    r.expect(r.pn() == "Dean Street", "the gate leads to %r" % r.pn())
+
+
+@check("n25-worms-over-the-rim", "2026-11-25 note 24 (Sam, the gardener's hut: \"The phallic worms need to come through the holes, at the moment they don't\"): an up worm stands out above the rim of its hole, and a resting one cannot be seen")
+def n25_worms_over_the_rim(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Soho Square: the gardener’s hut", wait=6000); r.clear_lore(); r.clear_slips()
+    r.js("() => { var b = document.querySelector('#dss-rules-overlay .dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(900)
+    r.js("() => { var w = document.querySelector('.worm-start'); if (w && !w.hidden) w.click(); }")
+    m = None
+    for _ in range(90):
+        r.page.wait_for_timeout(120)
+        i = r.js("() => [].findIndex.call(document.querySelectorAll('#dss-worm-game .worm-hole'), function (h) { return h.classList.contains('up'); })")
+        if i >= 0:
+            r.page.wait_for_timeout(300)
+            m = r.js("""(i) => { var hs = document.querySelectorAll('#dss-worm-game .worm-hole'), h = hs[i], b = h.querySelector('.worm-body'), hr = h.getBoundingClientRect(), br = b.getBoundingClientRect(); if (!h.classList.contains('up')) return null;
+              var x = (br.left + br.right) / 2, y = hr.top - 8, top = document.elementFromPoint(x, y); var rest = [].filter.call(hs, function (q) { return !q.classList.contains('up'); }).map(function (q) { var qb = q.querySelector('.worm-body').getBoundingClientRect(), qr = q.getBoundingClientRect(); return Math.round(qb.top - qr.bottom); });
+              return { above: Math.round(hr.top - br.top), hit: !!(top && top.closest('.worm-hole') === h), rest: rest }; }""", i)
+            if m: break
+    r.expect(m, "no worm came up in ten seconds")
+    r.info = "%r" % m
+    r.expect(m["above"] >= 10 and m["hit"], "an up worm does not stand out over the rim of its hole (%r)" % m)
+    r.expect(all(v >= 6 for v in m["rest"]), "a resting worm shows at the foot of its hole (%r)" % m["rest"])
+
+
+@check("n25-reclamation-steady", "2026-11-25 notes 35 and 36 (Sam, The Reclamation: \"still really unsteady and shaky ... you can never focus on a target\"; \"the note about 'lowers his rifle' rebuild those to make them match the paleofuturistic aesthetic\"): the view stands still while the sight is in the middle of the screen and pans only at an edge; and the running strip and rules slip are dark basalt, not typed paper")
+def n25_reclamation_steady(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("The Reclamation", wait=9000); r.clear_lore(); r.clear_slips()
+    slip = r.js("() => { var s = document.querySelector('#dss-rules-overlay .dss-rules-slip'); if (!s) return null; var cs = getComputedStyle(s); return [cs.backgroundImage.slice(0, 40), cs.color, cs.fontFamily.slice(0, 20)]; }")
+    r.expect(slip and "gradient" in slip[0] and "Courier" not in slip[2], "the Reclamation's rules slip is still typed paper (%r)" % slip)
+    r.js("() => { var b = document.querySelector('#dss-rules-overlay .dss-rules-play'); if (b) b.click(); }"); r.page.wait_for_timeout(900)
+    r.js("() => { var b = document.getElementById('rc-begin'); if (b && b.offsetParent) b.click(); }"); r.page.wait_for_timeout(2500)
+    r.expect(r.js("() => !!(window._rcDev && window._rcDev.view)"), "the game has no view hook")
+    def held(x, y, secs=2.0):
+        r.js("([x, y]) => window._rcDev.aim(x, y)", [x, y]); r.page.wait_for_timeout(250)
+        a = r.js("() => window._rcDev.view()"); r.page.wait_for_timeout(int(secs * 1000)); b = r.js("() => window._rcDev.view()")
+        return abs(b[0] - a[0]) + abs(b[1] - a[1])
+    mid = [held(0.0, 0.0), held(0.45, 0.2), held(-0.6, -0.4)]
+    edge = held(0.97, 0.0)
+    r.info = "the view turned %s rad with the sight held in the middle, %.3f rad with it held at the right edge" % (["%.4f" % v for v in mid], edge)
+    r.expect(all(v < 0.002 for v in mid), "the view moves while the sight is held still in the middle of the screen: %s" % r.info)
+    r.expect(edge > 0.05, "the view does not pan when the sight is pushed to the edge: %s" % r.info)
+    hud = r.js("() => { var h = document.getElementById('rc-hud'), cs = getComputedStyle(h); return [cs.backgroundImage.slice(0, 40), cs.fontFamily.slice(0, 24), cs.transform]; }")
+    r.expect("gradient" in hud[0] and "Courier" not in hud[1], "the running strip is still typed paper (%r)" % hud)
+
+
+@check("n25-arrival-opens-wide", "2026-11-25 note 47 (Sam, The Barbershop: \"This begins on a narrow screen it shoudl begin wide iek the others do\"): from its first seen frame the barber's street scene is the width of the window")
+def n25_arrival_opens_wide(r):
+    scratch_passage(r, "T-a47", '(set: $nightPhase to 1)[[Walk on|The Barbershop]]')
+    r.go("T-a47", wait=3000)
+    r.js("""() => { window.__w47 = []; var t0 = performance.now(); (function tick() { var w = document.getElementById('bd-wrap'); if (w) { var q = w.getBoundingClientRect(); window.__w47.push([Math.round(q.width), getComputedStyle(w).visibility]); } if (performance.now() - t0 < 6000) requestAnimationFrame(tick); })(); }""")
+    r.page.locator("tw-link:has-text('Walk on')").first.click(); r.page.wait_for_timeout(6200)
+    rows = r.js("() => window.__w47")
+    seen = [w for w, v in rows if v != "hidden"]
+    r.info = "%d frames with the scene up, %d of them seen; narrowest seen %s px" % (len(rows), len(seen), min(seen) if seen else "none")
+    r.expect(seen, "the barber's scene never showed")
+    r.expect(min(seen) >= 1438, "the barber's scene was seen %d px wide before it filled the window" % min(seen))
+    r.page.unroute("**/*")
+
+
+@check("n25-french-long-pan", "2026-11-25 note 2 (Sam, Approach The French: \"The pan of the camera on this 3D appreach is too short, make it more cinematic\"): the camera is still moving three seconds in and has landed by nine")
+def n25_french_long_pan(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Approach The French", wait=500)
+    r.wait_for("() => typeof window.__dssFhPan === 'number'", 15000, "the French approach's camera to start")
+    r.page.wait_for_timeout(3000); mid = r.js("() => window.__dssFhPan")
+    r.page.wait_for_timeout(6000); end = r.js("() => window.__dssFhPan")
+    r.info = "pan %.2f about 3 s in, %.2f about 9 s in" % (mid, end)
+    r.expect(0.1 < mid < 0.9, "three seconds in the pan is at %.2f, not under way" % mid)
+    r.expect(end == 1, "nine seconds in the pan has not landed (%.2f)" % end)
+
+
+@check("n25-tears-once-and-hangup-waits", "2026-11-25 notes 40 and 6 (Sam: \"The and the tears line flashes up twice\"; Lily phone call 1: \"The lines below the phone dialgoe window appear and dissapeared too quickly\"): the tears line comes in once, never dimming again once it has begun; and LILY's call does not offer Hang up. until its closing lines have been up for eight seconds")
+def n25_tears_once(r):
+    n25_walk(r, "T-t40", T25 + '(set: $lilyCallReturn to "Coach and Horses lock")', "After the dual ring", wait=0)
+    r.js("""() => { window.__t40 = []; var t0 = performance.now(); (function tick() { var e = [].filter.call(document.querySelectorAll('.dss-tears-line, .lily-glimpse'), function (x) { return !x.closest('.dss-ghost') && /And the tears/.test(x.textContent); })[0]; if (e) window.__t40.push(+(+getComputedStyle(e).opacity).toFixed(2)); if (performance.now() - t0 < 6500) setTimeout(tick, 50); })(); }""")
+    r.page.wait_for_timeout(6800)
+    ops = r.js("() => window.__t40")
+    r.expect(ops and max(ops) > 0.7, "the tears line never came in (%r)" % ops[-5:])
+    dips = [i for i in range(1, len(ops)) if ops[i] < ops[i - 1] - 0.005]
+    r.info = "tears: %d samples, peak %.2f, dips %d" % (len(ops), max(ops), len(dips))
+    r.expect(not dips, "the tears line dimmed and came again (%r)" % [ops[max(0, i - 2):i + 2] for i in dips[:2]])
+    r.page.unroute("**/*")
+    n25_walk(r, "T-l6", '(set: $lilyCallReturn to "Dean Street")', "Lily phone call 1", wait=15000)
+    HANG = "() => [].some.call(document.querySelectorAll('tw-link'), function (x) { return !x.closest('.dss-ghost') && /Hang up/.test(x.textContent) && x.getClientRects().length; })"
+    r.expect(not r.js(HANG), "Hang up. is offered 15 s into LILY's call, as the closing lines are still coming in")
+    r.wait_for(HANG, 12000, "Hang up. to come by 27 s")
+    r.page.unroute("**/*")
+
+
+@check("n25-drain-cat-and-pillar", "2026-11-25 notes 13 and 31 (Sam: Down the drain, \"a little popup 3d animation of her (same cat that is outside trisha's)\"; Dean Street, \"a little glowing blue pillar that appears in the bottom left hand corner whenever 'the third pillar is open'\"): Bual's pane draws on the drain page; with a key in your pocket a blue pillar stands bottom left, the pocket badge beside it, and with no key there is none")
+def n25_drain_cat_and_pillar(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Down the drain", wait=6000)
+    cat = r.js("""() => { var c = document.querySelector('.dss-cat-popup canvas'); if (!c) return null; var q = c.getBoundingClientRect(); var gl = c.getContext('webgl2') || c.getContext('webgl'); return [Math.round(q.width), Math.round(q.height), !!window.__dssCatPopupUp, document.scrollingElement.scrollHeight - innerHeight]; }""")
+    r.expect(cat and cat[0] >= 200 and cat[2], "Bual's pane is not drawn on Down the drain (%r)" % cat)
+    r.expect(cat[3] <= 4, "Down the drain scrolls %d px with the pane" % cat[3])
+    r.page.unroute("**/*")
+    scratch_passage(r, "T-p31", T25 + '(set: $returns to 12)(go-to: "Dean Street")')
+    r.go("T-p31", wait=8000); r.clear_lore()
+    p = r.js("() => { var p = document.querySelector('body > .dss-pillar-badge'), b = document.querySelector('body > .dss-pocket-badge:not(.dss-trail-badge)'); var f = function (e) { if (!e) return null; var q = e.getBoundingClientRect(); return [Math.round(q.left), Math.round(q.top), Math.round(q.right), Math.round(q.bottom)]; }; return [f(p), f(b), innerHeight]; }")
+    r.info = "cat pane %r; pillar %r, pocket badge %r" % (cat, p[0], p[1])
+    r.expect(p[0] and p[0][0] < 60 and p[0][3] > p[2] - 40, "no blue pillar bottom left with a key in your pocket (%r)" % p)
+    r.expect(not p[1] or p[1][0] >= p[0][2], "the pocket badge sits over the pillar (%r)" % p)
+    r.page.unroute("**/*")
+    scratch_passage(r, "T-p31b", T25 + '(set: $dreamKey to "")(set: $keyLighter to "seed")(set: $returns to 12)(go-to: "Dean Street")')
+    r.go("T-p31b", wait=7000)
+    r.expect(not r.js("() => !!document.querySelector('.dss-pillar-badge')"), "the blue pillar stands with no key held")
+    r.page.unroute("**/*")
+
+
+@check("n25-poem-whole-shows", "2026-11-25 note 43 (Sam, LINE 3: \"The whole poem should show when it is complete\"): with the third line the three lines stand together under THE POEM IS COMPLETE, and the page still fits")
+def n25_poem_whole_shows(r):
+    n25_walk(r, "T-l43", T25 + '(set: $alba to (a: $alba1, $alba2))(set: $notebook to "")', "LINE 3", wait=5000)
+    r.clear_lore(); r.clear_slips()
+    r.expect(r.js(N25_CLICK, "Closer"), "no Closer on LINE 3"); r.page.wait_for_timeout(6000)
+    lines = r.js("() => [].filter.call(document.querySelectorAll('.dss-poem-lines .alba-line'), function (e) { return !e.closest('.dss-ghost') && e.getClientRects().length; }).map(function (e) { return e.textContent.trim(); })")
+    over = r.js("() => document.scrollingElement.scrollHeight - innerHeight")
+    r.info = "%r; the page runs %d px over" % (lines, over)
+    r.expect(len(lines) == 3 and lines[2] == "She lay beside me in the dawn." and all(lines), "the whole poem is not shown under THE POEM IS COMPLETE (%r)" % lines)
+    r.expect(over <= 4, "LINE 3 scrolls %d px with the poem shown" % over)
+    r.page.unroute("**/*")
+
+
+@check("n25-dawn-pages", "2026-11-25 notes 64 and 65 (Sam, Dawn: \"I want the cool art deco drawins of plans back and explicit liber est' etc. ... Get rid of the things that show you so much about your night, I don't need the walking tracker\"; \"Another night should ass (There is more to discover) when ther is more\"): the alba leads to the White page (the Black page when it is incomplete), with its vines and EXPLICIT. LIBER. EST., before the Dawn; the Dawn no longer says those words itself or draws the night's route; and Another night says there is more while there is")
+def n25_dawn_pages(r):
+    import html as _h
+    t = n25_built()
+    for a, b in SWAPS: t = t.replace(a, b)
+    def passage(name):
+        i = t.find('name="%s"' % name); j = t.find("</tw-passagedata>", i); return _h.unescape(t[i:j])
+    r.expect('(link-goto: "White page")' in passage("Alba Complete") and '(link-goto: "Dawn")' not in passage("Alba Complete"), "Alba Complete does not go on to the White page")
+    r.expect('(link-goto: "Black page")' in passage("Alba Incomplete") and '(link-goto: "Dawn")' not in passage("Alba Incomplete"), "Alba Incomplete does not go on to the Black page")
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("White page", wait=9000)
+    w = r.js("() => [document.body.innerText.indexOf('EXPLICIT. LIBER. EST.') >= 0, !!document.querySelector('tw-passage svg'), [].some.call(document.querySelectorAll('tw-link'), function (l) { return /PLUS\\. ULTRA\\./.test(l.textContent); })]")
+    r.expect(all(w), "the White page has lost its words, its vines or its way on (%r)" % w)
+    r.js("() => { try { localStorage.setItem('dssRouteNow', JSON.stringify({ n: +localStorage.getItem('dssNightNo') || 0, p: ['19,26','19,25','19,24','19,23','19,22','19,21','19,20','19,19','19,18','19,17'] })); } catch (e) {} }")
+    r.go("Dawn", wait=9000)
+    d = r.js("() => [document.querySelectorAll('.dawn-explicit').length, document.querySelectorAll('#dawn-night-plan svg').length, (document.querySelector('.dawn-restart-btn') || {}).textContent || '']")
+    r.info = "White page %r; Dawn %r" % (w, d)
+    r.expect(d[0] == 0, "the Dawn says EXPLICIT. LIBER. EST. itself as well as the White page")
+    r.expect(d[1] == 0, "the Dawn draws the night's route")
+    r.expect(d[2].strip() == "Another night (There is more to discover)", "on a night with more to find the button reads %r" % d[2])
+
+
+@check("n25-back-door-after-cocaine", "2026-11-25 note 57 (Sam, Trisha's: \"The door to the back should open when you collect the cocaine\"): pocketing the cocaine from the back door's card brings the card straight back with Through the door")
+def n25_back_door_after_cocaine(r):
+    n25_walk(r, "T-d57", T25 + '(set: $inisToldOfPillars to true)(set: $dreamKey to "")(set: $keyLighter to "seed")(set: $keyCocaine to "seed")(set: $hasTrishaMatchbook to true)', "Trisha's", wait=1500)
+    r.room_ready("ti")
+    r.click_object("ti", "A door to the back")
+    b0 = r.card_buttons()
+    r.expect(any("cocaine" in b for b in b0), "the back door's card does not offer the cocaine, so nothing is proved (%r)" % b0)
+    r.press("cocaine"); r.page.wait_for_timeout(2600)
+    b1 = r.card_buttons()
+    r.info = "before: %r; after pocketing: %r" % (b0, b1)
+    r.expect("Through the door" in b1, "after the cocaine is pocketed the door's card does not come back with Through the door (%r)" % b1)
+    r.page.unroute("**/*")
+
+
+@check("n25-phone-box-rings-once", "2026-11-25 notes 50 and 51 (Sam, The Phone Box Rings: \"A slip should say 'The phone in the phone box is ringing'\"; \"I have been asked to 'accept the call' twice now, only once should be needed\"): as the box first rings Dean Street says so on a slip with directions; and one press of Accept the call answers it")
+def n25_phone_box_rings_once(r):
+    scratch_passage(r, "T-b50", T25 + '(set: $afterMidnight to true)(set: $metSalvu to true)(set: $shipResolved to false)(set: $shipCall to "pending")(set: $returns to 12)(go-to: "Dean Street")')
+    r.go("T-b50", wait=6000); r.clear_lore()
+    n25_slip(r, "The phone in the phone box is ringing.")
+    r.clear_slips(); r.clear_lore()
+    r.expect(r.js(N25_CLICK, "The phone box"), "no phone box on this Dean Street"); r.page.wait_for_timeout(4500)
+    r.expect(r.pn() == "The Phone Box Rings", "the phone box leads to %r" % r.pn())
+    r.clear_lore(); r.clear_slips()
+    r.wait_for("() => [].some.call(document.querySelectorAll('tw-link'), function (e) { return /Accept the call/.test(e.textContent) && e.getClientRects().length && !e.closest('.dss-ghost'); })", 15000, "the ring to come (the card waits a reading beat beside the page's words)")
+    r.page.wait_for_timeout(500)
+    l = r.page.locator("tw-link:visible", has_text="Accept the call")
+    r.expect(l.count() == 1, "%d Accept the call links on the ringing box" % l.count())
+    bx = l.first.bounding_box(); r.page.mouse.click(bx["x"] + bx["width"] / 2, bx["y"] + bx["height"] / 2); r.page.wait_for_timeout(3500)   # the ring card never stands still, so a locator click waits for ever; a hand presses where it is
+    r.info = "after one press: %s" % r.pn()
+    r.expect(r.pn() == "The Phone Box Answered", "one press of Accept the call left you on %r" % r.pn())
+    r.expect(not r.js("() => [].some.call(document.querySelectorAll('tw-link'), function (x) { return !x.closest('.dss-ghost') && /Accept the call/.test(x.textContent) && x.getClientRects().length; })"), "the answered call asks you to accept it again")
+    r.page.unroute("**/*")
+
+
+@check("n25-eating-has-a-sound", "2026-11-25 notes 30 and 28 (Sam, the chippy: \"There sound be a sound effect for eating the fish and chips\"; \"'Back to life back to reality' is attached to the lily flower, none should be attached to the flower\"): holding the eating card plays bites; and the thing that holds the chippy's flower is known to the voices, which give it no deja vu line")
+def n25_eating_has_a_sound(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Chinese Fish and Chips", wait=1500)
+    r.room_ready("cf")
+    names = r.js("() => window.__dssRooms.cf.names()")
+    lily = [n for n in names if r.js("(n) => !!(window.__dssLilyProbe && window.__dssLilyProbe.room === 'cf' && window.__dssLilyProbe(n))", n)]
+    r.expect(len(lily) == 1, "the chippy's flower is held by %r (of %r), expected one thing" % (lily, names))
+    # every thing in the room used up on an earlier night: one of them should speak the room's deja vu line, and never the one that holds the flower
+    dj = r.js("""() => { var V = window.dssVoices, names = window.__dssRooms.cf.names(); names.forEach(function (n) { for (var i = 0; i < 8; i++) V.look('cf', n); }); var n0 = +localStorage.getItem('dssNightNo') || 0, m = {}; names.forEach(function (n) { m['cf/' + n] = { at: n0 - 1 }; }); localStorage.setItem('dssVoicesDeja', JSON.stringify(m)); return names.map(function (n) { return [n, V.deja('cf', n)]; }); }""")
+    said = [n for n, line in dj if line]
+    r.expect(said, "nothing in the chippy speaks its deja vu line in this state, so nothing is proved (%r)" % dj)
+    r.expect(lily[0] not in said, "the thing that holds the flower (%r) speaks the room's deja vu line (%r)" % (lily[0], dict(dj).get(lily[0])))
+    r.js("() => { window.__dssEatBites = 0; window.showEatPopup('chips', function () {}); }"); r.page.wait_for_timeout(1500)
+    box = r.page.locator("#eat-overlay canvas").first.bounding_box()
+    r.expect(box, "no eating card")
+    r.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2); r.page.mouse.down(); r.page.wait_for_timeout(1600); r.page.mouse.up()
+    bites = r.js("() => window.__dssEatBites")
+    r.info = "the flower is on %r; %d bites in 1.6 s of eating" % (lily[0], bites)
+    r.expect(3 <= bites <= 7, "eating for 1.6 s made %d bites, expected about five" % bites)
+    r.expect(r.js("() => typeof window.dssAudio.eatCrunch === 'function'"), "there is no bite sound")
+
+
+@check("n25-airport-halo-beside-the-book", "2026-11-25 note 8 (Sam, Airport Pub: \"Make the halo slightly to the side of the orage book otherwise they clash\"): the marker stands beside the book, not on it")
+def n25_airport_halo_beside(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("Airport Pub", wait=12000)
+    m = r.js("() => { var s = window.__apBookMarker; return s ? s.position.toArray().map(function (n) { return +n.toFixed(2); }) : null; }")
+    r.info = "%r" % m
+    r.expect(m and abs(m[0] + 4.7) < 0.05, "the Airport Pub's marker is at %r; the book is at x -5.9, and the marker should stand 1.2 to its right" % m)
+
+
+@check("n25-slip-directions-light", "2026-11-25 note 3 (Sam, Dean Street: \"I think I just clicked the slip for direction to cecil court and the direction round didn't flash up\"): pressing Get Directions on the slip to find INIS lights the way to Cecil Court, and it is the way shown on the map, with a Who's next? reader already picked or not")
+def n25_slip_directions_light(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    for pitch in (False, True):
+        scratch_passage(r, "T-s3", T25 + '(set: $knowsCecilCourt to true)(set: $metCritic to true)(set: $knowsAboutPage to false)(set: $returnedPage to false)(set: $hasMissingPage to false)(set: $inisToldOfPillars to false)(set: $dreamKey to "")(set: $keyLighter to "seed")(set: $streetTipLap to 0)(set: $cecilTipShown to false)(set: $shipResolved to true)(set: $trishaSlipShown to true)(set: $returns to 6)[[Walk on|Dean Street]]')   # a night where Cecil Court's door is on the hub (on the second lap, with only the Ginger Light open, the slip's directions had no door to light)
+        r.go("T-s3", wait=4000)
+        r.js("() => { try { window.dssDirections.set(''); sessionStorage.removeItem('dssWayLast'); sessionStorage.removeItem('dssPitchSeen'); } catch (e) {} }")
+        r.page.locator("tw-link:has-text('Walk on')").first.click()
+        slip = "() => [].some.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (e) { return e.textContent.indexOf('INIS') >= 0 && !!e.querySelector('.dss-hint-go'); })"
+        r.page.wait_for_timeout(3000)
+        r.expect(any("Cecil Court" in t for t in r.js(HUB_LINKS)), "this Dean Street has no Cecil Court door, so nothing is proved (%r)" % r.js(HUB_LINKS))
+        r.wait_for(slip, 25000, "the slip to find INIS, with Get Directions")
+        picked = ""
+        if pitch:
+            picked = r.js("() => { var l = [].filter.call(document.querySelectorAll('.book-pitch:not(.where-next) tw-link'), function (x) { return !x.closest('.dss-ghost') && !/No one yet/.test(x.textContent); })[0]; if (!l) return ''; l.click(); return l.textContent.trim(); }")
+            r.page.wait_for_timeout(1500)
+        r.wait_for("() => [].every.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip:not(.out)'), function (c) { return c.classList.contains('typed'); })", 30000, "the slip to finish typing")
+        r.page.locator("#dss-hint-stack .dss-hint-slip:not(.out)", has_text="INIS").locator(".dss-hint-go").first.click()
+        r.wait_for("() => (window.__dssWayShown || '') === 'cecil'", 6000, "the way to Cecil Court to be the one shown (reader picked first: %r; lit %r, shown %r)" % (picked, r.js("() => window.dssDirections.get()"), r.js("() => window.__dssWayShown")))
+        r.info += "reader picked first: %r, shown cecil; " % picked
+        r.page.unroute("**/*")
+
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
-

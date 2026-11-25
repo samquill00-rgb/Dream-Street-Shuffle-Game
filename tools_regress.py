@@ -1835,11 +1835,11 @@ def _(r):
     r.expect(r.pn() == "Give him Red?" and q["said"] >= 12, "no question is asked before RED's name is given (%s, %r)" % (r.pn(), q))
     said = r.js("() => { var p = [].filter.call(document.querySelectorAll('.cellar-scene'), function (e) { return !e.closest('.dss-ghost'); })[0]; return [p.innerText.indexOf('Do you want to betray him for the woman who left you?') >= 0, !!p.querySelector('.claude-draft')]; }")
     r.expect(said[0] and not said[1], "RED's question is not Sam's line, or a pink placeholder is left (%r)" % said)
-    r.expect(q["links"] == ["I am making a sacrifice", "No, reconsider."], "the question's two answers are %r" % q["links"])
+    r.expect(q["links"] == ["I am making a sacrifice.", "No, reconsider."], "the question's two answers are %r" % q["links"])
     r.page.locator(".cellar-scene tw-link", has_text="No, reconsider.").first.click(); r.page.wait_for_timeout(6000)
     r.expect(r.pn() == "Turn to Copper", "No, reconsider. led to %s" % r.pn())
     to_question()
-    r.page.locator(".cellar-scene tw-link", has_text="I am making a sacrifice").first.click(); r.page.wait_for_timeout(5000)
+    r.page.locator(".cellar-scene tw-link", has_text="I am making a sacrifice.").first.click(); r.page.wait_for_timeout(5000)
     r.expect(r.pn() == "You give him Red", "going through with it led to %s" % r.pn())
 
 

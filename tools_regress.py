@@ -1843,6 +1843,22 @@ def _(r):
     r.expect(r.pn() == "You give him Red", "going through with it led to %s" % r.pn())
 
 
+@check("n25-no-backslash-at-start", "2026-11-25 (Sam: \"There is a tiny moment when a backwards slash shows up between the first and second scenes\"): Night Resets ended on a line-joining backslash with no line after it, so it printed, and Start showed it for a breath on the way to the Night Ahead; no passage ends on one now")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")   # serves the html through SWAPS when a bug is planted
+    r.page.add_init_script("""window.__bs = []; (function(){ function look(){ try { var ps = document.querySelectorAll('tw-passage'); for (var i = 0; i < ps.length; i++) { var w = document.createTreeWalker(ps[i], NodeFilter.SHOW_TEXT, null), n; while ((n = w.nextNode())) { if (n.nodeValue.indexOf('\\\\') >= 0 && n.parentElement && !n.parentElement.closest('script, style, tw-sidebar, [hidden]')) { var pe = n.parentElement, cs = getComputedStyle(pe); var pn = (document.getElementById('dss-pn') || {}).textContent || ''; var key = pn + '|' + n.nodeValue.trim().slice(0, 40); if (pe.getClientRects().length && cs.visibility !== 'hidden' && cs.display !== 'none' && window.__bs.indexOf(key) < 0) window.__bs.push(key); } } } } catch (e) {} requestAnimationFrame(look); } requestAnimationFrame(look); })();""")
+    r.go("Start", wait=6000)
+    seen = r.js("() => window.__bs.slice()")
+    r.info = "after Start: %s; seen %r" % (r.pn(), seen)
+    r.expect(r.pn() == "The Night Ahead", "Start led to %s" % r.pn())
+    r.expect(not seen, "a backslash was on the page on the way from Start (%r)" % seen)
+    import html as _h
+    u = _h.unescape(n25_built())
+    for a, b in SWAPS: u = u.replace(_h.unescape(a), _h.unescape(b))
+    ends = [m.group(1) for m in re.finditer(r'<tw-passagedata[^>]*name="([^"]*)"[^>]*>(?:(?!</tw-passagedata>).)*?\\\\\\s*</tw-passagedata>', u, re.S)]
+    r.expect(not ends, "these passages end on a bare backslash, which prints: %r" % ends[:6])
+
+
 @check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
 def _(r):
     r.go("Dean Street", wait=4000)

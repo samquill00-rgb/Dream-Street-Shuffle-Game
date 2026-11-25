@@ -1,3 +1,37 @@
+# STATE AT 25 NOV, EVENING (read first)
+- The 65 notes of 25 Nov 00:27-01:46 are worked through below. Source, build, soho-joyride.html and tools_regress.py are committed, NOT pushed.
+- Sam, mid-session: "Can we stop the regreession happening now? We can do all that after the session". So NO full regression has been run on this build. Run it next: `~/.dss-regress/venv/bin/python -u tools_regress.py` in the background, alone (about 2.4 hours, 300-odd checks).
+- What has been run: the 26 new `n25-` checks all passed on the build before the last three small edits (the portal check's tall window, the stronger deja vu test in n25-eating-has-a-sound, the SWAPS line in n25-dawn-pages). Those three edits are UNRUN.
+- Planted-bug proofs: 26 of 29 proved. Not yet proved: n25-portal-paragraphs-even (needs its new 1440x1300 window: plant the old three-line div), n25-dawn-pages' "more to discover" plant, n25-eating-has-a-sound's deja vu plant. The plant list is in the 25 Nov session scratchpad as plants.py; if it is gone, the plants are one-line swaps of each fix back to its old text.
+- Older checks edited to match today's rulings and UNRUN: endgame-1109 (no route on the Dawn), coach-through-the-drains-first (presses the cubicle's Retch), jeffrey-speech-in-scene (Speak to him first), ending-words-centred (now the White page), fetch-by-play (turned back, no glimpse), alba-holds-the-view and white-ending-by-play (White page before the Dawn), joyride-man-after-first-quest (state now has a dream world), fortuna-fires-too (waits up to 55 s), test-start-points (Where next? lines are not doors), notes-1114-source (bronze hand 0.3). fetch-box-spaced is retired.
+- AFTER the first commit, two more changes, both UNTESTED in a browser (Sam asked for no more runs this session): (1) note 29, "Yes, drop steps": no '1 of 3 steps' sign, no FOLLOW THIS TRAIL, nothing goes quiet; once any clue of a key is looked at tonight the compass, the map mark and the lit object point straight at the key (keyStep in dssVoices). The clue lines still speak; three of them still talk of steps or a path (the chippy ticket's 'third step in the path you're walking'): his to reword. Expect trail-compass, trail-badge-*, trail-picks-up-part-way and any check that reads 'of 3 steps' or presses Follow this trail to need updating. (2) note 39: his new piano piece is the French approach's bed (french-piano-approach.m4a, from ../French piano.mp3, copy in french-piano-originals/); same label, volume 0.30 and 4.5 s leave as the whole-tone piece. Its level is matched by meter (-19.5 LUFS), not by ear.
+- The old session's full run of 25 Nov 00:00 finished 273 of 277; its four failures were those last four checks, all stale or flaky, none a game bug.
+
+# PLAYTEST NOTES OF 25 NOV, 00:27-01:46 (65 notes)
+DONE, with an n25- check: 1, 2, 3 (see below), 5, 6, 7/17/33, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (the worms; not the music), 25, 27, 28 (the deja vu line; not the explaining), 30, 31, 34, 35, 36, 37, 38, 40, 41, 43, 45, 47, 48, 50, 53, 54, 55, 56, 57, 60, 61, 63, 64, 65.
+Notes on some of them:
+- 3: not reproduced as he described. Found: on a second lap, with only the Ginger Light open, the slip's Get Directions had no door to light. With Cecil Court on the hub it lights. Since today one way shows at a time and the compass pulses for a slip's directions too. Ask him which thing did not flash.
+- 7/17/33: the third paragraph's div sat on three lines; the page fitter hides the stray breaks at 1440x900, so it only shows in a taller window (64 px against 35). Fixed; the scan for the same pattern found no other.
+- 45: REVERSES the glimpse of 12 Oct. A night not ready never reaches the Fetch; it goes back to Dean Street with a slip (his line from that page).
+- 64: REVERSES the fold of 23 Nov. White and Black pages are back before the Dawn; the Dawn's own EXPLICIT block and the walked route are gone. The lily sprig count and the wheel are still on the Dawn: ask if they go too.
+- 36: the Reclamation's rules card title was a green stencil (approved 18 Oct); it is now basalt and turquoise with the rest.
+- 30, 5, 10: generated sounds, not recordings (eating, compass whirr, mandala). He may want his own clip for the eating.
+- 57: the back door's card comes straight back with Through the door after the cocaine. No 3D swing of the door.
+- 51: one press of Accept the call answers in every state tried. Not reproduced; ask what he saw.
+- 22/25: a real gate now stands in the left railing; a stag and a hind were moved off its sightline.
+ASK SAM (nothing built):
+- 4: tour guide and Harry Potter box on the second O'Flatterly approach: his to write.
+- 24: music for the worm game: which track?
+- 26, 49, 58: the night feels lost late on; too much pull to the dream worlds; the manuscript is forgotten. To discuss.
+- 28: explaining the flowers once. The first flower already says "Gather flowers. There are five to find."; the chippy's Eat. warning still names its own lily.
+- 32: something to point out the Fetch on Dean Street.
+- 42: LINE 3 prose: his redraft.
+- 44: Things turn up: what is wrong with the paragraphing?
+- 46: which typewriter screen came too soon? The late interludes fire at laps 10 and 13.
+- 52: Red's name is offered only if RED is met and line one is held; else JOHN alone. More on betraying JOHN is his prose.
+- 59: Shana's two options ('You do not find the Hanged Man.' / Let her look again): what should they say?
+- 62: the Fetch shows in a window only after two refused calls (or LILY turned away), and in Dee's mirror.
+
 # STATE AT 25 NOV, 00:05 (read first)
 - Committed, NOT pushed (Sam pushes): 84d481f room cards centred; 76938d4 the 14 notes of 24 Nov 01:43-02:10 (all done, each with a proved @check, incl. pillars-side-door: leaving the Pillars spawns on Manette Street by the side door via DOORS `out:`, and the chosen Where next line is pressable); 36e3874 regression-player fix (data-p93 hooks fed their own MutationObserver; the 24 Nov full run hung 21 h on trishas-trail-door).
 - A full regression was started at 00:00 on 25 Nov in the old session (log: that session's scratchpad full-regress-1125.log). If unsure it finished, run it again: `~/.dss-regress/venv/bin/python -u tools_regress.py` in the background, alone. Rerun any failure alone before calling it real.

@@ -1752,6 +1752,35 @@ def _(r):
             ctx.close()
 
 
+@check("n25-sideways-phone-turn", "2026-11-25 (Sam: \"Is it possible just to have it so it doesn't work on sideways phones? I think that's better\"): a phone held sideways gets one screen asking for it to be turned upright; upright phones (keyboard up or not), tablets held sideways and small desktop windows never see it")
+def _(r):
+    from urllib.parse import quote
+    J = "() => { var d = document.getElementById('dss-turn'); if (!d) return null; var e = document.elementFromPoint(innerWidth / 2, innerHeight / 2), b = d.getBoundingClientRect(); return [getComputedStyle(d).display !== 'none' && b.width >= innerWidth - 2 && b.height >= innerHeight - 2 && !!(e && e.closest('#dss-turn')), (d.innerText || '').length]; }"
+    for w, h, touch, want in ((844, 390, True, True), (740, 340, True, True), (390, 664, True, False), (390, 300, True, False), (1024, 700, True, False), (900, 450, False, False)):
+        ctx = r.ctx.browser.new_context(viewport={"width": w, "height": h}, has_touch=touch, is_mobile=touch)
+        try:
+            ctx.add_init_script(INIT)
+            pg = ctx.new_page()
+            if SWAPS:   # a planted bug has to reach this context too
+                def planted(route):
+                    resp = route.fetch(); t = resp.text()
+                    for x, y in SWAPS: t = t.replace(x, y)
+                    route.fulfill(response=resp, body=t)
+                pg.route("**/" + HTML + "*", planted)
+            pg.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote("Dean Street")), timeout=90000)
+            pg.wait_for_timeout(6000)
+            g = pg.evaluate(J)
+            r.info = "%dx%d %s: %r" % (w, h, "touch" if touch else "mouse", g)
+            r.expect(g is not None, "the turn-upright screen was never made")
+            r.expect(bool(g[0]) == want, "at %dx%d (%s) the turn-upright screen is %s" % (w, h, "touch" if touch else "mouse", "missing or does not cover the page" if want else "up, and should not be"))
+            if want:
+                r.expect(g[1] >= 40, "the turn-upright screen says nothing (%r)" % g)
+                pg.set_viewport_size({"width": h, "height": w}); pg.wait_for_timeout(700)
+                r.expect(not pg.evaluate(J)[0], "the screen stayed up after the %dx%d phone was turned upright" % (w, h))
+        finally:
+            ctx.close()
+
+
 @check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
 def _(r):
     r.go("Dean Street", wait=4000)

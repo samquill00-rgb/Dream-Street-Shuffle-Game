@@ -1859,6 +1859,25 @@ def _(r):
     r.expect(not ends, "these passages end on a bare backslash, which prints: %r" % ends[:6])
 
 
+@check("n25b-phone-box-waits", "2026-11-25 evening, note 7 (Sam: \"The phone box should operate like the doorways no automatic entry\"): walking onto the phone box no longer takes you in; its button comes up, and pressing it does")
+def _(r):
+    scratch_passage(r, "T-pb", '(set: $sobriety to 30)(set: $knowsCecilCourt to true)(set: $metCritic to true)(set: $returns to 4)[[Walk on|Dean Street]]')
+    r.go("T-pb", wait=4000); r.clear_slips()
+    r.page.locator("tw-link:has-text('Walk on')").first.click()
+    r.page.wait_for_timeout(7000); r.clear_lore(); r.clear_slips()
+    r.js("() => { var c = document.getElementById('coin-overlay'); if (c) c.remove(); }")
+    r.wait_for("() => !!(window.dssSohoMap && window.dssSohoMap.state)", 10000, "the Soho map")
+    d = r.js("() => { var d = window.dssSohoMap.doors.filter(function (x) { return x.id === 'phonebox'; })[0]; return d ? [d.c, d.r] : null; }")
+    r.expect(d, "no phone box on the map")
+    went = walk_into(r, "phonebox")
+    btn = r.js("() => { var b = document.querySelector('.dss-doorway-btn'); return b ? [getComputedStyle(b).display !== 'none' && b.getClientRects().length > 0, b.textContent] : null; }")
+    r.info = "after the step: %s, button %r" % (went, btn)
+    r.expect(went == "Dean Street", "walking onto the phone box went straight in (%s)" % went)
+    r.expect(btn and btn[0] and "phone box" in btn[1], "no button to step into the phone box (%r)" % btn)
+    r.page.locator(".dss-doorway-btn").click(); r.page.wait_for_timeout(5000)
+    r.expect(r.pn() != "Dean Street", "the button did not go into the phone box")
+
+
 @check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
 def _(r):
     r.go("Dean Street", wait=4000)
@@ -3021,9 +3040,9 @@ def _(r):
     r.page.locator(".dss-room-veil tw-link, tw-passage tw-link", has_text="Turn and follow her").first.click()
     r.wait_for("() => !!document.querySelector('#dss-photo-pop.in')", 8000, "the polaroid screen")
     box = r.js("""() => { var f = document.querySelector('.dss-photo-pop-frame'), x = document.querySelector('.dss-photo-pop-frame .dss-photo-pop-x'), h = document.querySelector('.dss-photo-pop-hint');
-      if (!f || !x || !h) return null; var a = f.getBoundingClientRect(), b = x.getBoundingClientRect(); return { near: Math.abs(b.right - a.right) < 30 && Math.abs(b.top - a.top) < 30, hint: h.textContent, vis: getComputedStyle(h).visibility }; }""")
-    r.expect(box, "the polaroid screen has no frame, cross or hint")
-    r.expect(box["near"], "the cross is not on the polaroid's corner")
+      if (!f || !h) return null; return { cross: !!x, hint: h.textContent, vis: getComputedStyle(h).visibility }; }""")
+    r.expect(box, "the polaroid screen has no frame or hint")
+    r.expect(not box["cross"], "the polaroid has a cross on its corner again (2026-11-25 note 12, Sam: \"No right hand cross to close this, you should have to pocket it\")")
     r.expect(box["hint"] == "Pocket the polaroid", "the line under the polaroid reads %r" % box["hint"])
     # 2026-11-20 note 14 (Sam: "once it is pocketed you shouldn't have to click again to put it away, it should go to the notebook"), which reverses 2026-11-14 note 17
     r.page.wait_for_timeout(800)
@@ -6736,7 +6755,8 @@ def n25_worm_tune_and_bag_count(r):
         out[nm] = [r.js(COUNT), r.js("() => document.scrollingElement.scrollHeight - innerHeight")]
         r.page.unroute("**/*")
     r.info = "worm tune %s; %r" % (tunes, out)
-    r.expect(out["two"][0].startswith("Two have read it tonight."), "with two readers Dean Street's count reads %r" % out["two"][0])
+    r.expect(out["two"][0].startswith("Two have seen it tonight."),   # 2026-11-25 note 14 (Sam: "Change it to 'seen it' cause Red doesn;t read it")
+     "with two readers Dean Street's count reads %r" % out["two"][0])
     r.expect(out["none"][0] == "", "with no reader yet Dean Street counts anyway (%r)" % out["none"][0])
     r.expect(out["two"][1] <= 4, "Dean Street scrolls %d px with the count line" % out["two"][1])
 

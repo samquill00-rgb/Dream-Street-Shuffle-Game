@@ -1678,6 +1678,34 @@ def _(r):
         r.page.set_viewport_size({"width": 1440, "height": 900})
 
 
+@check("n25-hub-phone", "2026-11-25 (Sam: \"What about mobile phones\", \"Yes, do it\"): on an upright phone Dean Street's lamp took two fifths of the width, the opening words ran four or five to a line beside it, and the Soho map began a whole screen down; the lamp is small and stops at the date, and the map shows on the opening screen")
+def _(r):
+    from urllib.parse import quote
+    for w, h in ((390, 760), (360, 700)):
+        ctx = r.ctx.browser.new_context(viewport={"width": w, "height": h}, has_touch=True, is_mobile=True)
+        try:
+            ctx.add_init_script(INIT)
+            pg = ctx.new_page()
+            if SWAPS:   # a planted bug has to reach this context too
+                def planted(route):
+                    resp = route.fetch(); t = resp.text()
+                    for x, y in SWAPS: t = t.replace(x, y)
+                    route.fulfill(response=resp, body=t)
+                pg.route("**/" + HTML + "*", planted)
+            for lap in ("first night", "second look"):
+                pg.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote("Dean Street")), timeout=90000)
+                pg.wait_for_timeout(11000)
+                g = pg.evaluate("() => { var p = [].filter.call(document.querySelectorAll('tw-passage'), function (e) { return !e.closest('.dss-ghost'); })[0]; var l = p.querySelector('#dean-lamp-svg').getBoundingClientRect(), c = p.querySelector('.soho-map-stage canvas').getBoundingClientRect(), d = p.querySelector('.scene-date, .scene-location').getBoundingClientRect(), se = document.scrollingElement; return { lamp: [Math.round(l.width), Math.round(l.bottom)], date: Math.round(d.bottom), map: [Math.round(c.top + scrollY), Math.round(c.width)], sw: se.scrollWidth }; }")
+                r.info = "%dx%d %s: %r" % (w, h, lap, g)
+                r.expect(g["sw"] <= w + 2, "Dean Street is %d px wide on a %d px phone" % (g["sw"], w))
+                r.expect(g["lamp"][0] <= 100 and g["lamp"][1] <= g["date"] + 30, "the lamp is %d px wide and runs to %d, past the date at %d, on a %dx%d phone" % (g["lamp"][0], g["lamp"][1], g["date"], w, h))
+                r.expect(g["map"][1] >= w - 80, "the map is %d px wide on a %d px phone" % (g["map"][1], w))
+                room = h - g["map"][0]
+                r.expect(room >= (40 if lap == "first night" else 180), "on the %s only %d px of the map are on a %dx%d phone's opening screen" % (lap, room, w, h))
+        finally:
+            ctx.close()
+
+
 @check("fight-ends-after-leaving", "2026-11-09 overnight bug-play: a fight's round timer ended it after its page was left, and its end wrote to a missing element (page error on Dean Street)")
 def _(r):
     r.go("Dean Street", wait=4000)

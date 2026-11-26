@@ -1,3 +1,18 @@
+# STATE AT 26 NOV, SESSION CLOSED BY SAM FOR A NEW ONE (read first)
+
+Nothing is running and nothing is half done; the tree is clean. Sam, 26 Nov: "let's not do another regression yet", so do not start a full run until he asks; targeted checks only.
+
+Committed to main, not pushed (Sam pushes): 92e63f9, one commit ahead of origin when this was written. Full regression of 25 Nov night on 6fe85f2: 309 of 317; the eight failures were fixed or their checks brought up to date and each passes alone (plus the hub, where-next and n25b groups, 17 of 17). No full run since 92e63f9.
+
+- Tester's laptop note: Dean Street is side by side (words, lamp, map) at 1240 px and wider, and 960 to 1239 landscape without the lamp. Upright phones: three screens (the page, the street, Options over the map). Sideways phones: a "Turn your phone upright" screen. Checks n25-hub-short-wide-window, n25-hub-phone, n25-sideways-phone-turn.
+- Rooms: a "Click a coloured light to look closer." pane the first time; the French's ceiling lamps are shaded so only the clickable lights glow.
+- Cellar: Copper's question pages `Give him John?` and `Give him Red?` (Sam's words). Tour guide panel cut.
+- Fifteen notes of 25 Nov 23:28: fourteen in 6fe85f2, note 4 (the Great Work not showing) in 92e63f9: the note is owed from the first haunt's box (sessionStorage dssGwOwed) and opens on the next free page. Not reproduced on Sam's own route; if it still fails, ask which haunt and where.
+- Not looked at by eye from those notes: 1, 2, 3, 6, 9, 10, 12, 13, 14, 15 (checks pass; no screenshots taken).
+- Harness traps met: room_ready closes slips; a ?start= jump after a typewriter page leaves __dssTypingGen set and holds slips a minute; the Options shimmer counts as overflow while it runs.
+- Waiting on Sam's words: LINE 3 redraft; "Things turn up"; the phone box's no-choice lines. Open rulings offered: brighter lights before the first press, pendant shade design, cellar bare bulb, Trisha's fairy lights, a first return opening on the words screen on phones.
+- Preview server dss-game (port 8732) was still running with its tab closed when the session ended (left up in case he is on the local link); it belongs to the old session, so check `lsof -iTCP:8732` before starting it again.
+
 # STATE AT 25 NOV, MORNING AFTER THE NIGHT RUN (read this first; the section below it is the day's working log and is superseded where they differ)
 - Everything is committed to main, NOT pushed. Last commits: 85e6b6f (fixes after the full regression), d4b7aad (checks), then the sound levels.
 - FULL REGRESSION run 04:53-07:23 on 25 Nov: 286 of 302. All 16 failures followed up and every one passes when rerun: 11 stale checks updated to the day's rulings, 3 real faults mended (the ride could not put you back on the street: its MORALE lift now pays on getting out; header slips lost Get Directions: the button now shows as soon as its door is on the street; Shana's captions overflowed 1280x800: now on the link's line), 2 of my own checks loosened. The full run has NOT been repeated since those fixes; only the 16 and all the n25 checks were rerun.

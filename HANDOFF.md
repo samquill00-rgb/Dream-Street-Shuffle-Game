@@ -1,7 +1,7 @@
 # 26 NOV, LATER (read first)
 - Chilli and Pepper (Sam's cats) peek over the pyramid's long left edge on Pyramid Mouth: one mirrored cutout (assets/pyramid-cats.png), banister diagonal along the edge, no fog, no tone mapping, no sRGB flag. d7c5ee3. Check n26-pyramid-cats (planted).
 - Rulings: brighter lights before the first press KEPT; the French's pendant shades BRASS (c758275); cellar bare bulb LEFT; Trisha's fairy lights WARM WHITE AND DIMMER (84dbb32); phone first return KEEPS the rule (words only when new). Nothing pushed; no full regression run.
-- LINE 3 redrafted by Sam (26 Nov). Still waiting on his words: "Things turn up", the phone box's no-choice lines. The ten unviewed 25 Nov notes: Sam trusts them and will change them himself if needed; do not offer screenshots.
+- LINE 3 redrafted by Sam (26 Nov; the paragraph opens "Your ears are tuned", the hearing sentence cut). Things turn up: its first sentence cut (Sam). Phone box no-choice call: Sam, "Keep this it's fine"; closed. Nothing is waiting on his words. The ten unviewed 25 Nov notes: Sam trusts them and will change them himself if needed; do not offer screenshots.
 
 # STATE AT 26 NOV, SESSION CLOSED BY SAM FOR A NEW ONE (read first)
 

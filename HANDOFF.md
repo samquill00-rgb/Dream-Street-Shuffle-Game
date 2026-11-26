@@ -1,3 +1,8 @@
+# 26 NOV, LATER (read first)
+- Chilli and Pepper (Sam's cats) peek over the pyramid's long left edge on Pyramid Mouth: one mirrored cutout (assets/pyramid-cats.png), banister diagonal along the edge, no fog, no tone mapping, no sRGB flag. d7c5ee3. Check n26-pyramid-cats (planted).
+- Rulings: brighter lights before the first press KEPT; the French's pendant shades BRASS (c758275); cellar bare bulb LEFT; Trisha's fairy lights WARM WHITE AND DIMMER (84dbb32); phone first return KEEPS the rule (words only when new). Nothing pushed; no full regression run.
+- Still waiting on his words: LINE 3, "Things turn up", the phone box's no-choice lines. The ten unviewed 25 Nov notes: Sam trusts them and will change them himself if needed; do not offer screenshots.
+
 # STATE AT 26 NOV, SESSION CLOSED BY SAM FOR A NEW ONE (read first)
 
 Nothing is running and nothing is half done; the tree is clean. Sam, 26 Nov: "let's not do another regression yet", so do not start a full run until he asks; targeted checks only.
@@ -10,7 +15,7 @@ Committed to main, not pushed (Sam pushes): 92e63f9, one commit ahead of origin 
 - Fifteen notes of 25 Nov 23:28: fourteen in 6fe85f2, note 4 (the Great Work not showing) in 92e63f9: the note is owed from the first haunt's box (sessionStorage dssGwOwed) and opens on the next free page. Not reproduced on Sam's own route; if it still fails, ask which haunt and where.
 - Not looked at by eye from those notes: 1, 2, 3, 6, 9, 10, 12, 13, 14, 15 (checks pass; no screenshots taken).
 - Harness traps met: room_ready closes slips; a ?start= jump after a typewriter page leaves __dssTypingGen set and holds slips a minute; the Options shimmer counts as overflow while it runs.
-- Waiting on Sam's words: LINE 3 redraft; "Things turn up"; the phone box's no-choice lines. Open rulings offered: brighter lights before the first press, pendant shade design, cellar bare bulb, Trisha's fairy lights, a first return opening on the words screen on phones.
+- Waiting on Sam's words: LINE 3 redraft; "Things turn up"; the phone box's no-choice lines. The five open rulings were all settled on 26 Nov (see the 26 Nov section at the top).
 - Preview server dss-game (port 8732) was still running with its tab closed when the session ended (left up in case he is on the local link); it belongs to the old session, so check `lsof -iTCP:8732` before starting it again.
 
 # STATE AT 25 NOV, MORNING AFTER THE NIGHT RUN (read this first; the section below it is the day's working log and is superseded where they differ)

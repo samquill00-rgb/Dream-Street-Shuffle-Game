@@ -25667,11 +25667,27 @@ window.dssLore = (function() {
      the press that leaves, and the errand card at O'Flatterly's swallowed that press. It now opens on its own, once a browser, a couple of seconds
      after the night's first haunt box is on screen and nothing else is up, in larger plain type, with the notebook's wheel drawn into it: the
      gate this haunt holds gilded and named. The NOTEBOOK tutorial waits behind it (the lore overlay counts as busy). */
-  function firstOpen(box) {
-    var gen = window._passageGen, since = 0;
+  /* 2026-11-25 (Sam, note 4 and after: "Just whenever the first haunt happenes to be collected, it didn't show"): the note needed its haunt box on
+     screen and 2.2 s with nothing else up, on the haunt's own page; press on sooner (or let a flash, a slip or a card fill those seconds) and the page
+     changed, the wait was dropped and the note was never raised again that game. It is now OWED from the moment the first haunt's box is seen
+     (sessionStorage 'dssGwOwed', the haunt's name) and, if its own page is left first, it comes up on the next page that is free for 2.2 s. Not on
+     the title, in a dream world or game, or at the dawn. */
+  var gwGen = -1;
+  function gwOwed() { try { return sessionStorage.getItem('dssGwOwed') || ''; } catch (e) { return ''; } }
+  function gwSettle() { try { sessionStorage.removeItem('dssGwOwed'); } catch (e) {} }
+  function owedTick() {
+    var nm = gwOwed(); if (!nm || gwGen === window._passageGen) return;
+    var st = document.querySelector('tw-story'), tags = ' ' + ((st && st.getAttribute('tags')) || '') + ' ';
+    if (document.getElementById('dss-title') || / (dream|minigame|dawn-end|dawn-approach|white-page|black-page|night-ahead) /.test(tags) || / interval(-[a-z]+)? /.test(tags)) return;
+    var stub = document.createElement('div'); stub.innerHTML = '<span class="haunt-name"></span>'; stub.firstChild.textContent = nm;
+    firstOpen(stub, true);
+  }
+  function firstOpen(box, late) {
+    var gen = window._passageGen, since = 0; gwGen = gen;
+    if (!late) { try { sessionStorage.setItem('dssGwOwed', ((box.querySelector('.haunt-name') || {}).textContent || '').trim() || '?'); } catch (e) {} }
     var iv = setInterval(function() {
-      if (window._passageGen !== gen || !box.isConnected) { clearInterval(iv); return; }
-      var shown = box.getClientRects().length > 0 && getComputedStyle(box).display !== 'none' && getComputedStyle(box).visibility !== 'hidden';
+      if (window._passageGen !== gen || (!late && !box.isConnected)) { clearInterval(iv); return; }
+      var shown = late || (box.getClientRects().length > 0 && getComputedStyle(box).display !== 'none' && getComputedStyle(box).visibility !== 'hidden');
       /* 2026-11-08 (Sam, playtest note 8: "When that wheel shows up there should be some explanation of the point of it"): a slip left standing (they stay until closed) kept this note away for good; only a slip still typing, or a must-read one, holds it now */
       var busy = (window.dssOverlayBusy && window.dssOverlayBusy()) || document.querySelector('.dss-hint-slip:not(.out):not(.typed), .dss-hint-slip.dss-hint-modal:not(.out), tw-dialog, .dss-rules-overlay, #dss-gate-flash');
       if (!shown || busy) { since = 0; return; }
@@ -25680,8 +25696,8 @@ window.dssLore = (function() {
       /* and once a GAME, not once a browser (the voices' rule): a new game opens it again on its first haunt */
       var run = 0; try { run = +localStorage.getItem('dssRunFirst') || 0; } catch (e) {}
       var seenRun = null; try { seenRun = localStorage.getItem('dssGreatWorkRun'); } catch (e) {}
-      var src = document.getElementById('dss-lore-greatwork'); if (!src || seenRun === String(run)) return;
-      try { localStorage.setItem('dssGreatWorkRun', String(run)); } catch (e) {}
+      var src = document.getElementById('dss-lore-greatwork'); if (!src) return; if (seenRun === String(run)) { gwSettle(); return; }
+      try { localStorage.setItem('dssGreatWorkRun', String(run)); } catch (e) {} gwSettle();
       /* 2026-11-18 (Sam, playtest note 22, The Empty Glass: "The stuff about the great work [shouldn't] be slips it should be popup modal"): back to the one
          card of 31 Oct (dssLore.autoFrom, dressed by dressCard: plain larger type, the wheel with this haunt's gate gilded, a Go on at its foot). It does not
          type itself out. This reverses the 11 Nov slips (note 3); slips() is kept, unused, in case he wants them back. */
@@ -25730,7 +25746,7 @@ window.dssLore = (function() {
     var note = o.querySelector('.editors-note'), first = note && note.querySelector('p');
     if (first) first.parentNode.insertBefore(fig, first); else if (note) note.appendChild(fig);
   }
-  setInterval(function() { Array.prototype.forEach.call(document.querySelectorAll('.nb-haunts:not([data-wheel])'), build); firstBoxMark(); glossBoxes(); }, 300);
+  setInterval(function() { Array.prototype.forEach.call(document.querySelectorAll('.nb-haunts:not([data-wheel])'), build); firstBoxMark(); owedTick(); glossBoxes(); }, 300);
 })();
 /* 2026-10-21 (Sam: "every time you gather a haunt the wheel shows up, but after the first time, it just shows as a sort of golden line drawing, briefly, with the part of the wheel you found shaded in").
    THE GATE FLASH. The first haunt in a browser still opens the NOTEBOOK on its wheel (the tutorial, dssHauntNotebookTut). Every haunt after
@@ -27120,7 +27136,7 @@ window.dssRingHold = (function() {
     var hub = /(^|\s)hub(\s|$)/.test(st.getAttribute('tags') || '');
     var p = hub ? Array.prototype.filter.call(st.querySelectorAll('tw-passage.soho-map-on'), function(e) { return !e.closest('.dss-ghost') && !e.classList.contains('dss-ghost'); })[0] : null;
     if (!p || !phone()) { if (st.classList.contains('dss-ph') || document.querySelector('.dss-ph-ui')) clear(st); return; }
-    if (!p.querySelector('.dss-ph-bar')) { clear(st); setup(st, p); }
+    if (!p.querySelector('.dss-ph-bar')) { if (!words(p) && (p._phWait = (p._phWait || 0) + 1) < 7) return; /* the words were not always in the page on the first look, and a page read as wordless made the next visit look new (caught by n25-hub-phone); a page that really has none is taken as it is after a second and a half */ clear(st); setup(st, p); }
     var mc = p.querySelector('#soho-map-container'), cs = window.getComputedStyle(p), mb = p.querySelector('.soho-map-bar'), ob = p.querySelector('.dss-ph-optb');
     if (mc) p.style.setProperty('--phmap', mc.offsetHeight + 'px');
     p.style.setProperty('--phtop', cs.paddingTop); p.style.setProperty('--phside', cs.paddingLeft);
@@ -27146,12 +27162,12 @@ window.dssRingHold = (function() {
     var p = Array.prototype.filter.call(st.querySelectorAll('tw-passage.soho-map-on'), function(e) { return !e.closest('.dss-ghost') && !e.classList.contains('dss-ghost'); })[0]; if (!p) return;
     var at = window.__dssCompassAt, mine = p.querySelector('.dss-wn-trail'), made = p.querySelector('.dss-wn-made');
     var want = at && at.door && at.room && at.key !== 'fetch' && document.querySelector('.dss-trail-badge') ? at : null;
-    if (want) { var ks = p.querySelectorAll('.book-pitch.where-next .book-pitch-k'); for (var i = 0; i < ks.length; i++) { if (!ks[i].closest('.dss-wn-trail') && ks[i].textContent.trim() === want.door) want = null; } }
+    if (want) { var ks = p.querySelectorAll('.book-pitch.where-next .book-pitch-k'); for (var i = 0; i < ks.length; i++) { if (!ks[i].closest('.dss-wn-trail') && ks[i].textContent.trim() === want.door) { want = null; break; } } }
     if (!want) { if (made && made.parentNode) made.parentNode.removeChild(made); else if (mine && mine.parentNode) mine.parentNode.removeChild(mine); return; }
     if (mine && mine.getAttribute('data-door') === want.door && mine.isConnected) return;
     if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
     var box = Array.prototype.filter.call(p.querySelectorAll('.book-pitch.where-next'), function(b) { return !b.classList.contains('flag-next'); })[0];
-    if (!box) { var mc = p.querySelector('#soho-map-container'); if (!mc) return; box = document.createElement('div'); box.className = 'book-pitch where-next dss-wn-made'; box.innerHTML = '<span class="book-pitch-q">Where next?</span>'; mc.parentNode.insertBefore(box, mc); }
+    if (!box) { var mc = p.querySelector('#soho-map-container'); if (!mc) return; box = document.createElement('div'); box.className = 'book-pitch where-next'; box.innerHTML = '<span class="book-pitch-q">Where next?</span>'; var wr = document.createElement('tw-hook'); wr.className = 'dss-wn-made'; wr.appendChild(box); var top = mc; while (top.parentNode && top.parentNode !== p) top = top.parentNode; if (top.parentNode !== p) return; p.insertBefore(wr, top); /* a block of its own beside the real boxes' blocks, so the phone's three screens treat it as one of them */ }
     var o = document.createElement('span'); o.className = 'book-pitch-opt dss-wn-trail'; o.setAttribute('data-door', want.door); o.setAttribute('role', 'button'); o.setAttribute('tabindex', '0'); o.style.cursor = 'pointer';
     var k = document.createElement('span'); k.className = 'book-pitch-k'; k.hidden = true; k.textContent = want.door; o.appendChild(k);
     var room = want.room.charAt(0).toUpperCase() + want.room.slice(1);
@@ -88262,6 +88278,11 @@ He puts the wrapped bird in the bin among the other things abandoned, fishes and
 (set: $keyEye to &quot;spent&quot;)(set: $dreamKey to &quot;&quot;)\
 (go-to: &quot;The Plain of Chebar&quot;)</tw-passagedata>
 </tw-storydata>
+
+
+
+
+
 
 
 

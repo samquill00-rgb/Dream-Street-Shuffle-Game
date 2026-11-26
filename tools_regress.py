@@ -1740,6 +1740,9 @@ def _(r):
             street(g, "a later night")
             r.expect(g["optb"] and g["optb"][0] and g["optb"][1] and len(g["boxes"]) >= 2, "no glowing Options button with two question boxes waiting (%r, %r)" % (g["optb"], g["boxes"]))
             pg.locator(".dss-ph-optb").tap(); pg.wait_for_timeout(900)
+            for _s in range(16):   # a box shimmers twice as it comes, and the sweep counts as overflow while it runs
+                if not pg.evaluate("() => [].some.call(document.querySelectorAll('.book-pitch-opt'), function (o) { return getComputedStyle(o, '::after').animationName !== 'none'; })"): break
+                pg.wait_for_timeout(250)
             g = pg.evaluate(M)
             r.expect(g["opts"] and g["sh"] <= h + 2, "Options did not open, or the page scrolls with it open (%r)" % g)
             r.expect(all(b[1] > b[0] + 30 and b[0] >= g["map"][1] - 12 and b[1] <= h for b in g["boxes"]) and g["boxes"][1][0] >= g["boxes"][0][1], "the question boxes are not laid over the map (%r, the map %r)" % (g["boxes"], g["map"]))
@@ -2741,6 +2744,28 @@ def _(r):
     m = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-gw-card'); return { wheel: !!o.querySelector('.dss-gw-fig .nb-wheel-svg'), on: !!o.querySelector('.dss-lore-on'), words: (o.querySelector('.editors-note') || {}).textContent.length || 0 }; }")
     r.info += "; %s" % m
     r.expect(m["wheel"] and m["on"] and m["words"] > 200, "the Great Work card is missing its wheel, its Go on or its words: %s" % m)
+
+
+@check("n25b-great-work-owed", "2026-11-25 note 4 and after (Sam: \"Just whenever the first haunt happenes to be collected, it didn't show\"): THE GREAT WORK needed 2.2 s with nothing else up on the first haunt's own page, and pressing on sooner lost it for the game; it is owed now, and opens on the next free page")
+def _(r):
+    if SWAPS: scratch_passage(r, "T-nothing", "")
+    r.go("O'Flatterly's quest", wait=300)
+    r.wait_for("() => { try { return !!sessionStorage.getItem('dssGwOwed'); } catch (e) { return false; } }", 20000, "the first haunt's box to be seen (the note owed)")
+    owed = r.js("() => sessionStorage.getItem('dssGwOwed')")
+    left = r.js("() => { if (document.querySelector('#dss-lore-overlay.dss-gw-card')) return 'card already up'; var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && /Out onto the street/.test(e.textContent); })[0]; if (!l) return 'no link'; l.click(); return 'left'; }")
+    r.expect(left == "left", "could not leave the haunt's page before the note opened (%s)" % left)
+    got = None
+    for _ in range(80):
+        r.js("() => { [].forEach.call(document.querySelectorAll('.dss-hint-slip.typed:not(.out) .dss-hint-x'), function (x) { x.click(); }); }")
+        got = r.js("() => ({ card: !!document.querySelector('#dss-lore-overlay.dss-gw-card'), pn: ((document.getElementById('dss-pn') || {}).textContent || '').trim(), owed: sessionStorage.getItem('dssGwOwed') })")
+        if got["card"]: break
+        r.page.wait_for_timeout(500)
+    r.info = "owed %r; left at once; then %r" % (owed, got)
+    r.expect(got["pn"] != "O'Flatterly's quest", "the check never left the haunt's page (%r)" % got)
+    r.expect(got["card"], "THE GREAT WORK never opened after the first haunt's page was left early (%r)" % got)
+    m = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-gw-card'); return o ? { wheel: !!o.querySelector('.dss-gw-fig .nb-wheel-svg'), words: ((o.querySelector('.editors-note') || {}).textContent || '').length, owed: sessionStorage.getItem('dssGwOwed') } : null; }")
+    r.info += "; %s" % m
+    r.expect(m and m["wheel"] and m["words"] > 200 and not m["owed"], "the late Great Work card is missing its wheel or words, or is still owed: %s" % m)
 
 
 @check("map-walk-pace", "2026-11-11 (Sam, playtest note 2: the walking had become really slow): with the CPU slowed 6x, holding an arrow still walks at full pace")
@@ -4491,7 +4516,7 @@ def typing_quicker(r):
     r.info = "verse pace %s; INIS's paragraph rates %s" % (pace, rates)
 
 
-@check("compass-slip", "2026-11-20 playtest note 11 (Sam: \"When the compass appears (as now) in the top right there should be a slip that explains what it is and that you should follow it\"): the first time the compass is put up, a slip says what it is; since 22 Nov (note 13) it sits just under the compass and stays through a change of page until it is clicked")
+@check("compass-slip", "2026-11-20 playtest note 11 (Sam: \"When the compass appears (as now) in the top right there should be a slip that explains what it is and that you should follow it\"): the first time the compass is put up, a slip says what it is; since 22 Nov (note 13) it sits just under the compass and stays through a change of page; since 25 Nov (note 10: \"The note about the compass shoudl disappear at an apropriate time like the others do\") it puts itself away some seconds after it is typed")
 def compass_slip(r):
     scratch_passage(r, "T-comp", '(set: $returns to 1)(set: $metRed to true)(set: $knowsAboutPage to true)(set: $hasMissingPage to false)(set: $returnedPage to false)[[Walk on|Dean Street]]')   # the page 93 errand taken on: the compass points to the Pillars
     r.go("T-comp", wait=4000)
@@ -4509,13 +4534,18 @@ def compass_slip(r):
         GEO = "() => { var s = [].filter.call(document.querySelectorAll('.dss-hint-slip'), function (e) { return /compass/i.test(e.textContent) && !e.__dssGoing; })[0], b = document.querySelector('.dss-trail-badge'); if (!s) return null; var a = s.getBoundingClientRect(), c = b ? b.getBoundingClientRect() : null; return { top: a.top, right: a.right, bt: c && c.bottom, br: c && c.right, vis: getComputedStyle(s).visibility }; }"
         g = r.js(GEO)
         r.expect(g and g["bt"] is not None and 0 <= g["top"] - g["bt"] <= 40 and abs(g["right"] - g["br"]) <= 24, "the compass slip is not just under the compass (%r)" % g)
-        r.page.wait_for_timeout(6000)
+        r.page.wait_for_timeout(1200)
         r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-passage:not(.dss-ghost) tw-link'), function (e) { return !e.closest('.book-pitch') && /Ronnie|French|Colony|Pillars|Approach/i.test(e.textContent); })[0] || [].filter.call(document.querySelectorAll('tw-passage:not(.dss-ghost) tw-link'), function (e) { return e.getClientRects().length; })[0]; window.__compassLeft = l ? l.textContent : ''; if (l) l.click(); }")
-        r.page.wait_for_timeout(13000)
+        r.page.wait_for_timeout(6000)
         g2 = r.js(GEO); pn = r.js("() => (document.getElementById('dss-pn') || {}).textContent")
         r.info = "under the compass at %r; after %r, on %r: %r" % (g, r.js("() => window.__compassLeft"), pn, g2)
         r.expect(pn and pn != "Dean Street", "the check never left Dean Street, so the page change is untested (%r)" % pn)
-        r.expect(g2 is not None, "the compass slip went when the page changed (now on %r), before it was clicked" % pn)
+        r.expect(g2 is not None, "the compass slip went when the page changed (now on %r), before it could be read" % pn)
+        gone = False
+        for _ in range(60):
+            if r.js(GEO) is None: gone = True; break
+            r.page.wait_for_timeout(500)
+        r.expect(gone, "the compass slip is still up half a minute after it was typed")
 
 
 @check("barber-comic-panel", "2026-11-20 playtest note 21 (Sam: \"This should have some sort of comic book popup saying the 'Sharp' lines ... remove them from there and put them in a lichenstein popup\"): a haircut's line opens in a comic panel, is not set in the page's text, and the panel can be put away; the shave's does the same")
@@ -4892,7 +4922,7 @@ def ronnies_street_link_band(r):
     r.expect(solid, "the street link has no band behind it (background %s), so the prose shows through" % m["bg"])
 
 
-@check("touch-dpad-beside-the-map", "2026-11-16 playtest (Friction 6): on a touch screen as wide as a laptop the Soho map's d-pad sat under the map, 183 px below the fold of Dean Street at 1440x900; it stands beside the map's foot")
+@check("touch-dpad-beside-the-map", "2026-11-16 playtest (Friction 6): on a touch screen as wide as a laptop the Soho map's d-pad sat under the map, 183 px below the fold of Dean Street at 1440x900; it stands beside the map's foot (since 2026-11-25, with the map on the right of the words, on the map's left)")
 def touch_dpad_beside_the_map(r):
     ctx = r.ctx.browser.new_context(viewport={"width": 1440, "height": 900}, has_touch=True, is_mobile=True)
     try:
@@ -4904,13 +4934,14 @@ def touch_dpad_beside_the_map(r):
         from urllib.parse import quote
         page.goto("http://127.0.0.1:%d/%s?t=%d&start=%s" % (r.port, HTML, int(time.time()), quote("Dean Street")), timeout=90000)
         page.wait_for_timeout(12000)
-        m = page.evaluate("() => { var d = [].filter.call(document.querySelectorAll('.soho-dpad'), function (e) { return !e.closest('.dss-ghost'); })[0], w = document.querySelector('.soho-map-wrap'); if (!d || !w) return null; var b = d.getBoundingClientRect(), q = w.getBoundingClientRect(); return { touch: matchMedia('(hover: none) and (pointer: coarse)').matches, iw: innerWidth, ih: innerHeight, show: getComputedStyle(d).display, top: Math.round(b.top), bottom: Math.round(b.bottom), left: Math.round(b.left), right: Math.round(b.right), mapRight: Math.round(q.right), mapBottom: Math.round(q.bottom) }; }")
+        m = page.evaluate("() => { var d = [].filter.call(document.querySelectorAll('.soho-dpad'), function (e) { return !e.closest('.dss-ghost'); })[0], w = document.querySelector('.soho-map-wrap'); if (!d || !w) return null; var b = d.getBoundingClientRect(), q = w.getBoundingClientRect(); return { touch: matchMedia('(hover: none) and (pointer: coarse)').matches, iw: innerWidth, ih: innerHeight, show: getComputedStyle(d).display, top: Math.round(b.top), bottom: Math.round(b.bottom), left: Math.round(b.left), right: Math.round(b.right), mapLeft: Math.round(q.left), mapRight: Math.round(q.right), mapBottom: Math.round(q.bottom) }; }")
         r.expect(m, "no d-pad or no map on Dean Street")
         r.info = "d-pad %(left)d-%(right)d x %(top)d-%(bottom)d; map ends %(mapRight)d x %(mapBottom)d; window %(iw)dx%(ih)d" % m
         r.expect(m["touch"] and m["iw"] >= 1100, "the browser is not acting as a wide touch screen (%r), so this check proves nothing" % m)
         r.expect(m["show"] != "none", "the d-pad is not shown on a touch screen")
         r.expect(m["bottom"] <= m["ih"], "the d-pad's foot is at %d px of a %d px window" % (m["bottom"], m["ih"]))
-        r.expect(m["left"] >= m["mapRight"] - 4, "the d-pad is not beside the map (it starts at %d px, the map ends at %d)" % (m["left"], m["mapRight"]))
+        r.expect(m["left"] >= m["mapRight"] - 4 or m["right"] <= m["mapLeft"] + 4, "the d-pad is not beside the map (it is %d to %d px, the map %d to %d)" % (m["left"], m["right"], m["mapLeft"], m["mapRight"]))
+        r.expect(m["top"] >= 0 and m["left"] >= 0 and m["bottom"] <= m["mapBottom"] + 12, "the d-pad is not at the map's foot (%r)" % m)
         r.expect(m["right"] <= m["iw"], "the d-pad runs off the right edge (%d of %d px)" % (m["right"], m["iw"]))
         r.expect(not errs, "page errors: %s" % errs[:2])
     finally:
@@ -6761,16 +6792,32 @@ def n25_worm_tune_and_bag_count(r):
     r.expect(out["two"][1] <= 4, "Dean Street scrolls %d px with the count line" % out["two"][1])
 
 
-@check("n25-flowers-said-once", "2026-11-25 note 28 (Sam: \"we need to explain somewhere that they should collect all the flowers without giving a hint for each one\"; ruled \"Night Ahead Part Two\"; the room badge \"Only on the first time\"): as LILY is named a slip says there are five flowers; the lily badge shows in the first flower room of a run and in no other")
+@check("n25-flowers-said-once", "2026-11-25 note 28 (Sam: \"we need to explain somewhere that they should collect all the flowers without giving a hint for each one\"; ruled \"Night Ahead Part Two\"; the room badge \"Only on the first time\"; reversed that night, note 1: \"'Gather flowers' prompt here is wrong, it shoudk appear when you first enter a venue that has flowers to gather\"): no slip as LILY is named; the first flower room of a run says there are five flowers and shows the lily badge, and no other room does either")
 def n25_flowers_said_once(r):
     n25_walk(r, "T-l28", '(set: $lilyNamed to false)(set: $lilyHintShown to false)', "Night Ahead: LILY", wait=2000)
-    n25_slip(r, "Gather flowers. There are five to find.", 20000)
+    GATHER = "() => [].some.call(document.querySelectorAll('#dss-hint-stack .dss-hint-slip'), function (c) { return c.textContent.indexOf('Gather flowers') >= 0; })"
+    r.page.wait_for_timeout(9000)
+    r.expect(not r.js(GATHER), "the Night Ahead says Gather flowers again as LILY is named")
     r.page.unroute("**/*")
     HINT = "() => [].some.call(document.querySelectorAll('body *'), function (e) { if (e.closest('.dss-ghost, script, style, tw-storydata') || !/^There is a lily in this room/.test(e.textContent.trim()) || !e.getClientRects().length) return false; var op = 1, a = e; while (a && a.nodeType === 1) { op *= +getComputedStyle(a).opacity; a = a.parentNode; } return op > 0.2; })"
     r.js("() => { try { localStorage.removeItem('dssLilyBadge'); } catch (e) {} }")
-    r.go("Chinese Fish and Chips", wait=1500); r.room_ready("cf"); r.page.wait_for_timeout(2500)
+    r.go("Chinese Fish and Chips", wait=1500)
+    r.wait_for("() => !!document.querySelector('.dss-room-dismiss')", 15000, "the room's opening words"); r.page.wait_for_timeout(1200)
+    r.js("() => { var b = [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return e.getClientRects().length; })[0]; if (b) b.click(); }")   # a slip waits behind a room's opening words; room_ready would press this too, and then close the slip
+    r.js("() => { window.__dssTypingGen = -1; }")   # the jump here from the typed Night Ahead page leaves its 'still typing' mark on this page, which holds slips for a minute; a player cannot arrive that way
+    n25_slip(r, "Gather flowers. There are five to find.", 25000)   # before room_ready, which closes the slips it finds
+    r.room_ready("cf"); r.page.wait_for_timeout(2500)
     first = [r.js(HINT), r.js("() => localStorage.getItem('dssLilyBadge')")]
-    r.go("Ronnie Scott's", wait=1500); r.room_ready("ri"); r.page.wait_for_timeout(2500)
+    r.go("Ronnie Scott's", wait=1500)
+    r.wait_for("() => !!document.querySelector('.dss-room-dismiss')", 15000, "the room's opening words"); r.page.wait_for_timeout(1200)
+    r.js("() => { var b = [].filter.call(document.querySelectorAll('.dss-room-dismiss'), function (e) { return e.getClientRects().length; })[0]; if (b) b.click(); }")   # a slip waits behind a room's opening words; room_ready would press this too, and then close the slip
+    r.js("() => { window.__dssTypingGen = -1; }")   # the jump here from the typed Night Ahead page leaves its 'still typing' mark on this page, which holds slips for a minute; a player cannot arrive that way
+    again = False
+    for _ in range(18):
+        if r.js(GATHER): again = True; break
+        r.page.wait_for_timeout(500)
+    r.expect(not again, "a second flower room says Gather flowers again")
+    r.room_ready("ri"); r.page.wait_for_timeout(2500)
     second = [r.js(HINT), r.js("() => localStorage.getItem('dssLilyBadge')")]
     r.info = "first flower room: badge %s (%s); second: badge %s (%s)" % (first[0], first[1], second[0], second[1])
     r.expect(first[0] and first[1] and first[1].endswith(":cf"), "the first flower room of the run does not show the lily badge (%r)" % first)

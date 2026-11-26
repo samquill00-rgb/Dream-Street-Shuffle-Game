@@ -2750,22 +2750,42 @@ def _(r):
 def _(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
     r.go("O'Flatterly's quest", wait=300)
-    r.wait_for("() => { try { return !!sessionStorage.getItem('dssGwOwed'); } catch (e) { return false; } }", 20000, "the first haunt's box to be seen (the note owed)")
-    owed = r.js("() => sessionStorage.getItem('dssGwOwed')")
+    r.wait_for("() => { try { return !!localStorage.getItem('dssGwOwed'); } catch (e) { return false; } }", 20000, "the first haunt's box to be seen (the note owed)")
+    owed = r.js("() => localStorage.getItem('dssGwOwed')")
     left = r.js("() => { if (document.querySelector('#dss-lore-overlay.dss-gw-card')) return 'card already up'; var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && /Out onto the street/.test(e.textContent); })[0]; if (!l) return 'no link'; l.click(); return 'left'; }")
     r.expect(left == "left", "could not leave the haunt's page before the note opened (%s)" % left)
     got = None
     for _ in range(80):
         r.js("() => { [].forEach.call(document.querySelectorAll('.dss-hint-slip.typed:not(.out) .dss-hint-x'), function (x) { x.click(); }); }")
-        got = r.js("() => ({ card: !!document.querySelector('#dss-lore-overlay.dss-gw-card'), pn: ((document.getElementById('dss-pn') || {}).textContent || '').trim(), owed: sessionStorage.getItem('dssGwOwed') })")
+        got = r.js("() => ({ card: !!document.querySelector('#dss-lore-overlay.dss-gw-card'), pn: ((document.getElementById('dss-pn') || {}).textContent || '').trim(), owed: localStorage.getItem('dssGwOwed') })")
         if got["card"]: break
         r.page.wait_for_timeout(500)
     r.info = "owed %r; left at once; then %r" % (owed, got)
     r.expect(got["pn"] != "O'Flatterly's quest", "the check never left the haunt's page (%r)" % got)
     r.expect(got["card"], "THE GREAT WORK never opened after the first haunt's page was left early (%r)" % got)
-    m = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-gw-card'); return o ? { wheel: !!o.querySelector('.dss-gw-fig .nb-wheel-svg'), words: ((o.querySelector('.editors-note') || {}).textContent || '').length, owed: sessionStorage.getItem('dssGwOwed') } : null; }")
+    m = r.js("() => { var o = document.querySelector('#dss-lore-overlay.dss-gw-card'); return o ? { wheel: !!o.querySelector('.dss-gw-fig .nb-wheel-svg'), words: ((o.querySelector('.editors-note') || {}).textContent || '').length, owed: localStorage.getItem('dssGwOwed') } : null; }")
     r.info += "; %s" % m
     r.expect(m and m["wheel"] and m["words"] > 200 and not m["owed"], "the late Great Work card is missing its wheel or words, or is still owed: %s" % m)
+
+
+@check("n26-great-work-any-first-box", "2026-11-26 (Sam: \"Everything should be fixed\"; the note 4 hunt): THE GREAT WORK waited for a box reading \"1 of 12\", so a first haunt whose box never came on screen left the next box reading \"2 of 12\" and the note never opened that game; the first haunt box seen in a game now opens it, whatever its count")
+def _(r):
+    scratch_passage(r, "T-gw-second", "(set: $haunts to (a: $haunt1))[[Go to the shop|O'Flatterly's quest]]")
+    r.go("T-gw-second", wait=6000)
+    r.js("() => { try { localStorage.removeItem('dssGreatWorkRun'); localStorage.removeItem('dssGwOwed'); } catch (e) {} }")
+    r.expect(r.js("() => { var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && /Go to the shop/.test(e.textContent); })[0]; if (l) l.click(); return !!l; }"), "no link to the shop on the scratch page")
+    r.wait_for("() => { try { return !!localStorage.getItem('dssGwOwed') || !!document.querySelector('#dss-lore-overlay.dss-gw-card'); } catch (e) { return false; } }", 20000, "the note to be owed by a box reading 2 of 12")
+    prog = r.js("() => [].map.call(document.querySelectorAll('.haunt-progress'), function (e) { return e.textContent.trim(); }).join('|')")
+    r.expect("2 of 12" in prog, "the shop's box does not read 2 of 12, so this is not the lost-first-box case (%r)" % prog)
+    r.js("() => { if (document.querySelector('#dss-lore-overlay.dss-gw-card')) return; var l = [].filter.call(document.querySelectorAll('tw-link'), function (e) { return !e.closest('.dss-ghost') && /Out onto the street/.test(e.textContent); })[0]; if (l) l.click(); }")
+    got = None
+    for _ in range(80):
+        r.js("() => { [].forEach.call(document.querySelectorAll('.dss-hint-slip.typed:not(.out) .dss-hint-x'), function (x) { x.click(); }); }")
+        got = r.js("() => ({ card: !!document.querySelector('#dss-lore-overlay.dss-gw-card'), prog: [].map.call(document.querySelectorAll('.haunt-progress'), function (e) { return e.textContent.trim(); }).join('|'), pn: ((document.getElementById('dss-pn') || {}).textContent || '').trim() })")
+        if got["card"]: break
+        r.page.wait_for_timeout(500)
+    r.info = repr(got)
+    r.expect(got["card"], "THE GREAT WORK did not open on a game's first haunt box that reads 2 of 12 (%r)" % got)
 
 
 @check("map-walk-pace", "2026-11-11 (Sam, playtest note 2: the walking had become really slow): with the CPU slowed 6x, holding an arrow still walks at full pace")
@@ -6352,7 +6372,7 @@ def n25_jeffrey_waits(r):
     first = r.js(PROSE)
     r.expect("The place is empty except for JEFFREY BERNARD" in first, "the bar does not open on its first line (%r)" % first[:160])
     r.expect("You don’t look well" not in first, "JEFFREY's scene is on the page before he is clicked")
-    r.room_ready("cb"); r.page.wait_for_timeout(3500)   # measured: for about two seconds after its opening words are put away the room's things do not answer the pointer
+    r.room_ready("cb"); r.page.wait_for_timeout(300)   # 2026-11-26: was 3500 for "about two seconds" of a deaf room after its words; that was the gold wheel, fixed 25 Nov (n25-room-through-the-wheel)
     r.click_object("cb", "JEFFREY BERNARD")
     r.expect("Speak to JEFFREY BERNARD" in r.card_buttons(), "JEFFREY's card does not offer his scene (%s)" % r.card_buttons())
     r.press("Speak to JEFFREY BERNARD"); r.page.wait_for_timeout(4500)

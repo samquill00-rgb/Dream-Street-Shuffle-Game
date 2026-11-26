@@ -1,7 +1,20 @@
-# 26 NOV, LATER (read first)
-- Chilli and Pepper (Sam's cats) peek over the pyramid's long left edge on Pyramid Mouth: one mirrored cutout (assets/pyramid-cats.png), banister diagonal along the edge, no fog, no tone mapping, no sRGB flag. d7c5ee3. Check n26-pyramid-cats (planted).
-- Rulings: brighter lights before the first press KEPT; the French's pendant shades BRASS (c758275); cellar bare bulb LEFT; Trisha's fairy lights WARM WHITE AND DIMMER (84dbb32); phone first return KEEPS the rule (words only when new). Nothing pushed; no full regression run.
-- LINE 3 redrafted by Sam (26 Nov; the paragraph opens "Your ears are tuned", the hearing sentence cut). Things turn up: its first sentence cut (Sam). Phone box no-choice call: Sam, "Keep this it's fine"; closed. Nothing is waiting on his words. The ten unviewed 25 Nov notes: Sam trusts them and will change them himself if needed; do not offer screenshots.
+# STATE AT 26 NOV, NIGHT, SESSION CLOSED BY SAM (read first)
+
+Last commit b8f6453 on main, NOT pushed (Sam pushes). Commits since origin's last push: b8f6453 only (Sam pushed up to fd786b8 himself).
+
+**FIRST JOB: RUN THE FULL REGRESSION.** One was started at the end of the session and STOPPED unfinished so the new session can own it. Check nothing is left running (`pgrep -fl "[m]s-playwright" | grep -v crashpad`), then run `~/.dss-regress/venv/bin/python -u tools_regress.py` in the background, alone (about an hour), and fix what fails. Sam: "Fix it all. I don't want you to hold anything back." Last full run was 25 Nov (309 of 317, all followed up).
+
+Done this session (all committed):
+- Chilli and Pepper, Sam's two cats, peek over the pyramid's long left edge on Pyramid Mouth (his photo, cut with macOS Vision, assets/pyramid-cats.png; mirrored so the banister diagonal lies along the edge; tilted in its plane to match; behind the edge so the stone hides the cut; no fog, no tone mapping, NO sRGB flag: this renderer writes linear and the flag crushed the tabby midtones into a dark patch). Upright screens: higher up the edge, between the mouth's porch and the eye. Check n26-pyramid-cats.
+- Rulings: brighter lights before the first press KEPT; the French's pendant shades BRASS (warm sheen of their own, since the lamp is inside); cellar bare bulb LEFT; Trisha's fairy lights WARM WHITE AND DIMMER; on phones the first return keeps the rule (words only when new).
+- LINE 3: Sam's redraft; the paragraph opens "Your ears are tuned in a way that eyes can never be." (the "If dawn was something you could hear" sentence is CUT, his choice). Things turn up: "'Things turn up', said the poet." CUT; the page opens on "'Here is your throat back, thanks for the loan.'" (Sam committed these two himself.)
+- Phone box no-choice call (no name held, nobody saved you): Sam, "Keep this it's fine". Closed.
+- THE GREAT WORK (note 4): opens on the first haunt box seen in a game, whatever its count (it needed "1 of 12", so a first box never seen lost it for the game); owed in localStorage under the run. Check n26-great-work-any-first-box, proved by planting.
+- Rooms "deaf for two seconds after their words": measured all ten rooms answering within 35 ms; the cause was the gold wheel, fixed 25 Nov (n25-room-through-the-wheel). n25-jeffrey-waits-for-his-click no longer waits 3.5 s.
+
+Nothing is waiting on Sam's words. The ten unviewed 25 Nov notes: Sam trusts them and will change them himself; do not offer screenshots.
+
+Harness notes from this session: zsh does not word-split a variable in `for P in ...; set -- $P` (use `bash -c`); a ?start= jump often has a lore card up, close it before probing a room; `fetch-by-play` stalled once on the Fetch and passed on rerun (flaky).
 
 # STATE AT 26 NOV, SESSION CLOSED BY SAM FOR A NEW ONE (read first)
 

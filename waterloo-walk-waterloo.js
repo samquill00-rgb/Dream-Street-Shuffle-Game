@@ -138,7 +138,8 @@ window.WW_buildWaterloo = function (kit) {
     return { scene: scene, length: P.len, fov: 62, near: 0.1, far: 200, bloom: [0.4, 0.5, 0.82], nearDist: 10, yawMax: 2.3, portal: { w: 6.4, h: 4.6 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function (s) { return { x: 0.4, y: 2.3, z: Z1 + 1.4 }; },
-      update: function (dt, t, s) { people(dt, t, P.at(s)); } };
+      lat: function () { return [-2.5, 3.2]; }, /* the fence to the glazed wall */
+      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); } };
   }
 
   /* ================= York Road, to the Victory Arch (IMG_2592) ================= */
@@ -190,8 +191,9 @@ window.WW_buildWaterloo = function (kit) {
     return { scene: scene, length: P.len, fov: 62, near: 0.15, far: 900, bloom: [0.4, 0.5, 0.88], nearDist: 12, yawMax: 2.3, portal: { w: 9.5, h: 10 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66 + rise(p[1]), z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: ARCH_X, y: 5.6, z: FACE_Z + 0.15 }; },
-      update: function (dt, t, s) {
-        people(dt, t, P.at(s));
+      lat: function (s) { return s > P.len - 14 ? [-3.5, 3.5] : [-5.2, 6.6]; }, /* kerb to the glass block; then the steps */
+      update: function (dt, t, s, cam) {
+        people(dt, t, cam || P.at(s));
         cars.forEach(function (c) { c.z += c.dir * c.v * dt; if (c.z > 40) c.z = -70; if (c.z < -70) c.z = 40; c.g.position.set(c.x, 0, c.z); });
       } };
   }
@@ -239,7 +241,8 @@ window.WW_buildWaterloo = function (kit) {
     return { scene: scene, length: P.len, fov: 66, near: 0.15, far: 500, bloom: [0.32, 0.5, 0.86], nearDist: 9, yawMax: 2.3, portal: { w: 5.4, h: 4.4 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: GATE_X, y: 2.2, z: Z1 + 0.2 }; },
-      update: function (dt, t, s) { people(dt, t, P.at(s)); } };
+      lat: function (s) { return s < 6 ? [-2, 2] : s > P.len - 6 ? [-1.6, 1.6] : [-7, 7]; },
+      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); } };
   }
 
   /* ================= platform 3 (IMG_2594) ================= */
@@ -275,7 +278,8 @@ window.WW_buildWaterloo = function (kit) {
     return { scene: scene, length: P.len, fov: 64, near: 0.1, far: 300, bloom: [0.36, 0.5, 0.84], nearDist: 5, yawMax: 2.3, portal: { w: 1.9, h: 2.5 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: -PW - 0.25, y: 1.3, z: DOOR_Z }; },
-      update: function (dt, t, s) { people(dt, t, P.at(s)); } };
+      lat: function (s) { return s > P.len - 6.5 ? [-0.4, 0.4] : [-3.5, 0.9]; }, /* yellow line to the columns; then the doorway */
+      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); } };
   }
 
   /* ================= the train out (IMG_2595, IMG_2596): you sit; it leaves ================= */
@@ -328,7 +332,7 @@ window.WW_buildWaterloo = function (kit) {
     }
     var gone = 0, v = 0, FIELD = 700, START = 110;
     untone(scene);
-    return { scene: scene, ride: true, length: 40, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
+    return { scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
       pose: function () { return { x: SEAT_X, y: EYE, z: 0, yaw: -0.5 }; },
       reset: function () { gone = 0; v = 0; },
       update: function (dt, t, s) {

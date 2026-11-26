@@ -214,10 +214,11 @@ window.WW_buildChx = function (kit) {
     /* the words of the question are a placeholder for Sam's own */
     prompts: [{ id: 'cans', at: FRIDGE_S, look: -0.95, draft: true, text: 'Canned cocktails for the train?', options: [{ label: 'Buy them', value: true }, { label: 'Walk on', value: false }] }],
     pose: function (s) { var p = at(s); return { x: p[0], y: 1.66, z: p[1], yaw: yawAt(s) }; },
+    lat: function (s) { return s < 21.5 ? [-0.7, 1.5] : s > LEN - 7 ? [-1.2, 1.2] : [-5, 5]; }, /* the aisle; the hall; the doorway */
     portalAt: function () { return { x: -HALL_HW + 0.2, y: 2.3, z: EXIT_Z }; },
     portalYaw: Math.PI / 2,
-    update: function (dt, t, s) {
-      var c = at(s);
+    update: function (dt, t, s, cam) {
+      var c = cam || at(s);
       people.forEach(function (q) {
         q.x += Math.cos(q.a) * q.v * dt; q.z += Math.sin(q.a) * q.v * dt;
         if (q.x < -HALL_HW + 1.5 || q.x > HALL_HW - 1.5) { q.a = Math.PI - q.a; q.x = Math.max(-HALL_HW + 1.5, Math.min(HALL_HW - 1.5, q.x)); }

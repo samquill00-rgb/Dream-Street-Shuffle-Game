@@ -577,6 +577,8 @@ var START_Z = 13.2, END_Z = Z_SLIT_END + 1.2;
 return {
   scene: scene, length: START_Z - END_Z, fov: 56, near: 0.05, far: 120, bloom: [0.36, 0.55, 0.78], nearDist: 7, yawMax: 1.15,
   portal: { w: 1.5, h: 3.4 },
+  /* the main run has a little room; the slit has none */
+  lat: function (s) { var z = START_Z - s, k = Math.max(0, Math.min(1, (-6 - z) / (-6 - Z_JOG))); return [-0.2 * (1 - k) - 0.06 * k, 0.6 * (1 - k) + 0.06 * k]; },
   pose: function (s) {
     var z = START_Z - s, k = Math.max(0, Math.min(1, (-6 - z) / (-6 - Z_JOG))); k = k * k * (3 - 2 * k);
     return { x: -0.4 + (0.37) * k, y: 1.66, z: z, yaw: 0 };

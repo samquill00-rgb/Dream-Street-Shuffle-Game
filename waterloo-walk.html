@@ -32,7 +32,7 @@
 <body>
 <canvas id="view"></canvas>
 <div id="veil"></div>
-<div id="hint">Hold W, or hold the Walk button. Drag to look around.</div>
+<div id="hint">Hold W to walk: Shift to stride, S to stroll. A and D move you across. Drag to look around.</div>
 <button id="walk" type="button">Walk</button>
 <div id="ask"><p></p><span></span></div>
 <div id="end"><div>The train has gone.</div></div>
@@ -419,13 +419,15 @@
   scene.traverse(function (o) { [].concat(o.material || []).forEach(function (m) { m.toneMapped = false; }); });
   return {
     scene: scene, length: L, fov: 62, near: 0.25, far: 9000, bloom: [0.5, 0.5, 0.8], nearDist: 16, yawMax: 2.3, portal: { w: 5.6, h: 6.4 },
+    lat: function () { return [-1.25, 2.75]; }, /* rail to rail */
     pose: function (s) { var p = toWorld(s, DECK + 1.66, -0.75); return { x: p.x, y: p.y, z: p.z, yaw: heading }; },
     portalAt: function (s) { var p = toWorld(s, DECK + 2.9, 0); return { x: p.x, y: p.y, z: p.z }; },
-    update: function (dt, t, s) {
+    update: function (dt, t, s, cam, lat) {
+      var cz = -0.75 + (lat || 0);
       people.forEach(function (q) {
         q.x += q.dir * q.v * dt; if (q.x > L + 5) q.x = -5; if (q.x < -5) q.x = L + 5;
         /* nobody walks through the camera: those in its lane keep ahead of it */
-        if (q.dir > 0 && q.z < -0.2 && q.x > s - 0.5 && q.x < s + 2.2) q.x = s + 2.2;
+        if (Math.abs(q.z - cz) < 0.75 && q.x > s - 0.9 && q.x < s + 2.0) { var to = q.z >= cz ? cz + 0.75 : cz - 0.75; if (to > 2) to = cz - 0.75; if (to < -2) to = cz + 0.75; q.z += (to - q.z) * Math.min(1, dt * 6); }
         q.g.position.set(q.x, DECK + Math.abs(Math.cos(t * q.v * 4.4 + q.ph)) * 0.025, q.z);
         var sw = Math.sin(t * q.v * 4.4 + q.ph) * 0.5; q.l1.rotation.z = sw; q.l2.rotation.z = -sw;
       });
@@ -443,7 +445,7 @@
   var SEQ = [
     { id: 'alley', st: alley, from: 0, to: alley.length },
     { id: 'charing-cross', st: chx, from: 0, to: chx.length },
-    { id: 'bridge', st: bridge, from: bridge.length * (isNaN(from) ? 0.16 : from), to: bridge.length * (isNaN(to) ? 0.6 : to) },
+    { id: 'bridge', st: bridge, from: bridge.length * (isNaN(from) ? 0.16 : from), to: bridge.length * (isNaN(to) ? 0.5 : to) },
     { id: 'tunnel', st: wl.tunnel, from: 0, to: wl.tunnel.length },
     { id: 'arch', st: wl.arch, from: 0, to: wl.arch.length },
     { id: 'concourse', st: wl.concourse, from: 0, to: wl.concourse.length },
@@ -475,8 +477,38 @@
     m.position.set(p.x, p.y, p.z); m.rotation.y = e.st.pose(e.to).yaw; m.visible = false; e.st.scene.add(m); e.portal = m;
   });
   var keys = {}, auto = Q.get('auto') === '1', btn = document.getElementById('walk'), hint = document.getElementById('hint');
-  var idx = 0, cur = null, S0 = 0, S1 = 0;
-  var st = { s: 0, yaw: 0, pitch: 0, speed: 0, done: false, t: 0, bob: 0, through: 0 };
+  /* ---------- sound: Sam's own recordings of the walk (26 November 2026), played as they are, a clip for each place ----------
+     The clips were cut from his two recordings at marks worked out from the loudness of the recording and the times of his photographs
+     (see SOUND-SOURCES.md); they are PROVISIONAL until he has heard them. Each stage lists [metres into the stage, clip]: the clip plays
+     until that mark. A stage with no entry is silent. A clip that runs out goes round again. */
+  var SOUND = {
+    'alley': [[1e9, 'street']], 'charing-cross': [[21, 'shop'], [1e9, 'chx']], 'bridge': [[1e9, 'bridge']],
+    'tunnel': [[1e9, 'tunnel']], 'arch': [[1e9, 'arch']], 'concourse': [[1e9, 'waterloo']]
+  };
+  var SOUND_LEVEL = 0.9, soundOff = Q.get('mute') === '1', soundOn = false, soundClip = null, players = {};
+  function player(name) {
+    if (!players[name]) { var a = new Audio('waterloo-walk-snd-' + name + '.m4a'); a.preload = 'auto'; a.loop = true; a.volume = 0; a._target = 0; players[name] = a; }
+    return players[name];
+  }
+  if (!soundOff) Object.keys(SOUND).forEach(function (id) { SOUND[id].forEach(function (z) { player(z[1]); }); });
+  function clipFor(id, rel) { var z = SOUND[id]; if (!z) return null; for (var i = 0; i < z.length; i++) if (rel < z[i][0]) return z[i][1]; return z[z.length - 1][1]; }
+  function soundTick(dt) {
+    if (soundOff || !soundOn) return;
+    var want = st.done ? null : clipFor(cur.id, st.s - S0);
+    if (want !== soundClip) {
+      if (want) { var a = player(want); try { a.currentTime = 0; } catch (e) {} var pr = a.play(); if (pr && pr.catch) pr.catch(function () {}); }
+      soundClip = want;
+    }
+    Object.keys(players).forEach(function (k) {
+      var a = players[k]; a._target = k === soundClip ? SOUND_LEVEL : 0;
+      a.volume = Math.max(0, Math.min(1, a.volume + (a._target - a.volume) * Math.min(1, dt * 2.2)));
+      if (a._target === 0 && a.volume < 0.01 && !a.paused) a.pause();
+    });
+  }
+  function soundStart() { soundOn = true; }
+  ['pointerdown', 'keydown', 'touchstart'].forEach(function (n) { window.addEventListener(n, soundStart, { passive: true }); });
+  var idx = 0, cur = null, S0 = 0, S1 = 0, coarse = false;
+  var st = { s: 0, lat: 0, yaw: 0, pitch: 0, speed: 0, done: false, t: 0, bob: 0, through: 0 }; /* lat: metres to the right of the stage's path */
   function size() {
     var w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h;
@@ -484,7 +516,7 @@
     camera.updateProjectionMatrix();
   }
   function enter(i) {
-    idx = i; cur = SEQ[i]; S0 = cur.from; S1 = cur.to; st.s = S0; st.yaw = 0; st.pitch = 0;
+    idx = i; cur = SEQ[i]; S0 = cur.from; S1 = cur.to; st.s = S0; st.lat = 0; st.yaw = 0; st.pitch = 0;
     renderPass.scene = cur.st.scene; SEQ.forEach(function (e) { e.portal.visible = e === cur; });
     btn.style.display = cur.st.ride ? 'none' : ''; if (cur.st.ride) hint.classList.add('gone'); if (cur.st.reset) cur.st.reset();
     bloom.strength = cur.st.bloom[0]; bloom.radius = cur.st.bloom[1]; bloom.threshold = cur.st.bloom[2];
@@ -495,12 +527,13 @@
   if (Q.get('at') != null) st.s = S0 + (S1 - S0) * parseFloat(Q.get('at'));
   window.addEventListener('resize', size);
 
-  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) document.getElementById('hint').textContent = 'Hold the Walk button. Drag to look around.';
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) { coarse = true; document.getElementById('hint').textContent = 'Hold Walk, and slide up or down for pace. Drag to look: you drift the way you look.'; }
   function wantWalk() { return auto || keys.w || keys.arrowup || keys[' '] || st.btn; }
   window.addEventListener('keydown', function (e) { keys[e.key.toLowerCase()] = true; if (e.key === ' ' || e.key.indexOf('Arrow') === 0) e.preventDefault(); });
   window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', function () { keys = {}; st.btn = false; btn.classList.remove('on'); });
-  btn.addEventListener('pointerdown', function (e) { st.btn = true; btn.classList.add('on'); btn.setPointerCapture(e.pointerId); e.preventDefault(); });
+  btn.addEventListener('pointerdown', function (e) { st.btn = true; st.btnY = e.clientY; st.btnPace = 1; btn.classList.add('on'); btn.setPointerCapture(e.pointerId); e.preventDefault(); });
+  btn.addEventListener('pointermove', function (e) { if (st.btn) st.btnPace = Math.max(0.5, Math.min(1.75, 1 - (e.clientY - st.btnY) / 90)); }); /* slide up to stride, down to stroll */
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (n) { btn.addEventListener(n, function () { st.btn = false; btn.classList.remove('on'); }); });
   var drag = null;
   canvas.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, y: e.clientY, yaw: st.yaw, pitch: st.pitch }; canvas.classList.add('drag'); canvas.setPointerCapture(e.pointerId); });
@@ -527,9 +560,18 @@
   function frame(now) {
     var dt = Math.min(0.05, (now - last) / 1000); last = now; st.t += dt;
     var want = wantWalk() && !st.done;
-    st.speed += ((want ? 1.55 : 0) - st.speed) * Math.min(1, dt * 4);
+    var pace = keys.shift ? 1.75 : (keys.s || keys.arrowdown) ? 0.5 : st.btn ? (st.btnPace || 1) : 1; /* stride, stroll, or the button's slide */
+    st.speed += ((want ? 1.55 * pace : 0) - st.speed) * Math.min(1, dt * 4);
     if (st.speed > 0.05 && !hint.classList.contains('gone')) hint.classList.add('gone');
     if (cur.st.ride) { st.speed = 0; st.s += dt; } /* a ride runs on the clock */
+    /* across the path: A and D or the side arrows; on a touch screen you drift the way you look while walking. Each stage says how far */
+    var side = ((keys.d || keys.arrowright) ? 1 : 0) - ((keys.a || keys.arrowleft) ? 1 : 0);
+    if (coarse && Math.abs(st.yaw) > 0.2) side = -Math.sin(st.yaw) * Math.min(1, st.speed);
+    if (st.done || asking) side = 0;
+    st.latV = (st.latV || 0) + (side * 1.25 - (st.latV || 0)) * Math.min(1, dt * 6); st.lat += st.latV * dt;
+    var lim = cur.st.lat ? cur.st.lat(st.s) : [0, 0];
+    if (st.lat > lim[1]) { st.lat += (lim[1] - st.lat) * Math.min(1, dt * 5); if (st.latV > 0) st.latV = 0; }
+    if (st.lat < lim[0]) { st.lat += (lim[0] - st.lat) * Math.min(1, dt * 5); if (st.latV < 0) st.latV = 0; }
     st.s += st.speed * dt; st.bob += st.speed * dt * 4.1;
     (cur.st.prompts || []).forEach(function (pr) {
       if (pr.id in choices || st.s < pr.at) return;
@@ -547,10 +589,11 @@
     var soft = Math.max(near * 0.55, st.through * st.through), blurPx = soft * 26;
     canvas.style.filter = blurPx > 0.15 ? 'blur(' + blurPx.toFixed(1) + 'px) brightness(' + (1 + soft * 0.9).toFixed(2) + ')' : '';
     portalMat.uniforms.t.value = st.t; portalMat.uniforms.near.value = near;
-    var P = cur.st.pose(st.s), amp = Math.min(1, st.speed);
-    camera.position.set(P.x, P.y + Math.sin(st.bob * 2) * 0.028 * amp, P.z);
+    var P = cur.st.pose(st.s), amp = Math.min(1.25, st.speed / 1.55);
+    var camX = P.x + Math.cos(P.yaw) * st.lat, camZ = P.z - Math.sin(P.yaw) * st.lat;
+    camera.position.set(camX, P.y + Math.sin(st.bob * 2) * 0.028 * amp, camZ);
     camera.rotation.order = 'YXZ'; camera.rotation.set(st.pitch, P.yaw + st.yaw, Math.sin(st.bob) * 0.004 * amp);
-    cur.st.update(dt, st.t, st.s);
+    cur.st.update(dt, st.t, st.s, [camX, camZ], st.lat); soundTick(dt);
     composer.render();
     requestAnimationFrame(frame);
   }
@@ -558,9 +601,9 @@
   setTimeout(function () { veil.classList.add('clear'); }, 150);
 
   window.__walk = {
-    state: function () { return { stage: idx, id: cur.id, blur: canvas.style.filter, s: st.s, from: S0, to: S1, done: st.done, speed: st.speed, yaw: st.yaw, pitch: st.pitch }; },
+    state: function () { return { stage: idx, id: cur.id, blur: canvas.style.filter, lat: st.lat, limits: cur.st.lat ? cur.st.lat(st.s) : [0, 0], s: st.s, from: S0, to: S1, done: st.done, speed: st.speed, yaw: st.yaw, pitch: st.pitch }; },
     goto: function (f) { st.s = S0 + (S1 - S0) * f; }, enter: enter, look: function (yaw, pitch) { st.yaw = yaw; st.pitch = pitch || 0; },
-    auto: function (on) { auto = !!on; }, choices: choices, answer: answer, asking: function () { return asking && asking.id; }, cam: camera, renderer: renderer
+    auto: function (on) { auto = !!on; }, choices: choices, answer: answer, sound: function () { var o = { on: soundOn, clip: soundClip }; Object.keys(players).forEach(function (k) { o[k] = { t: +players[k].currentTime.toFixed(1), vol: +players[k].volume.toFixed(2), paused: players[k].paused }; }); return o; }, asking: function () { return asking && asking.id; }, cam: camera, renderer: renderer
   };
 })();
 </script>

@@ -6102,6 +6102,23 @@ def _(r):
     r.expect(abs(b["fov"] - 62) < 0.5, "the pull ends on a %s degree lens, not the coast's 62" % b["fov"])
     r.expect(b["px"] is not None and b["px"] < -0.3 and b["py"] > 0.4, "once settled the planet is not up in the top left (%s, %s)" % (b["px"], b["py"]))
 
+@check("n26-pyramid-cats", "2026-11-26 (Sam: \"two cats called Chilli and Pepper. I want them to be peeking round the side of the pyramid in the approach\"; then \"flipped the images and aligned with the nice diagonal line of the other side of the pyramid\"): his photo of the two cats stands behind the pyramid's long left edge, mirrored, its banister diagonal along the edge; the photo keeps its colours (no sRGB flag on a linear-output renderer, no fog)")
+def n26_pyramid_cats(r):
+    r.go("Pyramid Mouth", wait=9000)
+    st = r.js("""() => { var c = window.__dssPyCats && window.__dssPyCats[0]; if (!c) return null; var m = c.m, mt = m.material, tx = mt.map, T = window.THREE;
+        var cam = new T.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 900); cam.position.set(52, 2.2, 142); cam.lookAt(-14, 34, 40); cam.updateMatrixWorld();
+        var p = m.position.clone().project(cam);
+        return { inScene: !!m.parent && m.visible, loaded: !!(tx && tx.image && tx.image.width), src: tx && tx.image && tx.image.src, mirrored: !!tx && tx.repeat.x === -1 && tx.offset.x === 1,
+                 srgb: !!tx && tx.encoding === T.sRGBEncoding, fog: mt.fog, x: (p.x + 1) / 2 * innerWidth, y: (1 - p.y) / 2 * innerHeight }; }""")
+    r.expect(st is not None, "no cats in the pyramid approach (window.__dssPyCats missing)")
+    if not st: return
+    r.expect(st["inScene"] and st["loaded"] and "assets/pyramid-cats.png" in (st["src"] or ""), "the cats' photo did not load into the scene: %r" % st)
+    r.expect(st["mirrored"], "the cats are not mirrored (Sam: \"flipped the images\")")
+    r.expect(not st["srgb"], "the cats' texture is flagged sRGB on this linear-output renderer: the tabby midtones go to a dark patch")
+    r.expect(not st["fog"], "the cats are fogged: at their distance the fog halves the photo")
+    r.expect(0 < st["x"] < 700 and 150 < st["y"] < 650, "the cats are not on the left half of the frame by the long edge (centre at %.0f, %.0f)" % (st["x"], st["y"]))
+
+
 def main(argv):
     # --plant=OLD|||NEW serves the html with OLD replaced (through scratch_passage), to prove a check fails with an old bug back
     for a in argv[1:]:

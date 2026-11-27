@@ -9,7 +9,7 @@ window.WW_buildWaterloo = function (kit) {
   /* 2026-11-27, the relight. A surface takes the stage's lamps; a thing that gives light (a lamp, a screen, a lit sign) or lies over
      the picture (a glow, a pool, glass) is drawn as it is. A painted picture with lit windows in it (a house front, a train's side,
      a departure board) is both: it takes the light and keeps some of its own, LITK of it. o.lit forces that; o.flat forces unlit. */
-  var LITK = 0.45;
+  var LITK = 0.45, FLAT_ALL = false; /* FLAT_ALL: everything made while it is set is drawn unlit (the world past a train's windows) */
   function pictureIsLit(t) {
     var c = t.image; if (!c || !c.getContext) return false; if (c._litv != null) return c._litv;
     var s = document.createElement('canvas'); s.width = s.height = 24; var g = s.getContext('2d'); g.drawImage(c, 0, 0, 24, 24);
@@ -19,7 +19,8 @@ window.WW_buildWaterloo = function (kit) {
   }
   function basic(o) {
     var lit = o.lit, flat = o.flat; if (lit != null || flat != null) { o = Object.assign({}, o); delete o.lit; delete o.flat; }
-    if (flat || o.transparent || o.blending || o.alphaTest) return new THREE.MeshBasicMaterial(o);
+    if (FLAT_ALL && !o.transparent && !o.blending) { o = Object.assign({}, o); o.color = new THREE.Color(o.color == null ? 0xffffff : o.color).multiplyScalar(0.5); } /* seen through glass at night: held down */
+    if (FLAT_ALL || flat || o.transparent || o.blending || o.alphaTest) return new THREE.MeshBasicMaterial(o);
     var p = { roughness: 0.86, metalness: 0.0 }; for (var k in o) p[k] = o[k];
     if (o.map) { if (lit || (lit == null && pictureIsLit(o.map))) { p.emissiveMap = o.map; p.emissive = new THREE.Color(o.color == null ? 0xffffff : o.color); p.emissiveIntensity = LITK; } return new THREE.MeshStandardMaterial(p); }
     var c = new THREE.Color(o.color == null ? 0xffffff : o.color), mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b);
@@ -391,44 +392,100 @@ window.WW_buildWaterloo = function (kit) {
   /* ================= the train out (IMG_2595, IMG_2596): you sit; it leaves ================= */
   function buildTrain() {
     LITK = 0.5; scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.0035);
-    var HW = 1.36, SEAT_X = 0.92, EYE = 1.34; /* a little tall in the seat, to see down the carriage and out */
-    /* the carriage: stays still; the world outside moves */
-    plane(HW * 2, 30, basic({ color: 0x232a3a }), 0, 0, -6, 0, -Math.PI / 2); plane(HW * 2, 30, basic({ color: 0xd2d2cc }), 0, 2.2, -6, 0, Math.PI / 2);
-    var wall = tex(cv(256, 256, function (g, w, h) { g.fillStyle = '#c9c9c3'; g.fillRect(0, 0, w, h); g.fillStyle = '#b2b2ac'; g.fillRect(0, 196, w, 60); g.clearRect(22, 46, 212, 118); g.strokeStyle = '#3a3c40'; g.lineWidth = 6; g.strokeRect(22, 46, 212, 118); }), true);
-    [-1, 1].forEach(function (sd) {
-      plane(30, 2.2, basic({ map: rep(wall, 30 / 1.7, 1), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }), sd * HW, 1.1, -6, sd > 0 ? -Math.PI / 2 : Math.PI / 2);
-      plane(30, 2.2, basic({ color: 0x9fb4c0, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false }), sd * (HW + 0.01), 1.1, -6, Math.PI / 2);
-      box(0.3, 0.05, 30, basic({ color: 0x9a9c9e }), sd * (HW - 0.18), 1.86, -6); /* the rack */
-    });
-    for (var lz = 6; lz > -20; lz -= 2.4) { box(0.22, 0.03, 1.5, basic({ color: 0xffffff }), 0, 2.18, lz); glow(0, 2.05, lz, 1.2, 0xf2f6ff, 0.18); }
-    var back = basic({ color: 0x9da1a6 }), cush = basic({ color: 0x2a3a6a });
-    for (var k = -2; k <= 16; k++) { /* backs behind each sitter; the row in front of you is k = 1 */
-      var zb = 0.3 - 0.86 * k;
-      [-SEAT_X, -SEAT_X + 0.5, SEAT_X - 0.5, SEAT_X].forEach(function (x) {
-        box(0.44, 0.74, 0.09, back, x, 0.84, zb); box(0.34, 0.13, 0.1, back, x, 1.22, zb); box(0.44, 0.1, 0.42, cush, x, 0.44, zb - 0.25);
-        if (k >= 2 && rnd() < 0.3) { var h = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), basic({ color: HAIR[Math.floor(rnd() * HAIR.length)] })); h.position.set(x, 1.36, zb - 0.2); scene.add(h); }
-      });
+    var HW = 1.36, SEAT_X = 0.94, EYE = 1.24, PITCH = 0.84, SCREEN_Z = -8.9, NEXT_Z = -11.6;
+    /* ---------- the carriage: it stays still; the world outside moves. Rebuilt 2026-11-27 from IMG_2595 and IMG_2596 ---------- */
+    function inst(geo, mat, list, cast) { /* many of one part */
+      var m = new THREE.InstancedMesh(geo, mat, list.length), o = new THREE.Object3D();
+      list.forEach(function (q, i) { o.position.set(q[0], q[1], q[2]); o.rotation.set(q[3] || 0, q[4] || 0, q[5] || 0); o.scale.set(q[6] || 1, 1, 1); o.updateMatrix(); m.setMatrixAt(i, o.matrix); });
+      m.castShadow = !!cast; m.receiveShadow = true; scene.add(m); return m;
     }
-    /* ---------- 2026-11-27, detail ---------- */
-    /* seat cloth, grab handles on the aisle seats, poles and a glass screen by the doors ahead, the rack's rails, vents, a worn carpet */
-    var cloth = tex(cv(64, 64, function (g, w, h) { g.fillStyle = '#263566'; g.fillRect(0, 0, w, h); for (var i = 0; i < 260; i++) { g.fillStyle = ['rgba(232,176,28,.55)', 'rgba(20,26,54,.7)', 'rgba(90,110,180,.5)'][i % 3]; g.fillRect(rnd() * w, rnd() * h, 2 + rnd() * 3, 1 + rnd() * 2); } }), true);
+    function rounded(w, h, r, x0, y0) { var sh = new THREE.Shape(), x = (x0 || 0) - w / 2, y = (y0 || 0); sh.moveTo(x + r, y); sh.lineTo(x + w - r, y); sh.quadraticCurveTo(x + w, y, x + w, y + r); sh.lineTo(x + w, y + h - r); sh.quadraticCurveTo(x + w, y + h, x + w - r, y + h); sh.lineTo(x + r, y + h); sh.quadraticCurveTo(x, y + h, x, y + h - r); sh.lineTo(x, y + r); sh.quadraticCurveTo(x, y, x + r, y); return sh; }
+    var EX = { bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2, curveSegments: 8 };
+    /* the moulded shell of a seat back, as it faces the row behind: widest at the shoulder, drawn in below, a cap across the top */
+    var shellS = new THREE.Shape(); shellS.moveTo(-0.185, 0.36); shellS.lineTo(0.185, 0.36); shellS.quadraticCurveTo(0.25, 0.78, 0.236, 1.04); shellS.quadraticCurveTo(0.232, 1.15, 0.2, 1.155); shellS.lineTo(-0.2, 1.155); shellS.quadraticCurveTo(-0.232, 1.15, -0.236, 1.04); shellS.quadraticCurveTo(-0.25, 0.78, -0.185, 0.36);
+    var shellG = new THREE.ExtrudeGeometry(shellS, Object.assign({ depth: 0.05 }, EX));
+    var panelS = new THREE.Shape(); panelS.moveTo(-0.15, 0.4); panelS.lineTo(0.15, 0.4); panelS.quadraticCurveTo(0.208, 0.78, 0.196, 1.02); panelS.quadraticCurveTo(0.192, 1.1, 0.165, 1.105); panelS.lineTo(-0.165, 1.105); panelS.quadraticCurveTo(-0.192, 1.1, -0.196, 1.02); panelS.quadraticCurveTo(-0.208, 0.78, -0.15, 0.4);
+    var panelG = new THREE.ExtrudeGeometry(panelS, { depth: 0.006, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 1, curveSegments: 8 });
+    var capG = new THREE.ExtrudeGeometry(rounded(0.46, 0.085, 0.03, 0, 1.15), Object.assign({ depth: 0.075 }, EX));
+    var restG = new THREE.ExtrudeGeometry(rounded(0.4, 0.66, 0.09, 0, 0.5), Object.assign({ depth: 0.05 }, EX));   /* the cushion you lean on */
+    var headG = new THREE.ExtrudeGeometry(rounded(0.3, 0.17, 0.05, 0, 0.98), Object.assign({ depth: 0.064 }, EX)); /* its head pad */
+    var panG = new THREE.ExtrudeGeometry(rounded(0.44, 0.1, 0.04, 0, 0.4), Object.assign({ depth: 0.42 }, EX));    /* the cushion you sit on */
+    var legG = new THREE.BoxGeometry(0.1, 0.4, 0.3), armG = new THREE.BoxGeometry(0.045, 0.045, 0.3), loopG = new THREE.TorusGeometry(0.055, 0.014, 6, 12, Math.PI);
+    var cloth = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#22306a'; g.fillRect(0, 0, w, h); for (var i = 0; i < 900; i++) { g.fillStyle = ['rgba(214,150,30,.5)', 'rgba(14,20,50,.75)', 'rgba(84,104,178,.55)', 'rgba(150,40,50,.45)'][i % 4]; g.fillRect(rnd() * w, rnd() * h, 2 + rnd() * 4, 1 + rnd() * 2); } for (var y = 0; y < h; y += 2) { g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, y, w, 1); } }), true);
+    cloth.repeat.set(3, 3);
+    var shellM = basic({ color: 0x7e8286, roughness: 0.6 }), panelM = basic({ color: 0x8a8e92, roughness: 0.66 }), capM = basic({ color: 0x92969a, roughness: 0.55 });
+    var clothM = basic({ map: cloth, roughness: 0.95 }), padM = basic({ color: 0x7a1c22, roughness: 0.95 }), darkM = basic({ color: 0x22252b, roughness: 0.7 }), loopM = basic({ color: 0x1f3f96, roughness: 0.5 });
+    var rows = [], k, zb;
+    for (k = -2; k <= 9; k++) rows.push(0.3 - PITCH * k);
+    for (k = 0; k <= 12; k++) rows.push(NEXT_Z - 0.6 - PITCH * k);
+    var XS = [-SEAT_X, -SEAT_X + 0.49, SEAT_X - 0.49, SEAT_X], shells = [], caps = [], rests = [], pans = [], legs = [], arms = [], loops = [];
+    rows.forEach(function (z) { XS.forEach(function (x, i) {
+      shells.push([x, 0, z]); caps.push([x, 0, z - 0.012]); rests.push([x, 0, z - 0.062]); pans.push([x, 0, z - 0.44]); legs.push([x + (i < 2 ? 0.14 : -0.14), 0.2, z - 0.2]);
+      arms.push([x - 0.235, 0.62, z - 0.2]); if (i === 0 || i === 3) arms.push([x + 0.235, 0.62, z - 0.2]); else arms.push([x + 0.235, 0.62, z - 0.2]);
+      if (i === 1 || i === 2) loops.push([x + (i === 1 ? 0.2 : -0.2), 1.235, z + 0.04, 0, Math.PI / 2, 0]);
+    }); });
+    inst(shellG, shellM, shells, true); inst(panelG, panelM, shells.map(function (q) { return [q[0], q[1], q[2] + 0.06]; })); inst(capG, capM, caps, true);
+    inst(restG, clothM, rests); inst(headG, padM, rests.map(function (q) { return [q[0], q[1], q[2] - 0.016]; })); inst(panG, clothM, pans); inst(legG, darkM, legs); inst(armG, darkM, arms); inst(loopG, loopM, loops);
+    /* floor: a dark speckled carpet, a paler aisle, a yellow tread at the doors */
     var carpet = tex(cv(64, 64, function (g, w, h) { g.fillStyle = '#1e2433'; g.fillRect(0, 0, w, h); for (var i = 0; i < 500; i++) { g.fillStyle = 'rgba(' + (rnd() < 0.5 ? '10,12,18' : '70,80,110') + ',' + rnd() * 0.5 + ')'; g.fillRect(rnd() * w, rnd() * h, 1.5, 1.5); } }), true);
-    plane(HW * 2, 30, basic({ map: rep(carpet, 4, 44) }), 0, 0.004, -6, 0, -Math.PI / 2); plane(0.5, 30, basic({ color: 0x3a4052 }), 0, 0.006, -6, 0, -Math.PI / 2);
-    for (var k2 = -2; k2 <= 16; k2++) { var zb2 = 0.3 - 0.86 * k2; [-SEAT_X, -SEAT_X + 0.5, SEAT_X - 0.5, SEAT_X].forEach(function (x, i) { plane(0.4, 0.62, basic({ map: cloth }), x, 0.9, zb2 - 0.052, Math.PI); plane(0.42, 0.4, basic({ map: cloth }), x, 0.496, zb2 - 0.25, 0, -Math.PI / 2); if (i === 1 || i === 2) { var hd = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.014, 5, 10, Math.PI), basic({ color: 0xe0b01c })); hd.position.set(x + (i === 1 ? 0.2 : -0.2), 1.38, zb2); hd.rotation.y = Math.PI / 2; scene.add(hd); } }); }
-    [-0.5, 0.5].forEach(function (x) { cyl(0.02, 0.02, 2.2, basic({ color: 0xe0b01c }), x, 1.1, -15.4); plane(0.8, 1.2, basic({ color: 0x9fb4c0, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }), x * 1.9, 1.3, -15.2, 0); });
-    [-1, 1].forEach(function (sd) { cyl(0.012, 0.012, 30, basic({ color: 0xc8ccd0 }), sd * (HW - 0.3), 1.9, -6, scene, 5).rotation.x = Math.PI / 2; for (var vz = 6; vz > -20; vz -= 1.2) box(0.2, 0.01, 0.5, basic({ color: 0xa8a8a2 }), sd * 0.55, 2.195, vz); });
-    plane(HW * 2, 2.2, basic({ color: 0xbfbfb9 }), 0, 1.1, -21, 0); box(0.8, 1.95, 0.05, basic({ color: 0x8a8e94 }), 0, 0.98, -20.95); plane(0.4, 0.5, basic({ color: 0x15202c }), 0, 1.45, -20.9, 0);
-    /* the carriage's own lights, faint in the glass */
-    for (var rz = 6; rz > -20; rz -= 2.4) { [-1, 1].forEach(function (sd) { var q = plane(0.22, 1.5, basic({ color: 0xffffff, transparent: true, opacity: 0.10, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }), sd * (HW * 2), 2.18, rz, 0, Math.PI / 2); }); }
-    /* the tray on the seat in front, and the cans if you bought them */
-    var tray = new THREE.Group(); tray.position.set(SEAT_X, 0.8, 0.3 - 0.86 + 0.17); scene.add(tray);
-    box(0.36, 0.015, 0.24, basic({ color: 0x8a8e94 }), 0, 0, 0, tray);
-    [[-0.07, 0xd9a23a, 0x7a4a12], [0.05, 0xe58ab8, 0x7a2a55]].forEach(function (c) {
-      var can = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.125, 14), basic({ color: c[1] })); can.position.set(c[0], 0.07, 0.02); tray.add(can);
-      var band = new THREE.Mesh(new THREE.CylinderGeometry(0.0305, 0.0305, 0.04, 14), basic({ color: c[2] })); band.position.set(c[0], 0.06, 0.02); tray.add(band);
-      var top = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.03, 0.008, 14), basic({ color: 0xd7dadd })); top.position.set(c[0], 0.136, 0.02); tray.add(top);
+    plane(HW * 2, 40, basic({ map: rep(carpet, 4, 58) }), 0, 0, -10, 0, -Math.PI / 2); plane(0.52, 40, basic({ color: 0x3a4154 }), 0, 0.003, -10, 0, -Math.PI / 2);
+    plane(HW * 2, NEXT_Z - SCREEN_Z, basic({ color: 0x4a4e58 }), 0, 0.004, (SCREEN_Z + NEXT_Z) / 2, 0, Math.PI / 2 * -1);
+    [-1, 1].forEach(function (sd) { plane(0.12, 1.5, basic({ color: 0xd9b21c }), sd * (HW - 0.07), 0.006, (SCREEN_Z + NEXT_Z) / 2, 0, -Math.PI / 2); });
+    /* the sides: a panel to the sill, a band of windows with rounded corners in dark rubber, a cove up to the ceiling; glass with a little shine */
+    var BAY = 1.68, wallW = tex(cv(512, 320, function (g, w, h) {
+      g.fillStyle = '#b9bcbe'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,.07)'; g.fillRect(0, 0, 3, h); g.fillRect(w - 3, 0, 3, h);
+      function rr(x, y, ww, hh, r) { g.beginPath(); g.moveTo(x + r, y); g.lineTo(x + ww - r, y); g.quadraticCurveTo(x + ww, y, x + ww, y + r); g.lineTo(x + ww, y + hh - r); g.quadraticCurveTo(x + ww, y + hh, x + ww - r, y + hh); g.lineTo(x + r, y + hh); g.quadraticCurveTo(x, y + hh, x, y + hh - r); g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y); g.closePath(); }
+      g.fillStyle = '#9da0a3'; rr(30, 14, w - 60, h - 30, 50); g.fill(); g.fillStyle = '#17181b'; rr(40, 24, w - 80, h - 50, 44); g.fill();
+      g.globalCompositeOperation = 'destination-out'; rr(50, 34, w - 100, h - 70, 36); g.fill(); g.globalCompositeOperation = 'source-over';
+    }), true);
+    var shineG = tex(cv(256, 128, function (g, w, h) { g.clearRect(0, 0, w, h); for (var i = 0; i < 9; i++) { var x = rnd() * w, gr = g.createLinearGradient(x, 0, x + 60, h); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,' + (0.1 + rnd() * 0.2) + ')'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(x - 20, 0, 90, h); } }), true);
+    var LEN = 40, ZC = -10, panelWall = basic({ color: 0x8c8f92, roughness: 0.65 });
+    [-1, 1].forEach(function (sd) {
+      var ry = sd > 0 ? -Math.PI / 2 : Math.PI / 2, x = sd * HW;
+      plane(LEN, 0.8, panelWall, x, 0.4, ZC, ry); box(0.07, 0.035, LEN, basic({ color: 0x8f9396 }), x - sd * 0.035, 0.81, ZC); box(0.03, 0.12, LEN, basic({ color: 0x2a2d33 }), x - sd * 0.015, 0.06, ZC);
+      var wt = wallW.clone(); wt.needsUpdate = true; wt.repeat.set(LEN / BAY, 1); wt.offset.x = 0.35;
+      var band = plane(LEN, 0.98, new THREE.MeshStandardMaterial({ map: wt, color: 0xc4c4c4, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.65 }), x, 0.8 + 0.49, ZC, ry); band.receiveShadow = true;
+      var cove = plane(LEN, 0.5, panelWall, x - sd * 0.12, 1.99, ZC, ry); cove.rotation.order = 'YXZ'; cove.rotation.x = 0.5;
+      var sg = shineG.clone(); sg.needsUpdate = true; sg.repeat.set(LEN / 3.4, 1);
+      plane(LEN, 0.98, new THREE.MeshBasicMaterial({ map: sg, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }), x + sd * 0.012, 1.29, ZC, ry);
+      /* the rack: a smoked shelf on brackets with a bright front rail */
+      plane(LEN, 0.3, new THREE.MeshBasicMaterial({ color: 0x8fa2ac, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }), x - sd * 0.17, 1.84, ZC, 0, -Math.PI / 2);
+      var rail = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, LEN, 6), basic({ color: 0xa8acb0, roughness: 0.35, metalness: 0.2 })); rail.rotation.x = Math.PI / 2; rail.position.set(x - sd * 0.32, 1.86, ZC); scene.add(rail);
+      for (var bz = 9; bz > -30; bz -= BAY) box(0.3, 0.02, 0.03, basic({ color: 0x9a9da0 }), x - sd * 0.16, 1.835, bz);
     });
-    /* outside: the platform and the train across it slide away; then the lights of the town */
+    /* the ceiling: a pale centre, two long lights, grilles */
+    plane(1.9, LEN, basic({ color: 0x9a9c9c, roughness: 0.75 }), 0, 2.2, ZC, 0, Math.PI / 2);
+    [-0.44, 0.44].forEach(function (x) { for (var lz = 9; lz > -30; lz -= 2.4) box(0.11, 0.02, 2.2, basic({ color: 0xffffff }), x, 2.19, lz); });
+    for (var vz = 8.4; vz > -30; vz -= 1.2) box(0.34, 0.008, 0.46, basic({ color: 0x9a9d9f }), 0, 2.196, vz);
+    /* the screens and yellow poles by the doors ahead, the vestibule, its doors, and the next saloon beyond */
+    [-1, 1].forEach(function (sd) {
+      plane(HW - 0.56, 1.75, new THREE.MeshBasicMaterial({ color: 0x9fb4c0, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }), sd * (0.56 + (HW - 0.56) / 2), 1.0, SCREEN_Z, 0);
+      plane(HW - 0.56, 1.75, new THREE.MeshBasicMaterial({ color: 0x9fb4c0, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }), sd * (0.56 + (HW - 0.56) / 2), 1.0, NEXT_Z, 0);
+      [SCREEN_Z, NEXT_Z].forEach(function (z) { var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 2.15, 8), basic({ color: 0xc9a416, roughness: 0.4, metalness: 0.3 })); pole.position.set(sd * 0.55, 1.1, z); pole.castShadow = true; scene.add(pole); box(HW - 0.56, 0.04, 0.03, basic({ color: 0x8f9396 }), sd * (0.56 + (HW - 0.56) / 2), 1.88, z); box(HW - 0.56, 0.3, 0.04, basic({ color: 0x8f9396 }), sd * (0.56 + (HW - 0.56) / 2), 0.15, z); });
+      /* a door each side of the vestibule: two leaves, a dark window in each, yellow at the meeting edge */
+      [-0.36, 0.36].forEach(function (dz) { var zc2 = (SCREEN_Z + NEXT_Z) / 2 + dz; box(0.04, 1.95, 0.68, basic({ color: 0xc2c5c7, roughness: 0.5 }), sd * (HW - 0.02), 1.0, zc2); plane(0.36, 0.7, basic({ color: 0x0c1016 }), sd * (HW - 0.045), 1.4, zc2, sd > 0 ? -Math.PI / 2 : Math.PI / 2); });
+      box(0.045, 1.95, 0.05, basic({ color: 0xc9a416 }), sd * (HW - 0.025), 1.0, (SCREEN_Z + NEXT_Z) / 2);
+    });
+    /* a notice on the pillar by your window, as in the photograph: a white card, a green band, a red box. No words */
+    var card = tex(cv(128, 180, function (g, w, h) { g.fillStyle = '#eceee8'; g.fillRect(0, 0, w, h); g.fillStyle = '#2f8f4a'; g.fillRect(8, 26, w - 16, 20); g.fillStyle = '#c9c9c4'; for (var i = 0; i < 7; i++) g.fillRect(10, 58 + i * 11, 60 + rnd() * 40, 5); g.fillStyle = '#b8261c'; g.fillRect(12, 140, 50, 20); g.fillStyle = '#3a3a3a'; g.fillRect(8, 8, 70, 10); }));
+    plane(0.2, 0.28, basic({ map: card }), HW - 0.006, 1.42, -2.0, -Math.PI / 2);
+    /* people in the seats ahead: a head and shoulders over the shell */
+    var COATC = [0x4a1f3a, 0x1b2233, 0x23201d, 0x2a3a34, 0x6a5a48, 0x15161a], SK = [0x7a5c48, 0x94765e, 0x5a3e30];
+    rows.forEach(function (z, ri) { if (ri < 5) return; XS.forEach(function (x) { if (rnd() > 0.42) return; /* nobody in the two rows in front of you */
+      var hd = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), basic({ color: SK[Math.floor(rnd() * 3)] })); hd.position.set(x + (rnd() - 0.5) * 0.08, 1.3 + rnd() * 0.05, z - 0.19); hd.scale.y = 1.15; hd.castShadow = true; scene.add(hd);
+      var hr = new THREE.Mesh(new THREE.SphereGeometry(0.108, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), basic({ color: [0x15110e, 0x2a1c12, 0x0c0c0e, 0x3a2a1c, 0x5a4a34][Math.floor(rnd() * 5)] })); hr.position.copy(hd.position); hr.position.y += 0.012; hr.rotation.x = 0.5; hr.scale.y = 1.15; scene.add(hr);
+      var shd = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 6), basic({ color: COATC[Math.floor(rnd() * COATC.length)] })); shd.position.set(hd.position.x, 1.08, z - 0.17); shd.scale.set(1.05, 0.5, 0.6); scene.add(shd);
+    }); });
+    /* the tray folded down from the seat in front, and the cans if you bought them */
+    var tray = new THREE.Group(); tray.position.set(SEAT_X, 0.79, 0.3 - PITCH + 0.2); scene.add(tray);
+    var tr = new THREE.Mesh(new THREE.ExtrudeGeometry(rounded(0.36, 0.24, 0.03, 0, -0.12), { depth: 0.014, bevelEnabled: false }), basic({ color: 0x8a8e94, roughness: 0.5 })); tr.rotation.x = -Math.PI / 2; tr.receiveShadow = true; tray.add(tr);
+    [[-0.07, 0xd9a23a, 0x7a4a12], [0.05, 0xe58ab8, 0x7a2a55]].forEach(function (c) {
+      var can = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.125, 16), new THREE.MeshStandardMaterial({ color: c[1], roughness: 0.35, metalness: 0.2 })); can.position.set(c[0], 0.078, 0.01); can.castShadow = true; tray.add(can);
+      var band = new THREE.Mesh(new THREE.CylinderGeometry(0.0305, 0.0305, 0.04, 16), new THREE.MeshStandardMaterial({ color: c[2], roughness: 0.5, metalness: 0.3 })); band.position.set(c[0], 0.068, 0.01); tray.add(band);
+      var top = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, 0.008, 16), new THREE.MeshStandardMaterial({ color: 0xc4c8cc, roughness: 0.3, metalness: 0.25 })); top.position.set(c[0], 0.144, 0.01); tray.add(top);
+    });
+    /* outside: the platform and the train across it slide away; then the lights of the town. Painted, not lit: the carriage's lamps do not reach it */
+    FLAT_ALL = true;
     var world = new THREE.Group(); scene.add(world);
     var conc = basic({ color: 0x6c6a64 });
     box(5.2, 0.3, 150, conc, HW + 0.25 + 2.6, -1.1, -45, world); plane(0.4, 150, basic({ color: 0xc9b23a }), HW + 1.0, -0.94, -45, 0, -Math.PI / 2, world);
@@ -453,14 +510,15 @@ window.WW_buildWaterloo = function (kit) {
       box(4, 0.3, 60, basic({ color: 0x15161a }), HW + 3.6, 3.6, -420, G); box(4.5, 0.3, 60, basic({ color: 0x6c6a64 }), HW + 3.6, -1.1, -420, G); for (var pl = 0; pl < 6; pl++) glow(HW + 3.2, 3.2, -394 - pl * 10, 3, 0xf4f6ff, 0.8, G);
     }
     var gone = 0, v = 0, FIELD = 700, START = 110;
-    /* the train's lamps */ var LAMPS = [], lq3; for (lq3 = 6; lq3 > -20; lq3 -= 2.4) LAMPS.push({ x: 0, y: 2.05, z: lq3, c: 0xf2f6ff, i: 0.95, d: 5.5 });
-    var AMB = [0x7c8088, 0x3a3e48, 0.5, 0.2];
+    FLAT_ALL = false;
+    /* the train's lamps */ var LAMPS = [], lq3; for (lq3 = 8; lq3 > -30; lq3 -= 2.1) LAMPS.push({ x: (Math.round(lq3 / 2.1) % 2 ? 0.44 : -0.44), y: 2.08, z: lq3, c: 0xf2f6ff, i: 0.62, d: 5.2 });
+    var AMB = [0x7c8088, 0x3a3e48, 0.3, 0.12];
     untone(scene);
     return { lamps: LAMPS, amb: AMB, scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
-      pose: function () { return { x: SEAT_X - 0.12, y: EYE, z: 0, yaw: -0.42 }; },
+      pose: function () { return { x: SEAT_X - 0.06, y: EYE, z: -0.04, yaw: -0.5 }; },
       reset: function () { gone = 0; v = 0; },
       update: function (dt, t, s) {
-        tray.children.forEach(function (o, i) { if (i > 0) o.visible = kit.choices.cans === true; });
+        tray.visible = kit.choices.cans === true; /* the tray is down only when there is something to put on it */
         var target = s < 4 ? 0 : Math.min(24, (s - 4) * 1.15); v += (target - v) * Math.min(1, dt * 1.5); gone += v * dt;
         world.position.z = gone;
         /* each field sits ahead of the platform's end and steps forward once it has gone by */

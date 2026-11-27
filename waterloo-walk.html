@@ -26,6 +26,8 @@
   #ask p.claude-draft { color: #ff8fc7; }
   #ask button { margin: 0 6px; padding: 10px 22px; font: inherit; font-size: 16px; color: #e9dfc8; background: rgba(18, 16, 14, .5); border: 1px solid rgba(233, 223, 200, .45); border-radius: 3px; cursor: pointer; }
   #ask button:hover { background: rgba(233, 223, 200, .2); }
+  #fault { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); display: none; max-width: 80vw; padding: 16px 20px; z-index: 9; font-size: 16px; line-height: 1.5; text-align: center;
+           background: rgba(18, 16, 14, .9); border: 1px solid rgba(233, 223, 200, .45); border-radius: 4px; }
   #osm { position: fixed; right: 8px; bottom: 6px; font: 10px/1 Helvetica, Arial, sans-serif; color: rgba(233, 223, 200, .4); pointer-events: none; }
 </style>
 </head>
@@ -34,6 +36,7 @@
 <div id="veil"></div>
 <div id="hint">Hold W to walk: Shift to stride, S to stroll. A and D move you across. Drag to look around.</div>
 <button id="walk" type="button">Walk</button>
+<div id="fault"></div>
 <div id="ask"><p></p><span></span></div>
 <div id="end"><div>The train has gone.</div></div>
 <div id="osm">Map data &copy; OpenStreetMap contributors</div>
@@ -45,10 +48,18 @@
 <script src="vendor/three/postprocessing/RenderPass.js"></script>
 <script src="vendor/three/postprocessing/ShaderPass.js"></script>
 <script src="vendor/three/postprocessing/UnrealBloomPass.js"></script>
-<script src="waterloo-walk-data.js"></script>
-<script src="waterloo-walk-alley.js"></script>
-<script src="waterloo-walk-chx.js"></script>
-<script src="waterloo-walk-waterloo.js"></script>
+<script>
+/* The page and its stage files must be one matched set: a new page with an older cached stage file fails at load and leaves the
+   screen black. On a local server every load fetches them afresh; anywhere else they carry the page's version. */
+var WW_VERSION = '6';
+(function () {
+  var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === 'file:', q = '?v=' + WW_VERSION + (local ? '-' + Date.now() : '');
+  ['waterloo-walk-data.js', 'waterloo-walk-alley.js', 'waterloo-walk-chx.js', 'waterloo-walk-waterloo.js'].forEach(function (f) { document.write('<script src="' + f + q + '"><\/script>'); });
+})();
+/* nothing fails silently: a fault is written on the screen */
+function WW_fail(msg) { var e = document.getElementById('fault'); if (!e) return; if (/WebGLShader|WebGLProgram|context/i.test(msg) && !/keeps dropping/.test(msg)) return; /* a dropped context restarts the stage instead */ e.textContent = 'The walk has stopped: ' + msg + ' Reload the page to start again.'; e.style.display = 'block'; }
+window.addEventListener('error', function (e) { WW_fail((e.message || 'a script did not load') + (e.filename ? ' (' + e.filename.split('/').pop().split('?')[0] + ':' + e.lineno + ').' : '.')); }, true);
+</script>
 <script>
 (function () {
   'use strict';
@@ -64,7 +75,7 @@
   function pairs(a) { var o = []; for (var i = 0; i < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; }
 
   /* ---------- renderer ---------- */
-  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, powerPreference: 'high-performance' });
+  var renderer = new THREE.WebGLRenderer(Q.get('pp') === '0' ? { canvas: canvas, antialias: false } : { canvas: canvas, antialias: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.85; /* the alley's grade; the bridge's painted materials opt out below */
@@ -444,8 +455,9 @@
   /* each entry is a stretch walked on foot with a portal at its far end; the last is the train, which you ride */
   var SEQ = [
     { id: 'alley', st: alley, from: 0, to: alley.length },
+    { id: 'strand', st: wl.strand, from: 0, to: wl.strand.length },
     { id: 'charing-cross', st: chx, from: 0, to: chx.length },
-    { id: 'bridge', st: bridge, from: bridge.length * (isNaN(from) ? 0.16 : from), to: bridge.length * (isNaN(to) ? 0.5 : to) },
+    { id: 'bridge', st: bridge, from: bridge.length * (isNaN(from) ? 0.03 : from), to: bridge.length * (isNaN(to) ? 0.97 : to) },
     { id: 'tunnel', st: wl.tunnel, from: 0, to: wl.tunnel.length },
     { id: 'arch', st: wl.arch, from: 0, to: wl.arch.length },
     { id: 'concourse', st: wl.concourse, from: 0, to: wl.concourse.length },
@@ -482,7 +494,7 @@
      (see SOUND-SOURCES.md); they are PROVISIONAL until he has heard them. Each stage lists [metres into the stage, clip]: the clip plays
      until that mark. A stage with no entry is silent. A clip that runs out goes round again. */
   var SOUND = {
-    'alley': [[1e9, 'street']], 'charing-cross': [[21, 'shop'], [1e9, 'chx']], 'bridge': [[1e9, 'bridge']],
+    'strand': [[1e9, 'street']], 'charing-cross': [[21, 'shop'], [1e9, 'chx']], 'bridge': [[1e9, 'bridge']],
     'tunnel': [[1e9, 'tunnel']], 'arch': [[1e9, 'arch']], 'concourse': [[1e9, 'waterloo']]
   };
   var SOUND_LEVEL = 0.9, soundOff = Q.get('mute') === '1', soundOn = false, soundClip = null, players = {};
@@ -509,13 +521,31 @@
   ['pointerdown', 'keydown', 'touchstart'].forEach(function (n) { window.addEventListener(n, soundStart, { passive: true }); });
   var idx = 0, cur = null, S0 = 0, S1 = 0, coarse = false;
   var st = { s: 0, lat: 0, yaw: 0, pitch: 0, speed: 0, done: false, t: 0, bob: 0, through: 0 }; /* lat: metres to the right of the stage's path */
+  var sized = '';
   function size() {
     var w = window.innerWidth, h = window.innerHeight;
-    renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h;
+    if (!w || !h) return; /* a hidden pane reports no size: keep the last good one */
+    sized = w + 'x' + h; renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h;
     if (cur) { camera.fov = cur.st.fov + (w < h ? 16 : 0); camera.near = cur.st.near; camera.far = cur.st.far; }
     camera.updateProjectionMatrix();
   }
+  /* Safari drops a page's graphics context when its tabs hold too much graphics memory, and it keeps left pages alive in its
+     back-forward cache. So: a stage's textures and meshes are freed as you leave it (they load again if you come back), and
+     everything is freed when the page is put away. */
+  function release(sc) {
+    var seen = [];
+    function drop(x) { if (x && x.dispose && seen.indexOf(x) < 0) { seen.push(x); x.dispose(); } }
+    sc.traverse(function (o) {
+      drop(o.geometry); if (o.shadow && o.shadow.map) { o.shadow.map.dispose(); o.shadow.map = null; }
+      [].concat(o.material || []).forEach(function (m) { Object.keys(m).forEach(function (k) { if (m[k] && m[k].isTexture) drop(m[k]); }); if (m.uniforms) Object.keys(m.uniforms).forEach(function (k) { var v = m.uniforms[k].value; if (v && v.isTexture) drop(v); }); drop(m); });
+    });
+    renderer.renderLists.dispose();
+  }
+  window.addEventListener('pagehide', function () { stopped = true; SEQ.forEach(function (e) { release(e.st.scene); }); try { composer.renderTarget1.dispose(); composer.renderTarget2.dispose(); renderer.dispose(); renderer.forceContextLoss(); } catch (e) {} });
+  window.addEventListener('pageshow', function (e) { if (e.persisted) location.reload(); });
+  var stopped = false;
   function enter(i) {
+    if (cur && SEQ[i].st !== cur.st) release(cur.st.scene);
     idx = i; cur = SEQ[i]; S0 = cur.from; S1 = cur.to; st.s = S0; st.lat = 0; st.yaw = 0; st.pitch = 0;
     renderPass.scene = cur.st.scene; SEQ.forEach(function (e) { e.portal.visible = e === cur; });
     btn.style.display = cur.st.ride ? 'none' : ''; if (cur.st.ride) hint.classList.add('gone'); if (cur.st.reset) cur.st.reset();
@@ -533,7 +563,7 @@
   window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', function () { keys = {}; st.btn = false; btn.classList.remove('on'); });
   btn.addEventListener('pointerdown', function (e) { st.btn = true; st.btnY = e.clientY; st.btnPace = 1; btn.classList.add('on'); btn.setPointerCapture(e.pointerId); e.preventDefault(); });
-  btn.addEventListener('pointermove', function (e) { if (st.btn) st.btnPace = Math.max(0.5, Math.min(1.75, 1 - (e.clientY - st.btnY) / 90)); }); /* slide up to stride, down to stroll */
+  btn.addEventListener('pointermove', function (e) { if (st.btn) st.btnPace = Math.max(0.5, Math.min(1.6, 1 - (e.clientY - st.btnY) / 90)); }); /* slide up to stride, down to stroll */
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (n) { btn.addEventListener(n, function () { st.btn = false; btn.classList.remove('on'); }); });
   var drag = null;
   canvas.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, y: e.clientY, yaw: st.yaw, pitch: st.pitch }; canvas.classList.add('drag'); canvas.setPointerCapture(e.pointerId); });
@@ -545,6 +575,8 @@
   ['pointerup', 'pointercancel'].forEach(function (n) { canvas.addEventListener(n, function () { drag = null; canvas.classList.remove('drag'); }); });
 
   /* a stage can stop the walk to ask something; the answer is kept for later stages and for the game */
+  var BASE = 2.6; /* metres a second (Sam, 27 Nov: the first pace was 'far too slow') */
+  Q.forEach(function (v, k) { if (k.indexOf('c_') === 0) choices[k.slice(2)] = v === '1'; }); /* answers carried over a restart */
   var asking = null, askEl = document.getElementById('ask');
   function ask(pr) {
     asking = pr; var p = askEl.querySelector('p'), box = askEl.querySelector('span');
@@ -557,22 +589,34 @@
     asking = null; askEl.classList.remove('show'); btn.style.visibility = '';
   }
   var last = performance.now(), veil = document.getElementById('veil');
+  canvas.addEventListener('webglcontextlost', function (e) {
+    e.preventDefault(); if (stopped) return; stopped = true;
+    var n = 0; try { var r = JSON.parse(sessionStorage.getItem('wwLost') || '[]').filter(function (t) { return Date.now() - t < 120000; }); n = r.length; r.push(Date.now()); sessionStorage.setItem('wwLost', JSON.stringify(r)); } catch (x) {}
+    if (n >= 3) { WW_fail('the browser keeps dropping the picture. Close other tabs that show 3D, then'); return; }
+    var u = new URL(location.href); u.searchParams.set('stage', cur.id); u.searchParams.set('at', Math.max(0, Math.min(0.98, (st.s - S0) / (S1 - S0))).toFixed(3));
+    Object.keys(choices).forEach(function (k) { u.searchParams.set('c_' + k, choices[k] ? '1' : '0'); });
+    setTimeout(function () { location.replace(u.toString()); }, 400);
+  });
   function frame(now) {
+    if (stopped) return;
+    requestAnimationFrame(frame);
+    if (!window.innerWidth || !window.innerHeight) { last = now; return; }
+    if (sized !== window.innerWidth + 'x' + window.innerHeight) size();
     var dt = Math.min(0.05, (now - last) / 1000); last = now; st.t += dt;
     var want = wantWalk() && !st.done;
-    var pace = keys.shift ? 1.75 : (keys.s || keys.arrowdown) ? 0.5 : st.btn ? (st.btnPace || 1) : 1; /* stride, stroll, or the button's slide */
-    st.speed += ((want ? 1.55 * pace : 0) - st.speed) * Math.min(1, dt * 4);
+    var pace = keys.shift ? 1.6 : (keys.s || keys.arrowdown) ? 0.5 : st.btn ? (st.btnPace || 1) : 1; /* stride, stroll, or the button's slide */
+    st.speed += ((want ? BASE * pace : 0) - st.speed) * Math.min(1, dt * 4);
     if (st.speed > 0.05 && !hint.classList.contains('gone')) hint.classList.add('gone');
     if (cur.st.ride) { st.speed = 0; st.s += dt; } /* a ride runs on the clock */
     /* across the path: A and D or the side arrows; on a touch screen you drift the way you look while walking. Each stage says how far */
     var side = ((keys.d || keys.arrowright) ? 1 : 0) - ((keys.a || keys.arrowleft) ? 1 : 0);
     if (coarse && Math.abs(st.yaw) > 0.2) side = -Math.sin(st.yaw) * Math.min(1, st.speed);
     if (st.done || asking) side = 0;
-    st.latV = (st.latV || 0) + (side * 1.25 - (st.latV || 0)) * Math.min(1, dt * 6); st.lat += st.latV * dt;
+    st.latV = (st.latV || 0) + (side * 2.0 - (st.latV || 0)) * Math.min(1, dt * 6); st.lat += st.latV * dt;
     var lim = cur.st.lat ? cur.st.lat(st.s) : [0, 0];
     if (st.lat > lim[1]) { st.lat += (lim[1] - st.lat) * Math.min(1, dt * 5); if (st.latV > 0) st.latV = 0; }
     if (st.lat < lim[0]) { st.lat += (lim[0] - st.lat) * Math.min(1, dt * 5); if (st.latV < 0) st.latV = 0; }
-    st.s += st.speed * dt; st.bob += st.speed * dt * 4.1;
+    st.s += st.speed * dt; st.bob += st.speed * dt * 2.7;
     (cur.st.prompts || []).forEach(function (pr) {
       if (pr.id in choices || st.s < pr.at) return;
       st.s = pr.at; st.speed = 0; if (!asking) ask(pr);
@@ -589,17 +633,28 @@
     var soft = Math.max(near * 0.55, st.through * st.through), blurPx = soft * 26;
     canvas.style.filter = blurPx > 0.15 ? 'blur(' + blurPx.toFixed(1) + 'px) brightness(' + (1 + soft * 0.9).toFixed(2) + ')' : '';
     portalMat.uniforms.t.value = st.t; portalMat.uniforms.near.value = near;
-    var P = cur.st.pose(st.s), amp = Math.min(1.25, st.speed / 1.55);
+    var P = cur.st.pose(st.s), amp = Math.min(1.25, st.speed / BASE);
     var camX = P.x + Math.cos(P.yaw) * st.lat, camZ = P.z - Math.sin(P.yaw) * st.lat;
     camera.position.set(camX, P.y + Math.sin(st.bob * 2) * 0.028 * amp, camZ);
     camera.rotation.order = 'YXZ'; camera.rotation.set(st.pitch, P.yaw + st.yaw, Math.sin(st.bob) * 0.004 * amp);
     cur.st.update(dt, st.t, st.s, [camX, camZ], st.lat); soundTick(dt);
     composer.render();
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
   setTimeout(function () { veil.classList.add('clear'); }, 150);
 
+  /* ?debug=1 reports what the page is doing to a local listener, for faults that only show in one browser */
+  if (Q.get('debug') === '1') (function () {
+    var n = 0, t0 = performance.now();
+    function say(o) { o.t = Math.round(performance.now() - t0); try { navigator.sendBeacon('http://localhost:8798/log', JSON.stringify(o)); } catch (e) {} }
+    function snap(why) { var i = renderer.info; return { why: why, stage: cur && cur.id, s: Math.round(st.s), lost: renderer.getContext().isContextLost(), tex: i.memory.textures, geo: i.memory.geometries, progs: i.programs ? i.programs.length : -1, calls: i.render.calls, tris: i.render.triangles, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, buf: canvas.width + 'x' + canvas.height, ua: n ? undefined : navigator.userAgent }; }
+    say(snap('loaded')); n = 1;
+    var ticks = 0; setInterval(function () { if (ticks++ < 12) say(snap('tick')); }, 1000);
+    var lostSaid = 0; canvas.addEventListener('webglcontextlost', function (e) { if (lostSaid++ < 2) say({ why: 'CONTEXT LOST', msg: e.statusMessage || '', at: snap('lost') }); });
+    window.addEventListener('error', function (e) { say({ why: 'ERROR', msg: e.message, file: (e.filename || '').split('/').pop(), line: e.lineno }); }, true);
+    ['keydown', 'pointerdown'].forEach(function (k) { window.addEventListener(k, function (e) { say({ why: k, key: e.key || '' }); }, true); });
+    window.addEventListener('dss:walk-stage-end', function (e) { say(snap('stage-end ' + e.detail.stage)); }); window.addEventListener('dss:walk-end', function () { say(snap('WALK END')); });
+  })();
   window.__walk = {
     state: function () { return { stage: idx, id: cur.id, blur: canvas.style.filter, lat: st.lat, limits: cur.st.lat ? cur.st.lat(st.s) : [0, 0], s: st.s, from: S0, to: S1, done: st.done, speed: st.speed, yaw: st.yaw, pitch: st.pitch }; },
     goto: function (f) { st.s = S0 + (S1 - S0) * f; }, enter: enter, look: function (yaw, pitch) { st.yaw = yaw; st.pitch = pitch || 0; },

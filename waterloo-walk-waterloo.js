@@ -345,5 +345,99 @@ window.WW_buildWaterloo = function (kit) {
       } };
   }
 
-  return { tunnel: buildTunnel(), arch: buildArch(), concourse: buildConcourse(), platform: buildPlatform(), train: buildTrain() };
+
+  /* ================= the Strand, to the front of Charing Cross (no photographs; built from knowledge of the place) =================
+     Out of St Martin's Lane you come down the station side of the Strand, buses and cabs on your right, and turn in through the
+     forecourt gates past the Eleanor Cross to the doors under the canopy. */
+  function buildStrand() {
+    scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0b0a); scene.fog = new THREE.FogExp2(0x17130f, 0.0045);
+    var GATE_Z = -30, FRONT_X = -30, DOOR_Z = -44;
+    plane(240, 260, basic({ color: 0x0b0b0c }), 0, -0.02, -40, 0, -Math.PI / 2); /* the roadway */
+    plane(6.4, 150, basic({ map: rep(slabs, 3, 60), color: 0xcdb48a }), -0.2, 0, -45, 0, -Math.PI / 2); /* your pavement */
+    plane(4, 150, basic({ map: rep(slabs, 2, 60), color: 0x8f8572 }), 19, 0, -45, 0, -Math.PI / 2); /* the far one */
+    box(0.25, 0.14, 150, basic({ color: 0x6a6258 }), 3.1, 0.05, -45);
+    for (var m = 20; m > -120; m -= 6) plane(0.14, 2.6, basic({ color: 0x8a8a84 }), 10, 0.0, m, 0, -Math.PI / 2);
+    plane(1.2, 150, basic({ color: 0x7a1a14 }), 4.4, 0.001, -45, 0, -Math.PI / 2); /* the red of the bus lane */
+    /* shop fronts with rooms above: yours on the left before the forecourt, and all down the far side */
+    var street = tex(cv(1024, 512, function (g, w, h) {
+      g.fillStyle = '#2a2622'; g.fillRect(0, 0, w, h);
+      for (var c = 0; c < 8; c++) {
+        var x = c * 128, tone = 40 + Math.floor(rnd() * 26); g.fillStyle = 'rgb(' + (tone + 16) + ',' + (tone + 8) + ',' + tone + ')'; g.fillRect(x + 2, 0, 124, 400);
+        for (var r = 0; r < 4; r++) for (var k = 0; k < 3; k++) { var l = rnd(); g.fillStyle = l < 0.22 ? '#d9b46c' : l < 0.3 ? '#b8c2c8' : '#121110'; g.fillRect(x + 14 + k * 38, 26 + r * 92, 24, 56); }
+        var warm = rnd() < 0.6, gr = g.createLinearGradient(0, 400, 0, h); gr.addColorStop(0, warm ? '#f4e2b4' : '#e4eef4'); gr.addColorStop(1, warm ? '#b08a4c' : '#8fa2ac'); g.fillStyle = gr; g.fillRect(x + 6, 420, 116, 92);
+        for (var i = 0; i < 12; i++) { g.fillStyle = 'hsla(' + Math.floor(rnd() * 360) + ',45%,' + (30 + rnd() * 30) + '%,.55)'; g.fillRect(x + 8 + rnd() * 100, 450 + rnd() * 50, 8 + rnd() * 18, 8 + rnd() * 16); }
+        g.fillStyle = ['#1b2430', '#2a1f18', '#1f2a22', '#30181a'][c % 4]; g.fillRect(x + 2, 400, 124, 22); g.fillStyle = 'rgba(255,255,255,.7)'; g.fillRect(x + 34, 407, 60, 7); g.fillStyle = '#141414'; g.fillRect(x + 62, 422, 4, 90);
+      }
+    }), true);
+    plane(40, 22, basic({ map: rep(street, 0.9, 1), color: 0xa8a8a8 }), -3.4, 11, -2, Math.PI / 2);
+    plane(150, 22, basic({ map: rep(street, 3.3, 1), color: 0xc8c8c8 }), 21, 11, -45, -Math.PI / 2);
+    plane(50, 22, basic({ map: rep(street, 1.1, 1) }), -3.4, 11, -99, Math.PI / 2);
+    /* the forecourt: railings and gate piers along the pavement, setts within */
+    var setts = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#1c1a18'; g.fillRect(0, 0, w, h); for (var r = 0; r < 8; r++) for (var c = 0; c < 6; c++) { var v = 62 + Math.floor(rnd() * 26); g.fillStyle = 'rgb(' + v + ',' + (v - 3) + ',' + (v - 8) + ')'; g.fillRect(((c * 22 + (r % 2) * 11) % w) + 1, r * 16 + 1, 20, 14); } }), true);
+    plane(28, 52, basic({ map: rep(setts, 14, 26), color: 0xd0c0a0 }), -17, 0.004, -48, 0, -Math.PI / 2);
+    var stoneM = basic({ color: 0x6a6354 }), iron = basic({ color: 0x141416 });
+    [[-22, GATE_Z + 4.5], [GATE_Z - 4.5, -74]].forEach(function (r) { box(0.4, 0.7, r[0] - r[1], stoneM, -3.4, 0.35, (r[0] + r[1]) / 2); box(0.06, 1.3, r[0] - r[1], iron, -3.4, 1.35, (r[0] + r[1]) / 2); for (var z = r[0]; z > r[1]; z -= 0.35) box(0.04, 1.3, 0.04, iron, -3.4, 1.35, z); });
+    [-22, GATE_Z + 4.5, GATE_Z - 4.5, -52, -74].forEach(function (z) { box(1.1, 3.4, 1.1, stoneM, -3.4, 1.7, z); box(1.4, 0.3, 1.4, stoneM, -3.4, 3.5, z); box(0.3, 0.5, 0.3, basic({ color: 0xffe9c0 }), -3.4, 4.0, z); glow(-3.4, 4.0, z, 1.5, 0xffd9a0, 0.6); });
+    /* the Eleanor Cross: eight-sided, tier on tier, floodlit */
+    var cross = new THREE.Group(); cross.position.set(-14, 0, -40); scene.add(cross);
+    var lit = basic({ color: 0x968a6e }), shade = basic({ color: 0x6e654f });
+    function tier(r0, r1, h, y, mat) { var m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, h, 8), mat); m.position.y = y + h / 2; cross.add(m); return m; }
+    tier(3.4, 3.4, 0.4, 0, shade); tier(2.9, 2.9, 0.4, 0.4, shade); tier(2.2, 2.0, 5.2, 0.8, lit); tier(2.3, 2.3, 0.35, 6.0, shade);
+    tier(1.6, 1.4, 5.0, 6.35, lit); tier(1.7, 1.7, 0.3, 11.35, shade); tier(1.05, 0.9, 4.2, 11.65, lit); tier(1.1, 1.1, 0.25, 15.85, shade); tier(0.7, 0.05, 4.6, 16.1, lit);
+    box(0.12, 1.1, 0.12, lit, 0, 21.2, 0, cross); box(0.6, 0.12, 0.12, lit, 0, 21.4, 0, cross);
+    [[2.2, 6.3], [1.6, 11.6], [1.05, 16.1]].forEach(function (t) { for (var k = 0; k < 8; k++) { var a = k / 8 * Math.PI * 2 + Math.PI / 8, pin = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.5, 4), lit); pin.position.set(Math.cos(a) * t[0], t[1] + 0.75, Math.sin(a) * t[0]); cross.add(pin); } });
+    for (var n = 0; n < 8; n++) { var a2 = n / 8 * Math.PI * 2; plane(0.9, 2.6, basic({ color: 0x4a4234 }), -14 + Math.cos(a2) * 2.12, 3.2, -40 + Math.sin(a2) * 2.12, Math.PI / 2 - a2); }
+    glow(-14, 4, -40, 12, 0xffe2a8, 0.28); glow(-14, 12, -40, 9, 0xffe2a8, 0.2);
+    /* the station hotel across the back of the forecourt, its glass canopy over the doors */
+    var hotel = tex(cv(1024, 512, function (g, w, h) {
+      g.fillStyle = '#16181c'; g.fillRect(0, 0, w, 96); g.fillStyle = '#b79f72'; g.fillRect(0, 96, w, h - 96);
+      g.fillStyle = '#8d7a56'; [96, 180, 268, 356, 430].forEach(function (y) { g.fillRect(0, y, w, 7); });
+      for (var c = 0; c < 17; c++) {
+        var x = 18 + c * 59;
+        for (var r = 0; r < 4; r++) { var y = 112 + r * 86, l = rnd(); g.fillStyle = l < 0.42 ? '#f0cf86' : l < 0.5 ? '#c9d2d6' : '#17150f'; g.beginPath(); g.moveTo(x, y + 62); g.lineTo(x, y + 14); g.arc(x + 15, y + 14, 15, Math.PI, 0); g.lineTo(x + 30, y + 62); g.fill(); }
+        if (c % 2 === 0) { g.fillStyle = '#22252a'; g.fillRect(x - 2, 40, 34, 56); g.fillStyle = rnd() < 0.3 ? '#e6c074' : '#0e0e10'; g.fillRect(x + 6, 52, 18, 30); }
+        g.fillStyle = '#f6e6ba'; g.beginPath(); g.moveTo(x - 6, h); g.lineTo(x - 6, 462); g.arc(x + 15, 462, 21, Math.PI, 0); g.lineTo(x + 36, h); g.fill();
+      }
+    }));
+    plane(76, 30, basic({ map: hotel, color: 0xb9b3a6 }), FRONT_X, 15, -48, Math.PI / 2);
+    box(4, 30, 76, basic({ color: 0x0d0d0e }), FRONT_X - 2.1, 15, -48);
+    box(6.4, 0.16, 26, basic({ color: 0x9fb4bc, transparent: true, opacity: 0.35 }), FRONT_X + 3.2, 5.6, DOOR_Z); box(6.6, 0.3, 0.3, iron, FRONT_X + 3.2, 5.45, DOOR_Z + 13); box(6.6, 0.3, 0.3, iron, FRONT_X + 3.2, 5.45, DOOR_Z - 13); box(0.3, 0.3, 26, iron, FRONT_X + 6.4, 5.45, DOOR_Z);
+    for (var cz = DOOR_Z + 9; cz >= DOOR_Z - 9; cz -= 6) { /* none in the doorway's line */ box(0.22, 5.4, 0.22, iron, FRONT_X + 6.3, 2.7, cz); glow(FRONT_X + 3.2, 5.0, cz, 4.2, 0xfff2d6, 0.6); box(0.5, 0.08, 0.5, basic({ color: 0xffffff }), FRONT_X + 3.2, 5.45, cz); }
+    plane(5, 4.4, basic({ color: 0xa8976a }), FRONT_X + 0.04, 2.2, DOOR_Z, Math.PI / 2);
+    /* cabs waiting in the forecourt */
+    [[-8, -56, 0.3], [-9.5, -62, 0.25], [-21, -62, 1.5]].forEach(function (c) { var g = new THREE.Group(); g.position.set(c[0], 0, c[1]); g.rotation.y = c[2]; scene.add(g); box(1.8, 1.5, 4.4, basic({ color: 0x0b0b0d }), 0, 0.95, 0, g); box(1.6, 0.5, 2.4, basic({ color: 0x15171c }), 0, 1.8, 0.2, g); box(0.5, 0.16, 0.16, basic({ color: 0xffb030 }), 0, 2.12, -1.0, g); glow(-0.6, 0.8, 2.25, 1.0, 0xff2010, 0.9, g); glow(0.6, 0.8, 2.25, 1.0, 0xff2010, 0.9, g); });
+    /* lamps down your kerb; the lights at the gate */
+    for (var lz = 8; lz > -110; lz -= 17) { box(0.16, 8.5, 0.16, iron, 2.7, 4.25, lz); box(1.4, 0.1, 0.1, iron, 3.3, 8.5, lz); glow(3.9, 8.4, lz, 7, 0xffd08a, 0.95); }
+    [[2.6, GATE_Z + 6, 0x2aff7a], [2.6, GATE_Z - 8, 0xff2a1a]].forEach(function (p) { box(0.1, 3.2, 0.1, iron, p[0], 1.6, p[1]); box(0.26, 0.8, 0.22, basic({ color: 0x0c0c0e }), p[0], 3.3, p[1]); glow(p[0], 3.4, p[1] + 0.15, 1.4, p[2], 1); });
+    /* buses and cabs: the near lanes run your way, the far lanes against you */
+    var busSide = tex(cv(512, 256, function (g, w, h) {
+      g.fillStyle = '#b0181a'; g.fillRect(0, 0, w, h); g.fillStyle = '#16181c'; g.fillRect(0, h - 26, w, 26); g.fillStyle = '#1a1c20'; g.fillRect(10, 22, w - 20, 62); g.fillRect(10, 128, w - 20, 66);
+      for (var i = 0; i < 9; i++) { g.fillStyle = '#f2dfa4'; g.fillRect(16 + i * 54, 26, 48, 54); if (i !== 1 && i !== 5) g.fillRect(16 + i * 54, 132, 48, 58); g.fillStyle = 'rgba(40,34,28,.55)'; if (rnd() < 0.6) g.fillRect(26 + i * 54 + rnd() * 20, 50, 13, 30); if (rnd() < 0.5 && i !== 1 && i !== 5) g.fillRect(26 + i * 54 + rnd() * 20, 156, 13, 34); }
+      g.fillStyle = '#8f1214'; g.fillRect(70, 128, 48, 100); g.fillRect(286, 128, 48, 100);
+    }));
+    var traffic = [];
+    function vehicle(bus, lane, dir, z) {
+      var g = new THREE.Group(), red = basic({ color: 0x74100f });
+      if (bus) { box(2.55, 4.3, 11, [basic({ map: busSide }), basic({ map: busSide }), basic({ color: 0x7a1012 }), basic({ color: 0x111111 }), red, red], 0, 2.35, 0, g); box(2.2, 1.1, 0.06, basic({ color: 0x1a1c20 }), 0, 3.3, 5.52, g); box(2.2, 0.9, 0.06, basic({ color: 0x1a1c20 }), 0, 1.6, 5.52, g); box(1.6, 0.36, 0.06, basic({ color: 0xffb030 }), 0, 3.95, -5.52, g); box(2.2, 1.5, 0.06, basic({ color: 0x1a1c20 }), 0, 1.7, -5.52, g); }
+      else { box(1.8, 1.5, 4.4, basic({ color: 0x0b0b0d }), 0, 0.95, 0, g); box(1.6, 0.5, 2.4, basic({ color: 0x15171c }), 0, 1.8, 0.2, g); box(0.5, 0.16, 0.16, basic({ color: 0xffb030 }), 0, 2.12, -1.0, g); }
+      var half = bus ? 5.5 : 2.2, hy = bus ? 0.9 : 0.75;
+      glow(-0.75, hy, -half - 0.05, 1.7, 0xfff6d8, 1, g); glow(0.75, hy, -half - 0.05, 1.7, 0xfff6d8, 1, g); glow(-0.75, hy + 0.1, half + 0.05, 1.4, 0xff2010, 1, g); glow(0.75, hy + 0.1, half + 0.05, 1.4, 0xff2010, 1, g);
+      g.rotation.y = dir < 0 ? 0 : Math.PI; scene.add(g); traffic.push({ g: g, x: lane, dir: dir, z: z, v: (bus ? 4.2 : 6) + rnd() * 2.5 });
+    }
+    vehicle(true, 4.6, -1, 20); vehicle(false, 7.6, -1, -10); vehicle(true, 4.6, -1, -60); vehicle(false, 7.6, -1, -95);
+    vehicle(true, 15.4, 1, -40); vehicle(false, 12.4, 1, -75); vehicle(false, 12.4, 1, 5); vehicle(true, 15.4, 1, -118);
+    var P = pathOf([[0, 4], [0, GATE_Z + 1], [-9, GATE_Z - 5], [-22, DOOR_Z + 0.5], [FRONT_X + 1.2, DOOR_Z]]);
+    var onStreet = crowd(26, [-2.6, 2.4, -110, 14], { along: true, towards: 0.5, dim: 0.75 }), inYard = crowd(9, [-26, -6, -60, -34], { dim: 0.8, still: 0.3 });
+    untone(scene);
+    return { scene: scene, length: P.len, fov: 62, near: 0.15, far: 600, bloom: [0.42, 0.5, 0.86], nearDist: 10, yawMax: 2.3, portal: { w: 5.2, h: 4.6 },
+      pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
+      portalAt: function () { return { x: FRONT_X + 0.5, y: 2.3, z: DOOR_Z }; },
+      lat: function (s) { return s < 30 ? [-2.4, 2.3] : s > P.len - 6 ? [-1.6, 1.6] : [-2.6, 2.6]; }, /* railings to kerb; through the gate; the doors */
+      update: function (dt, t, s, cam) {
+        var c = cam || P.at(s); onStreet(dt, t, c); inYard(dt, t, c);
+        traffic.forEach(function (v) { v.z += v.dir * v.v * dt; if (v.z > 40) v.z = -130; if (v.z < -130) v.z = 40; v.g.position.set(v.x, 0, v.z); });
+      } };
+  }
+
+  return { strand: buildStrand(), tunnel: buildTunnel(), arch: buildArch(), concourse: buildConcourse(), platform: buildPlatform(), train: buildTrain() };
 };

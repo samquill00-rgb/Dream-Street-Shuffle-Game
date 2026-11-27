@@ -2294,7 +2294,7 @@ def _(r):
 # way on not yet taken, up to 30 pages or back to Dean Street. On every page: no errors (the watchers), any 3D view
 # is not blank, and the page fits a 1440x900 laptop screen without scrolling.
 WORLD_GAMES = {"The Climb": "hc-win", "Nazca Race": "nz-race-win", "The Reclamation": "rc-win", "Pyramid Run": "pyr-run-win"}   # each game's hidden way on for a win, taken by the world walks
-WORLD_ENDS = {"Night Ahead Part Two": 1, "The Fetch": 1, "Black page": 1, "White page": 1, "Dawn": 1}   # 2026-11-15: the two last pages of the game have no way on by design; a walk that goes on past the Fetch ends there
+WORLD_ENDS = {"Night Ahead Part Two": 1, "The Fetch": 1, "Walk to Waterloo": 1, "Black page": 1, "White page": 1, "Dawn": 1}   # 2026-11-27: Go now in the Sanctum goes to the walk to Waterloo, played by its own check (waterloo-walk-wired) #   # 2026-11-15: the two last pages of the game have no way on by design; a walk that goes on past the Fetch ends there
 WORLDS = ["himalayas", "nazca", "easter", "pyramid", "ezekiel"]
 # 2026-11-18: pages that go on by themselves, with nothing to press (the Dawn Approach is a view held for 16 s, then the last page comes). The walker
 # gave every page 8 s to show a way on, which with its other waits came to about 16 s: a full run on 16 Nov lost that race once on Dawn Approach Black
@@ -6911,27 +6911,16 @@ def n25_room_through_the_wheel(r):
     r.page.unroute("**/*")
 
 
-@check("waterloo-walk-wired", "2026-11-27 (Sam: \"a different ending ... for when you reach all 5 dreamworlds ... you walk from soho to waterloo and get on a train out of town\"; \"Now wire it into the game\"): with all five worlds walked the Dawn's last page offers The way out beside Another night, and with four it does not; the button opens the walk in its frame at the alley, the game's own music stops under it, and when the train has gone the game turns to Waterloo Out, remembering the cans. Planted by serving the page with the walk's host id changed (--plant=ww-host|||ww-nohost).")
+@check("waterloo-walk-wired", "2026-11-27 (Sam: \"a different ending ... for when you reach all 5 dreamworlds ... you walk from soho to waterloo and get on a train out of town\"; it \"just replaces centre point\"; \"the walk follows the chamber you reach after the Wheel of Ezekiel bit\"; \"you still reach the petal storm after you get the train\"): \"Go now should lead straight to the alley\": Go now in the Sanctum opens the walk, with no Fetch and no climb to Centre Point; Centre Point itself is as it was for every other night; the walk opens in its frame at the alley, the game's own music stops under it, and when the train has gone the night goes on to the Alba; the Dawn carries no door of its own. Planted twice: the passage's host div renamed (--plant=id=&quot;ww-host&quot;|||id=&quot;ww-gone&quot;), so no frame opens; and Go now sent back to the Fetch (--plant=[[Go now|Walk to Waterloo]]|||[[Go now|The Fetch]]).")
 def waterloo_walk_wired(r):
     if SWAPS: scratch_passage(r, "T-nothing", "")
-    def dawn(worlds):
-        r.go("Dawn", wait=1500)
-        r.js("(w) => localStorage.setItem(window.DSS_WORLDS_KEY, JSON.stringify(w))", worlds)
-        r.go("Dawn", wait=3000)
-        for _ in range(5):
-            b = r.page.locator(".dawn-page.dawn-pg-on .dawn-on")
-            if b.count():
-                b.first.click(); r.page.wait_for_timeout(2500)
-        # Another night waits hidden until the petal storm has risen and lifts it to the foot of the screen
-        r.wait_for("() => { var b = document.querySelector('.dawn-play-again.dawn-petal-restart .dawn-restart-btn:not(.ww-out-btn)'); return !!(b && b.getClientRects().length && getComputedStyle(b).visibility !== 'hidden'); }", 60000, "Another night after the petal storm")
-        return r.js("() => { var b = document.querySelector('.dawn-play-again.dawn-petal-restart .ww-out-btn'); return !!(b && b.getClientRects().length && getComputedStyle(b).visibility !== 'hidden'); }")
-    r.expect(not dawn(["himalayas", "nazca", "easter", "pyramid"]), "The way out stands on the Dawn with only four worlds walked")
-    r.expect(dawn(["himalayas", "nazca", "easter", "pyramid", "ezekiel"]), "no The way out button on the Dawn's last page with all five worlds walked")
-    r.expect(r.js("() => { var a = document.querySelector('.ww-out-btn'), b = document.querySelector('#dawn-play-again .dawn-restart-btn:not(.ww-out-btn)'); return !!(a && b && b.getClientRects().length); }"), "Another night is gone from beside The way out")
-    r.expect(not r.js("() => document.documentElement.scrollHeight > window.innerHeight + 2"), "the Dawn's last page scrolls with The way out on it")
-    r.page.click(".ww-out-btn")
-    r.wait_for("() => !!document.getElementById('ww-frame')", 15000, "the walk's frame")
+    r.go("Approach Centre Point", wait=5000)
+    r.expect(r.pn() == "Approach Centre Point" and not r.js("() => !!document.getElementById('ww-frame')"), "Centre Point no longer stands for other nights (page %r)" % r.pn())
+    r.go("The Sanctum", wait=4000); r.clear_lore(); r.clear_slips()
+    r.page.locator("tw-link:has-text('Go now')").first.click()
+    r.wait_for("() => !!document.getElementById('ww-frame')", 15000, "the walk's frame after Go now in the Sanctum")
     r.expect(r.pn() == "Walk to Waterloo", "the page under the walk is %r" % r.pn())
+    r.expect(not r.js("() => !!document.getElementById('cp-container')"), "Centre Point's scene was built on the way to the walk")
     t0 = time.time(); fr = None
     while time.time() - t0 < 60:
         fr = next((f for f in r.page.frames if "waterloo-walk.html" in f.url), None)
@@ -6945,18 +6934,16 @@ def waterloo_walk_wired(r):
     r.expect(st["id"] == "alley" and not st["done"], "the walk did not open in the alley (%s)" % st["id"])
     r.expect(fr.evaluate("() => getComputedStyle(document.getElementById('fault')).display") == "none", "the walk shows a fault: %s" % fr.evaluate("() => document.getElementById('fault').textContent"))
     r.page.wait_for_timeout(4000)
-    r.expect(not r.js("() => !!(window.dssAudio && window.dssAudio.bedPlaying && window.dssAudio.bedPlaying('piano-eoin'))"), "the Dawn's piano still plays under the walk")
+    r.expect(not r.js("() => !!(window.dssAudio && window.dssAudio.bedPlaying && window.dssAudio.bedPlaying('piano-eoin'))"), "the endgame piano plays under the walk")
     r.expect(not r.js("() => !!(window.dssAudio && window.dssAudio.bedPlaying && window.dssAudio.bedPlaying('soho-street'))"), "the Soho street bed plays under the walk")
     # walk a little for real, then jump to the train with the cans bought and let it leave
     fr.evaluate("() => window.__walk.auto(true)"); r.page.wait_for_timeout(2500)
     r.expect(fr.evaluate("() => window.__walk.state().s") > 2, "holding Walk did not move you down the alley")
     fr.evaluate("() => { window.__walk.auto(false); window.__walk.choices.cans = true; window.__walk.enter(8); }")
-    r.wait_for("() => ((document.getElementById('dss-pn') || {}).textContent || '').trim() === 'Waterloo Out'", 60000, "Waterloo Out after the train has gone")
+    r.wait_for("() => /^Alba (Complete|Incomplete)$/.test(((document.getElementById('dss-pn') || {}).textContent || '').trim())", 70000, "the Alba after the train has gone")
     r.page.wait_for_timeout(1500)
     r.expect(not r.js("() => !!document.getElementById('ww-frame')"), "the walk's frame is still over the page after the train")
-    r.expect(r.js("() => { var b = document.querySelector('tw-story > tw-passage:not(.dss-ghost) .dawn-restart-btn'); return !!(b && b.getClientRects().length); }"), "no Another night on Waterloo Out")
-    r.expect(not r.js("() => document.documentElement.scrollHeight > window.innerHeight + 2"), "Waterloo Out scrolls")
-
+    r.expect(r.js("() => !document.querySelector('.ww-out-btn, .ww-door')") and r.js("() => !/ww-out-btn|ww-door/.test(document.querySelector('tw-storydata').innerHTML)"), "the Dawn still carries a door to the walk")
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

@@ -71,6 +71,43 @@ window.WW_buildWaterloo = function (kit) {
   /* a pool of light lying on the ground; a streak of it on something wet; the dark at the foot of a wall */
   function pool(x, z, w, d, col, op, parent) { var q = plane(w, d, basic({ map: smear, color: col, transparent: true, opacity: op * 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.025, z, 0, -Math.PI / 2, parent); q.renderOrder = 1; return q; }
   function streak(x, z, w, len, col, op, parent) { var q = plane(w, len, basic({ map: shine, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.02, z, 0, -Math.PI / 2, parent); q.renderOrder = 1; return q; }
+
+  /* 2026-11-27, the second pass: things that move in the night, shared by the stages. No rain anywhere (Sam's rule) */
+  var FX = [], EXTRA = [];
+  /* dust turning in a lamp's shaft */
+  function motes(x, y, z, r, h, n, col) {
+    var a = []; for (var i = 0; i < n; i++) { var ang = rnd() * 6.3, rr = Math.sqrt(rnd()) * r; a.push(Math.cos(ang) * rr, rnd() * h, Math.sin(ang) * rr); }
+    var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(a, 3));
+    var p = new THREE.Points(g, new THREE.PointsMaterial({ color: col, size: 1.7, sizeAttenuation: false, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); p.position.set(x, y, z); scene.add(p);
+    FX.push(function (dt, t) { p.rotation.y = t * 0.07; p.position.y = y + Math.sin(t * 0.31 + x) * 0.14; });
+  }
+  /* steam off a grating in the pavement */
+  function steam(x, z, k) {
+    box(0.7, 0.02, 0.45, new THREE.MeshBasicMaterial({ color: 0x070707 }), x, 0.012, z); var list = [];
+    for (var i = 0; i < 8; i++) { var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: kit.glowTex, color: 0xc8c2b8, transparent: true, opacity: 0, depthWrite: false })); scene.add(sp); list.push(sp); }
+    FX.push(function (dt, t) { list.forEach(function (sp, i) { var p = ((t * 0.13) + i / 8) % 1; sp.position.set(x + Math.sin(p * 5 + i) * 0.3 * p, 0.15 + p * 3.4, z + Math.cos(p * 4 + i * 2) * 0.25 * p); var sc = 0.6 + p * 2.6; sp.scale.set(sc, sc, 1); sp.material.opacity = (k || 0.2) * Math.sin(p * Math.PI); }); });
+  }
+  /* standing water: a dark patch with the nearest lamp lying in it */
+  function puddle(x, z, w, d, col) { var q = plane(w, d, new THREE.MeshBasicMaterial({ map: smear, color: 0x000000, transparent: true, opacity: 0.85, depthWrite: false }), x, 0.013, z, 0, -Math.PI / 2); q.renderOrder = 1; pool(x, z, w * 0.7, d * 0.7, col || 0xffc070, 0.9); }
+  /* a lamp that cannot hold its light: steady for a few seconds, then a stutter */
+  function tiredLamp(L) {
+    if (!L) return; L._i = L.i; var tg = glow(L.x, L.y, L.z, 2.2, L.c, 0.5);
+    FX.push(function (dt, t) { var cyc = (t * 0.8 + L.x * 0.37) % 6.7, off = (cyc > 4.9 && cyc < 4.97) || (cyc > 5.1 && cyc < 5.3) || (cyc > 5.6 && cyc < 6.1); L.i = off ? L._i * 0.06 : L._i; tg.visible = !off; });
+  }
+  /* a vehicle's headlamps as real light on the road and on whoever it passes */
+  function headlight(group, front) { var l = new THREE.PointLight(0xfff0d0, 1.5, 13, 2); l.position.set(0, 1.0, front); group.add(l); }
+  /* the town out of focus */
+  function bokeh(n, x0, x1, y0, y1, z0, z1) { var hues = [0xffa040, 0xffc070, 0xff5030, 0x40c0ff, 0xb060ff, 0xfff0d0, 0x40ffb0]; for (var i = 0; i < n; i++) glow(x0 + rnd() * (x1 - x0), y0 + rnd() * (y1 - y0), z0 + rnd() * (z1 - z0), 4 + rnd() * 9, hues[Math.floor(rnd() * hues.length)], 0.08 + rnd() * 0.1); }
+  /* a neon sign: a shape in tube, never a word. It lights what is near it */
+  function neon(x, y, z, ry, col, kind) {
+    var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; scene.add(g);
+    var m = new THREE.MeshBasicMaterial({ color: col }); m.toneMapped = false;
+    function bar(w, h, px, py, rz) { var b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.035), m); b.position.set(px, py, 0); b.rotation.z = rz || 0; g.add(b); }
+    if (kind === 'ring') { var r = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 6, 28), m); g.add(r); bar(0.34, 0.035, 0, 0, 0.6); }
+    else if (kind === 'arrow') { bar(0.8, 0.04, 0, 0); bar(0.3, 0.04, 0.3, 0.09, -0.7); bar(0.3, 0.04, 0.3, -0.09, 0.7); }
+    else { bar(0.04, 0.5, -0.15, 0.2, 0.6); bar(0.04, 0.5, 0.15, 0.2, -0.6); bar(0.5, 0.04, 0, 0.41); bar(0.04, 0.34, 0, -0.16); bar(0.3, 0.04, 0, -0.33); } /* a cocktail glass */
+    var ox = Math.sin(ry) * 0.45, oz = Math.cos(ry) * 0.45; glow(x + ox * 0.3, y, z + oz * 0.3, 2.6, col, 0.5); EXTRA.push({ x: x + ox, y: y, z: z + oz, c: col, i: 1.1, d: 6.5 });
+  }
   function foot(x, z, len, ry, h) { return plane(len, h || 1.5, basic({ map: footT, transparent: true, depthWrite: false }), x, (h || 1.5) / 2, z, ry); }
 
   /* ---------- shared textures ---------- */
@@ -113,7 +150,7 @@ window.WW_buildWaterloo = function (kit) {
 
   /* ================= the tunnel under the railway (IMG_2591) ================= */
   function buildTunnel() {
-    LITK = 0.4; scene = new THREE.Scene(); scene.background = new THREE.Color(0x09090b); scene.fog = new THREE.FogExp2(0x121214, 0.007);
+    LITK = 0.4; scene = new THREE.Scene(); FX = []; EXTRA = []; scene.background = new THREE.Color(0x09090b); scene.fog = new THREE.FogExp2(0x121214, 0.007);
     var HW = 4.7, Z0 = 4, Z1 = -48, LEN = Z0 - Z1, zc = (Z0 + Z1) / 2, H = 5.3;
     plane(HW * 2 + 12, LEN + 40, basic({ map: rep(slabs, 9, 34), color: 0xb9b4ac }), 0, 0, zc, 0, -Math.PI / 2);
     for (var z = Z0 - 4; z > Z1; z -= 9) { var s = plane(5, 8, basic({ map: shine, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), 1.6, 0.02, z, 0, -Math.PI / 2); s.renderOrder = 1; }
@@ -179,20 +216,29 @@ window.WW_buildWaterloo = function (kit) {
     /* beyond the far mouth: the street's lamps and lights, not a flat dark */
     for (var fm = 0; fm < 12; fm++) glow(-9 + rnd() * 18, 1 + rnd() * 7, Z1 - 6 - rnd() * 9, 1.5 + rnd() * 3, [0xffae3a, 0xffae3a, 0xff2a1a, 0xfff0d2, 0x9a4cff][fm % 5], 0.7);
     var P = pathOf([[0.9, Z0 - 1], [0.9, Z1 + 2]]), people = crowd(18, [-1.4, 3.6, Z1, Z0], { along: true, towards: 0.3, dim: 0.72 });
+    /* ---------- 2026-11-27, second pass ---------- */
+    [Z0 - 6, Z0 - 15, Z0 - 24].forEach(function (lz) { motes(HW - 1.3, 0.6, lz, 1.3, 2.9, 70, 0xfff0d0); });
+    steam(-0.9, -31, 0.22); steam(2.6, -9, 0.14);
+    neon(-HW + 0.07, 2.95, -19.5, Math.PI / 2, 0xff3a9a, 'glass'); neon(-HW + 0.07, 2.95, -17.2, Math.PI / 2, 0x40d8ff, 'ring'); neon(HW - 0.07, 2.4, -40, -Math.PI / 2, 0xffb030, 'arrow');
+    puddle(1.8, -12, 2.6, 1.6, 0xfff0d0); puddle(-0.2, -27, 3.2, 1.8, 0xff3a9a); puddle(2.9, -36, 2.2, 1.4, 0xfff0d0); puddle(0.4, -43, 3, 1.6, 0x9a4cff);
+    bokeh(18, -14, 14, 0.5, 9, Z1 - 30, Z1 - 12);
+    /* a strip of old posters peeling, a locked roller shutter with a tag sprayed across it, cable trays overhead */
+    for (var sh = 0; sh < 3; sh++) { box(0.06, 2.4, 2.6, basic({ color: 0x4a4e52, roughness: 0.5 }), HW - 0.04, 1.25, -28 - sh * 2.8); for (var sl2 = 0; sl2 < 12; sl2++) box(0.02, 0.02, 2.6, basic({ color: 0x2a2c30 }), HW - 0.08, 0.2 + sl2 * 0.2, -28 - sh * 2.8); }
+    [[-1.9, 4.9], [1.9, 4.95]].forEach(function (q) { box(0.3, 0.04, LEN, basic({ color: 0x3a3b3c }), q[0], q[1], zc); for (var tz3 = Z0 - 1; tz3 > Z1; tz3 -= 2.2) box(0.02, 0.4, 0.02, basic({ color: 0x3a3b3c }), q[0], q[1] + 0.2, tz3); });
     /* the tunnel's lamps */ var LAMPS = [], lq; for (lq = Z0 - 6; lq > Z1; lq -= 9) LAMPS.push({ x: HW - 0.6, y: 3.5, z: lq, c: 0xfff0d0, i: 1.9, d: 15 });
     LAMPS.push({ x: HW - 0.6, y: 4.3, z: Z0 - 9, c: 0xffffff, i: 1.2, d: 14 }, { x: -2.7, y: 2.4, z: -16, c: 0xffc878, i: 1.2, d: 9 }, { x: -2.7, y: 2.4, z: -23, c: 0xffc878, i: 1.2, d: 9 }, { x: -2.6, y: 2.6, z: Z1 - 10, c: 0x9a4cff, i: 1.4, d: 14 });
     var AMB = [0x4a4a52, 0x2a2826, 0.42, 0.16];
-    untone(scene);
-    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 62, near: 0.1, far: 200, bloom: [0.4, 0.5, 0.82], nearDist: 10, yawMax: 2.3, portal: { w: 6.4, h: 4.6 },
+    EXTRA.forEach(function (e) { LAMPS.push(e); }); var myFX = FX; tiredLamp(LAMPS[Math.min(LAMPS.length - 1, 2)]); untone(scene);
+    return { lamps: LAMPS, amb: AMB, grade: 'saturate(1.0) sepia(.08) contrast(1.08) brightness(.96)', scene: scene, length: P.len, fov: 62, near: 0.1, far: 200, bloom: [0.4, 0.5, 0.82], nearDist: 10, yawMax: 2.3, portal: { w: 6.4, h: 4.6 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function (s) { return { x: 0.4, y: 2.3, z: Z1 + 1.4 }; },
       lat: function () { return [-2.5, 3.2]; }, /* the fence to the glazed wall */
-      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); } };
+      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); myFX.forEach(function (f) { f(dt, t); }); } };
   }
 
   /* ================= York Road, to the Victory Arch (IMG_2592) ================= */
   function buildArch() {
-    LITK = 0.5; scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d0b09); scene.fog = new THREE.FogExp2(0x1a140e, 0.0042);
+    LITK = 0.5; scene = new THREE.Scene(); FX = []; EXTRA = []; scene.background = new THREE.Color(0x0d0b09); scene.fog = new THREE.FogExp2(0x1a140e, 0.0042);
     var ARCH_X = 2.5, FACE_Z = -66; /* the arch stands at the end of your own pavement: no crossing through the traffic */
     plane(260, 200, basic({ color: 0x0c0c0d }), 0, -0.02, -30, 0, -Math.PI / 2); /* the road */
     plane(15, 90, basic({ map: rep(slabs, 6, 34), color: 0xd0a868 }), 3.5, 0, -22, 0, -Math.PI / 2); /* pavement under sodium lamps */
@@ -258,23 +304,33 @@ window.WW_buildWaterloo = function (kit) {
     var tsd = trainSide(); box(70, 2.7, 2.8, [basic({ color: 0x9a9c9e }), basic({ color: 0x9a9c9e }), basic({ color: 0x2a2c2e }), basic({ color: 0x111111 }), basic({ map: rep(tsd, 3.5, 1), color: 0xa0a0a0 }), basic({ map: rep(tsd, 3.5, 1), color: 0xa0a0a0 })], -70, 11.1, -84);
     var P = pathOf([[2.5, 12], [2.5, -34], [ARCH_X, FACE_Z + 8], [ARCH_X, FACE_Z + 0.6]]), people = crowd(40, [-3, 8.5, -56, 14], { along: true, towards: 0.75, dim: 0.68, tint: 0xffd2a0 });
     function rise(z) { return Math.max(0, Math.min(1.02, (FACE_Z + 5.4 - z) / 3 * 1.02)); }
+    /* ---------- 2026-11-27, second pass ---------- */
+    headlight(cars[0].g, -2.6); headlight(cars[2].g, -2.6);
+    steam(5.2, -17, 0.2); steam(-1.0, -43, 0.16);
+    neon(11.92, 3.0, -8, -Math.PI / 2, 0x40c8ff, 'ring'); neon(11.92, 3.0, -21, -Math.PI / 2, 0xff5a3a, 'arrow'); neon(11.92, 3.0, 2, -Math.PI / 2, 0xff3a9a, 'glass');
+    motes(-2.6, 1, -14, 2.2, 7.6, 80, 0xffae3a); motes(9.6, 1, -24, 2.2, 7.6, 80, 0xffae3a);
+    puddle(1.0, -6, 3.4, 2, 0xffae3a); puddle(6, -20, 3, 1.8, 0x40c8ff); puddle(-1.5, -36, 3.6, 2, 0xffae3a); puddle(4, -47, 4, 2.2, 0xffe6b0); puddle(-9, -12, 5, 2.4, 0xffae3a);
+    bokeh(40, -140, -20, 4, 60, -160, -70); bokeh(20, 30, 120, 10, 70, -160, -80);
+    /* the ground floor of the glass block: lit lobbies behind glass, a revolving door, planters */
+    [-30, -18, -6, 6].forEach(function (z, i) { plane(9, 3.6, new THREE.MeshBasicMaterial({ color: [0x4a5a6a, 0x6a5a3a, 0x3a5a5a, 0x5a4a5a][i] }), 11.97, 2.0, z, -Math.PI / 2); box(0.08, 3.8, 0.12, basic({ color: 0x101214 }), 11.9, 1.9, z - 4.6); glow(11.2, 2.4, z, 5, [0x9ac0ff, 0xffd090, 0x90ffe0, 0xe0a0ff][i], 0.16); });
+    [[10.9, -12], [10.9, -24], [10.9, 0]].forEach(function (q) { box(1.2, 0.6, 0.6, basic({ color: 0x2a2c30 }), q[0], 0.3, q[1]); for (var b = 0; b < 5; b++) { var lf = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5), basic({ color: 0x1c2a18 })); lf.position.set(q[0] - 0.4 + b * 0.2, 0.75 + rnd() * 0.2, q[1] + (rnd() - 0.5) * 0.3); scene.add(lf); } });
     /* the arch's lamps */ var LAMPS = []; [[-3.4, 4], [-3.4, -14], [-3.4, -32], [10.5, -4], [10.5, -24], [-3.4, -50], [-22, -44], [-22, -20]].forEach(function (p) { LAMPS.push({ x: p[0], y: 9.2, z: p[1], c: 0xffae3a, i: 2.4, d: 30 }); });
     LAMPS.push({ x: ARCH_X, y: 6, z: FACE_Z + 3, c: 0xffe2a0, i: 1.7, d: 34 }, { x: ARCH_X - 5.8, y: 4.9, z: FACE_Z + 1.8, c: 0xffe2a8, i: 1.3, d: 11 }, { x: ARCH_X + 5.8, y: 4.9, z: FACE_Z + 1.8, c: 0xffe2a8, i: 1.3, d: 11 }, { x: 6.5, y: 1.7, z: -27.4, c: 0xcfe0f4, i: 0.9, d: 6 }, { x: ARCH_X, y: 14, z: FACE_Z + 9, c: 0xffe6c0, i: 1.6, d: 40 });
     var AMB = [0x2c2e3c, 0x1c160e, 0.4, 0.13];
-    untone(scene);
-    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 62, near: 0.15, far: 900, bloom: [0.4, 0.5, 0.88], nearDist: 12, yawMax: 2.3, portal: { w: 9.5, h: 10 },
+    EXTRA.forEach(function (e) { LAMPS.push(e); }); var myFX = FX; tiredLamp(LAMPS[Math.min(LAMPS.length - 1, 2)]); untone(scene);
+    return { lamps: LAMPS, amb: AMB, grade: 'saturate(1.02) sepia(.14) contrast(1.08) brightness(.96)', scene: scene, length: P.len, fov: 62, near: 0.15, far: 900, bloom: [0.4, 0.5, 0.88], nearDist: 12, yawMax: 2.3, portal: { w: 9.5, h: 10 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66 + rise(p[1]), z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: ARCH_X, y: 5.6, z: FACE_Z + 0.15 }; },
       lat: function (s) { return s > P.len - 14 ? [-3.5, 3.5] : [-5.2, 6.6]; }, /* kerb to the glass block; then the steps */
       update: function (dt, t, s, cam) {
-        people(dt, t, cam || P.at(s));
+        people(dt, t, cam || P.at(s)); myFX.forEach(function (f) { f(dt, t); });
         cars.forEach(function (c) { c.z += c.dir * c.v * dt; if (c.z > 40) c.z = -70; if (c.z < -70) c.z = 40; c.g.position.set(c.x, 0, c.z); });
       } };
   }
 
   /* ================= the Waterloo concourse (IMG_2593) ================= */
   function buildConcourse() {
-    LITK = 0.4; scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0d10); scene.fog = new THREE.FogExp2(0x16171b, 0.003);
+    LITK = 0.4; scene = new THREE.Scene(); FX = []; EXTRA = []; scene.background = new THREE.Color(0x0c0d10); scene.fog = new THREE.FogExp2(0x16171b, 0.003);
     var HW = 56, Z0 = 2, Z1 = -36, H = 17, zc = (Z0 + Z1) / 2, depth = Z0 - Z1, GATE_X = 16;
     plane(HW * 2, depth + 80, basic({ map: rep(tile, 56, 60), color: 0xa8a49c }), 0, 0, zc - 40, 0, -Math.PI / 2);
     /* the roof: ridge and furrow glass on deep lattice girders, white floods beneath */
@@ -321,21 +377,32 @@ window.WW_buildWaterloo = function (kit) {
     pool(0, Z1 + 6, 100, 12, 0xffb030, 0.4); foot(0, Z0 - 0.1, HW * 2, Math.PI, 1.8);
     for (var rp = -HW + 6; rp < HW - 6; rp += 5) { if (Math.abs(rp - GATE_X) < 5) continue; cyl(0.04, 0.05, 0.95, basic({ color: 0x8a8f96 }), rp, 0.48, Z1 + 3.2); }
     var P = pathOf([[-30, 0.5], [-30, -8], [GATE_X - 6, -26], [GATE_X, Z1 + 0.8]]), people = crowd(78, [-HW + 2, HW - 2, Z1 + 2, Z0 - 4], { still: 0.2, dim: 0.9 });
+    /* ---------- 2026-11-27, second pass ---------- */
+    /* a flower stall by one of the pods: buckets of colour under a warm lamp; two yellow wet-floor signs; a cleaner's cart */
+    var blooms = [0xff3a6a, 0xffc020, 0xff7a20, 0xb040ff, 0xffffff, 0xff5a9a, 0x40a0ff];
+    for (var fb = 0; fb < 9; fb++) { var fx2 = -15.6 + (fb % 3) * 0.7, fz2 = -18.2 + Math.floor(fb / 3) * 0.6, fy = 0.35 + Math.floor(fb / 3) * 0.22; cyl(0.2, 0.16, 0.5, basic({ color: 0x15171b }), fx2, fy - 0.1, fz2); for (var bl = 0; bl < 7; bl++) { var fl = new THREE.Mesh(new THREE.SphereGeometry(0.075, 6, 5), new THREE.MeshStandardMaterial({ color: blooms[(fb + bl) % blooms.length], roughness: 0.8, emissive: new THREE.Color(blooms[(fb + bl) % blooms.length]), emissiveIntensity: 0.3 })); fl.position.set(fx2 + (rnd() - 0.5) * 0.3, fy + 0.25 + rnd() * 0.18, fz2 + (rnd() - 0.5) * 0.3); scene.add(fl); } }
+    EXTRA.push({ x: -15, y: 2.2, z: -17.6, c: 0xffd890, i: 1.3, d: 7 }); glow(-15, 2.3, -17.6, 3, 0xffd890, 0.4);
+    [[2, -15], [-34, -27]].forEach(function (q) { [-0.12, 0.12].forEach(function (d) { var wf = box(0.34, 0.62, 0.02, new THREE.MeshStandardMaterial({ color: 0xf0c81e, roughness: 0.6, emissive: new THREE.Color(0xf0c81e), emissiveIntensity: 0.2 }), q[0], 0.3, q[1] + d); wf.rotation.x = d > 0 ? -0.36 : 0.36; }); });
+    box(0.6, 0.9, 1.0, basic({ color: 0x2a4a8a }), 36, 0.5, -12); cyl(0.02, 0.02, 1.5, basic({ color: 0x8a8f96 }), 36.2, 1.3, -12.3); box(0.5, 0.3, 0.3, new THREE.MeshStandardMaterial({ color: 0xf0c81e, roughness: 0.6 }), 36, 1.1, -11.8);
+    neon(-12, 3.3, -20.2, 0, 0xff3a9a, 'glass'); neon(28, 3.3, -24.2, 0, 0x40d8ff, 'ring'); neon(-40, 3.3, -12.2, 0, 0xffb030, 'arrow');
+    /* the hoardings' colour drawn out long across the polished floor; dust high in the floods' light */
+    [-38, -14, 10, 34].forEach(function (hx, i) { streak(hx, Z0 - 12, 12, 22, [0xff7ab0, 0x7ab0ff, 0xffc070, 0x8affc0][i], 0.2); });
+    motes(-10, 6, -16, 9, 9, 160, 0xf2f6ff); motes(20, 6, -18, 9, 9, 160, 0xf2f6ff);
     /* the concourse's lamps */ var LAMPS = [], lx2, lz2; for (lx2 = -HW + 4; lx2 < HW; lx2 += 8) for (lz2 = Z0 - 6; lz2 > Z1 + 2; lz2 -= 10) LAMPS.push({ x: lx2 + 4, y: H - 1.6, z: lz2, c: 0xf2f6ff, i: 1.1, d: 32 });
     [[-12, -22], [28, -26], [-40, -14]].forEach(function (q) { LAMPS.push({ x: q[0], y: 2, z: q[1] + 2.4, c: 0xffd890, i: 1.1, d: 8 }, { x: q[0], y: 2, z: q[1] - 2.4, c: 0xffd890, i: 1.1, d: 8 }); });
     for (lx2 = -44; lx2 <= 44; lx2 += 11) LAMPS.push({ x: lx2, y: 4.6, z: Z1 + 4, c: 0xffb030, i: 0.9, d: 14 });
     var AMB = [0x8c8e98, 0x4c4a44, 0.34, 0.13];
-    untone(scene);
-    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 66, near: 0.15, far: 500, bloom: [0.32, 0.5, 0.86], nearDist: 9, yawMax: 2.3, portal: { w: 5.4, h: 4.4 },
+    EXTRA.forEach(function (e) { LAMPS.push(e); }); var myFX = FX; tiredLamp(LAMPS[Math.min(LAMPS.length - 1, 2)]); untone(scene);
+    return { lamps: LAMPS, amb: AMB, grade: 'saturate(.98) sepia(.05) contrast(1.08) brightness(.96)', scene: scene, length: P.len, fov: 66, near: 0.15, far: 500, bloom: [0.32, 0.5, 0.86], nearDist: 9, yawMax: 2.3, portal: { w: 5.4, h: 4.4 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: GATE_X, y: 2.2, z: Z1 + 0.2 }; },
       lat: function (s) { return s < 6 ? [-2, 2] : s > P.len - 6 ? [-1.6, 1.6] : [-7, 7]; },
-      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); } };
+      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); myFX.forEach(function (f) { f(dt, t); }); } };
   }
 
   /* ================= platform 3 (IMG_2594) ================= */
   function buildPlatform() {
-    LITK = 0.45; scene = new THREE.Scene(); scene.background = new THREE.Color(0x090a0c); scene.fog = new THREE.FogExp2(0x101114, 0.006);
+    LITK = 0.45; scene = new THREE.Scene(); FX = []; EXTRA = []; scene.background = new THREE.Color(0x090a0c); scene.fog = new THREE.FogExp2(0x101114, 0.006);
     var DOOR_Z = -31, PW = 3.6;
     var conc = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#77756f'; g.fillRect(0, 0, w, h); for (var i = 0; i < 1400; i++) { g.fillStyle = 'rgba(' + (rnd() < 0.5 ? '30,30,30' : '190,188,180') + ',' + rnd() * 0.1 + ')'; g.fillRect(rnd() * w, rnd() * h, 2, 2); } g.fillStyle = 'rgba(40,40,40,.35)'; g.fillRect(0, 0, w, 2); }), true);
     plane(PW * 2, 120, basic({ map: rep(conc, 4, 60) }), 0, 0, -50, 0, -Math.PI / 2);
@@ -378,20 +445,32 @@ window.WW_buildWaterloo = function (kit) {
     for (var cz4 = -4; cz4 > -100; cz4 -= 12) { var brk = box(0.08, 0.08, 1.6, basic({ color: 0xa8a69c }), PW - 1.5, 6.1, cz4); brk.rotation.y = Math.PI / 2; brk.rotation.z = 0.6; }
     for (var sg = 0; sg < 5; sg++) glow(-12 + sg * 6 + rnd() * 2, 2.5 + rnd() * 2, -108, 2, sg % 2 ? 0xff2a1a : 0xffb030, 0.8);
     var P = pathOf([[0.8, 4], [0.8, DOOR_Z + 3.2], [-1.6, DOOR_Z], [-PW - 0.1, DOOR_Z]]), people = crowd(9, [-1.6, 2.4, -90, 2], { along: true, towards: 0.7, dim: 0.85 });
+    /* ---------- 2026-11-27, second pass ---------- */
+    [-4, -16, -28].forEach(function (cz5) { motes(0.6, 0.8, cz5 + 5, 1.6, 4.4, 70, 0xf4f6ff); });
+    steam(-PW + 0.3, DOOR_Z - 9, 0.16); steam(-PW + 0.3, DOOR_Z + 12, 0.12);
+    puddle(1.2, -12, 2.4, 1.4, 0xf4f6ff); puddle(-1.6, -22, 2, 1.2, 0xfff0c8); puddle(0.4, -44, 3, 1.6, 0xf4f6ff); puddle(-2.2, -6, 1.8, 1.1, 0xf0dfa6);
+    bokeh(26, -40, 40, 1, 16, -150, -112);
+    /* hazard chevrons at the open door; a red fire point; a lit timetable case; a bin with a yellow lid; the far signals */
+    var haz = tex(cv(64, 16, function (g, w, h) { g.fillStyle = '#e0b01c'; g.fillRect(0, 0, w, h); g.fillStyle = '#141414'; for (var i = -16; i < w; i += 16) { g.beginPath(); g.moveTo(i, h); g.lineTo(i + 8, h); g.lineTo(i + 16, 0); g.lineTo(i + 8, 0); g.fill(); } }), true);
+    plane(1.5, 0.14, basic({ map: rep(haz, 3, 1) }), -PW + 0.1, 0.008, DOOR_Z, 0, -Math.PI / 2).rotation.z = Math.PI / 2;
+    box(0.3, 0.5, 0.2, new THREE.MeshStandardMaterial({ color: 0xc81e1e, roughness: 0.5, emissive: new THREE.Color(0xc81e1e), emissiveIntensity: 0.2 }), PW - 1.5, 1.4, -34.2);
+    box(1.4, 1.0, 0.12, basic({ color: 0x15171b }), PW - 1.5, 1.6, -45.9); plane(1.25, 0.85, new THREE.MeshBasicMaterial({ color: 0xcfe0f4 }), PW - 1.57, 1.6, -45.9, -Math.PI / 2); EXTRA.push({ x: PW - 2.1, y: 1.6, z: -45.9, c: 0xcfe0f4, i: 0.9, d: 5 });
+    box(0.5, 0.9, 0.5, basic({ color: 0x2a2c30 }), PW - 1.5, 0.45, -11); box(0.54, 0.08, 0.54, new THREE.MeshStandardMaterial({ color: 0xe0b01c, roughness: 0.6 }), PW - 1.5, 0.94, -11);
+    [[-9, 0xff2a1a], [-5.5, 0xffb030], [6, 0x30ff60], [9.5, 0xff2a1a]].forEach(function (q) { box(0.12, 4.2, 0.12, basic({ color: 0x101214 }), q[0], 2.1, -104); box(0.4, 1.0, 0.3, basic({ color: 0x0a0a0c }), q[0], 4.4, -104); glow(q[0], 4.5, -103.7, 1.6, q[1], 1); });
     /* the platform's lamps */ var LAMPS = [], lq2; for (lq2 = -4; lq2 > -100; lq2 -= 12) LAMPS.push({ x: 0.6, y: 5.4, z: lq2 + 5, c: 0xf4f6ff, i: 2.0, d: 17 });
     LAMPS.push({ x: -PW - 0.9, y: 1.6, z: DOOR_Z, c: 0xfff0c8, i: 1.4, d: 7 }); for (lq2 = -8; lq2 > -100; lq2 -= 10) LAMPS.push({ x: -PW - 0.3, y: 2.2, z: lq2, c: 0xf0dfa6, i: 0.7, d: 6 });
     var AMB = [0x3c3e48, 0x2a2a2e, 0.42, 0.15];
-    untone(scene);
-    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 64, near: 0.1, far: 300, bloom: [0.36, 0.5, 0.84], nearDist: 5, yawMax: 2.3, portal: { w: 1.9, h: 2.5 },
+    EXTRA.forEach(function (e) { LAMPS.push(e); }); var myFX = FX; tiredLamp(LAMPS[Math.min(LAMPS.length - 1, 2)]); untone(scene);
+    return { lamps: LAMPS, amb: AMB, grade: 'saturate(1.0) sepia(.05) contrast(1.1) brightness(.95)', scene: scene, length: P.len, fov: 64, near: 0.1, far: 300, bloom: [0.36, 0.5, 0.84], nearDist: 5, yawMax: 2.3, portal: { w: 1.9, h: 2.5 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: -PW - 0.25, y: 1.3, z: DOOR_Z }; },
       lat: function (s) { return s > P.len - 6.5 ? [-0.4, 0.4] : [-3.5, 0.9]; }, /* yellow line to the columns; then the doorway */
-      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); } };
+      update: function (dt, t, s, cam) { people(dt, t, cam || P.at(s)); myFX.forEach(function (f) { f(dt, t); }); } };
   }
 
   /* ================= the train out (IMG_2595, IMG_2596): you sit; it leaves ================= */
   function buildTrain() {
-    LITK = 0.5; scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.0035);
+    LITK = 0.5; scene = new THREE.Scene(); FX = []; EXTRA = []; scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.0035);
     var HW = 1.36, SEAT_X = 0.94, EYE = 1.24, PITCH = 0.84, SCREEN_Z = -8.9, NEXT_Z = -11.6;
     /* ---------- the carriage: it stays still; the world outside moves. Rebuilt 2026-11-27 from IMG_2595 and IMG_2596 ---------- */
     function inst(geo, mat, list, cast) { /* many of one part */
@@ -571,7 +650,7 @@ window.WW_buildWaterloo = function (kit) {
     /* the train's lamps */ var LAMPS = [], lq3; for (lq3 = 8; lq3 > -30; lq3 -= 2.1) LAMPS.push({ x: (Math.round(lq3 / 2.1) % 2 ? 0.44 : -0.44), y: 2.08, z: lq3, c: 0xe2f2e6, i: 0.74, d: 5.4 }); /* a cold, slightly green tube light */
     tired = LAMPS.reduce(function (a, b) { return Math.hypot(b.x - 0.44, b.z + 3.0) < Math.hypot(a.x - 0.44, a.z + 3.0) ? b : a; });
     var AMB = [0x6c7880, 0x2c3038, 0.22, 0.08];
-    untone(scene);
+    EXTRA.forEach(function (e) { LAMPS.push(e); }); var myFX = FX; untone(scene);
     return { lamps: LAMPS, amb: AMB, grade: 'saturate(1.08) sepia(.06) contrast(1.1) brightness(.95)' /* 2026-11-27 (Sam: "Put some colour back"): colder light, but the colours hold */, scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
       pose: function () { return { x: SEAT_X - 0.06, y: EYE, z: -0.04, yaw: -0.5 }; },
       reset: function () { gone = 0; v = 0; },
@@ -601,7 +680,7 @@ window.WW_buildWaterloo = function (kit) {
      Out of St Martin's Lane you come down the station side of the Strand, buses and cabs on your right, and turn in through the
      forecourt gates past the Eleanor Cross to the doors under the canopy. */
   function buildStrand() {
-    LITK = 0.5; scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0b0a); scene.fog = new THREE.FogExp2(0x17130f, 0.0045);
+    LITK = 0.5; scene = new THREE.Scene(); FX = []; EXTRA = []; scene.background = new THREE.Color(0x0c0b0a); scene.fog = new THREE.FogExp2(0x17130f, 0.0045);
     var GATE_Z = -30, FRONT_X = -30, DOOR_Z = -44;
     plane(240, 260, basic({ color: 0x0b0b0c }), 0, -0.02, -40, 0, -Math.PI / 2); /* the roadway */
     plane(6.4, 150, basic({ map: rep(slabs, 3, 60), color: 0xcdb48a }), -0.2, 0, -45, 0, -Math.PI / 2); /* your pavement */
@@ -708,19 +787,32 @@ window.WW_buildWaterloo = function (kit) {
     });
     var P = pathOf([[0, 4], [0, GATE_Z + 1], [-9, GATE_Z - 5], [-22, DOOR_Z + 0.5], [FRONT_X + 1.2, DOOR_Z]]);
     var onStreet = crowd(30, [-2.6, 2.4, -110, 14], { along: true, towards: 0.5, dim: 0.7, tint: 0xffdcae }), inYard = crowd(10, [-26, -6, -60, -34], { dim: 0.7, tint: 0xffdcae, still: 0.3 });
+    /* ---------- 2026-11-27, second pass ---------- */
+    headlight(traffic[0].g, -6.2); headlight(traffic[1].g, -2.6); headlight(traffic[5].g, -2.6);
+    steam(1.6, -21, 0.2); steam(-9, -52, 0.16); steam(0.8, -62, 0.14);
+    neon(-3.32, 2.7, 9, Math.PI / 2, 0xff3a9a, 'glass'); neon(-3.32, 2.7, -5.5, Math.PI / 2, 0x40c8ff, 'ring'); neon(-3.32, 2.7, -14, Math.PI / 2, 0xffb030, 'arrow');
+    neon(20.9, 2.9, -30, -Math.PI / 2, 0x60ff90, 'ring'); neon(20.9, 2.9, -58, -Math.PI / 2, 0xff3a9a, 'glass'); neon(20.9, 2.9, -8, -Math.PI / 2, 0xff5a3a, 'arrow');
+    motes(3.4, 1, 8, 2.4, 6.8, 80, 0xffc070); motes(3.4, 1, -26, 2.4, 6.8, 80, 0xffc070);
+    puddle(0.6, -4, 3, 1.8, 0xffc070); puddle(-1.2, -16, 2.6, 1.6, 0xff3a9a); puddle(1.6, -27, 3.2, 1.8, 0xffc070); puddle(-12, -34, 5, 2.6, 0xffe2a8); puddle(-20, -47, 5, 2.4, 0xfff0d0); puddle(7.5, -18, 5, 2.4, 0xffd9a0);
+    bokeh(40, -30, 50, 2, 40, -220, -120);
+    /* shop doorways set back and lit, a cash machine's blue screen, a rank of hire bikes, sandwich boards, a taxi sign's amber */
+    for (var dz2 = 13; dz2 > -20; dz2 -= 4.4) { box(0.5, 2.3, 1.0, new THREE.MeshBasicMaterial({ color: 0x6a5230 }), -3.6, 1.15, dz2 + 1.2); box(0.08, 2.5, 0.08, basic({ color: 0x101214 }), -3.34, 1.25, dz2 + 0.66); box(0.08, 2.5, 0.08, basic({ color: 0x101214 }), -3.34, 1.25, dz2 + 1.74); }
+    box(0.1, 0.6, 0.7, basic({ color: 0x2a2c30 }), -3.3, 1.3, -17.6); plane(0.42, 0.32, new THREE.MeshBasicMaterial({ color: 0x4aa0ff }), -3.24, 1.4, -17.6, Math.PI / 2); EXTRA.push({ x: -2.8, y: 1.4, z: -17.6, c: 0x4aa0ff, i: 0.8, d: 4 });
+    for (var bk2 = 0; bk2 < 6; bk2++) { var bzz2 = -84 - bk2 * 0.85; box(0.08, 0.55, 0.3, basic({ color: 0x2a2c30 }), 2.1, 0.28, bzz2); var w3 = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.03, 5, 14), basic({ color: 0x0c0c0e })); w3.position.set(1.5, 0.34, bzz2); scene.add(w3); var w4 = w3.clone(); w4.position.x = 0.55; scene.add(w4); box(1.0, 0.05, 0.05, new THREE.MeshStandardMaterial({ color: 0xb01418, roughness: 0.5, emissive: new THREE.Color(0xb01418), emissiveIntensity: 0.15 }), 1.05, 0.68, bzz2); }
+    [[-2.2, 4.5], [-2.2, -9]].forEach(function (q) { [-0.14, 0.14].forEach(function (d) { var sb = box(0.5, 0.85, 0.03, basic({ color: 0x1a1a1c }), q[0], 0.42, q[1] + d); sb.rotation.x = d > 0 ? -0.3 : 0.3; }); });
     /* the strand's lamps */ var LAMPS = [], lq4; for (lq4 = 8; lq4 > -110; lq4 -= 17) LAMPS.push({ x: 3.9, y: 8.2, z: lq4, c: 0xffc070, i: 2.3, d: 28 });
     [-22, GATE_Z + 4.5, GATE_Z - 4.5, -52, -74].forEach(function (z) { LAMPS.push({ x: -3.0, y: 4.1, z: z, c: 0xffd9a0, i: 1.1, d: 10 }); });
     for (lq4 = DOOR_Z + 9; lq4 >= DOOR_Z - 9; lq4 -= 6) LAMPS.push({ x: FRONT_X + 3.2, y: 4.9, z: lq4, c: 0xfff2d6, i: 1.4, d: 15 });
     for (lq4 = 14; lq4 > -20; lq4 -= 6) LAMPS.push({ x: -2.0, y: 2.3, z: lq4, c: 0xffe2b0, i: 1.0, d: 8 });
     LAMPS.push({ x: -10, y: 1.2, z: -37, c: 0xffe2a8, i: 1.8, d: 18 }, { x: -18, y: 1.2, z: -43, c: 0xffe2a8, i: 1.8, d: 18 }, { x: 1.1, y: 1.4, z: -13.6, c: 0xdfe8ff, i: 1.0, d: 6 }, { x: FRONT_X + 6, y: 16, z: -48, c: 0xffd9a0, i: 1.6, d: 44 });
     var AMB = [0x2c2e3c, 0x1c160e, 0.4, 0.13];
-    untone(scene);
-    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 62, near: 0.15, far: 600, bloom: [0.42, 0.5, 0.86], nearDist: 10, yawMax: 2.3, portal: { w: 5.2, h: 4.6 },
+    EXTRA.forEach(function (e) { LAMPS.push(e); }); var myFX = FX; tiredLamp(LAMPS[Math.min(LAMPS.length - 1, 2)]); untone(scene);
+    return { lamps: LAMPS, amb: AMB, grade: 'saturate(1.02) sepia(.14) contrast(1.08) brightness(.96)', scene: scene, length: P.len, fov: 62, near: 0.15, far: 600, bloom: [0.42, 0.5, 0.86], nearDist: 10, yawMax: 2.3, portal: { w: 5.2, h: 4.6 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: FRONT_X + 0.5, y: 2.3, z: DOOR_Z }; },
       lat: function (s) { return s < 30 ? [-2.4, 2.3] : s > P.len - 6 ? [-1.6, 1.6] : [-2.6, 2.6]; }, /* railings to kerb; through the gate; the doors */
       update: function (dt, t, s, cam) {
-        var c = cam || P.at(s); onStreet(dt, t, c); inYard(dt, t, c);
+        var c = cam || P.at(s); onStreet(dt, t, c); inYard(dt, t, c); myFX.forEach(function (f) { f(dt, t); });
         traffic.forEach(function (v) { v.z += v.dir * v.v * dt; if (v.z > 40) v.z = -130; if (v.z < -130) v.z = 40; v.g.position.set(v.x, 0, v.z); });
       } };
   }

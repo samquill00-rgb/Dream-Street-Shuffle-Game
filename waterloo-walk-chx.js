@@ -247,12 +247,31 @@ window.WW_buildChx = function (kit) {
   var FRIDGE_S = 4 + 8.6;
 
   scene.traverse(function (o) { [].concat(o.material || []).forEach(function (m) { if (!m.isMeshStandardMaterial) m.toneMapped = false; }); });
+  /* ---------- 2026-11-27, second pass ---------- */
+  var FXc = [], dark2 = basic({ color: 0x15171b });
+  /* the chiller made a real one: uprights between its doors, handles, a kick plate, price strips along the shelves */
+  [-1.7, -0.57, 0.57, 1.7].forEach(function (d) { box(0.06, 2.1, 0.05, dark2, SHOP_HW - 0.69, 1.25, -9.4 + d); }); [-1.1, 0, 1.1].forEach(function (d) { box(0.04, 0.5, 0.03, basic({ color: 0x9a9da0, roughness: 0.4 }), SHOP_HW - 0.66, 1.3, -9.4 + d + 0.45); });
+  box(0.04, 0.2, 3.5, basic({ color: 0x2a2d32 }), SHOP_HW - 0.7, 0.2, -9.4); [0.62, 1.1, 1.58, 2.06].forEach(function (y) { box(0.02, 0.035, 3.4, new THREE.MeshBasicMaterial({ color: 0xf2e9c8 }), SHOP_HW - 0.7, y, -9.4); });
+  /* offer cards hung over the aisle in loud colours, a stack of crates, a mop bucket, a yellow wet-floor sign */
+  [[-6.4, 0xff3a3a], [-11.2, 0xffc020]].forEach(function (q) { box(0.9, 0.5, 0.02, new THREE.MeshBasicMaterial({ color: q[1] }), -1.0, SHOP_H - 0.6, q[0]); box(0.01, 0.35, 0.01, dark2, -1.3, SHOP_H - 0.18, q[0]); box(0.01, 0.35, 0.01, dark2, -0.7, SHOP_H - 0.18, q[0]); });
+  for (var cr = 0; cr < 3; cr++) box(0.6, 0.3, 0.4, basic({ color: [0x1f5a3a, 0x2a4a8a, 0x8a2a20][cr] }), 2.8, 0.15 + cr * 0.3, -5.4);
+  [-0.12, 0.12].forEach(function (d) { var wf = box(0.34, 0.62, 0.02, new THREE.MeshStandardMaterial({ color: 0xf0c81e, roughness: 0.6, emissive: new THREE.Color(0xf0c81e), emissiveIntensity: 0.2 }), -6, 0.3, -24 + d); wf.rotation.x = d > 0 ? -0.36 : 0.36; });
+  /* in the hall: a flower stall beside the coffee stand, the great clock's lit face, dust in the floods' light */
+  var blooms = [0xff3a6a, 0xffc020, 0xff7a20, 0xb040ff, 0xffffff, 0xff5a9a, 0x40a0ff];
+  for (var fb = 0; fb < 9; fb++) { var fx2 = 10.4 + (fb % 3) * 0.7, fz2 = -30.4 + Math.floor(fb / 3) * 0.6, fy = 0.35 + Math.floor(fb / 3) * 0.22; var bkt = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.5, 8), dark2); bkt.position.set(fx2, fy - 0.1, fz2); scene.add(bkt); for (var bl = 0; bl < 7; bl++) { var fl = new THREE.Mesh(new THREE.SphereGeometry(0.075, 6, 5), new THREE.MeshStandardMaterial({ color: blooms[(fb + bl) % blooms.length], roughness: 0.8, emissive: new THREE.Color(blooms[(fb + bl) % blooms.length]), emissiveIntensity: 0.3 })); fl.position.set(fx2 + (rnd() - 0.5) * 0.3, fy + 0.25 + rnd() * 0.18, fz2 + (rnd() - 0.5) * 0.3); scene.add(fl); } }
+  function motesC(x, y, z, r, h, n) { var a = []; for (var i = 0; i < n; i++) { var ang = rnd() * 6.3, rr = Math.sqrt(rnd()) * r; a.push(Math.cos(ang) * rr, rnd() * h, Math.sin(ang) * rr); } var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(a, 3)); var p = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xf2f6ff, size: 1.7, sizeAttenuation: false, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); p.position.set(x, y, z); scene.add(p); FXc.push(function (dt, t) { p.rotation.y = t * 0.06; }); }
+  motesC(-8, 4, -32, 8, 6, 140); motesC(14, 4, -36, 8, 6, 140);
+  /* a shop tube that stutters */
+  var tiredC = box(0.17, 0.055, 1.5, new THREE.MeshBasicMaterial({ color: 0x2c2e2e }), 0.3, SHOP_H - 0.045, -6.2); tiredC.visible = false;
   var LAMPS = [], lz, lx;
   for (lz = -3.6; lz > SHOP_Z1; lz -= 2.6) LAMPS.push({ x: 0.3, y: SHOP_H - 0.25, z: lz, c: 0xf4f8ff, i: 0.75, d: 9 });
   LAMPS.push({ x: SHOP_HW - 2.2, y: 1.5, z: -9.4, c: 0xdff2ff, i: 0.6, d: 5 }, { x: 0, y: 2.4, z: SHOP_Z0 + 1.2, c: 0xeaf2ff, i: 1.0, d: 9 }, { x: 15, y: 2.0, z: -28.6, c: 0xffc878, i: 1.2, d: 9 }, { x: 0, y: 4.4, z: GATES_Z + 3.5, c: 0xffb030, i: 1.0, d: 16 });
   for (lz = HALL_Z0 - 2.5; lz > GATES_Z - 4; lz -= 5) for (lx = -HALL_HW + 5.5; lx < HALL_HW; lx += 9) LAMPS.push({ x: lx, y: HALL_H - 0.7, z: lz + 2.5, c: 0xf2f6ff, i: 1.05, d: 26 });
   for (lx = -30; lx <= 30; lx += 7.6) if (Math.abs(lx) > 5) LAMPS.push({ x: lx, y: 2.4, z: HALL_Z0 - 1.4, c: 0xfff0d0, i: 0.9, d: 8 });
+  LAMPS.push({ x: 11, y: 2.2, z: -30, c: 0xffd890, i: 1.2, d: 7 });
+  var tiredL = LAMPS[1]; tiredL._i = tiredL.i;
   return {
+    grade: 'saturate(1.0) sepia(.05) contrast(1.08) brightness(.96)',
     lamps: LAMPS, amb: [0x8a8c96, 0x4a4840, 0.36, 0.14],
     scene: scene, length: LEN, fov: 64, near: 0.1, far: 400, bloom: [0.32, 0.5, 0.86], nearDist: 9, yawMax: 2.3, portal: { w: 4.4, h: 4.6 },
     /* the words of the question are a placeholder for Sam's own */
@@ -262,7 +281,8 @@ window.WW_buildChx = function (kit) {
     portalAt: function () { return { x: -HALL_HW + 0.2, y: 2.3, z: EXIT_Z }; },
     portalYaw: Math.PI / 2,
     update: function (dt, t, s, cam) {
-      var c = cam || at(s);
+      var c = cam || at(s); FXc.forEach(function (f) { f(dt, t); });
+      var cyc = (t * 0.8) % 6.7, off = (cyc > 4.9 && cyc < 4.97) || (cyc > 5.1 && cyc < 5.3) || (cyc > 5.6 && cyc < 6.1); tiredC.visible = off; tiredL.i = off ? 0.05 : tiredL._i;
       people.forEach(function (q) {
         q.x += Math.cos(q.a) * q.v * dt; q.z += Math.sin(q.a) * q.v * dt;
         if (q.x < -HALL_HW + 1.5 || q.x > HALL_HW - 1.5) { q.a = Math.PI - q.a; q.x = Math.max(-HALL_HW + 1.5, Math.min(HALL_HW - 1.5, q.x)); }

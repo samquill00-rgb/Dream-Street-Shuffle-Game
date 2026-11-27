@@ -5,7 +5,29 @@ window.WW_buildWaterloo = function (kit) {
   'use strict';
   var cv = kit.cv, tex = kit.tex, rnd = kit.rnd, scene = null;
 
-  function basic(o) { return new THREE.MeshBasicMaterial(o); }
+
+  /* 2026-11-27, the relight. A surface takes the stage's lamps; a thing that gives light (a lamp, a screen, a lit sign) or lies over
+     the picture (a glow, a pool, glass) is drawn as it is. A painted picture with lit windows in it (a house front, a train's side,
+     a departure board) is both: it takes the light and keeps some of its own, LITK of it. o.lit forces that; o.flat forces unlit. */
+  var LITK = 0.45;
+  function pictureIsLit(t) {
+    var c = t.image; if (!c || !c.getContext) return false; if (c._litv != null) return c._litv;
+    var s = document.createElement('canvas'); s.width = s.height = 24; var g = s.getContext('2d'); g.drawImage(c, 0, 0, 24, 24);
+    var d = g.getImageData(0, 0, 24, 24).data, dark = 0, bright = 0;
+    for (var i = 0; i < d.length; i += 4) { var m = Math.max(d[i], d[i + 1], d[i + 2]); if (d[i + 3] < 200) continue; if (m < 44) dark++; else if (m > 188) bright++; }
+    return (c._litv = dark > 100 && bright > 12);
+  }
+  function basic(o) {
+    var lit = o.lit, flat = o.flat; if (lit != null || flat != null) { o = Object.assign({}, o); delete o.lit; delete o.flat; }
+    if (flat || o.transparent || o.blending || o.alphaTest) return new THREE.MeshBasicMaterial(o);
+    var p = { roughness: 0.86, metalness: 0.0 }; for (var k in o) p[k] = o[k];
+    if (o.map) { if (lit || (lit == null && pictureIsLit(o.map))) { p.emissiveMap = o.map; p.emissive = new THREE.Color(o.color == null ? 0xffffff : o.color); p.emissiveIntensity = LITK; } return new THREE.MeshStandardMaterial(p); }
+    var c = new THREE.Color(o.color == null ? 0xffffff : o.color), mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b);
+    if (lit || (lit == null && (mx > 0.9 || (mx > 0.72 && (mx - mn) / mx > 0.6)))) return new THREE.MeshBasicMaterial(o);
+    if (mx < 0.12) { p.roughness = 0.55; p.metalness = 0.35; } /* iron, black paint */
+    return new THREE.MeshStandardMaterial(p);
+  }
+
   function box(w, h, d, mat, x, y, z, parent) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); (parent || scene).add(m); return m; }
   function plane(w, h, mat, x, y, z, ry, rx, parent) { var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, z); if (ry) m.rotation.y = ry; if (rx) m.rotation.x = rx; (parent || scene).add(m); return m; }
   function glow(x, y, z, size, color, op, parent) {
@@ -13,7 +35,7 @@ window.WW_buildWaterloo = function (kit) {
     s.position.set(x, y, z); s.scale.set(size, size, 1); (parent || scene).add(s); return s;
   }
   function rep(t, rx, ry) { var c = t.clone(); c.needsUpdate = true; c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(rx, ry); return c; }
-  function untone(sc) { sc.traverse(function (o) { [].concat(o.material || []).forEach(function (m) { m.toneMapped = false; }); }); }
+  function untone(sc) { sc.traverse(function (o) { [].concat(o.material || []).forEach(function (m) { if (!m.isMeshStandardMaterial) m.toneMapped = false; }); }); }
   function pathOf(PTS) {
     var cum = [0]; for (var i = 1; i < PTS.length; i++) cum.push(cum[i - 1] + Math.hypot(PTS[i][0] - PTS[i - 1][0], PTS[i][1] - PTS[i - 1][1]));
     var LEN = cum[cum.length - 1], n = PTS.length;
@@ -46,7 +68,7 @@ window.WW_buildWaterloo = function (kit) {
   var smear = tex(cv(64, 64, function (g, w, h) { var gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
   var footT = tex(cv(8, 64, function (g, w, h) { var gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.62)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
   /* a pool of light lying on the ground; a streak of it on something wet; the dark at the foot of a wall */
-  function pool(x, z, w, d, col, op, parent) { var q = plane(w, d, basic({ map: smear, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.025, z, 0, -Math.PI / 2, parent); q.renderOrder = 1; return q; }
+  function pool(x, z, w, d, col, op, parent) { var q = plane(w, d, basic({ map: smear, color: col, transparent: true, opacity: op * 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.025, z, 0, -Math.PI / 2, parent); q.renderOrder = 1; return q; }
   function streak(x, z, w, len, col, op, parent) { var q = plane(w, len, basic({ map: shine, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.02, z, 0, -Math.PI / 2, parent); q.renderOrder = 1; return q; }
   function foot(x, z, len, ry, h) { return plane(len, h || 1.5, basic({ map: footT, transparent: true, depthWrite: false }), x, (h || 1.5) / 2, z, ry); }
 
@@ -90,7 +112,7 @@ window.WW_buildWaterloo = function (kit) {
 
   /* ================= the tunnel under the railway (IMG_2591) ================= */
   function buildTunnel() {
-    scene = new THREE.Scene(); scene.background = new THREE.Color(0x09090b); scene.fog = new THREE.FogExp2(0x121214, 0.007);
+    LITK = 0.4; scene = new THREE.Scene(); scene.background = new THREE.Color(0x09090b); scene.fog = new THREE.FogExp2(0x121214, 0.007);
     var HW = 4.7, Z0 = 4, Z1 = -48, LEN = Z0 - Z1, zc = (Z0 + Z1) / 2, H = 5.3;
     plane(HW * 2 + 12, LEN + 40, basic({ map: rep(slabs, 9, 34), color: 0xb9b4ac }), 0, 0, zc, 0, -Math.PI / 2);
     for (var z = Z0 - 4; z > Z1; z -= 9) { var s = plane(5, 8, basic({ map: shine, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), 1.6, 0.02, z, 0, -Math.PI / 2); s.renderOrder = 1; }
@@ -156,8 +178,11 @@ window.WW_buildWaterloo = function (kit) {
     /* beyond the far mouth: the street's lamps and lights, not a flat dark */
     for (var fm = 0; fm < 12; fm++) glow(-9 + rnd() * 18, 1 + rnd() * 7, Z1 - 6 - rnd() * 9, 1.5 + rnd() * 3, [0xffae3a, 0xffae3a, 0xff2a1a, 0xfff0d2, 0x9a4cff][fm % 5], 0.7);
     var P = pathOf([[0.9, Z0 - 1], [0.9, Z1 + 2]]), people = crowd(18, [-1.4, 3.6, Z1, Z0], { along: true, towards: 0.3, dim: 0.72 });
+    /* the tunnel's lamps */ var LAMPS = [], lq; for (lq = Z0 - 6; lq > Z1; lq -= 9) LAMPS.push({ x: HW - 0.6, y: 3.5, z: lq, c: 0xfff0d0, i: 1.9, d: 15 });
+    LAMPS.push({ x: HW - 0.6, y: 4.3, z: Z0 - 9, c: 0xffffff, i: 1.2, d: 14 }, { x: -2.7, y: 2.4, z: -16, c: 0xffc878, i: 1.2, d: 9 }, { x: -2.7, y: 2.4, z: -23, c: 0xffc878, i: 1.2, d: 9 }, { x: -2.6, y: 2.6, z: Z1 - 10, c: 0x9a4cff, i: 1.4, d: 14 });
+    var AMB = [0x4a4a52, 0x2a2826, 0.42, 0.16];
     untone(scene);
-    return { scene: scene, length: P.len, fov: 62, near: 0.1, far: 200, bloom: [0.4, 0.5, 0.82], nearDist: 10, yawMax: 2.3, portal: { w: 6.4, h: 4.6 },
+    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 62, near: 0.1, far: 200, bloom: [0.4, 0.5, 0.82], nearDist: 10, yawMax: 2.3, portal: { w: 6.4, h: 4.6 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function (s) { return { x: 0.4, y: 2.3, z: Z1 + 1.4 }; },
       lat: function () { return [-2.5, 3.2]; }, /* the fence to the glazed wall */
@@ -166,7 +191,7 @@ window.WW_buildWaterloo = function (kit) {
 
   /* ================= York Road, to the Victory Arch (IMG_2592) ================= */
   function buildArch() {
-    scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d0b09); scene.fog = new THREE.FogExp2(0x1a140e, 0.0042);
+    LITK = 0.5; scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d0b09); scene.fog = new THREE.FogExp2(0x1a140e, 0.0042);
     var ARCH_X = 2.5, FACE_Z = -66; /* the arch stands at the end of your own pavement: no crossing through the traffic */
     plane(260, 200, basic({ color: 0x0c0c0d }), 0, -0.02, -30, 0, -Math.PI / 2); /* the road */
     plane(15, 90, basic({ map: rep(slabs, 6, 34), color: 0xd0a868 }), 3.5, 0, -22, 0, -Math.PI / 2); /* pavement under sodium lamps */
@@ -232,8 +257,11 @@ window.WW_buildWaterloo = function (kit) {
     var tsd = trainSide(); box(70, 2.7, 2.8, [basic({ color: 0x9a9c9e }), basic({ color: 0x9a9c9e }), basic({ color: 0x2a2c2e }), basic({ color: 0x111111 }), basic({ map: rep(tsd, 3.5, 1), color: 0xa0a0a0 }), basic({ map: rep(tsd, 3.5, 1), color: 0xa0a0a0 })], -70, 11.1, -84);
     var P = pathOf([[2.5, 12], [2.5, -34], [ARCH_X, FACE_Z + 8], [ARCH_X, FACE_Z + 0.6]]), people = crowd(40, [-3, 8.5, -56, 14], { along: true, towards: 0.75, dim: 0.68, tint: 0xffd2a0 });
     function rise(z) { return Math.max(0, Math.min(1.02, (FACE_Z + 5.4 - z) / 3 * 1.02)); }
+    /* the arch's lamps */ var LAMPS = []; [[-3.4, 4], [-3.4, -14], [-3.4, -32], [10.5, -4], [10.5, -24], [-3.4, -50], [-22, -44], [-22, -20]].forEach(function (p) { LAMPS.push({ x: p[0], y: 9.2, z: p[1], c: 0xffae3a, i: 2.4, d: 30 }); });
+    LAMPS.push({ x: ARCH_X, y: 6, z: FACE_Z + 3, c: 0xffe2a0, i: 1.7, d: 34 }, { x: ARCH_X - 5.8, y: 4.9, z: FACE_Z + 1.8, c: 0xffe2a8, i: 1.3, d: 11 }, { x: ARCH_X + 5.8, y: 4.9, z: FACE_Z + 1.8, c: 0xffe2a8, i: 1.3, d: 11 }, { x: 6.5, y: 1.7, z: -27.4, c: 0xcfe0f4, i: 0.9, d: 6 }, { x: ARCH_X, y: 14, z: FACE_Z + 9, c: 0xffe6c0, i: 1.6, d: 40 });
+    var AMB = [0x2c2e3c, 0x1c160e, 0.4, 0.13];
     untone(scene);
-    return { scene: scene, length: P.len, fov: 62, near: 0.15, far: 900, bloom: [0.4, 0.5, 0.88], nearDist: 12, yawMax: 2.3, portal: { w: 9.5, h: 10 },
+    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 62, near: 0.15, far: 900, bloom: [0.4, 0.5, 0.88], nearDist: 12, yawMax: 2.3, portal: { w: 9.5, h: 10 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66 + rise(p[1]), z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: ARCH_X, y: 5.6, z: FACE_Z + 0.15 }; },
       lat: function (s) { return s > P.len - 14 ? [-3.5, 3.5] : [-5.2, 6.6]; }, /* kerb to the glass block; then the steps */
@@ -245,7 +273,7 @@ window.WW_buildWaterloo = function (kit) {
 
   /* ================= the Waterloo concourse (IMG_2593) ================= */
   function buildConcourse() {
-    scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0d10); scene.fog = new THREE.FogExp2(0x16171b, 0.003);
+    LITK = 0.4; scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0d10); scene.fog = new THREE.FogExp2(0x16171b, 0.003);
     var HW = 56, Z0 = 2, Z1 = -36, H = 17, zc = (Z0 + Z1) / 2, depth = Z0 - Z1, GATE_X = 16;
     plane(HW * 2, depth + 80, basic({ map: rep(tile, 56, 60), color: 0xa8a49c }), 0, 0, zc - 40, 0, -Math.PI / 2);
     /* the roof: ridge and furrow glass on deep lattice girders, white floods beneath */
@@ -284,7 +312,7 @@ window.WW_buildWaterloo = function (kit) {
     /* ---------- 2026-11-27, detail ---------- */
     /* great lit hoardings over the balcony, their colour on the floor; shop pods in the hall; bins; signs hung from the roof */
     function hoarding(seed) { return tex(cv(256, 128, function (g, w, h) { var hue = Math.floor(rnd() * 360), gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, 'hsl(' + hue + ',55%,42%)'); gr.addColorStop(1, 'hsl(' + ((hue + 50) % 360) + ',60%,22%)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); for (var i = 0; i < 5; i++) { g.fillStyle = 'hsla(' + ((hue + 180 + i * 20) % 360) + ',50%,70%,.35)'; g.beginPath(); g.arc(rnd() * w, rnd() * h, 14 + rnd() * 40, 0, 7); g.fill(); } g.fillStyle = 'rgba(255,255,255,.8)'; g.fillRect(18, h - 30, 90, 8); g.fillRect(18, h - 18, 54, 5); })); }
-    [-38, -14, 10, 34].forEach(function (hx, i) { plane(18, 6, basic({ map: hoarding(i), color: 0xb8b8b8 }), hx, 12.6, Z0 - 0.08, Math.PI); box(18.4, 6.4, 0.2, basic({ color: 0x101214 }), hx, 12.6, Z0 - 0.02); pool(hx, Z0 - 9, 16, 12, [0xff7ab0, 0x7ab0ff, 0xffc070, 0x8affc0][i], 0.22); });
+    [-38, -14, 10, 34].forEach(function (hx, i) { plane(18, 6, basic({ map: hoarding(i), color: 0xb8b8b8, flat: true }), hx, 12.6, Z0 - 0.08, Math.PI); box(18.4, 6.4, 0.2, basic({ color: 0x101214 }), hx, 12.6, Z0 - 0.02); pool(hx, Z0 - 9, 16, 12, [0xff7ab0, 0x7ab0ff, 0xffc070, 0x8affc0][i], 0.22); });
     [[-12, -22], [28, -26], [-40, -14]].forEach(function (q) { box(5, 2.8, 3.4, basic({ color: 0x1c1e22 }), q[0], 1.4, q[1]); plane(4.4, 1.3, basic({ color: 0xf2dca8 }), q[0], 1.8, q[1] + 1.71, 0); plane(4.4, 1.3, basic({ color: 0xf2dca8 }), q[0], 1.8, q[1] - 1.71, Math.PI); box(5.3, 0.2, 3.7, basic({ color: 0x101214 }), q[0], 2.9, q[1]); glow(q[0], 1.9, q[1] + 2.2, 6, 0xffd890, 0.35); pool(q[0], q[1] + 3.4, 7, 4, 0xffd890, 0.4); pool(q[0], q[1] - 3.4, 7, 4, 0xffd890, 0.4); });
     [[-22, -18], [4, -14], [34, -20], [18, -8], [-44, -26]].forEach(function (q) { box(0.5, 0.95, 0.5, basic({ color: 0x15171b }), q[0], 0.48, q[1]); });
     [[-30, -14], [-4, -20], [GATE_X, -26], [40, -22]].forEach(function (q) { box(4, 0.6, 0.1, basic({ color: 0x0a2a5c }), q[0], 5.0, q[1]); for (var k = 0; k < 4; k++) plane(0.5, 0.14, basic({ color: 0xe8eef6 }), q[0] - 1.4 + k * 0.9, 5.0, q[1] + 0.06, 0); box(0.03, H - 5.3, 0.03, basic({ color: 0x8a8f96 }), q[0] - 1.8, 5.3 + (H - 5.3) / 2, q[1]); box(0.03, H - 5.3, 0.03, basic({ color: 0x8a8f96 }), q[0] + 1.8, 5.3 + (H - 5.3) / 2, q[1]); });
@@ -292,8 +320,12 @@ window.WW_buildWaterloo = function (kit) {
     pool(0, Z1 + 6, 100, 12, 0xffb030, 0.4); foot(0, Z0 - 0.1, HW * 2, Math.PI, 1.8);
     for (var rp = -HW + 6; rp < HW - 6; rp += 5) { if (Math.abs(rp - GATE_X) < 5) continue; cyl(0.04, 0.05, 0.95, basic({ color: 0x8a8f96 }), rp, 0.48, Z1 + 3.2); }
     var P = pathOf([[-30, 0.5], [-30, -8], [GATE_X - 6, -26], [GATE_X, Z1 + 0.8]]), people = crowd(78, [-HW + 2, HW - 2, Z1 + 2, Z0 - 4], { still: 0.2, dim: 0.9 });
+    /* the concourse's lamps */ var LAMPS = [], lx2, lz2; for (lx2 = -HW + 4; lx2 < HW; lx2 += 8) for (lz2 = Z0 - 6; lz2 > Z1 + 2; lz2 -= 10) LAMPS.push({ x: lx2 + 4, y: H - 1.6, z: lz2, c: 0xf2f6ff, i: 1.1, d: 32 });
+    [[-12, -22], [28, -26], [-40, -14]].forEach(function (q) { LAMPS.push({ x: q[0], y: 2, z: q[1] + 2.4, c: 0xffd890, i: 1.1, d: 8 }, { x: q[0], y: 2, z: q[1] - 2.4, c: 0xffd890, i: 1.1, d: 8 }); });
+    for (lx2 = -44; lx2 <= 44; lx2 += 11) LAMPS.push({ x: lx2, y: 4.6, z: Z1 + 4, c: 0xffb030, i: 0.9, d: 14 });
+    var AMB = [0x8c8e98, 0x4c4a44, 0.34, 0.13];
     untone(scene);
-    return { scene: scene, length: P.len, fov: 66, near: 0.15, far: 500, bloom: [0.32, 0.5, 0.86], nearDist: 9, yawMax: 2.3, portal: { w: 5.4, h: 4.4 },
+    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 66, near: 0.15, far: 500, bloom: [0.32, 0.5, 0.86], nearDist: 9, yawMax: 2.3, portal: { w: 5.4, h: 4.4 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: GATE_X, y: 2.2, z: Z1 + 0.2 }; },
       lat: function (s) { return s < 6 ? [-2, 2] : s > P.len - 6 ? [-1.6, 1.6] : [-7, 7]; },
@@ -302,7 +334,7 @@ window.WW_buildWaterloo = function (kit) {
 
   /* ================= platform 3 (IMG_2594) ================= */
   function buildPlatform() {
-    scene = new THREE.Scene(); scene.background = new THREE.Color(0x090a0c); scene.fog = new THREE.FogExp2(0x101114, 0.006);
+    LITK = 0.45; scene = new THREE.Scene(); scene.background = new THREE.Color(0x090a0c); scene.fog = new THREE.FogExp2(0x101114, 0.006);
     var DOOR_Z = -31, PW = 3.6;
     var conc = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#77756f'; g.fillRect(0, 0, w, h); for (var i = 0; i < 1400; i++) { g.fillStyle = 'rgba(' + (rnd() < 0.5 ? '30,30,30' : '190,188,180') + ',' + rnd() * 0.1 + ')'; g.fillRect(rnd() * w, rnd() * h, 2, 2); } g.fillStyle = 'rgba(40,40,40,.35)'; g.fillRect(0, 0, w, 2); }), true);
     plane(PW * 2, 120, basic({ map: rep(conc, 4, 60) }), 0, 0, -50, 0, -Math.PI / 2);
@@ -345,8 +377,11 @@ window.WW_buildWaterloo = function (kit) {
     for (var cz4 = -4; cz4 > -100; cz4 -= 12) { var brk = box(0.08, 0.08, 1.6, basic({ color: 0xa8a69c }), PW - 1.5, 6.1, cz4); brk.rotation.y = Math.PI / 2; brk.rotation.z = 0.6; }
     for (var sg = 0; sg < 5; sg++) glow(-12 + sg * 6 + rnd() * 2, 2.5 + rnd() * 2, -108, 2, sg % 2 ? 0xff2a1a : 0xffb030, 0.8);
     var P = pathOf([[0.8, 4], [0.8, DOOR_Z + 3.2], [-1.6, DOOR_Z], [-PW - 0.1, DOOR_Z]]), people = crowd(9, [-1.6, 2.4, -90, 2], { along: true, towards: 0.7, dim: 0.85 });
+    /* the platform's lamps */ var LAMPS = [], lq2; for (lq2 = -4; lq2 > -100; lq2 -= 12) LAMPS.push({ x: 0.6, y: 5.4, z: lq2 + 5, c: 0xf4f6ff, i: 2.0, d: 17 });
+    LAMPS.push({ x: -PW - 0.9, y: 1.6, z: DOOR_Z, c: 0xfff0c8, i: 1.4, d: 7 }); for (lq2 = -8; lq2 > -100; lq2 -= 10) LAMPS.push({ x: -PW - 0.3, y: 2.2, z: lq2, c: 0xf0dfa6, i: 0.7, d: 6 });
+    var AMB = [0x3c3e48, 0x2a2a2e, 0.42, 0.15];
     untone(scene);
-    return { scene: scene, length: P.len, fov: 64, near: 0.1, far: 300, bloom: [0.36, 0.5, 0.84], nearDist: 5, yawMax: 2.3, portal: { w: 1.9, h: 2.5 },
+    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 64, near: 0.1, far: 300, bloom: [0.36, 0.5, 0.84], nearDist: 5, yawMax: 2.3, portal: { w: 1.9, h: 2.5 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: -PW - 0.25, y: 1.3, z: DOOR_Z }; },
       lat: function (s) { return s > P.len - 6.5 ? [-0.4, 0.4] : [-3.5, 0.9]; }, /* yellow line to the columns; then the doorway */
@@ -355,8 +390,8 @@ window.WW_buildWaterloo = function (kit) {
 
   /* ================= the train out (IMG_2595, IMG_2596): you sit; it leaves ================= */
   function buildTrain() {
-    scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.0035);
-    var HW = 1.36, SEAT_X = 0.92, EYE = 1.2;
+    LITK = 0.5; scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.0035);
+    var HW = 1.36, SEAT_X = 0.92, EYE = 1.34; /* a little tall in the seat, to see down the carriage and out */
     /* the carriage: stays still; the world outside moves */
     plane(HW * 2, 30, basic({ color: 0x232a3a }), 0, 0, -6, 0, -Math.PI / 2); plane(HW * 2, 30, basic({ color: 0xd2d2cc }), 0, 2.2, -6, 0, Math.PI / 2);
     var wall = tex(cv(256, 256, function (g, w, h) { g.fillStyle = '#c9c9c3'; g.fillRect(0, 0, w, h); g.fillStyle = '#b2b2ac'; g.fillRect(0, 196, w, 60); g.clearRect(22, 46, 212, 118); g.strokeStyle = '#3a3c40'; g.lineWidth = 6; g.strokeRect(22, 46, 212, 118); }), true);
@@ -370,7 +405,7 @@ window.WW_buildWaterloo = function (kit) {
     for (var k = -2; k <= 16; k++) { /* backs behind each sitter; the row in front of you is k = 1 */
       var zb = 0.3 - 0.86 * k;
       [-SEAT_X, -SEAT_X + 0.5, SEAT_X - 0.5, SEAT_X].forEach(function (x) {
-        box(0.44, 0.78, 0.09, back, x, 0.86, zb); box(0.4, 0.2, 0.1, back, x, 1.3, zb); box(0.44, 0.1, 0.42, cush, x, 0.44, zb - 0.25);
+        box(0.44, 0.74, 0.09, back, x, 0.84, zb); box(0.34, 0.13, 0.1, back, x, 1.22, zb); box(0.44, 0.1, 0.42, cush, x, 0.44, zb - 0.25);
         if (k >= 2 && rnd() < 0.3) { var h = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), basic({ color: HAIR[Math.floor(rnd() * HAIR.length)] })); h.position.set(x, 1.36, zb - 0.2); scene.add(h); }
       });
     }
@@ -418,9 +453,11 @@ window.WW_buildWaterloo = function (kit) {
       box(4, 0.3, 60, basic({ color: 0x15161a }), HW + 3.6, 3.6, -420, G); box(4.5, 0.3, 60, basic({ color: 0x6c6a64 }), HW + 3.6, -1.1, -420, G); for (var pl = 0; pl < 6; pl++) glow(HW + 3.2, 3.2, -394 - pl * 10, 3, 0xf4f6ff, 0.8, G);
     }
     var gone = 0, v = 0, FIELD = 700, START = 110;
+    /* the train's lamps */ var LAMPS = [], lq3; for (lq3 = 6; lq3 > -20; lq3 -= 2.4) LAMPS.push({ x: 0, y: 2.05, z: lq3, c: 0xf2f6ff, i: 0.95, d: 5.5 });
+    var AMB = [0x7c8088, 0x3a3e48, 0.5, 0.2];
     untone(scene);
-    return { scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
-      pose: function () { return { x: SEAT_X, y: EYE, z: 0, yaw: -0.5 }; },
+    return { lamps: LAMPS, amb: AMB, scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
+      pose: function () { return { x: SEAT_X - 0.12, y: EYE, z: 0, yaw: -0.42 }; },
       reset: function () { gone = 0; v = 0; },
       update: function (dt, t, s) {
         tray.children.forEach(function (o, i) { if (i > 0) o.visible = kit.choices.cans === true; });
@@ -437,7 +474,7 @@ window.WW_buildWaterloo = function (kit) {
      Out of St Martin's Lane you come down the station side of the Strand, buses and cabs on your right, and turn in through the
      forecourt gates past the Eleanor Cross to the doors under the canopy. */
   function buildStrand() {
-    scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0b0a); scene.fog = new THREE.FogExp2(0x17130f, 0.0045);
+    LITK = 0.5; scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0b0a); scene.fog = new THREE.FogExp2(0x17130f, 0.0045);
     var GATE_Z = -30, FRONT_X = -30, DOOR_Z = -44;
     plane(240, 260, basic({ color: 0x0b0b0c }), 0, -0.02, -40, 0, -Math.PI / 2); /* the roadway */
     plane(6.4, 150, basic({ map: rep(slabs, 3, 60), color: 0xcdb48a }), -0.2, 0, -45, 0, -Math.PI / 2); /* your pavement */
@@ -544,8 +581,14 @@ window.WW_buildWaterloo = function (kit) {
     });
     var P = pathOf([[0, 4], [0, GATE_Z + 1], [-9, GATE_Z - 5], [-22, DOOR_Z + 0.5], [FRONT_X + 1.2, DOOR_Z]]);
     var onStreet = crowd(30, [-2.6, 2.4, -110, 14], { along: true, towards: 0.5, dim: 0.7, tint: 0xffdcae }), inYard = crowd(10, [-26, -6, -60, -34], { dim: 0.7, tint: 0xffdcae, still: 0.3 });
+    /* the strand's lamps */ var LAMPS = [], lq4; for (lq4 = 8; lq4 > -110; lq4 -= 17) LAMPS.push({ x: 3.9, y: 8.2, z: lq4, c: 0xffc070, i: 2.3, d: 28 });
+    [-22, GATE_Z + 4.5, GATE_Z - 4.5, -52, -74].forEach(function (z) { LAMPS.push({ x: -3.0, y: 4.1, z: z, c: 0xffd9a0, i: 1.1, d: 10 }); });
+    for (lq4 = DOOR_Z + 9; lq4 >= DOOR_Z - 9; lq4 -= 6) LAMPS.push({ x: FRONT_X + 3.2, y: 4.9, z: lq4, c: 0xfff2d6, i: 1.4, d: 15 });
+    for (lq4 = 14; lq4 > -20; lq4 -= 6) LAMPS.push({ x: -2.0, y: 2.3, z: lq4, c: 0xffe2b0, i: 1.0, d: 8 });
+    LAMPS.push({ x: -10, y: 1.2, z: -37, c: 0xffe2a8, i: 1.8, d: 18 }, { x: -18, y: 1.2, z: -43, c: 0xffe2a8, i: 1.8, d: 18 }, { x: 1.1, y: 1.4, z: -13.6, c: 0xdfe8ff, i: 1.0, d: 6 }, { x: FRONT_X + 6, y: 16, z: -48, c: 0xffd9a0, i: 1.6, d: 44 });
+    var AMB = [0x2c2e3c, 0x1c160e, 0.4, 0.13];
     untone(scene);
-    return { scene: scene, length: P.len, fov: 62, near: 0.15, far: 600, bloom: [0.42, 0.5, 0.86], nearDist: 10, yawMax: 2.3, portal: { w: 5.2, h: 4.6 },
+    return { lamps: LAMPS, amb: AMB, scene: scene, length: P.len, fov: 62, near: 0.15, far: 600, bloom: [0.42, 0.5, 0.86], nearDist: 10, yawMax: 2.3, portal: { w: 5.2, h: 4.6 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
       portalAt: function () { return { x: FRONT_X + 0.5, y: 2.3, z: DOOR_Z }; },
       lat: function (s) { return s < 30 ? [-2.4, 2.3] : s > P.len - 6 ? [-1.6, 1.6] : [-2.6, 2.6]; }, /* railings to kerb; through the gate; the doors */

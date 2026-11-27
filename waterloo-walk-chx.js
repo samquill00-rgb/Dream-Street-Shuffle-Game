@@ -8,7 +8,29 @@ window.WW_buildChx = function (kit) {
   scene.background = new THREE.Color(0x0d0c0c);
   scene.fog = new THREE.FogExp2(0x17161a, 0.0045);
 
-  function basic(o) { return new THREE.MeshBasicMaterial(o); }
+
+  /* 2026-11-27, the relight. A surface takes the stage's lamps; a thing that gives light (a lamp, a screen, a lit sign) or lies over
+     the picture (a glow, a pool, glass) is drawn as it is. A painted picture with lit windows in it (a house front, a train's side,
+     a departure board) is both: it takes the light and keeps some of its own, LITK of it. o.lit forces that; o.flat forces unlit. */
+  var LITK = 0.45;
+  function pictureIsLit(t) {
+    var c = t.image; if (!c || !c.getContext) return false; if (c._litv != null) return c._litv;
+    var s = document.createElement('canvas'); s.width = s.height = 24; var g = s.getContext('2d'); g.drawImage(c, 0, 0, 24, 24);
+    var d = g.getImageData(0, 0, 24, 24).data, dark = 0, bright = 0;
+    for (var i = 0; i < d.length; i += 4) { var m = Math.max(d[i], d[i + 1], d[i + 2]); if (d[i + 3] < 200) continue; if (m < 44) dark++; else if (m > 188) bright++; }
+    return (c._litv = dark > 100 && bright > 12);
+  }
+  function basic(o) {
+    var lit = o.lit, flat = o.flat; if (lit != null || flat != null) { o = Object.assign({}, o); delete o.lit; delete o.flat; }
+    if (flat || o.transparent || o.blending || o.alphaTest) return new THREE.MeshBasicMaterial(o);
+    var p = { roughness: 0.86, metalness: 0.0 }; for (var k in o) p[k] = o[k];
+    if (o.map) { if (lit || (lit == null && pictureIsLit(o.map))) { p.emissiveMap = o.map; p.emissive = new THREE.Color(o.color == null ? 0xffffff : o.color); p.emissiveIntensity = LITK; } return new THREE.MeshStandardMaterial(p); }
+    var c = new THREE.Color(o.color == null ? 0xffffff : o.color), mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b);
+    if (lit || (lit == null && (mx > 0.9 || (mx > 0.72 && (mx - mn) / mx > 0.6)))) return new THREE.MeshBasicMaterial(o);
+    if (mx < 0.12) { p.roughness = 0.55; p.metalness = 0.35; } /* iron, black paint */
+    return new THREE.MeshStandardMaterial(p);
+  }
+
   function box(w, h, d, mat, x, y, z, parent) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); (parent || scene).add(m); return m; }
   function plane(w, h, mat, x, y, z, ry, rx, parent) { var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, z); if (ry) m.rotation.y = ry; if (rx) m.rotation.x = rx; (parent || scene).add(m); return m; }
   function glow(x, y, z, size, color, op) {
@@ -109,7 +131,7 @@ window.WW_buildChx = function (kit) {
     box(0.32, 2.4, 4.2, basic({ color: 0x8f8d88 }), SHOP_HW - 0.15, 1.2, -4.6);
     /* the chiller, with its cans */
     box(0.7, 2.4, 3.6, basic({ color: 0x2a2d32 }), SHOP_HW - 0.35, 1.2, -9.4);
-    plane(3.4, 2.05, basic({ map: fridge, color: 0xa9adb2 }), SHOP_HW - 0.71, 1.25, -9.4, -Math.PI / 2);
+    plane(3.4, 2.05, basic({ map: fridge, color: 0x9da1a6, flat: true }), SHOP_HW - 0.71, 1.25, -9.4, -Math.PI / 2);
     box(0.5, 0.12, 3.6, basic({ color: 0xc8ccd0 }), SHOP_HW - 0.5, 2.36, -9.4);
     glow(SHOP_HW - 1.0, 1.4, -9.4, 5, 0xdff2ff, 0.15);
     /* the till by the far door */
@@ -199,7 +221,7 @@ window.WW_buildChx = function (kit) {
     for (var px = -22; px <= 26; px += 4) { box(0.07, 0.95, 0.07, steel, px, 0.48, GATES_Z + 3); if (px < 26) box(4, 0.05, 0.02, basic({ color: 0x0a2a5c }), px + 2, 0.9, GATES_Z + 3); }
     /* the board's amber on the floor beneath it, the shop fronts' light on the floor before them, a dark foot to every wall */
     var smear = tex(cv(64, 64, function (g, w, h) { var gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
-    function pool(x, z, w, d, col, op) { var q = plane(w, d, basic({ map: smear, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.025, z, 0, -Math.PI / 2); q.renderOrder = 1; }
+    function pool(x, z, w, d, col, op) { var q = plane(w, d, basic({ map: smear, color: col, transparent: true, opacity: op * 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.025, z, 0, -Math.PI / 2); q.renderOrder = 1; }
     pool(0, GATES_Z + 6, 46, 12, 0xffb030, 0.5); pool(0, HALL_Z0 - 3.5, 66, 8, 0xfff0d0, 0.35); pool(15, -27.5, 8, 5, 0xffc878, 0.45);
     var foot = tex(cv(8, 64, function (g, w, h) { var gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.6)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
     plane(sideLen, 1.6, basic({ map: foot, transparent: true, depthWrite: false }), HALL_HW - 0.05, 0.8, sz, -Math.PI / 2); plane(sideLen, 1.6, basic({ map: foot, transparent: true, depthWrite: false }), -HALL_HW + 0.05, 0.8, sz, Math.PI / 2);
@@ -224,8 +246,14 @@ window.WW_buildChx = function (kit) {
   function yawAt(s) { var a = at(s - 1.2), b = at(s + 2.6), dx = b[0] - a[0], dz = b[1] - a[1]; if (s + 2.6 > LEN) { dx = PTS[PTS.length - 1][0] - PTS[PTS.length - 2][0]; dz = PTS[PTS.length - 1][1] - PTS[PTS.length - 2][1]; } return Math.atan2(-dx, -dz); }
   var FRIDGE_S = 4 + 8.6;
 
-  scene.traverse(function (o) { [].concat(o.material || []).forEach(function (m) { m.toneMapped = false; }); });
+  scene.traverse(function (o) { [].concat(o.material || []).forEach(function (m) { if (!m.isMeshStandardMaterial) m.toneMapped = false; }); });
+  var LAMPS = [], lz, lx;
+  for (lz = -3.6; lz > SHOP_Z1; lz -= 2.6) LAMPS.push({ x: 0.3, y: SHOP_H - 0.25, z: lz, c: 0xf4f8ff, i: 0.75, d: 9 });
+  LAMPS.push({ x: SHOP_HW - 2.2, y: 1.5, z: -9.4, c: 0xdff2ff, i: 0.6, d: 5 }, { x: 0, y: 2.4, z: SHOP_Z0 + 1.2, c: 0xeaf2ff, i: 1.0, d: 9 }, { x: 15, y: 2.0, z: -28.6, c: 0xffc878, i: 1.2, d: 9 }, { x: 0, y: 4.4, z: GATES_Z + 3.5, c: 0xffb030, i: 1.0, d: 16 });
+  for (lz = HALL_Z0 - 2.5; lz > GATES_Z - 4; lz -= 5) for (lx = -HALL_HW + 5.5; lx < HALL_HW; lx += 9) LAMPS.push({ x: lx, y: HALL_H - 0.7, z: lz + 2.5, c: 0xf2f6ff, i: 1.05, d: 26 });
+  for (lx = -30; lx <= 30; lx += 7.6) if (Math.abs(lx) > 5) LAMPS.push({ x: lx, y: 2.4, z: HALL_Z0 - 1.4, c: 0xfff0d0, i: 0.9, d: 8 });
   return {
+    lamps: LAMPS, amb: [0x8a8c96, 0x4a4840, 0.36, 0.14],
     scene: scene, length: LEN, fov: 64, near: 0.1, far: 400, bloom: [0.32, 0.5, 0.86], nearDist: 9, yawMax: 2.3, portal: { w: 4.4, h: 4.6 },
     /* the words of the question are a placeholder for Sam's own */
     prompts: [{ id: 'cans', at: FRIDGE_S, look: -0.95, draft: true, text: 'Canned cocktails for the train?', options: [{ label: 'Buy them', value: true }, { label: 'Walk on', value: false }] }],

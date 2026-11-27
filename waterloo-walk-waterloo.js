@@ -484,6 +484,51 @@ window.WW_buildWaterloo = function (kit) {
       var band = new THREE.Mesh(new THREE.CylinderGeometry(0.0305, 0.0305, 0.04, 16), new THREE.MeshStandardMaterial({ color: c[2], roughness: 0.5, metalness: 0.3 })); band.position.set(c[0], 0.068, 0.01); tray.add(band);
       var top = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, 0.008, 16), new THREE.MeshStandardMaterial({ color: 0xc4c8cc, roughness: 0.3, metalness: 0.25 })); top.position.set(c[0], 0.144, 0.01); tray.add(top);
     });
+
+    /* ---------- 2026-11-27, second pass: the night train. Burial's look, without rain (Sam's rule): your own carriage hung in the dark
+       glass, grime and breath on the panes, a tube that cannot hold its light, lamps going by across the seats ---------- */
+    /* the carriage in the window: its lights, seat tops and far windows drawn again beyond the glass, faintly. Nobody is in it */
+    var ghostM = new THREE.MeshBasicMaterial({ color: 0xcfe0d8, transparent: true, opacity: 0.085, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    var ghostD = new THREE.MeshBasicMaterial({ color: 0x8a9aa0, transparent: true, opacity: 0.035, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    [1, -1].forEach(function (sd) {
+      function mx(x) { return sd * (2 * HW) - x; }
+      [-0.44, 0.44].forEach(function (x) { for (var gz = 9; gz > -26; gz -= 2.4) box(0.11, 0.02, 2.2, ghostM, mx(x), 2.19, gz); });
+      rows.forEach(function (z) { XS.forEach(function (x) { box(0.44, 0.1, 0.08, ghostD, mx(x), 1.19, z); }); });
+    });
+    /* the glass itself: dirt gathered at the edges, the smear of a sleeve, breath low down. No drops */
+    var grime = tex(cv(512, 256, function (g, w, h) {
+      g.clearRect(0, 0, w, h);
+      var e = g.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, w * 0.62); e.addColorStop(0, 'rgba(150,160,150,0)'); e.addColorStop(1, 'rgba(150,160,150,.42)'); g.fillStyle = e; g.fillRect(0, 0, w, h);
+      var b = g.createLinearGradient(0, h * 0.62, 0, h); b.addColorStop(0, 'rgba(190,200,196,0)'); b.addColorStop(1, 'rgba(190,200,196,.34)'); g.fillStyle = b; g.fillRect(0, 0, w, h);
+      for (var i = 0; i < 46; i++) { var x = rnd() * w, y = rnd() * h * 0.5, l = 40 + rnd() * 150, gr = g.createLinearGradient(0, y, 0, y + l); gr.addColorStop(0, 'rgba(170,180,172,0)'); gr.addColorStop(0.4, 'rgba(170,180,172,' + (0.05 + rnd() * 0.1) + ')'); gr.addColorStop(1, 'rgba(170,180,172,0)'); g.fillStyle = gr; g.fillRect(x, y, 2 + rnd() * 9, l); }
+      for (var s = 0; s < 5; s++) { g.save(); g.translate(60 + rnd() * (w - 120), 60 + rnd() * (h - 120)); g.rotate(rnd() * 3); var sm = g.createRadialGradient(0, 0, 0, 0, 0, 60); sm.addColorStop(0, 'rgba(200,206,200,.16)'); sm.addColorStop(1, 'rgba(200,206,200,0)'); g.fillStyle = sm; g.scale(2.2, 0.5); g.fillRect(-60, -60, 120, 120); g.restore(); }
+    }), true);
+    [-1, 1].forEach(function (sd) { var gt = grime.clone(); gt.needsUpdate = true; gt.repeat.set(LEN / BAY, 1); gt.offset.x = 0.35; plane(LEN, 0.98, new THREE.MeshBasicMaterial({ map: gt, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide, fog: false }), sd * (HW + 0.006), 1.29, ZC, sd > 0 ? -Math.PI / 2 : Math.PI / 2); });
+    /* a tube up ahead that keeps dropping out; a sodium lamp's light crossing the seats as each one goes by; a train's windows flickering past on the other side */
+    var tiredCover = box(0.115, 0.022, 2.2, new THREE.MeshBasicMaterial({ color: 0x2c2e2e }), 0.44, 2.186, -3.0); tiredCover.visible = false;
+    var sweepR = new THREE.PointLight(0xffa040, 0, 7.5, 2), sweepL = new THREE.PointLight(0xfff0c8, 0, 8, 2); scene.add(sweepR); scene.add(sweepL);
+    /* more of the carriage: a dot-matrix sign hung at the doors, its amber on the ceiling; a camera's dome; the alarm and the door buttons; cards in the coves; heater grilles; coat hooks */
+    var dots = tex(cv(512, 64, function (g, w, h) { g.fillStyle = '#050505'; g.fillRect(0, 0, w, h); for (var x = 6; x < w; x += 6) for (var y = 8; y < h - 6; y += 6) { var on = Math.sin(x * 0.11) * Math.cos(x * 0.031 + y * 0.4) > 0.2 && (x % 96) > 18; g.fillStyle = on ? '#ffb030' : '#1c1408'; g.fillRect(x, y, 3.5, 3.5); } }), true);
+    dots.repeat.set(0.5, 1);
+    box(0.74, 0.16, 0.07, basic({ color: 0x101214 }), 0, 2.02, SCREEN_Z + 0.2); plane(0.68, 0.11, new THREE.MeshBasicMaterial({ map: dots }), 0, 2.02, SCREEN_Z + 0.24, 0); glow(0, 2.02, SCREEN_Z + 0.34, 0.9, 0xffa030, 0.35);
+    var dome = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), basic({ color: 0x0c0d0f, roughness: 0.2 })); dome.position.set(-0.2, 2.2, SCREEN_Z + 0.7); scene.add(dome);
+    [-1, 1].forEach(function (sd) {
+      box(0.03, 0.16, 0.12, basic({ color: 0x9a1c18 }), sd * (HW - 0.03), 1.5, SCREEN_Z - 0.35); box(0.03, 0.09, 0.09, new THREE.MeshBasicMaterial({ color: 0x38d070 }), sd * (HW - 0.035), 1.18, (SCREEN_Z + NEXT_Z) / 2 + 0.78); glow(sd * (HW - 0.08), 1.18, (SCREEN_Z + NEXT_Z) / 2 + 0.78, 0.35, 0x38ff80, 0.55);
+      for (var cz = 6.4; cz > -30; cz -= BAY * 2) { if (cz < SCREEN_Z + 0.6 && cz > NEXT_Z - 0.6) continue; var cd = plane(0.62, 0.2, basic({ color: [0x6a7a8a, 0x8a7a5a, 0x5a6a5a, 0x7a5a5a][Math.abs(Math.round(cz)) % 4], roughness: 0.8 }), sd * (HW - 0.135), 1.99, cz, sd > 0 ? -Math.PI / 2 : Math.PI / 2); cd.rotation.order = 'YXZ'; cd.rotation.x = 0.5; plane(0.3, 0.02, basic({ color: 0xcfd2d4 }), sd * (HW - 0.15), 1.96, cz, sd > 0 ? -Math.PI / 2 : Math.PI / 2).rotation.order = 'YXZ'; }
+      for (var hz = 8; hz > -30; hz -= 0.09) { if (Math.round(hz * 10) % 17 === 0) continue; }
+      for (var gz2 = 7.5; gz2 > -30; gz2 -= BAY) box(0.02, 0.07, 1.1, basic({ color: 0x1a1c20 }), sd * (HW - 0.012), 0.2, gz2);
+      for (var hk = 7.9; hk > -30; hk -= BAY) box(0.03, 0.03, 0.02, basic({ color: 0x8f9396 }), sd * (HW - 0.02), 1.72, hk);
+    });
+    /* what is left behind in a late carriage: a folded paper on a seat, a paper cup on the floor, a can on its side */
+    var paper = tex(cv(128, 96, function (g, w, h) { g.fillStyle = '#c9c6ba'; g.fillRect(0, 0, w, h); g.fillStyle = '#2a2a2a'; g.fillRect(6, 6, 70, 12); g.fillStyle = '#7a7a76'; for (var i = 0; i < 9; i++) g.fillRect(6, 26 + i * 7, 50 + rnd() * 60, 3); g.fillStyle = '#5a5e62'; g.fillRect(84, 24, 36, 30); }));
+    var pp = plane(0.3, 0.22, basic({ map: paper }), -SEAT_X + 0.49, 0.512, 0.3 - PITCH - 0.24, 0, -Math.PI / 2); pp.rotation.z = 0.3;
+    var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.11, 12), basic({ color: 0xb8b2a4 })); cup.position.set(0.18, 0.055, -1.9); cup.castShadow = true; scene.add(cup);
+    var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.012, 12), basic({ color: 0x2a2a2c })); lid.position.set(0.18, 0.116, -1.9); scene.add(lid);
+    var fallen = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.125, 12), new THREE.MeshStandardMaterial({ color: 0x8a8e92, roughness: 0.4, metalness: 0.2 })); fallen.rotation.z = Math.PI / 2; fallen.rotation.y = 0.5; fallen.position.set(-0.1, 0.03, -4.3); fallen.castShadow = true; scene.add(fallen);
+    /* two of the people ahead have a phone's light on them; one sleeps against the glass */
+    glow(-SEAT_X + 0.49, 1.02, 0.3 - PITCH * 4 - 0.34, 0.55, 0xa8c8ff, 0.55); glow(SEAT_X - 0.49, 1.02, 0.3 - PITCH * 6 - 0.34, 0.55, 0xa8c8ff, 0.5);
+    var sl = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), basic({ color: 0x15110e })); sl.position.set(-HW + 0.2, 1.22, 0.3 - PITCH * 2 - 0.2); sl.scale.y = 1.15; sl.rotation.z = 0.5; sl.castShadow = true; scene.add(sl);
+    var slb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 6), basic({ color: 0x1b2233 })); slb.position.set(-HW + 0.33, 1.02, 0.3 - PITCH * 2 - 0.17); slb.scale.set(1.05, 0.5, 0.6); slb.rotation.z = 0.25; scene.add(slb);
     /* outside: the platform and the train across it slide away; then the lights of the town. Painted, not lit: the carriage's lamps do not reach it */
     FLAT_ALL = true;
     var world = new THREE.Group(); scene.add(world);
@@ -509,18 +554,42 @@ window.WW_buildWaterloo = function (kit) {
       for (var nb = 0; nb < 14; nb++) { var sdn = nb % 2 ? 1 : -1, t3 = winTex.clone(); t3.needsUpdate = true; t3.repeat.set(2, 1.4); box(18, 12, 1, basic({ map: t3, color: 0xd8c8a8 }), sdn * (18 + rnd() * 6), 5, -40 - nb * 48, G).rotation.y = Math.PI / 2; }
       box(4, 0.3, 60, basic({ color: 0x15161a }), HW + 3.6, 3.6, -420, G); box(4.5, 0.3, 60, basic({ color: 0x6c6a64 }), HW + 3.6, -1.1, -420, G); for (var pl = 0; pl < 6; pl++) glow(HW + 3.2, 3.2, -394 - pl * 10, 3, 0xf4f6ff, 0.8, G);
     }
-    var gone = 0, v = 0, FIELD = 700, START = 110;
+
+    /* ---------- 2026-11-27, second pass, outside: the town out of focus, rails catching the light, a train going the other way ---------- */
+    fields.forEach(function (G) {
+      var hues = [0xffa040, 0xffc070, 0xff5030, 0x40c0ff, 0xb060ff, 0xfff0d0, 0x40ffb0];
+      for (var bk = 0; bk < 70; bk++) { var sdb = rnd() < 0.5 ? -1 : 1, db = 30 + rnd() * 220; glow(sdb * db, 1 + rnd() * (6 + db * 0.16), -rnd() * 700, 5 + db * 0.07 + rnd() * 6, hues[Math.floor(rnd() * hues.length)], 0.10 + rnd() * 0.10, G); }
+      for (var tb = 0; tb < 5; tb++) { var sdt = tb % 2 ? 1 : -1, wt2 = winTex.clone(); wt2.needsUpdate = true; wt2.repeat.set(2.2, 6); var tw2 = box(20, 62 + rnd() * 30, 16, basic({ map: wt2, color: 0xffffff }), sdt * (70 + rnd() * 60), 28, -60 - tb * 130, G); glow(tw2.position.x, tw2.position.y + 34, tw2.position.z, 5, 0xff2a1a, 0.9, G); }
+      [HW + 0.75, HW + 2.2, -HW - 2.45, -HW - 3.9].forEach(function (rx) { box(0.07, 0.02, 700, basic({ color: 0xb8bcc4 }), rx, -1.5, -350, G); });
+      box(3.2, 0.1, 700, basic({ color: 0x15130f }), -HW - 3.2, -1.62, -350, G); box(3.2, 0.1, 700, basic({ color: 0x15130f }), HW + 1.5, -1.62, -350, G);
+    });
+    var passer = new THREE.Group(), pSide = trainSide(); world.parent.add(passer);
+    for (var pc = 0; pc < 8; pc++) box(2.8, 2.75, 20, [basic({ map: pSide, color: 0xffffff }), basic({ map: pSide, color: 0xffffff }), basic({ color: 0x9a9c9e }), basic({ color: 0x111111 }), basic({ color: 0xc9ccce }), basic({ color: 0xc9ccce })], -HW - 3.2, 0.35, -pc * 20.3, passer);
+    passer.visible = false;
+    var gone = 0, v = 0, FIELD = 700, START = 110, tired = null;
     FLAT_ALL = false;
-    /* the train's lamps */ var LAMPS = [], lq3; for (lq3 = 8; lq3 > -30; lq3 -= 2.1) LAMPS.push({ x: (Math.round(lq3 / 2.1) % 2 ? 0.44 : -0.44), y: 2.08, z: lq3, c: 0xf2f6ff, i: 0.62, d: 5.2 });
-    var AMB = [0x7c8088, 0x3a3e48, 0.3, 0.12];
+    /* the train's lamps */ var LAMPS = [], lq3; for (lq3 = 8; lq3 > -30; lq3 -= 2.1) LAMPS.push({ x: (Math.round(lq3 / 2.1) % 2 ? 0.44 : -0.44), y: 2.08, z: lq3, c: 0xe2f2e6, i: 0.74, d: 5.4 }); /* a cold, slightly green tube light */
+    tired = LAMPS.reduce(function (a, b) { return Math.hypot(b.x - 0.44, b.z + 3.0) < Math.hypot(a.x - 0.44, a.z + 3.0) ? b : a; });
+    var AMB = [0x6c7880, 0x2c3038, 0.22, 0.08];
     untone(scene);
-    return { lamps: LAMPS, amb: AMB, scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
+    return { lamps: LAMPS, amb: AMB, grade: 'saturate(.7) sepia(.16) contrast(1.12) brightness(.93)', scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
       pose: function () { return { x: SEAT_X - 0.06, y: EYE, z: -0.04, yaw: -0.5 }; },
       reset: function () { gone = 0; v = 0; },
       update: function (dt, t, s) {
         tray.visible = kit.choices.cans === true; /* the tray is down only when there is something to put on it */
         var target = s < 4 ? 0 : Math.min(24, (s - 4) * 1.15); v += (target - v) * Math.min(1, dt * 1.5); gone += v * dt;
         world.position.z = gone;
+        /* the tube that drops out: steady for a few seconds, then a stutter */
+        var cyc = (t * 0.9) % 7.3, off = (cyc > 5.2 && cyc < 5.28) || (cyc > 5.4 && cyc < 5.55) || (cyc > 5.9 && cyc < 6.45) || (cyc > 6.6 && cyc < 6.66);
+        tiredCover.visible = off; if (tired) tired.i = off ? 0.05 : 0.74;
+        /* a lamp every thirty metres on your side: its light enters ahead, crosses the seats and leaves behind you */
+        var k1 = (gone % 30) / 30, on1 = Math.min(1, v / 3);
+        sweepR.position.set(HW + 1.6, 2.4, -13 + k1 * 24); sweepR.intensity = 2.4 * on1 * Math.sin(Math.PI * k1);
+        /* the other train: twice on the way out it comes through on the next line, its windows strobing down the carriage */
+        var pt = (s > 13 && s < 19) ? (s - 13) / 6 : (s > 26 && s < 32) ? (s - 26) / 6 : -1;
+        passer.visible = pt >= 0; if (pt >= 0) passer.position.z = -150 + pt * 470;
+        sweepL.position.set(-HW - 1.4, 1.6, -6 + Math.sin(t * 23) * 5); sweepL.intensity = pt >= 0 ? 1.5 * (0.55 + 0.45 * Math.sin(t * 41)) * Math.sin(Math.PI * pt) : 0;
+        dots.offset.x = (t * 0.07) % 1;
         /* each field sits ahead of the platform's end and steps forward once it has gone by */
         fields.forEach(function (G, i) { var base = -START - i * FIELD, pass = Math.floor(Math.max(0, gone + base + FIELD + 60) / (FIELD * 2)); G.position.z = base - pass * FIELD * 2; });
         scene.rotation.z = Math.sin(t * 1.7) * 0.0025 * Math.min(1, v / 8); scene.position.y = Math.sin(t * 9.1) * 0.0025 * Math.min(1, v / 8);

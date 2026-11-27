@@ -21,20 +21,14 @@ window.WW_buildWaterloo = function (kit) {
     function yaw(s) { var a = at(s - 1.2), b = at(s + 2.6), dx = b[0] - a[0], dz = b[1] - a[1]; if (s + 2.6 > LEN) { dx = PTS[n - 1][0] - PTS[n - 2][0]; dz = PTS[n - 1][1] - PTS[n - 2][1]; } return Math.atan2(-dx, -dz); }
     return { len: LEN, at: at, yaw: yaw };
   }
-  /* plain figures, no faces. Each walks a heading inside a box of floor and turns at its edges */
-  var COATS = [0x1b2233, 0x23201d, 0x3a2a22, 0x4a1f24, 0x2a3a34, 0x8a6a48, 0x15161a, 0x5a5d62, 0x1f2f4a, 0x0e0e10], HAIR = [0x15110e, 0x2a1c12, 0x6a5a48, 0x0c0c0e, 0x8a8478];
+  var HAIR = [0x15110e, 0x2a1c12, 0x6a5a48, 0x0c0c0e, 0x8a8478]; /* the heads over the seat backs on the train */
+  /* passers-by (the page's shared figure). Each walks a heading inside a box of floor and turns at its edges */
   function crowd(n, b, opts) {
     opts = opts || {}; var list = [];
     for (var i = 0; i < n; i++) {
-      var g = new THREE.Group(), dim = opts.dim || 1, cc = new THREE.Color(COATS[Math.floor(rnd() * COATS.length)]).multiplyScalar(dim);
-      var body = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.19, 0.8, 8), basic({ color: cc })); body.position.y = 1.2; body.scale.x = 0.62; g.add(body);
-      var head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 8, 6), basic({ color: new THREE.Color(HAIR[Math.floor(rnd() * HAIR.length)]).multiplyScalar(dim) })); head.position.y = 1.72; g.add(head);
-      var lg = new THREE.BoxGeometry(0.13, 0.84, 0.15); lg.translate(0, -0.42, 0); var lm = basic({ color: new THREE.Color(rnd() < 0.7 ? 0x16181e : 0x3a4250).multiplyScalar(dim) });
-      var l1 = new THREE.Mesh(lg, lm), l2 = new THREE.Mesh(lg, lm); l1.position.set(0, 0.84, -0.09); l2.position.set(0, 0.84, 0.09); g.add(l1); g.add(l2);
-      g.scale.setScalar(0.94 + rnd() * 0.14);
-      var along = opts.along, a = along ? (rnd() < (opts.towards == null ? 0.5 : opts.towards) ? Math.PI / 2 : -Math.PI / 2) + (rnd() - 0.5) * 0.12 : rnd() * Math.PI * 2;
-      list.push({ g: g, l1: l1, l2: l2, x: b[0] + rnd() * (b[1] - b[0]), z: b[2] + rnd() * (b[3] - b[2]), a: a, v: rnd() < (opts.still || 0) ? 0 : 1.0 + rnd() * 0.7, ph: rnd() * 6 });
-      scene.add(g);
+      var f = kit.figure({ dim: opts.dim, tint: opts.tint, shadow: opts.shadow }); scene.add(f.g);
+      var a = opts.along ? (rnd() < (opts.towards == null ? 0.5 : opts.towards) ? Math.PI / 2 : -Math.PI / 2) + (rnd() - 0.5) * 0.12 : rnd() * Math.PI * 2;
+      list.push({ f: f, g: f.g, x: b[0] + rnd() * (b[1] - b[0]), z: b[2] + rnd() * (b[3] - b[2]), a: a, v: rnd() < (opts.still || 0) ? 0 : 1.0 + rnd() * 0.7 });
     }
     return function (dt, t, c) {
       list.forEach(function (q) {
@@ -43,22 +37,29 @@ window.WW_buildWaterloo = function (kit) {
         if (q.z < b[2]) { if (opts.along) q.z = b[3]; else { q.a = -q.a; q.z = b[2]; } }
         if (q.z > b[3]) { if (opts.along) q.z = b[2]; else { q.a = -q.a; q.z = b[3]; } }
         var dx = q.x - c[0], dz = q.z - c[1], d = Math.hypot(dx, dz); if (d < 1.2 && d > 0.001) { q.x = c[0] + dx / d * 1.2; q.z = c[1] + dz / d * 1.2; }
-        q.g.position.set(q.x, (opts.y || 0) + (q.v ? Math.abs(Math.cos(t * q.v * 4.4 + q.ph)) * 0.025 : 0), q.z); q.g.rotation.y = -q.a;
-        var sw = q.v ? Math.sin(t * q.v * 4.4 + q.ph) * 0.5 : 0; q.l1.rotation.z = sw; q.l2.rotation.z = -sw;
+        q.g.position.set(q.x, opts.y || 0, q.z); q.g.rotation.y = -q.a; q.f.step(t, q.v);
       });
     };
   }
+  /* 2026-11-27, the graphics pass: small makers for the detail */
+  function cyl(r0, r1, h, mat, x, y, z, parent, seg) { var m = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg || 8), mat); m.position.set(x, y, z); (parent || scene).add(m); return m; }
+  var smear = tex(cv(64, 64, function (g, w, h) { var gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
+  var footT = tex(cv(8, 64, function (g, w, h) { var gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.62)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
+  /* a pool of light lying on the ground; a streak of it on something wet; the dark at the foot of a wall */
+  function pool(x, z, w, d, col, op, parent) { var q = plane(w, d, basic({ map: smear, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.025, z, 0, -Math.PI / 2, parent); q.renderOrder = 1; return q; }
+  function streak(x, z, w, len, col, op, parent) { var q = plane(w, len, basic({ map: shine, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.02, z, 0, -Math.PI / 2, parent); q.renderOrder = 1; return q; }
+  function foot(x, z, len, ry, h) { return plane(len, h || 1.5, basic({ map: footT, transparent: true, depthWrite: false }), x, (h || 1.5) / 2, z, ry); }
 
   /* ---------- shared textures ---------- */
-  var slabs = tex(cv(256, 256, function (g, w, h) {
+  var slabs = tex(kit.soiled(cv(256, 256, function (g, w, h) {
     g.fillStyle = '#2c2a28'; g.fillRect(0, 0, w, h);
     for (var r = 0; r < 4; r++) for (var c = 0; c < 3; c++) { var v = 120 + Math.floor(rnd() * 26); g.fillStyle = 'rgb(' + v + ',' + (v - 3) + ',' + (v - 8) + ')'; g.fillRect(((c * 86 + (r % 2) * 43) % w) + 1, r * 64 + 1, 84, 62); }
     for (var i = 0; i < 2200; i++) { g.fillStyle = 'rgba(' + (rnd() < 0.6 ? '20,18,16' : '200,196,188') + ',' + rnd() * 0.09 + ')'; g.fillRect(rnd() * w, rnd() * h, 2, 2); }
-  }), true);
-  var tile = tex(cv(256, 256, function (g, w, h) {
+  }), 'floor', 1), true);
+  var tile = tex(kit.soiled(cv(256, 256, function (g, w, h) {
     g.fillStyle = '#a39f96'; g.fillRect(0, 0, w, h);
     for (var r = 0; r < 4; r++) for (var c = 0; c < 4; c++) { var v = 172 + Math.floor(rnd() * 18); g.fillStyle = 'rgb(' + v + ',' + (v - 3) + ',' + (v - 9) + ')'; g.fillRect(c * 64 + 1, r * 64 + 1, 62, 62); }
-  }), true);
+  }), 'floor', 0.25), true);
   var winTex = tex(cv(256, 256, function (g, w, h) {
     g.fillStyle = '#0d0e10'; g.fillRect(0, 0, w, h);
     for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) { var l = rnd(); g.fillStyle = l < 0.12 ? '#c9a460' : l < 0.2 ? '#aeb6bc' : '#15171b'; g.fillRect(c * 32 + 4, r * 32 + 6, 24, 20); }
@@ -133,7 +134,28 @@ window.WW_buildWaterloo = function (kit) {
     for (var tz = -13.5; tz > -26; tz -= 2.4) { box(0.7, 0.05, 0.7, basic({ color: 0x4a3626 }), -3.3, 0.76, tz); box(0.07, 0.75, 0.07, basic({ color: 0x1a1a1c }), -3.3, 0.38, tz); box(0.4, 0.45, 0.4, basic({ color: 0x1c1c1e }), -3.3, 0.22, tz + 0.85); }
     /* the far mouth: night, and a doorway lit purple */
     plane(40, 14, basic({ color: 0x0b0b0e }), 0, 7, Z1 - 16, 0); glow(-2.6, 2.4, Z1 - 12, 7, 0x9a4cff, 0.8); box(2.2, 3.2, 0.2, basic({ color: 0x5a2c9a }), -2.6, 1.6, Z1 - 12.5);
-    var P = pathOf([[0.9, Z0 - 1], [0.9, Z1 + 2]]), people = crowd(16, [-1.4, 3.6, Z1, Z0], { along: true, towards: 0.3, dim: 0.8 });
+    /* ---------- 2026-11-27, detail ---------- */
+    /* conduit and pipe along both walls under the girders; the lamps' housings and their light down the brick */
+    [[HW - 0.1, 4.55, 0.07], [HW - 0.1, 4.35, 0.05], [HW - 0.22, 4.7, 0.1], [-HW + 0.1, 4.6, 0.06], [-HW + 0.1, 4.42, 0.09]].forEach(function (q) { var c = cyl(q[2], q[2], LEN, basic({ color: 0x4a4944 }), q[0], q[1], zc, scene, 6); c.rotation.x = Math.PI / 2; });
+    for (var cz2 = Z0 - 3; cz2 > Z1; cz2 -= 4.5) { box(0.16, 0.26, 0.06, basic({ color: 0x3a3936 }), HW - 0.1, 4.5, cz2); box(0.16, 0.26, 0.06, basic({ color: 0x3a3936 }), -HW + 0.1, 4.5, cz2 - 2); }
+    for (var lz3 = Z0 - 6; lz3 > Z1; lz3 -= 9) { box(0.3, 0.08, 0.5, basic({ color: 0x2a2a2c }), HW - 0.16, 3.68, lz3); kit.cone(scene, HW - 0.5, 3.5, lz3, 3.5, 2.6, 0xfff0d0, 0.14); pool(HW - 1.6, lz3, 6, 7, 0xfff0d0, 0.45); }
+    foot(HW - 0.03, zc, LEN, -Math.PI / 2, 1.4); foot(-HW + 0.03, zc, LEN, Math.PI / 2, 1.4);
+    /* a drain down the middle and the wet that lies along it */
+    plane(0.3, LEN, basic({ color: 0x0c0c0d }), -0.4, 0.006, zc, 0, -Math.PI / 2); streak(-0.4, zc, 1.6, LEN, 0xd8dce8, 0.3);
+    /* the cafe: chairs, shut parasols, a string of bulbs over the pen, its lit hatch in the hoarding */
+    for (var tz2 = -13.5; tz2 > -26; tz2 -= 2.4) { [-0.7, 0.7].forEach(function (d) { box(0.36, 0.04, 0.36, basic({ color: 0x1a1a1c }), -3.3 + d * 0.1, 0.46, tz2 + d); box(0.36, 0.42, 0.04, basic({ color: 0x1a1a1c }), -3.3 + d * 0.1, 0.68, tz2 + d * 1.25); }); }
+    [-15.5, -22].forEach(function (z) { cyl(0.03, 0.03, 2.4, basic({ color: 0x1a1a1c }), -2.7, 1.2, z); var par = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.5, 8), basic({ color: 0x2a1416 })); par.position.set(-2.7, 1.9, z); scene.add(par); });
+    var bulbs = []; for (var bz2 = -12.4; bz2 > -27; bz2 -= 0.7) bulbs.push(-2.2 - Math.abs(Math.sin(bz2 * 0.9)) * 0.9, 2.5 - Math.abs(Math.sin(bz2 * 1.5)) * 0.25, bz2);
+    var bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(bulbs, 3)); scene.add(new THREE.Points(bg, new THREE.PointsMaterial({ color: 0xffd9a0, size: 4, sizeAttenuation: false, fog: false })));
+    glow(-2.7, 2.3, -19.5, 9, 0xffc878, 0.22); pool(-2.9, -19.5, 4, 15, 0xffc878, 0.4);
+    plane(2.4, 1.3, basic({ color: 0xf2cf8a }), -HW + 0.04, 1.75, -19.5, Math.PI / 2); box(0.3, 0.08, 2.6, basic({ color: 0x3a2a1c }), -HW + 0.18, 1.08, -19.5); glow(-HW + 0.5, 1.8, -19.5, 3.5, 0xffc878, 0.4);
+    /* pasted bills on the hoarding near the mouth; a bike locked to the fence; litter */
+    for (var pb = 0; pb < 7; pb++) plane(0.6, 0.84, basic({ color: [0xd8d0b8, 0xc83a2a, 0x2a4a8a, 0xe0b02c, 0x1a1a1c][pb % 5] }), -HW + 0.035, 1.5 + (pb % 2) * 0.1, Z0 - 2.4 - pb * 0.72, Math.PI / 2);
+    [[0.34, -31], [0.34, -32.05]].forEach(function (q) { var wh = new THREE.Mesh(new THREE.TorusGeometry(q[0], 0.025, 5, 16), basic({ color: 0x0c0c0e })); wh.position.set(-2.0, 0.36, q[1]); wh.rotation.y = Math.PI / 2; scene.add(wh); }); box(0.03, 0.03, 1.1, basic({ color: 0x6a1c1c }), -2.0, 0.66, -31.5); box(0.03, 0.5, 0.03, basic({ color: 0x6a1c1c }), -2.0, 0.6, -31.2);
+    for (var lt = 0; lt < 14; lt++) box(0.08 + rnd() * 0.12, 0.02, 0.06 + rnd() * 0.1, basic({ color: [0xb8b4a8, 0x8a2a20, 0x3a5a8a][lt % 3] }), -4 + rnd() * 8, 0.012, Z0 - rnd() * LEN).rotation.y = rnd() * 3;
+    /* beyond the far mouth: the street's lamps and lights, not a flat dark */
+    for (var fm = 0; fm < 12; fm++) glow(-9 + rnd() * 18, 1 + rnd() * 7, Z1 - 6 - rnd() * 9, 1.5 + rnd() * 3, [0xffae3a, 0xffae3a, 0xff2a1a, 0xfff0d2, 0x9a4cff][fm % 5], 0.7);
+    var P = pathOf([[0.9, Z0 - 1], [0.9, Z1 + 2]]), people = crowd(18, [-1.4, 3.6, Z1, Z0], { along: true, towards: 0.3, dim: 0.72 });
     untone(scene);
     return { scene: scene, length: P.len, fov: 62, near: 0.1, far: 200, bloom: [0.4, 0.5, 0.82], nearDist: 10, yawMax: 2.3, portal: { w: 6.4, h: 4.6 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
@@ -185,7 +207,30 @@ window.WW_buildWaterloo = function (kit) {
       glow(-0.6, 0.75, -2.15, 1.5, 0xfff6d8, 1, g); glow(0.6, 0.75, -2.15, 1.5, 0xfff6d8, 1, g); glow(-0.6, 0.8, 2.15, 1.3, 0xff2010, 1, g); glow(0.6, 0.8, 2.15, 1.3, 0xff2010, 1, g);
       g.rotation.y = dir > 0 ? Math.PI : 0; scene.add(g); cars.push({ g: g, dir: dir, x: dir > 0 ? -6.6 : -11, z: -60 + rnd() * 90, v: 5 + rnd() * 4 });
     }
-    var P = pathOf([[2.5, 12], [2.5, -34], [ARCH_X, FACE_Z + 8], [ARCH_X, FACE_Z + 0.6]]), people = crowd(34, [-3, 8.5, -56, 14], { along: true, towards: 0.75, dim: 0.75 });
+    /* ---------- 2026-11-27, detail ---------- */
+    /* the front in relief: piers standing proud, a cornice, the sculpture groups, bracket lamps by the arch, brass rails up the steps */
+    var stoneL = basic({ color: 0x8f8a7c }), stoneD = basic({ color: 0x6a665c });
+    [-9.6, -6.6, 6.6, 9.6, -20, 20, -28, 28].forEach(function (dx) { box(1.4, 22, 0.9, stoneL, ARCH_X + dx, 11, FACE_Z + 0.45); box(1.8, 0.6, 1.2, stoneD, ARCH_X + dx, 22.3, FACE_Z + 0.5); box(1.8, 1.2, 1.2, stoneD, ARCH_X + dx, 0.6, FACE_Z + 0.5); });
+    box(64, 0.9, 1.3, stoneD, ARCH_X, 23.4, FACE_Z + 0.55); box(64, 0.5, 0.9, stoneL, ARCH_X, 8.6, FACE_Z + 0.4); box(20, 1.2, 1.5, stoneL, ARCH_X, 25.2, FACE_Z + 0.6);
+    [-8.1, 8.1].forEach(function (dx) { box(2.6, 3.2, 1.6, stoneL, ARCH_X + dx, 12.6, FACE_Z + 0.9); var fig = new THREE.Mesh(new THREE.ConeGeometry(1.0, 3.4, 6), stoneL); fig.position.set(ARCH_X + dx, 15.6, FACE_Z + 0.9); scene.add(fig); box(0.5, 0.06, 1.2, iron2(), ARCH_X + dx * 0.72, 5.2, FACE_Z + 1.0); glow(ARCH_X + dx * 0.72, 4.9, FACE_Z + 1.6, 3.4, 0xffe2a8, 0.8); kit.cone(scene, ARCH_X + dx * 0.72, 4.9, FACE_Z + 1.6, 4.9, 2.6, 0xffe2a8, 0.12); });
+    var figTop = new THREE.Mesh(new THREE.ConeGeometry(2.2, 4.6, 7), stoneL); figTop.position.set(ARCH_X, 28, FACE_Z + 0.6); scene.add(figTop);
+    function iron2() { return basic({ color: 0x151517 }); }
+    [-5.5, 0, 5.5].forEach(function (dx) { var r = box(0.05, 0.05, 3.4, basic({ color: 0x8a6a2a }), ARCH_X + dx, 1.55, FACE_Z + 3.9); r.rotation.x = -0.32; cyl(0.03, 0.03, 1.0, basic({ color: 0x8a6a2a }), ARCH_X + dx, 0.5, FACE_Z + 5.4); cyl(0.03, 0.03, 1.0, basic({ color: 0x8a6a2a }), ARCH_X + dx, 1.5, FACE_Z + 2.4); });
+    /* the lamps' light in the air and on the stones; the front's light spilled down the steps; the road's shine */
+    [[-3.4, 4], [-3.4, -14], [-3.4, -32], [10.5, -4], [10.5, -24], [-3.4, -50]].forEach(function (p) { kit.cone(scene, p[0], 9.3, p[1], 9.3, 5.2, 0xffae3a, 0.12); pool(p[0] + 1.5, p[1], 11, 11, 0xffa030, 0.5); streak(p[0] - 5, p[1], 4, 16, 0xffa030, 0.4); });
+    pool(ARCH_X, FACE_Z + 7, 22, 16, 0xffe6b0, 0.55); streak(-8.8, -22, 5, 80, 0xffb060, 0.14);
+    foot(11.95, -14, 46, -Math.PI / 2, 2.2);
+    /* bollards on the kerb, a stand of hire bikes, a lit way-finding post, bins */
+    for (var bz3 = 10; bz3 > -56; bz3 -= 3.8) { cyl(0.07, 0.085, 1.0, iron2(), -3.7, 0.5, bz3); }
+    for (var bk = 0; bk < 7; bk++) { var bx = 9.4, bzz = 2 - bk * 0.85; box(0.08, 0.55, 0.3, basic({ color: 0x2a2c30 }), bx, 0.28, bzz); var w1 = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.03, 5, 14), basic({ color: 0x0c0c0e })); w1.position.set(bx - 0.6, 0.34, bzz); scene.add(w1); var w2 = w1.clone(); w2.position.x = bx - 1.55; scene.add(w2); box(1.0, 0.05, 0.05, basic({ color: 0x8a1418 }), bx - 1.05, 0.68, bzz); }
+    box(0.9, 2.6, 0.2, basic({ color: 0x15171b }), 6.5, 1.3, -28); plane(0.7, 1.3, basic({ color: 0xcfe0f4 }), 6.5, 1.6, -27.89, 0); glow(6.5, 1.6, -27.6, 2.4, 0xcfe0f4, 0.45);
+    [[7.8, -8], [-2.6, -40]].forEach(function (q) { box(0.55, 1.05, 0.55, basic({ color: 0x101214 }), q[0], 0.52, q[1]); });
+    /* the cars' wheels and their lights on the road */
+    cars.forEach(function (c) { [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) { var wh = cyl(0.36, 0.36, 0.24, basic({ color: 0x08080a }), q[0] * 0.82, 0.36, q[1] * 1.3, c.g, 12); wh.rotation.z = Math.PI / 2; }); streak(0, -6.6, 2.2, 9, 0xfff2d0, 0.5, c.g); streak(0, 5.6, 2.0, 7, 0xff2010, 0.45, c.g); });
+    /* the railway on its viaduct beyond the road, a lit train drawn across it */
+    box(160, 1.4, 6, basic({ color: 0x0e0e10 }), -70, 9, -84); for (var ar = -140; ar < 0; ar += 14) box(2.4, 8.4, 6, basic({ color: 0x15130f }), ar, 4.2, -84);
+    var tsd = trainSide(); box(70, 2.7, 2.8, [basic({ color: 0x9a9c9e }), basic({ color: 0x9a9c9e }), basic({ color: 0x2a2c2e }), basic({ color: 0x111111 }), basic({ map: rep(tsd, 3.5, 1), color: 0xa0a0a0 }), basic({ map: rep(tsd, 3.5, 1), color: 0xa0a0a0 })], -70, 11.1, -84);
+    var P = pathOf([[2.5, 12], [2.5, -34], [ARCH_X, FACE_Z + 8], [ARCH_X, FACE_Z + 0.6]]), people = crowd(40, [-3, 8.5, -56, 14], { along: true, towards: 0.75, dim: 0.68, tint: 0xffd2a0 });
     function rise(z) { return Math.max(0, Math.min(1.02, (FACE_Z + 5.4 - z) / 3 * 1.02)); }
     untone(scene);
     return { scene: scene, length: P.len, fov: 62, near: 0.15, far: 900, bloom: [0.4, 0.5, 0.88], nearDist: 12, yawMax: 2.3, portal: { w: 9.5, h: 10 },
@@ -202,7 +247,7 @@ window.WW_buildWaterloo = function (kit) {
   function buildConcourse() {
     scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0d10); scene.fog = new THREE.FogExp2(0x16171b, 0.003);
     var HW = 56, Z0 = 2, Z1 = -36, H = 17, zc = (Z0 + Z1) / 2, depth = Z0 - Z1, GATE_X = 16;
-    plane(HW * 2, depth + 80, basic({ map: rep(tile, 56, 60), color: 0xf0ede6 }), 0, 0, zc - 40, 0, -Math.PI / 2);
+    plane(HW * 2, depth + 80, basic({ map: rep(tile, 56, 60), color: 0xa8a49c }), 0, 0, zc - 40, 0, -Math.PI / 2);
     /* the roof: ridge and furrow glass on deep lattice girders, white floods beneath */
     var glazing = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#0d1014'; g.fillRect(0, 0, w, h); g.strokeStyle = '#8f9498'; g.lineWidth = 2; for (var i = 0; i <= w; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.stroke(); } g.lineWidth = 5; g.beginPath(); g.moveTo(0, 2); g.lineTo(w, 2); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke(); }), true);
     plane(HW * 2, depth + 80, basic({ map: rep(glazing, 40, 30) }), 0, H + 2, zc - 40, 0, Math.PI / 2);
@@ -236,7 +281,17 @@ window.WW_buildWaterloo = function (kit) {
     box(0.06, 5.5, 0.06, basic({ color: 0x2a2c30 }), 0, H - 3.4, -17); box(1.7, 1.7, 1.7, basic({ color: 0x15171b }), 0, H - 7, -17);
     [[0, 0.86, 0], [0, -0.86, Math.PI], [0.86, 0, Math.PI / 2], [-0.86, 0, -Math.PI / 2]].forEach(function (f) { plane(1.4, 1.4, basic({ color: 0xf6f2e4 }), f[0], H - 7, -17 + f[1], f[2]); });
     box(1.6, 1.3, 1.6, basic({ color: 0x8a8478 }), -10, 0.65, -12); var br = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.3, 7), basic({ color: 0x2a221a })); br.position.set(-10, 2.45, -12); scene.add(br); var bh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), basic({ color: 0x2a221a })); bh.position.set(-10, 3.75, -12); scene.add(bh);
-    var P = pathOf([[-30, 0.5], [-30, -8], [GATE_X - 6, -26], [GATE_X, Z1 + 0.8]]), people = crowd(70, [-HW + 2, HW - 2, Z1 + 2, Z0 - 4], { still: 0.2 });
+    /* ---------- 2026-11-27, detail ---------- */
+    /* great lit hoardings over the balcony, their colour on the floor; shop pods in the hall; bins; signs hung from the roof */
+    function hoarding(seed) { return tex(cv(256, 128, function (g, w, h) { var hue = Math.floor(rnd() * 360), gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, 'hsl(' + hue + ',55%,42%)'); gr.addColorStop(1, 'hsl(' + ((hue + 50) % 360) + ',60%,22%)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); for (var i = 0; i < 5; i++) { g.fillStyle = 'hsla(' + ((hue + 180 + i * 20) % 360) + ',50%,70%,.35)'; g.beginPath(); g.arc(rnd() * w, rnd() * h, 14 + rnd() * 40, 0, 7); g.fill(); } g.fillStyle = 'rgba(255,255,255,.8)'; g.fillRect(18, h - 30, 90, 8); g.fillRect(18, h - 18, 54, 5); })); }
+    [-38, -14, 10, 34].forEach(function (hx, i) { plane(18, 6, basic({ map: hoarding(i), color: 0xb8b8b8 }), hx, 12.6, Z0 - 0.08, Math.PI); box(18.4, 6.4, 0.2, basic({ color: 0x101214 }), hx, 12.6, Z0 - 0.02); pool(hx, Z0 - 9, 16, 12, [0xff7ab0, 0x7ab0ff, 0xffc070, 0x8affc0][i], 0.22); });
+    [[-12, -22], [28, -26], [-40, -14]].forEach(function (q) { box(5, 2.8, 3.4, basic({ color: 0x1c1e22 }), q[0], 1.4, q[1]); plane(4.4, 1.3, basic({ color: 0xf2dca8 }), q[0], 1.8, q[1] + 1.71, 0); plane(4.4, 1.3, basic({ color: 0xf2dca8 }), q[0], 1.8, q[1] - 1.71, Math.PI); box(5.3, 0.2, 3.7, basic({ color: 0x101214 }), q[0], 2.9, q[1]); glow(q[0], 1.9, q[1] + 2.2, 6, 0xffd890, 0.35); pool(q[0], q[1] + 3.4, 7, 4, 0xffd890, 0.4); pool(q[0], q[1] - 3.4, 7, 4, 0xffd890, 0.4); });
+    [[-22, -18], [4, -14], [34, -20], [18, -8], [-44, -26]].forEach(function (q) { box(0.5, 0.95, 0.5, basic({ color: 0x15171b }), q[0], 0.48, q[1]); });
+    [[-30, -14], [-4, -20], [GATE_X, -26], [40, -22]].forEach(function (q) { box(4, 0.6, 0.1, basic({ color: 0x0a2a5c }), q[0], 5.0, q[1]); for (var k = 0; k < 4; k++) plane(0.5, 0.14, basic({ color: 0xe8eef6 }), q[0] - 1.4 + k * 0.9, 5.0, q[1] + 0.06, 0); box(0.03, H - 5.3, 0.03, basic({ color: 0x8a8f96 }), q[0] - 1.8, 5.3 + (H - 5.3) / 2, q[1]); box(0.03, H - 5.3, 0.03, basic({ color: 0x8a8f96 }), q[0] + 1.8, 5.3 + (H - 5.3) / 2, q[1]); });
+    /* the boards' amber on the floor; the dark at the foot of the walls; rope posts before the gates */
+    pool(0, Z1 + 6, 100, 12, 0xffb030, 0.4); foot(0, Z0 - 0.1, HW * 2, Math.PI, 1.8);
+    for (var rp = -HW + 6; rp < HW - 6; rp += 5) { if (Math.abs(rp - GATE_X) < 5) continue; cyl(0.04, 0.05, 0.95, basic({ color: 0x8a8f96 }), rp, 0.48, Z1 + 3.2); }
+    var P = pathOf([[-30, 0.5], [-30, -8], [GATE_X - 6, -26], [GATE_X, Z1 + 0.8]]), people = crowd(78, [-HW + 2, HW - 2, Z1 + 2, Z0 - 4], { still: 0.2, dim: 0.9 });
     untone(scene);
     return { scene: scene, length: P.len, fov: 66, near: 0.15, far: 500, bloom: [0.32, 0.5, 0.86], nearDist: 9, yawMax: 2.3, portal: { w: 5.4, h: 4.4 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
@@ -273,7 +328,23 @@ window.WW_buildWaterloo = function (kit) {
     var p3 = tex(cv(64, 64, function (g, w, h) { g.fillStyle = '#0a2a5c'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = 'bold 48px Helvetica, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('3', w / 2, h / 2 + 3); }));
     [-14, -40].forEach(function (z3) { box(0.5, 0.5, 0.06, basic({ map: p3 }), PW - 1.5, 3.2, z3 + 0.2); });
     plane(40, 12, basic({ color: 0x0a0a0c }), 0, 4, -112, 0); glow(-9, 3, -110, 3, 0xff2a1a, 0.9); glow(6, 3.4, -110, 3, 0x2aff7a, 0.7);
-    var P = pathOf([[0.8, 4], [0.8, DOOR_Z + 3.2], [-1.6, DOOR_Z], [-PW - 0.1, DOOR_Z]]), people = crowd(7, [-1.6, 2.4, -90, 2], { along: true, towards: 0.7 });
+    /* ---------- 2026-11-27, detail ---------- */
+    /* through the open door: the vestibule's floor, a yellow pole, seat backs, the far door's window */
+    box(2.6, 0.06, 1.5, basic({ color: 0x2a3040 }), -PW - 1.75, 0.2, DOOR_Z); cyl(0.025, 0.025, 2.0, basic({ color: 0xe0b01c }), -PW - 1.2, 1.2, DOOR_Z); cyl(0.025, 0.025, 2.0, basic({ color: 0xe0b01c }), -PW - 2.3, 1.2, DOOR_Z);
+    [-1, 1].forEach(function (sd) { box(0.5, 0.9, 0.1, basic({ color: 0x2a3a6a }), -PW - 1.2, 0.9, DOOR_Z + sd * 0.9); box(0.5, 0.9, 0.1, basic({ color: 0x2a3a6a }), -PW - 2.3, 0.9, DOOR_Z + sd * 0.9); });
+    plane(1.1, 0.9, basic({ color: 0x15202c }), -PW - 3.1, 1.5, DOOR_Z, Math.PI / 2); box(0.2, 0.04, 1.5, basic({ color: 0xffffff }), -PW - 1.75, 2.2, DOOR_Z); pool(-PW + 0.6, DOOR_Z, 3.5, 3, 0xfff0c8, 0.6);
+    /* gaps and bellows between the cars; the lamps' light down through the air and on the platform; wet shine along the edge */
+    for (var gc = 0; gc < 6; gc++) { box(2.5, 2.3, 0.34, basic({ color: 0x0c0c0e }), -PW - 1.75, 1.35, 2 - gc * 20.3 - 20.15); box(2.5, 2.3, 0.34, basic({ color: 0x0c0c0e }), PW + 5.2, 1.35, 2 - gc * 20.3 - 26.15); }
+    for (var cz3 = -4; cz3 > -100; cz3 -= 12) { kit.cone(scene, 0.6, 5.5, cz3 + 5, 5.5, 3.6, 0xf4f6ff, 0.10); pool(0.6, cz3 + 5, 7, 8, 0xf4f6ff, 0.35); }
+    streak(-PW + 0.6, -50, 1.4, 120, 0xfff0d0, 0.35); streak(PW - 0.5, -50, 1.2, 120, 0xdfe8ff, 0.2);
+    /* benches, a help point with its blue lamp, a hung sign, conduit along the roof, the brackets on the columns */
+    [-18, -52].forEach(function (z) { box(0.5, 0.08, 2.2, basic({ color: 0x3a3f46 }), PW - 1.5, 0.48, z + 2.6); box(0.06, 0.5, 2.2, basic({ color: 0x3a3f46 }), PW - 1.28, 0.78, z + 2.6); box(0.4, 0.46, 0.08, basic({ color: 0x2a2c30 }), PW - 1.5, 0.23, z + 1.7); box(0.4, 0.46, 0.08, basic({ color: 0x2a2c30 }), PW - 1.5, 0.23, z + 3.5); });
+    box(0.3, 1.7, 0.2, basic({ color: 0xe8e8e4 }), PW - 1.5, 0.85, -22.5); glow(PW - 1.5, 1.8, -22.5, 1.1, 0x3a8cff, 0.9);
+    box(2.2, 0.5, 0.08, basic({ color: 0x0a2a5c }), 0.6, 3.6, -20); plane(1.2, 0.12, basic({ color: 0xe8eef6 }), 0.4, 3.6, -19.95, 0); box(0.03, 3, 0.03, basic({ color: 0x8a8f96 }), -0.3, 5.3, -20); box(0.03, 3, 0.03, basic({ color: 0x8a8f96 }), 1.5, 5.3, -20);
+    [[-1.2, 6.9], [2.2, 6.95], [2.5, 6.8]].forEach(function (q) { box(0.07, 0.07, 120, basic({ color: 0x2c2e32 }), q[0], q[1], -50); });
+    for (var cz4 = -4; cz4 > -100; cz4 -= 12) { var brk = box(0.08, 0.08, 1.6, basic({ color: 0xa8a69c }), PW - 1.5, 6.1, cz4); brk.rotation.y = Math.PI / 2; brk.rotation.z = 0.6; }
+    for (var sg = 0; sg < 5; sg++) glow(-12 + sg * 6 + rnd() * 2, 2.5 + rnd() * 2, -108, 2, sg % 2 ? 0xff2a1a : 0xffb030, 0.8);
+    var P = pathOf([[0.8, 4], [0.8, DOOR_Z + 3.2], [-1.6, DOOR_Z], [-PW - 0.1, DOOR_Z]]), people = crowd(9, [-1.6, 2.4, -90, 2], { along: true, towards: 0.7, dim: 0.85 });
     untone(scene);
     return { scene: scene, length: P.len, fov: 64, near: 0.1, far: 300, bloom: [0.36, 0.5, 0.84], nearDist: 5, yawMax: 2.3, portal: { w: 1.9, h: 2.5 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },
@@ -303,6 +374,17 @@ window.WW_buildWaterloo = function (kit) {
         if (k >= 2 && rnd() < 0.3) { var h = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), basic({ color: HAIR[Math.floor(rnd() * HAIR.length)] })); h.position.set(x, 1.36, zb - 0.2); scene.add(h); }
       });
     }
+    /* ---------- 2026-11-27, detail ---------- */
+    /* seat cloth, grab handles on the aisle seats, poles and a glass screen by the doors ahead, the rack's rails, vents, a worn carpet */
+    var cloth = tex(cv(64, 64, function (g, w, h) { g.fillStyle = '#263566'; g.fillRect(0, 0, w, h); for (var i = 0; i < 260; i++) { g.fillStyle = ['rgba(232,176,28,.55)', 'rgba(20,26,54,.7)', 'rgba(90,110,180,.5)'][i % 3]; g.fillRect(rnd() * w, rnd() * h, 2 + rnd() * 3, 1 + rnd() * 2); } }), true);
+    var carpet = tex(cv(64, 64, function (g, w, h) { g.fillStyle = '#1e2433'; g.fillRect(0, 0, w, h); for (var i = 0; i < 500; i++) { g.fillStyle = 'rgba(' + (rnd() < 0.5 ? '10,12,18' : '70,80,110') + ',' + rnd() * 0.5 + ')'; g.fillRect(rnd() * w, rnd() * h, 1.5, 1.5); } }), true);
+    plane(HW * 2, 30, basic({ map: rep(carpet, 4, 44) }), 0, 0.004, -6, 0, -Math.PI / 2); plane(0.5, 30, basic({ color: 0x3a4052 }), 0, 0.006, -6, 0, -Math.PI / 2);
+    for (var k2 = -2; k2 <= 16; k2++) { var zb2 = 0.3 - 0.86 * k2; [-SEAT_X, -SEAT_X + 0.5, SEAT_X - 0.5, SEAT_X].forEach(function (x, i) { plane(0.4, 0.62, basic({ map: cloth }), x, 0.9, zb2 - 0.052, Math.PI); plane(0.42, 0.4, basic({ map: cloth }), x, 0.496, zb2 - 0.25, 0, -Math.PI / 2); if (i === 1 || i === 2) { var hd = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.014, 5, 10, Math.PI), basic({ color: 0xe0b01c })); hd.position.set(x + (i === 1 ? 0.2 : -0.2), 1.38, zb2); hd.rotation.y = Math.PI / 2; scene.add(hd); } }); }
+    [-0.5, 0.5].forEach(function (x) { cyl(0.02, 0.02, 2.2, basic({ color: 0xe0b01c }), x, 1.1, -15.4); plane(0.8, 1.2, basic({ color: 0x9fb4c0, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }), x * 1.9, 1.3, -15.2, 0); });
+    [-1, 1].forEach(function (sd) { cyl(0.012, 0.012, 30, basic({ color: 0xc8ccd0 }), sd * (HW - 0.3), 1.9, -6, scene, 5).rotation.x = Math.PI / 2; for (var vz = 6; vz > -20; vz -= 1.2) box(0.2, 0.01, 0.5, basic({ color: 0xa8a8a2 }), sd * 0.55, 2.195, vz); });
+    plane(HW * 2, 2.2, basic({ color: 0xbfbfb9 }), 0, 1.1, -21, 0); box(0.8, 1.95, 0.05, basic({ color: 0x8a8e94 }), 0, 0.98, -20.95); plane(0.4, 0.5, basic({ color: 0x15202c }), 0, 1.45, -20.9, 0);
+    /* the carriage's own lights, faint in the glass */
+    for (var rz = 6; rz > -20; rz -= 2.4) { [-1, 1].forEach(function (sd) { var q = plane(0.22, 1.5, basic({ color: 0xffffff, transparent: true, opacity: 0.10, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }), sd * (HW * 2), 2.18, rz, 0, Math.PI / 2); }); }
     /* the tray on the seat in front, and the cans if you bought them */
     var tray = new THREE.Group(); tray.position.set(SEAT_X, 0.8, 0.3 - 0.86 + 0.17); scene.add(tray);
     box(0.36, 0.015, 0.24, basic({ color: 0x8a8e94 }), 0, 0, 0, tray);
@@ -329,6 +411,11 @@ window.WW_buildWaterloo = function (kit) {
       for (var i = 0; i < 150; i++) { var sd = rnd() < 0.5 ? -1 : 1, dist = 9 + Math.pow(rnd(), 2) * 260; glow(sd * dist, -1 + rnd() * (4 + dist * 0.12), -rnd() * 700, 1.5 + dist * 0.03, cols[Math.floor(rnd() * cols.length)], 0.9, G); }
       for (var b = 0; b < 16; b++) { var sd2 = rnd() < 0.5 ? -1 : 1, d2 = 26 + rnd() * 160, w = 14 + rnd() * 26, h = 12 + rnd() * 60, t = winTex.clone(); t.needsUpdate = true; t.repeat.set(w / 9, h / 9); box(w, h, w, basic({ map: t }), sd2 * (d2 + w / 2), h / 2 - 3, -rnd() * 700, G); }
       for (var m = 0; m < 24; m++) { box(0.2, 5, 0.2, basic({ color: 0x2a2c30 }), HW + 4.5, 1.5, -m * 29, G); }
+      /* gantries with their signals, the dark flank of a viaduct wall, lit windows close by the line, a station's lit canopy going past */
+      for (var gz = 0; gz < 10; gz++) { var z0 = -30 - gz * 68; box(0.3, 7, 0.3, basic({ color: 0x1c1e22 }), -HW - 6, 2.5, z0, G); box(0.3, 7, 0.3, basic({ color: 0x1c1e22 }), HW + 12, 2.5, z0, G); box(18 + HW * 2, 0.3, 0.3, basic({ color: 0x1c1e22 }), 3, 6, z0, G); glow(HW + 2 + (gz % 3) * 3, 5.4, z0, 1.2, gz % 2 ? 0xff2a1a : 0x30ff60, 0.9, G); glow(-HW - 3, 5.4, z0, 1.2, 0xffb030, 0.9, G); }
+      box(0.6, 3, 700, basic({ color: 0x0e0d0c }), HW + 14, 0.2, -350, G); box(0.6, 3, 700, basic({ color: 0x0e0d0c }), -HW - 9, 0.2, -350, G);
+      for (var nb = 0; nb < 14; nb++) { var sdn = nb % 2 ? 1 : -1, t3 = winTex.clone(); t3.needsUpdate = true; t3.repeat.set(2, 1.4); box(18, 12, 1, basic({ map: t3, color: 0xd8c8a8 }), sdn * (18 + rnd() * 6), 5, -40 - nb * 48, G).rotation.y = Math.PI / 2; }
+      box(4, 0.3, 60, basic({ color: 0x15161a }), HW + 3.6, 3.6, -420, G); box(4.5, 0.3, 60, basic({ color: 0x6c6a64 }), HW + 3.6, -1.1, -420, G); for (var pl = 0; pl < 6; pl++) glow(HW + 3.2, 3.2, -394 - pl * 10, 3, 0xf4f6ff, 0.8, G);
     }
     var gone = 0, v = 0, FIELD = 700, START = 110;
     untone(scene);
@@ -376,7 +463,7 @@ window.WW_buildWaterloo = function (kit) {
     var setts = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#1c1a18'; g.fillRect(0, 0, w, h); for (var r = 0; r < 8; r++) for (var c = 0; c < 6; c++) { var v = 62 + Math.floor(rnd() * 26); g.fillStyle = 'rgb(' + v + ',' + (v - 3) + ',' + (v - 8) + ')'; g.fillRect(((c * 22 + (r % 2) * 11) % w) + 1, r * 16 + 1, 20, 14); } }), true);
     plane(28, 52, basic({ map: rep(setts, 14, 26), color: 0xd0c0a0 }), -17, 0.004, -48, 0, -Math.PI / 2);
     var stoneM = basic({ color: 0x6a6354 }), iron = basic({ color: 0x141416 });
-    [[-22, GATE_Z + 4.5], [GATE_Z - 4.5, -74]].forEach(function (r) { box(0.4, 0.7, r[0] - r[1], stoneM, -3.4, 0.35, (r[0] + r[1]) / 2); box(0.06, 1.3, r[0] - r[1], iron, -3.4, 1.35, (r[0] + r[1]) / 2); for (var z = r[0]; z > r[1]; z -= 0.35) box(0.04, 1.3, 0.04, iron, -3.4, 1.35, z); });
+    [[-22, GATE_Z + 4.5], [GATE_Z - 4.5, -74]].forEach(function (r) { box(0.4, 0.7, r[0] - r[1], stoneM, -3.4, 0.35, (r[0] + r[1]) / 2); box(0.05, 0.05, r[0] - r[1], iron, -3.4, 1.95, (r[0] + r[1]) / 2); box(0.05, 0.05, r[0] - r[1], iron, -3.4, 0.85, (r[0] + r[1]) / 2); for (var z = r[0]; z > r[1]; z -= 0.22) box(0.03, 1.3, 0.03, iron, -3.4, 1.35, z); }); /* open railings: rails and bars, no sheet */
     [-22, GATE_Z + 4.5, GATE_Z - 4.5, -52, -74].forEach(function (z) { box(1.1, 3.4, 1.1, stoneM, -3.4, 1.7, z); box(1.4, 0.3, 1.4, stoneM, -3.4, 3.5, z); box(0.3, 0.5, 0.3, basic({ color: 0xffe9c0 }), -3.4, 4.0, z); glow(-3.4, 4.0, z, 1.5, 0xffd9a0, 0.6); });
     /* the Eleanor Cross: eight-sided, tier on tier, floodlit */
     var cross = new THREE.Group(); cross.position.set(-14, 0, -40); scene.add(cross);
@@ -426,8 +513,37 @@ window.WW_buildWaterloo = function (kit) {
     }
     vehicle(true, 4.6, -1, 20); vehicle(false, 7.6, -1, -10); vehicle(true, 4.6, -1, -60); vehicle(false, 7.6, -1, -95);
     vehicle(true, 15.4, 1, -40); vehicle(false, 12.4, 1, -75); vehicle(false, 12.4, 1, 5); vehicle(true, 15.4, 1, -118);
+    /* ---------- 2026-11-27, detail ---------- */
+    /* awnings and hanging signs on your side; a cornice over the shop fronts on both */
+    for (var az = 15; az > -20; az -= 4.4) { var aw = box(1.3, 0.05, 3.7, basic({ color: [0x2a1416, 0x14241c, 0x1a2030, 0x2a2416][Math.floor(rnd() * 4)] }), -2.85, 3.5, az); aw.rotation.z = -0.3; box(0.06, 0.55, 0.8, basic({ color: 0x101214 }), -2.9, 4.7, az + 1.9); box(0.5, 0.04, 0.04, iron, -3.15, 5.0, az + 1.9); }
+    box(0.5, 0.35, 40, basic({ color: 0x3a342c }), -3.3, 4.75, -2); box(0.6, 0.4, 150, basic({ color: 0x302b25 }), 20.8, 4.75, -45); box(0.5, 0.5, 150, basic({ color: 0x25211c }), 20.8, 22, -45);
+    /* bollards down the kerb, bins, a bus shelter with its lit panel */
+    for (var bz = 12; bz > -112; bz -= 3.6) { if (Math.abs(bz - GATE_Z) < 5) continue; cyl(0.07, 0.085, 1.0, iron, 2.75, 0.5, bz); cyl(0.074, 0.074, 0.08, basic({ color: 0xb8b4a8 }), 2.75, 0.86, bz); }
+    [[1.9, 2], [1.9, -18], [-2.4, -76]].forEach(function (q) { box(0.55, 1.05, 0.55, basic({ color: 0x101214 }), q[0], 0.52, q[1]); box(0.6, 0.06, 0.6, basic({ color: 0x2a2c30 }), q[0], 1.07, q[1]); });
+    box(0.08, 2.5, 0.08, iron, 2.3, 1.25, -8); box(0.08, 2.5, 0.08, iron, 2.3, 1.25, -13); box(1.5, 0.08, 5.4, basic({ color: 0x1a1c20 }), 1.7, 2.55, -10.5); plane(4.8, 2.1, basic({ color: 0x9fb4bc, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }), 2.3, 1.3, -10.5, Math.PI / 2);
+    plane(1.2, 1.8, basic({ color: 0xe8d8b8 }), 1.1, 1.3, -13.02, 0); plane(1.2, 1.8, basic({ color: 0xc8dcf0 }), 1.1, 1.3, -13.06, Math.PI); glow(1.1, 1.3, -13.3, 3.2, 0xdfe8ff, 0.45); box(1.2, 0.08, 0.3, basic({ color: 0x4a3626 }), 1.6, 0.5, -10);
+    /* the lamps' light in the air and on the ground; the shop fronts' light on the pavement; the road's wet shine */
+    for (var lz2 = 8; lz2 > -110; lz2 -= 17) { kit.cone(scene, 3.9, 8.3, lz2, 8.3, 4.6, 0xffc070, 0.13); pool(3.2, lz2, 9, 9, 0xffb860, 0.5); streak(9, lz2, 4, 18, 0xffb860, 0.5); }
+    pool(-1.6, -2, 4, 40, 0xffe2b0, 0.4); pool(18.6, -45, 4, 150, 0xffe2b0, 0.3); streak(13, -45, 5, 150, 0xffd9a0, 0.16);
+    pool(-14, -40, 16, 16, 0xffe2a8, 0.45); pool(FRONT_X + 4, DOOR_Z, 9, 24, 0xfff0d0, 0.5);
+    foot(-3.35, -2, 40, Math.PI / 2, 1.8); foot(FRONT_X + 0.06, -48, 76, Math.PI / 2, 2.2); foot(20.95, -45, 150, -Math.PI / 2, 1.8);
+    /* the hotel's cornices and its mansard, dormers lit here and there; chimneys against the sky */
+    [9.2, 14.6, 20.0, 25.6].forEach(function (y) { box(0.6, 0.45, 76, basic({ color: 0x8a7a58 }), FRONT_X + 0.3, y, -48); });
+    box(3.4, 6.5, 76, basic({ color: 0x121418 }), FRONT_X - 1.2, 33.2, -48);
+    for (var dz = -14; dz > -84; dz -= 6.2) { box(0.5, 2.2, 1.7, basic({ color: 0x1b1e24 }), FRONT_X + 0.6, 32.2, dz); plane(1.1, 1.5, basic({ color: rnd() < 0.3 ? 0xe6c074 : 0x0b0c0e }), FRONT_X + 0.87, 32.1, dz, Math.PI / 2); }
+    [-20, -38, -58, -76].forEach(function (z) { box(1.6, 4, 2.6, basic({ color: 0x15130f }), FRONT_X - 1.5, 38.4, z); });
+    glow(FRONT_X + 2, 12, -48, 60, 0xffd9a0, 0.10);
+    /* the far end of the street: roofs, lit windows, the red of brake lights */
+    [[-10, -150, 30, 26], [18, -165, 26, 34], [44, -150, 30, 22], [-40, -160, 26, 30]].forEach(function (b) { var t = winTex.clone(); t.needsUpdate = true; t.repeat.set(b[2] / 9, b[3] / 9); box(b[2], b[3], 12, basic({ map: t, fog: false, color: 0x9a9a9a }), b[0], b[3] / 2, b[1]); });
+    for (var f2 = 0; f2 < 16; f2++) glow(5 + rnd() * 11, 0.9 + rnd(), -120 - rnd() * 40, 1.6 + rnd() * 2, rnd() < 0.6 ? 0xff2814 : 0xfff0d0, 0.6);
+    /* wheels, and each vehicle's lights on the wet road */
+    traffic.forEach(function (v) {
+      var long = v.g.children[0].geometry.parameters.depth > 8, half = long ? 5.5 : 2.2;
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) { var wh = cyl(0.48, 0.48, 0.3, basic({ color: 0x08080a }), q[0] * (long ? 1.15 : 0.82), 0.48, q[1] * (half - (long ? 2 : 1.1)), v.g, 12); wh.rotation.z = Math.PI / 2; });
+      streak(0, -half - 4.5, 2.2, 9, 0xfff2d0, 0.55, v.g); streak(0, half + 3.5, 2.0, 7, 0xff2010, 0.5, v.g);
+    });
     var P = pathOf([[0, 4], [0, GATE_Z + 1], [-9, GATE_Z - 5], [-22, DOOR_Z + 0.5], [FRONT_X + 1.2, DOOR_Z]]);
-    var onStreet = crowd(26, [-2.6, 2.4, -110, 14], { along: true, towards: 0.5, dim: 0.75 }), inYard = crowd(9, [-26, -6, -60, -34], { dim: 0.8, still: 0.3 });
+    var onStreet = crowd(30, [-2.6, 2.4, -110, 14], { along: true, towards: 0.5, dim: 0.7, tint: 0xffdcae }), inYard = crowd(10, [-26, -6, -60, -34], { dim: 0.7, tint: 0xffdcae, still: 0.3 });
     untone(scene);
     return { scene: scene, length: P.len, fov: 62, near: 0.15, far: 600, bloom: [0.42, 0.5, 0.86], nearDist: 10, yawMax: 2.3, portal: { w: 5.2, h: 4.6 },
       pose: function (s) { var p = P.at(s); return { x: p[0], y: 1.66, z: p[1], yaw: P.yaw(s) }; },

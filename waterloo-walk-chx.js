@@ -22,17 +22,17 @@ window.WW_buildChx = function (kit) {
   var HALL_HW = 34, HALL_Z0 = SHOP_Z1, GATES_Z = -50, HALL_H = 11, EXIT_Z = -46.5, EXIT_W = 4.2; /* the door straight to the bridge, left of the platforms (Sam, 2026-11-26) */
 
   /* ---------- textures ---------- */
-  var tile = tex(cv(256, 256, function (g, w, h) {
+  var tile = tex(kit.soiled(cv(256, 256, function (g, w, h) {
     g.fillStyle = '#9a958b'; g.fillRect(0, 0, w, h);
     for (var r = 0; r < 4; r++) for (var c = 0; c < 4; c++) { var v = 150 + Math.floor(rnd() * 22); g.fillStyle = 'rgb(' + v + ',' + (v - 4) + ',' + (v - 12) + ')'; g.fillRect(c * 64 + 1, r * 64 + 1, 62, 62); }
     for (var i = 0; i < 1600; i++) { g.fillStyle = 'rgba(60,56,50,' + rnd() * 0.08 + ')'; g.fillRect(rnd() * w, rnd() * h, 2, 2); }
-  }), true);
+  }), 'floor', 0.3), true);
   var vinyl = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#6f7074'; g.fillRect(0, 0, w, h); for (var i = 0; i < 900; i++) { g.fillStyle = 'rgba(' + (rnd() < 0.5 ? '30,30,34' : '170,170,176') + ',' + rnd() * 0.12 + ')'; g.fillRect(rnd() * w, rnd() * h, 2, 2); } }), true);
-  var brick = tex(cv(256, 256, function (g, w, h) {
+  var brick = tex(kit.soiled(cv(256, 256, function (g, w, h) {
     g.fillStyle = '#3a3128'; g.fillRect(0, 0, w, h);
     for (var r = 0; r < 16; r++) for (var c = 0; c < 9; c++) { var a = 0.75 + rnd() * 0.3; g.fillStyle = 'rgb(' + Math.floor(150 * a) + ',' + Math.floor(118 * a) + ',' + Math.floor(72 * a) + ')'; g.fillRect(c * 32 - (r % 2) * 16 + 1, r * 16 + 1, 30, 14); }
     for (var i = 0; i < 700; i++) { g.fillStyle = 'rgba(20,16,12,' + rnd() * 0.2 + ')'; g.fillRect(rnd() * w, rnd() * h, 3, 6 + rnd() * 16); }
-  }), true);
+  }), 'wall', 1), true);
   var stone = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#2b2824'; g.fillRect(0, 0, w, h); g.fillStyle = '#353129'; for (var r = 0; r < 4; r++) for (var c = 0; c < 2; c++) g.fillRect(c * 64 + (r % 2) * 32 - 32 + 1, r * 32 + 1, 62, 30); g.fillRect(97, 33, 30, 30); }), true);
   function shelfTex() {
     return tex(cv(512, 256, function (g, w, h) {
@@ -92,7 +92,8 @@ window.WW_buildChx = function (kit) {
   /* ---------- the shop ---------- */
   (function () {
     plane(SHOP_HW * 2, SHOP_Z0 - SHOP_Z1, basic({ map: rep(vinyl, 5, 10), color: 0xd8d8dc }), 0, 0.01, (SHOP_Z0 + SHOP_Z1) / 2, 0, -Math.PI / 2);
-    plane(SHOP_HW * 2, SHOP_Z0 - SHOP_Z1, basic({ color: 0xcfcfca }), 0, SHOP_H, (SHOP_Z0 + SHOP_Z1) / 2, 0, Math.PI / 2);
+    var grid = tex(cv(64, 64, function (g, w, h) { g.fillStyle = '#c2c2bc'; g.fillRect(0, 0, w, h); g.fillStyle = '#d2d2cc'; g.fillRect(2, 2, w - 4, h - 4); for (var i = 0; i < 60; i++) { g.fillStyle = 'rgba(90,90,86,.25)'; g.fillRect(rnd() * w, rnd() * h, 1, 1); } }), true);
+    plane(SHOP_HW * 2, SHOP_Z0 - SHOP_Z1, basic({ map: rep(grid, 12, 24), color: 0xb8b8b4 }), 0, SHOP_H, (SHOP_Z0 + SHOP_Z1) / 2, 0, Math.PI / 2);
     var len = SHOP_Z0 - SHOP_Z1, zc = (SHOP_Z0 + SHOP_Z1) / 2, wall = basic({ color: 0xbdbbb4 });
     plane(len, SHOP_H, wall, -SHOP_HW, SHOP_H / 2, zc, Math.PI / 2); plane(len, SHOP_H, wall, SHOP_HW, SHOP_H / 2, zc, -Math.PI / 2);
     /* glass front and back, a doorway in each */
@@ -125,7 +126,7 @@ window.WW_buildChx = function (kit) {
   var people = [];
   (function () {
     var depth = HALL_Z0 - GATES_Z, zc = (HALL_Z0 + GATES_Z) / 2;
-    plane(HALL_HW * 2, depth + 70, basic({ map: rep(tile, 34, 52), color: 0xe8e4dc }), 0, 0, zc - 35, 0, -Math.PI / 2);
+    plane(HALL_HW * 2, depth + 70, basic({ map: rep(tile, 34, 52), color: 0xa9a59c }), 0, 0, zc - 35, 0, -Math.PI / 2);
     /* the floor's shine under the roof lights */
     var shine = tex(cv(64, 256, function (g, w, h) { var gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,.22)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
     /* south wall: the row of shop fronts either side of ours */
@@ -181,19 +182,34 @@ window.WW_buildChx = function (kit) {
     var clock = box(1.5, 1.5, 0.25, basic({ color: 0x15171b }), 0, 8.4, HALL_Z0 - 14); plane(1.2, 1.2, basic({ color: 0xf4f1e6 }), 0, 8.4, HALL_Z0 - 13.86, 0); plane(1.2, 1.2, basic({ color: 0xf4f1e6 }), 0, 8.4, HALL_Z0 - 14.14, Math.PI);
     [[12, -26], [12, -34], [-9, -44], [22, -42]].forEach(function (q) { box(3.2, 0.45, 0.6, basic({ color: 0x6a4a2c }), q[0], 0.42, q[1]); box(3.2, 0.5, 0.08, basic({ color: 0x6a4a2c }), q[0], 0.8, q[1] + 0.3); });
 
-    /* the crowd: plain figures, no faces */
-    var coats = [0x1b2233, 0x23201d, 0x3a2a22, 0x4a1f24, 0x2a3a34, 0x8a6a48, 0x15161a, 0x5a5d62, 0x1f2f4a], hair = [0x15110e, 0x2a1c12, 0x6a5a48, 0x0c0c0e, 0x8a8478];
+    /* the crowd */
     for (var i = 0; i < 46; i++) {
-      var g = new THREE.Group(), coat = basic({ color: coats[Math.floor(rnd() * coats.length)] }), lm = basic({ color: rnd() < 0.7 ? 0x16181e : 0x3a4250 });
-      var body = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.19, 0.8, 8), coat); body.position.y = 1.2; body.scale.x = 0.62; g.add(body);
-      var head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 8, 6), basic({ color: hair[Math.floor(rnd() * hair.length)] })); head.position.y = 1.72; g.add(head);
-      var lg = new THREE.BoxGeometry(0.13, 0.84, 0.15); lg.translate(0, -0.42, 0);
-      var l1 = new THREE.Mesh(lg, lm), l2 = new THREE.Mesh(lg, lm); l1.position.set(0, 0.84, -0.09); l2.position.set(0, 0.84, 0.09); g.add(l1); g.add(l2);
-      g.scale.setScalar(0.94 + rnd() * 0.14);
+      var f = kit.figure({ dim: 0.9 }); scene.add(f.g);
       var still = rnd() < 0.22, ang = rnd() < 0.6 ? (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * 0.5 : rnd() * Math.PI * 2;
-      people.push({ g: g, l1: l1, l2: l2, x: -HALL_HW + 2 + rnd() * (HALL_HW * 2 - 4), z: GATES_Z + 2.5 + rnd() * (depth - 5), a: ang, v: still ? 0 : 1.0 + rnd() * 0.7, ph: rnd() * 6 });
-      scene.add(g);
+      people.push({ f: f, g: f.g, x: -HALL_HW + 2 + rnd() * (HALL_HW * 2 - 4), z: GATES_Z + 2.5 + rnd() * (depth - 5), a: ang, v: still ? 0 : 1.0 + rnd() * 0.7 });
     }
+
+    /* ---------- 2026-11-27, detail ---------- */
+    var dark = basic({ color: 0x15171b }), steel = basic({ color: 0x8a8f96 });
+    /* a coffee stand lit warm, mid-hall; ticket machines by the shops; signs hung over the way; bins; posts and tape before the gates */
+    box(5, 2.7, 3.2, basic({ color: 0x2a1c12 }), 15, 1.35, -31); box(5.3, 0.18, 3.5, basic({ color: 0x15100c }), 15, 2.8, -31); plane(4.4, 1.2, basic({ color: 0xf2cf8a }), 15, 1.75, -29.38, 0); box(4.6, 0.1, 0.5, basic({ color: 0x6a4a2c }), 15, 1.1, -29.2); glow(15, 1.9, -29, 7, 0xffc878, 0.4);
+    for (var m = 0; m < 4; m++) { box(0.9, 1.9, 0.6, basic({ color: 0x1b2f52 }), 18 + m * 1.2, 0.95, HALL_Z0 - 0.5); plane(0.5, 0.4, basic({ color: 0x8fd0ff }), 18 + m * 1.2, 1.35, HALL_Z0 - 0.82, Math.PI); glow(18 + m * 1.2, 1.35, HALL_Z0 - 1.0, 1.1, 0x8fd0ff, 0.5); }
+    [[-10, -27], [6, -38], [-22, -43]].forEach(function (q) { box(3.4, 0.55, 0.1, basic({ color: 0x0a2a5c }), q[0], 4.5, q[1]); box(0.03, HALL_H - 4.8, 0.03, steel, q[0] - 1.5, 4.8 + (HALL_H - 4.8) / 2, q[1]); box(0.03, HALL_H - 4.8, 0.03, steel, q[0] + 1.5, 4.8 + (HALL_H - 4.8) / 2, q[1]); for (var k = 0; k < 3; k++) plane(0.5, 0.12, basic({ color: 0xe8eef6 }), q[0] - 1 + k * 0.9, 4.5, q[1] + 0.06, 0); });
+    [[-6, -22], [20, -40], [-28, -30], [8, -47]].forEach(function (q) { box(0.5, 0.95, 0.5, dark, q[0], 0.48, q[1]); box(0.52, 0.05, 0.52, steel, q[0], 0.96, q[1]); });
+    for (var px = -22; px <= 26; px += 4) { box(0.07, 0.95, 0.07, steel, px, 0.48, GATES_Z + 3); if (px < 26) box(4, 0.05, 0.02, basic({ color: 0x0a2a5c }), px + 2, 0.9, GATES_Z + 3); }
+    /* the board's amber on the floor beneath it, the shop fronts' light on the floor before them, a dark foot to every wall */
+    var smear = tex(cv(64, 64, function (g, w, h) { var gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
+    function pool(x, z, w, d, col, op) { var q = plane(w, d, basic({ map: smear, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }), x, 0.025, z, 0, -Math.PI / 2); q.renderOrder = 1; }
+    pool(0, GATES_Z + 6, 46, 12, 0xffb030, 0.5); pool(0, HALL_Z0 - 3.5, 66, 8, 0xfff0d0, 0.35); pool(15, -27.5, 8, 5, 0xffc878, 0.45);
+    var foot = tex(cv(8, 64, function (g, w, h) { var gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.6)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
+    plane(sideLen, 1.6, basic({ map: foot, transparent: true, depthWrite: false }), HALL_HW - 0.05, 0.8, sz, -Math.PI / 2); plane(sideLen, 1.6, basic({ map: foot, transparent: true, depthWrite: false }), -HALL_HW + 0.05, 0.8, sz, Math.PI / 2);
+    box(0.9, 0.34, 0.08, basic({ color: 0x1fa85a }), -HALL_HW + 0.3, 5.0, EXIT_Z); glow(-HALL_HW + 0.5, 5.0, EXIT_Z, 1.6, 0x30ff80, 0.5);
+    /* in the shop: self-service tills with lit screens by the far door, baskets by the near one, signs over the aisle, the fridge's cold on the floor */
+    for (var t = 0; t < 3; t++) { box(0.6, 1.25, 0.55, basic({ color: 0x3a3f46 }), -SHOP_HW + 0.45, 0.63, -12.6 - t * 1.25); plane(0.34, 0.28, basic({ color: 0x9fe0ff }), -SHOP_HW + 0.76, 1.42, -12.6 - t * 1.25, Math.PI / 2); box(0.06, 0.36, 0.4, dark, -SHOP_HW + 0.72, 1.42, -12.6 - t * 1.25); glow(-SHOP_HW + 0.95, 1.4, -12.6 - t * 1.25, 0.9, 0x9fe0ff, 0.5); }
+    for (var b = 0; b < 5; b++) box(0.46, 0.06, 0.32, basic({ color: b % 2 ? 0x1f5a3a : 0x14402a }), 2.6, 0.2 + b * 0.07, -2.9);
+    [[-5.2], [-9.4], [-13.2]].forEach(function (q) { box(1.5, 0.34, 0.04, basic({ color: 0x14402a }), 0.2, SHOP_H - 0.5, q[0]); plane(1.0, 0.1, basic({ color: 0xe8eee4 }), 0.2, SHOP_H - 0.5, q[0] + 0.03, 0); });
+    pool(1.9, -9.4, 3, 4, 0xd8f0ff, 0.5); pool(0, SHOP_Z0 + 2, 6, 5, 0xeaf2ff, 0.3);
+    [SHOP_Z0 - 0.5, SHOP_Z1 + 0.5].forEach(function (z) { [-1.05, 1.05].forEach(function (x) { box(0.06, 1.5, 0.4, basic({ color: 0xe8e8e4 }), x, 0.75, z); glow(x, 1.45, z, 0.4, 0xff3020, 0.7); }); });
   })();
 
   /* ---------- the way through ---------- */
@@ -224,8 +240,7 @@ window.WW_buildChx = function (kit) {
         if (q.x < -HALL_HW + 1.5 || q.x > HALL_HW - 1.5) { q.a = Math.PI - q.a; q.x = Math.max(-HALL_HW + 1.5, Math.min(HALL_HW - 1.5, q.x)); }
         if (q.z > HALL_Z0 - 2 || q.z < GATES_Z + 2) { q.a = -q.a; q.z = Math.max(GATES_Z + 2, Math.min(HALL_Z0 - 2, q.z)); }
         var dx = q.x - c[0], dz = q.z - c[1], d = Math.hypot(dx, dz); if (d < 1.3 && d > 0.001) { q.x = c[0] + dx / d * 1.3; q.z = c[1] + dz / d * 1.3; }
-        q.g.position.set(q.x, q.v ? Math.abs(Math.cos(t * q.v * 4.4 + q.ph)) * 0.025 : 0, q.z); q.g.rotation.y = -q.a;
-        var sw = q.v ? Math.sin(t * q.v * 4.4 + q.ph) * 0.5 : 0; q.l1.rotation.z = sw; q.l2.rotation.z = -sw;
+        q.g.position.set(q.x, 0, q.z); q.g.rotation.y = -q.a; q.f.step(t, q.v);
       });
     }
   };

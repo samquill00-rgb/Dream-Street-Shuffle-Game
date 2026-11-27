@@ -411,10 +411,10 @@ window.WW_buildWaterloo = function (kit) {
     var headG = new THREE.ExtrudeGeometry(rounded(0.3, 0.17, 0.05, 0, 0.98), Object.assign({ depth: 0.064 }, EX)); /* its head pad */
     var panG = new THREE.ExtrudeGeometry(rounded(0.44, 0.1, 0.04, 0, 0.4), Object.assign({ depth: 0.42 }, EX));    /* the cushion you sit on */
     var legG = new THREE.BoxGeometry(0.1, 0.4, 0.3), armG = new THREE.BoxGeometry(0.045, 0.045, 0.3), loopG = new THREE.TorusGeometry(0.055, 0.014, 6, 12, Math.PI);
-    var cloth = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#22306a'; g.fillRect(0, 0, w, h); for (var i = 0; i < 900; i++) { g.fillStyle = ['rgba(214,150,30,.5)', 'rgba(14,20,50,.75)', 'rgba(84,104,178,.55)', 'rgba(150,40,50,.45)'][i % 4]; g.fillRect(rnd() * w, rnd() * h, 2 + rnd() * 4, 1 + rnd() * 2); } for (var y = 0; y < h; y += 2) { g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, y, w, 1); } }), true);
+    var cloth = tex(cv(128, 128, function (g, w, h) { g.fillStyle = '#2444b0'; g.fillRect(0, 0, w, h); for (var i = 0; i < 900; i++) { g.fillStyle = ['rgba(240,170,30,.6)', 'rgba(16,26,90,.7)', 'rgba(90,130,230,.6)', 'rgba(200,50,60,.5)'][i % 4]; g.fillRect(rnd() * w, rnd() * h, 2 + rnd() * 4, 1 + rnd() * 2); } for (var y = 0; y < h; y += 2) { g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, y, w, 1); } }), true);
     cloth.repeat.set(3, 3);
     var shellM = basic({ color: 0x7e8286, roughness: 0.6 }), panelM = basic({ color: 0x8a8e92, roughness: 0.66 }), capM = basic({ color: 0x92969a, roughness: 0.55 });
-    var clothM = basic({ map: cloth, roughness: 0.95 }), padM = basic({ color: 0x7a1c22, roughness: 0.95 }), darkM = basic({ color: 0x22252b, roughness: 0.7 }), loopM = basic({ color: 0x1f3f96, roughness: 0.5 });
+    var clothM = new THREE.MeshStandardMaterial({ map: cloth, roughness: 0.95, emissiveMap: cloth, emissive: new THREE.Color(0xffffff), emissiveIntensity: 0.22 }), padM = new THREE.MeshStandardMaterial({ color: 0xb0242c, roughness: 0.95, emissive: new THREE.Color(0xb0242c), emissiveIntensity: 0.18 }), darkM = basic({ color: 0x22252b, roughness: 0.7 }), loopM = new THREE.MeshStandardMaterial({ color: 0x2850d0, roughness: 0.45, emissive: new THREE.Color(0x2850d0), emissiveIntensity: 0.25 }); /* the cloth, the head pads and the handles keep a little of their own colour in the dim */
     var rows = [], k, zb;
     for (k = -2; k <= 9; k++) rows.push(0.3 - PITCH * k);
     for (k = 0; k <= 12; k++) rows.push(NEXT_Z - 0.6 - PITCH * k);
@@ -479,9 +479,9 @@ window.WW_buildWaterloo = function (kit) {
     /* the tray folded down from the seat in front, and the cans if you bought them */
     var tray = new THREE.Group(); tray.position.set(SEAT_X, 0.79, 0.3 - PITCH + 0.2); scene.add(tray);
     var tr = new THREE.Mesh(new THREE.ExtrudeGeometry(rounded(0.36, 0.24, 0.03, 0, -0.12), { depth: 0.014, bevelEnabled: false }), basic({ color: 0x8a8e94, roughness: 0.5 })); tr.rotation.x = -Math.PI / 2; tr.receiveShadow = true; tray.add(tr);
-    [[-0.07, 0xd9a23a, 0x7a4a12], [0.05, 0xe58ab8, 0x7a2a55]].forEach(function (c) {
-      var can = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.125, 16), new THREE.MeshStandardMaterial({ color: c[1], roughness: 0.35, metalness: 0.2 })); can.position.set(c[0], 0.078, 0.01); can.castShadow = true; tray.add(can);
-      var band = new THREE.Mesh(new THREE.CylinderGeometry(0.0305, 0.0305, 0.04, 16), new THREE.MeshStandardMaterial({ color: c[2], roughness: 0.5, metalness: 0.3 })); band.position.set(c[0], 0.068, 0.01); tray.add(band);
+    [[-0.07, 0xffb41e, 0x0f8f86], [0.05, 0xff4f9e, 0x5a1ec8]].forEach(function (c) { /* a gold can with a teal band, a pink one with a violet band */
+      var can = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.125, 16), new THREE.MeshStandardMaterial({ color: c[1], roughness: 0.3, metalness: 0.15, emissive: new THREE.Color(c[1]), emissiveIntensity: 0.3 })); can.position.set(c[0], 0.078, 0.01); can.castShadow = true; tray.add(can);
+      var band = new THREE.Mesh(new THREE.CylinderGeometry(0.0305, 0.0305, 0.04, 16), new THREE.MeshStandardMaterial({ color: c[2], roughness: 0.4, metalness: 0.15, emissive: new THREE.Color(c[2]), emissiveIntensity: 0.35 })); band.position.set(c[0], 0.068, 0.01); tray.add(band);
       var top = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, 0.008, 16), new THREE.MeshStandardMaterial({ color: 0xc4c8cc, roughness: 0.3, metalness: 0.25 })); top.position.set(c[0], 0.144, 0.01); tray.add(top);
     });
 
@@ -506,7 +506,7 @@ window.WW_buildWaterloo = function (kit) {
     [-1, 1].forEach(function (sd) { var gt = grime.clone(); gt.needsUpdate = true; gt.repeat.set(LEN / BAY, 1); gt.offset.x = 0.35; plane(LEN, 0.98, new THREE.MeshBasicMaterial({ map: gt, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide, fog: false }), sd * (HW + 0.006), 1.29, ZC, sd > 0 ? -Math.PI / 2 : Math.PI / 2); });
     /* a tube up ahead that keeps dropping out; a sodium lamp's light crossing the seats as each one goes by; a train's windows flickering past on the other side */
     var tiredCover = box(0.115, 0.022, 2.2, new THREE.MeshBasicMaterial({ color: 0x2c2e2e }), 0.44, 2.186, -3.0); tiredCover.visible = false;
-    var sweepR = new THREE.PointLight(0xffa040, 0, 7.5, 2), sweepL = new THREE.PointLight(0xfff0c8, 0, 8, 2); scene.add(sweepR); scene.add(sweepL);
+    var sweepR = new THREE.PointLight(0xff9428, 0, 9.5, 2), sweepL = new THREE.PointLight(0xfff0c8, 0, 8, 2); scene.add(sweepR); scene.add(sweepL);
     /* more of the carriage: a dot-matrix sign hung at the doors, its amber on the ceiling; a camera's dome; the alarm and the door buttons; cards in the coves; heater grilles; coat hooks */
     var dots = tex(cv(512, 64, function (g, w, h) { g.fillStyle = '#050505'; g.fillRect(0, 0, w, h); for (var x = 6; x < w; x += 6) for (var y = 8; y < h - 6; y += 6) { var on = Math.sin(x * 0.11) * Math.cos(x * 0.031 + y * 0.4) > 0.2 && (x % 96) > 18; g.fillStyle = on ? '#ffb030' : '#1c1408'; g.fillRect(x, y, 3.5, 3.5); } }), true);
     dots.repeat.set(0.5, 1);
@@ -524,7 +524,7 @@ window.WW_buildWaterloo = function (kit) {
     var pp = plane(0.3, 0.22, basic({ map: paper }), -SEAT_X + 0.49, 0.512, 0.3 - PITCH - 0.24, 0, -Math.PI / 2); pp.rotation.z = 0.3;
     var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.11, 12), basic({ color: 0xb8b2a4 })); cup.position.set(0.18, 0.055, -1.9); cup.castShadow = true; scene.add(cup);
     var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.012, 12), basic({ color: 0x2a2a2c })); lid.position.set(0.18, 0.116, -1.9); scene.add(lid);
-    var fallen = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.125, 12), new THREE.MeshStandardMaterial({ color: 0x8a8e92, roughness: 0.4, metalness: 0.2 })); fallen.rotation.z = Math.PI / 2; fallen.rotation.y = 0.5; fallen.position.set(-0.1, 0.03, -4.3); fallen.castShadow = true; scene.add(fallen);
+    var fallen = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.125, 12), new THREE.MeshStandardMaterial({ color: 0x2ea8d8, roughness: 0.4, metalness: 0.15, emissive: new THREE.Color(0x2ea8d8), emissiveIntensity: 0.2 })); fallen.rotation.z = Math.PI / 2; fallen.rotation.y = 0.5; fallen.position.set(-0.1, 0.03, -4.3); fallen.castShadow = true; scene.add(fallen);
     /* two of the people ahead have a phone's light on them; one sleeps against the glass */
     glow(-SEAT_X + 0.49, 1.02, 0.3 - PITCH * 4 - 0.34, 0.55, 0xa8c8ff, 0.55); glow(SEAT_X - 0.49, 1.02, 0.3 - PITCH * 6 - 0.34, 0.55, 0xa8c8ff, 0.5);
     var sl = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), basic({ color: 0x15110e })); sl.position.set(-HW + 0.2, 1.22, 0.3 - PITCH * 2 - 0.2); sl.scale.y = 1.15; sl.rotation.z = 0.5; sl.castShadow = true; scene.add(sl);
@@ -572,7 +572,7 @@ window.WW_buildWaterloo = function (kit) {
     tired = LAMPS.reduce(function (a, b) { return Math.hypot(b.x - 0.44, b.z + 3.0) < Math.hypot(a.x - 0.44, a.z + 3.0) ? b : a; });
     var AMB = [0x6c7880, 0x2c3038, 0.22, 0.08];
     untone(scene);
-    return { lamps: LAMPS, amb: AMB, grade: 'saturate(.7) sepia(.16) contrast(1.12) brightness(.93)', scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
+    return { lamps: LAMPS, amb: AMB, grade: 'saturate(1.08) sepia(.06) contrast(1.1) brightness(.95)' /* 2026-11-27 (Sam: "Put some colour back"): colder light, but the colours hold */, scene: scene, ride: true, length: 34, fov: 68, near: 0.05, far: 900, bloom: [0.4, 0.55, 0.82], nearDist: 4, yawMax: 2.2, portal: null,
       pose: function () { return { x: SEAT_X - 0.06, y: EYE, z: -0.04, yaw: -0.5 }; },
       reset: function () { gone = 0; v = 0; },
       update: function (dt, t, s) {
@@ -584,7 +584,7 @@ window.WW_buildWaterloo = function (kit) {
         tiredCover.visible = off; if (tired) tired.i = off ? 0.05 : 0.74;
         /* a lamp every thirty metres on your side: its light enters ahead, crosses the seats and leaves behind you */
         var k1 = (gone % 30) / 30, on1 = Math.min(1, v / 3);
-        sweepR.position.set(HW + 1.6, 2.4, -13 + k1 * 24); sweepR.intensity = 2.4 * on1 * Math.sin(Math.PI * k1);
+        sweepR.position.set(HW + 1.6, 2.4, -13 + k1 * 24); sweepR.intensity = 2.7 * on1 * Math.sin(Math.PI * k1);
         /* the other train: twice on the way out it comes through on the next line, its windows strobing down the carriage */
         var pt = (s > 13 && s < 19) ? (s - 13) / 6 : (s > 26 && s < 32) ? (s - 26) / 6 : -1;
         passer.visible = pt >= 0; if (pt >= 0) passer.position.z = -150 + pt * 470;
